@@ -48,7 +48,7 @@ func preAuthFeature(h http.Handler, device bool, config PreAuthConfig) (identity
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op.Wire = preAuthWireProfile(device, !preAuthNil(config.IdentifierBinder), config.Methods...)
+	op.Wire = preAuthWireProfileForPurpose(device, !preAuthNil(config.IdentifierBinder), config.Purpose, config.Methods...)
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/session", Operations: []identityhttp.OperationDescriptor{op}})
 }
 

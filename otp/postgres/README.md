@@ -2,6 +2,19 @@
 
 ## Joint phone-reset participant
 
+The native phone owner restores the **original committed** reset request's
+`PreparedPhonePasswordResetSend` using its exact input, generation, output and
+cookie. Its `Fields`, `OriginalFactor` and `Timeline` expose only authenticated
+original selection metadata, not current authority. `PrepareConfirmation`
+maps a new joint input against that exact SMS continuation and the real stored
+challenge version; it never reconstructs authority from reset-grant fields or
+newer directory rows. It requires the original tenant/user/actor/policy,
+credential target, factor triplet and browser cookie. Obtain a fresh consuming
+owner through the prepared send's `NewPhoneRecoveryContributor`; issuance
+configuration and other invocations remain unchanged. Mapping compares no code,
+consumes nothing and renews no deadline. Retain its joint command and plan for
+the native owner's preparation/recovery rather than remapping after ambiguity.
+
 `NewPhoneRecoveryContributor` is an invocation-local selection of the existing
 OTP owner, not a second attempt service. Register its stable pointer before
 generation. After the password owner restores the final retained **generated**

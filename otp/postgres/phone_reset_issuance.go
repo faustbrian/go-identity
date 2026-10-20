@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -294,23 +292,7 @@ func (s *PhonePasswordResetIssuer) original(ctx context.Context, root identity.C
 		return bad(ErrInvalidCommand)
 	}
 	defer clear(factorWire)
-	frame, err := json.Marshal(struct {
-		Binding       identity.CommandBinding
-		Operation     identity.FeatureOperation
-		Fields        []identity.FeatureField
-		Input         []byte
-		Factor        mfapg.TOTPFactorMetadata
-		Ciphertext    []byte
-		Configuration [32]byte
-		Generation    uint64
-	}{spec.Binding, spec.Operation, spec.Fields, wire, m, factorWire, p.configuration, generation})
-	if err != nil || len(frame) > 32768 {
-		clear(frame)
-		return bad(ErrInvalidCommand)
-	}
-	digest := sha256.Sum256(frame)
-	clear(frame)
-	aad, err := envelope.NewContext(map[string]string{"profile": "identity-otp-phone-reset-request-v1", "binding": base64.RawURLEncoding.EncodeToString(digest[:]), "generation": strconv.FormatUint(generation, 10)})
+	aad, err := phoneResetOriginalAAD(spec, wire, m, factorWire, p.configuration, generation)
 	return i, aad, err
 }
 

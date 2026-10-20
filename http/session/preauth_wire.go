@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	identityhttp "github.com/faustbrian/go-identity/http"
+	"github.com/faustbrian/go-identity/session"
 )
 
 func preAuthWire() *identityhttp.WireOperation {
@@ -11,6 +12,10 @@ func preAuthWire() *identityhttp.WireOperation {
 }
 
 func preAuthWireProfile(device, bindBase bool, methods ...PreAuthMethod) *identityhttp.WireOperation {
+	return preAuthWireProfileForPurpose(device, bindBase, session.PreAuthSessionIssuance, methods...)
+}
+
+func preAuthWireProfileForPurpose(device, bindBase bool, purpose session.PreAuthPurpose, methods ...PreAuthMethod) *identityhttp.WireOperation {
 	text := func(max int) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": max} }
 	object := func(required []string, fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
@@ -81,6 +86,26 @@ func preAuthWireProfile(device, bindBase bool, methods ...PreAuthMethod) *identi
 		}
 		schema["allOf"] = []any{map[string]any{"if": map[string]any{"anyOf": selected}, "then": map[string]any{"required": []string{"identifier"}}, "else": map[string]any{"not": map[string]any{"required": []string{"identifier"}}}}}
 		definition["description"] = definition["description"].(string) + " Only selected target-bound profiles require identifier. Their trusted owner canonicalizes and binds that original target after IP admission, before preparation; a client-supplied binding is forbidden. Unbound profiles reject identifier."
+	}
+	var recovery []any
+	if purpose == session.PreAuthPhonePasswordRecovery {
+		recovery = append(recovery, map[string]any{"not": map[string]any{"required": []string{"method"}}})
+	}
+	var recoveryMethods []string
+	for _, method := range methods {
+		if method.Purpose == session.PreAuthPhonePasswordRecovery {
+			recoveryMethods = append(recoveryMethods, method.Name)
+		}
+	}
+	if len(recoveryMethods) != 0 {
+		recovery = append(recovery, map[string]any{"required": []string{"method"}, "properties": map[string]any{"method": map[string]any{"enum": recoveryMethods}}})
+	}
+	if len(recovery) != 0 {
+		schema := definition["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+		conditions, _ := schema["allOf"].([]any)
+		schema["allOf"] = append(conditions, map[string]any{"if": map[string]any{"anyOf": recovery}, "then": map[string]any{"not": map[string]any{"required": []string{"remember"}}}})
+		schema["properties"].(map[string]any)["remember"].(map[string]any)["description"] = "Session-issuing profiles only: absent selects configured default; null is invalid. Recovery profiles forbid this member, including false, and never carry session policy. Flow TTL remains five minutes."
+		definition["description"] = definition["description"].(string) + " Selected phone-password recovery is a distinct target-bound original purpose, not login; remember is forbidden and no session policy is resolved or issued."
 	}
 	data, _ := json.Marshal(definition)
 	return &identityhttp.WireOperation{Definition: data}

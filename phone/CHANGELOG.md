@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opaque initiation-risk input that precedes any evidence reference.
+  Native composition resolves the original browser/number account; no caller
+  selects a user or supplies carrier facts. This input alone enables no route.
+
 - Add opaque, separately selected sessionless password-reset request/completion
   contracts. Retain the original risk issuance command independently from its
   consumer; completion retains the canonical capability, SMS, independent TOTP

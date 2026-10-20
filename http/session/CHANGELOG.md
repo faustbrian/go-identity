@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow explicitly selected target-bound phone-password recovery pre-auth
+  profiles alongside login methods. Recovery forbids every remember member,
+  carries zero session policy and requires no lifetime configuration when
+  selected alone. Existing login defaults and session lifetimes are unchanged.
+
 - Require a canonical target-binding owner when selecting phone SMS-code
   pre-auth initiation, including default and method-specific selections.
 

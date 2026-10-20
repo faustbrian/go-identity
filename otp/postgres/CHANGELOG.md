@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Bridge authenticated original phone-reset SMS preparation into a joint
+  completion attempt using the actual stored challenge version, original
+  continuation and credential authority. Preserve original factor selection,
+  absolute lifetime and browser possession; select a fresh invocation-local
+  consuming contributor without reconstructing authority or comparing codes.
+  Native current-policy, distinct completion-risk and atomic reset/session
+  effects remain required.
+
 - Reacquire the full original phone-recovery factor fence before protected OTP
   exclusions. Final checks retain only the actual MFA replay-CAS completion,
   correlated to the same live protected Work; stale, absent or expired receipt

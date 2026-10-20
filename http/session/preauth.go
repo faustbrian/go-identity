@@ -58,6 +58,10 @@ type PreAuthConfig struct {
 	PolicyVersion                 uint64
 	Now                           func() time.Time
 	MaximumDuration               time.Duration
+	// Purpose zero retains session-issuing login. Phone-password recovery
+	// requires IdentifierBinder and forbids remember input entirely. Recovery
+	// alone needs no Lifetime configuration and never resolves session policy.
+	Purpose session.PreAuthPurpose
 	// IdentifierBinder optionally requires a target for the base profile.
 	// Omission preserves the closed remember-only legacy request contract.
 	IdentifierBinder PreAuthIdentifierBinder
@@ -79,6 +83,9 @@ type PreAuthMethod struct {
 	Service                       PreAuthService
 	Action, CallbackURL, PolicyID string
 	PolicyVersion                 uint64
+	// Purpose selects the trusted issuer's exact original profile, not a body
+	// option. Recovery requires a target binder and carries zero Remember.
+	Purpose session.PreAuthPurpose
 	// IdentifierBinder requires identifier only when this exact method is
 	// selected. Phone/password initiation requires this owner; other methods
 	// retain their explicitly unbound compatibility profile when it is nil.
@@ -243,17 +250,31 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 	}
 	cookie.MaxAge = 0
 	cookie.Expires = time.Time{}
-	remember, err := session.ResolveRememberPolicy(session.RememberDefault, c.Lifetime)
-	if err != nil {
-		return nil, identityhttp.ErrInvalidInput
+	var remember session.RememberPolicy
+	needsRemember := c.Purpose == session.PreAuthSessionIssuance
+	for _, profile := range c.Methods {
+		needsRemember = needsRemember || profile.Purpose == session.PreAuthSessionIssuance
+	}
+	if needsRemember {
+		remember, err = session.ResolveRememberPolicy(session.RememberDefault, c.Lifetime)
+		if err != nil {
+			return nil, identityhttp.ErrInvalidInput
+		}
 	}
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	base := PreAuthMethod{Service: c.Service, Action: c.Action, CallbackURL: c.CallbackURL, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinder: c.IdentifierBinder}
+	base := PreAuthMethod{Service: c.Service, Purpose: c.Purpose, Action: c.Action, CallbackURL: c.CallbackURL, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinder: c.IdentifierBinder}
 	validProfile := func(p PreAuthMethod) bool {
-		if p.IdentifierBinder != nil && preAuthNil(p.IdentifierBinder) || (p.Action == "identity.phone.password-signin" || p.Action == "identity.phone.signin") && preAuthNil(p.IdentifierBinder) {
+		if p.IdentifierBinder != nil && preAuthNil(p.IdentifierBinder) || (p.Action == "identity.phone.password-signin" || p.Action == "identity.phone.signin" || p.Purpose == session.PreAuthPhonePasswordRecovery) && preAuthNil(p.IdentifierBinder) {
 			return false
 		}
-		_, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: p.Action, Origin: string(c.Origin), CallbackURL: p.CallbackURL, PolicyID: p.PolicyID, PolicyVersion: p.PolicyVersion, Nonce: [32]byte{1}, Remember: remember}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})
+		intent := session.PreAuthIntent{TenantID: "configuration", Purpose: p.Purpose, Action: p.Action, Origin: string(c.Origin), CallbackURL: p.CallbackURL, PolicyID: p.PolicyID, PolicyVersion: p.PolicyVersion, Nonce: [32]byte{1}, Remember: remember}
+		if !preAuthNil(p.IdentifierBinder) {
+			intent.IdentifierBinding = [32]byte{1}
+		}
+		if p.Purpose == session.PreAuthPhonePasswordRecovery {
+			intent.Remember = session.RememberPolicy{}
+		}
+		_, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: intent, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})
 		return err == nil && !preAuthNil(p.Service) && (p.CallbackURL == "" || strings.HasPrefix(p.CallbackURL, "https://"))
 	}
 	if !validProfile(base) || len(c.Methods) > 16 {
@@ -361,7 +382,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 					s.identifier = func() string { return identifier }
 					continue
 				}
-				if name != "remember" {
+				if name != "remember" || s.profile.Purpose == session.PreAuthPhonePasswordRecovery {
 					return s, identityhttp.ErrInvalidInput
 				}
 				switch string(raw) {
@@ -376,7 +397,9 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 			if !preAuthNil(s.profile.IdentifierBinder) && s.identifier == nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			s.remember, err = session.ResolveRememberPolicy(choice, c.Lifetime)
+			if s.profile.Purpose == session.PreAuthSessionIssuance {
+				s.remember, err = session.ResolveRememberPolicy(choice, c.Lifetime)
+			}
 			s.facts = facts
 			if err == nil && devices != nil {
 				bearer, found, e := decoder.CookieBearer(r, "__Host-identity_device", identityhttp.HeaderOptional)
@@ -449,7 +472,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 			command, ok := p.Command()
 			spec, e := command.Record.Bindings()
 			i := spec.Binding.Intent
-			if !ok || e != nil || command.CommandID != id || command.CorrelationID != string(id) || i.TenantID != s.facts.TenantID() || i.Action != profile.Action || i.Origin != string(c.Origin) || i.CallbackURL != profile.CallbackURL || i.PolicyID != profile.PolicyID || i.PolicyVersion != profile.PolicyVersion || i.Remember != s.remember || i.IdentifierBinding != identifierBinding || spec.Version != 1 || spec.Binding.ExpiresAt.Sub(spec.Binding.IssuedAt) != 5*time.Minute || command.Record.Check(c.Now(), spec.Binding, spec.Cookie) != nil {
+			if !ok || e != nil || command.CommandID != id || command.CorrelationID != string(id) || i.TenantID != s.facts.TenantID() || i.Purpose != profile.Purpose || i.Action != profile.Action || i.Origin != string(c.Origin) || i.CallbackURL != profile.CallbackURL || i.PolicyID != profile.PolicyID || i.PolicyVersion != profile.PolicyVersion || i.Remember != s.remember || i.IdentifierBinding != identifierBinding || spec.Version != 1 || spec.Binding.ExpiresAt.Sub(spec.Binding.IssuedAt) != 5*time.Minute || command.Record.Check(c.Now(), spec.Binding, spec.Cookie) != nil {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}

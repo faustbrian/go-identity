@@ -40,6 +40,17 @@ Each deliberate fresh start is independent; the handler never retries an unknown
 outcome or prepares another command as recovery. Subsequent OTP Send must use
 the returned original flow ID/cookie and its own keyed contract.
 
+For separately selected phone-password recovery, set the base or named method's
+`Purpose: session.PreAuthPhonePasswordRecovery`, exact action
+`identity.phone.password-reset-request` and the genuine recovery issuer. A target
+`IdentifierBinder` is mandatory and must use the phone reset owner's binding
+domain, not signin. The request requires its bounded `identifier`; **every**
+`remember` member is forbidden, including `false` and `null`. Recovery carries
+zero `RememberPolicy` and never issues a session. A recovery-only handler needs
+no `Lifetime`; coexisting login methods retain their existing session policy.
+The client cannot select purpose/action/policy through JSON. This initiation
+alone sends no SMS and grants no account or recovery authority.
+
 To support multiple login methods on this one route, explicitly populate
 `PreAuthConfig.Methods` with named `PreAuthMethod` profiles. For example, a
 `password` profile supplies a password-bound original issuer and its exact
