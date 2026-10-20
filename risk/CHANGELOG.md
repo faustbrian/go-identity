@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Derive original phone-evidence counter custody at coordinator-owned primary
+  time without redispatching counters or providers. Native consumers must still
+  authenticate the original committed attempt and current durable windows;
+  signed evidence alone does not establish current allowance.
+
 - Admit explicit organization domain reservation and withdrawal through the
   protected privileged profile, with current provider signals and exact
   transaction-owned actor/resource counters. This grants no domain proof or

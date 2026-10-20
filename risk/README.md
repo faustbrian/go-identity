@@ -709,6 +709,14 @@ match its exact coordinator command and current policy, lock the authoritative
 journal and counters, and perform atomic reservation/consumption; these phases
 remain unfinished. Projecting or restoring never runs callbacks or renews time.
 
+`PhoneEvidenceIssuer.PrepareUseCounters(original, prepared, primaryTime)`
+authenticates the original evidence and derives its existing counter command
+without dispatch, clock sampling or a new charge. Its attempt, policy and keyed
+targets remain those of issuance. A native durable counter owner must require
+the matching authenticated committed attempt and then check current windows/key
+history in the coordinator transaction. The returned command is not a current
+allowance; deriving it never renews signed evidence or original observations.
+
 `PhoneEvidenceIssuer.RecheckUse(original, prepared, primaryTime)` reconstructs
 the complete original recovery and subject intent using the current immutable
 policy/provider configuration, then authenticates the signed consumer projection
