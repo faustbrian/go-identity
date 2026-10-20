@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence one original known-empty actor factor generation for exact self-only
+  organization archive/restore commands. Foreign subjects, unequal versions,
+  unsupported lifecycle actions and mismatched owners/schemas remain denied.
+
 - Select a resolved phone-recovery account's original confirmed TOTP through
   the native reader, without caller-selected factor IDs or domain SQL. Retain
   that exact selection in the reset grant; retries never select a replacement.

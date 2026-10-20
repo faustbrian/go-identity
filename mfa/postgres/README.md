@@ -163,6 +163,13 @@ at their independently retained known-empty generations inside the existing
 email-removal Work. Acquire canonical subject locks first. Missing, changed or
 nonempty authority denies; this API never initializes factors or grants a proof.
 
+`RequireActionPrimaryFactors` also admits exact self-only organization archive/
+restore under the `organization-lifecycle` schema and existing organization
+participant. Freeze equal actor/target generation fields from one actual
+known-empty actor read. It locks that one row, not an administrative target;
+an enrolled, changed or missing generation denies without password-only fallback.
+This guard does not implement organization lifecycle policy or effects.
+
 `NewOTPFactorReader` reads confirmed owned OTP factors and their exact verified
 recipients only under a real live OTP-enabled child grant. `Metadata` and
 `Recipient` are original version/recipient custody, not code verification or

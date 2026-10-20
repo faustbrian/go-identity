@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Admit exact self-only organization archive/restore action-primary custody
+  under the lifecycle schema. Apply the forward
+  `OrganizationLifecycleReauthenticationMigrationSource` after every selected
+  password suffix before consumption; existing proof bytes, purposes and
+  one-use transaction ownership remain unchanged. Organization policy and
+  effects still belong to its separately selected native workflow.
+
 - Select verified-phone/password plus confirmed TOTP through
   `NewPhoneMFASigninService`, retaining distinct signed non-final phone evidence
   and exact original target/browser. Apply the forward phone-MFA primary suffix;

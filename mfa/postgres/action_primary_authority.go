@@ -10,11 +10,12 @@ import (
 )
 
 // RequireActionPrimaryFactors fences original known-empty MFA generations for
-// selected native username rename and organization ownership transfer. Read the
+// selected native username rename, organization transfer and lifecycle. Read the
 // generations using ReadPasswordSigninFactors before freezing command intent;
 // bind both action-primary.actor-factor-version and
 // action-primary.target-factor-version as uint64 fields. Username rename is
-// self-only and requires equal versions. Transfer requires distinct subjects.
+// self-only and requires equal versions, as do archive and restore. Transfer
+// requires distinct subjects.
 // Missing, changed or enrolled state denies; no factor is initialized and no
 // password-only fallback is inferred from session metadata.
 //
@@ -68,8 +69,14 @@ func actionPrimaryFactorSubjects(s identity.FeatureCommandSpec, f kernel.Feature
 		if string(b.ActorID) == string(b.UserID) {
 			return nil, invalidAuthority()
 		}
-	} else if string(b.ActorID) != string(b.UserID) || actorVersion != targetVersion {
-		return nil, invalidAuthority()
+	} else {
+		if s.Operation.OperationID == "identity.organization.archive" || s.Operation.OperationID == "identity.organization.restore" {
+			op = identity.FeatureOperation{Owner: "organization", OperationID: s.Operation.OperationID, SchemaID: "organization-lifecycle", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+			descriptor = kernel.ContributorDescriptor{Owner: "organization/postgres", ContractID: "organization.membership", Version: 1}
+		}
+		if string(b.ActorID) != string(b.UserID) || actorVersion != targetVersion {
+			return nil, invalidAuthority()
+		}
 	}
 	if s.Operation != op || f.Contributor != descriptor {
 		return nil, invalidAuthority()

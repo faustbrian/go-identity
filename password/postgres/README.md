@@ -236,10 +236,17 @@ rejection precedes that charge. Use the durable outbox for external delivery.
 
 `NewActionPrimarySource` explicitly selects `identity.username.update`,
 `identity.phone.send-verification`, `identity.phone.update`,
-`identity.phone.remove` or `identity.organization.owner-transfer` over the existing
+`identity.phone.remove`, `identity.organization.owner-transfer`,
+`identity.organization.archive` or `identity.organization.restore` over the existing
 reauthentication owner. Phone update requires a distinct update-bound proof;
 the SMS-request proof cannot authorize replacement. Phone operations are
 self-only and reject a supplied target-subject override.
+Organization archive/restore are also self-only, use the exact
+`organization-lifecycle` schema and retain separate action-bound proofs; a
+transfer proof or administrative target cannot substitute. Append
+`OrganizationLifecycleReauthenticationMigrationSource` after the complete
+installed action and selected phone/email histories before consumption. Its
+suffix preserves earlier purposes and existing immutable signed records.
 Configure the exact issuance target/audience, a maximum age of at most fifteen
 minutes and bearer or cookie transport; cookies require retained CSRF keys.
 Install `ActionReauthenticationMigrationSource{Base: installedHistory, Version:
