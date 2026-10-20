@@ -27,7 +27,7 @@ func decodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, data 
 	if b.OperationID == "identity.email.verification-signin" {
 		return decodePrimaryMFAPlanMode(b, fp, data, "email-verification", allowUngenerated)
 	}
-	if b.OperationID == "identity.password.signin" || b.OperationID == "identity.username.signin" {
+	if passwordMFAOrigin(b.OperationID) != "" {
 		return decodePasswordMFAPlanMode(b, fp, data, allowUngenerated)
 	}
 	return decodeMagicLinkMFAPlanMode(b, fp, data, allowUngenerated)
@@ -79,6 +79,8 @@ func passwordMFAOrigin(operation string) string {
 		return "password"
 	case "identity.username.signin":
 		return "username"
+	case "identity.phone.password-signin":
+		return "phone"
 	default:
 		return ""
 	}

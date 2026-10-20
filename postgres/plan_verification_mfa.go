@@ -16,7 +16,7 @@ func emailVerificationMFAOperation(p CommandPlan) bool {
 
 func validPrimaryMFAPlanMode(b identity.CommandBinding, p CommandPlan, origin string, ungenerated bool) bool {
 	switch origin {
-	case "password", "username":
+	case "password", "username", "phone":
 		return origin == passwordMFAOrigin(b.OperationID) && validPasswordMFAPlanMode(b, p, ungenerated)
 	case "email-verification":
 		return validEmailVerificationMFAPlanMode(b, p, ungenerated)

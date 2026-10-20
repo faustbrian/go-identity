@@ -21,7 +21,7 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && len(encoded) > 0 && encoded[0] == 0xa5 && binding.OperationID == "identity.email.verification-signin" {
 		return decodeMFAContinuationPlanMode(binding, fingerprint, encoded, false)
 	}
-	if !proofBase && (binding.OperationID == "identity.password.signin" || binding.OperationID == "identity.username.signin") && len(encoded) > 0 && encoded[0] == 0xa5 {
+	if !proofBase && passwordMFAOrigin(binding.OperationID) != "" && len(encoded) > 0 && encoded[0] == 0xa5 {
 		return decodePasswordMFAPlanMode(binding, fingerprint, encoded, false)
 	}
 	if !proofBase && mfaCompletionPurpose(binding.OperationID) && len(encoded) > 0 && encoded[0] == 0xa6 {

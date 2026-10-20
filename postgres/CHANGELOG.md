@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain exact phone/password MFA challenge provenance through canonical plan
+  encoding, decoding and original command recovery, without reinterpreting an
+  email/username challenge or adding a second primary capability.
+
 - Admit original phone-reset SMS preparation with immutable initiation risk,
   then attach one canonical phone-reset grant and encrypted delivery together.
   Recipient overrides, consuming OTP, altered risk and partial final effects

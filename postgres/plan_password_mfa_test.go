@@ -134,6 +134,37 @@ func TestUsernameMFAChallengeRetainsOriginalAction(t *testing.T) {
 	}
 }
 
+func TestPhoneMFAChallengeRetainsOriginalAction(t *testing.T) {
+	b, p := passwordMFAPlanFixture(t)
+	b.OperationID, b.SchemaID = "identity.phone.password-signin", "phone-password-signin"
+	p.Feature.Operation.Owner = "identity/phone"
+	p.Feature.Operation.OperationID, p.Feature.Operation.SchemaID = b.OperationID, b.SchemaID
+	wire, err := encodeFeaturePlan(b, [32]byte{1}, p)
+	if err != nil {
+		t.Fatal("verified phone password comparison cannot retain its TOTP challenge", err)
+	}
+	got, err := decodeFeaturePlan(b, [32]byte{1}, wire)
+	if err != nil || got.Feature == nil || got.Feature.Operation != p.Feature.Operation || got.MFAContinuation == nil || *got.MFAContinuation != *p.MFAContinuation {
+		t.Fatal("phone TOTP challenge cannot recover its original operation", err)
+	}
+	if !bytes.Contains(wire, []byte("identity-phone-mfa-challenge-v1")) {
+		t.Fatal("phone comparison reused another primary's stored profile")
+	}
+	for _, origin := range []string{"password", "username", "magic-link", "email-verification"} {
+		changed := bytes.ReplaceAll(wire, cborText("identity-phone-mfa-challenge-v1"), cborText("identity-"+origin+"-mfa-challenge-v1"))
+		if _, err := decodeFeaturePlan(b, [32]byte{1}, changed); err == nil {
+			t.Fatal("phone history accepted a substituted primary profile", origin)
+		}
+	}
+	for _, operation := range [][2]string{{"identity.password.signin", "password-signin"}, {"identity.username.signin", "username-signin"}} {
+		foreign := b
+		foreign.OperationID, foreign.SchemaID = operation[0], operation[1]
+		if _, err := decodeFeaturePlan(foreign, [32]byte{1}, wire); err == nil {
+			t.Fatal("phone challenge was reinterpreted as another comparison")
+		}
+	}
+}
+
 func FuzzUsernameMFAOriginalChallenge(f *testing.F) {
 	f.Add(uint32(0), byte(0))
 	f.Add(uint32(1), byte(255))

@@ -16,7 +16,7 @@ import (
 // Returned metadata is historical correlation, never primary/factor authority.
 // Earlier deadlines win and all operational errors remain redacted.
 func (c *Coordinator) QueryPasswordMFAChallenge(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (MFAContinuationPlan, CommandRecord, bool, error) {
-	if q.OperationID != "identity.password.signin" && q.OperationID != "identity.username.signin" || q.UserID != "" || q.AnonymousFlowID == "" || q.RecordID != "" {
+	if passwordMFAOrigin(q.OperationID) == "" || q.UserID != "" || q.AnonymousFlowID == "" || q.RecordID != "" {
 		return MFAContinuationPlan{}, CommandRecord{}, false, identity.InvalidInputError{Field: "password_mfa_query"}
 	}
 	return c.queryPrimaryMFAChallenge(ctx, q, caller, false)
