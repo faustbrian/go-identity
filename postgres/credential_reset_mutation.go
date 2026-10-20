@@ -14,9 +14,12 @@ import (
 func admitResetInputCredential(ctx context.Context, w Work, command identity.Command, plan *admittedKernelPlan) error {
 	spec, input := command.PasswordResetInputFeature()
 	if !input {
+		spec, input = command.PhonePasswordResetInputFeature()
+	}
+	if !input {
 		return nil
 	}
-	if plan == nil || plan.feature == nil || plan.feature.Operation != credentialResetOperation() || spec.Binding != plan.binding {
+	if plan == nil || plan.feature == nil || !credentialResetSelected(plan.feature.Operation) || spec.Operation != plan.feature.Operation || spec.Binding != plan.binding {
 		return w.fail(ctx, invalidCredentialReset())
 	}
 	i, err := decodeCredentialReset(spec)

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Admit the closed joint phone-reset plan through retained preparation,
+  counted denial, consuming execution and original recovery, preserving atomic
+  capability/OTP/risk participation. Final OTP checks correlate actual native
+  MFA replay receipts with their exact originating protected Work, not copied
+  metadata or today's versions. Install `PhonePasswordResetMigrationSource`
+  after canonical credential-reset history. Complete native workflow composition
+  remains required; no reset endpoint is enabled by these contracts.
+
 - Preserve OAuth authentication-age expiry as a distinct denied/noncommitted
   terminal outcome. The exact native continuation owner may atomically advance
   its existing attempt pointer only after the coordinator proves the previous

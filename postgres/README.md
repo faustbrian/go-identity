@@ -641,6 +641,19 @@ poisons Work: ignoring the error cannot commit earlier provisional writes.
 `FeatureCommandIdentity` only returns correlation metadata; it does not validate
 a candidate command. Existing metadata and successor accessors remain unchanged.
 
+The closed joint phone-reset plan retains capability, SMS OTP and distinct
+completion risk as separate atomic participants; it cannot use a generic or
+emailed-reset command. Install `PhonePasswordResetMigrationSource` after the
+canonical credential-reset receipt history before selecting this profile.
+During its final OTP check, `OTPApplyWork.RequireFeatureOrigin` lets the native
+MFA receipt owner correlate its actual provisional replay write with the exact
+same live protected Work and registered feature owner. Scalar copies, another
+transaction, an incomplete Apply and returned callbacks cannot supply that
+correlation. The guard performs no IO and supplies no factor verdict or SQL
+authority. Ordinary `RequireFeatureCommand` and `FeatureCommandIdentity` remain
+Apply-only. Native complete workflow and factor/risk/password/session checks
+remain required; these kernel contracts expose no recovery endpoint.
+
 ## Original-signin hash upgrades
 
 The registered `identity/password/postgres` owner can compose a hash-only

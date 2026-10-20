@@ -48,6 +48,15 @@ func encodePhonePasswordResetCustody(c identity.Command, key [32]byte, payload m
 	if err != nil {
 		return codecError()
 	}
+	if cookie, present := c.PhonePasswordResetPreAuthCookie(); present {
+		raw := []byte(cookie.Token())
+		cookieDigest, err := commandSecret(key, domain+"-flow-cookie", raw, 86)
+		clear(raw)
+		if err != nil {
+			return codecError()
+		}
+		payload[domain+"-flow-cookie"] = cborBytes(cookieDigest)
+	}
 	payload[domain+"-material"] = cborBytes(material)
 	payload[domain+"-proof"] = cborBytes(proofDigest[:])
 	payload[domain+"-phone-code"] = cborBytes(smsDigest[:])

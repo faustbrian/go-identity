@@ -228,10 +228,10 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		if w.state.registrationAccepted && (w.state.registrationUser != nil || result.User != (identity.User{}) || w.state.lifecycle == nil || w.state.lifecycle.plan.EventType != signupAcceptedEvent || !w.state.execution.reservation.plan.signupAcceptance) {
 			return false
 		}
-		if (credentialReplacementOperation(w.state.feature.Operation) || w.state.feature.Operation == credentialResetOperation()) && (w.state.replacementReceipt == nil || w.state.replacementIntent == nil || result.Feature == nil || result.Feature.BeforeVersion != w.state.replacementReceipt.BeforeCredentialVersion || result.Feature.AfterVersion != w.state.replacementReceipt.Credential.Version) {
+		if (credentialReplacementOperation(w.state.feature.Operation) || credentialResetSelected(w.state.feature.Operation)) && (w.state.replacementReceipt == nil || w.state.replacementIntent == nil || result.Feature == nil || result.Feature.BeforeVersion != w.state.replacementReceipt.BeforeCredentialVersion || result.Feature.AfterVersion != w.state.replacementReceipt.Credential.Version) {
 			return false
 		}
-		if w.state.feature.Operation == credentialResetOperation() && (w.state.resetIntent == nil || !w.state.resetApplied) {
+		if credentialResetSelected(w.state.feature.Operation) && (w.state.resetIntent == nil || !w.state.resetApplied) {
 			return false
 		}
 		if credentialCompromiseOperation(w.state.feature.Operation) && (w.state.credentialReceipt == nil || w.state.credentialIntent == nil || result.Feature == nil || result.Feature.BeforeVersion != w.state.credentialReceipt.BeforeCredentialVersion || result.Feature.AfterVersion != w.state.credentialReceipt.Credential.Version) {

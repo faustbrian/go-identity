@@ -101,6 +101,11 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// Phone recovery must retain the existing password/reset material writer;
+	// neither a same-owner alias nor a future schema can omit its typed phases.
+	if op.OperationID == "identity.phone.password-reset-complete" {
+		return op == phonePasswordResetOperation() && d == (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1})
+	}
 	// A schema alias must not turn this issuance/supersession operation into
 	// a generic feature without its typed grant, delivery and audit phases.
 	if op.OperationID == organizationInvitationResendOperation().OperationID {

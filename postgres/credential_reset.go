@@ -63,8 +63,13 @@ func CredentialResetFields(i CredentialResetIntent) ([]identity.FeatureField, er
 }
 
 func decodeCredentialReset(s identity.FeatureCommandSpec) (CredentialResetIntent, error) {
-	i, err := decodeCredentialReplacement(s)
-	if err != nil {
+	owner := s.Operation.Owner
+	if s.Operation == phonePasswordResetOperation() {
+		owner = "identity/password"
+	}
+	previous, err := decodeCredentialCompromiseOwner(s, owner)
+	i := CredentialReplacementIntent(previous)
+	if err != nil || i.Credential.Kind != identity.CredentialPassword || i.Credential.Owner != "identity/password" {
 		return CredentialResetIntent{}, invalidCredentialReset()
 	}
 	var found bool
@@ -86,7 +91,13 @@ func decodeCredentialReset(s identity.FeatureCommandSpec) (CredentialResetIntent
 
 func credentialResetCommand(p CredentialResetContributor, c identity.Command, plan CommandPlan) (CredentialResetIntent, error) {
 	s, ok := c.PasswordResetFeature()
-	if !ok || s.Operation != credentialResetOperation() || plan.Feature == nil || plan.Feature.Operation != s.Operation || plan.SubjectType != "credential" || plan.Capability == nil || plan.Capability.Purpose != "identity.password.reset-complete" || plan.Lifecycle == nil || plan.Lifecycle.EventType != "password.reset.v1" {
+	if !ok {
+		s, ok = c.PhonePasswordResetFeature()
+		if !ok || !phoneResetConsumptionPlan(plan) {
+			return CredentialResetIntent{}, invalidCredentialReset()
+		}
+	}
+	if !ok || !credentialResetSelected(s.Operation) || plan.Feature == nil || plan.Feature.Operation != s.Operation || plan.SubjectType != "credential" || plan.Capability == nil || string(plan.Capability.Purpose) != s.Operation.OperationID || plan.Lifecycle == nil || plan.Lifecycle.EventType != "password.reset.v1" {
 		return CredentialResetIntent{}, invalidCredentialReset()
 	}
 	i, err := decodeCredentialReset(s)
@@ -109,4 +120,24 @@ func invalidCredentialReset() error { return identity.InvalidInputError{Field: "
 
 func credentialResetOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.reset-complete", SchemaID: "password-reset-complete", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+func phonePasswordResetOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.password-reset-complete", SchemaID: "identity.phone.password-reset-complete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+func credentialResetSelected(op identity.FeatureOperation) bool {
+	return op == credentialResetOperation() || op == phonePasswordResetOperation()
+}
+
+// Phone recovery is a closed conjunction, not a second password writer. The
+// actual native owners must still authenticate and consume each declared input.
+// This predicate is only the structural selection used by retained preparation;
+// the plan codec validates complete scope and the registry requires live phases.
+func phoneResetConsumptionPlan(p CommandPlan) bool {
+	return p.Feature != nil && p.Feature.Operation == phonePasswordResetOperation() &&
+		p.SubjectType == "credential" && p.Capability != nil && p.Capability.Purpose == "identity.phone.password-reset-complete" && p.Capability.MaxUses == 1 &&
+		p.OTP != nil && p.OTP.Mode == OTPConsume && p.RiskEvidence != nil &&
+		p.RiskEvidence.Purpose == "phone-password-reset-complete" && p.RiskEvidence.Phase == "phone-reset-completion" &&
+		p.CommandCounters == nil && p.CaptchaEvidence == nil && !p.CaptchaReplayReservation
 }

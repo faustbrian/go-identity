@@ -154,7 +154,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		if plan.Feature != nil && plan.Feature.Operation == magicLinkConsumeOperation() {
 			return validateMagicLinkConsumption(phase, command, plan)
 		}
-		if plan.Feature != nil && plan.Feature.Operation == credentialResetOperation() {
+		if plan.Feature != nil && credentialResetSelected(plan.Feature.Operation) {
 			p, ok := phase.(CredentialResetContributor)
 			if !ok {
 				return invalidCredentialReset()
@@ -207,7 +207,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -342,7 +342,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 					return nil, invalidPlan()
 				}
 			}
-		} else if p.Feature.Operation == credentialResetOperation() {
+		} else if credentialResetSelected(p.Feature.Operation) {
 			if _, ok := feature.contributor.(CredentialResetContributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -443,7 +443,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 			}
 		}
 	}
-	if p.Feature.Operation == credentialResetOperation() {
+	if credentialResetSelected(p.Feature.Operation) {
 		for _, entry := range entries {
 			if entry.descriptor.Owner == "identity/postgres" {
 				if _, ok := entry.contributor.(*Repository); !ok {
@@ -699,7 +699,7 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			if e := prepareMagicLinkConsumption(ctx, w); e != nil {
 				return result, e
 			}
-		} else if p.feature.Operation == credentialResetOperation() {
+		} else if credentialResetSelected(p.feature.Operation) {
 			if e := prepareCredentialReset(ctx, w, command); e != nil {
 				return result, e
 			}

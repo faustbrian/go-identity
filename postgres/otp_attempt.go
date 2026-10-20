@@ -210,8 +210,16 @@ func (c *Coordinator) prepareOTPAttempt(b identity.CommandBinding, command ident
 		return fail()
 	}
 	s, ok := command.Feature()
-	if _, custody := command.OneTimeCode(); !ok || !custody {
-		return fail()
+	_, custody := command.OneTimeCode()
+	if !ok || !custody {
+		// Compound recovery keeps both codes and the capability sealed. Borrow
+		// only its exact root-owned metadata; never convert it to one-code or
+		// generic Feature custody to satisfy the legacy selector.
+		s, ok = command.PhonePasswordResetFeature()
+		_, _, _, _, custody = command.PhonePasswordResetCustody()
+		if !ok || !custody || !phoneResetConsumptionPlan(p) {
+			return fail()
+		}
 	}
 	// Only exact email/phone replacement carries its required old-destination
 	// notice. Full prepareFeature validation still requires the registered

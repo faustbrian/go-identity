@@ -198,6 +198,10 @@ func (AttemptDecision) MarshalText() ([]byte, error) { return nil, ErrSensitiveS
 // optimistic version once without overflow. Rollback means discard the proposal;
 // ambiguity means recover the same durable command, never reevaluate.
 func (v Verifier) EvaluateAttempt(c Challenge, a AttemptCommand, primaryNow time.Time) (AttemptDecision, error) {
+	return v.evaluateAttempt(c, a, primaryNow, false)
+}
+
+func (v Verifier) evaluateAttempt(c Challenge, a AttemptCommand, primaryNow time.Time, compoundDenial bool) (AttemptDecision, error) {
 	if c.state == nil || !challengeTime(primaryNow) {
 		return AttemptDecision{}, ErrInvalidChallenge
 	}
@@ -209,6 +213,12 @@ func (v Verifier) EvaluateAttempt(c Challenge, a AttemptCommand, primaryNow time
 	matched, e := v.Compare(scope, s.Digest, a.state.code)
 	if e != nil {
 		return AttemptDecision{}, e
+	}
+	// Phone recovery requires BOTH SMS and an independent factor. Its native
+	// owner uses this denial-only policy after actually rejecting that factor;
+	// even a matching SMS must spend the existing budget without reserving it.
+	if compoundDenial {
+		matched = false
 	}
 	result := AttemptDecision{Outcome: AttemptDenied, State: s.State, Version: s.Version, UsedAttempts: s.UsedAttempts, FailedAttempts: s.FailedAttempts, Checks: s.Checks}
 	if scope.binding != s.Continuation.state.scope.binding {

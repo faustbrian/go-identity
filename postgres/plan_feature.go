@@ -55,7 +55,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.MagicLinkRegistration != nil {
 		return nil, invalidPlan()
 	}
-	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) && !proofBase {
+	if p.Feature != nil && (passwordResetOperation(p.Feature.Operation) || p.Feature.Operation.OperationID == "identity.phone.password-reset-complete") && !proofBase {
 		return encodeCredentialResetPlan(binding, fingerprint, p)
 	}
 	if p.Feature != nil && p.Feature.Operation == organizationInvitationAcceptOperation() && !proofBase {
@@ -82,7 +82,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.OrganizationInvitationOrigin != nil {
 		return encodeOrganizationInvitationOrigin(binding, fingerprint, p)
 	}
-	if p.Feature != nil && (p.Feature.Operation.OperationID == "identity.phone.password-reset-complete" || p.Feature.Operation.OperationID == "identity.phone.password-reset-request" && (!riskInitiationOperation(p.Feature.Operation) || p.RiskEvidence == nil)) {
+	if p.Feature != nil && (p.Feature.Operation.OperationID == "identity.phone.password-reset-complete" && (!proofBase || p.Feature.Operation != phonePasswordResetOperation()) || p.Feature.Operation.OperationID == "identity.phone.password-reset-request" && (!riskInitiationOperation(p.Feature.Operation) || p.RiskEvidence == nil)) {
 		return nil, invalidPlan()
 	}
 	count := 4

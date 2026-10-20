@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve explicit sessionless phone-recovery pre-auth custody without a
+  remember policy, in a distinct v6 authorization-binding domain. Add the
+  closed phone-recovery conjunction denial transition against the existing
+  SMS attempt budget; independent factor evidence remains MFA-owned and this
+  primitive neither consumes TOTP replay nor enables a reset workflow.
+
 - Add a distinct SMS-only phone-verification purpose with workflow-separated
   code digests. This primitive does not enable phone enrollment or signin.
 

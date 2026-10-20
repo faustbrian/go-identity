@@ -26,7 +26,10 @@ func (w Work) OTPConsumption(owner FeatureExecutionContributor) (OTPReservationB
 		return OTPReservationBinding{}, invalidWork()
 	}
 	spec, ok := s.otpCommand.Feature()
-	if !ok || spec.Binding != p.binding {
+	if !ok && phoneResetConsumptionPlan(p.snapshot()) {
+		spec, ok = s.otpCommand.PhonePasswordResetFeature()
+	}
+	if !ok || spec.Binding != p.binding || spec.Operation != p.feature.Operation {
 		return OTPReservationBinding{}, invalidWork()
 	}
 	return OTPReservationBinding{Command: p.binding, Plan: *p.otp, Fingerprint: p.fingerprint, Generation: s.generation}, nil

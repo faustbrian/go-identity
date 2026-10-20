@@ -270,6 +270,9 @@ func otpPhoneVerificationCredential(w Work, b identity.CommandBinding, original 
 }
 
 func otpMutationCredential(w Work, b identity.CommandBinding, original CredentialAdmission) (CredentialAdmission, error) {
+	if w.state != nil && w.state.feature != nil && w.state.feature.Operation == phonePasswordResetOperation() {
+		return otpPhoneResetCredential(w, b, original)
+	}
 	if w.state != nil && w.state.feature != nil && w.state.feature.Operation == phoneChangeOperation() {
 		return otpPhoneChangeCredential(w, b, original)
 	}
@@ -280,6 +283,9 @@ func otpMutationCredential(w Work, b identity.CommandBinding, original Credentia
 }
 
 func otpMutationUser(w Work, b identity.CommandBinding, original UserAuthorityAdmission) (UserAuthorityAdmission, error) {
+	if w.state != nil && w.state.feature != nil && w.state.feature.Operation == phonePasswordResetOperation() {
+		return otpPhoneResetUser(w, b, original)
+	}
 	mapped, err := otpMutationCredential(w, b, CredentialAdmission{IdentifierAuthorityVersion: original.IdentifierAuthorityVersion})
 	if err != nil {
 		return UserAuthorityAdmission{}, err

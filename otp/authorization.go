@@ -177,6 +177,9 @@ type continuationState struct {
 // Explicit NewMFAFlowAuthorization uses a disjoint v5 consumed-primary frame,
 // accepts only PurposeMFA and binds the exact subject/child target and original
 // remember policy. It neither exposes nor renews an ordinary pending flow.
+// Explicit sessionless phone recovery uses v6, requires password-reset/SMS
+// and a known subject, and binds the original recovery purpose and keyed target
+// commitment without a remember choice. No other operation may reuse that flow.
 func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.RememberPolicy) (Continuation, error) {
 	flow, e := a.Bindings()
 	if e != nil || s.AuthorizationBinding != ([32]byte{}) {
@@ -196,12 +199,20 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 		return Continuation{}, ErrInvalidAuthorization
 	}
 	b := []byte("identity-otp-authorization-v1\x00")
+	var recoveryIntent *session.PreAuthIntent
 	if record, bound := a.PreAuthTransaction(); bound {
 		original, err := record.Bindings()
 		if err != nil || original.Binding.Intent.TenantID != identity.TenantID(s.TenantID) || needsRemember && original.Binding.Intent.Remember != remember {
 			return Continuation{}, ErrInvalidAuthorization
 		}
 		b = []byte("identity-otp-authorization-v2\x00")
+		if original.Binding.Intent.Purpose == session.PreAuthPhonePasswordRecovery {
+			if s.Purpose != PurposePasswordReset || s.Channel != ChannelSMS || s.SubjectID == "" {
+				return Continuation{}, ErrInvalidAuthorization
+			}
+			b = []byte("identity-otp-authorization-v6\x00")
+			recoveryIntent = &original.Binding.Intent
+		}
 	}
 	if record, bound := a.AuthenticatedSession(); bound {
 		original, err := record.Bindings()
@@ -228,9 +239,14 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 		b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
 		b = append(b, value...)
 	}
-	b = append(b, byte(policy.Choice))
-	for _, duration := range []int64{int64(policy.AbsoluteTTL), int64(policy.IdleTTL), int64(policy.RefreshAfter), int64(policy.FreshFor)} {
-		b = binary.BigEndian.AppendUint64(b, uint64(duration))
+	if recoveryIntent != nil {
+		b = append(b, byte(recoveryIntent.Purpose))
+		b = append(b, recoveryIntent.IdentifierBinding[:]...)
+	} else {
+		b = append(b, byte(policy.Choice))
+		for _, duration := range []int64{int64(policy.AbsoluteTTL), int64(policy.IdleTTL), int64(policy.RefreshAfter), int64(policy.FreshFor)} {
+			b = binary.BigEndian.AppendUint64(b, uint64(duration))
+		}
 	}
 	if record, bound := a.PreAuthTransaction(); bound {
 		b = appendPreAuthAuthorization(b, record)
@@ -295,10 +311,12 @@ func appendPreAuthAuthorization(b []byte, record session.PreAuthTransaction) []b
 	}
 	b = append(b, i.Nonce[:]...)
 	b = binary.BigEndian.AppendUint64(b, i.PolicyVersion)
-	resolved, _ := i.Remember.Bindings()
-	b = append(b, byte(resolved.Choice))
-	for _, duration := range []time.Duration{resolved.AbsoluteTTL, resolved.IdleTTL, resolved.RefreshAfter, resolved.FreshFor} {
-		b = binary.BigEndian.AppendUint64(b, uint64(duration))
+	if i.Purpose != session.PreAuthPhonePasswordRecovery {
+		resolved, _ := i.Remember.Bindings()
+		b = append(b, byte(resolved.Choice))
+		for _, duration := range []time.Duration{resolved.AbsoluteTTL, resolved.IdleTTL, resolved.RefreshAfter, resolved.FreshFor} {
+			b = binary.BigEndian.AppendUint64(b, uint64(duration))
+		}
 	}
 	b = binary.BigEndian.AppendUint32(b, original.Cookie.KeyVersion)
 	b = append(b, original.Cookie.Sum[:]...)

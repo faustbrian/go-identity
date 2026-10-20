@@ -16,8 +16,9 @@ import (
 // here renews freshness or proves cryptographic authenticity or row existence.
 // The registered risk adapter must authenticate every scalar, match current
 // policy and native command scope, and reserve the existing authoritative row.
-// Only reset initiation is currently admitted; completion needs capability/OTP
-// phases. Copies own their scalars. Diagnostics and serialization are redacted.
+// Reset initiation and the closed completion conjunction are admitted; the
+// latter requires separate capability, consuming OTP and completion-risk
+// participants. Copies own their scalars. Diagnostics and serialization are redacted.
 type RiskEvidencePlan struct {
 	IssuanceCommandID, Tenant, Subject, IssuerActor string
 	Purpose, Phase, RecoveryOperation               string
@@ -50,7 +51,12 @@ func validateRiskPlan(b identity.CommandBinding, p CommandPlan) error {
 	if r == nil {
 		return nil
 	}
-	if p.Feature == nil || !riskInitiationOperation(p.Feature.Operation) || p.SubjectType != "phone" || p.Capability != nil || r.Phase != "phone-reset-initiation" || r.Purpose != "phone-password-reset-initiate" || r.RecoveryOperation != b.OperationID || r.Tenant != string(b.TenantID) || r.Subject != string(b.UserID) || r.ConsumerCommandID != string(b.CommandID) || r.ConsumerActor != string(b.ActorID) || r.IssuanceCommandID == r.ConsumerCommandID || !boundedRiskScope(r.IssuerActor) || r.PolicyVersion == 0 || r.KeyVersion == 0 || r.IntentDigest == ([32]byte{}) || r.EvidenceDigest == ([32]byte{}) || r.ProofDigest == ([32]byte{}) || r.Signature == ([32]byte{}) || !validRiskTime(r.IssuedAt, true) || !validRiskTime(r.CheckedAt, false) || !validRiskTime(r.ExpiresAt, true) || !r.ExpiresAt.After(r.IssuedAt) || r.ExpiresAt.Sub(r.IssuedAt) > 2*time.Minute || r.CheckedAt.Before(r.IssuedAt) || !r.CheckedAt.Before(r.ExpiresAt) {
+	initiation := p.Feature != nil && riskInitiationOperation(p.Feature.Operation) && p.SubjectType == "phone" && p.Capability == nil && r.Phase == "phone-reset-initiation" && r.Purpose == "phone-password-reset-initiate"
+	// The capability wrapper strips only its own proof while encoding its
+	// fixed-depth base. Full phone completion still requires that wrapper, the
+	// exact SMS attempt and the distinct completion evidence before admission.
+	completion := p.Feature != nil && p.Feature.Operation == phonePasswordResetOperation() && p.SubjectType == "credential" && p.OTP != nil && p.OTP.Mode == OTPConsume && r.Phase == "phone-reset-completion" && r.Purpose == "phone-password-reset-complete"
+	if !initiation && !completion || r.RecoveryOperation != b.OperationID || r.Tenant != string(b.TenantID) || r.Subject != string(b.UserID) || r.ConsumerCommandID != string(b.CommandID) || r.ConsumerActor != string(b.ActorID) || r.IssuanceCommandID == r.ConsumerCommandID || !boundedRiskScope(r.IssuerActor) || r.PolicyVersion == 0 || r.KeyVersion == 0 || r.IntentDigest == ([32]byte{}) || r.EvidenceDigest == ([32]byte{}) || r.ProofDigest == ([32]byte{}) || r.Signature == ([32]byte{}) || !validRiskTime(r.IssuedAt, true) || !validRiskTime(r.CheckedAt, false) || !validRiskTime(r.ExpiresAt, true) || !r.ExpiresAt.After(r.IssuedAt) || r.ExpiresAt.Sub(r.IssuedAt) > 2*time.Minute || r.CheckedAt.Before(r.IssuedAt) || !r.CheckedAt.Before(r.ExpiresAt) {
 		return invalidPlan()
 	}
 	if _, err := identity.ParseCommandID(r.IssuanceCommandID); err != nil {

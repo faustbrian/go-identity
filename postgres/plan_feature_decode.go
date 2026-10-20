@@ -30,7 +30,7 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && binding.OperationID == "identity.magic-link.consume" {
 		return decodeMagicLinkConsumptionPlan(binding, fingerprint, encoded)
 	}
-	if !proofBase && binding.OperationID == "identity.password.reset-complete" {
+	if !proofBase && (binding.OperationID == "identity.password.reset-complete" || binding.OperationID == "identity.phone.password-reset-complete") {
 		return decodeCredentialResetPlan(binding, fingerprint, encoded)
 	}
 	if !proofBase && binding.OperationID == "identity.organization.invitation.accept" {

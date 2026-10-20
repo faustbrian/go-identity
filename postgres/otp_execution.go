@@ -89,7 +89,10 @@ func (s *otpExecutionState) commandSpec(owner OTPReservationContributor, phase o
 		return identity.FeatureCommandSpec{}, err
 	}
 	spec, ok := s.reservation.command.Feature()
-	if !ok {
+	if !ok && phoneResetConsumptionPlan(s.reservation.plan.snapshot()) {
+		spec, ok = s.reservation.command.PhonePasswordResetFeature()
+	}
+	if !ok || spec.Binding != s.reservation.plan.binding || spec.Operation != s.reservation.plan.feature.Operation {
 		return identity.FeatureCommandSpec{}, invalidWork()
 	}
 	return spec, nil
@@ -100,6 +103,9 @@ func (s *otpExecutionState) preAuthCookie(owner OTPReservationContributor, phase
 		return authentication.BearerCredential{}, err
 	}
 	cookie, ok := s.reservation.command.PreAuthCookie()
+	if !ok && phoneResetConsumptionPlan(s.reservation.plan.snapshot()) {
+		cookie, ok = s.reservation.command.PhonePasswordResetPreAuthCookie()
+	}
 	if !ok {
 		return authentication.BearerCredential{}, invalidWork()
 	}
@@ -136,6 +142,44 @@ func (OTPApplyWork) MarshalText() ([]byte, error) { return nil, invalidWork() }
 // Binding returns live exact-owner frozen custody, not release proof.
 func (w OTPApplyWork) Binding(p OTPReservationContributor) (OTPReservationBinding, error) {
 	return w.state.binding(p, otpCheck)
+}
+
+// RequireFeatureOrigin correlates an opaque native completion receipt with its
+// originating protected Work during the final phone-reset OTP check. Both
+// contributor instances must be the exact registered owners, and origin must
+// share the live private Work state, original plan and generation. Identical
+// scalar metadata from another Work is insufficient. Only a completed phone
+// Apply is accepted; this grants no SQL, factor verdict or mutation authority.
+// A trusted receipt owner may retain origin privately until this transaction
+// closes, solely for this guard; callers must not retain or reuse general Work
+// access. Zero, foreign, returned, canceled and other-profile handles deny.
+// No IO, contributor callback, code comparison or freshness renewal occurs.
+func (w OTPApplyWork) RequireFeatureOrigin(ctx context.Context, otpOwner OTPReservationContributor, featureOwner FeatureExecutionContributor, origin Work) error {
+	if ctx == nil {
+		return invalidWork()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b, err := w.Binding(otpOwner)
+	if err != nil {
+		return err
+	}
+	s := &w.state.reservation
+	p := s.plan
+	if origin.state != s.work.state || !phoneResetConsumptionPlan(p.snapshot()) ||
+		origin.state.featureApplying || origin.state.featureInvocation != nil ||
+		!origin.state.featureAttempted || origin.state.featureReceipt == nil ||
+		origin.state.featureReceipt.Operation != p.feature.Operation ||
+		origin.state.feature == nil || *origin.state.feature != *p.feature ||
+		origin.state.execution.reservation.journal.generation != b.Generation {
+		return invalidWork()
+	}
+	entry, err := s.coordinator.registry.selectFeatureOperation(*p.feature)
+	if err != nil || !sameParticipant(entry.contributor, featureOwner) {
+		return invalidWork()
+	}
+	return nil
 }
 
 // CommandSpec returns code-free original feature scope to the exact owner.

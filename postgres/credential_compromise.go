@@ -91,6 +91,13 @@ func CredentialCompromiseFields(s CredentialCompromiseIntent) ([]identity.Featur
 }
 
 func decodeCredentialCompromise(s identity.FeatureCommandSpec) (CredentialCompromiseIntent, error) {
+	return decodeCredentialCompromiseOwner(s, s.Operation.Owner)
+}
+
+// The ordinary compromise/change paths always use their operation owner. Only
+// the closed phone-reset mapper supplies the existing password credential owner;
+// this does not grant cross-owner mutation or relax either ordinary operation.
+func decodeCredentialCompromiseOwner(s identity.FeatureCommandSpec, owner string) (CredentialCompromiseIntent, error) {
 	values := make(map[string]identity.FeatureValue, 8)
 	for _, f := range s.Fields {
 		if !strings.HasPrefix(f.Name, "credential.") {
@@ -111,7 +118,7 @@ func decodeCredentialCompromise(s identity.FeatureCommandSpec) (CredentialCompro
 	}
 	intent.Credential.Kind = identity.CredentialKind(kind)
 	expected, err := CredentialCompromiseFields(intent)
-	if err != nil || intent.Credential.TenantID != s.Binding.TenantID || intent.Credential.UserID != s.Binding.UserID || string(intent.Credential.ID) != s.Binding.RecordID || intent.Credential.Owner != s.Operation.Owner {
+	if err != nil || intent.Credential.TenantID != s.Binding.TenantID || intent.Credential.UserID != s.Binding.UserID || string(intent.Credential.ID) != s.Binding.RecordID || intent.Credential.Owner != owner {
 		return CredentialCompromiseIntent{}, invalidCredentialCompromise()
 	}
 	for _, f := range expected {

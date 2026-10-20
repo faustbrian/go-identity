@@ -296,7 +296,7 @@ func (c *Coordinator) prepareRestoredFeature(b identity.CommandBinding, generate
 	// Only this closed retained-preparation route may restore consuming OTP.
 	// Ordinary command preparation remains closed to opaque code custody.
 	if final.OTP != nil {
-		if !(final.MFACompletion != nil && validMFACompletionPlan(b, final)) && !otpEnrollmentPreparation(final) {
+		if !(final.MFACompletion != nil && validMFACompletionPlan(b, final)) && !otpEnrollmentPreparation(final) && !phoneResetConsumptionPlan(final) {
 			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
 		}
 		return c.prepareOTPReservation(b, generated, final)
@@ -392,14 +392,15 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 }
 
 func preparationProtected(p CommandPlan) bool {
-	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil && !otpEnrollmentPreparation(p) || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	phone := phoneResetConsumptionPlan(p)
+	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil && !otpEnrollmentPreparation(p) && !phone || p.RiskEvidence != nil && !phone || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
 // Only the original closed reset consumption plan may precede hash generation.
 // It cannot add, replace or renew capability consumption in the final output.
 // The plan codec and registry independently require the exact native owners.
 func resetAuthenticationPreparation(p CommandPlan) bool {
-	return p.Feature != nil && p.Feature.Operation == credentialResetOperation() && p.Capability != nil && p.CommandCounters == nil
+	return phoneResetConsumptionPlan(p) || p.Feature != nil && p.Feature.Operation == credentialResetOperation() && p.Capability != nil && p.CommandCounters == nil
 }
 
 // The consuming magic-link declaration already contains the original verified
@@ -436,6 +437,9 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		return false
 	}
 	if (original.CommandCounters == nil) != (final.CommandCounters == nil) || original.CommandCounters != nil && *original.CommandCounters != *final.CommandCounters {
+		return false
+	}
+	if (original.RiskEvidence == nil) != (final.RiskEvidence == nil) || original.RiskEvidence != nil && *original.RiskEvidence != *final.RiskEvidence {
 		return false
 	}
 	// Restoration may generate session material, but cannot change whether
@@ -661,7 +665,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 		return Reservation{}, err
 	}
 	if admitted.otp != nil {
-		if admitted.mfaCompletion == nil && !otpEnrollmentPreparation(admitted.snapshot()) || generated.source == nil {
+		if admitted.mfaCompletion == nil && !otpEnrollmentPreparation(admitted.snapshot()) && !phoneResetConsumptionPlan(admitted.snapshot()) || generated.source == nil {
 			return Reservation{}, invalidPreparation()
 		}
 		otpJournal := r.journal
@@ -671,7 +675,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 		if plan == nil {
 			otpJournal.previousGeneration = 0
 		}
-		if plan == nil && (otpEnrollmentPreparation(admitted.snapshot()) || validMFACompletionPlan(admitted.binding, admitted.snapshot())) {
+		if plan == nil && (otpEnrollmentPreparation(admitted.snapshot()) || validMFACompletionPlan(admitted.binding, admitted.snapshot()) || phoneResetConsumptionPlan(admitted.snapshot())) {
 			// Reuse the native counted-denial phase in this same attachment
 			// transaction before any consuming participant is reserved. A correct
 			// precheck rolls back; a wrong submission retains debit/audit/terminal
@@ -723,7 +727,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 			}
 		}
 	}
-	if admitted.otp != nil || admitted.capability != nil {
+	if admitted.otp != nil || admitted.risk != nil || admitted.capability != nil {
 		// Denial must roll back the entire consuming prefix, not just its last
 		// participant. Otherwise a rejected command can strand the child's
 		// one-use reservation, or retain OTP after a later child conflict.
@@ -738,6 +742,12 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 		}
 		if admitted.otp != nil {
 			err = c.reserveOTP(ctx, participants, *generated.source, original, admitted, journal, owner)
+		}
+		if err == nil && admitted.risk != nil {
+			// The counted conjunction above must finish before any evidence use.
+			// Keep this reservation in the same rollback prefix as OTP/capability;
+			// later failure cannot strand a legitimate remaining one-use proof.
+			err = c.reserveRisk(ctx, participants, original, admitted, journal, owner)
 		}
 		if err == nil && admitted.capability != nil {
 			// Preserve capability-last enlistment for the joined OTP profile.
@@ -844,7 +854,7 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	}
 	p := w.state.execution.reservation.preparation
 	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && (plan.feature.Operation == credentialResetOperation() || plan.feature.Operation == magicLinkConsumeOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
+	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
 		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
 			return invalidPreparation()
 		}
