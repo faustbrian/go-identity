@@ -145,7 +145,8 @@ func compromiseCommand(p CredentialCompromiseContributor, c identity.Command, pl
 	}
 	op, event := "identity.password.mark-compromised", "password.compromised.v1"
 	if intent.Credential.Owner == "passkey" {
-		op, event = "identity.passkey.mark-compromised", "passkey.compromised.v1"
+		op = "identity.passkey.mark-compromised"
+		event = "passkey.compromised.v1"
 	}
 	if s.Operation.OperationID != op || s.Operation.RecordRequirement != identity.FeatureRecordRequired || plan.Lifecycle.EventType != event || plan.Lifecycle.BeforeVersion != intent.Credential.Version || plan.Lifecycle.AfterVersion != intent.Credential.Version+1 {
 		return CredentialCompromiseIntent{}, invalidCredentialCompromise()
