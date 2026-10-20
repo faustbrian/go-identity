@@ -25,6 +25,16 @@ func passwordResetOriginalMaterial(c identity.Command, policy primitive.Policy, 
 	if err != nil {
 		return kernel.CredentialResetIntent{}, primitive.EncodedHash{}, err
 	}
+	spec, ok := c.PasswordResetFeature()
+	if !ok {
+		spec, ok = c.PhonePasswordResetFeature()
+	}
+	// The shared material writer must not let a signed phone grant acquire the
+	// weaker email command. The selected profile independently authenticates
+	// the grant's exact purpose and all original phone/factor dependencies.
+	if !ok || spec.Operation.OperationID != grant.Payload().Operation {
+		return kernel.CredentialResetIntent{}, primitive.EncodedHash{}, identity.ForbiddenError{}
+	}
 	if err := passwordResetOriginalIntent(i, profile, original, grant, consumption, now); err != nil {
 		return kernel.CredentialResetIntent{}, primitive.EncodedHash{}, err
 	}
@@ -34,7 +44,7 @@ func passwordResetOriginalMaterial(c identity.Command, policy primitive.Policy, 
 func passwordResetOriginalIntent(i kernel.CredentialResetIntent, profile password.ResetProfile, original password.ResetGrantSpec, grant capability.Grant, consumption kernel.CapabilityPlan, now time.Time) error {
 	payload := grant.Payload()
 	r := i.Replacement
-	if profile.Authorize(grant, original, now) != nil || r.Credential.TenantID != original.TenantID || r.Credential.UserID != original.UserID || r.Credential.ID != original.CredentialID || r.Credential.Version != original.CredentialVersion || r.ExpectedAuthorityVersion != original.CredentialAuthorityVersion || consumption.Purpose != "identity.password.reset-complete" || consumption.CapabilityID != payload.ID || consumption.ProofFingerprint == ([32]byte{}) || consumption.ProofFingerprint != grant.EnvelopeDigest() || consumption.ReplayKeyVersion == 0 || consumption.ReplayDigest == ([32]byte{}) || consumption.MaxUses != 1 || !consumption.ExpiresAt.Equal(original.ExpiresAt) {
+	if profile.Authorize(grant, original, now) != nil || r.Credential.TenantID != original.TenantID || r.Credential.UserID != original.UserID || r.Credential.ID != original.CredentialID || r.Credential.Version != original.CredentialVersion || r.ExpectedAuthorityVersion != original.CredentialAuthorityVersion || consumption.Purpose != capability.Purpose(payload.Operation) || consumption.CapabilityID != payload.ID || consumption.ProofFingerprint == ([32]byte{}) || consumption.ProofFingerprint != grant.EnvelopeDigest() || consumption.ReplayKeyVersion == 0 || consumption.ReplayDigest == ([32]byte{}) || consumption.MaxUses != 1 || !consumption.ExpiresAt.Equal(original.ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	return nil

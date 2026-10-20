@@ -15,18 +15,42 @@ import (
 )
 
 func TestPasswordResetOriginalMaterialBindsSignedPredecessors(t *testing.T) {
+	for _, phoneReset := range []bool{false, true} {
+		t.Run(map[bool]string{false: "email", true: "phone"}[phoneReset], func(t *testing.T) {
+			testPasswordResetOriginalMaterial(t, phoneReset)
+		})
+	}
+}
+
+func testPasswordResetOriginalMaterial(t *testing.T, phoneReset bool) {
+	t.Helper()
 	spec, previous, encoded, policy := replacementFixture(t)
 	spec.Operation, spec.Binding.OperationID, spec.Binding.SchemaID = resetOperation(), "identity.password.reset-complete", "password-reset-complete"
+	if phoneReset {
+		spec.Operation = phonePasswordResetOperation()
+		spec.Binding.OperationID, spec.Binding.SchemaID = spec.Operation.OperationID, spec.Operation.SchemaID
+	}
 	origin, err := identity.NewCommandID()
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
-	profile, err := password.NewResetProfile(password.ResetProfileConfig{Issuer: "https://identity.test", Audience: "reset", MaximumLifetime: time.Minute, Callbacks: []string{"https://identity.test/reset"}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: {31}}})
+	configuration := password.ResetProfileConfig{Issuer: "https://identity.test", Audience: "reset", MaximumLifetime: time.Minute, Callbacks: []string{"https://identity.test/reset"}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: {31}}}
+	constructor := password.NewResetProfile
+	if phoneReset {
+		constructor = password.NewPhoneResetProfile
+	}
+	profile, err := constructor(configuration)
 	if err != nil {
 		t.Fatal(err)
 	}
 	original := password.ResetGrantSpec{TenantID: "tenant", UserID: "user", CredentialID: "password", CredentialVersion: 7, CredentialAuthorityVersion: 5, UserAuthorityVersion: 3, IdentifierID: "original-email", IdentifierVersion: 11, OriginCommandID: origin, RecoveryPath: auth.RecoveryPathEmail, CallbackURL: "https://identity.test/reset", IssuedAt: at, ExpiresAt: at.Add(time.Minute)}
+	if phoneReset {
+		original.IdentifierID = "original-phone"
+		original.RecoveryPath = auth.RecoveryPathPhone
+		original.FactorVersion = 4
+		original.Phone = password.PhoneResetBinding{PreAuthTransaction: "original-phone-browser", OTPChallengeID: "original-phone-challenge", AttemptID: origin, NumberDigest: [32]byte{91}, NumberKeyVersion: 1, VerificationVersion: 3, FactorID: "independent-confirmed-totp", FactorVersion: 5, RiskPolicyVersion: 3}
+	}
 	key := []byte(strings.Repeat("x", 32))
 	signer, err := capability.NewHMACSHA256Signer("synthetic-reset", key)
 	if err != nil {
@@ -54,9 +78,17 @@ func TestPasswordResetOriginalMaterialBindsSignedPredecessors(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer proof.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
-	grant, err := engine.Verify(context.Background(), proof, "identity.password.reset-complete", "reset")
+	grant, err := engine.Verify(context.Background(), proof, capability.Purpose(spec.Operation.OperationID), "reset")
 	if err != nil {
 		t.Fatal(err)
+	}
+	newCommand := func(s identity.FeatureCommandSpec) (identity.Command, error) {
+		if !phoneReset {
+			return identity.NewFeaturePasswordResetCommand(s, encoded, proof)
+		}
+		sms, _ := auth.NewOneTimeCode("123456")
+		totp, _ := auth.NewOneTimeCode("654321")
+		return identity.NewFeaturePhonePasswordResetCommand(s, encoded, proof, sms, totp)
 	}
 	for _, enabled := range []bool{false, true} {
 		intent := kernel.CredentialResetIntent{Replacement: previous, ExpectedEnabled: enabled}
@@ -67,16 +99,30 @@ func TestPasswordResetOriginalMaterialBindsSignedPredecessors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		command, err := identity.NewFeaturePasswordResetCommand(spec, encoded, proof)
+		command, err := newCommand(spec)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// This is independently specified consumption metadata, not durable
 		// issuance proof. The native owner must obtain it from the real issuer.
-		plan := kernel.CapabilityPlan{CapabilityID: payload.ID, Purpose: "identity.password.reset-complete", ReplayDigest: [32]byte{19}, ReplayKeyVersion: 2, ProofFingerprint: grant.EnvelopeDigest(), ExpiresAt: original.ExpiresAt, MaxUses: 1}
+		plan := kernel.CapabilityPlan{CapabilityID: payload.ID, Purpose: capability.Purpose(spec.Operation.OperationID), ReplayDigest: [32]byte{19}, ReplayKeyVersion: 2, ProofFingerprint: grant.EnvelopeDigest(), ExpiresAt: original.ExpiresAt, MaxUses: 1}
 		got, hash, err := passwordResetOriginalMaterial(command, policy, profile, original, grant, plan, at)
 		if err != nil || got != intent || hash.String() != encoded {
 			t.Fatal("original signed reset predecessors denied")
+		}
+		if phoneReset {
+			// A genuinely signed phone grant cannot authorize the weaker email
+			// command, even when all password predecessors happen to match.
+			email := spec
+			email.Operation = resetOperation()
+			email.Binding.OperationID, email.Binding.SchemaID = email.Operation.OperationID, email.Operation.SchemaID
+			weaker, e := identity.NewFeaturePasswordResetCommand(email, encoded, proof)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, _, e := passwordResetOriginalMaterial(weaker, policy, profile, original, grant, plan, at); !errors.Is(e, identity.ForbiddenError{}) {
+				t.Fatal("signed phone grant acquired email command material", e)
+			}
 		}
 		for _, change := range []func(*kernel.CredentialResetIntent){
 			func(i *kernel.CredentialResetIntent) { i.Replacement.Credential.Version++ },
@@ -89,7 +135,7 @@ func TestPasswordResetOriginalMaterialBindsSignedPredecessors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			changedCommand, err := identity.NewFeaturePasswordResetCommand(changedSpec, encoded, proof)
+			changedCommand, err := newCommand(changedSpec)
 			if err != nil {
 				t.Fatal(err)
 			}

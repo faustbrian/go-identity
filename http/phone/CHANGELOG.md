@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicitly selected phone/password recovery request and completion
+  transport with original recovery-browser/device custody, separate owned risk
+  evaluation and staged shared rate admission. Request acknowledgments reveal
+  neither recipient eligibility nor private commitment; completion delegates
+  canonical capability, SMS, independent TOTP, password screening and atomic
+  session effects to the native owner. Closed OpenAPI enables no fallback or
+  implicit session, and original retry evidence is never renewed.
+
 - Add opt-in cookie-only verified-phone replacement sending, keyed completion
   and code-free original recovery with exact predecessor/proof/CSRF binding,
   shared rate admission and closed JSON/OpenAPI. Historical responses never

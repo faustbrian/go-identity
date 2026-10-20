@@ -19,14 +19,14 @@ require (
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261016111510-a2bc669715c6
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261018164858-91ea1f9395f6
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261018013113-bb569ec9d44c
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261020161549-10df24392384
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261020163503-ea96b3da9b18
 	github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6
-	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261019135947-110c9b66a26e
+	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6
 	github.com/faustbrian/go-identity/password v0.0.0-20261020120243-19670fe0ec13
-	github.com/faustbrian/go-identity/phone v0.0.0-20261020145705-eb408832e8af
+	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261020160457-d2d1fa59e027
-	github.com/faustbrian/go-identity/risk v0.0.0-20261020120243-19670fe0ec13
-	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261018214852-8c1464f073aa
+	github.com/faustbrian/go-identity/risk v0.0.0-20261020133538-6d5c539268df
+	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261020123641-81bbbbbffa8e
 	github.com/faustbrian/go-identity/session v0.0.0-20261020084459-928f9b710602
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261020162400-f96bcf8bf25d
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
@@ -36,7 +36,7 @@ require (
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
-	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261015133445-5c139522d060
+	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261020135213-493107bf82af
 	github.com/faustbrian/go-transactional-outbox/v2 v2.0.2-0.20261015062550-37ea15436ae9
 	github.com/jackc/pgx/v5 v5.11.0
 )

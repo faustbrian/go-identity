@@ -148,6 +148,53 @@ operation to the existing replacement marker. This migration alone enables no
 reset service: original capability/SMS/TOTP/risk admission and atomic session
 revocation remain the native workflow's responsibility.
 
+## Explicit phone-password recovery
+
+`NewPhonePasswordResetRequestService(primary, numbers, config, localKeys)`
+selects request-only native recovery. Both `Enabled` and `AcceptCarrierRisk`
+must be true. The configured SMS issuer and canonical-link delivery must share
+the actual delivery contributor. Retain the original configuration, dedicated
+intent/request keys, identifier-binding profile and encryption keys for the
+supported recovery lifetime. Constructors perform no IO or migrations.
+
+Start with a lookup-free, canonical-target-bound recovery pre-auth transaction
+whose purpose is `PreAuthPhonePasswordRecovery`. Call
+`EvaluatePasswordResetRequestRisk` with its actual browser and canonical number;
+the native owner selects the current verified phone, password and confirmed
+independent TOTP account. Call `RequestPasswordReset` with that original evidence
+and a stable request key. The enumeration-safe receipt means acceptance, not
+delivery or proof that an account exists. Dispatch the two encrypted original
+SMS intents using the existing delivery worker and configured sender.
+
+Compose `NewPhonePasswordResetService(requestOwner, completionConfig)` to enable
+completion. Supply the actual native TOTP verifier, retained SMS attempt-key
+version and protected hash configuration whose HIBP policy explicitly selects
+`identity.phone.password-reset-complete`. The separate completion-risk request
+uses the delivered canonical capability and original browser, never a body user
+ID or a caller-provided factor/risk verdict. Keep its distinct issuance command
+and evidence with the consuming completion command. `PasswordResetComplete`
+requires that capability, SMS code, independent TOTP and borrowed replacement
+password together; it issues no session and offers no SMS-only/email fallback.
+
+The sole coordinator transaction consumes the actual risk, capability, SMS and
+TOTP replay authority with password replacement, all-session revocation, audit
+and lifecycle output. Install kernel `CredentialResetMigrationSource` followed
+by its `PhonePasswordResetMigrationSource`, the password adapter's same-named
+phone suffix, and the session adapter's ordinary reset plus phone-reset suffixes
+after their existing histories. Also install actual request/preparation,
+OTP/TOTP, risk reservation/counter, issuer/replay, delivery and audit/outbox
+histories. The outbox identity adapter must support the exact phone-reset
+operation while preserving `password.reset.v1`; earlier email-only adapters
+cannot complete this profile. Never replay an older purpose constraint later.
+
+Matching fresh-service retries return original metadata without rehashing or
+renewing provider/risk/OTP freshness; changed original input conflicts.
+`RecoverPasswordResetRequest` and `RecoverPasswordResetComplete` authorize
+original scoped history without code, password or capability re-presentation.
+Unknown outcomes remain uncertain until that existing recovery owner resolves
+them. HTTP/reference composition is selected separately; these constructors
+register no routes or metadata.
+
 ## Explicit username password signin
 
 Set `SigninConfig.Username` to the same immutable comparison policy used for

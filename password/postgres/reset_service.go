@@ -446,13 +446,23 @@ func (s *ResetService) RecoverResetComplete(ctx context.Context, q identity.Reco
 }
 
 func resetCompleteReceipt(id identity.CommandID, r identity.CommandResult, err error) (password.ResetCompleteResult, error) {
+	return resetCompleteReceiptForOperation(id, r, err, resetOperation())
+}
+
+func phoneResetCompleteReceipt(id identity.CommandID, r identity.CommandResult, err error) (password.ResetCompleteResult, error) {
+	return resetCompleteReceiptForOperation(id, r, err, phonePasswordResetOperation())
+}
+
+// Preserve each caller's exact operation when projecting kernel history. Phone
+// and email use the same result shape, not interchangeable recovery authority.
+func resetCompleteReceiptForOperation(id identity.CommandID, r identity.CommandResult, err error, operation identity.FeatureOperation) (password.ResetCompleteResult, error) {
 	out := password.ResetCompleteResult{CommandID: id, Outcome: r.Outcome}
 	var collision identity.ConflictError
 	if errors.As(err, &collision) {
 		out.Outcome = identity.CommitOutcomeConflict
 	}
 	if r.Outcome == identity.CommitOutcomeCommitted {
-		if r.Feature == nil || r.Feature.Operation != resetOperation() {
+		if r.Feature == nil || r.Feature.Operation != operation {
 			return password.ResetCompleteResult{}, password.ErrPasswordWork
 		}
 		out.CredentialVersion, out.SessionsRevoked = r.Feature.AfterVersion, true

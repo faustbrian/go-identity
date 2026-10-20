@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose explicit native phone-password recovery with original browser,
+  distinct initiation/completion risk, delivered SMS and canonical reset link,
+  independently confirmed TOTP, HIBP-screened replacement and atomic all-session
+  revocation. Original retries/recovery retain their original plans and expiry.
+  Install the selected kernel/password/session phone-reset histories and use
+  the outbox adapter's phone-reset profile before enabling it; no HTTP route or
+  weaker fallback is enabled by construction.
+
 - Admit exact self-only organization archive/restore action-primary custody
   under the lifecycle schema. Apply the forward
   `OrganizationLifecycleReauthenticationMigrationSource` after every selected

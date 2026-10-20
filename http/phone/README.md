@@ -2,9 +2,54 @@
 
 Go 1.27. This optional module independently selects existing-account
 **cookie-only** enrollment, verified-phone replacement or self-removal, with
-their original recovery. It supplies no UI. Signup, signin, reset and enrolled-
+their original recovery. An additional explicit profile selects no-session
+phone/password recovery below. It supplies no UI. Signup, signin and enrolled-
 MFA continuation are not enabled. Each profile is separately opt-in below.
 Full phone-platform qualification remains unfinished.
+
+## Explicit phone/password recovery
+
+`NewPasswordResetFeature(PasswordResetConfig{...})` selects only these POSTs:
+
+| Path | Closed JSON body | Retry header |
+| --- | --- | --- |
+| `/v1/phone/password-reset-request` | `commandID`, `riskIssuanceCommandID`, `flowID`, `number` | Exactly one `Idempotency-Key` |
+| `/v1/phone/password-reset-complete` | `commandID`, `riskIssuanceCommandID`, `flowID`, `token`, `phoneCode`, `totpCode`, `newPassword` | Forbidden |
+
+Both require exact HTTPS tenant host/Origin, the original `__Host-identity_flow`
+cookie and the deployment-signed `__Host-identity_device` cookie. Authorization,
+`X-CSRF-Token`, remember, actor/user/tenant overrides, queries, trailers and extra
+or duplicate JSON members deny. Initiate a separately selected target-bound
+`PreAuthPhonePasswordRecovery` browser first; it carries no remember policy.
+Retain every original command, risk-issuance ID, cookie and input across retries.
+Each risk-issuance command is distinct from its consuming command. Use distinct
+initiation and completion risk artifacts; never submit raw carrier facts/verdicts.
+
+Supply the actual native `PasswordResetService`, owned phone-risk evaluator and
+authenticated completion rate-source reader. Request admission counts IP and
+canonical destination without looking up an account. Completion counts IP before
+capability/source work, then the authenticated subject/original SMS challenge
+with its immutable issued interval. The native workflow repeats current
+authority/freshness and atomically consumes canonical capability, SMS, independent
+confirmed TOTP and risk evidence with HIBP-screened password replacement and
+all-session revocation. No SMS-only fallback, session issuance or cookie mutation
+exists. Only the native owner distinguishes new consumption from original
+terminal replay; HTTP never renews evidence to make a retry pass.
+
+For any valid, rate-admitted request, **202 `accepted:true` means only public
+acknowledgment**, not account eligibility, durable queueing or SMS delivery.
+The same response covers native/risk/provider failure and exposes only the
+client's original attempt ID. This prevents eligibility enumeration; use native
+operational state and actual sender observations to establish delivery. The
+transport does not retry or fabricate a committed receipt.
+
+Successful completion returns credential-free original command/outcome,
+credential version and required session-revocation result. An error never claims
+completion or session effects; an unknown result remains unknown. Keep original
+scope for the native code-free recovery APIs; this feature adds no public history
+route. All responses are no-store/nosniff. Borrowed password/capability custody is
+terminated after each bounded request, including failure. Drain requests before
+closing borrowed shared rate, database or key owners.
 
 Construct `NewVerificationFeature(VerificationConfig{...})` and pass its feature
 to the base HTTP router. Without that explicit selection there are no phone
