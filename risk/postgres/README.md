@@ -357,7 +357,7 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   custody, not native publication or healthy admission. The original lease/page
   APIs remain usable on schemas without this optional migration.
 
-- Optional `Config.UseIssuer` installs pure use preparation only after matching
+- Optional `Config.UseIssuer` installs use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.
   `PrepareEvidenceUse` accepts a core precheck, original trusted request and
   native phone initiation feature spec. It freezes the exact phone, pre-auth,
@@ -369,8 +369,38 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   provider configuration without callbacks or IO. It uses the signed historical
   check time, rounded upward to microseconds, without rewriting that time or
   expiry; it does not establish current validity. Nil preserves existing setup.
-  Native current counters, same-domain row checks and finalization remain
-  required; this partial method does not enable `RiskExecutionContributor`.
+  `PreparePhoneResetCompletionEvidenceUse` instead accepts an existing sealed
+  phone-reset input or generated command. It preserves the original password
+  or verifier, canonical reset capability, SMS, independent TOTP and actual
+  browser cookie without exposing a generic feature or single-code variant.
+  Completion requires its own independently issued
+  `phone-password-reset-complete` evidence; initiation cannot substitute.
+  The pinned public coordinator currently enables initiation execution only.
+  Completion mapping/restoration is preparatory and requires the jointly
+  consuming coordinator before a phone-reset workflow can execute.
+
+  Select `Config.UseCounters` with the exact `DurableCounterStore` used by
+  issuance to enable current execution. Install its independent
+  `DurableCounterMigrationSource` and the existing evidence reservation history
+  first. Reuse the same policy value and complete retained counter keys as the
+  core issuer, not a newly constructed equivalent policy. Nil counter custody
+  retains preparation/reservation compatibility but denies domain use.
+
+  `CheckRiskEvidence` and `FinalizeRiskEvidence` implement the existing sealed
+  coordinator execution phases. They lock the original issued row and exact
+  reserved command/fingerprint/generation, authenticate current policy/provider
+  configuration, require the original sealed durable counter attempt and read
+  complete retained keys plus current unchanged windows. Missing, corrupt,
+  expired, foreign or over-limit authority denies. A shared native counter-scope
+  lock fences the durable owner's charges and key registration through commit;
+  these checks never charge, reset a window, call a provider or open another
+  transaction. The signed check instant and original expiry never renew.
+  Finalization repeats current checks and CASes the same reserved generation
+  with exclusive database-time expiry in the protected mutation transaction.
+  Unknown retains reserved custody; only existing coordinator-proven noncommit
+  can terminally release either phase. The phone owner still supplies current
+  target/browser/factor authority and the real OTP/capability/password/session
+  effects; adapter execution is not proof of that complete recovery journey.
 - `OwnedConfirmation` exports an already recorded exact publication through
   the configured core `VelocityConfirmation` contract. It does not implicitly
   confirm, reconcile by writing, or perform native IO. A single outer journal

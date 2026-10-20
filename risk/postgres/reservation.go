@@ -14,7 +14,7 @@ import (
 
 var _ identitypostgres.RiskReservationContributor = (*Repository)(nil)
 
-// ReserveRiskEvidence authenticates the frozen initiation use and locks its
+// ReserveRiskEvidence authenticates the frozen phase-specific use and locks its
 // existing primary issued row through the sole coordinator's reservation Work.
 // Exactly one command obtains ownership. No bearer, response or domain authority
 // is returned. Missing, expired, terminal or mismatched evidence yields the same
@@ -114,7 +114,13 @@ func (r *Repository) restoreUse(b identitypostgres.RiskReservationBinding) (risk
 func (r *Repository) restoreHistoricalUse(b identitypostgres.RiskReservationBinding) (risk.EvidenceUseClaim, error) {
 	p := b.Plan
 	c := b.Command
-	if r == nil || p.PolicyVersion == 0 || p.Tenant != string(c.TenantID) || p.Subject != string(c.UserID) || p.ConsumerCommandID != string(c.CommandID) || p.ConsumerActor != string(c.ActorID) || p.RecoveryOperation != c.OperationID || c.OperationID != "identity.phone.password-reset-request" || c.SchemaID != "identity.phone.password-reset-request.native-v1" || c.SchemaVersion != 1 || p.Phase != string(risk.PhoneResetInitiation) || p.Purpose != "phone-password-reset-initiate" {
+	phase, purpose := risk.PhoneResetInitiation, "phone-password-reset-initiate"
+	op := nativeUseOperation()
+	if c.OperationID == "identity.phone.password-reset-complete" {
+		phase, purpose = risk.PhoneResetCompletion, "phone-password-reset-complete"
+		op = nativeCompletionUseOperation()
+	}
+	if r == nil || p.PolicyVersion == 0 || p.Tenant != string(c.TenantID) || p.Subject != string(c.UserID) || p.ConsumerCommandID != string(c.CommandID) || p.ConsumerActor != string(c.ActorID) || p.RecoveryOperation != c.OperationID || c.OperationID != op.OperationID || c.SchemaID != op.SchemaID || c.SchemaVersion != op.SchemaVersion || p.Phase != string(phase) || p.Purpose != purpose {
 		return risk.EvidenceUseClaim{}, identity.ConflictError{}
 	}
 	prepared := risk.PreparedEvidenceUse{Binding: risk.EvidenceIntentBinding{CommandID: p.IssuanceCommandID, Tenant: p.Tenant, Subject: p.Subject, Actor: p.IssuerActor, Purpose: p.Purpose, Phase: risk.IssuancePhase(p.Phase), RecoveryOperation: risk.Action(p.RecoveryOperation), PolicyVersion: p.PolicyVersion, KeyVersion: p.KeyVersion, IntentDigest: p.IntentDigest}, ConsumerCommandID: p.ConsumerCommandID, ConsumerActor: p.ConsumerActor, EvidenceDigest: p.EvidenceDigest, ProofDigest: p.ProofDigest, Signature: p.Signature, IssuedAt: p.IssuedAt, CheckedAt: p.CheckedAt, ExpiresAt: p.ExpiresAt}

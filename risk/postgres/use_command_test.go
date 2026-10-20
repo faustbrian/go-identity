@@ -37,8 +37,8 @@ func TestNativeEvidenceUsePreparationAuthenticatesCompleteScope(t *testing.T) {
 	if err != nil || plan != nativeUsePlan(use.Prepared()) || r.ValidateRiskEvidenceCommand(command, plan) != nil {
 		t.Fatal("exact scope rejected or interval changed", err)
 	}
-	if _, enabled := any(r).(identitypostgres.RiskExecutionContributor); enabled {
-		t.Fatal("partial validation enabled domain execution")
+	if _, enabled := any(r).(identitypostgres.RiskExecutionContributor); !enabled {
+		t.Fatal("native risk consuming phases missing")
 	}
 	// Caller projections and issuer variables are not retained mutable custody.
 	issuer = risk.PhoneEvidenceIssuer{}

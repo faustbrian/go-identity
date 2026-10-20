@@ -14,6 +14,59 @@ func nativeUsePlan(p risk.PreparedEvidenceUse) identitypostgres.RiskEvidencePlan
 	return identitypostgres.RiskEvidencePlan{IssuanceCommandID: p.Binding.CommandID, Tenant: p.Binding.Tenant, Subject: p.Binding.Subject, IssuerActor: p.Binding.Actor, Purpose: p.Binding.Purpose, Phase: string(p.Binding.Phase), RecoveryOperation: string(p.Binding.RecoveryOperation), PolicyVersion: p.Binding.PolicyVersion, KeyVersion: p.Binding.KeyVersion, IntentDigest: p.Binding.IntentDigest, ConsumerCommandID: p.ConsumerCommandID, ConsumerActor: p.ConsumerActor, EvidenceDigest: p.EvidenceDigest, ProofDigest: p.ProofDigest, Signature: p.Signature, IssuedAt: p.IssuedAt, CheckedAt: p.CheckedAt, ExpiresAt: p.ExpiresAt}
 }
 
+func TestNativeCompletionUseAuthenticatesOnlyIndependentCompletionPurpose(t *testing.T) {
+	issue, key := evaluatedIssue(t, risk.PhoneResetCompletion)
+	at := issue.Prepared().PreparedAt
+	record, err := issue.Materialize(at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, original, _ := issuanceFixture(t, risk.PhoneResetCompletion, at, issue.Prepared().Binding.CommandID, captureExecutor{}, true, nil)
+	id, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	use, err := issuer.PrecheckUse(t.Context(), original, risk.EvidenceUseRequest{CommandID: string(id), Actor: "phone-service", Recovery: original.Recovery, Reference: record.Reference}, record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRepository(Config{Schema: "risk_store", PolicyVersion: 3, EvidenceKeys: []risk.EvidenceKey{key}, EnvelopeKeys: map[string][]byte{"wrapping_v1": wrappingKey(1)}, CurrentEnvelopeKey: "wrapping_v1", UseIssuer: &issuer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := identitypostgres.RiskReservationBinding{Plan: nativeUsePlan(use.Prepared()), Command: identity.CommandBinding{CommandID: id, TenantID: "tenant", UserID: "subject", ActorID: "phone-service", OperationID: "identity.phone.password-reset-complete", SchemaID: "identity.phone.password-reset-complete.native-v1", SchemaVersion: 1}}
+	claim, err := r.restoreUse(b)
+	if err != nil || claim.Prepared() != use.Prepared() {
+		t.Fatal("independently issued completion evidence cannot be reserved", err)
+	}
+	for _, change := range []func(*identitypostgres.RiskReservationBinding){
+		func(b *identitypostgres.RiskReservationBinding) { b.Plan.Purpose = "phone-password-reset-initiate" },
+		func(b *identitypostgres.RiskReservationBinding) { b.Plan.Phase = string(risk.PhoneResetInitiation) },
+		func(b *identitypostgres.RiskReservationBinding) {
+			b.Command.OperationID = "identity.phone.password-reset-request"
+		},
+		func(b *identitypostgres.RiskReservationBinding) {
+			b.Command.SchemaID = "identity.phone.password-reset-request.native-v1"
+		},
+		func(b *identitypostgres.RiskReservationBinding) { b.Command.SchemaVersion++ },
+		func(b *identitypostgres.RiskReservationBinding) { b.Command.UserID = "foreign" },
+		func(b *identitypostgres.RiskReservationBinding) { b.Plan.ConsumerActor = "foreign" },
+	} {
+		changed := b
+		change(&changed)
+		if _, err := r.restoreUse(changed); err == nil {
+			t.Fatal("completion purpose or ownership substituted")
+		}
+	}
+	r.policy++
+	if _, err := r.restoreUse(b); err == nil {
+		t.Fatal("historical policy enabled current completion")
+	}
+	if got, err := r.restoreHistoricalUse(b); err != nil || got.Prepared() != use.Prepared() {
+		t.Fatal("historical completion custody stranded during noncommit recovery", err)
+	}
+}
+
 func TestNativeRiskUseAuthenticationAndInvalidWork(t *testing.T) {
 	issue, key := evaluatedIssue(t, risk.PhoneResetInitiation)
 	at := issue.Prepared().PreparedAt

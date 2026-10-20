@@ -42,9 +42,16 @@ type Config struct {
 	LockoutMutations *LockoutMutationConfig
 	// UseIssuer optionally installs pure original-scope authentication for native
 	// use preparation. It must match PolicyVersion and every retained EvidenceKey.
-	// The issuer value is copied; nil preserves reservation-only setup. This
-	// does not enable domain execution or supply current counter authority.
+	// The issuer value is copied; nil preserves reservation-only setup. Current
+	// execution additionally requires UseCounters and the original durable rows.
 	UseIssuer *risk.PhoneEvidenceIssuer
+	// UseCounters selects the same durable counter owner used by phone evidence
+	// issuance. Install DurableCounterMigrationSource first. Current use reads
+	// its existing scope, original authenticated attempt and current windows
+	// through the sole Risk Work, never its pool or a second transaction. The
+	// store's immutable custody is borrowed; its pool remains caller-owned.
+	// Nil preserves pure preparation/reservation, but domain use fails closed.
+	UseCounters *DurableCounterStore
 	// CaptchaCustody selects 1..32 immutable current verifier profiles for native
 	// CAPTCHA issuance and current consuming phases. Nil preserves existing setup.
 	// Every profile must match
@@ -72,9 +79,10 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // consuming recovery and terminal release use that coordinator as well.
 // Protected counters, authorized native lockout transitions and native CAPTCHA
 // issuance and consuming custody are opt-in. CAPTCHA check/finalize and proven
-// terminal release run through the same coordinator; phone domain consumption,
-// counter retirement and pruning remain unsupported. Selection is not a
-// complete consumer workflow service.
+// terminal release run through the same coordinator. Phone use additionally
+// needs exact issuer/durable-counter custody; the phone workflow still owns
+// domain/factor authority. Counter retirement and pruning remain unsupported.
+// Selection is not a complete consumer workflow service.
 type Repository struct {
 	schema          string
 	policy          uint64
@@ -83,6 +91,7 @@ type Repository struct {
 	counters        *risk.CommandCounterPolicyConfig
 	counterPolicy   risk.CommandCounterPolicy
 	useIssuer       *risk.PhoneEvidenceIssuer
+	useCounters     *durableCounterState
 	lockouts        bool
 	lockoutMutation *lockoutMutationState
 	captcha         []risk.CaptchaEvidenceCustody
@@ -141,6 +150,17 @@ func NewRepository(c Config) (*Repository, error) {
 			return nil, risk.ErrInvalidPolicy
 		}
 		r.useIssuer = &issuer
+	}
+	if c.UseCounters != nil {
+		state := c.UseCounters.state
+		if r.useIssuer == nil || state == nil || state.schema != r.schema {
+			return nil, risk.ErrInvalidPolicy
+		}
+		admission, err := state.config.Policy.Admit("identity.phone.password-reset-complete")
+		if err != nil || admission.PolicyVersion != r.policy || admission.Profile.Window%time.Microsecond != 0 {
+			return nil, risk.ErrInvalidPolicy
+		}
+		r.useCounters = state
 	}
 	if c.CommandCounters != nil {
 		copy := *c.CommandCounters
@@ -284,7 +304,7 @@ func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, 
 // positive evidence, never a reconstructed successful receipt. Absence is
 // negative only here: issuance is same-Work atomic and this profile never prunes
 // rows. Corrupt or foreign linkage is unknown. Expiry is not rollback proof.
-// For initiation consumption, only exact reserved historical custody supplies
+// For phone consumption, only exact reserved historical custody supplies
 // noncommit evidence for this participant; every other participant must supply
 // its own evidence before the coordinator grants terminal release authority.
 func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
@@ -315,7 +335,7 @@ func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.
 	if b, e := w.CommandCounterBinding(r); e == nil {
 		return r.recoverCommandCounter(ctx, w, b)
 	}
-	if scope, err := w.Scope(); err == nil && scope.OperationID == "identity.phone.password-reset-request" {
+	if scope, err := w.Scope(); err == nil && (scope.OperationID == "identity.phone.password-reset-request" || scope.OperationID == "identity.phone.password-reset-complete") {
 		return r.recoverRiskEvidence(ctx, w)
 	}
 	b, feature, transition, err := w.FeatureScope(r)

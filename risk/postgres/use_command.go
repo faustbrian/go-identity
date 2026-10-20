@@ -28,6 +28,24 @@ func (r *Repository) PrepareEvidenceUse(spec identity.FeatureCommandSpec, origin
 	if r == nil || r.useIssuer == nil || spec.Operation != nativeUseOperation() || len(spec.Fields) > 121 {
 		return fail()
 	}
+	spec, plan, err := r.prepareUseScope(spec, original, use)
+	if err != nil {
+		return fail()
+	}
+	command, err := identity.NewFeatureCommand(spec)
+	if err != nil || r.ValidateRiskEvidenceCommand(command, plan) != nil {
+		return fail()
+	}
+	return command, plan, nil
+}
+
+func (r *Repository) prepareUseScope(spec identity.FeatureCommandSpec, original risk.PhoneEvidenceRequest, use risk.EvidenceUse) (identity.FeatureCommandSpec, identitypostgres.RiskEvidencePlan, error) {
+	fail := func() (identity.FeatureCommandSpec, identitypostgres.RiskEvidencePlan, error) {
+		return identity.FeatureCommandSpec{}, identitypostgres.RiskEvidencePlan{}, risk.ErrInvalidEvidenceExecution
+	}
+	if r == nil || r.useIssuer == nil || len(spec.Fields) > 121 {
+		return fail()
+	}
 	for _, f := range spec.Fields {
 		if f.Name == "risk.intent" || strings.HasPrefix(f.Name, "risk.use.") {
 			return fail()
@@ -47,34 +65,49 @@ func (r *Repository) PrepareEvidenceUse(spec identity.FeatureCommandSpec, origin
 		textField("risk.use.network", original.Subject.Network),
 		textField("risk.use.device", original.Subject.Device),
 		textField("risk.use.identifier", original.Subject.IdentifierDigest))
-	command, err := identity.NewFeatureCommand(spec)
-	plan := evidenceUsePlan(p)
-	if err != nil || r.ValidateRiskEvidenceCommand(command, plan) != nil {
-		return fail()
-	}
-	return command, plan, nil
+	return spec, evidenceUsePlan(p), nil
 }
 
 // ValidateRiskEvidenceCommand authenticates the complete native original intent
 // and signed consuming plan under configured current policy/provider versions.
-// Only phone-reset initiation is supported. Non-risk feature fields are checked
-// separately by the phone owner, including equality with its domain target.
+// Initiation and sealed conjunctive completion are supported. Non-risk fields
+// are checked separately by the phone owner, including its exact domain target.
 // Validation uses the original signed check instant rounded up to microseconds;
 // it is not admission at current time. It performs no IO, clock or callbacks and
 // cannot replace current authoritative row/counter/expiry checks or finalization.
 // Zero, disabled, malformed or mismatched input returns one redacted error.
-// This method alone does not implement or enable RiskExecutionContributor.
+// Validation alone grants no domain execution or current-counter authority.
 func (r *Repository) ValidateRiskEvidenceCommand(command identity.Command, plan identitypostgres.RiskEvidencePlan) error {
-	if r == nil || r.useIssuer == nil {
-		return risk.ErrInvalidEvidenceExecution
+	_, _, err := r.restoreUseCommand(command, plan, useCheckTime(plan.CheckedAt))
+	return err
+}
+
+func nativeUseSpec(command identity.Command) (identity.FeatureCommandSpec, bool) {
+	if s, ok := command.Feature(); ok {
+		return s, s.Operation == nativeUseOperation()
 	}
-	s, ok := command.Feature()
-	if !ok || s.Operation != nativeUseOperation() {
-		return risk.ErrInvalidEvidenceExecution
+	s, ok := command.PhonePasswordResetInputFeature()
+	if !ok {
+		s, ok = command.PhonePasswordResetFeature()
+	}
+	_, cookie := command.PhonePasswordResetPreAuthCookie()
+	return s, ok && cookie && s.Operation == nativeCompletionUseOperation()
+}
+
+func (r *Repository) restoreUseCommand(command identity.Command, plan identitypostgres.RiskEvidencePlan, now time.Time) (risk.PhoneEvidenceRequest, identity.FeatureCommandSpec, error) {
+	fail := func() (risk.PhoneEvidenceRequest, identity.FeatureCommandSpec, error) {
+		return risk.PhoneEvidenceRequest{}, identity.FeatureCommandSpec{}, risk.ErrInvalidEvidenceExecution
+	}
+	if r == nil || r.useIssuer == nil {
+		return fail()
+	}
+	s, ok := nativeUseSpec(command)
+	if !ok {
+		return fail()
 	}
 	claim, err := r.restoreUse(identitypostgres.RiskReservationBinding{Command: s.Binding, Plan: plan})
 	if err != nil {
-		return risk.ErrInvalidEvidenceExecution
+		return fail()
 	}
 	original := risk.PhoneEvidenceRequest{CommandID: plan.IssuanceCommandID, Actor: plan.IssuerActor,
 		Recovery: risk.CarrierRequest{Phase: risk.IssuancePhase(plan.Phase), Binding: risk.PhoneRecoveryScope{Tenant: plan.Tenant, Subject: plan.Subject, RecoveryOperation: risk.Action(plan.RecoveryOperation), PolicyVersion: plan.PolicyVersion}}}
@@ -82,7 +115,7 @@ func (r *Repository) ValidateRiskEvidenceCommand(command identity.Command, plan 
 	for _, f := range s.Fields {
 		if f.Name == "risk.intent" {
 			if f.Value.Kind != identity.FeatureBytes || !bytes.Equal(f.Value.Bytes, plan.IntentDigest[:]) {
-				return risk.ErrInvalidEvidenceExecution
+				return fail()
 			}
 			found++
 			continue
@@ -91,7 +124,7 @@ func (r *Repository) ValidateRiskEvidenceCommand(command identity.Command, plan 
 			continue
 		}
 		if f.Value.Kind != identity.FeatureText {
-			return risk.ErrInvalidEvidenceExecution
+			return fail()
 		}
 		switch f.Name {
 		case "risk.use.number":
@@ -107,17 +140,17 @@ func (r *Repository) ValidateRiskEvidenceCommand(command identity.Command, plan 
 		case "risk.use.identifier":
 			original.Subject.IdentifierDigest = f.Value.Text
 		default:
-			return risk.ErrInvalidEvidenceExecution
+			return fail()
 		}
 		found++
 	}
 	if found != 7 {
-		return risk.ErrInvalidEvidenceExecution
+		return fail()
 	}
-	if _, err := r.useIssuer.RecheckUse(original, claim.Prepared(), useCheckTime(plan.CheckedAt)); err != nil {
-		return risk.ErrInvalidEvidenceExecution
+	if _, err := r.useIssuer.RecheckUse(original, claim.Prepared(), now); err != nil {
+		return fail()
 	}
-	return nil
+	return original, s, nil
 }
 
 func nativeUseOperation() identity.FeatureOperation {

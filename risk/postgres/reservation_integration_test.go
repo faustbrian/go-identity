@@ -66,6 +66,9 @@ func nativeRecoveryCoordinator(t *testing.T, pool *database.Pool, native *Reposi
 
 func testNativeRiskReservation(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, executor *Executor) {
 	t.Helper()
+	t.Run("native-current-execution", func(t *testing.T) {
+		testNativeRiskCurrentExecution(t, ctx, pool, executor)
+	})
 	setupAt := func(t *testing.T, at time.Time) (risk.PhoneEvidenceIssuer, risk.PhoneEvidenceRequest, risk.EvidenceRecord) {
 		t.Helper()
 		id, _ := identity.NewCommandID()
@@ -272,13 +275,13 @@ func testNativeRiskReservation(t *testing.T, ctx context.Context, pool *database
 	t.Run("native-atomic-reserve-replay-takeover", func(t *testing.T) {
 		issuer, original, record := setup(t)
 		c, b, command, p := prepare(t, repo, issuer, original, record)
-		reserved, _, err := c.ReserveCommand(ctx, b, command, p)
+		_, _, err := c.ReserveCommand(ctx, b, command, p)
 		if err != nil {
 			t.Fatal("native reserve", err)
 		}
 		assertOwned(t, b, *p.RiskEvidence, "1")
-		if _, err := c.Begin(ctx, reserved); err == nil {
-			t.Fatal("reservation enabled unfinished domain phases")
+		if repo.ValidateRiskEvidenceCommand(command, *p.RiskEvidence) == nil {
+			t.Fatal("reservation-only configuration admitted domain evidence")
 		}
 		_, replay, err := c.ReserveCommand(ctx, b, command, p)
 		if err != nil || replay.Outcome != identity.CommitOutcomeInProgress {

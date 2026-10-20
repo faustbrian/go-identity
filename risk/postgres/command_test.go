@@ -195,6 +195,10 @@ func evaluatedIssueAt(t *testing.T, phase risk.IssuancePhase, now time.Time, com
 }
 
 func issuanceFixture(t *testing.T, phase risk.IssuancePhase, now time.Time, commandID string, executor risk.EvidenceExecutor, forbidden bool, keys []risk.EvidenceKey) (risk.PhoneEvidenceIssuer, risk.PhoneEvidenceRequest, risk.EvidenceKey) {
+	return issuanceFixtureWithCounters(t, phase, now, commandID, executor, forbidden, keys, nil)
+}
+
+func issuanceFixtureWithCounters(t *testing.T, phase risk.IssuancePhase, now time.Time, commandID string, executor risk.EvidenceExecutor, forbidden bool, keys []risk.EvidenceKey, counterStore func(risk.Policy, []risk.CounterDigestKey) risk.CounterStore) (risk.PhoneEvidenceIssuer, risk.PhoneEvidenceRequest, risk.EvidenceKey) {
 	t.Helper()
 	pc := risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4},
@@ -210,15 +214,24 @@ func issuanceFixture(t *testing.T, phase risk.IssuancePhase, now time.Time, comm
 		t.Fatal(err)
 	}
 	ck, _ := risk.NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
-	store := fixtureCounters{}
+	var store risk.CounterStore = fixtureCounters{}
 	if forbidden {
-		store.forbidden = t
+		store = fixtureCounters{forbidden: t}
 	}
-	counters, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: policy, Keys: []risk.CounterDigestKey{ck}, Store: store, Clock: func() time.Time { return now }, Timeout: time.Second})
+	if counterStore != nil {
+		store = counterStore(policy, []risk.CounterDigestKey{ck})
+	}
+	fixtureClock := func() time.Time { return now }
+	if counterStore != nil {
+		// Native PostgreSQL observations occur after preparation. Only this
+		// explicitly selected real-store fixture uses a progressing clock.
+		fixtureClock = time.Now
+	}
+	counters, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: policy, Keys: []risk.CounterDigestKey{ck}, Store: store, Clock: fixtureClock, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ec := risk.EvaluatorConfig{Policy: policy, Counters: &counters, Clock: func() time.Time { return now }, Timeout: 5 * time.Second}
+	ec := risk.EvaluatorConfig{Policy: policy, Counters: &counters, Clock: fixtureClock, Timeout: 5 * time.Second}
 	for _, name := range []string{"status", "captcha"} {
 		ec.Sources = append(ec.Sources, risk.Source{Name: name, Version: "v1", Timeout: time.Second, Read: func(_ context.Context, c risk.Context) (risk.Signal, error) {
 			if forbidden {
@@ -231,7 +244,7 @@ func issuanceFixture(t *testing.T, phase risk.IssuancePhase, now time.Time, comm
 	if err != nil {
 		t.Fatal(err)
 	}
-	cc := risk.CarrierEvaluatorConfig{Enabled: true, PolicyVersion: 3, Lifetime: 2 * time.Minute, Clock: func() time.Time { return now }, Timeout: time.Second}
+	cc := risk.CarrierEvaluatorConfig{Enabled: true, PolicyVersion: 3, Lifetime: 2 * time.Minute, Clock: fixtureClock, Timeout: time.Second}
 	for _, kind := range []risk.CarrierKind{risk.SIMSwap, risk.NumberRecycling, risk.Carrier} {
 		cc.Sources = append(cc.Sources, risk.CarrierSource{Kind: kind, Version: "v1", Timeout: time.Second, Read: func(_ context.Context, r risk.CarrierRequest) (risk.CarrierObservation, error) {
 			if forbidden {
@@ -248,7 +261,7 @@ func issuanceFixture(t *testing.T, phase risk.IssuancePhase, now time.Time, comm
 	if len(keys) == 0 {
 		keys = []risk.EvidenceKey{key}
 	}
-	issuer, err := risk.NewPhoneEvidenceIssuer(risk.PhoneEvidenceIssuerConfig{Evaluation: evaluator, Carrier: carrier, Clock: func() time.Time { return now }, Timeout: 10 * time.Second, Keys: keys, Executor: executor})
+	issuer, err := risk.NewPhoneEvidenceIssuer(risk.PhoneEvidenceIssuerConfig{Evaluation: evaluator, Carrier: carrier, Clock: fixtureClock, Timeout: 10 * time.Second, Keys: keys, Executor: executor})
 	if err != nil {
 		t.Fatal(err)
 	}

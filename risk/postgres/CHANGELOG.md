@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Preserve joint phone password-reset input, capability, independent SMS/TOTP
+  and browser custody when binding independently issued completion evidence.
+  Native phone evidence can now check current original durable counters and
+  atomically finalize its exact reserved generation through the shared
+  coordinator. Select the same `DurableCounterStore` used for issuance through
+  `Config.UseCounters`, after installing its existing counter and reservation
+  histories. Missing current authority denies; original expiry is never renewed
+  and unknown outcomes retain the reservation for existing recovery.
+  The pinned public coordinator supports initiation execution only; completion
+  mapping/restoration awaits its joint consuming profile.
+
 - Use supported secret-envelope v2 internally for original admission custody,
   preserving stored formats and containing arbitrary provider diagnostics.
   Byte-key configuration and public admission contracts are unchanged.
