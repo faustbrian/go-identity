@@ -1,6 +1,6 @@
 # Identity Implementation — Current Milestone
 
-## Active M08 — authenticated verified-phone replacement
+## M08 — authenticated verified-phone replacement: selected profile CLOSED
 
 Primary owns go-identity main from `92f34fa`: phone contracts, kernel directory/
 cascade, OTP admission, password native proof/workflow, optional phone HTTP and
@@ -82,6 +82,256 @@ race1.340s and tagged vet pass. Fresh identity.phone.update proof support is
 local too. No native PhoneChangeService or complete consumer exists yet; do not
 count these helpers or publish them as a finished replacement workflow.
 
+2026-10-19 12:51 UTC: genuine native replacement now completes SMS -> distinct
+update proof/original OTP -> atomic verified successor, retirement, pending
+cascade and encrypted old-number notice -> old-session/old-number denial, usable
+new-phone and retained-email sessions, independent reset request and code-free
+original recovery. Actual PostgreSQL/race twelve bearer/cookie cases pass31.998s
+(normal, before/lost COMMIT, contention, late factor withdrawal, provider outage).
+Outage/withdrawal RED exposed invalid receipt projection; preserve exact feature
+and original attempt correlation on pre-claim/rolled-back denial, never fabricate
+commit or renew proof. Concurrency stress also passed six cases18.148s; an earlier
+combined run had a no-winner case under the inherited500ms recovery-test lease.
+The contention fixture now uses the existing coordinator IO budget; a lock-order
+cause is unproved, not called fixed. Other/fault cases keep500ms. Ordinary full
+race passes phone1.489s, MFA-native1.312s, OTP-native1.742s, password-native2.230s,
+kernel3.569s. Retained native flows/tagged vet, one independent complete review,
+public dependency adoption/publication and selected HTTP/reference remain open.
+No native profile, M08 milestone or unit closure is claimed yet.
+
+2026-10-19 13:24 UTC: final review c4575b1f requested changes for keyed completion
+retry, send audit action and self-service audit retention. Corrections reuse the
+existing immutable prepared request-key mapping and authenticated encrypted OTP
+attempt custody, not a new journal. Wrong-code retry now recovers the original
+denial; changed code under that key conflicts. Lost successful/ambiguous responses
+recover by original key without another proof use or debit. Exact new schemas
+emit request_verification/change identifier events with standard retention; old
+enrollment/removal histories remain unchanged. Kernel standard-retention RED and
+actual duplicate-debit RED were observed. Final twelve-case PG/race passes39.087s;
+ordinary phone/OTP-native/password-native/kernel race1.538/1.798/2.283/3.672s.
+Final review, publication/public adoption and HTTP/reference remain open.
+
+2026-10-19 13:40 UTC: fresh complete53-path review dfb00394 confirmed F1-F3
+resolved, but found F4: a contender which observed absence could later receive
+terminal/busy history before current input admission, bypassing recovery's
+current-disclosure fences and misreporting fresh execution. Deterministic gate
+tests reproduced two fresh winners and unauthorized history after account,
+credential or query withdrawal. One initial RED partition timed out in provider
+evaluation before its target schedule; it is not counted as defect proof. The
+corrected native adapter routes all those historical returns through the same
+original-custody/current-authority recovery owner; a per-call admission observation
+only distinguishes fresh denial from returned history, not durable authority.
+Focused eight-case PG/race GREEN23.389s, without changing runtime budgets or
+weakening admission. Full affected regressions and final review remain pending;
+no phone profile closure yet.
+
+2026-10-19 13:50 UTC: complete53 source8251be90 independently APPROVE; F1-F4
+resolved. Reviewed phone/kernel/MFA prerequisite18 subset is main-pushed at
+b1c611f, exact Required39263629287 SUCCESS. Standalone public-input ordinary
+race phone/kernel/MFA passes1.594/4.070/1.320s. Actual authenticated public
+modules at b1c611f are available; OTP then password native public adoption is
+next. HTTP/reference and replacement profile remain open; no full count changes.
+
+2026-10-19 14:01 UTC: OTP prerequisite13 publication addendum6edd782e APPROVE,
+committed/main-pushed110c9b6, exact Required39265009935 SUCCESS. Public artifact
+authenticated and135 committed source/doc/manifest files byte-match. Standalone
+public dependency OTP race1.816s/taggedvet0/modverify pass. Password-native now
+adopts those actual public versions (no workspace/replacements); ordinary race
+2.267s/taggedvet0/modverify pass. First genuine18-case publicPG/race failed
+53.242s in bearer/concurrent-credential-withdrawn before the forced interleaving:
+first replacement risk.EvaluateError, no first commit. Other17 pass, not an
+aggregate pass. Focused same case3 repeats pass8.883s. Current investigation is
+the synthetic provider barrier's1s deadline versus second-call preparation;
+no production safety limit has changed and no fix is claimed. Native publication
+is held for concrete correction/current complete acceptance, not marked blocked.
+
+2026-10-19 14:08 UTC: finite fixture correction gives only deliberately
+rendezvousing concurrency providers the existing2s coordinator IO budget; all
+production limits, non-concurrent outage/factor timeouts, history/no-debit and
+first-winner assertions unchanged. Reviewer inspected it in final24 snapshot
+475b6d42. Fresh genuine18-case public-dependency PG/race81330 passes45.751s;
+isolated PG removed. Earlier failed53.242s remains a failed run, its exact
+deadline cause not proven. Ordinary2.267s/modverify unchanged-input pass;
+refreshed taggedvet follows. Planning0/scoped history+current-tree secrets0.
+Final publication addendum pending, then explicit24-path commit/main push.
+
+2026-10-19 14:10 UTC: final native24 publication addendum475b6d42 APPROVE;
+main-pushed1600f09, exact Required39266303432 SUCCESS. Authenticated public
+password-native artifact resolves with exact source origin; no HTTP/reference
+or full M08 closure. Next unchanged slice boundary: cookie replacement transport
+and reference compose actual native owners. Native metadata sources authenticate
+original session possession and exact keyed destination without live authority,
+mutation or code comparison; native workflow keeps all protected checks. New
+source API absence RED and genuine bearer/cookie normal+original retry+conflict
+PG/race GREEN6.240s. Not a separate consumer milestone.
+Selected HTTP profile is independently opted-in replacement (send/update/code-free
+history), exact tenant HTTPS/Origin/CSRF/device/proof, shared delivery/secret rates,
+header-only send/update keys, closed bounded JSON and code-free history. Preserve
+existing enrollment/removal; canonical send route must have one selected handler,
+never silent fallback or duplicate registration. No HTTP signup/reset/MFA variants.
+Reference owns actual composition/migrations and full HTTPS/public consumer proof.
+
+2026-10-19 14:49 UTC: replacement-only reference migration/HTTP composition is
+local and genuine PostgreSQL/HTTPS race consumer passes9.927s (5110). It upgrades
+populated enrollment history without rewriting operator custody, reconstructs
+with enrollment disabled, sends/captures SMS, denies wrong Origin/CSRF/predecessor
+and code, replays wrong/successful keys without another OTP debit, commits the
+verified successor/notice/cascade, denies old session/phone, admits new-phone
+and retained-email signin, and delivers original independent email reset intent.
+Request/recovery never sets a password; its actual HIBP collector stays idle.
+Earlier runs exposed test-fixture policy mismatch, an incorrect JSON expectation
+for canonical Origin denial, and an incorrect reset-completion collector count;
+those failed aggregates remain failed. No runtime safety checks were bypassed.
+Native metadata3API affected genuine bearer/cookie PG/race passes7.315s; HTTP
+ordinary race4.364s/fuzz6.342s and selected shared policy/feature race2.112/2.049s
+are retained at their original inputs. Reference zero/unselected, missing-owner
+and independent-native-history RED/GREEN now pass1.482s. Complete affected
+ordinary checks, one independent final-diff review, actual public pins/adoption
+and delivery remain pending; no M08/profile closure or count change yet.
+
+2026-10-20 06:49 UTC: source review /root/phone_change_http_reference_review
+APPROVE complete37 candidate93879dcb; no findings, retained native report.
+Reference ordinary race16.246s/command13.608s; final genuine replacement HTTPS
+race11.996s after missing-notice-worker RED; HTTPphone race4.777s and sharedHTTP
+race25.282s, parser fuzz70,138execs3.342s, native ordinary2.356s and affected vet0.
+Scoped history/current-tree secrets0; planning/localdocs0. Reviewed11 transport
+prerequisite subset481045f is main-pushed, exact Required39382286693 SUCCESS.
+Authenticated publicHTTP76 files byte-match owner. HTTPphone adopts this public
+dependency without workspace/replacements; standalone race4.272s/vet0. Native
+481045f pin is staged only as a reference working change (not Git staged).
+HTTPphone pin-only addendum pending, followed by source commit/main delivery and
+reference actual-public adoption. No profile or milestone closure yet.
+
+2026-10-20 06:57 UTC: selected replacement consumer CLOSED. HTTPphone b301f87
+and reference 10eb07f are main-pushed; exact Required39382571560 and39383146125
+SUCCESS. Reference19 publication addendum7c8d3028 APPROVE, preserving the complete
+37-path source review93879dcb. Public dependency adoption, GOWORKoff and no
+replacements: ordinary reference race10.940s/command8.956s, taggedvet0/modverify,
+real PG/HTTPS race10.867s. Actual downloaded reference
+v0.0.0-20261020065420-10eb07f97fa5 repeats the genuine PG/HTTPS consumer12.085s;
+307 artifact files byte-match committed owner (LICENSE inherited from root).
+ModuleSum h1:K7GgmJl5e4Acnu1w8njjDVdjNsdsIAGnxgudTSsRvzQ=,
+GoModSum h1:N2DyvPT2+Q2UyAvwUcpPdOjEXSd6z/tLiSFtNEB0OI0=.
+Exact captured wrong/successful retry, original code-free history, identifier/
+session withdrawal, new-phone/retained-email signin, old-number notice and
+independent reset delivery are usable through the public optional composition.
+Forward native migrations are required before enabling. Full M08/67-unit final
+qualification remain open; no new39-denominator milestone credit. No service
+remains running. OAuth pairwise publication is the next primary delivery.
+
+2026-10-19 13:46 UTC: complete eighteen-case native phone PG/race passes61.953s
+after F4, including all original wrong-code, CSRF/proof/reason, rollback/lost
+COMMIT, current-factor/provider and retained-signin/reset cases plus the forced
+history schedules. Full ordinary race phone/MFA-native/OTP-native/password-native/
+kernel passes1.559/1.323/2.075/2.340/3.698s; taggedvet5modules exit0, gofmt/diff0,
+planning0. Final changed-base/current-tree secrets and independent final-diff
+re-review precede source publication. Old118.196s retained-flow evidence remains
+unchanged-source scoped rather than relabeled fresh. No full profile closure.
+
+## M31 — selected native public-subject OIDC consumer CLOSED
+
+2026-10-19 13:42 UTC: original complete runtime approval5eba9e9b plus final native
+dependency/publication addendum5940f93e APPROVE. Native14 commit56f3281 is
+origin/main and Required39261120497 attempt2 SUCCESS. Attempt1 failed an unchanged
+audit ZIP download with Go proxy HTTP2 INTERNAL_ERROR; no source/tool change or
+bypass, exact-head retry passed. Public native33/33 files plus injected license
+match committed source. Public core1cbd6cc/child9c51845 selected-native PG/race
+passes90.427s, ordinary race1.230s, taggedvet0/modverify/planning/secrets pass.
+Downloaded native two-case genuine RP/current-authority and signing-restart
+PG/race consumer passes10.295s; retained compact raw result is in the current
+task scratch, not a new repository evidence framework. Native public profile
+closed. All worker PG/cache/scratch resources removed, repository clean. Required
+forward signing history precedes OIDC activation. HTTP/reference, remaining OIDC
+profiles, full M31 and final unit qualification remain open; roadmap still8/39.
+
+### Next independent OIDC lane — pairwise-subject policy
+
+2026-10-19 13:45 UTC: reuse the OIDC worker for one bounded readiness/design
+pass on required pairwise subjects, not a restart of accepted public subjects.
+Read-only until the concrete policy/rotation/atomic ownership boundary is fixed;
+no new paperwork or alternative authority. Consume clean go-oauth-server
+main56f3281, reviewed public core1cbd6cc/child9c51845/native56f3281 and actual
+downloaded PG/RP proof10.295s. Intended writable scope after that checkpoint:
+go-oauth-server root/oidc/postgres source, local tests/docs/migrations only;
+primary retains root manifests/workspace, integration pins, Git and HTTP/reference.
+Required outcome is registered-sector, versioned-secret, stable/unlinkable
+pairwise ID tokens and same-sub UserInfo across reconstruction/key rotation,
+with accurate discovery and fail-closed missing/foreign policy. Preserve current
+public subjects and the four-method extension. No HTTP/reference/logout/private
+exchange or client-management implementation in this lane. The pass must identify
+actual contract dependencies, original protocol/typed-policy requirements and
+smallest genuine independent-RP/PG/race checks; then freeze once and implement.
+Do not begin a whole-family plan or publish a parser-only prerequisite.
+
+2026-10-19 13:59 UTC: bounded readiness pass complete; pairwise profile FROZEN.
+Owner /root/oidc_rp_consumer may implement only the above source/test/local-doc/
+migration paths; no Git or primary-owned manifests/pins/composition. Immutable
+registered sector host must match every registered redirect host; unsupported
+multi-host sector_identifier_uri registration fails closed and remains required
+later. Preserve existing public-subject bytes, nil-policy fingerprints and the
+four-method extension. Child owns versioned-envelope HMAC policy; native resolves
+the durable issuer/environment/tenant/sector/user binding atomically in existing
+authenticated Authorize Work before signing. Original grant binds code/refresh/
+UserInfo; no private session/grant engine. Stable stored subjects survive restart,
+new grants, same-sector clients and key overlap/migration; different sectors
+differ. Key version selects new writers, not a new subject namespace. Retire only
+when retained/pending paths no longer need custody. Acceptance: independent-RP
+tokens/UserInfo; stability/sector isolation; unchanged public flow; missing/foreign
+policy/key/binding denial; PG contention/rollback/unknown outcome; current-authority
+revocation. Focused root/child regressions and bounded hostile fuzz, selected
+native PG/race plus retained public/restart cases, then one complete independent
+review/public adoption. HTTP/reference/logout/private exchange remain primary/
+later work, not silently excluded from full M31. No local heavy run until primary
+grants the serialized test slot.
+
+2026-10-19 13:24 UTC: complete repaired runtime review5eba9e9b APPROVE. Root
+extension/signing13-file commit1cbd6cc is origin/main, exact Required39257138484
+SUCCESS; its public artifact matches47 committed files. Child publication
+addendum dcf0e10c APPROVE, preserving the full runtime review. Child public-root
+readonly race1.285s/vet0/modverify pass; planning/changed-content secrets pass.
+The selected11-file child commit9c51845 is now origin/main; exact Required
+39259778561 SUCCESS. Its public artifact matches6 owned files plus injected
+root license. Native public root/child pins and authenticated tidy are applied;
+standalone native ordinary race passes1.230s; genuine selected PG/race is running.
+Native publication and HTTP/reference remain pending; no full M31 or unit closure.
+Original runtime findings and repaired
+native deadline/race proof remain in the owning lane, not rerun for new Git IDs.
+
+2026-10-19 11:38 UTC: independent worker owns go-oauth-server root, new oidc/
+and postgres only from clean local/remote main7292fbe. Consume committed genuine
+password-session consent/code-S256/refresh/revoke and client authority; native
+pins core127c7db, identity/postgres4c83b9a, sessionaf740fb and passwordad15f57.
+Adopt these working consumers, not another OAuth engine. Selected outcome:
+genuine current user session and consent -> code/S256 -> issuer/client/nonce-
+bound ID token -> independent OIDC RP signature/discovery/JWKS validation ->
+UserInfo with the same grant/client subject and current-authority denial.
+Core owns private signing-key lifecycle with publication-before-signing and
+verification overlap; child owns exactly the four-method consumer-owned
+OIDCExtension and OIDC claim semantics. No core-to-child import or private
+session/grant/journal authority. Preserve existing Service struct compatibility
+despite stale interface wording; record the narrow contract reconciliation.
+Freeze public-subject, ES256 and code/S256 first; preserve pairwise, logout,
+private session exchange, shared-issuer and all other full-goal obligations as
+open and expose no unsupported capabilities. Prove nonce/audience/issuer/claim
+minimization, current authority/revocation, key publication/rotation, rollback,
+contention and ambiguous/replayed token outcomes with actual PostgreSQL and an
+independent relying party. No token minted or renewed from historical replay.
+Worker owns module-local manifests/migrations/docs only; no shared identity,
+session/risk/Tools/HTTP/reference, aggregate notes, Git operations or children.
+First inspect the actual consumed boundary once: missing upstream behavior is
+reported, not stubbed or privately replaced. Focused TDD/native/race/vet and
+independent protocol consumer; serialize heavy runs with primary/organization.
+Primary owns alignment checkpoints, independent final review, main delivery,
+public dependency adoption and later HTTP/reference. This is not full M31 or
+unit verification. Others share the codebase; preserve their work.
+
+2026-10-19 11:55 UTC: OIDC first public boundary inspected by primary. Selected
+code parser/child claim tests pass locally; native PG/RP proof is pending.
+Primary required durable signing publication/overlap/compromise reconstruction,
+not caller promises, and clock callbacks outside synchronization. Worker retains
+the existing transaction/journal and is implementing those native owners. No
+Git delivery, independent review, M31 closure or unit credit yet.
+
 ## Parallel M22 — authorized static member-role update — selected profile CLOSED
 
 Next worker assignment: go-organization root and postgres only, main51f98f3;
@@ -125,6 +375,34 @@ open; 8/39 closed is unchanged.
 
 ## Parallel M22 — invitation resend with predecessor supersession
 
+2026-10-19 12:10 UTC: selected native resend profile CLOSED, not full M22.
+Independent native18 final review APPROVE (6732fef6) covers source delivered on
+main a20a7b95cc7aa1d971e89a3ebe5c58482943c97c; exact Required39249149604 SUCCESS.
+Authentic public native v0.0.0-20261019120336-a20a7b95cc7a has exact origin and
+all59 non-injected files byte-match the commit. Its downloaded-module genuine
+PostgreSQL/race consumer passes15.617s, all12 cases, with GOWORKoff and no local
+replacements. This proves supersession/new-proof acceptance, original history,
+terminal/collision/current-recipient/admin fences, rollback/contention and actual
+lost-COMMIT recovery, not HTTP/reference or all organization capabilities.
+Native ordinary0.282s, invitation retained race70.154s and tagged vet exit0 are
+retained producer results. Apply resend migration after expiry. Worker-owned
+/tmp/organization-resend.PkvB4N is confirmed stopped and removed. Heavy slot
+released to OIDC worker. Whole roadmap remains8/39; no helper/unit inflation.
+
+2026-10-19 11:55 UTC: core9b574e6 and kernel08705b0 are independently approved,
+ordinary main-pushed and exact Required39245268244/39245256136 SUCCESS. Selected
+fingerprints e5bb6a8e/484d5ea2 match committed bytes; authentic public core57/native
+465 files (native excludes injected LICENSE) match their commits. Public core
+v0.0.0-20261019113128-9b574e6e0bdc and native kernel
+v0.0.0-20261019113122-08705b019fd8 are adopted by the worker. Existing actual
+PG/race expiry compatibility passes11.166s against both prerequisite trees.
+Native resend's complete new genuine PG suite passes4.108s locally, including
+two supersessions/acceptance, original delivery recovery, terminal versions,
+rollback/contention/current authority/lost commit. A UTC location mismatch was
+fixed in the native read projection without changing the instant/deadline.
+Current final race/retained/ordinary/vet, independent complete native review,
+publication and downloaded public consumer remain pending. No full M22 closure.
+
 Worker owns go-organization root and postgres only from committed main93f15a5;
 no identity/kernel/session/risk/capability shared-contract edits, Git operations
 or children. Others share the codebase; preserve their changes. Consume the
@@ -151,6 +429,17 @@ and created0->1. Canonical resend requires its own operation/audit, next invitat
 version and supersession. Worker may advance independent core semantics/tests,
 but native continuation waits for primary-owned additive kernel support and
 its committed focused proof; no resend-as-send or second proof engine is allowed.
+Primary owns only the corresponding kernel declaration/recipient/issuance/query
+routing and positive-version accept extension as this prerequisite. Exact resend
+schema is organization-invitation-resend; informational invitation.resent.v1 is
+the invitation's positive v->v+1 transition, with standard-retention canonical
+identity.organization.resend_invitation audit. No organization/member authority
+cascade is asserted. Send's original bytes and origin-history grammar remain
+unchanged; resend history anchors organization through its existing immutable
+invitation row. Native producer must prove unchanged deadline/recipient, exact
+next-version capability and supersession. One focused declaration/custody/history
+regression pass and complete native tests precede review/publication/adoption;
+only the later genuine native consumer can close the resend profile.
 
 ## Parallel M22 — recipient-owned invitation rejection
 

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 10:59 UTC
+## TL;DR — updated 2026-10-20 06:57 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -41,19 +41,87 @@ public consumer passes genuine PostgreSQL/race rejection (19.677s). Apply the
 forward rejection migration before enabling it. Organization HTTP/reference and
 the remaining M22 lifecycle remain open; this is not a new full milestone.
 
-**Active implementation:** verified-phone replacement, from authenticated
+**Newly delivered selected profile:** verified-phone replacement, from authenticated
 new-number SMS to atomic replacement, old-number denial and retained recovery.
 Its compound directory transition and exact request/consuming-plan contracts
 are reviewed and root/phone contracts are pushed at `cb4384b`, with green CI.
 Native CAS/retirement/pending-cascade storage is reviewed and main-pushed at
 `33871a2`, with green Required CI and a byte-matched public artifact. Real
 PostgreSQL/race proves the directory prerequisite, not genuine phone possession.
-Actual OTP/proof/session/recovery orchestration and HTTP/reference remain pending.
-No phone-replacement profile is counted as delivered yet. The independent
-organization worker's next assigned profile is invitation resend with predecessor
-supersession; static role updates are delivered. Native resend needs additive
-kernel support for successor issuance; the worker cannot bypass that dependency.
-No shared phone files are assigned to it.
+Local native orchestration now completes new-number SMS -> distinct fresh
+update proof/original OTP -> atomic replacement/retirement/old-number notice ->
+old-session and retired-phone denial, usable new-phone and retained-email
+sessions, independent reset request and code-free recovery. Twelve genuine
+PostgreSQL/race cases pass (31.998s), including bearer/cookie, rollback/lost
+COMMIT, contention, late factor withdrawal and provider outage. The outage and
+withdrawal regressions caught invalid result projections and now pass without
+charging OTP or consuming the proof. Affected five-module ordinary race passes.
+The contention fixture now uses its coordinator IO budget rather than the
+500ms lease selected for prompt ambiguous-outcome recovery; the earlier
+intermittent no-winner failure is not attributed to a proven lock-order defect.
+Retained native enrollment/password/OTP-signin checks subsequently passed
+(118.196s). Independent review identified missing keyed completion replay and
+wrong audit action/retention. The local fixes now pass all twelve genuine
+PostgreSQL/race cases (39.087s), including lost wrong-code and successful-response
+recovery under the original key, changed-code conflict and canonical persisted
+identifier events with standard retention. Four affected ordinary modules pass
+race. Fresh review confirmed those fixes and exposed a concurrent-retry disclosure
+gap. The native correction now passes eight deterministic bearer/cookie races
+(23.389s): allowed history is replayed, and withdrawn account, credential or
+query authority receives no receipt. Full eighteen-case PostgreSQL/race now
+passes (61.953s), with all five affected ordinary race suites and tagged vet green.
+Final complete-source re-review approves the corrected workflow. Phone/kernel/MFA
+prerequisites are main-pushed at `b1c611f`, with exact green CI. OTP-native public
+adoption passes standalone race/vet/module authentication and its publication
+addendum approves the thirteen-path prerequisite; `110c9b6` is committed.
+Password-native `1600f09` is now independently approved, main-pushed and exact
+Required-CI green. Its full eighteen-case genuine public-dependency PostgreSQL/
+race run passes (45.751s). An earlier run failed before the forced concurrency
+schedule; only that test rendezvous budget was corrected, with no production
+limit or security assertion change. The earlier failure is not called fixed.
+Opt-in replacement-only reference `10eb07f` is now independently approved,
+main-pushed and exact Required-CI green, with transport `b301f87` and contract
+prerequisite `481045f`. Its actual downloaded public module passes the genuine
+PostgreSQL/HTTPS/race consumer (12.085s): populated upgrade, captured SMS, exact
+wrong/successful key recovery, replacement, old session/phone denial, usable new
+phone and retained email, old-number notice and independent reset delivery.
+All 307 public reference files match committed source, including inherited
+license. Apply the forward native migrations before enabling replacement.
+This selected replacement profile is closed; full M08 and unit qualification
+remain open. No new whole milestone is counted.
+
+**Newly delivered organization resend profile:** core `9b574e6`, kernel `08705b0`
+and native `a20a7b9` are independently approved, main-pushed and exact Required-CI
+green. Authentic public modules match committed source. The downloaded native
+adapter's genuine PostgreSQL/race consumer passes (15.617s): two supersessions,
+old-proof denial/new-proof acceptance, original delivery history, current
+authority, rollback/contention and lost-commit recovery. Apply the forward resend
+migration after expiry before enabling it. This selected native profile is
+closed; full M22, HTTP/reference and unit qualification remain open. Its worker
+fixtures and caches are removed. No shared phone files were assigned.
+
+**Newly delivered native OIDC profile:** code/S256 -> ID token ->
+independent relying-party/JWKS -> same-subject UserInfo consumer in
+go-oauth-server. It uses the existing genuine session/consent/grant owners;
+The genuine native PostgreSQL/RP consumer and selected race checks pass locally.
+The complete corrected candidate is independently approved. Core extension and
+signing contracts are main-pushed at `1cbd6cc`, with exact Required CI green and
+an authenticated, byte-matched public artifact. The optional OIDC child is now
+main-pushed at `9c51845` after standalone public-root race/vet/module verification
+and its dependency/publication review; exact Required CI is green and its public
+artifact matches committed source. Native `56f3281` is now reviewed, main-pushed
+and exact Required CI green (attempt 2; attempt 1 had a Go proxy transport error,
+not a source/test failure). Actual public-root/child native PG/race selection
+passes (90.427s); all 33 downloaded native files match committed source. The
+downloaded adapter's genuine independent-RP and durable-signing-restart consumers
+pass under PostgreSQL/race (10.295s), without replacements. Install the forward
+signing migration before selecting OIDC. This closes the selected native public-
+subject/ES256 profile, not full M31. HTTP/reference, pairwise/logout/private exchange
+and full provider/unit qualification remain open. All worker PG/cache/scratch
+resources are removed. No full milestone or unit count is increased.
+The same worker has completed the bounded pairwise-subject policy/rotation pass
+and is implementing its frozen registered-sector native consumer while primary
+finishes phone delivery. Pairwise acceptance is not claimed yet.
 
 **Newly delivered M08 profile — phone self-removal:** fresh action-bound proof
 removes the verified phone atomically with its retirement, pending cascade and
