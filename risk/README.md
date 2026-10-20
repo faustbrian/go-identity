@@ -838,6 +838,11 @@ invitation-resource and network counters. Assessment and preparation confer no
 organization permission or durable expiry; the native organization owner must
 still prove current administrator authority and atomically finalize the effect.
 
+Organization domain reservation and withdrawal use that same Privileged
+transaction profile, scoped to the exact organization resource. They do not
+verify a domain, authorize its ownership or permit SSO routing. Domain reads,
+verification and unlisted aliases do not acquire this mutation admission.
+
 Regenerate from the selected current planning snapshot, then format the output:
 
 ```sh

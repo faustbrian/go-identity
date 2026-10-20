@@ -2,7 +2,7 @@
 // Owned Golib planning sources (MIT); regenerate and review all classifications.
 // PUBLIC_CONTRACTS.json SHA-256: 3364b210cb3b5753ff7dd85f11763691519c546bdd6b4220e5e544ae2bf01e05
 // REFERENCE_CONFIGURATION.md SHA-256: dc766c02baefab3b9ebd86b897891b9ea505518ea19363e2b1e083183375a514
-// risk/native_operations.json SHA-256: 3a2383048b75022ba1be65dab2516b6aca756ba27701d22f1fe24b265a7c2781
+// risk/native_operations.json SHA-256: 00565174040a4afd3d7ba850898b7376c5f3a642ca05e3ac3bd7e7469ca9d849
 package risk
 
 import "time"
@@ -158,6 +158,8 @@ var canonicalOperations = map[Action]ProfileClass{
 	"identity.organization.archive":                     Privileged,
 	"identity.organization.create":                      Privileged,
 	"identity.organization.delete":                      Privileged,
+	"identity.organization.domain.reserve":              Privileged,
+	"identity.organization.domain.withdraw":             Privileged,
 	"identity.organization.get":                         DefaultDeny,
 	"identity.organization.invitation-send":             Privileged,
 	"identity.organization.invitation.accept":           Privileged,

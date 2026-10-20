@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit explicit organization domain reservation and withdrawal through the
+  protected privileged profile, with current provider signals and exact
+  transaction-owned actor/resource counters. This grants no domain proof or
+  organization permission; reads, verification and unlisted aliases stay closed.
+
 - Admit explicit invitation expiry through the protected privileged profile,
   requiring current provider signals and transaction-owned actor/resource
   counters. This grants no organization permission or invitation authority;
