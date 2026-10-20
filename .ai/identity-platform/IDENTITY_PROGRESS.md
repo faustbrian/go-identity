@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 08:57 UTC
+## TL;DR — updated 2026-10-20 11:03 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -13,6 +13,21 @@ queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
+
+**Newly delivered organization reservation profile:** a genuine owner/admin can
+reserve a canonical domain, read its current claim and withdraw it, with global
+uniqueness, current authority and original recovery. Root `2ee78bf` and native
+`bbf7a6e` are independently approved, main-pushed and exact Required-CI green
+(structure/secrets, not hosted runtime tests). Actual public-root PostgreSQL/race
+passes (13.557s); all 64 final native public files match committed source, and
+the downloaded adapter's genuine PostgreSQL/race consumer passes (11.227s).
+Apply `DomainClaimMigrationSource` after the base organization migration before
+selection. This is reservation, not verified ownership, DomainProof or SSO.
+Full M25 and HTTP/reference remain open; no whole milestone is added.
+An earlier final-public run failed at bootstrap signin503 before domain behavior.
+Diagnostic-only execution confirmed one inner signin deadline, but not the slow
+phase/cause. That failure is retained; unchanged subsequent acceptance does not
+prove a reliability repair. No timeout or security limit was relaxed.
 
 **Newly delivered organization profile:** authorized static member-role changes
 now atomically update membership/scoped authority and organization policy, with
@@ -148,11 +163,15 @@ now independently approved, main-pushed and exact Required-CI green at
 PostgreSQL/race issuance/recovery (2.513s), with no session or invented remember
 policy. Native reset request/completion, atomic consumption/revocation and HTTP
 remain unfinished and disabled; no whole milestone is added.
-An independent organization lane is starting authenticated domain reservation/
-read/withdrawal against committed owners. This is not domain verification:
-genuine challenge/evidence authority must precede verified claims or SSO routing.
-OAuth's real fresh-login continuation has a local genuine-session/RP success;
-failure/recovery acceptance and review remain open, not delivered.
+Organization's selected reservation/read/withdrawal profile is delivered above;
+genuine challenge/evidence authority must still precede verified claims or SSO.
+OAuth fresh-login continuation's complete source review now approves all 38
+affected paths. Shared kernel `67fa690` and OAuth root `ed0600f` are main-pushed;
+kernel exact Required CI is green. Public-supplier kernel race (7.099s)/tagged
+vet and OAuth-root race (1.557s)/vet pass. Child/native public-pin adoption,
+exact final CI and downloaded consumer acceptance remain pending; this is not
+delivery of the full fresh-login profile or M31. Actual native expiry cases pass
+locally, with the earlier pre-OAuth confirmation503 retained as unexplained.
 
 **Qualification limit:** scheduled full-history scan `39394030689` has untriaged
 secret candidates. Current-change checks and exact publication CI pass, not

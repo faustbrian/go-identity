@@ -85,12 +85,32 @@ must reverify and atomically advance TOTP replay with password/session effects.
 The current owner boundaries do not yet express that conjunction; no private
 attempt budget or caller-writable factor verdict may substitute.
 
+2026-10-20 09:17 UTC: a bounded leaf worker owns only new
+`mfa/postgres/phone_recovery_*.go` and their tests plus scoped native README/
+CHANGELOG entries for this SAME M08 outcome. Primary retains root/kernel/session/
+risk, OTP, password/phone workflow, transport/reference, manifests/pins and Git.
+Consume committed joint-input928f9b7 and nativec9ff4fb; existing MFA encrypted
+factor/enrollment/aggregate/replay storage, core TOTPVerifier and secret-envelope
+remain sole owners. Implement actual original-factor read/preparation, bounded
+decryption before locks, native live-work verification and exact replay CAS in
+the existing coordinator. Counted denial must only observe replay; consumption
+must reverify at current database time and atomically advance it with the parent
+password mutation. No fabricated session/MFA continuation, scalar successful
+factor proof, separate budget/transaction/journal or migration is selected.
+Fence original command/user/factor/enrollment/aggregate authority and exact
+ciphertext/profile/row/replay; lock account/aggregate before factor and downstream
+OTP exclusions, reject stale/foreign/disabled/returned handles, clear plaintext.
+Focused TDD, genuine task-owned PostgreSQL/race verification/replay/rollback/
+contention evidence and one later complete parent integration review. Worker
+must confirm its first public boundary with primary and request the serialized
+heavy slot. This prerequisite alone neither enables reset nor closes M08.
+
 Scheduled full-history scan39394030689 still has untriaged secret candidates;
 current-change secret checks and both exact publication Required runs pass.
 No full-history security or release clearance is claimed; no historical repair
 or scanner bypass is part of this prerequisite batch.
 
-## Active M25 prerequisite — authenticated domain claim custody
+## M25 prerequisite — authenticated domain reservation profile CLOSED
 
 2026-10-20 08:57 UTC: freeze one organization-owned reserve -> authenticated
 current read -> withdraw consumer, not verified-domain routing. Owner is the
@@ -123,6 +143,22 @@ populated forward migration; bounded canonicalization fuzz plus affected root/
 native race/vet. Parent owns public-pin/downloaded consumer adoption, independent
 complete review and main publication/CI. Workers request the serialized heavy
 slot and do not spawn agents or perform Git operations. Full M25 remains open.
+
+2026-10-20 11:03 UTC: root2ee78bf/nativebbf7a6e are independently APPROVED,
+main-pushed and exact Required CI green39408595435/39409970595 (structure/
+secrets only). Root/public-source identity and native64-file byte comparison
+pass. Real public-root genuine PostgreSQL/race passes13.557s; downloaded final
+native genuine consumer passes11.227s with GOWORK=off and no replacements.
+The final-admission expiry defect has actual RED42.364s and corrected native
+domain/membership race74.967s, plus ordinary race1.322s/tagged vet0. Install the
+forward DomainClaimMigrationSource after base before selection. Reservation is
+not verification/DomainProof/SSO; fullM25, HTTP/reference and qualification open.
+Earlier public final attempt44801 FAILED12.961s at bootstrap signin503 before
+domain execution. Diagnostic workspace48981 reproduced deadlineExceeded after
+3.840s native signin with live HTTP context; no Work.fail was observed. Deeper
+diagnostic45281 PASS11.352s and14167 PASS23.070s (two runs) did not reproduce the
+slow phase; no cause/repair is claimed. Final unmodified public13320 PASS11.227s.
+No production/fixture deadlines or assertions were weakened. PG fixtures removed.
 
 ## M08 — authenticated verified-phone replacement: selected profile CLOSED
 
@@ -480,6 +516,19 @@ contract investigation then implementation; report the first public boundary.
 Focused TDD/presence/freshness/replay/cross-client/wrong-session/expiry regressions,
 affected race/vet and genuine PostgreSQL/S256/independent RP consumer prove the
 complete outcome. One independent final review before primary publication.
+
+2026-10-20 11:03 UTC: complete38-path source re-review APPROVE from
+oauth_fresh_corrected_review: OAuth24 digest a3a4b3a983e61daaf37ac3816df7fc9bda6c912b4097c631b39fce65821c1ced;
+kernel14 digest965b0e2af34a95867c98948b84010854157f53f9feeaea4517ee0ae9079a990a.
+Shared kernel67fa690 is main-pushed, exact Required39411813151 SUCCESS;
+standalone public-root kernel race7.099s/tagged vet0 prove exactly selected14
+(unpublished phone codec/test excluded with a task-owned baseline overlay).
+OAuth root ed0600f is main-pushed after standalone public-supplier race1.557s/
+vet0. Root CI, child/native pin adoption and final public consumer remain next.
+Current four-case native delivery aggregate7553 stays FAILED40.707s (pre-OAuth
+confirmation503); three partitions passed, unchanged fourth retry96157 passed
+10.340s. Actual new expiry regressions have RED21.131s then passing partitions.
+No claim that the bootstrap503 cause is established/fixed; no M31 closure.
 
 ## M31 — selected native public and pairwise OIDC profiles CLOSED
 
