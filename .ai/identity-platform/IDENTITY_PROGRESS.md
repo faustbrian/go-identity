@@ -2,8 +2,8 @@
 
 ## TL;DR — updated 2026-10-20 22:08 UTC
 
-**Estimated whole-goal completion: approximately 20%, with low confidence.**
-**Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
+**Estimated whole-goal completion: approximately 20–25%, with low confidence.**
+**Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
 67 units. Consumer delivery is separate from complete unit/release qualification.
 The working authentication baseline, thirteen email profiles, native username
 authentication, organization/team lifecycle, selected OAuth code/PKCE and machine
@@ -35,9 +35,11 @@ verification pass. The accepted reference profile is now main-pushed as
 All313 downloaded public-reference files match source; the downloaded module's
 actual PostgreSQL/HTTPS/race recovery consumer PASS14.243s with GOWORKoff.
 This finite recovery profile is CLOSED, not another implementation in progress.
-The8/39 count is retained pending bounded M08 scope reconciliation; phone signup
-and privacy remain full-goal obligations, not implicitly supported. Full-unit
-qualification, tagged release and production/deployment are not claimed.
+M08's assigned existing-account consumer outcome is CLOSED: verified enrollment/
+change, OTP/password signin and reset have successive reviewed public-reference
+deliveries. Independent scope reconciliation distinguishes that roadmap row from
+whole-unit completion. Phone signup and privacy remain full-goal obligations,
+not implicitly supported. No verified unit, tagged release or deployment is added.
 
 The entries below retain earlier checkpoints; their pending/local wording is
 historical where superseded by this current summary.
@@ -676,11 +678,11 @@ whole-unit qualification is claimed.
 
 | Measure | Current position |
 | --- | --- |
-| Complete consumer milestones | **8/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey, M06 selected magic-link journey, M07 selected email OTP journey, M10 confirmed TOTP enrollment/signin, M15 selected WebAuthn ceremony. The unweighted count is 20.5%; it is not the whole-goal effort estimate. |
-| Remaining milestones | **31/39 not closed**: M04, M08–M09, M11–M14 and M16–M39. Existing implementation is not assumed absent. |
+| Complete consumer milestones | **9/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey, M06 selected magic-link journey, M07 selected email OTP journey, M08 existing-account phone lifecycle/signin/reset, M10 confirmed TOTP enrollment/signin, M15 selected WebAuthn ceremony. The unweighted count is 23.1%; it is not the whole-goal effort estimate. |
+| Remaining milestones | **30/39 not closed**: M04, M09, M11–M14 and M16–M39. Existing implementation is not assumed absent. |
 | Additional delivered behavior | **13 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not thirteen additional closed milestones. |
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
-| Last consumer milestone closure | **19 October:** M15 selected identified-user none/ES256 WebAuthn ceremony and durable validation, `75a475e`, independent final review/delivery audit, public artifact and green CI. M10 was also reconciled from already-delivered TOTP consumer evidence rather than newly implemented. |
+| Last consumer milestone closure | **20 October:** M08 existing-account phone enrollment/change, OTP/password signin and reset. Final reference `d5156d8`, independent final review and scope reconciliation, public-module PostgreSQL/HTTPS/race proof and exact green CI. Signup/privacy and whole-unit qualification remain open. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
 | Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer, self-leave and current-subject organization listing.** Root `956176f` / native `804dbe8` adds bounded policy-filtered pages with original freshness and post-callback primary/scoped authority checks. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
 | Delivered username profiles | **M05 consumer profile closed:** required-email registration/signin, advisory availability, protected rename and explicitly selected TOTP signin through `4315bbf`. Original retry/recovery, CSRF, session effects and independent/coexisting selections are proven through real PostgreSQL and public modules. Broader catalog profiles and package qualification remain open. |

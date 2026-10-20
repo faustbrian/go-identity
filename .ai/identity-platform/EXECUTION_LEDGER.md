@@ -1,6 +1,16 @@
 # Identity Implementation — Current Milestone
 
-## M08 — explicitly enabled phone-password recovery profile DELIVERED
+## M08 consumer milestone CLOSED — existing-account phone profiles
+
+2026-10-20 22:09 UTC bounded independent scope reconciliation by
+phone_reset_consumer_review closes the assigned M08 consumer row: verified
+enrollment/change, OTP/password signin and reset are delivered through successive
+reviewed public-reference profiles. Count9/39 (23.1% unweighted), effort estimate
+20–25% low confidence. Goal roadmap lines251–255/266 distinguish consumer
+milestones from release units. Signup-on-verification remains unselected and
+required for eventual phone completeness; phone privacy contributes to M37 and
+whole-unit completion. Neither is falsely advertised or waived. No qualified
+unit is added. Do not restart completed reset for those separate obligations.
 
 2026-10-20 22:08 UTC reference committed/main-pushed
 d5156d8eda1cd60dc0529f7e7e352e26244992d2, exact Required39505315426 SUCCESS.
