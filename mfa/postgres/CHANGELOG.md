@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Explicitly admit verified-phone/password primaries with independently confirmed
+  TOTP. Append `PhoneContinuationMigrationSource` after the actual installed
+  continuation history; retain original checksums and reject weaker factor or
+  mismatched predecessor selections.
+
+- Fence the actual phone-recovery TOTP replay successor during the same
+  protected transaction's final OTP check. Exact kernel-origin correlation and
+  current factor/deadline checks preserve Apply-only proof semantics without
+  comparing again or accepting caller-written replay counters.
+
+- Add bounded original-factor TOTP custody for the explicit phone-password-reset
+  profile. Decrypt before coordinator locks, classify actual denied codes without
+  advancing replay, and independently verify/atomically CAS replay with protected
+  password effects through live owner-bound custody. Native phone composition
+  remains required; no continuation, session, independent attempt budget, schema
+  or weaker recovery fallback is introduced.
+
 - Fence the original known-empty factor generation for exact verified-phone
   replacement and its non-attaching SMS request. Unknown aliases, changed
   generations and enrolled factors still deny without fallback or initialization.

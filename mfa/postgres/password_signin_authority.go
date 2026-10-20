@@ -97,13 +97,10 @@ func requirePasswordSigninFactors(ctx context.Context, w kernel.Work, owner kern
 	username := f.Operation.Owner == "identity/username" && b.OperationID == "identity.username.signin" && f.Operation.SchemaID == "username-signin"
 	phone := f.Operation.Owner == "identity/phone" && b.OperationID == "identity.phone.password-signin" && f.Operation.SchemaID == "phone-password-signin"
 	profile := f.Operation.Owner == "identity/password" && b.OperationID == "identity.password.signin" && f.Operation.SchemaID == "password-signin" || username || phone
-	// This phone profile supports only known-empty authority. Enrolled phone
-	// continuations need their own original challenge binding, never a password
-	// or username challenge relabeled after comparison.
-	if phone && challenge {
-		return invalidAuthority()
-	}
-	if username && challenge && (len(methods) != 1 || methods[0] != "totp") {
+	// Username and verified-phone comparisons retain distinct original
+	// challenges, but both select only the independently enrolled TOTP owner.
+	// Neither profile may reinterpret the phone/SMS itself as a second factor.
+	if (username || phone) && challenge && (len(methods) != 1 || methods[0] != "totp") {
 		return invalidAuthority()
 	}
 	if err != nil || !ok || !profile || f.Operation.SchemaVersion != 1 || f.Operation.RecordRequirement != identity.FeatureRecordOmitted || f.Operation.SubjectRequirement > identity.FeatureSubjectAnonymousFlow || b.ValidateFor(f.Operation) != nil || s.Binding != b || s.Operation != f.Operation || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) {

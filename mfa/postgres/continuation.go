@@ -76,7 +76,7 @@ func PersistPasswordContinuation(ctx context.Context, w kernel.Work, owner kerne
 		return identity.ForbiddenError{}
 	}
 	digest, err := c.ScopeDigest()
-	if err != nil || (b.OperationID != "identity.password.signin" && b.OperationID != "identity.username.signin") || s.State != mfa.Pending || s.Version != 1 || s.ID != mfa.ContinuationID(challenge.ID) || s.SubjectID != identity.SubjectID(challenge.UserID) || s.TenantID != b.TenantID || string(s.SourcePreAuthID) != b.AnonymousFlowID || string(s.PrimaryProofID) != string(b.CommandID) || digest != challenge.ScopeDigest || s.PolicyVersion != challenge.PolicyVersion || s.FactorVersion != challenge.FactorVersion || !s.IssuedAt.Equal(challenge.IssuedAt) || !s.ExpiresAt.Equal(challenge.ExpiresAt) {
+	if err != nil || (b.OperationID != "identity.password.signin" && b.OperationID != "identity.username.signin" && b.OperationID != "identity.phone.password-signin") || s.State != mfa.Pending || s.Version != 1 || s.ID != mfa.ContinuationID(challenge.ID) || s.SubjectID != identity.SubjectID(challenge.UserID) || s.TenantID != b.TenantID || string(s.SourcePreAuthID) != b.AnonymousFlowID || string(s.PrimaryProofID) != string(b.CommandID) || digest != challenge.ScopeDigest || s.PolicyVersion != challenge.PolicyVersion || s.FactorVersion != challenge.FactorVersion || !s.IssuedAt.Equal(challenge.IssuedAt) || !s.ExpiresAt.Equal(challenge.ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	return persistContinuation(ctx, w, c, b, fingerprint, generation)

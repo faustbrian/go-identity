@@ -1,5 +1,62 @@
 # PostgreSQL MFA authority (in development)
 
+For explicitly selected verified-phone/password plus TOTP, the password owner
+retains its distinct original primary and browser. `RequirePasswordSigninFactors`
+and its method-bound variant admit only independent confirmed TOTP for that
+phone origin, never the phone/SMS itself as a second factor. Apply
+`PhoneContinuationMigrationSource` after the installed continuation history,
+setting `UsernameSignin`/`VerificationSignin` to its actual predecessor selections.
+Existing rows/checksums remain unchanged; an incorrect predecessor fails rather
+than dropping an unknown constraint. This suffix does not compare passwords,
+authorize another factor, issue a session or enable HTTP.
+
+The bounded phone-password-reset integration reads the original confirmed
+encrypted factor using `TOTPFactorReader.ReadForPhoneRecovery`; this is structural
+custody, not recovery authorization, a fabricated login continuation or session.
+`NewPhoneRecoveryTOTPVerifier` takes the existing secret-envelope service plus an
+independent comparison key and positive retained key version. `Prepare` binds the
+exact joint input or generated command and decrypts outside database locks. Its
+exclusive original authority deadline must be microsecond-exact. Always defer
+`PreparedPhoneRecoveryTOTP.Destroy`, including when execution never starts.
+Copies share one-shot custody; verification moves the Secret under a short lock,
+does SQL without that lock, and clears it on every return. Destroy waits for an
+active bounded use outside the lock. A consuming phase must prepare afresh.
+
+The exact native command retains `phone.reset.factor-id` (text),
+`phone.reset.factor-version` (enrollment uint64) and
+`phone.reset.factor-authority-version` (aggregate uint64), derived by the phone
+owner from its verified original reset capability. `VerifyPhoneRecoveryTOTPAttempt`
+accepts only the exact sealed input or generated command matching its prepared
+custody through the registered `OTPAttemptWork` owner, never a generic feature;
+its opaque, live-bound `Accepted` classification performs actual core TOTP
+verification but never advances replay. Only an actual crypto mismatch/replay is
+a false classification; stale or unavailable authority is an error. The OTP owner
+alone decides/debits the existing SMS challenge budget. There is no MFA-specific
+recovery budget, caller-writable successful-factor flag or scalar-step API.
+
+The OTP reservation wrapper calls `RequirePhoneRecoveryTOTPReservation` and its
+first protected check calls `RequirePhoneRecoveryTOTPApply` after primary/flow
+admission, before challenge/lockout exclusions. Their exact live owner/command
+checks lock current user, aggregate and encrypted factor without comparison.
+`VerifyAndRecordPhoneRecoveryTOTP` independently rechecks the generated command
+and current database time, verifies the original opaque code, then advances only
+the internally verified replay step in the existing coordinator Work. Require its
+opaque completion's `RequireRecorded` inside the same Apply immediately before
+password effects. This rechecks the locks already acquired by the protected OTP
+check and fences exact ciphertext, profile, enrollment, row, replay and authority.
+The OTP owner's repeated commit check uses the actual opaque completion's
+`RequireOTPApplyRecorded` to fence only its verified successor. Kernel-owned
+`RequireFeatureOrigin` checks the exact same private Work and registered owners
+before and after those current factor/time locks; no general retained Work
+access is used. Ordinary `RequireRecorded` remains Apply-only. No decryption or
+provider callback runs under those locks. The parent phone/password workflow must
+still authenticate
+the canonical reset capability, exact phone/pre-auth/OTP/attempt/risk binding and
+current password authority and atomically commit all consumption, password/session
+effects and replay. These helpers alone enable no reset service or endpoint;
+unknown outcomes use the parent coordinator's existing original-command recovery.
+Encrypted factor/enrollment storage and retained-factor behavior are unchanged.
+
 `ReadPhoneFactors` supplies preliminary actual known-empty factor metadata for
 the selected existing-account phone enrollment, replacement and removal profiles.
 Freeze that positive generation as the `phone.factor-version` uint64 field in
