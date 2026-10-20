@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose authenticated original replacement session, keyed destination and
+  immutable challenge-lifetime metadata for transport admission. Reads create
+  no challenge, proof use, debit, delivery or mutation and grant no current
+  executable or historical-disclosure authority.
+
 - Fence every phone-replacement keyed-history return with current account,
   credential and query authority, including concurrent completion after an
   initial absence observation. Historical receipts never imply fresh execution.

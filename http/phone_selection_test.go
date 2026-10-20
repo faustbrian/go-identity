@@ -9,7 +9,7 @@ import (
 )
 
 func TestPhoneEnrollmentSelectsNativeStoredSynchronizer(t *testing.T) {
-	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.verify.recover"} {
+	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.verify.recover", "identity.phone.update", "identity.phone.update.recover"} {
 		for _, row := range []struct {
 			name  string
 			csrf  identityhttp.CSRFPolicy

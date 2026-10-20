@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Register code-free phone-update recovery and allow explicitly selected
+  replacement/update recovery under the native stored-session synchronizer
+  profile. Disabled features still expose no route or advertised capability.
+
 - Admit explicitly selected phone self-removal under its native original-session
   synchronizer profile, with exact token header and Origin, no Referer fallback
   and no independently renewable token age. Selection enables no route by default.

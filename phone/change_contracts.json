@@ -1,0 +1,61 @@
+{
+  "operations": [{
+    "id": "identity.phone.update.recover",
+    "owner": "identity/phone",
+    "declared_owners": ["identity/phone"],
+    "method": {"interface": "go:identity/phone:ChangeService", "name": "RecoverUpdate", "signature": "RecoverUpdate(context.Context, UpdateRecoveryRequest) (UpdateResult, error)"},
+    "request_type": "identity.phone.update.recover.request",
+    "result_type": "identity.phone.update.recover.result",
+    "error_types": ["identity.phone.update.recover.errors"],
+    "transport": {"exposure": "both", "http_method": "POST", "http_path": "/v1/phone/update/recover", "openapi_operation_id": "identity.phone.update.recover"}
+  }],
+  "semantics": [{
+    "id": "identity.phone.update.recover",
+    "owners": ["identity/phone"],
+    "access": "original authenticated-session possession and current historical disclosure policy",
+    "authorization": "original session possession plus current self-user historical disclosure policy; not executable session authority",
+    "csrf_origin": "CSRF",
+    "event_semantics": "Original code-free phone-update correlation observes or reconciles only its retained consuming command. Committed/not-committed history is metadata, never new mutation or renewed authority. Current account, credential and historical disclosure policy fence the result. No code comparison, attempt debit, proof consumption, resend, session or credential delivery. Cookie transport requires exact Origin and the original stored-session synchronizer even after replacement invalidates identifier authority. Recovery applies verification IP admission only, never another challenge debit.",
+    "exposure": "both", "http_method": "POST", "http_path": "/v1/phone/update/recover", "openapi_operation_id": "identity.phone.update.recover",
+    "idempotency": "read", "idempotency_transport": "Idempotency-Key and request.IdempotencyKey forbidden",
+    "rate_policy": "rate.verify", "risk_class": "auth"
+  }],
+  "types": [{
+    "id": "identity.phone.update.recover.request", "owner": "identity/phone", "category": "operation_request",
+    "definition": {
+      "name": "UpdateRecoveryRequest", "schema_id": "identity.phone.update.recover.request",
+      "representation": "Opaque constructor-only handle. Fields describe its explicit sensitive projection, not automatic JSON.",
+      "fields": [
+        {"name": "TenantID", "type": "identity.TenantID", "required": true, "semantics": "Exact original tenant from trusted transport resolution, agreeing with retained custody."},
+        {"name": "UserID", "type": "identity.UserID", "required": true, "semantics": "Original self subject authenticated by actual source-session possession, never claimed JSON."},
+        {"name": "Caller", "type": "authorization.DecisionContext", "required": true, "semantics": "Current self-user historical disclosure action and policy; original receipt grants no authority."},
+        {"name": "Flow", "type": "otp.SendFlow", "required": true, "semantics": "Original authenticated-session ID and token possession, not renewed executable session authority."},
+        {"name": "Recovery", "type": "phone.VerificationRecovery", "required": true, "semantics": "Unchanged original send, consuming command, attempt, fingerprint and scope/version correlation. No submitted code or fresh proof."},
+        {"name": "CSRFToken", "type": "session.CSRFToken", "required": false, "semantics": "Current request synchronizer required for selected cookie mode; zero only in explicitly selected native bearer mode."}
+      ]
+    }
+  }, {
+    "id": "identity.phone.update.recover.result", "owner": "identity/phone", "category": "operation_result",
+    "definition": {
+      "name": "UpdateResult", "schema_id": "identity.phone.update.recover.result",
+      "representation": "Explicit original-history projection. Automatic serialization is denied; zero accompanies denied disclosure.",
+      "fields": [
+        {"name": "Result", "type": "identity.CommandResult", "required": true, "semantics": "Original consuming command and durability. Pending cascade admission is not completed cleanup. Unknown remains unknown."},
+        {"name": "Recovery", "type": "phone.VerificationRecovery", "required": true, "semantics": "Original unchanged code-free correlation, never permission for another submission."},
+        {"name": "Replayed", "type": "bool", "required": true, "semantics": "Always true for authenticated historical observation; never fresh authentication or replacement."}
+      ]
+    }
+  }, {
+    "id": "identity.phone.update.recover.errors", "owner": "identity/phone", "category": "operation_errors",
+    "definition": {
+      "name": "UpdateRecoveryError", "schema_id": "identity.phone.update.recover.errors",
+      "variants": [
+        {"identity": "invalid", "type": "phone.ErrInvalidChange", "semantics": "Malformed or substituted original recovery correlation."},
+        {"identity": "denied", "type": "identity.ForbiddenError", "semantics": "Original possession, synchronizer or current disclosure authority denies. Post-query withdrawal withholds the result."},
+        {"identity": "conflict", "type": "identity.ConflictError", "semantics": "Retained original scope conflicts; never adopt another command or attempt."},
+        {"identity": "unknown", "type": "identity.UnknownCommitError", "semantics": "Original outcome remains unknown with unchanged authenticated recovery custody."},
+        {"identity": "unavailable", "type": "error", "semantics": "Bounded storage, custody or cancellation failure; never infer rollback, repeat code comparison or issue credentials."}
+      ]
+    }
+  }]
+}

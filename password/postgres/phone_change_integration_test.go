@@ -267,6 +267,21 @@ func testNativePhoneChangeSend(t *testing.T, ctx context.Context, pool *database
 	if err != nil {
 		t.Fatal(err)
 	}
+	if mode == "normal" {
+		flow, err := otp.NewSessionSendFlow(original.SessionID, auth.NewBearerCredential(bearer))
+		if err != nil {
+			t.Fatal(err)
+		}
+		metadata, err := service.PhoneChangeSession(ctx, r.TenantID, flow)
+		actual, metadataError := metadata.Bindings()
+		if err != nil || metadataError != nil || actual.SessionID != original.SessionID || actual.UserID != user || actual.Version != original.Version {
+			t.Fatal("original replacement session was not authenticated for transport", err)
+		}
+		destination, err := service.PhoneChangeDestination(ctx, request)
+		if err != nil || !destination.Equal(next) {
+			t.Fatal("replacement rate source did not retain the new destination", err)
+		}
+	}
 	sent, err := service.SendChange(ctx, request)
 	if err != nil || sent.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatalf("actual new-number send: outcome=%v error=%v", sent.Outcome, err)
@@ -274,6 +289,24 @@ func testNativePhoneChangeSend(t *testing.T, ctx context.Context, pool *database
 	again, err := service.SendChange(ctx, request)
 	if err != nil || again.Binding != sent.Binding || again.Outcome != sent.Outcome {
 		t.Fatal("original replacement send was not replayed", err)
+	}
+	if mode == "normal" {
+		if destination, err := service.PhoneChangeDestination(ctx, request); err != nil || !destination.Equal(next) {
+			t.Fatal("consumed sending proof lost its original rate metadata", err)
+		}
+		changed, _ := request.Bindings()
+		changed.PreviousNumber, err = numberPolicy.Canonicalize(ctx, "+12025550126")
+		if err != nil {
+			t.Fatal(err)
+		}
+		conflicting, err := phone.NewChangeRequest(changed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		destination, err := service.PhoneChangeDestination(ctx, conflicting)
+		if _, stateError := destination.Record(); err == nil || stateError == nil {
+			t.Fatal("changed original replacement custody supplied rate metadata")
+		}
 	}
 	requirePhoneChangeAudit(t, ctx, pool, sent.Binding, "identity.identifier.request_verification")
 	command, err := base64.RawURLEncoding.DecodeString(string(sent.Binding.CommandID))
@@ -376,6 +409,19 @@ func testNativePhoneChangeSend(t *testing.T, ctx context.Context, pool *database
 	completion, err := phone.NewUpdateRequest(completionSpec)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if mode == "normal" {
+		var issuedAt, expiresAt time.Time
+		if err := pool.Raw().QueryRow(ctx, `SELECT issued_at,expires_at FROM phone_codes.challenges WHERE tenant_id=$1 AND challenge_id=$2`, string(r.TenantID), string(sent.Binding.CommandID)).Scan(&issuedAt, &expiresAt); err != nil {
+			t.Fatal("original replacement challenge interval", err)
+		}
+		first, err := service.PhoneUpdateLifetime(ctx, completion)
+		if err != nil || first <= 0 || first != expiresAt.Sub(issuedAt) {
+			t.Fatal("replacement rate lifetime is not the original issued interval", err)
+		}
+		if again, err := service.PhoneUpdateLifetime(ctx, completion); err != nil || again != first {
+			t.Fatal("replacement rate lookup renewed or changed original validity", err)
+		}
 	}
 	consumer := service
 	var fault *signinCommitFault

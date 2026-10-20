@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Describe the direct original phone-update recovery contract for independently
+  selected HTTP composition. Metadata alone enables no route or workflow.
+
 - Require a retry key for replacement completion so the native owner can
   preserve one server-owned attempt across lost responses and wrong-code
   denials. Changed bound input under that key conflicts.

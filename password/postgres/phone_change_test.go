@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/faustbrian/go-identity/otp"
 	"github.com/faustbrian/go-identity/phone"
 )
 
@@ -29,6 +30,17 @@ func TestPhoneChangeRequiresActualOwners(t *testing.T) {
 		}
 		if result, err := owner.RecoverUpdate(context.Background(), phone.UpdateRecoveryRequest{}); err == nil || result.Result.Binding.CommandID != "" {
 			t.Fatal("zero owner disclosed replacement history")
+		}
+		result, err := owner.PhoneChangeSession(context.Background(), "", otp.SendFlow{})
+		if _, stateError := result.Bindings(); err == nil || stateError == nil {
+			t.Fatal("zero owner supplied original session metadata")
+		}
+		destination, err := owner.PhoneChangeDestination(context.Background(), phone.ChangeRequest{})
+		if _, stateError := destination.Record(); err == nil || stateError == nil {
+			t.Fatal("zero owner supplied replacement rate metadata")
+		}
+		if lifetime, err := owner.PhoneUpdateLifetime(context.Background(), phone.UpdateRequest{}); err == nil || lifetime != 0 {
+			t.Fatal("zero owner supplied challenge rate lifetime")
 		}
 	}
 }
