@@ -283,6 +283,16 @@ func FuzzRiskFrozenPlan(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(seed)
+	// Exercise the actual SMS request grammar as well as the retained legacy
+	// phone-domain declaration; random mutation rarely discovers the tuple.
+	p.SubjectType = "otp_challenge"
+	p.Lifecycle = &LifecyclePlan{EventType: "otp.sent.v1", AfterVersion: 1}
+	p.Audits[0].EventType = "otp.send"
+	request, err := encodeFeaturePlan(s.Binding, [32]byte{1}, p)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(request)
 	f.Add([]byte{0xa9})
 	f.Add(bytes.Repeat([]byte{0}, 65537))
 	f.Fuzz(func(t *testing.T, input []byte) {

@@ -111,6 +111,18 @@ func validResetRecipientIssuance(b identity.CommandBinding, p CommandPlan) bool 
 	return i.RegistrationUserID == "" && b.UserID == "" && b.AnonymousFlowID != "" && p.Feature != nil && passwordResetRequestOperation(p.Feature.Operation) && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) && p.Lifecycle != nil && len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.password.reset-complete"
 }
 
+func validPhoneResetRequestIssuance(b identity.CommandBinding, p CommandPlan) bool {
+	if p.Feature == nil || !riskInitiationOperation(p.Feature.Operation) || p.SubjectType == "phone" {
+		// Preserve existing phone-domain issuance history. It remains excluded
+		// from the new SMS preparation path by preparationProtected.
+		return true
+	}
+	i := p.CapabilityIssuance
+	return phoneResetRequestPreparation(p) && b.UserID != "" && b.AnonymousFlowID == "" &&
+		i != nil && validCapabilityIssuancePlan(i) && i.RegistrationUserID == "" && i.ResetRecipientUserID == "" && i.MagicLinkRecipientUserID == "" && i.MFAContinuationUserID == "" &&
+		len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.phone.password-reset-complete"
+}
+
 func magicLinkRequestOperation(op identity.FeatureOperation) bool {
 	return op == (identity.FeatureOperation{Owner: "identity/magiclink", OperationID: "identity.magic-link.request", SchemaID: "magic-link-request", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow})
 }
@@ -144,7 +156,7 @@ func validMFAContinuationIssuance(b identity.CommandBinding, p CommandPlan) bool
 // delivery envelope. Delivery remains outermost; a nested issuer envelope is
 // forbidden. No second journal or alternative history authority is introduced.
 func encodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan, encode func(identity.CommandBinding, [32]byte, CommandPlan) ([]byte, error)) ([]byte, error) {
-	if !validCapabilityIssuancePlan(p.CapabilityIssuance) || !validRegistrationIssuance(b, p) || !validResetRecipientIssuance(b, p) || !validMagicLinkRecipientIssuance(b, p) || !validMFAContinuationIssuance(b, p) || p.Lifecycle == nil || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != p.CapabilityIssuance.Contributor {
+	if !validCapabilityIssuancePlan(p.CapabilityIssuance) || !validRegistrationIssuance(b, p) || !validResetRecipientIssuance(b, p) || !validPhoneResetRequestIssuance(b, p) || !validMagicLinkRecipientIssuance(b, p) || !validMFAContinuationIssuance(b, p) || p.Lifecycle == nil || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != p.CapabilityIssuance.Contributor {
 		return nil, invalidPlan()
 	}
 	base := p

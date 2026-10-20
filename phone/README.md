@@ -6,6 +6,23 @@ authentication, risk decisions, signup, signin or recovery. Those composing
 owners must enforce their own tenant scope, uniqueness and transactional proofs.
 It requires Go 1.27.0 or later.
 
+## Explicit phone-password recovery contracts
+
+`PasswordResetService` is a separately selected workflow port, not an enabled
+implementation. Request and completion keep original sessionless pre-auth custody
+and distinct purpose-bound risk references. `RiskIssuanceCommandID` identifies
+the original risk command so its owner can resolve the private record; it cannot
+be the consuming command or independently authorize recovery. Native admission
+must authenticate that exact original scope and exclusive lifetime.
+
+Completion keeps the reset capability, phone OTP, independent confirmed TOTP and
+borrowed replacement password together. The native owner must atomically consume
+them with risk, password replacement and session revocation, after HIBP screening.
+Destroy the caller-owned password after the bounded call. Recovery methods query
+original authorized history without resubmitting codes or issuing a session.
+There is no email, missing-factor or remember-policy fallback. These contracts
+alone provide neither a usable recovery backend nor an HTTP route.
+
 ## Existing-account verification contracts
 
 Verified-phone replacement has distinct input custody: `ChangeRequest` binds

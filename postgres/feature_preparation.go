@@ -393,7 +393,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 
 func preparationProtected(p CommandPlan) bool {
 	phone := phoneResetConsumptionPlan(p)
-	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil && !otpEnrollmentPreparation(p) && !phone || p.RiskEvidence != nil && !phone || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil && !otpEnrollmentPreparation(p) && !phone || p.RiskEvidence != nil && !phone && !phoneResetRequestPreparation(p) || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
 // Only the original closed reset consumption plan may precede hash generation.
@@ -418,6 +418,9 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if original.Feature == nil || original.Lifecycle == nil || preparationProtected(original) || original.Delivery != nil {
 		return false
 	}
+	if phoneResetRequestPreparation(original) && (final.CapabilityIssuance == nil || final.Delivery == nil || !validPhoneResetRequestIssuance(b, final)) {
+		return false
+	}
 	if consumptionAuthenticationPreparation(original) {
 		if !consumptionAuthenticationPreparation(final) || *original.Capability != *final.Capability || final.Delivery != nil || final.CapabilityIssuance != nil && original.MFAContinuation == nil {
 			return false
@@ -430,7 +433,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	// original admission stays issuance-free and cannot introduce consumption.
 	withoutIssuance := final
 	withoutIssuance.CapabilityIssuance = nil
-	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) && !validOrganizationInvitationIssuance(b, final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
+	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) && !validOrganizationInvitationIssuance(b, final) && !phoneResetRequestPreparation(final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
 		return false
 	}
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || original.MagicLinkRequestAcceptance != final.MagicLinkRequestAcceptance || len(original.Audits) != len(final.Audits) {

@@ -654,6 +654,15 @@ authority. Ordinary `RequireFeatureCommand` and `FeatureCommandIdentity` remain
 Apply-only. Native complete workflow and factor/risk/password/session checks
 remain required; these kernel contracts expose no recovery endpoint.
 
+The separate native request uses `otp_challenge` with `otp.sent.v1` 0→1 and
+original initiation-only risk. Its original preparation cannot consume an OTP
+or capability. Final attachment must retain the exact risk artifact and add one
+`identity.phone.password-reset-complete` grant plus encrypted delivery, with no
+recipient override. Current pre-auth, verified phone/password, independent factor,
+actual risk and issuer checks remain the registered native owners' responsibility.
+The existing `phone` domain-risk declaration stays readable and unchanged; it
+does not gain this preparation path.
+
 ## Original-signin hash upgrades
 
 The registered `identity/password/postgres` owner can compose a hash-only

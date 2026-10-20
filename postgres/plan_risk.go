@@ -46,12 +46,24 @@ func validRiskTime(t time.Time, microseconds bool) bool {
 	return !t.IsZero() && t.Location() == time.UTC && t.Year() >= 1 && t.Year() <= 9999 && (!microseconds || t.Nanosecond()%1000 == 0)
 }
 
+// Original phone recovery generates SMS and its reset grant only after the
+// coordinator acknowledges preparation. The risk artifact is already immutable
+// input; no consuming OTP, capability or alternative admission budget belongs in
+// this request. Legacy phone-domain declarations keep their existing grammar.
+func phoneResetRequestPreparation(p CommandPlan) bool {
+	return p.Feature != nil && riskInitiationOperation(p.Feature.Operation) &&
+		p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}) &&
+		p.SubjectType == "otp_challenge" && p.Lifecycle != nil && *p.Lifecycle == (LifecyclePlan{EventType: "otp.sent.v1", AfterVersion: 1}) &&
+		p.RiskEvidence != nil && p.RiskEvidence.Phase == "phone-reset-initiation" && p.RiskEvidence.Purpose == "phone-password-reset-initiate" &&
+		p.OTP == nil && p.Capability == nil && p.CommandCounters == nil && p.CaptchaEvidence == nil && !p.CaptchaReplayReservation
+}
+
 func validateRiskPlan(b identity.CommandBinding, p CommandPlan) error {
 	r := p.RiskEvidence
 	if r == nil {
 		return nil
 	}
-	initiation := p.Feature != nil && riskInitiationOperation(p.Feature.Operation) && p.SubjectType == "phone" && p.Capability == nil && r.Phase == "phone-reset-initiation" && r.Purpose == "phone-password-reset-initiate"
+	initiation := p.Feature != nil && riskInitiationOperation(p.Feature.Operation) && (p.SubjectType == "phone" || phoneResetRequestPreparation(p)) && p.Capability == nil && r.Phase == "phone-reset-initiation" && r.Purpose == "phone-password-reset-initiate"
 	// The capability wrapper strips only its own proof while encoding its
 	// fixed-depth base. Full phone completion still requires that wrapper, the
 	// exact SMS attempt and the distinct completion evidence before admission.

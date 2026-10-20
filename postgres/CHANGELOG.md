@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit original phone-reset SMS preparation with immutable initiation risk,
+  then attach one canonical phone-reset grant and encrypted delivery together.
+  Recipient overrides, consuming OTP, altered risk and partial final effects
+  deny; existing phone-domain risk declarations remain compatible. Native
+  recipient/factor/risk/issuance ownership is still required.
+
 - Admit the closed joint phone-reset plan through retained preparation,
   counted denial, consuming execution and original recovery, preserving atomic
   capability/OTP/risk participation. Final OTP checks correlate actual native

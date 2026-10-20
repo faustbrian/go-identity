@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opaque, separately selected sessionless password-reset request/completion
+  contracts. Retain the original risk issuance command independently from its
+  consumer; completion retains the canonical capability, SMS, independent TOTP
+  and borrowed replacement password together. These ports enable no native
+  workflow or route and offer no weaker factor or email fallback.
+
 - Derive a distinct canonical-target commitment for sessionless phone-password
   recovery. It cannot substitute for password or OTP signin intent; the native
   workflow still owns pre-auth authentication, risk and all recovery proofs.
