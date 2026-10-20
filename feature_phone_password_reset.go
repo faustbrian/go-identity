@@ -14,6 +14,7 @@ type phonePasswordResetCommandState struct {
 	hash                string
 	proof               capability.Proof
 	phoneCode, totpCode auth.OneTimeCode
+	preAuthCookie       auth.BearerCredential
 }
 
 // NewFeaturePhonePasswordResetInputCommand freezes a joint original password,
@@ -72,6 +73,48 @@ func newFeaturePhonePasswordResetCommand(spec FeatureCommandSpec, state phonePas
 	// opaque code, proof or verifier backing storage through reflection.
 	c.feature.phonePasswordReset = func() phonePasswordResetCommandState { return state }
 	return c, nil
+}
+
+// BindPhonePasswordResetPreAuth retains the original browser-flow cookie with
+// an exact joint phone-reset input or generated command. It returns a new
+// immutable command, preserving every borrowed password/proof/code owner and
+// leaving the original unchanged. Already-bound, legacy, mixed or zero commands
+// and noncanonical cookies return zero Command and redacted InvalidInputError.
+// Cookie syntax is canonical unpadded base64url for 32..64 bytes; only the native
+// session owner may authenticate its original purpose, target and current row.
+// Binding grants no verification or consumption authority and enables no flow.
+func BindPhonePasswordResetPreAuth(original Command, cookie auth.BearerCredential) (Command, error) {
+	state, ok := original.phonePasswordResetState(true)
+	if !ok {
+		state, ok = original.phonePasswordResetState(false)
+	}
+	if !ok || state.preAuthCookie.Token() != "" {
+		return Command{}, invalidFeatureCommand()
+	}
+	frozen, err := freezeFeaturePreAuthCookie(cookie)
+	if err != nil {
+		return Command{}, err
+	}
+	state.preAuthCookie = frozen
+	return newFeaturePhonePasswordResetCommand(original.feature.spec, state)
+}
+
+// PhonePasswordResetPreAuthCookie borrows only the exact original browser cookie
+// retained by BindPhonePasswordResetPreAuth. Input and generated joint commands
+// retain their distinct variants; generic Feature, PreAuthCookie and OneTimeCode
+// remain closed rather than dropping a required factor. This is not proof of
+// possession or current flow admission. Never log, serialize or persist Token;
+// discard every borrowed secret-bearing copy after bounded native use. Zero,
+// unbound, legacy and mixed commands return zero/false. No IO or callbacks run.
+func (c Command) PhonePasswordResetPreAuthCookie() (auth.BearerCredential, bool) {
+	state, ok := c.phonePasswordResetState(true)
+	if !ok {
+		state, ok = c.phonePasswordResetState(false)
+	}
+	if !ok || state.preAuthCookie.Token() == "" {
+		return auth.BearerCredential{}, false
+	}
+	return state.preAuthCookie, true
 }
 
 func phonePasswordResetOperation(op FeatureOperation) bool {

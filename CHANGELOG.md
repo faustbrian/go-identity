@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain the original browser-flow cookie in exact joint phone-reset command
+  custody without exposing it through legacy accessors or changing any factor.
+  Binding validates syntax only; native flow admission remains required.
+
 - Add explicit joint phone-password-reset input and generated command custody.
   Password/verifier, canonical capability, phone OTP and independent TOTP remain
   one closed variant; legacy email-reset and single-code accessors reject it.

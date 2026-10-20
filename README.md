@@ -40,6 +40,12 @@ the native owner must still bind original pre-auth/current authority, reserve
 separate completion risk evidence and atomically finalize every proof, password
 change and session revocation. This profile issues no session or remember choice.
 
+`BindPhonePasswordResetPreAuth` adds the original browser cookie to either exact
+joint variant without replacing its password/verifier or proof/code owners.
+`PhonePasswordResetPreAuthCookie` lends it only to that closed native profile;
+generic feature, cookie and single-code access remain unavailable. Binding checks
+canonical cookie syntax, not possession or the current session-owned flow.
+
 `NewFeaturePasswordResetInputCommand` borrows the primitive replacement `Secret`
 and original capability `Proof` before hashing. Select `PasswordResetInputFeature`
 and `PasswordResetInputCustody` together; no legacy or generated accessor admits
