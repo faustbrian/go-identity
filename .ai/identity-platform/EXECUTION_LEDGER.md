@@ -1,6 +1,18 @@
 # Identity Implementation — Current Milestone
 
-## Active M08 — explicitly enabled phone-password recovery
+## M08 — explicitly enabled phone-password recovery profile DELIVERED
+
+2026-10-20 22:08 UTC reference committed/main-pushed
+d5156d8eda1cd60dc0529f7e7e352e26244992d2, exact Required39505315426 SUCCESS.
+Actual downloaded public referencev0.0.0-20261020220354-d5156d8eda1c has all313
+tracked files byte-identical to owning source; its genuine PostgreSQL/HTTPS/race
+reset consumer PASS14.243s with GOWORKoff. The three public-supplier reference
+profiles PASS53.032s and complete-source review APPROVE remain attributable to
+their original unchanged inputs. This finite reset consumer is CLOSED: no more
+variants or qualification gates are added to it. No tag/release/deployment claim.
+The8/39 milestone count is retained pending bounded M08 scope reconciliation;
+phone signup and privacy remain full-goal obligations, not silently supported.
+All Go handles are terminal and the isolated PostgreSQL server is stopped.
 
 2026-10-20 22:04 UTC selected reference consumer acceptance is complete:
 GOWORKoff/public suppliers, genuine PostgreSQL/HTTPS/race success, required-audit

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 22:04 UTC
+## TL;DR — updated 2026-10-20 22:08 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -12,7 +12,7 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**New local consumer proof:** the full selected phone-reset reference journey
+**New delivered consumer:** the full selected phone-reset reference journey
 now passes real PostgreSQL/HTTPS under race (final group216.846s: success,
 required-audit rollback, lost-COMMIT recovery and retained phone-removal
 HTTPS/commit-custody profiles). Actual preceding registration/verification,
@@ -30,9 +30,14 @@ HTTP-phone race5.890s/vet0 pass against authenticated public dependencies withou
 local replacements. Reference public-pin adoption is now independently APPROVED;
 its genuine public-supplier PostgreSQL/HTTPS/race success, rollback and lost-COMMIT
 group PASS53.032s. Ordinary reference/cmd race8.624s/7.622s, tagged vet and module
-verification pass. Reference commit/push/exact CI remain pending for this accepted
-profile. No whole milestone or qualified unit is added: phone signup and lifecycle/
-privacy obligations still prevent full M08/unit closure.
+verification pass. The accepted reference profile is now main-pushed as
+`d5156d8`, exact Required CI `39505315426` green.
+All313 downloaded public-reference files match source; the downloaded module's
+actual PostgreSQL/HTTPS/race recovery consumer PASS14.243s with GOWORKoff.
+This finite recovery profile is CLOSED, not another implementation in progress.
+The8/39 count is retained pending bounded M08 scope reconciliation; phone signup
+and privacy remain full-goal obligations, not implicitly supported. Full-unit
+qualification, tagged release and production/deployment are not claimed.
 
 The entries below retain earlier checkpoints; their pending/local wording is
 historical where superseded by this current summary.
