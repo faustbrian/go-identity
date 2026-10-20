@@ -19,13 +19,14 @@ type storedPreAuth struct {
 	TenantID                    identity.TenantID
 	Action, Origin, CallbackURL string
 	Nonce                       [32]byte
-	Remember                    session.RememberPolicySpec
+	Remember                    session.RememberPolicySpec `json:",omitzero"`
 	PolicyID                    string
 	PolicyVersion               uint64
 	IssuedAt, ExpiresAt         time.Time
 	Cookie                      session.TokenDigest
 	Version                     uint64
-	IdentifierBinding           *[32]byte `json:",omitempty"`
+	IdentifierBinding           *[32]byte              `json:",omitempty"`
+	Purpose                     session.PreAuthPurpose `json:",omitempty"`
 }
 
 func encodePreAuth(record session.PreAuthTransaction) ([]byte, error) {
@@ -35,7 +36,7 @@ func encodePreAuth(record session.PreAuthTransaction) ([]byte, error) {
 	}
 	b := s.Binding
 	r, err := b.Intent.Remember.Bindings()
-	if err != nil {
+	if err != nil && b.Intent.Purpose != session.PreAuthPhonePasswordRecovery {
 		return nil, ErrInvalidRecord
 	}
 	i := b.Intent
@@ -47,7 +48,7 @@ func encodePreAuth(record session.PreAuthTransaction) ([]byte, error) {
 		original := i.IdentifierBinding
 		identifierBinding = &original
 	}
-	payload, err := json.Marshal(storedPreAuth{1, b.ID, i.TenantID, i.Action, i.Origin, i.CallbackURL, i.Nonce, r, i.PolicyID, i.PolicyVersion, b.IssuedAt, b.ExpiresAt, s.Cookie, s.Version, identifierBinding})
+	payload, err := json.Marshal(storedPreAuth{1, b.ID, i.TenantID, i.Action, i.Origin, i.CallbackURL, i.Nonce, r, i.PolicyID, i.PolicyVersion, b.IssuedAt, b.ExpiresAt, s.Cookie, s.Version, identifierBinding, i.Purpose})
 	if err != nil || len(payload) > maximumPreAuthRecordBytes {
 		return nil, ErrInvalidRecord
 	}
@@ -63,15 +64,23 @@ func decodePreAuth(payload []byte) (session.PreAuthTransaction, error) {
 	if json.Unmarshal(payload, &stored) != nil || stored.Schema != 1 {
 		return bad()
 	}
-	remember, err := session.NewRememberPolicy(stored.Remember)
-	if err != nil {
-		return bad()
+	var remember session.RememberPolicy
+	if stored.Purpose == session.PreAuthPhonePasswordRecovery {
+		if stored.Remember != (session.RememberPolicySpec{}) {
+			return bad()
+		}
+	} else {
+		var err error
+		remember, err = session.NewRememberPolicy(stored.Remember)
+		if err != nil {
+			return bad()
+		}
 	}
 	var identifierBinding [32]byte
 	if stored.IdentifierBinding != nil {
 		identifierBinding = *stored.IdentifierBinding
 	}
-	result, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: stored.ID, Intent: session.PreAuthIntent{TenantID: stored.TenantID, Action: stored.Action, Origin: stored.Origin, CallbackURL: stored.CallbackURL, Nonce: stored.Nonce, Remember: remember, PolicyID: stored.PolicyID, PolicyVersion: stored.PolicyVersion, IdentifierBinding: identifierBinding}, IssuedAt: stored.IssuedAt, ExpiresAt: stored.ExpiresAt}, Cookie: stored.Cookie, Version: stored.Version})
+	result, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: stored.ID, Intent: session.PreAuthIntent{TenantID: stored.TenantID, Action: stored.Action, Origin: stored.Origin, CallbackURL: stored.CallbackURL, Nonce: stored.Nonce, Remember: remember, PolicyID: stored.PolicyID, PolicyVersion: stored.PolicyVersion, IdentifierBinding: identifierBinding, Purpose: stored.Purpose}, IssuedAt: stored.IssuedAt, ExpiresAt: stored.ExpiresAt}, Cookie: stored.Cookie, Version: stored.Version})
 	if err != nil {
 		return bad()
 	}

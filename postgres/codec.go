@@ -184,6 +184,15 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 				return claimRequest{}, err
 			}
 		}
+		if _, input := c.PhonePasswordResetInputFeature(); input {
+			if err := encodePhonePasswordResetCustody(c, key, payload, true); err != nil {
+				return claimRequest{}, err
+			}
+		} else if _, generated := c.PhonePasswordResetFeature(); generated {
+			if err := encodePhonePasswordResetCustody(c, key, payload, false); err != nil {
+				return claimRequest{}, err
+			}
+		}
 		if _, ok := c.PasswordSigninFeature(); ok {
 			if err := encodePasswordSigninCustody(c, key, payload); err != nil {
 				return claimRequest{}, err
@@ -263,6 +272,12 @@ func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return 
 // The authenticated variant additionally binds every original hash/bearer/proof
 // field; this selection does not replace native policy validation/consumption.
 func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
+	if s, ok := c.PhonePasswordResetInputFeature(); ok {
+		return s, true
+	}
+	if s, ok := c.PhonePasswordResetFeature(); ok {
+		return s, true
+	}
 	if s, ok := c.PasswordResetInputFeature(); ok {
 		return s, true
 	}
@@ -272,7 +287,7 @@ func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
 	if s, ok := c.Feature(); ok {
 		// Signin's scalar metadata alone cannot stand in for the paired
 		// password/cookie variant, including preparation and restored plans.
-		if passwordSigninOperation(s.Operation) || passwordRegistrationOperation(s.Operation) || passwordResetOperation(s.Operation) {
+		if passwordSigninOperation(s.Operation) || passwordRegistrationOperation(s.Operation) || passwordResetOperation(s.Operation) || s.Operation.OperationID == "identity.phone.password-reset-complete" {
 			return identity.FeatureCommandSpec{}, false
 		}
 		return s, true

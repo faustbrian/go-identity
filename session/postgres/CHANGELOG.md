@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve explicit no-session phone-recovery pre-auth purpose in durable
+  records, native issuance and original recovery without a remember choice.
+  Existing login payloads and installed migration bytes remain unchanged.
+
 - Decode the closed phone OTP signin session projection without accepting
   email authentication metadata. Add the forward `PhoneOTPSigninMigrationSource`
   after the explicitly selected password/signup/magic-link/MFA/verification

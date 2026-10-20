@@ -55,6 +55,8 @@ github.com/faustbrian/go-identifier v1.0.0 h1:5lXZbS2wK4NelWv4ekRocwOwjkWt1ch/nh
 github.com/faustbrian/go-identifier v1.0.0/go.mod h1:Q2yS7Hk4N4i9Wd3OmPQGh657SHtA1IjvtT4PllphNlY=
 github.com/faustbrian/go-identity v0.0.0-20261019000410-c5205a35b05c h1:x+tCMpIxkwekIQ44vvPyQoATVZRC+lC4EsOYqqYPpZI=
 github.com/faustbrian/go-identity v0.0.0-20261019000410-c5205a35b05c/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
+github.com/faustbrian/go-identity v0.0.0-20261020084459-928f9b710602 h1:xxr8O50FVQBmv9moTZs4qd732UFhNkr6aXV8GDM9XqU=
+github.com/faustbrian/go-identity v0.0.0-20261020084459-928f9b710602/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
 github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053 h1:XFlSTdRmnTbUMrVY1nRcwFUCtNR19cqP9XUoKqreHd0=
 github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053/go.mod h1:gbHmgfef5iSUtki7ZEa7HnqngXCugftiOgDlPQGwYx0=
 github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907 h1:dLBvHl7G/7ZAuvrlF/BtO3KDEnvIGXNVMvOU9YslG0s=
@@ -71,6 +73,8 @@ github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015104034-f168811009
 github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015104034-f16881100907/go.mod h1:3uMDUUcoVr8FQxFP7tIChsHPslNc8jW8urnpNqsgfBA=
 github.com/faustbrian/go-identity/session v0.0.0-20261019005456-2fb03512d8a1 h1:Xz6Ht9a36dn57Ya0FeKGkgY5CdQcnp8IX6aCKH6dhSU=
 github.com/faustbrian/go-identity/session v0.0.0-20261019005456-2fb03512d8a1/go.mod h1:4881V+LxKRjNfZ8KZn7Xne258cP8IZZUPZGZd4TU/uc=
+github.com/faustbrian/go-identity/session v0.0.0-20261020084459-928f9b710602 h1:f31i1Vyu/1uOKJ/5r+8w8+Zx/xctlsUKAr5FOIsJiQ0=
+github.com/faustbrian/go-identity/session v0.0.0-20261020084459-928f9b710602/go.mod h1:4881V+LxKRjNfZ8KZn7Xne258cP8IZZUPZGZd4TU/uc=
 github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEWMARORc=
 github.com/faustbrian/go-jsonrpc v1.1.1/go.mod h1:thOSBE3KGGNbPHY/OcreIcDPwusQ273v61n6TlmJdxE=
 github.com/faustbrian/go-migrations/v2 v2.0.0 h1:ipOKc3CA0p8vL5GPVh6xISQUfLiPCBfD6nT8stuWfUo=

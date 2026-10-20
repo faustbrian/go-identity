@@ -203,6 +203,15 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if _, ok := command.PasswordResetInputFeature(); ok {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
+	// Compound phone recovery cannot use generic execution to omit capability,
+	// phone OTP, independent TOTP or risk finalization. Its dedicated consuming
+	// transaction must be selected explicitly before this custody can execute.
+	if _, ok := command.PhonePasswordResetInputFeature(); ok {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
+	if _, ok := command.PhonePasswordResetFeature(); ok {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	if plan.OTP != nil {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}

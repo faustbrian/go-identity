@@ -33,6 +33,9 @@ type PreAuthIssueExecutorConfig struct {
 	ActorID                               identity.ActorID
 	Action, Origin, CallbackURL, PolicyID string
 	PolicyVersion, AuditRetentionVersion  uint64
+	// Purpose selects only the matching core profile; zero preserves login.
+	// Phone recovery has no session choice and requires identifier binding.
+	Purpose session.PreAuthPurpose
 }
 
 // PreAuthIssueCommand freezes a server-prepared original flow with a stable
@@ -65,8 +68,13 @@ func NewPreAuthIssueExecutor(pool *database.Pool, c PreAuthIssueExecutorConfig) 
 	if err != nil {
 		return nil, session.ErrInvalidInput
 	}
+	var identifier [32]byte
+	if c.Purpose == session.PreAuthPhonePasswordRecovery {
+		remember = session.RememberPolicy{}
+		identifier = [32]byte{1}
+	}
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	_, err = session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: [32]byte{1}, Remember: remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})
+	_, err = session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: [32]byte{1}, Remember: remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: identifier, Purpose: c.Purpose}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})
 	if err != nil {
 		return nil, session.ErrInvalidInput
 	}
@@ -74,7 +82,7 @@ func NewPreAuthIssueExecutor(pool *database.Pool, c PreAuthIssueExecutorConfig) 
 	if err != nil {
 		return nil, err
 	}
-	native.preAuthIssue = &preAuthIssueProfile{identity.ActorID(strings.Clone(string(c.ActorID))), strings.Clone(c.Action), strings.Clone(c.Origin), strings.Clone(c.CallbackURL), strings.Clone(c.PolicyID), c.PolicyVersion}
+	native.preAuthIssue = &preAuthIssueProfile{actor: identity.ActorID(strings.Clone(string(c.ActorID))), action: strings.Clone(c.Action), origin: strings.Clone(c.Origin), callback: strings.Clone(c.CallbackURL), policy: strings.Clone(c.PolicyID), version: c.PolicyVersion, purpose: c.Purpose}
 	domain, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: c.Coordinator.MaximumDuration})
 	if err != nil {
 		return nil, err

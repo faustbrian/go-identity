@@ -178,6 +178,107 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 			}
 		}
 	})
+	t.Run("sessionless phone recovery", func(t *testing.T) {
+		recoveryConfig := config
+		recoveryConfig.Action = "identity.phone.password-reset-request"
+		recoveryConfig.Purpose = session.PreAuthPhonePasswordRecovery
+		recoveryExecutor, err := NewPreAuthIssueExecutor(pool, recoveryConfig)
+		if err != nil {
+			t.Fatal("native recovery profile unavailable", err)
+		}
+		key, err := session.NewDigestKey(9, bytes.Repeat([]byte{7}, 32))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cookie, err := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_flow", SameSite: http.SameSiteLaxMode})
+		if err != nil {
+			t.Fatal(err)
+		}
+		issuerConfig := session.PreAuthIssuerConfig{ActorID: recoveryConfig.ActorID, Action: recoveryConfig.Action, Origin: recoveryConfig.Origin, CallbackURL: recoveryConfig.CallbackURL, PolicyID: recoveryConfig.PolicyID, PolicyVersion: recoveryConfig.PolicyVersion, Clock: recoveryConfig.Clock, MaximumDuration: 2 * time.Second, FlowTTL: 5 * time.Minute, LookupKey: key, TokenSize: 32, Cookie: cookie, Purpose: session.PreAuthPhonePasswordRecovery}
+		issuer, err := session.NewPreAuthIssuer(recoveryExecutor, issuerConfig)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		input := session.PreAuthPrepareInput{CommandID: id, TenantID: "issue", CorrelationID: "phone-recovery", IdentifierBinding: [32]byte{98}}
+		prepared, err := issuer.Prepare(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		command, _ := prepared.Command()
+		spec, _ := command.Record.Bindings()
+		var sessionsBefore, sessionsAfter int
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM session_store.sessions`).Scan(&sessionsBefore); err != nil {
+			t.Fatal(err)
+		}
+		out, err := issuer.Issue(ctx, prepared)
+		if err != nil || out.CommitOutcome != identity.CommitOutcomeCommitted || out.Replayed {
+			t.Fatal("sessionless flow not committed", err)
+		}
+		wire, err := out.Token.Reveal()
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, err := session.ParseToken(wire)
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest, err := token.PreAuthDigest(key, spec.Binding)
+		if err != nil || digest != spec.Cookie || spec.Binding.Intent.Remember != (session.RememberPolicy{}) || spec.Binding.Intent.Purpose != session.PreAuthPhonePasswordRecovery {
+			t.Fatal("recovery acquired login/session authority", err)
+		}
+		counts(t, command, 1, 1)
+		loaded, err := ReadPreAuth(ctx, pool.Raw(), config.Repository, "issue", spec.Binding.ID)
+		if err != nil || loaded.Check(spec.Binding.IssuedAt, spec.Binding, digest) != nil {
+			t.Fatal("original recovery possession not preserved", err)
+		}
+		var stored []byte
+		if err := pool.Raw().QueryRow(ctx, `SELECT record FROM session_store.preauth_transactions WHERE tenant_id='issue' AND flow_id=$1`, string(spec.Binding.ID)).Scan(&stored); err != nil || bytes.Contains(stored, []byte(`"Remember"`)) {
+			t.Fatal("stored recovery carries a session choice", err)
+		}
+		changed := spec
+		changed.Binding.Intent.IdentifierBinding[0]++
+		changedRecord, err := session.NewPreAuthTransaction(changed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		changedCommand := command
+		changedCommand.Record = changedRecord
+		conflicting, err := recoveryExecutor.ExecutePreAuthIssuance(ctx, changedCommand)
+		var conflict identity.ConflictError
+		if !errors.As(err, &conflict) || conflicting.Receipt.Outcome != identity.CommitOutcomeConflict {
+			t.Fatal("same recovery command retargeted identifier", err)
+		}
+		if _, err := executor.ExecutePreAuthIssuance(ctx, command); err == nil {
+			t.Fatal("login executor admitted recovery purpose")
+		}
+		replayed, err := recoveryExecutor.ExecutePreAuthIssuance(ctx, command)
+		if err != nil || !replayed.Replayed || replayed.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("recovery retry reacquired delivery", err)
+		}
+		restarted, err := NewPreAuthIssueExecutor(pool, recoveryConfig)
+		if err != nil {
+			t.Fatal(err)
+		}
+		restartedIssuer, err := session.NewPreAuthIssuer(restarted, issuerConfig)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recovered, err := restartedIssuer.Recover(ctx, command)
+		if err != nil || recovered.CommitOutcome != identity.CommitOutcomeCommitted || !recovered.Replayed || recovered.Flow != (session.PreAuthTransaction{}) || !reflect.DeepEqual(recovered.Cookie, http.Cookie{}) {
+			t.Fatal("recovery replay redelivered credentials", err)
+		}
+		if _, err := recovered.Token.Reveal(); !errors.Is(err, session.ErrInvalidToken) {
+			t.Fatal("recovery disclosed original cookie")
+		}
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM session_store.sessions`).Scan(&sessionsAfter); err != nil || sessionsAfter != sessionsBefore {
+			t.Fatal("phone recovery created a session", err)
+		}
+		counts(t, command, 1, 1)
+	})
 	t.Run("exact retry and restart do not reissue", func(t *testing.T) {
 		input := prepare(t)
 		execution, err := executor.ExecutePreAuthIssuance(ctx, input)

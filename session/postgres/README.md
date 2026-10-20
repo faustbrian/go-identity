@@ -1,5 +1,16 @@
 # PostgreSQL session storage
 
+## Explicit sessionless recovery pre-authentication
+
+`PreAuthIssueExecutorConfig.Purpose` must match the core issuer's explicit
+`PreAuthPhonePasswordRecovery` selection. This uses existing pre-auth storage,
+issuance evidence, audit/outbox and command recovery, with no session or remember
+choice. Existing login bytes and installed SQL remain unchanged; older binaries
+reject the new purpose rather than loading it as login. Apply the existing
+pre-auth/issuance histories before selection. This is not a phone-reset service:
+its owner still must consume the original flow and all required proofs with the
+protected credential mutation.
+
 `PasswordSigninSession` restores the same closed session fields from exact
 username-signin paired custody. It does not turn a username into a verified
 delivery address or supply the native workflow's current admission. Enabling

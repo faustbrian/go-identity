@@ -18,6 +18,7 @@ type preAuthIssueProfile struct {
 	actor                            identity.ActorID
 	action, origin, callback, policy string
 	version                          uint64
+	purpose                          session.PreAuthPurpose
 }
 
 func (p *preAuthIssueProfile) matches(b identity.CommandBinding, record session.PreAuthTransaction) bool {
@@ -26,7 +27,7 @@ func (p *preAuthIssueProfile) matches(b identity.CommandBinding, record session.
 		return false
 	}
 	i := s.Binding.Intent
-	return b.ActorKind == authorization.SubjectServiceAccount && b.ActorID == p.actor && b.PolicyID == p.policy && b.PolicyVersion == p.version && i.Action == p.action && i.Origin == p.origin && i.CallbackURL == p.callback
+	return b.ActorKind == authorization.SubjectServiceAccount && b.ActorID == p.actor && b.PolicyID == p.policy && b.PolicyVersion == p.version && i.Purpose == p.purpose && i.Action == p.action && i.Origin == p.origin && i.CallbackURL == p.callback
 }
 
 func (r *Repository) validatePreAuthIssuePlan(command identity.Command, p kernel.CommandPlan) error {

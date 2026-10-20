@@ -44,11 +44,15 @@ func mapPreAuthIssue(b identity.CommandBinding, record session.PreAuthTransactio
 	number("flow.version", s.Version)
 	number("cookie.version", uint64(s.Cookie.KeyVersion))
 	add("cookie.digest", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: s.Cookie.Sum[:]})
-	number("remember.choice", uint64(remember.Choice))
-	duration("remember.absolute", remember.AbsoluteTTL)
-	duration("remember.idle", remember.IdleTTL)
-	duration("remember.refresh", remember.RefreshAfter)
-	duration("remember.fresh", remember.FreshFor)
+	if i.Purpose == session.PreAuthSessionIssuance {
+		number("remember.choice", uint64(remember.Choice))
+		duration("remember.absolute", remember.AbsoluteTTL)
+		duration("remember.idle", remember.IdleTTL)
+		duration("remember.refresh", remember.RefreshAfter)
+		duration("remember.fresh", remember.FreshFor)
+	} else {
+		number("flow.purpose", uint64(i.Purpose))
+	}
 	if i.IdentifierBinding != ([32]byte{}) {
 		add("flow.identifier", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: i.IdentifierBinding[:]})
 	}
@@ -110,15 +114,27 @@ func nativePreAuthIssue(command identity.Command) (identity.CommandBinding, sess
 	} else {
 		copy(s.Cookie.Sum[:], digest)
 	}
-	choice := number("remember.choice")
-	if choice > 255 {
-		valid = false
+	if _, present := values["flow.purpose"]; present {
+		purpose := number("flow.purpose")
+		if purpose != uint64(session.PreAuthPhonePasswordRecovery) {
+			return bad()
+		}
+		b.Intent.Purpose = session.PreAuthPhonePasswordRecovery
 	}
-	remember, err := session.NewRememberPolicy(session.RememberPolicySpec{Choice: session.RememberChoice(choice), AbsoluteTTL: duration("remember.absolute"), IdleTTL: duration("remember.idle"), RefreshAfter: duration("remember.refresh"), FreshFor: duration("remember.fresh")})
-	if err != nil || !valid {
+	if b.Intent.Purpose == session.PreAuthSessionIssuance {
+		choice := number("remember.choice")
+		if choice > 255 {
+			return bad()
+		}
+		remember, err := session.NewRememberPolicy(session.RememberPolicySpec{Choice: session.RememberChoice(choice), AbsoluteTTL: duration("remember.absolute"), IdleTTL: duration("remember.idle"), RefreshAfter: duration("remember.refresh"), FreshFor: duration("remember.fresh")})
+		if err != nil {
+			return bad()
+		}
+		b.Intent.Remember = remember
+	}
+	if !valid {
 		return bad()
 	}
-	b.Intent.Remember = remember
 	if _, present := values["flow.identifier"]; present {
 		identifier := take("flow.identifier", identity.FeatureBytes).Bytes
 		if len(identifier) != len(b.Intent.IdentifierBinding) {

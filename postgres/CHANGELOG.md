@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind compound phone-reset password/verifier, canonical capability, phone OTP
+  and independent TOTP in separate keyed command-intent domains. Plain metadata
+  and generic execution cannot drop factors. Dedicated atomic phone recovery
+  orchestration remains unavailable; this change enables no reset endpoint.
+
 - Require the phone-replacement consuming profile's canonical identifier-change
   event with standard self-service audit retention.
 
