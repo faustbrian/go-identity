@@ -373,11 +373,18 @@ func (p Policy) assess(ctx context.Context, c Context, input []Signal, protected
 		return Assessment{}, err
 	}
 	if protectedProviders {
-		if a.Preflight != "" || a.Profile.Class != CredentialMutation || a.Profile.Phase != ReserveWithCommand || !slices.Contains(a.Profile.RequiredSignals, "velocity") {
+		commandReserved := a.Profile.Class == CredentialMutation && a.Profile.Phase == ReserveWithCommand
+		// Phone reset's native evidence owner owns the originally charged
+		// Authentication velocity and rechecks its allowance during atomic evidence
+		// use. Hash preparation must not charge again or fabricate a clean fact.
+		// This exact HIBP-enabled completion is the only authentication exception;
+		// the provider-only result still grants no counter or mutation authority.
+		phoneResetEvidence := c.Operation == "identity.phone.password-reset-complete" && a.Profile.Class == Authentication && a.Profile.Phase == BeforeCredential && p.state.hibpOperations[c.Operation]
+		if a.Preflight != "" || (!commandReserved && !phoneResetEvidence) || !slices.Contains(a.Profile.RequiredSignals, "velocity") {
 			return Assessment{}, ErrInvalidAction
 		}
 		// Admit returns owned slices. Remove only the signal whose actual
-		// allowance belongs to mandatory command reservation/finalization.
+		// allowance belongs to mandatory native reservation/current-use checks.
 		a.Profile.RequiredSignals = slices.DeleteFunc(a.Profile.RequiredSignals, func(name string) bool { return name == "velocity" })
 	}
 	if !scopeID(c.Tenant) || !scopeID(c.Attempt) || !validTime(c.Now) {

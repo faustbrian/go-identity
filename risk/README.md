@@ -68,11 +68,29 @@ journal. Native OTP composition and full release proof remain unfinished.
 
 `Policy.AssessProtectedProviders` checks required provider observations before
 password hashing and rechecks their original freshness without provider IO.
-It supports only the command-reserved credential-mutation profile and rejects
+It supports the command-reserved credential-mutation profile and rejects
 caller-supplied velocity. Its distinct result is **not** complete risk admission:
 the native mutation owner must reserve and recheck the exact matching counter
 policy in the protected transaction. HIBP and every other mandatory provider
 remain fail-closed. Ordinary `Policy.Assess` still requires velocity.
+
+The pure assessment additionally supports the exact HIBP-enabled
+`identity.phone.password-reset-complete` profile with mandatory velocity.
+That workflow's existing native RiskEvidence owner must authenticate the
+original counted attempt and recheck current durable allowance during atomic
+evidence use. Provider-only hashing must not recharge or synthesize velocity.
+This exception enables no other authentication action and does not broaden
+the evaluator or protected-admission custody profiles below. It is preparation,
+not an enabled phone reset service or permission to persist a password.
+
+`PhoneEvidenceIssuer.PrepareUse(ctx, original, consuming)` resolves the exact
+original issuance through the configured native executor and produces only
+opaque `EvidenceUse` after matching committed intent, original scope, presented
+reference and exclusive expiry. Supply the retained complete original command,
+actor and subject correlation, not reconstructed current facts. Native records
+remain private. Resolution never evaluates providers, charges counters or issues
+replacement evidence; it cannot renew source expiry or grant reservation,
+current-counter allowance or protected-domain authority.
 
 `Evaluator.EvaluateProtectedProviders` collects those facts through the same
 configured bounded readers and failure handling as ordinary evaluation. It

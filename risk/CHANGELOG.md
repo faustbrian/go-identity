@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Prepare opaque phone-recovery evidence use through authorized original native
+  resolution without exposing persistence records. Missing, denied, failed,
+  unknown, foreign or expired originals yield no usable proof or replacement
+  issuance; current durable use and protected effects remain separately required.
+
+- Permit provider-only HIBP preparation for exact phone-reset completion when
+  its native risk-evidence owner retains original/current velocity authority.
+  No caller velocity, other Authentication exemption or recovery permission is
+  introduced; ordinary complete assessments still require velocity.
+
 - Derive original phone-evidence counter custody at coordinator-owned primary
   time without redispatching counters or providers. Native consumers must still
   authenticate the original committed attempt and current durable windows;
