@@ -432,7 +432,7 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	}
 	execution := w.state.execution
 	r := execution.reservation
-	class, reason, outcome, safeCause := abortClassification(cause)
+	class, reason, outcome, safeCause := abortFeatureClassification(cause, w.state.feature)
 	var records []audit.Record
 	// Previously validated immutable staging survives a poisoned/cancelled
 	// domain handle; detached terminalization must revalidate it under its fence.
@@ -565,10 +565,23 @@ func (c *Coordinator) persistAuditPhase(w Work) (err error) {
 	return invalidAudit()
 }
 
+func abortFeatureClassification(cause error, feature *FeatureRegistration) (string, string, audit.Outcome, error) {
+	class, reason, outcome, safe := abortClassification(cause)
+	if class == "reauthentication-required" && !oauthReauthenticationFeature(feature) {
+		// Abort is also a public kernel operation. A caller-provided OAuth
+		// error cannot give another feature an unrecoverable terminal class.
+		return abortClassification(identity.UnavailableError{})
+	}
+	return class, reason, outcome, safe
+}
+
 func abortClassification(cause error) (string, string, audit.Outcome, error) {
+	var reauthenticate OAuthReauthenticationRequiredError
 	var forbidden identity.ForbiddenError
 	var conflict identity.ConflictError
 	switch {
+	case errors.As(cause, &reauthenticate):
+		return "reauthentication-required", "not_authorized", audit.OutcomeDenied, OAuthReauthenticationRequiredError{}
 	case errors.As(cause, &forbidden):
 		return "denied", "not_authorized", audit.OutcomeDenied, identity.ForbiddenError{}
 	case errors.As(cause, &conflict):

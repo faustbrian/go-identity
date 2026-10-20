@@ -276,6 +276,11 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 		return result, nil
 	}
 	switch *observed.class {
+	case "reauthentication-required":
+		if feature == nil || !oauthReauthenticationOperation(*feature) {
+			return identity.CommandResult{}, identity.UnavailableError{}
+		}
+		return result, OAuthReauthenticationRequiredError{}
 	case "denied":
 		return result, identity.ForbiddenError{}
 	case "conflict":

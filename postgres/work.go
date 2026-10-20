@@ -66,6 +66,7 @@ type workState struct {
 	featureApplyCommand       *identity.Command
 	featurePreparationCommand *identity.Command
 	featurePreparationPlan    *admittedKernelPlan
+	oauthHandoff              *oauthContinuationHandoff
 	passwordUpgrade           *passwordHashUpgradeState
 	delivery                  *workDelivery
 	issuance                  *workIssuance
@@ -272,6 +273,11 @@ func (w Work) fail(ctx context.Context, err error) error {
 			w.state.failed = identity.ConflictError{}
 		} else if _, ok := err.(identity.ForbiddenError); ok && ctx.Err() == nil {
 			w.state.failed = identity.ForbiddenError{}
+		} else if _, ok := err.(OAuthReauthenticationRequiredError); ok && ctx.Err() == nil && oauthReauthenticationFeature(w.state.feature) {
+			// Preserve only the canonical OAuth owner's proven-noncommit policy
+			// outcome. Sanitizing it as an outage strands the original flow;
+			// accepting it for other owners would invent retry permission.
+			w.state.failed = OAuthReauthenticationRequiredError{}
 		} else {
 			w.state.failed = readFailure(ctx, err)
 		}

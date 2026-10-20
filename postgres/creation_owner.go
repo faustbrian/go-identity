@@ -306,7 +306,7 @@ func securityMutationAudit(ctx context.Context, b identity.CommandBinding, befor
 	if class != "committed" {
 		changes, after = audit.ChangeSetInput{NoChange: true}, strconv.FormatUint(before, 10)
 		switch class {
-		case "denied":
+		case "denied", "reauthentication-required":
 			outcome, reason = audit.OutcomeDenied, "not_authorized"
 		case "conflict":
 			outcome, reason = audit.OutcomeDenied, "conflict"

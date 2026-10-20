@@ -24,8 +24,11 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 		}
 		state = "committed"
 	} else {
+		if class == "reauthentication-required" && (q.feature == nil || !oauthReauthenticationOperation(*q.feature)) {
+			return identity.InvalidInputError{Field: "command_terminal"}
+		}
 		switch class {
-		case "denied", "conflict", "cancelled", "deadline-exceeded", "dependency-failure":
+		case "denied", "conflict", "cancelled", "deadline-exceeded", "dependency-failure", "reauthentication-required":
 		default:
 			return identity.InvalidInputError{Field: "command_terminal"}
 		}

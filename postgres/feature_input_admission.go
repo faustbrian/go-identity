@@ -75,6 +75,8 @@ func (c *Coordinator) invokeFeatureInputAdmission(ctx context.Context, w Work, c
 			err = identity.ForbiddenError{}
 		case identity.ConflictError:
 			err = identity.ConflictError{}
+		case OAuthReauthenticationRequiredError:
+			err = OAuthReauthenticationRequiredError{}
 		default:
 			err = identity.UnavailableError{}
 		}

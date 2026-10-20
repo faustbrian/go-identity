@@ -1,5 +1,28 @@
 # Identity PostgreSQL
 
+## OAuth authentication-age continuation handoff
+
+The canonical native OAuth owner can select
+`OAuthContinuationPreparationContributor` for an original human authorization
+continuation. Ordinary preparation admission remains read-only. Only the
+separate checked start callback may CAS that existing continuation's current
+attempt pointer, atomically with this coordinator's acknowledged start marker.
+It requires `Work.RequireOAuthContinuationHandoff` and a locked, exact
+same-human/tenant/grant/schema/policy predecessor whose immutable receipt is
+`NotCommitted` with `OAuthReauthenticationRequiredError`. Unknown, pending,
+committed, missing and other failed history cannot authorize another attempt.
+
+Append `OAuthReauthenticationMigrationSource{Base: installedHistory,
+Version: nextVersion}` before enabling this profile. It extends the terminal
+shape constraint without rewriting existing migration bytes or receipts.
+Use upgraded readers for the new denied classification. The OAuth owner must
+independently require genuine newer authentication and all current/original
+source, client and expiry checks, preserve the original token/request/deadline,
+and retain recovery access to every original attempt even after pointer advance.
+An unacknowledged start grants no generation or retry; recover its original
+command through the existing coordinator. This adds no transaction, journal,
+credential, freshness renewal or OAuth protocol implementation to the kernel.
+
 ## Pending phone enrollment
 
 `NewPhoneEnrollmentDomain` freezes the phone owner's exact metadata-bound

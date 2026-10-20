@@ -587,8 +587,12 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if e != nil {
 		return result, e
 	}
-	w.state.execution.featureAbortAudits = make(map[string][]audit.Record, 5)
-	for _, class := range []string{"denied", "conflict", "cancelled", "deadline-exceeded", "dependency-failure"} {
+	classes := []string{"denied", "conflict", "cancelled", "deadline-exceeded", "dependency-failure"}
+	if oauthReauthenticationOperation(p.feature.Operation) {
+		classes = append(classes, "reauthentication-required")
+	}
+	w.state.execution.featureAbortAudits = make(map[string][]audit.Record, len(classes))
+	for _, class := range classes {
 		records, e := featureMutationAudits(ctx, p, now, class)
 		if e != nil {
 			return result, w.fail(ctx, e)
@@ -843,6 +847,8 @@ func (c *Coordinator) checkFeatureCommit(w Work) (err error) {
 			err = identity.ForbiddenError{}
 		case identity.ConflictError:
 			err = identity.ConflictError{}
+		case OAuthReauthenticationRequiredError:
+			err = OAuthReauthenticationRequiredError{}
 		default:
 			err = identity.UnavailableError{}
 		}

@@ -562,6 +562,11 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 			return preparationReservation{}, result, err
 		}
 	}
+	if r.generate && !denied {
+		if err := c.advanceOAuthContinuationPreparation(ctx, tx, original, q, p, phase, r.journal, owner, external); err != nil {
+			return preparationReservation{}, result, err
+		}
+	}
 	if r.generate && !external && !denied {
 		if err := startJournalPreparation(ctx, tx, q, r.journal, owner); err != nil {
 			return preparationReservation{}, result, err

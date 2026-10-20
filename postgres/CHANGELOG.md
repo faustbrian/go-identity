@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Preserve OAuth authentication-age expiry as a distinct denied/noncommitted
+  terminal outcome. The exact native continuation owner may atomically advance
+  its existing attempt pointer only after the coordinator proves the previous
+  same-human/flow attempt terminal reauthentication-required. Unknown, pending,
+  committed and unrelated failures never permit restart. Install the forward
+  OAuth reauthentication migration before selecting this continuation profile;
+  original journal records, continuation intent and expiry remain unchanged.
+
 - Bind compound phone-reset password/verifier, canonical capability, phone OTP
   and independent TOTP in separate keyed command-intent domains. Plain metadata
   and generic execution cannot drop factors. Dedicated atomic phone recovery
