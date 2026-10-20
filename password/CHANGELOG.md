@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reuse provider-only screened hashing for exact phone-reset completion without
+  charging or inventing a second velocity allowance. Required HIBP, original
+  provider freshness and native risk-evidence consumption remain mandatory;
+  this preparation alone enables no recovery workflow.
+
 - Add an explicitly selected phone/TOTP reset capability scope, separate from
   emailed reset, binding original phone/pre-auth/OTP/attempt/factor/risk policy.
   This pure profile enables no recovery endpoint or consumption by itself;

@@ -89,13 +89,15 @@ func (p *HashPreparer) Prepare(ctx context.Context, candidate primitive.Secret, 
 	return p.prepare(ctx, candidate, binding)
 }
 
-// PrepareProtected screens and hashes for the closed command-reserved credential
-// mutation profile. Required HIBP/provider facts are checked before and after
-// crypto without recollection or freshness renewal; only native transaction-
-// owned velocity is deferred. Caller velocity and unsupported profiles deny.
+// PrepareProtected screens and hashes for the closed native credential-mutation
+// profiles, including exact phone-reset completion whose original RiskEvidence
+// owns velocity. Required HIBP/provider facts are checked before and after crypto
+// without recollection or freshness renewal; only native-owned velocity is
+// deferred. Caller velocity and unsupported profiles deny.
 // The distinct provider-only result grants no counter allowance or authority:
-// the mutation owner must reserve/recheck matching counters atomically with its
-// protected effects. Prepare retains its existing complete-assessment behavior.
+// the mutation owner must reserve/recheck matching counters or original phone
+// risk-evidence allowance atomically with its protected effects. Prepare retains
+// its existing complete-assessment behavior.
 // Secret ownership, bounds, cancellation and redaction match Prepare.
 func (p *HashPreparer) PrepareProtected(ctx context.Context, candidate primitive.Secret, binding risk.Context) (primitive.EncodedHash, risk.ProtectedProviderAssessment, error) {
 	if p == nil || p.prepareProtected == nil {

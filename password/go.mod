@@ -8,7 +8,7 @@ require (
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
 	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
-	github.com/faustbrian/go-identity/risk v0.0.0-20261015085833-f43df0429695
+	github.com/faustbrian/go-identity/risk v0.0.0-20261020133538-6d5c539268df
 	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
 )

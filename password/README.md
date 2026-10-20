@@ -116,12 +116,18 @@ The assessment is not authorization or transactional risk evidence. Complete
 reference composition must wire real provider provenance; this public helper
 does not establish provenance from caller-built structural facts.
 
-`PrepareProtected` is the explicit command-reserved credential-mutation lane.
+`PrepareProtected` is the explicit native credential-mutation preparation lane.
 It requires HIBP and all other configured providers, rejects supplied velocity,
 and rechecks unchanged observations after hashing. Its distinct provider-only
 result does not grant velocity allowance: the native mutation must reserve and
 recheck the exact matching counter policy in its protected transaction. Other
 profiles cannot borrow this lane; ordinary `Prepare` remains unchanged.
+The sole authentication exception is HIBP-enabled
+`identity.phone.password-reset-complete` with mandatory velocity: its native
+RiskEvidence participant must authenticate the original counted attempt and
+recheck current durable allowance atomically with use. This preparation neither
+recharges velocity nor grants recovery authority. Phone-reset service and
+transport composition require their own complete acceptance.
 
 Run preparation before opening the protected transaction. Never log or return
 `EncodedHash.String()`; borrow it only for owned command/persistence work and
