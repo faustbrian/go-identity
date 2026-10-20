@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 11:03 UTC
+## TL;DR — updated 2026-10-20 17:02 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -13,6 +13,82 @@ queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
+
+**New working consumer:** verified-phone/password -> independently enrolled TOTP
+-> authenticated session read -> logout/code-free recovery is delivered through
+published reference `577df95`, independently approved and exact Required-CI green.
+All 307 downloaded reference files match source; its actual PostgreSQL/race
+consumer passes6.026s without local replacements. Four phone profiles plus
+retained email/phone-SFA/username consumers passed33.409s using public suppliers.
+Phone-only and coexisting selection, denial, rollback and lost-commit recovery
+are covered; no new TOTP HTTP variant or weaker fallback is enabled.
+
+**Remaining:** full phone reset is still disconnected. Native MFA/session,
+password and joint OTP prerequisites are delivered/CI-green, including corrected
+terminal TOTP-receipt enforcement. Primary now connects request/delivery and
+completion through those real owners. Organization custom roles are in final
+re-review after concrete replay-admission and fresh-client binding-discovery
+fixes; they are not yet delivered. No whole milestone or qualified-unit increment
+is claimed for either partial family.
+
+**Retained earlier checkpoint:** phone-reset request contracts/kernel preparation are
+main-pushed at `eb40883` with exact Required CI green. The phone-MFA canonical
+history/recovery prerequisite is independently approved, main-pushed at `d2d1fa5`
+and exact Required CI green. Genuine native SMS request
+persistence and canonical reset-grant/SMS delivery pass locally. The capability
+phone-MFA-origin prerequisite is main-pushed at `34ff029`, with exact green CI.
+The selected reference phone/password -> confirmed TOTP -> usable authenticated
+session -> logout/code-free recovery consumer now passes locally under race,
+including independent/coexisting selection, wrong-code accounting, foreign
+scope/owner denial and secret-free replay. Actual rollback/lost-COMMIT cases
+pass10.901s; existing email/username/phone baseline consumers pass15.956s.
+All four phone/TOTP profiles additionally pass20.198s with the real authenticated
+public capability supplier instead of its removed task clone.
+These are local coimplementation results, not final independent review,
+public-supplier adoption or delivered reference support. The initial passing
+harness had skipped enrollment; that result is
+withdrawn as TOTP proof and the corrected harness now requires actual completion.
+M08/reset remains unfinished; no whole milestone or unit is added.
+
+**Current phone-reset gap:** request -> delivered SMS/capability -> joint
+completion -> HIBP-screened replacement -> session revocation is not connected
+end to end. No new whole milestone has closed. Native SMS/TOTP conjunction tests
+now prove one existing attempt budget, no charge for stale/withdrawn authority,
+rollback and ambiguous-commit behavior; they caught and corrected a late-expiry
+charge after a lock wait. Protected consuming integration now passes locally:
+actual MFA verification/replay CAS, exact same-transaction successor checking,
+OTP finalization and pre-auth consumption commit together. Its five PostgreSQL/
+race cases also compose the actual session-revocation effect: active and expired
+local stored rows revoke, another tenant stays unchanged, and failed or expired
+completion rolls back replay, credential and session effects (4.379s). Session
+payload fixtures do not prove authenticated session use; capability/risk peers
+and the domain marker remain labelled seams, not the full reset workflow.
+The risk adapter's current-counter/expiry/writer-fencing behavior is reviewed,
+main-pushed at `81bbbbb` and exact Required-CI green (structure/secrets, not
+hosted PostgreSQL). Its real PostgreSQL proof uses a labelled domain-effect
+fixture, not the complete reset. Capability preparation is independently approved
+and main-pushed at go-capability `64bed7f`, with exact Required CI green and its
+downloaded artifact matching source. The first CI attempt failed obsolete root
+checksums; the reviewed two-line tidy correction passed. Local phone request
+contracts pass focused race and bounded fuzz, but
+contracts alone do not enable a workflow or endpoint. Remaining MFA/OTP,
+password/session, native service and opt-in HTTP/reference composition stay open.
+Original-risk resolution and HIBP preparation are independently approved and
+main-pushed at `6d5c539` / `ddf1c0f`, both exact Required-CI green. The password
+module selects the authenticated public risk supplier and passes standalone
+race/vet/tidy/module verification; all 92 downloaded risk files match source.
+The joint kernel/OTP/MFA/session changes are independently approved; kernel/core
+OTP are main-pushed `5c1b014` with standalone public-supplier checks. Its initial
+Required run flagged two public protocol identifiers as a secret; the reviewed
+formatting-only follow-up `ff72a5b` is main-pushed and Required-CI green. Native
+MFA/OTP/session public pin integration remains open. The outbox formatter is
+main-pushed `493107b`, Required-CI green, and all 28 public files match source;
+its task clone is removed. Real enrolled-factor SMS generation/restoration now
+passes locally, but actual request Work exposed missing kernel preparation gates.
+The exact initiation-risk/SMS/capability preparation regression is now locally
+green; genuine request persistence remains in progress. Actual SMS/capability
+request/delivery, canonical password
+material, full native service and opt-in HTTP/reference composition remain open.
 
 **Newly delivered organization reservation profile:** a genuine owner/admin can
 reserve a canonical domain, read its current claim and withdraw it, with global
