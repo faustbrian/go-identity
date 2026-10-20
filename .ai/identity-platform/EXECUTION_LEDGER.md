@@ -228,7 +228,78 @@ planning0. Final changed-base/current-tree secrets and independent final-diff
 re-review precede source publication. Old118.196s retained-flow evidence remains
 unchanged-source scoped rather than relabeled fresh. No full profile closure.
 
-## M31 — selected native public-subject OIDC consumer CLOSED
+## Dependency-ready federation lane — organization domain authority
+
+2026-10-20 06:59 UTC: primary assigns one bounded readiness pass to a separate
+worker in go-organization main a20a7b95cc7aa1d971e89a3ebe5c58482943c97c.
+Read-only initially; no Go/services/Git mutations or child agents. Inspect the
+complete organization/SSO/domain goals and committed current session/membership/
+coordinator contracts, then report the smallest real durable domain-claim and
+evidence-transition consumer needed by SSO (not a protocol parser or stub).
+Organization alone must own claim uniqueness/version/lifecycle and DomainProof;
+SSO owns challenge orchestration, verifier only observed evidence. Proposed later
+writable scope is organization root+postgres source/local tests/docs/migrations;
+primary retains manifests, workspace, integration pins, reference/HTTP and Git.
+Excludes provider protocols, JIT, routing and SCIM implementation. Parent will
+freeze exact consumed revisions, finite security/denial/recovery assertions and
+focused PG/consumer checks before authorizing any write. Existing OAuth public
+adoption remains the primary's active implementation/delivery lane.
+
+Readiness pass complete: real SSO-issued challenge/evidence authority is absent.
+Do not implement an exclusive, non-expiring unverified reservation as a consumer
+substitute: it could squat another organization's domain before ownership proof.
+Full domain challenge/verification remains unstarted. No new canonical operation
+or caller-writable proof authority was approved. Worker made no changes.
+
+## Parallel WebAuthn — required Ed25519 algorithm profile
+
+2026-10-20 07:11 UTC: new separate-repository worker owns one finite none-
+attestation Ed25519 registration/assertion profile in go-webauthn main
+f9533eb111c9af936acac7b39ce685ad34f5d383. Consumed root/native baseline is the
+delivered identified-user/discoverable ES256 owner; native public root479cf9ab,
+identity kernel46d7a68f. Required baseline PROTOCOL_BASELINES.md:616-617 selects
+COSE EdDSA -8, OKP kty1/crv6. Preserve ES256 defaults, stored bytes/ceremony
+identity, tenant/RP/user-handle uniqueness, UP/UV, backup/counter and sole native
+coordinator effects. No RSA, trusted attestation, passkey/session or HTTP work.
+Worker may edit root/postgres Go, tests, scoped fixtures and local module docs/
+changelogs only; primary owns manifests/workspace/pins/Git and integration.
+Acceptance: explicit immutable algorithm selection and exact advertisement,
+genuine positive registration/assertion, wrong algorithm/key/curve/length and
+signature denial without challenge consumption, selected identified/discoverable
+PG atomicity/recovery, retained ES256 bytes. Reuse pinned authoritative protocol/
+independent vectors; retain browser/authenticator evidence per selected profile
+where achievable and report any missing boundary, never invent interoperability.
+One bounded contract pass then TDD/implementation; send the first public boundary
+for primary alignment. Root/child affected race/vet, bounded parser fuzz and real
+PG checks are serialized with primary's heavy slot. Full M15/67-unit qualification
+is not implied by this additive profile; one independent complete review before
+main publication. Missing upstream behavior is requested from its owner, not
+substituted. No Git operations, child agents or services without scheduling.
+
+## M31 — selected native public and pairwise OIDC profiles CLOSED
+
+2026-10-20 07:12 UTC: pairwise profile CLOSED. Root98db84e plus vocabulary-only
+f1cec65, child33943e5 and native2aa074c are main-pushed. Exact Required39383782717,
+39384118552 and39384670613 SUCCESS. Initial root39383420814 failed only valid HMAC
+documentation spelling; existing cspell vocabulary corrected, no scanner bypass.
+Independent full32 runtime approval7904e9f0 and final child49d776ce/native12924970
+publication addenda APPROVE. Public-root/native inputs are sumdb authenticated,
+GOWORKoff/no replacements; ordinary root/child/native race1.292/1.234/1.221s,
+affected vet0, modverify/planning/secrets0. Final actual-public selected native
+PG/race passes126.398s: independent RP/public preservation, pairwise refresh after
+retirement/reconstruction, current account/credential/consent/grant denial,
+key custody/rewrap/stale selection, missing/foreign/retired bindings, rollback,
+contention, lost-COMMIT and key lifecycle serialization. All40 downloaded native
+files byte-match owningcommit (inherited LICENSE); its own genuine RP consumer
+passes15.081s. Native module v0.0.0-20261020070901-2aa074c77566,
+sum h1:vMyam6iDoDJabC7TasltGp3rCD6yuNgNEDQhg6kZ4w4=,
+modsum h1:An4SnwlKuVnw3RHoLU+A+sM0zVKiTG6i0Chuea620hU=.
+Apply PairwiseMigrationSource after installed history before selection. Existing
+subjects remain stable through writer rotation; nil public framing is retained.
+Multi-host sector URI, HTTP/reference/logout/private exchange and complete M31/
+unit qualification remain open. Earlier78.100s failed aggregate and historical
+workspace-attribution gap stay scoped original evidence, not relabeled passes.
+No whole milestone/unit count increase; task-owned PG stopped/removed.
 
 2026-10-19 13:42 UTC: original complete runtime approval5eba9e9b plus final native
 dependency/publication addendum5940f93e APPROVE. Native14 commit56f3281 is
@@ -244,7 +315,7 @@ closed. All worker PG/cache/scratch resources removed, repository clean. Require
 forward signing history precedes OIDC activation. HTTP/reference, remaining OIDC
 profiles, full M31 and final unit qualification remain open; roadmap still8/39.
 
-### Next independent OIDC lane — pairwise-subject policy
+### Retained pairwise-subject implementation scope
 
 2026-10-19 13:45 UTC: reuse the OIDC worker for one bounded readiness/design
 pass on required pairwise subjects, not a restart of accepted public subjects.

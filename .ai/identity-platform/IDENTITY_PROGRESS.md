@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 06:57 UTC
+## TL;DR — updated 2026-10-20 07:12 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -119,9 +119,20 @@ signing migration before selecting OIDC. This closes the selected native public-
 subject/ES256 profile, not full M31. HTTP/reference, pairwise/logout/private exchange
 and full provider/unit qualification remain open. All worker PG/cache/scratch
 resources are removed. No full milestone or unit count is increased.
-The same worker has completed the bounded pairwise-subject policy/rotation pass
-and is implementing its frozen registered-sector native consumer while primary
-finishes phone delivery. Pairwise acceptance is not claimed yet.
+**Newly delivered pairwise OIDC profile:** registered single-host sectors keep
+stable ID-token/UserInfo subjects across grants, reconstruction and key rotation,
+including refresh after old-key retirement. Public subjects remain unchanged.
+Root `f1cec65`, child `33943e5` and native `2aa074c` are independently approved,
+main-pushed and exact Required-CI green. Actual public-dependency PostgreSQL/race
+acceptance passes (126.398s); the downloaded native module's independent-RP
+consumer passes (15.081s). Apply the forward pairwise migration before selection.
+Multi-host sector URI, HTTP/reference/logout/private exchange and full M31/unit
+qualification remain open. No new whole milestone is counted.
+
+**Active:** primary phone-password recovery; separate WebAuthn worker implements
+the required explicit Ed25519 algorithm profile against existing durable owners.
+SSO domain verification is not started: genuine challenge/evidence authority
+must precede verified claims; an unproven domain reservation cannot substitute.
 
 **Newly delivered M08 profile — phone self-removal:** fresh action-bound proof
 removes the verified phone atomically with its retirement, pending cascade and
@@ -1554,7 +1565,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closed selected consumer profile: required-email Latin-v1 signup/verification/signin, metered advisory availability, fresh-proof rename/session invalidation and opt-in TOTP signin. Reference `4315bbf`, independent final review, green Required CI, canonical public-dependency PostgreSQL/race 48.976s and downloaded-reference consumer 31.145s. Broader typed-catalog variants and whole-unit/release qualification remain pending. |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closed: selected browser-SFA signin/optional-signup public-reference journey `647ac4b`; independent review, green CI and downloaded-module PostgreSQL consumer. Full-unit qualification remains open. |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closed selected email-signin profile: genuine registration/verification, original browser, encrypted delivery, counted consumption, session read/logout and code-free unknown recovery. Native `8008afd` and reference `00ca1bb`, independent reviews, green Required CI and actual downloaded-reference PostgreSQL consumer. OTP-MFA/phone/reset variants and full-unit qualification remain separate. |
-| M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Enrollment/verification, distinct phone/password signin, SMS-code signin and fresh-authenticated self-removal are delivered through actual public-reference PostgreSQL/HTTPS consumers, independent review and green CI; latest removal reference `62ee204`. Signup, number change, phone password reset, remaining assigned variants and full qualification remain open. One intermittent router-startup failure remains unproved, not a claimed fix. |
+| M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Enrollment/verification, distinct phone/password signin, SMS-code signin, fresh-authenticated self-removal and verified-phone replacement are delivered through actual public-reference PostgreSQL/HTTPS consumers, independent review and green CI; latest replacement reference `10eb07f`. Signup, phone password reset, remaining assigned variants and full qualification remain open. One intermittent router-startup failure remains unproved, not a claimed fix. |
 | M09 | Anonymous session, self-deletion and collision-safe permanent upgrade: identity/anonymous, identity/anonymous/postgres | Closure not reassessed |
 | M10 | Confirmed TOTP enrollment and TOTP signin: identity/mfa, identity/mfa/postgres | Closed selected cookie/password-primary TOTP profile, including username-primary composition: genuine registration, fresh proof, pending enrollment, reveal-once URI, explicit confirmation, challenge-only primary, TOTP completion and usable session/read/logout. Reviewed/pushed reference `4315bbf` and `02c6195`, green CI and original canonical/downloaded consumers retained. Fresh source audit at `d65ed4c` found the closure row stale; current downloaded combined phone/username/TOTP consumer also passes (13.824s). Broader MFA profiles and unit/release qualification remain separate. |
 | M11 | Confirmed secondary-OTP enrollment, delivered-code signin and session: MFA/OTP/password/session owners | Selected email profile proven; full milestone not closed |
