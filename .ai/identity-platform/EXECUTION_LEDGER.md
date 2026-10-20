@@ -53,6 +53,22 @@ ordinary feature and single-code paths deny instead of dropping a required
 factor. Borrowed proof/password terminal lifetimes are preserved. This remains
 local, unreviewed preparation; no native phone reset service or endpoint yet.
 
+Canonical pre-auth owner gap found in code: login pre-auth always required a
+RememberPolicy, while phone reset must issue no session/remember choice. Extend
+that existing owner with one exact no-session recovery purpose and identifier
+commitment; preserve legacy cookie/storage bytes rather than inventing a dummy
+login policy or parallel pre-auth engine. Root expected missing-purpose RED,
+focused no-session issuer/cookie tests pass race1.227s. The native owner now
+persists the exact recovery purpose without remember fields and rejects login
+profile substitution; actual PostgreSQL/race issuance/reconstruction/retry passes
+1.878s without adding sessions or redelivering cookies. Whole affected session
+race passes1.620s/vet0; native ordinary race1.840s/tagged vet0. Kernel compound
+fingerprints retain every original factor; generic execution stays closed.
+After its small custody-helper edit, focused kernel race passes1.198s. Canonical
+phone recovery-target binding has expected absent-API RED, then complete phone
+race1.536s/vet0 with public suppliers. All this remains local/unreviewed: actual
+request/delivery and atomic TOTP/OTP/reset/risk/session execution are unfinished.
+
 ## M08 — authenticated verified-phone replacement: selected profile CLOSED
 
 Primary owns go-identity main from `92f34fa`: phone contracts, kernel directory/
@@ -349,6 +365,66 @@ PG checks are serialized with primary's heavy slot. Full M15/67-unit qualificati
 is not implied by this additive profile; one independent complete review before
 main publication. Missing upstream behavior is requested from its owner, not
 substituted. No Git operations, child agents or services without scheduling.
+
+## Parallel M31 — validated sector URI to real pairwise OIDC consumer
+
+2026-10-20 07:54 UTC: oidc_rp_consumer owns one finite extension in clean
+go-oauth-server main2aa074c, consuming delivered rootf1cec65/child33943e5/native
+2aa074c and their public-root PostgreSQL/independent-RP proof. Outcome: explicitly
+registered HTTPS sector_identifier_uri validates the actual exact redirect set,
+then genuine native code/S256 -> ID token/independent RP -> same-subject UserInfo
+works across multiple registered redirect hosts. Missing/foreign/changed URI
+evidence denies; no caller-written verified flag. Preserve single-host/public
+policy, durable subject/key rotation, revocation and original recovery. Exclude
+logout, HTTP/reference, private exchange and unrelated registration generalization.
+Writable root subject_policy.go/new sector Go/tests and scoped docs/changelogs;
+OIDC subject tests and native selected sector tests/necessary binding seams only.
+No identity/shared contracts, manifests/go.mod/go.sum/workspace/pins/CI/Git or
+installed migration edits. Parent owns those and final integration. First public
+boundary alignment then real consumer; bounded HTTPS/SSRF/parser tests, affected
+race/vet/fuzz and native PG/independent RP. No children; preserve other work.
+Heavy checks require primary scheduling; one independent complete review before
+publication. No acceptance credit for a parser/fetcher alone.
+
+2026-10-20 08:33 UTC: this sector-URI profile is CLOSED. Reviewed root960e143
+and native/child5f2242b are pushed to main. Exact final Required39393498920 is
+SUCCESS; prior root39392921230 failed only documentation spelling after root
+tests/race, corrected in the reviewed final batch. Independent complete review
+resolved an actual missing special-purpose-DNS exclusion using a failing denial
+regression; the final source and publication addendum both APPROVE. A separate
+delivery audit confirms native reports, reviewed bytes, remote head and CI.
+Actual public-root/native PostgreSQL/race across new multi-host and retained
+public/single-host RP flows passes17.374s; the downloaded final native adapter
+passes its separate multi-host consumer6.412s with GOWORK off/public suppliers.
+All54root/41native/10child public files match owning commits and sums authenticate.
+No new schema; retain the existing signing/pairwise forward migrations. All
+sector-worker PG, caches and scratch are removed. Full M31/HTTP/reference and
+unit/release qualification remain open; no whole milestone or unit added.
+
+## Parallel M31 — original authorization to fresh-login continuation
+
+2026-10-20 08:33 UTC: oidc_rp_consumer next owns one finite native OIDC
+fresh-authentication outcome on clean main5f2242b, consuming root960e143,
+unchanged child33943e5/native5f2242b and the public PG/RP evidence above.
+Selected prompt=login and max_age, including explicit zero, must preserve wire
+absence and original client/redirect/state/S256/nonce intent, request real fresh
+authentication, then complete with a genuinely newly authenticated source
+session and issue an independently verified ID token with original auth_time.
+Do not create a perpetual LoginRequired loop, accept timestamps as proof or
+manufacture session authority. Reuse existing OAuth continuation/coordinator,
+idempotency and encrypted custody owners; no second journal or session engine.
+Missing upstream behavior is requested, never stubbed. Existing absent-policy,
+public/pairwise, consent and original refresh/recovery behavior must remain.
+Other prompt variants, logout, HTTP/reference, private exchange and new claim
+scopes stay unadvertised/unselected in this slice, not removed from full M31.
+Writable root/oidc/postgres Go, tests, scoped docs/changelogs and necessary new
+forward native migrations only. Parent exclusively owns shared identity APIs,
+manifests/go.mod/go.sum/go.work, pins/CI/Git and final integration. Preserve all
+other writers; no children, Git mutations or unscheduled heavy runs. One bounded
+contract investigation then implementation; report the first public boundary.
+Focused TDD/presence/freshness/replay/cross-client/wrong-session/expiry regressions,
+affected race/vet and genuine PostgreSQL/S256/independent RP consumer prove the
+complete outcome. One independent final review before primary publication.
 
 ## M31 — selected native public and pairwise OIDC profiles CLOSED
 

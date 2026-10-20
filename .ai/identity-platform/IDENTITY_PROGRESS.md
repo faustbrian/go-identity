@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 07:48 UTC
+## TL;DR — updated 2026-10-20 08:33 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -143,9 +143,24 @@ full M15, passkey orchestration or unit qualification. No whole milestone added.
 
 **Active:** primary phone-password recovery. Canonical capability scope and joint
 password/capability/SMS/TOTP command custody are locally tested, not delivered;
-native request/completion, atomic consumption/revocation and HTTP remain open.
+sessionless pre-auth issuance/recovery now passes real PostgreSQL without
+issuing a session or inventing remember policy. Native request/completion,
+atomic consumption/revocation and HTTP remain open.
 SSO domain verification is not started: genuine challenge/evidence authority
 must precede verified claims; an unproven domain reservation cannot substitute.
+
+**Newly delivered native OIDC profile:** actual HTTPS sector registration now
+supports multiple callback hosts with stable pairwise ID-token/UserInfo identity.
+Root `960e143` and adapter/child `5f2242b` are reviewed and pushed; exact final
+Required CI is green. The public-root PostgreSQL/race selection passes new and
+retained RP flows (17.374s), and the downloaded final adapter passes the multi-host
+consumer (6.412s), without replacements. An outbound-address filtering defect
+found in review is fixed with a failing/passing regression. The earlier root CI
+failed a spelling check, not runtime tests; corrected final CI passes. No new
+migration; existing signing/pairwise histories remain required. Full M31,
+HTTP/reference and unit qualification remain open, so the count stays 8/39.
+Next parallel profile is real fresh-login continuation for prompt/max_age;
+primary work remains the complete phone-password recovery journey.
 
 **Newly delivered M08 profile — phone self-removal:** fresh action-bound proof
 removes the verified phone atomically with its retirement, pending cascade and
