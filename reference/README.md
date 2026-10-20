@@ -1369,3 +1369,52 @@ proof, primary or ceremony expiry. After confirmation, all prior subject session
 are revoked; the new TOTP/recovery set supports ordinary password-first signin.
 General multi-factor, other-method, trusted-device and administrative replacement
 remain unfinished. Local slice behavior is not whole-unit release qualification.
+
+## Independently selected verified-phone replacement
+
+`StoreConfiguration.PhoneChange` selects the actual native replacement owner.
+Supply its number policy, distinct send/update `ActionPrimaryConfig` audiences,
+`PhoneChangeConfig` and `PhoneIssuanceConfiguration`; leave injected issuer,
+risk evaluator/keys and notice delivery/templates zero. For cookie primaries,
+leave their CSRF keys zero for injection from `PasswordVerification`. Select
+real password verification, session, OTP, delivery and independent email/password
+signin/reset owners. Register both action targets in password verification and
+the selected SMS provider worker. No application-owned domain stores are needed.
+
+`HTTPPhoneChange` independently selects cookie send/update/original recovery,
+with trusted Origin, the existing signed browser-device profile and policy
+revision. It requires shared durable HTTP rate storage. Do not also select
+`HTTPPhoneVerification`: those profiles intentionally share one canonical send
+path and conflicting selection denies. Native enrollment, removal and phone
+login selections remain independent. Disabled HTTP contributes no route or
+OpenAPI metadata.
+
+Apply the selected reference migration plan before initialization/serving.
+Replacement appends native kernel version1901 and password version26 after
+their required removal predecessors, retaining all installed checksums and
+operator history. Installing those predecessors does not enable removal routes.
+
+Consumer journey: sign in through retained email/password, read the session ID,
+obtain an action-bound send proof, submit exact old identifier versions and the
+new number, capture the provider's SMS, obtain a distinct `identity.phone.update`
+proof, and submit that proof with the original SMS command/code and a new retry
+key. A committed response queues old-number notification and cascade cleanup;
+it does not issue a replacement session or claim downstream cleanup finished.
+Old identifier-bound sessions and the retired phone deny; new-phone and retained
+email signin remain usable. Retry with the original key or use code-free
+recovery; never interpret unknown as rollback.
+
+The executable `TestReferencePostgresPhoneChangeHTTPS` consumer in
+`phone_change_integration_test.go` supplies complete configuration and exercises
+public composition with genuine PostgreSQL, populated migration/reconstruction,
+HTTPS and captured sender IO. From this module, run:
+
+```sh
+go test -race -tags=integration \
+  -run '^TestReferencePostgresPhoneChangeHTTPS$' .
+```
+
+Use a task-owned PostgreSQL database at `IDENTITY_REFERENCE_POSTGRES_PORT` (loopback,
+user `postgres`, database `identity_test`, disposable trust authentication).
+The test creates and removes its own database. Never point it at existing data.
+Complete phone/reset/MFA variants and full release qualification remain pending.

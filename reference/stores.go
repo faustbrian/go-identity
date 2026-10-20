@@ -80,6 +80,11 @@ type StoreConfiguration struct {
 	// PhoneRemoval independently selects authenticated self-removal and its
 	// required old-number notice, not enrollment, login or HTTP.
 	PhoneRemoval *PhoneRemovalConfiguration
+	// PhoneChange independently selects verified-phone replacement and original
+	// recovery. Enrollment, removal and HTTP are not silently enabled.
+	PhoneChange *PhoneChangeConfiguration
+	// HTTPPhoneChange selects replacement only, independently of enrollment.
+	HTTPPhoneChange *HTTPPhoneChangeConfiguration
 	// HTTPPhoneRemoval opts into cookie self-removal only, independently of
 	// enrollment and the HTTP signin/password-verification selections.
 	HTTPPhoneRemoval *HTTPPhoneRemovalConfiguration
@@ -483,6 +488,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpPhoneRemoval != nil {
 		state.features.httpPhoneRemoval.rate.Close()
+	}
+	if state.features != nil && state.features.httpPhoneChange != nil {
+		state.features.httpPhoneChange.close()
 	}
 	if state.features != nil && state.features.httpEmailOTPChange != nil {
 		state.features.httpEmailOTPChange.close()

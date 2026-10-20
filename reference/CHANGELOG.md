@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Independently compose verified-phone replacement and its opt-in cookie HTTP
+  send/update/original-recovery routes using real proof, OTP, risk, session,
+  delivery and retained email recovery owners. Apply forward native phone-change
+  histories before serving; existing migration bytes remain unchanged. Enrollment
+  HTTP and replacement HTTP select different profiles of the same sending route
+  and cannot both be enabled on one server.
+
 - Independently compose native authenticated phone self-removal using the
   graph's real proof, risk, encrypted delivery and retained signin/reset
   owners. Include required lockout, proof and cascade migration successors;

@@ -113,7 +113,9 @@ type featureState struct {
 	username                     *usernameState
 	phone                        *phoneState
 	phoneRemoval                 *phoneRemovalState
+	phoneChange                  *phoneChangeState
 	httpPhoneRemoval             *phoneRemovalHTTPState
+	httpPhoneChange              *phoneChangeHTTPState
 	phoneSignin                  *phoneSigninState
 	phoneOTPSignin               *phoneOTPSigninState
 	httpPhoneOTPSignin           *phoneOTPSigninHTTPState
@@ -224,6 +226,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.HTTPPhoneVerification != nil && c.Phone == nil {
 		return identity.InvalidInputError{Field: "reference_http_phone"}
+	}
+	if c.HTTPPhoneChange != nil && (c.PhoneChange == nil || c.HTTPPhoneVerification != nil) {
+		return identity.InvalidInputError{Field: "reference_http_phone_change"}
 	}
 	if c.PhoneSignin != nil && (c.PasswordSignin == nil || c.Session == nil || c.OTP == nil) || c.HTTPPhoneSignin != nil && c.PhoneSignin == nil {
 		return identity.InvalidInputError{Field: "reference_phone_signin"}
@@ -475,6 +480,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	phoneChangeOwner, err := composePhoneChange(c, d, evaluator, passwordVerificationOwner, passwordSigninOwner, resetOwner)
+	if err != nil {
+		return err
+	}
 	phoneSigninOwner, err := composePhoneSignin(c, d, evaluator)
 	if err != nil {
 		return err
@@ -684,6 +693,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpPhoneVerification.rate.Close()
 		}
 	}()
+	httpPhoneChange, err := composePhoneChangeHTTP(c, phoneChangeOwner, sessionOwner, passwordVerificationOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpPhoneChange != nil && !retainedResetHTTP {
+			httpPhoneChange.close()
+		}
+	}()
 	httpEmailOTPChange, err := composeEmailOTPChangeHTTP(c, emailOwner, sessionOwner, s.httpRate)
 	if err != nil {
 		return err
@@ -726,7 +744,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.username = usernameOwner
 	s.features.phone = phoneOwner
 	s.features.phoneRemoval = phoneRemovalOwner
+	s.features.phoneChange = phoneChangeOwner
 	s.features.httpPhoneRemoval = httpPhoneRemoval
+	s.features.httpPhoneChange = httpPhoneChange
 	s.features.phoneSignin = phoneSigninOwner
 	s.features.phoneOTPSignin = phoneOTPSigninOwner
 	s.features.httpPhoneOTPSignin = httpPhoneOTPSignin
@@ -838,7 +858,7 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 	}
 	for tenant := range s.tenants {
-		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] || f.phoneOTPSignin != nil && !seen[tenant][f.phoneOTPSignin.provider] || f.phoneRemoval != nil && !seen[tenant][f.phoneRemoval.provider] {
+		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] || f.phoneOTPSignin != nil && !seen[tenant][f.phoneOTPSignin.provider] || f.phoneRemoval != nil && !seen[tenant][f.phoneRemoval.provider] || f.phoneChange != nil && (!seen[tenant][f.phoneChange.provider] || !seen[tenant][f.phoneChange.noticeProvider]) {
 			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 		}
 	}
@@ -911,6 +931,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	}
 	if s.features.phone != nil {
 		if err := s.features.phone.owner.Initialize(w); err != nil {
+			return err
+		}
+	}
+	if s.features.phoneChange != nil {
+		if err := s.features.phoneChange.owner.Initialize(w); err != nil {
 			return err
 		}
 	}

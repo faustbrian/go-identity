@@ -13,7 +13,7 @@ import (
 // Removal extends the installed physical owners, not enrollment's OTP history.
 // Existing namespaces/checksums stay unchanged when removal is selected later.
 func (s StoreSet) phoneRemovalMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
-	if s.state.features == nil || s.state.features.phoneRemoval == nil {
+	if s.state.features == nil || s.state.features.phoneRemoval == nil && s.state.features.phoneChange == nil {
 		return catalog, nil
 	}
 	// The selected protected owner enforces durable lockouts. Reuse the native

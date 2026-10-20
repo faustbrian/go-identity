@@ -77,7 +77,7 @@ func (s storeMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 		c.magicTOTP = false
 	}
 	c.emailOTP = s.state.features.email != nil && (s.state.features.email.otpVerification != nil || s.state.features.email.otpChange != nil)
-	c.phoneOTP = s.state.features.phone != nil
+	c.phoneOTP = s.state.features.phone != nil || s.state.features.phoneChange != nil
 	return c.load(ctx, fixedMigrationSource(legacy))
 }
 

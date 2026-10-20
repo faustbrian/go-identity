@@ -56,7 +56,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	if err := ctx.Err(); err != nil {
 		return authorization.Decision{}, err
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.phone.send-verification" || c.Request.Action == "identity.phone.verify" || c.Request.Action == "identity.phone.verify.recover") {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.phone.send-verification" || c.Request.Action == "identity.phone.verify" || c.Request.Action == "identity.phone.verify.recover" || c.Request.Action == "identity.phone.update" || c.Request.Action == "identity.phone.update.recover") {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
@@ -251,6 +251,7 @@ type signupGraphExtensions struct {
 	phonePassword   bool
 	phoneOTP        string
 	phoneRemoval    string
+	phoneChange     bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -377,10 +378,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_device", SameSite: http.SameSiteLaxMode})
 	c.HTTPPreAuth = &reference.HTTPPreAuthConfiguration{Lifetime: session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute}, Device: &session.BrowserDeviceConfig{Namespace: "reference-registration", Keys: []session.BrowserDeviceKey{key}, ActiveVersion: 1, Lifetime: 24 * time.Hour, Cookie: cookie}}
 	resetRiskVersion := uint64(3)
-	if extensions.emailRemoval || extensions.phoneRemoval != "" {
+	if extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange {
 		resetRiskVersion = 9
 	}
-	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "", extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "", extensions.factorRemovalReset || extensions.emailRemoval || extensions.phoneRemoval != "")
+	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "" && !extensions.phoneChange, extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange, extensions.factorRemovalReset || extensions.emailRemoval || extensions.phoneRemoval != "")
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
@@ -426,7 +427,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Email.Addresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{MaximumDuration: time.Second}
 		c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true, AdministrativeTargets: true}
 	}
-	if extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" {
+	if extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange {
 		c.PasswordReset = selectedReset
 		c.PasswordReset.Native.Coordinator.QueryPolicy = c.OTP.Signin.Coordinator.QueryPolicy
 		c.PasswordReset.Native.Coordinator.AdmissionPolicy = c.OTP.Signin.Coordinator.QueryPolicy
@@ -627,6 +628,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.phoneRemoval != "" {
 		calls = configureReferencePhoneRemoval(t, &c, extensions.phoneRemoval)
 	}
+	if extensions.phoneChange {
+		calls = configureReferencePhoneChange(t, &c)
+	}
 	var emailUpgrade *reference.StoreConfiguration
 	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "totp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
 		var retainedTargets []passwordpg.ReauthenticationTarget
@@ -809,6 +813,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.phoneRemoval == "upgrade" {
 		selected := c
 		phoneRemovalUpgrade, c.PhoneRemoval = &selected, nil
+	}
+	var phoneChangeUpgrade *reference.StoreConfiguration
+	if extensions.phoneChange {
+		selected := c
+		phoneChangeUpgrade, c.PhoneChange = &selected, nil
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
@@ -1099,6 +1108,16 @@ END $$`); err != nil {
 		t.Fatal("selected public registration routes missing")
 	}
 	network.Config.Handler = server.Handler()
+	var phoneChangeHandler atomic.Pointer[http.Handler]
+	if extensions.phoneChange {
+		initial := server.Handler()
+		phoneChangeHandler.Store(&initial)
+		// Test-only deployment handoff keeps the configured HTTPS origin stable;
+		// production servers remain immutable after construction.
+		network.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			(*phoneChangeHandler.Load()).ServeHTTP(w, r)
+		})
+	}
 	network.StartTLS()
 	client := network.Client()
 	client.Timeout = 5 * time.Second
@@ -1217,7 +1236,7 @@ END $$`); err != nil {
 	if extensions.phoneEnrollment {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
 			var afterVerified func()
-			if extensions.phonePassword && extensions.phoneRemoval == "" {
+			if extensions.phonePassword && extensions.phoneRemoval == "" && !extensions.phoneChange {
 				afterVerified = func() {
 					proveReferencePhonePasswordHTTPS(t, ctx, f, features, client, network.URL, origin, c.PasswordSignin.PreAuth.CallbackURL, *c.HTTPPreAuth.Device, user, readSession)
 				}
@@ -1232,6 +1251,9 @@ END $$`); err != nil {
 				}
 			}
 			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified, c.HTTPPhoneRemoval != nil)
+			if phoneChangeUpgrade != nil {
+				proveReferencePhoneChangeHTTPS(t, ctx, f, *phoneChangeUpgrade, config, deps, workers, workerConfigs, modules, migrationRequest, messages, user, fresh, readSession, client, network.URL, origin, func(h http.Handler) { phoneChangeHandler.Store(&h) })
+			}
 			if extensions.phoneRemoval != "" {
 				removalConfig, removalFeatures := c, features
 				if phoneRemovalUpgrade != nil {
