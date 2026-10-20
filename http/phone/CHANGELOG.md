@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in cookie-only verified-phone replacement sending, keyed completion
+  and code-free original recovery with exact predecessor/proof/CSRF binding,
+  shared rate admission and closed JSON/OpenAPI. Historical responses never
+  claim a fresh update or issue a session. Select replacement or enrollment
+  sending explicitly; neither profile silently falls back to the other.
+
 - Add independently selected cookie-only phone self-removal with a closed,
   versioned request, original signed proof/CSRF custody and shared keyed rate
   admission. Return only original command and pending cascade status; never

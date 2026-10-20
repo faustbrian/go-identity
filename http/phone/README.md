@@ -1,9 +1,9 @@
 # Explicit authenticated phone HTTP profiles
 
-Go 1.27. This optional module selects existing-account **cookie-only** enrollment,
-SMS verification and original, code-free recovery. It supplies no UI. Signup,
-signin, reset, replacement and enrolled-MFA continuation are not enabled.
-Self-removal is separately opt-in as described below.
+Go 1.27. This optional module independently selects existing-account
+**cookie-only** enrollment, verified-phone replacement or self-removal, with
+their original recovery. It supplies no UI. Signup, signin, reset and enrolled-
+MFA continuation are not enabled. Each profile is separately opt-in below.
 Full phone-platform qualification remains unfinished.
 
 Construct `NewVerificationFeature(VerificationConfig{...})` and pass its feature
@@ -75,3 +75,28 @@ retain original custody and use native code-free reconciliation, not a new
 logical mutation. Pending cleanup and SMS delivery do not restore old-phone
 authority. See the concrete reference module's phone guide for composition,
 required migrations, independent recovery policy and a runnable consumer.
+
+## Independent verified-phone replacement
+
+`NewChangeFeature(ChangeConfig{...})` selects authenticated new-number sending,
+`POST /v1/phone/update` and code-free `POST /v1/phone/update/recover`.
+Enrollment and replacement use the same canonical sending path, so select one
+profile per server; duplicate selection fails, never silently dispatches or
+falls back. Native enrollment remains independently usable.
+
+Sending requires `flowID`, `number`, `previousNumber`, `identifierID`, canonical
+decimal `expectedIdentifierVersion`/`expectedVerificationVersion`, and `proofID`.
+Completion requires `flowID`, `sendCommandID`, `code`, a distinct update `proofID`
+and the original registered `reason`. Both require one header `Idempotency-Key`.
+Recovery takes only `flowID` and unchanged original `recovery`, without a key,
+code or fresh proof. All require original cookie/Origin/stored synchronizer;
+send additionally requires the existing signed browser-device cookie.
+
+Use the real native `PhoneChangeService` for both workflow and read-only
+`ChangeSource`, genuine proof storage and shared delivery/keyed-secret/recovery
+limiters. Original destination/lifetime reads do not authorize execution or
+disclosure; the native owner repeats current authority and commits OTP/proof
+consumption, replacement, retirement, old-number notice and pending cascade.
+History never sets `updated` or issues a session. An unchanged successful or
+wrong-code key recovers its original receipt; it is not another OTP attempt.
+Unknown outcomes require original recovery, not a fresh logical submission.
