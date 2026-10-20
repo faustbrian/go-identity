@@ -249,6 +249,9 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	phoneEnrollment bool
 	phonePassword   bool
+	phoneTOTP       bool
+	phoneTOTPOnly   bool
+	phoneTOTPRollback bool
 	phoneOTP        string
 	phoneRemoval    string
 	phoneChange     bool
@@ -288,6 +291,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, extensions.postgresBaseline)
 	f.usernameTOTP = extensions.usernameTOTP
+	f.phoneTOTP = extensions.phoneTOTP
+	f.phoneTOTPOnly = extensions.phoneTOTPOnly
+	f.phoneTOTPRollback = extensions.phoneTOTPRollback
+	if extensions.phoneTOTP {
+		f.phoneTOTPCompleted = new(bool)
+	}
 	f.usernameTOTPOnly = extensions.usernameTOTPOnly
 	f.usernameTOTPWithdrawal = extensions.usernameTOTPWithdrawal
 	f.usernameTOTPPersistent = extensions.usernameTOTPPersistent
@@ -549,7 +558,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.HTTPMFARecoveryRegeneration = &reference.HTTPMFARecoveryRegenerationConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
 		f.regenerationHTTP = true
 	}
-	if extensions.passwordMFA {
+	if extensions.passwordMFA || extensions.phoneTOTP {
 		configureReferencePasswordMFA(t, &c, origin)
 	}
 	if extensions.passwordRecovery {
@@ -620,6 +629,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.phonePassword {
 		c.PhoneSignin = &reference.PhoneSigninConfiguration{Policy: c.Phone.Policy}
+		if extensions.phoneTOTP {
+			c.PhoneSignin.TOTP = &reference.PhoneTOTPConfiguration{Challenge: *c.PasswordSignin.MFA, Completion: *c.PasswordSignin.TOTP}
+			if extensions.phoneTOTPOnly {
+				c.PasswordSignin.MFA, c.PasswordSignin.TOTP, c.HTTPMFA = nil, nil, nil
+			}
+		}
 		c.HTTPPhoneSignin = &reference.HTTPPasswordSigninConfiguration{ActorID: c.HTTPPasswordSignin.ActorID, PolicyRevision: c.HTTPPasswordSignin.PolicyRevision}
 	}
 	if extensions.phoneOTP != "" {
@@ -1251,6 +1266,33 @@ END $$`); err != nil {
 				}
 			}
 			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified, c.HTTPPhoneRemoval != nil)
+			if extensions.phoneTOTP {
+				// Phone verification correctly invalidates its initiating session.
+				// Obtain a real new email/password session before TOTP enrollment;
+				// never revive the original session or seed factor authority.
+				currentCookies, currentCSRF := fresh()
+				token, err := session.ParseToken(currentCookies[0].Value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				credential, err := session.NewCredential(session.CredentialCookie, token)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sessions, err := features.Sessions()
+				if err != nil {
+					t.Fatal(err)
+				}
+				current, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential})
+				if err != nil || !current.Authenticated {
+					t.Fatal("real phone TOTP enrollment session unavailable", err)
+				}
+				bindings, err := current.Session.Bindings()
+				if err != nil {
+					t.Fatal(err)
+				}
+				proveReferenceMFAEnrollment(t, ctx, f, features, client, network.URL, origin, currentCookies, currentCSRF, bindings.SessionID, false)
+			}
 			if phoneChangeUpgrade != nil {
 				proveReferencePhoneChangeHTTPS(t, ctx, f, *phoneChangeUpgrade, config, deps, workers, workerConfigs, modules, migrationRequest, messages, user, fresh, readSession, client, network.URL, origin, func(h http.Handler) { phoneChangeHandler.Store(&h) })
 			}
@@ -1422,7 +1464,13 @@ END $$`); err != nil {
 		proveReferenceUsername(t, ctx, f, features, workers, client, network.URL, origin, messages)
 		return
 	}
+	if extensions.phoneTOTP {
+		f.config = c
+	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
+	if extensions.phoneTOTP && !*f.phoneTOTPCompleted {
+		t.Fatal("selected phone TOTP consumer was skipped")
+	}
 	if extensions.emailSignin != "" {
 		proveReferenceEmailOTPSignin(t, ctx, f, features, workers, client, network.URL, origin, messages, extensions.emailSignin)
 	}

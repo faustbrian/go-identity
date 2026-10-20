@@ -16,11 +16,35 @@ import (
 // PhoneSigninConfiguration opts into native verified-phone/password signin,
 // independently of phone enrollment or HTTP. The graph copies PasswordSignin's
 // native keys/policy, substitutes this fixed NumberPolicy and owns its distinct
-// original pre-auth issuer. Enrolled or unavailable factor authority denies;
-// password-first phone MFA is not selected. Policy must remain immutable during
+// original pre-auth issuer. Without TOTP, enrolled or unavailable factor
+// authority denies. Explicit TOTP selection requires the independent confirmed
+// factor before issuing a session. Policy must remain immutable during
 // construction. Both native owners freeze their retained configuration.
 type PhoneSigninConfiguration struct {
 	Policy *phone.NumberPolicy
+	// TOTP explicitly selects original phone comparison and confirmed TOTP
+	// completion. Nil retains known-empty-factor signin. This enables no
+	// additional HTTP route or alternative factor method.
+	TOTP *PhoneTOTPConfiguration
+}
+
+// PhoneTOTPConfiguration selects the existing native TOTP challenge/completion
+// owners with phone-specific primary provenance. Only TOTP is supported; no
+// recovery-code, secondary SMS or trusted-device fallback follows selection.
+type PhoneTOTPConfiguration struct {
+	Challenge  passwordpg.MFAChallengeConfig
+	Completion PasswordTOTPConfiguration
+}
+
+func (PhoneTOTPConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("reference.PhoneTOTPConfiguration(redacted)"))
+}
+
+func (PhoneTOTPConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, phone.ErrVerificationDisclosure
+}
+func (PhoneTOTPConfiguration) MarshalText() ([]byte, error) {
+	return nil, phone.ErrVerificationDisclosure
 }
 
 // Format hides retained deployment policy for all formatting verbs.
@@ -40,6 +64,7 @@ func (PhoneSigninConfiguration) MarshalText() ([]byte, error) {
 
 type phoneSigninState struct {
 	owner   *passwordpg.SigninService
+	totp    *magicLinkTOTPService
 	preauth *session.PreAuthIssuer
 	bind    func(context.Context, identity.TenantID, string) ([32]byte, error)
 }
@@ -56,8 +81,16 @@ func composePhoneSignin(c StoreConfiguration, d ReferenceDependencies, evaluator
 	selected, profile := c, *c.PasswordSignin
 	profile.Native.Phone = &policy
 	profile.MFA, profile.TOTP, profile.Recovery, profile.OTP = nil, nil, nil, nil
+	if c.PhoneSignin.TOTP != nil {
+		challenge, completion := c.PhoneSignin.TOTP.Challenge, c.PhoneSignin.TOTP.Completion
+		profile.MFA, profile.TOTP = &challenge, &completion
+	}
 	selected.PasswordSignin = &profile
 	owner, err := composePasswordSignin(selected, d, evaluator)
+	if err != nil {
+		return nil, err
+	}
+	totp, err := composePasswordTOTP(selected, d, owner, evaluator)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +99,7 @@ func composePhoneSignin(c StoreConfiguration, d ReferenceDependencies, evaluator
 		return nil, err
 	}
 	key := slices.Clone(profile.Native.IdentifierKey)
-	return &phoneSigninState{owner: owner, preauth: preauth, bind: func(ctx context.Context, tenant identity.TenantID, raw string) ([32]byte, error) {
+	return &phoneSigninState{owner: owner, totp: totp, preauth: preauth, bind: func(ctx context.Context, tenant identity.TenantID, raw string) ([32]byte, error) {
 		number, err := policy.Canonicalize(ctx, raw)
 		if err != nil {
 			return [32]byte{}, invalid

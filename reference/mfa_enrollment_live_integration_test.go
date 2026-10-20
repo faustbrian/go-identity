@@ -494,6 +494,9 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	if passwordMFA {
 		proveReferencePasswordMFAHTTP(t, ctx, f, features, client, base, origin, mfa.FactorID(pending.Enrollment.ID), secret)
 	}
+	if f.phoneTOTP {
+		proveReferencePhoneTOTP(t, ctx, f, features, origin, mfa.FactorID(pending.Enrollment.ID), secret)
+	}
 	if f.usernameTOTP {
 		proveReferencePasswordMFAHTTP(t, ctx, f, features, client, base, origin, mfa.FactorID(pending.Enrollment.ID), secret, "username")
 		if f.usernameTOTPWithdrawal != "" {

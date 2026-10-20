@@ -1,9 +1,10 @@
 # Existing-account phone enrollment and signin
 
 This optional backend profile attaches and verifies a phone on an existing,
-verified account. Password and SMS-code signin are separately selected below;
-phone signup, reset, replacement and MFA remain unselected. Authenticated
-self-removal is a separate explicit selection described below.
+verified account. Password, SMS-code signin and password plus confirmed TOTP
+are separately selected below; phone signup and reset remain unselected.
+Authenticated replacement and self-removal are separate explicit selections
+described below. No other MFA method follows from phone selection.
 Unknown/enrolled/changed factor authority denies the
 single-factor enrollment profile; it never falls back to weaker authentication.
 
@@ -105,13 +106,35 @@ shared HTTP pre-auth/device and rate configuration. Then:
 
 Retain password-free recovery metadata and original custody after ambiguity;
 native `RecoverSignin` observes that original attempt without password retry,
-token redelivery or deadline renewal. Enrolled or unavailable factors deny;
-phone-origin MFA continuation is not selected. Disabled HTTP selection exposes
+token redelivery or deadline renewal. Without explicit TOTP selection, enrolled
+or unavailable factors deny. Disabled HTTP selection exposes
 neither the route nor initiation method/schema. Install the selected native
 phone/password and session provenance suffixes after all selected predecessor
 histories using the graph migration APIs; do not copy or replay older SQL.
 This checkpoint qualifies adding phone signin after those selected histories;
 enabling additional predecessor profiles afterwards is not yet qualified.
+
+### Explicit phone/password followed by confirmed TOTP
+
+Set `PhoneSignin.TOTP` to a `PhoneTOTPConfiguration` containing the actual native
+`MFAChallengeConfig` and `PasswordTOTPConfiguration`. The challenge supports only
+`totp` (an empty method list selects that same profile). Use the existing issuer,
+encrypted preparation custody, counter policy and independent risk/envelope/
+comparison keys; the graph supplies its phone primary and session owners.
+This selection is independent of email-password TOTP selection.
+
+`PhoneSignin().Signin` returns only the original non-final challenge for enrolled
+accounts. Call `FeatureSet.PhoneTOTP().TotpVerify` with that challenge/proof,
+original browser cookie, confirmed TOTP factor/code and trusted continuation
+caller. Only a fresh known commit delivers the session/CSRF once. Read and sign
+out through `FeatureSet.Sessions`; retain the exact command/flow/actor correlation
+for code-free `RecoverTotpVerify`. Retry/recovery cannot renew authority or
+redeliver credentials. SMS possession is not an independent second factor.
+
+Apply the graph's forward phone primary and continuation histories after the
+existing selected password/MFA/username/verification histories. Existing SQL
+checksums stay unchanged. Native selection does not add a TOTP HTTP variant or
+route; do not point the email/username completion route at a phone challenge.
 
 ## Independently selected phone SMS-code signin
 

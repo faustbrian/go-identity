@@ -506,6 +506,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if usernameOwner != nil && usernameOwner.totp != nil {
 		migrationConfig.passwordMFA, migrationConfig.passwordTOTP = true, true
 	}
+	if phoneSigninOwner != nil && phoneSigninOwner.totp != nil {
+		migrationConfig.passwordMFA, migrationConfig.passwordTOTP = true, true
+	}
 	mfaEnrollmentOwner, err := composeMFAEnrollment(c, d, passwordVerificationOwner, evaluator, resetOwner)
 	if err != nil {
 		return err

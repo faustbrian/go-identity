@@ -68,5 +68,8 @@ func composePasswordTOTP(c StoreConfiguration, d ReferenceDependencies, primary 
 		flowKeys[digest.KeyVersion] = key
 	}
 	config := MagicLinkTOTPCompletionConfig{MaximumDuration: n.MaximumDuration, ConfigurationID: n.ConfigurationID, PolicyID: n.PolicyID, Coordinator: p.Coordinator, Issuer: m.Issuer, Session: p.Session, Profile: sessionpg.MagicLinkAdmissionConfig{GlobalAuthorityID: p.Profile.GlobalAuthorityID, PolicyNamespace: p.Profile.PolicyNamespace, Audience: p.Profile.Audience}, SessionIssuer: p.Issuance, CSRF: p.CSRFKey, CookieKeys: flowKeys, Risk: risk.ProtectedProviderAdmissionCustodyConfig{Evaluation: evaluator, ConfigurationID: n.ConfigurationID, Keys: n.RiskKeys}, Counters: n.Counters, ComparisonKey: n.ComparisonKey, ComparisonKeyVersion: n.ComparisonKeyVersion, ActiveEnvelopeKeyID: n.ActiveEnvelopeKeyID}
+	if p.Phone != nil {
+		return newPhonePasswordTOTPService(d.PostgreSQL, primary, config, p.Profile, keys)
+	}
 	return newPasswordTOTPService(d.PostgreSQL, primary, config, p.Profile, keys)
 }

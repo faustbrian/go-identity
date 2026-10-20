@@ -120,6 +120,10 @@ func newPasswordTOTPService(pool *database.Pool, primary *passwordpg.SigninServi
 	return newNativeTOTPService(pool, nil, primary, c, profile, keys)
 }
 
+func newPhonePasswordTOTPService(pool *database.Pool, primary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, profile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider) (*magicLinkTOTPService, error) {
+	return newNativeMFAServiceMode(pool, nil, primary, nil, c, profile, keys, nil, true)
+}
+
 func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider) (*magicLinkTOTPService, error) {
 	return newNativeMFAService(pool, request, passwordPrimary, nil, c, passwordProfile, keys, nil)
 }
@@ -132,7 +136,14 @@ func newNativeRecoveryService(pool *database.Pool, request *magicpg.RequestServi
 }
 
 func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, verification *passwordpg.VerificationSigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider, recoveryKeys map[uint32][32]byte) (*magicLinkTOTPService, error) {
+	return newNativeMFAServiceMode(pool, request, passwordPrimary, verification, c, passwordProfile, keys, recoveryKeys, false)
+}
+
+func newNativeMFAServiceMode(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, verification *passwordpg.VerificationSigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider, recoveryKeys map[uint32][32]byte, phone bool) (*magicLinkTOTPService, error) {
 	recovery := recoveryKeys != nil
+	if phone && (passwordPrimary == nil || request != nil || verification != nil || recovery) {
+		return nil, invalidTOTPCompletion()
+	}
 	origins := 0
 	for _, present := range []bool{request != nil, passwordPrimary != nil, verification != nil} {
 		if present {
@@ -227,6 +238,8 @@ func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, p
 		}
 		if recovery {
 			s.recoveryEffect, err = sessionpg.NewMFAPasswordRecoveryCompletionEffect(c.Session, passwordProfile)
+		} else if phone {
+			s.effect, err = sessionpg.NewMFAPhonePasswordTOTPCompletionEffect(c.Session, passwordProfile)
 		} else {
 			s.effect, err = sessionpg.NewMFAPasswordTOTPCompletionEffect(c.Session, passwordProfile)
 		}

@@ -299,6 +299,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 		}
 	}
 	if state.features != nil && state.features.phoneSignin != nil {
+		phoneTOTP := state.features.phoneSignin.totp != nil
 		for i := range guards {
 			guards[i].constraints = slices.Clone(guards[i].constraints)
 			for j, name := range guards[i].constraints {
@@ -307,6 +308,12 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 				// successors, including the username password-record guard.
 				if guards[i].schema == "identity_password" && name == "signin_records.signin_records_purpose_v2" {
 					guards[i].constraints[j] = "signin_records.signin_records_purpose_phone_v1"
+				}
+				if phoneTOTP && guards[i].schema == "identity_password" && (name == "mfa_primary_records.mfa_primary_records_purpose_check" || name == "mfa_primary_records.mfa_primary_records_purpose_v2") {
+					guards[i].constraints[j] = "mfa_primary_records.mfa_primary_records_purpose_phone_v1"
+				}
+				if phoneTOTP && guards[i].schema == "identity_mfa" && (name == "continuations.continuations_origin_purpose_check" || name == "continuations.continuations_origin_purpose_v2" || name == "continuations.continuations_origin_purpose_username_v1") {
+					guards[i].constraints[j] = "continuations.continuations_origin_purpose_phone_v1"
 				}
 				if guards[i].schema != state.features.migrations.passwordSigninSchema {
 					continue

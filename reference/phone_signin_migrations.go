@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -52,6 +53,7 @@ func (s StoreSet) phoneSigninMigrationCatalog(ctx context.Context, catalog []mig
 		return nil, err
 	}
 	appendLast("identity_phone_signin_password", "identity/password/postgres", steps, migrationGuard{version: 24, schema: "identity_password", constraints: []string{"signin_records.signin_records_purpose_phone_v1"}})
+	passwordHistory = steps
 	predecessor := sessionpg.UsernameSigninAfterPassword
 	switch {
 	case present("identity_verification_mfa_session"):
@@ -71,5 +73,23 @@ func (s StoreSet) phoneSigninMigrationCatalog(ctx context.Context, catalog []mig
 		return nil, err
 	}
 	appendLast("identity_phone_signin_session", "identity/session/postgres", steps, migrationGuard{version: 1, schema: schema, constraints: []string{"session_issuances.session_issuances_purpose_phone_password_v1"}})
+	if s.state.features.phoneSignin.totp != nil {
+		steps, err = (passwordpg.PhoneMFASigninMigrationSource{Base: fixedMigrationSource(passwordHistory), Version: 25, UsernameMFA: present("identity_username_mfa_primary")}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		appendLast("identity_phone_mfa_primary", "identity/password/postgres", steps, migrationGuard{version: 25, schema: "identity_password", constraints: []string{"mfa_primary_records.mfa_primary_records_purpose_phone_v1"}})
+		var factors []migrations.Migration
+		for _, h := range catalog {
+			if h.namespace == "identity_mfa" {
+				factors = h.history
+			}
+		}
+		steps, err = (mfapg.PhoneContinuationMigrationSource{Base: fixedMigrationSource(factors), Version: 25, UsernameSignin: present("identity_username_mfa_continuation"), VerificationSignin: present("identity_verification_mfa")}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		appendLast("identity_phone_mfa_continuation", "identity/mfa/postgres", steps, migrationGuard{version: 25, schema: "identity_mfa", constraints: []string{"continuations.continuations_origin_purpose_phone_v1"}})
+	}
 	return catalog, nil
 }

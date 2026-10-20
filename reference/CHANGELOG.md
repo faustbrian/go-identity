@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Explicitly compose verified-phone/password plus independently confirmed TOTP
+  through native primary, factor and session owners. Selection enables no TOTP
+  HTTP route or weaker-factor fallback. Apply the forward phone primary and
+  continuation migrations; existing email/username histories stay unchanged.
+
 - Independently compose verified-phone replacement and its opt-in cookie HTTP
   send/update/original-recovery routes using real proof, OTP, risk, session,
   delivery and retained email recovery owners. Apply forward native phone-change

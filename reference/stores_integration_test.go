@@ -38,6 +38,10 @@ import (
 )
 
 type liveStores struct {
+	phoneTOTP                          bool
+	phoneTOTPOnly                      bool
+	phoneTOTPRollback                  bool
+	phoneTOTPCompleted                 *bool
 	usernameTOTPOnly                   bool
 	usernamePrimaryRecovery            func(passwordhttp.SigninResponse, []*http.Cookie)
 	usernameTOTPPersistent             bool

@@ -48,6 +48,21 @@ type composedMagicTOTP struct {
 	password     bool
 	verification bool
 	username     bool
+	phone        bool
+}
+
+// PhoneTOTP returns only the explicitly composed verified-phone/password TOTP
+// completion owner. It cannot select email/username or a weaker factor. Graph
+// startup, tenant, deadline and shutdown admission also apply to retained handles.
+func (f FeatureSet) PhoneTOTP() (mfa.TOTPCompletionService, error) {
+	s, err := f.selectedPhoneSignin()
+	if err != nil {
+		return nil, err
+	}
+	if s.totp == nil {
+		return nil, identity.UnavailableError{}
+	}
+	return composedMagicTOTP{state: f.state, phone: true}, nil
 }
 
 // UsernameTOTP returns only the explicitly selected username-origin TOTP owner.
@@ -84,6 +99,9 @@ func (f FeatureSet) VerificationTOTP() (mfa.TOTPCompletionService, error) {
 }
 
 func (f composedMagicTOTP) owner() *magicLinkTOTPService {
+	if f.phone {
+		return f.state.features.phoneSignin.totp
+	}
 	if f.username {
 		return f.state.features.username.totp
 	}

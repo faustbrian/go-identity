@@ -71,6 +71,9 @@ func composeNativePasswordSignin(c StoreConfiguration, d ReferenceDependencies, 
 		if username {
 			return passwordpg.NewUsernameMFASigninService(d.PostgreSQL, n, *c.PasswordSignin.MFA)
 		}
+		if n.Phone != nil {
+			return passwordpg.NewPhoneMFASigninService(d.PostgreSQL, n, *c.PasswordSignin.MFA)
+		}
 		return passwordpg.NewMFASigninService(d.PostgreSQL, n, *c.PasswordSignin.MFA)
 	}
 	return passwordpg.NewSigninService(d.PostgreSQL, n)

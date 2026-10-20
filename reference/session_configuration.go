@@ -100,6 +100,19 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 		}
 		passwordMFA = &profile
 	}
+	if p := c.PhoneSignin; p != nil && p.TOTP != nil {
+		if c.PasswordSignin == nil || selection.Verified == nil {
+			return nil, invalid
+		}
+		// Phone comparison retains password authentication plus actual TOTP.
+		// Its sessions need native factor reads/revocation even when email MFA
+		// login is deliberately unselected.
+		profile := c.PasswordSignin.Native.Profile
+		if profile != *selection.Verified || passwordMFA != nil && *passwordMFA != profile {
+			return nil, invalid
+		}
+		passwordMFA = &profile
+	}
 	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA}, Validation: validation})
 	if err != nil {
 		return nil, invalid
