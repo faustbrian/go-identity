@@ -41,7 +41,9 @@ func (ContributorConfig) MarshalText() ([]byte, error) { return nil, otp.ErrSens
 // Contributor implements coordinator-owned metered checks, counted denial,
 // reservation, protected consumption and recovery. It owns no pool, transaction, retry, hook,
 // goroutine or independent replay log. Enlist the exact returned pointer;
-// instances are immutable and concurrent-safe, phase handles are serial-use.
+// ordinary instances are immutable and concurrent-safe, phase handles are
+// serial-use. The explicit phone-recovery constructor instead owns one
+// invocation's bounded mutable preparation and must not be shared by requests.
 //
 // The denial entry point returns Unchanged (rollback) for correct codes; only
 // the separate reservation/protected execution path can consume them atomically.
@@ -63,6 +65,7 @@ type Contributor struct {
 	emailChangeDomain         *emailVerificationProfile
 	phoneConfirmation         *phoneEnrollmentConfirmation
 	phoneSignin               *phoneSigninProfile
+	phoneRecovery             *phoneRecoveryProfile
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
@@ -133,7 +136,7 @@ func (p *Contributor) original(command identity.Command, plan kernel.OTPAttemptP
 	if p == nil || p.codec == nil || plan.Mode != kernel.OTPConsume && plan.Mode != kernel.OTPCheck {
 		return bad()
 	}
-	spec, ok := command.Feature()
+	spec, ok := p.attemptSpec(command)
 	if !ok {
 		return bad()
 	}
@@ -202,11 +205,11 @@ func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAtte
 	if err != nil {
 		return 0, err
 	}
-	a, authority, err := p.original(command, b.Plan)
+	a, authority, err := p.executionOriginal(command, b.Plan)
 	if err != nil {
 		return 0, err
 	}
-	spec, _ := command.Feature()
+	spec, _ := p.attemptSpec(command)
 	authority, err = p.executionAuthority(spec, authority)
 	if err != nil {
 		return 0, err
@@ -232,7 +235,7 @@ func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAtte
 			return 0, err
 		}
 	}
-	flow, err := p.authenticateFlow(ctx, command, b.Plan)
+	flow, err := p.executionFlow(ctx, command, b.Plan)
 	if err != nil {
 		return 0, err
 	}
@@ -243,6 +246,25 @@ func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAtte
 	}
 	if err = requireNativeFlow(ctx, w, p, flow, nil); err != nil {
 		return 0, err
+	}
+	// Only this live callback may inspect the actual MFA cryptographic result.
+	// It runs before shared lockouts/challenge acquisition, never persists a
+	// success flag, and cannot turn the counted comparison into consuming proof.
+	var factorDenied bool
+	if p.phoneRecovery != nil {
+		s, err := p.phoneRecoveryCurrent(command, b.Plan, nil)
+		if err != nil {
+			return 0, err
+		}
+		classification, err := mfapg.VerifyPhoneRecoveryTOTPAttempt(ctx, w, p, s.counted)
+		if err != nil {
+			return 0, err
+		}
+		accepted, err := classification.Accepted(ctx, w, p)
+		if err != nil {
+			return 0, err
+		}
+		factorDenied = !accepted
 	}
 	bindings, _ := a.Bindings()
 	continuation, _ := bindings.Continuation.Bindings()
@@ -275,7 +297,21 @@ func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAtte
 	if p.flowTime(flow, now) != nil {
 		return 0, ErrInvalidCommand
 	}
-	d, err := p.codec.verifier.EvaluateAttempt(row.challenge, a, now)
+	if p.phoneRecovery != nil {
+		// The factor was actually compared before downstream exclusions. Its
+		// original recovery deadline may elapse while waiting for them; that
+		// must abort metering, not turn a prior comparison into renewed scope.
+		s, err := p.phoneRecoveryCurrent(command, b.Plan, nil)
+		if err != nil || !now.Before(s.preparation.ValidUntil) {
+			return 0, ErrInvalidCommand
+		}
+	}
+	var d otp.AttemptDecision
+	if factorDenied {
+		d, err = p.codec.verifier.EvaluatePhoneRecoveryDenial(row.challenge, a, now)
+	} else {
+		d, err = p.codec.verifier.EvaluateAttempt(row.challenge, a, now)
+	}
 	if err != nil {
 		return 0, ErrInvalidCommand
 	}

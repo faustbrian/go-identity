@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Reacquire the full original phone-recovery factor fence before protected OTP
+  exclusions. Final checks retain only the actual MFA replay-CAS completion,
+  correlated to the same live protected Work; stale, absent or expired receipt
+  custody aborts without another comparison or a weaker original-state fallback.
+
+- Add an explicitly selected invocation-local joint phone-reset OTP participant.
+  Verify the original encrypted TOTP factor before counted SMS exclusions and
+  debit only the existing SMS challenge budget when either code denies. Correct
+  conjunctions retain no successful precheck or replay advancement. Own separate
+  one-use plaintext preparations outside SQL, fence original expiry after waits,
+  and keep ordinary contributors and generic one-code custody closed. Complete
+  native reset authorization and protected consuming composition remain separate.
+
 - Restore phone-replacement attempts from authenticated native request-key
   custody without allocating another attempt or renewing original validity.
 

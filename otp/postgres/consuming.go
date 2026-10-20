@@ -114,11 +114,11 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 	if err != nil {
 		return err
 	}
-	attempt, a, err := p.original(command, b.Plan)
+	attempt, a, err := p.executionOriginal(command, b.Plan)
 	if err != nil {
 		return err
 	}
-	originalSpec, _ := command.Feature()
+	originalSpec, _ := p.attemptSpec(command)
 	a, err = p.executionAuthority(originalSpec, a)
 	if err != nil {
 		return err
@@ -129,7 +129,7 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 	if err := p.requireSigninReservationFactors(ctx, w, command, b.Plan); err != nil {
 		return err
 	}
-	flow, err := p.authenticateFlow(ctx, command, b.Plan)
+	flow, err := p.executionFlow(ctx, command, b.Plan)
 	if err != nil {
 		return err
 	}
@@ -138,6 +138,15 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 	// authenticated sessions are checked read-only and are never reserved.
 	if err = reserveNativeFlow(ctx, w, p, flow, b); err != nil {
 		return err
+	}
+	if p.phoneRecovery != nil {
+		s, err := p.phoneRecoveryCurrent(command, b.Plan, nil)
+		if err != nil {
+			return err
+		}
+		if err := mfapg.RequirePhoneRecoveryTOTPReservation(ctx, w, p, command, s.preparation.Factor, s.preparation.ValidUntil); err != nil {
+			return err
+		}
 	}
 	ab, _ := attempt.Bindings()
 	c, _ := ab.Continuation.Bindings()
@@ -157,7 +166,7 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 	}
 	d, err := p.codec.verifier.EvaluateAttempt(row.challenge, attempt, now)
 	snapshot, _ := row.challenge.Bindings()
-	spec, _ := command.Feature()
+	spec, _ := p.attemptSpec(command)
 	if err == nil && spec.Operation == mfaEnrollmentConfirmationOperation() && (d.Outcome == otp.AttemptConflict || snapshot.State != otp.ChallengeIssued) {
 		// The exact authenticated row is now another reservation or terminal
 		// generation. This is a definitive admission conflict, not an IO or
@@ -185,11 +194,11 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 	if err != nil {
 		return err
 	}
-	_, a, err := p.original(command, b.Plan)
+	_, a, err := p.executionOriginal(command, b.Plan)
 	if err != nil {
 		return err
 	}
-	originalSpec, _ := command.Feature()
+	originalSpec, _ := p.attemptSpec(command)
 	a, err = p.executionAuthority(originalSpec, a)
 	if err != nil {
 		return err
@@ -200,18 +209,27 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 	if err := p.requireSigninReservationFactors(ctx, w, command, b.Plan); err != nil {
 		return err
 	}
-	flow, err := p.authenticateFlow(ctx, command, b.Plan)
+	flow, err := p.executionFlow(ctx, command, b.Plan)
 	if err != nil {
 		return err
 	}
 	if err = reserveNativeFlow(ctx, w, p, flow, b); err != nil {
 		return err
 	}
+	if p.phoneRecovery != nil {
+		s, err := p.phoneRecoveryCurrent(command, b.Plan, nil)
+		if err != nil {
+			return err
+		}
+		if err := mfapg.RequirePhoneRecoveryTOTPReservation(ctx, w, p, command, s.preparation.Factor, s.preparation.ValidUntil); err != nil {
+			return err
+		}
+	}
 	query := func(ctx context.Context, sql string, args ...any) (challengeRows, error) {
 		return w.Query(ctx, sql, args...)
 	}
-	spec, _ := command.Feature()
-	r, err := p.codec.restoreRecord(spec)
+	spec, _ := p.attemptSpec(command)
+	r, err := p.executionRecord(command, spec, b.Plan)
 	if err != nil {
 		return err
 	}
@@ -223,7 +241,7 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 	if err != nil {
 		return err
 	}
-	retained, _, err := p.retainedOriginal(ctx, query, b)
+	retained, _, err := p.retainedPreparedOriginal(ctx, query, b)
 	if err != nil {
 		return err
 	}
@@ -249,6 +267,17 @@ func (p *Contributor) requireSigninReservationFactors(ctx context.Context, w ker
 // Caller holds exact reservation exclusion. Recovery/release authenticate this
 // retained projection, never substitute a fresh original from mutable storage.
 func (p *Contributor) retainedOriginal(ctx context.Context, query challengeQuery, b kernel.OTPReservationBinding) ([]byte, nativeCustody, error) {
+	return p.retainedOriginalMode(ctx, query, b, false)
+}
+
+// Live consuming phases already own authenticated outside-lock preparation.
+// Restart recovery/release deliberately retain the existing code/bearer-free
+// local codec restoration; they cannot depend on an invocation's plaintext.
+func (p *Contributor) retainedPreparedOriginal(ctx context.Context, query challengeQuery, b kernel.OTPReservationBinding) ([]byte, nativeCustody, error) {
+	return p.retainedOriginalMode(ctx, query, b, true)
+}
+
+func (p *Contributor) retainedOriginalMode(ctx context.Context, query challengeQuery, b kernel.OTPReservationBinding, prepared bool) ([]byte, nativeCustody, error) {
 	rows, err := query(ctx, `SELECT consumer_envelope,consumer_owner,consumer_record_requirement,consumer_subject_requirement FROM `+pgx.Identifier{p.schema}.Sanitize()+`.challenges WHERE tenant_id=$1 AND challenge_id=$2`, string(b.Command.TenantID), b.Plan.ChallengeID)
 	if err != nil {
 		return nil, nativeCustody{}, challengeFailure(ctx)
@@ -264,9 +293,20 @@ func (p *Contributor) retainedOriginal(ctx context.Context, query challengeQuery
 		return nil, nativeCustody{}, ErrInvalidCommand
 	}
 	op := identity.FeatureOperation{Owner: owner, OperationID: b.Command.OperationID, SchemaID: b.Command.SchemaID, SchemaVersion: b.Command.SchemaVersion, RecordRequirement: identity.FeatureRecordRequirement(record), SubjectRequirement: identity.FeatureSubjectRequirement(subject)}
+	if prepared && p.phoneRecovery != nil {
+		s, err := p.phoneRecoveryCurrent(identity.Command{}, b.Plan, nil)
+		if err != nil || s.spec.Binding != b.Command || s.spec.Operation != op {
+			return nil, nativeCustody{}, ErrInvalidCommand
+		}
+		expected, err := originalEnvelope(s.spec, b)
+		if err != nil || !bytes.Equal(wire, expected) {
+			return nil, nativeCustody{}, ErrInvalidCommand
+		}
+		return wire, s.native, nil
+	}
 	spec := identity.FeatureCommandSpec{Binding: b.Command, Operation: op, Fields: []identity.FeatureField{{Name: "otp.attempt-custody", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: wire}}, {Name: "otp.digest-key-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(b.Plan.DigestKeyVersion)}}}}
 	c, err := p.codec.restoreCustody(spec)
-	if err != nil || c.authority == nil {
+	if err != nil || c.authority == nil || p.phoneRecovery != nil && !phoneRecoveryAttemptRecord(c.record) {
 		return nil, nativeCustody{}, ErrInvalidCommand
 	}
 	plan, err := p.codec.recordPlan(c.record, b.Plan.DigestKeyVersion)

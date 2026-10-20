@@ -48,6 +48,9 @@ func (s sendRequestRecord) validate(binding identity.CommandBinding) error {
 	if s.recipient != nil && validateSendRecipient(*s.recipient, b.Scope, binding) != nil {
 		return ErrInvalidCommand
 	}
+	if op == phoneResetSendOperation() {
+		return s.validatePhoneResetSend(binding)
+	}
 	if op == mfaLoginSendOperation() {
 		flow, err := retainedMFAFlow(binding, op, s.continuation)
 		if err != nil || s.recipient == nil {

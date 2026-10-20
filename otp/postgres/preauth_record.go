@@ -10,6 +10,7 @@ import (
 )
 
 const identifierBoundPreAuthRecordPrefix = "IOPB2\x00"
+const phoneRecoveryPreAuthRecordPrefix = "IOPR3\x00"
 
 // This bounded scalar projection is private encrypted command custody, not a
 // second pre-auth store or admission proof. The canonical primary row and every
@@ -20,7 +21,13 @@ func appendPreAuthRecord(out []byte, record session.PreAuthTransaction) []byte {
 	// Legacy records start with a bounded uint16-length flow ID. This marker
 	// is not a valid legacy length. Keep old bytes unchanged and make bound
 	// records fail closed in old readers rather than dropping original intent.
-	if i.IdentifierBinding != ([32]byte{}) {
+	if i.Purpose == session.PreAuthPhonePasswordRecovery {
+		// New purpose has no login policy. Its explicit marker is invalid to
+		// old readers; never reinterpret absent remember fields as a login.
+		out = append(out, []byte(phoneRecoveryPreAuthRecordPrefix)...)
+		out = append(out, byte(i.Purpose))
+		out = append(out, i.IdentifierBinding[:]...)
+	} else if i.IdentifierBinding != ([32]byte{}) {
 		out = append(out, []byte(identifierBoundPreAuthRecordPrefix)...)
 		out = append(out, i.IdentifierBinding[:]...)
 	}
@@ -30,10 +37,12 @@ func appendPreAuthRecord(out []byte, record session.PreAuthTransaction) []byte {
 	}
 	out = append(out, i.Nonce[:]...)
 	out = binary.BigEndian.AppendUint64(out, i.PolicyVersion)
-	remember, _ := i.Remember.Bindings()
-	out = append(out, byte(remember.Choice))
-	for _, duration := range []time.Duration{remember.AbsoluteTTL, remember.IdleTTL, remember.RefreshAfter, remember.FreshFor} {
-		out = binary.BigEndian.AppendUint64(out, uint64(duration))
+	if i.Purpose != session.PreAuthPhonePasswordRecovery {
+		remember, _ := i.Remember.Bindings()
+		out = append(out, byte(remember.Choice))
+		for _, duration := range []time.Duration{remember.AbsoluteTTL, remember.IdleTTL, remember.RefreshAfter, remember.FreshFor} {
+			out = binary.BigEndian.AppendUint64(out, uint64(duration))
+		}
 	}
 	out = binary.BigEndian.AppendUint32(out, s.Cookie.KeyVersion)
 	out = append(out, s.Cookie.Sum[:]...)
@@ -43,7 +52,14 @@ func appendPreAuthRecord(out []byte, record session.PreAuthTransaction) []byte {
 func readPreAuthRecord(r *recordReader) (session.PreAuthTransaction, error) {
 	s := session.PreAuthTransactionSpec{}
 	b, i := &s.Binding, &s.Binding.Intent
-	if bytes.HasPrefix(r.data, []byte(identifierBoundPreAuthRecordPrefix)) {
+	if bytes.HasPrefix(r.data, []byte(phoneRecoveryPreAuthRecordPrefix)) {
+		r.data = r.data[len(phoneRecoveryPreAuthRecordPrefix):]
+		i.Purpose = session.PreAuthPurpose(r.u8())
+		copy(i.IdentifierBinding[:], r.take(32))
+		if !r.ok || i.Purpose != session.PreAuthPhonePasswordRecovery || i.IdentifierBinding == ([32]byte{}) {
+			return session.PreAuthTransaction{}, ErrInvalidCommand
+		}
+	} else if bytes.HasPrefix(r.data, []byte(identifierBoundPreAuthRecordPrefix)) {
 		r.data = r.data[len(identifierBoundPreAuthRecordPrefix):]
 		copy(i.IdentifierBinding[:], r.take(32))
 		if !r.ok || i.IdentifierBinding == ([32]byte{}) {
@@ -65,9 +81,11 @@ func readPreAuthRecord(r *recordReader) (session.PreAuthTransaction, error) {
 	}
 	copy(i.Nonce[:], r.take(32))
 	i.PolicyVersion = r.u64()
-	i.Remember, err = session.NewRememberPolicy(session.RememberPolicySpec{Choice: session.RememberChoice(r.u8()), AbsoluteTTL: time.Duration(r.u64()), IdleTTL: time.Duration(r.u64()), RefreshAfter: time.Duration(r.u64()), FreshFor: time.Duration(r.u64())})
-	if err != nil {
-		return session.PreAuthTransaction{}, ErrInvalidCommand
+	if i.Purpose != session.PreAuthPhonePasswordRecovery {
+		i.Remember, err = session.NewRememberPolicy(session.RememberPolicySpec{Choice: session.RememberChoice(r.u8()), AbsoluteTTL: time.Duration(r.u64()), IdleTTL: time.Duration(r.u64()), RefreshAfter: time.Duration(r.u64()), FreshFor: time.Duration(r.u64())})
+		if err != nil {
+			return session.PreAuthTransaction{}, ErrInvalidCommand
+		}
 	}
 	s.Cookie.KeyVersion = r.u32()
 	copy(s.Cookie.Sum[:], r.take(32))

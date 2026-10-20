@@ -50,7 +50,31 @@ func (p *Contributor) CheckOTP(ctx context.Context, w kernel.OTPApplyWork) error
 	if err != nil {
 		return err
 	}
-	_, _, _, err = p.checkConsuming(ctx, w, b, spec, cookie)
+	c, flow, authority, err := p.checkConsumingAdmission(ctx, w, b, spec, cookie)
+	if err != nil {
+		return err
+	}
+	if p.phoneRecovery != nil {
+		s, err := p.phoneRecoveryCurrent(identity.Command{}, b.Plan, &spec)
+		if err != nil {
+			return err
+		}
+		// Reservation's factor locks ended at attachment commit. Reacquire the
+		// original full fence after primary/flow admission but before downstream
+		// OTP exclusions; actual TOTP verification/replay remains feature Apply.
+		if s.recorded != nil {
+			// Commit repeats CheckOTP after feature Apply. Only its actual opaque
+			// MFA receipt may select the verified successor, with exact same-Work
+			// correlation; a stale/foreign receipt never falls back to original.
+			err = s.recorded.RequireOTPApplyRecorded(ctx, w, p)
+		} else {
+			err = mfapg.RequirePhoneRecoveryTOTPApply(ctx, w, p, s.preparation.Factor, s.preparation.ValidUntil)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	_, _, _, err = p.checkConsumingExclusions(ctx, w, b, spec, c, flow, authority)
 	return err
 }
 
@@ -68,6 +92,15 @@ func (p *Contributor) FinalizeOTP(ctx context.Context, w kernel.OTPFinalizeWork)
 	spec, err := w.CommandSpec(p)
 	if err != nil {
 		return err
+	}
+	if p.phoneRecovery != nil {
+		s, err := p.phoneRecoveryCurrent(identity.Command{}, b.Plan, &spec)
+		if err != nil || s.recorded == nil {
+			// Counted preparation rolls back its factor check. The preceding
+			// final CheckOTP validates same-Work custody when present, but only
+			// terminal finalization can require that feature Apply produced it.
+			return ErrInvalidCommand
+		}
 	}
 	user, factorVersion, err := p.signinFactorsFromSpec(spec, b.Plan)
 	if err != nil {
@@ -98,19 +131,23 @@ func (p *Contributor) FinalizeOTP(ctx context.Context, w kernel.OTPFinalizeWork)
 }
 
 func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b kernel.OTPReservationBinding, spec identity.FeatureCommandSpec, cookie auth.BearerCredential) (lockedReservation, nativeFlow, time.Time, error) {
-	bad := func(err error) (lockedReservation, nativeFlow, time.Time, error) {
+	c, flow, authority, err := p.checkConsumingAdmission(ctx, w, b, spec, cookie)
+	if err != nil {
 		return lockedReservation{}, nativeFlow{}, time.Time{}, err
+	}
+	return p.checkConsumingExclusions(ctx, w, b, spec, c, flow, authority)
+}
+
+func (p *Contributor) checkConsumingAdmission(ctx context.Context, w consumingWork, b kernel.OTPReservationBinding, spec identity.FeatureCommandSpec, cookie auth.BearerCredential) (nativeCustody, nativeFlow, AttemptAuthority, error) {
+	bad := func(err error) (nativeCustody, nativeFlow, AttemptAuthority, error) {
+		return nativeCustody{}, nativeFlow{}, AttemptAuthority{}, err
 	}
 	if b.PreviousGeneration != 0 || !validOwnership(b) || spec.Binding != b.Command {
 		return bad(ErrInvalidCommand)
 	}
-	c, err := p.codec.restoreCustody(spec)
+	c, flow, err := p.consumingOriginal(ctx, spec, b.Plan, cookie)
 	if err != nil || c.authority == nil || c.authority.Directory.Query.GlobalAuthorityID != p.global || b.Command.UserID != "" && c.authority.UserAuthorization.Scope.PolicyNamespace != p.namespace {
 		return bad(ErrInvalidCommand)
-	}
-	flow, err := p.authenticateFlowSpec(ctx, spec, b.Plan, cookie)
-	if err != nil {
-		return bad(err)
 	}
 	authority, err := p.executionAuthority(spec, *c.authority)
 	if err != nil {
@@ -122,18 +159,25 @@ func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b ker
 	if err = requireNativeFlow(ctx, w, p, flow, &sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.Generation}); err != nil {
 		return bad(err)
 	}
+	return c, flow, authority, nil
+}
+
+func (p *Contributor) checkConsumingExclusions(ctx context.Context, w consumingWork, b kernel.OTPReservationBinding, spec identity.FeatureCommandSpec, c nativeCustody, flow nativeFlow, authority AttemptAuthority) (lockedReservation, nativeFlow, time.Time, error) {
+	bad := func(err error) (lockedReservation, nativeFlow, time.Time, error) {
+		return lockedReservation{}, nativeFlow{}, time.Time{}, err
+	}
 	continuation, _ := c.record.Attempt.Continuation.Bindings()
 	query := func(ctx context.Context, sql string, args ...any) (challengeRows, error) {
 		return w.Query(ctx, sql, args...)
 	}
-	if _, _, err = p.lockout.loadLockouts(ctx, query, p.schema, continuation.Scope); err != nil {
+	if _, _, err := p.lockout.loadLockouts(ctx, query, p.schema, continuation.Scope); err != nil {
 		return bad(err)
 	}
 	row, err := loadReservation(ctx, query, p.schema, b, b.Generation, continuation.Scope.SubjectID)
 	if err != nil {
 		return bad(err)
 	}
-	retained, _, err := p.retainedOriginal(ctx, query, b)
+	retained, _, err := p.retainedPreparedOriginal(ctx, query, b)
 	if err != nil {
 		return bad(err)
 	}

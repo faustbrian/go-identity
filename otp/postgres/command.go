@@ -379,11 +379,17 @@ func (c *AttemptCodec) restoreCustody(spec identity.FeatureCommandSpec) (nativeC
 
 func (c *AttemptCodec) restoreAttempt(command identity.Command, plan identitypostgres.OTPAttemptPlan) (otp.AttemptCommand, error) {
 	s, ok := command.Feature()
+	code, custody := command.OneTimeCode()
+	phoneRecovery := false
 	if !ok {
+		s, code, _, ok = phoneRecoveryAttemptCustody(command)
+		custody, phoneRecovery = ok, ok
+	}
+	if !ok || !custody {
 		return otp.AttemptCommand{}, ErrInvalidCommand
 	}
 	r, err := c.restoreRecord(s)
-	if err != nil {
+	if err != nil || phoneRecovery && !phoneRecoveryAttemptRecord(r) {
 		return otp.AttemptCommand{}, ErrInvalidCommand
 	}
 	// restoreRecord authenticated the unique named version in this exact spec.
@@ -397,10 +403,6 @@ func (c *AttemptCodec) restoreAttempt(command identity.Command, plan identitypos
 	}
 	want, err := c.recordPlan(r, version)
 	if err != nil || want != plan {
-		return otp.AttemptCommand{}, ErrInvalidCommand
-	}
-	code, ok := command.OneTimeCode()
-	if !ok {
 		return otp.AttemptCommand{}, ErrInvalidCommand
 	}
 	a, err := c.issuers[r.Attempt.FingerprintKeyVersion].RestoreForCommand(r, code)

@@ -44,6 +44,12 @@ func boundIssuanceOperation(b identity.CommandBinding) (identity.FeatureOperatio
 		subject = identity.FeatureSubjectAnonymousFlow
 	}
 	op := issuanceOperation(subject)
+	if b.OperationID == phoneResetSendOperation().OperationID {
+		op = phoneResetSendOperation()
+		if b.UserID == "" || b.RecordID != string(b.CommandID) {
+			return identity.FeatureOperation{}, ErrInvalidCommand
+		}
+	}
 	if b.OperationID == phoneEnrollmentSendOperation().OperationID {
 		op = phoneEnrollmentSendOperation()
 		if b.SchemaID == phoneChangeSendOperation().SchemaID {
@@ -88,6 +94,10 @@ func issuanceScopeMatches(b identity.CommandBinding, scope otp.DigestScopeSpec) 
 	}
 	if scope.SubjectID != string(b.UserID) {
 		return false
+	}
+	if op == phoneResetSendOperation() {
+		_, targetErr := identity.ParseIdentifierID(scope.TargetID)
+		return targetErr == nil && scope.Purpose == otp.PurposePasswordReset && scope.Channel == otp.ChannelSMS && scope.ChallengeID == string(b.CommandID)
 	}
 	if op == phoneChangeSendOperation() {
 		// A replacement send creates only this challenge. Its OTP target is
@@ -146,6 +156,9 @@ func validIssuance(challenge otp.Challenge, spec identity.FeatureCommandSpec) bo
 	if err != nil || policyErr != nil || p.TTL%1000 != 0 || p.ResendInterval%1000 != 0 || !issuanceScopeMatches(spec.Binding, b.Scope) {
 		return false
 	}
+	if op == phoneResetSendOperation() && !phoneResetSendFlow(spec.Binding, s.Continuation, s.IssuedAt, s.ExpiresAt) {
+		return false
+	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
 		if op == mfaEnrollmentSendOperation() || op == mfaLoginSendOperation() || phoneSMSIssuance(op) {
 			return false
@@ -179,6 +192,11 @@ func (c *AttemptCodec) mapIssuance(ctx context.Context, challenge otp.Challenge,
 	}
 	s, _ := challenge.Bindings()
 	b, _ := s.Continuation.Bindings()
+	if spec.Operation == phoneResetSendOperation() {
+		if len(recipient) != 1 || (sendRequestRecord{continuation: s.Continuation, policy: s.Policy, authority: original, recipient: &recipient[0], issuedAt: s.IssuedAt, expiresAt: s.ExpiresAt}).validate(spec.Binding) != nil {
+			return bad(ErrInvalidCommand)
+		}
+	}
 	_, sessionBound := b.Authorization.AuthenticatedSession()
 	if sessionBound != authenticated {
 		return bad(ErrInvalidCommand)
@@ -325,6 +343,9 @@ func (c *AttemptCodec) restoreIssuanceContext(parent context.Context, spec ident
 		return bad()
 	}
 	s, _ := challenge.Bindings()
+	if spec.Operation == phoneResetSendOperation() && (sendRequestRecord{continuation: s.Continuation, policy: s.Policy, authority: *authority, recipient: recipient, issuedAt: s.IssuedAt, expiresAt: s.ExpiresAt}).validate(spec.Binding) != nil {
+		return bad()
+	}
 	if recipient != nil {
 		b, _ := s.Continuation.Bindings()
 		if validateSendRecipient(*recipient, b.Scope, spec.Binding) != nil {

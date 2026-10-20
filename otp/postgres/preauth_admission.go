@@ -59,6 +59,10 @@ func newPreAuthProfile(config sessionpg.Config, material map[uint32][]byte) (*pr
 func (c *AttemptCodec) authenticatePreAuth(ctx context.Context, p *preAuthProfile, command identity.Command, plan kernel.OTPAttemptPlan) (session.PreAuthTransaction, error) {
 	spec, ok := command.Feature()
 	cookie, present := command.PreAuthCookie()
+	if !ok {
+		spec, _, cookie, ok = phoneRecoveryAttemptCustody(command)
+		present = ok
+	}
 	if !ok || !present {
 		return session.PreAuthTransaction{}, ErrInvalidCommand
 	}
@@ -77,7 +81,7 @@ func (c *AttemptCodec) authenticatePreAuthSpec(ctx context.Context, p *preAuthPr
 		return bad(err)
 	}
 	record, err := c.restoreRecord(spec)
-	if err != nil {
+	if err != nil || spec.Operation.OperationID == "identity.phone.password-reset-complete" && !phoneRecoveryAttemptRecord(record) {
 		return bad(ErrInvalidCommand)
 	}
 	// restoreRecord has authenticated the unique named version. Never substitute
@@ -105,6 +109,20 @@ func (c *AttemptCodec) authenticatePreAuthSpec(ctx context.Context, p *preAuthPr
 			return bad(ErrInvalidCommand)
 		}
 		original = flow.mfaOriginal
+	}
+	return authenticateOriginalPreAuth(ctx, p, original, cookie)
+}
+
+// The original opaque transaction has already been restored from authenticated
+// custody. Rechecking its bearer needs only fixed local hashing, not envelope
+// decryption or an application/provider callback under live Work locks.
+func authenticateOriginalPreAuth(ctx context.Context, p *preAuthProfile, original session.PreAuthTransaction, cookie authentication.BearerCredential) (session.PreAuthTransaction, error) {
+	bad := func(err error) (session.PreAuthTransaction, error) { return session.PreAuthTransaction{}, err }
+	if ctx == nil || p == nil {
+		return bad(ErrInvalidCommand)
+	}
+	if err := ctx.Err(); err != nil {
+		return bad(err)
 	}
 	s, err := original.Bindings()
 	if err != nil {
@@ -141,7 +159,10 @@ func admitPreAuth[R sessionpg.SessionRows](ctx context.Context, q sessionpg.Sess
 	if custody == nil {
 		err = sessionpg.RequirePreAuth(ctx, q, p.config, original)
 	} else {
-		spec, _ := command.Feature()
+		spec, ok := command.Feature()
+		if !ok {
+			spec, _, _, _ = phoneRecoveryAttemptCustody(command)
+		}
 		if custody.Command != spec.Binding || custody.Plan != plan || custody.Fingerprint == ([32]byte{}) || custody.Generation == 0 || custody.PreviousGeneration != 0 {
 			return session.PreAuthTransaction{}, ErrInvalidCommand
 		}

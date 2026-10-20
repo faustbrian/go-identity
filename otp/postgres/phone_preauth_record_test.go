@@ -84,6 +84,8 @@ func FuzzPhonePreAuthCustody(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(appendPreAuthRecord(nil, bound))
+	f.Add(appendPreAuthRecord(nil, phoneRecoveryPreAuthSeed(f)))
+	f.Add([]byte(phoneRecoveryPreAuthRecordPrefix))
 	f.Add([]byte(identifierBoundPreAuthRecordPrefix))
 	f.Add(append([]byte(identifierBoundPreAuthRecordPrefix), make([]byte, 32)...))
 	f.Fuzz(func(t *testing.T, data []byte) {

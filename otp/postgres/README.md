@@ -1,5 +1,40 @@
 # OTP PostgreSQL
 
+## Joint phone-reset participant
+
+`NewPhoneRecoveryContributor` is an invocation-local selection of the existing
+OTP owner, not a second attempt service. Register its stable pointer before
+generation. After the password owner restores the final retained **generated**
+joint command, call `PreparePhoneRecovery` outside SQL with the original encrypted
+MFA snapshot, existing `PhoneRecoveryTOTPVerifier` and authenticated exclusive
+deadline. It authenticates the original SMS attempt and browser bearer and owns
+two independent one-use plaintext preparations. Defer `PhoneRecoveryCustody.Destroy`
+on every exit, including skipped execution. Never share this owner across requests
+or renew a started invocation by preparing it again.
+
+The counted callback rechecks current original authority and pre-auth, then uses
+MFA's actual TOTP cryptography before shared OTP lockouts/challenge acquisition.
+Either wrong code debits the **existing SMS challenge budget once**; a correct
+conjunction rolls the provisional count back and grants no factor proof. Counted
+verification never advances TOTP replay or consumes pre-auth/capability/risk.
+Original deadlines are rechecked after downstream lock waits. Generic feature
+and one-code accessors remain closed for both exact joint command variants.
+
+Reservation and the protected OTP check independently reacquire the original
+factor fence after primary/pre-auth admission and before shared OTP exclusions.
+In protected feature Apply, the parent calls the custody's
+`VerifyAndRecordTOTP`, then the resulting MFA completion's `RequireRecorded` in
+that same live Work before password mutation. This performs another actual
+verification and replay CAS; no caller-written success flag/counter is accepted.
+Commit's repeated OTP check uses only that actual opaque MFA completion and the
+kernel's exact same-Work origin guard to fence its verified replay successor;
+an unusable completion cannot fall back to the original snapshot. No code is
+compared again. These participant APIs alone do not enable a complete reset
+service or establish canonical capability, original phone, completion-risk or
+password/session effects. Ambiguity stays with the original coordinator recovery;
+do not prepare a replacement submission, release reservations or repeat
+comparisons locally.
+
 ## Existing-account phone SMS-code signin
 
 `NewPhoneSigninService` selects a separate `identity.phone.signin` workflow;

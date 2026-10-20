@@ -7,6 +7,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/jackc/pgx/v5"
@@ -99,6 +100,13 @@ func (p *issuanceContributor) ApplyFeature(ctx context.Context, w kernel.Work, c
 
 // Invocation custody is local; all Work authorization uses the stable owner.
 func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, command identity.Command, owner kernel.FeatureExecutionContributor) (identity.FeatureReceipt, error) {
+	return p.applyPreparedIssuance(ctx, w, command, owner, nil)
+}
+
+// Only the phone-request restore path can supply this private authenticated
+// custody. Other profiles preserve their original authentication path. Crypto
+// for phone recovery is finished outside Work, before any current row locks.
+func (p *issuanceContributor) applyPreparedIssuance(ctx context.Context, w kernel.Work, command identity.Command, owner kernel.FeatureExecutionContributor, prepared *preparedPhonePasswordResetSend) (identity.FeatureReceipt, error) {
 	bad := func(err error) (identity.FeatureReceipt, error) { return identity.FeatureReceipt{}, err }
 	if p == nil || p.store == nil || ctx == nil {
 		return bad(ErrInvalidCommand)
@@ -124,16 +132,28 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 		if transition.EventType != "identifier.attached.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 			return bad(ErrInvalidCommand)
 		}
-	} else if op == phoneChangeSendOperation() {
+	} else if op == phoneChangeSendOperation() || op == phoneResetSendOperation() {
 		if transition.EventType != "otp.sent.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 			return bad(ErrInvalidCommand)
 		}
 	} else if transition.EventType != "otp.sent.v1" || registration.Contributor != p.Descriptor() || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 		return bad(ErrInvalidCommand)
 	}
-	custody, flow, err := p.store.authenticateIssuance(ctx, command)
-	if err != nil {
-		return bad(err)
+	var custody issuanceCustody
+	var flow nativeFlow
+	if prepared != nil {
+		if op != phoneResetSendOperation() || prepared.phase != p || prepared.generated != command {
+			return bad(ErrInvalidCommand)
+		}
+		custody, flow = prepared.custody, prepared.flow
+	} else {
+		if op == phoneResetSendOperation() {
+			return bad(ErrInvalidCommand)
+		}
+		custody, flow, err = p.store.authenticateIssuance(ctx, command)
+		if err != nil {
+			return bad(err)
+		}
 	}
 	if phoneSMSIssuance(op) && custody.recipient != nil {
 		return bad(ErrInvalidCommand)
@@ -171,6 +191,11 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 			selected.Query.UserID = ""
 		}
 		if err := w.RequireRecipient(ctx, owner, selected); err != nil {
+			return bad(err)
+		}
+	}
+	if prepared != nil {
+		if err := mfapg.RequirePhoneResetIssuance(ctx, w, owner, prepared.root, prepared.input.factor, flow.preauth); err != nil {
 			return bad(err)
 		}
 	}
@@ -218,6 +243,16 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 	}
 	if err := p.delivery.Stage(ctx, w, p.prepared); err != nil {
 		return bad(err)
+	}
+	if prepared != nil {
+		// Delivery and challenge exclusion can wait. Eligibility is not a
+		// reusable proof; retain the original factor and both absolute clocks.
+		if err := mfapg.RequirePhoneResetIssuance(ctx, w, owner, prepared.root, prepared.input.factor, flow.preauth); err != nil {
+			return bad(err)
+		}
+		if _, err := p.currentTime(ctx, w, a, flow, s, owner); err != nil {
+			return bad(err)
+		}
 	}
 	return identity.FeatureReceipt{Operation: spec.Operation, BeforeVersion: transition.BeforeVersion, AfterVersion: transition.AfterVersion}, nil
 }
