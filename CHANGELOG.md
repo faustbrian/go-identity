@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit joint phone-password-reset input and generated command custody.
+  Password/verifier, canonical capability, phone OTP and independent TOTP remain
+  one closed variant; legacy email-reset and single-code accessors reject it.
+  This enables no recovery endpoint or native consuming workflow by itself.
+
 - Add a feature-only verified-phone replacement transition with exact one-step
   versions, original-value retirement and preserved primary selection. Existing
   generic replacement still clears verification. Phone-update receipts require

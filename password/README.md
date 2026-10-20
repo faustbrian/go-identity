@@ -331,6 +331,18 @@ does not require another reset-intent store and does not authorize recovery.
 The profile is immutable and concurrent-safe, performs no IO and owns no
 resource requiring shutdown. Its redacted error is `ErrInvalidReset`.
 
+`NewPhoneResetProfile` explicitly selects a different canonical reset scope for
+phone recovery with a current independent TOTP. Its original `ResetGrantSpec`
+must select `RecoveryPathPhone` and positive MFA authority; `PhoneResetBinding`
+binds original pre-authentication, phone challenge/attempt, keyed number digest,
+verification, independent TOTP and risk-policy versions. Neither reset profile
+accepts the other's signed grant, even with the same configured issuer/audience.
+This is scope construction/validation only, not a usable phone-reset workflow.
+Phone recovery remains disabled until actual opt-in composition proves distinct
+initiation/completion risk evidence, canonical capability, phone OTP, independent
+TOTP, password screening and session invalidation in the owning transaction.
+The SMS and capability are not two independent authentication factors.
+
 **Scope validation is not reset permission.** This pure policy neither consumes
 the grant nor checks current account/factor/risk eligibility. Native scanner
 validation must remain read-only. Explicit user-confirmed completion must

@@ -30,6 +30,16 @@ adapter's coordinator-owned ledger and must not be applied to those tables.
 
 ## Original password-reset preparation
 
+The separate `NewFeaturePhonePasswordResetInputCommand` and generated
+`NewFeaturePhonePasswordResetCommand` retain the canonical capability, phone OTP
+and independent TOTP together with the original password or generated verifier.
+Only their exact native phone-reset descriptor is admitted. Legacy email-reset,
+ordinary feature and single-code accessors reject this compound variant. These
+are preparatory custody contracts, not a phone-recovery service or enabled route:
+the native owner must still bind original pre-auth/current authority, reserve
+separate completion risk evidence and atomically finalize every proof, password
+change and session revocation. This profile issues no session or remember choice.
+
 `NewFeaturePasswordResetInputCommand` borrows the primitive replacement `Secret`
 and original capability `Proof` before hashing. Select `PasswordResetInputFeature`
 and `PasswordResetInputCustody` together; no legacy or generated accessor admits

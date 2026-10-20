@@ -32,8 +32,8 @@ func PasswordSigninIdentifierBinding(number Number, tenant identity.TenantID, ke
 	return signinIdentifierBinding(number, tenant, key, "identity-phone-password-signin-binding-v1\x00", "identity.phone.password-signin", ErrPasswordSigninBinding)
 }
 
-// Only the two fixed workflow entry points select a domain/action. Keep the
-// historical password frame unchanged while separating OTP initiation from it.
+// Only fixed workflow entry points select a domain/action. Keep historical
+// signin frames unchanged while separating sessionless recovery from them.
 func signinIdentifierBinding(number Number, tenant identity.TenantID, key []byte, domain, action string, invalid NumberError) ([32]byte, error) {
 	if len(key) < 32 || len(key) > 64 {
 		return [32]byte{}, invalid

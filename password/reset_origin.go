@@ -34,7 +34,7 @@ func (p ResetProfile) ResolveOriginal(g capability.Grant, now time.Time) (ResetG
 		TenantID: identity.TenantID(w.Tenant), UserID: identity.UserID(w.Subject),
 		CredentialID:    identity.CredentialID(strings.TrimPrefix(w.Resource, "identity.password/")),
 		IdentifierID:    identity.IdentifierID(w.Caveats["password.identifier"]),
-		OriginCommandID: identity.CommandID(w.CorrelationID), RecoveryPath: auth.RecoveryPathEmail,
+		OriginCommandID: identity.CommandID(w.CorrelationID), RecoveryPath: p.state.path,
 		IssuedAt: w.IssuedAt, ExpiresAt: w.ExpiresAt,
 	}
 	for _, field := range []struct {
@@ -58,6 +58,13 @@ func (p ResetProfile) ResolveOriginal(g capability.Grant, now time.Time) (ResetG
 			return ResetGrantSpec{}, ErrInvalidReset
 		}
 		s.FactorVersion = value
+	}
+	if p.state.path == auth.RecoveryPathPhone {
+		var err error
+		s.Phone, err = phoneResetBinding(w.Caveats)
+		if err != nil {
+			return ResetGrantSpec{}, err
+		}
 	}
 	var resolved ResetGrantSpec
 	matches := 0

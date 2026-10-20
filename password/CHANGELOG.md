@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an explicitly selected phone/TOTP reset capability scope, separate from
+  emailed reset, binding original phone/pre-auth/OTP/attempt/factor/risk policy.
+  This pure profile enables no recovery endpoint or consumption by itself;
+  coordinated phone recovery composition remains in development.
+
 - Preserve distinct phone/password signin correlation during password-free
   recovery. Other phone verification, OTP and reset operations cannot use it.
 

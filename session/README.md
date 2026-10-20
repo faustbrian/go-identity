@@ -1,5 +1,16 @@
 # Session
 
+## Sessionless phone-recovery pre-authentication
+
+Select `PreAuthPhonePasswordRecovery` in both `PreAuthIssuerConfig.Purpose` and
+the matching native executor profile. It admits only
+`identity.phone.password-reset-request`, requires the original canonical-number
+commitment and rejects every `RememberPolicy`. The existing issuer, durable
+pre-auth record and commit-gated flow cookie are reused; no session is created.
+The distinct recovery cookie domain cannot become a login continuation. This
+prepares recovery only: canonical capability, SMS/TOTP, risk and the atomic
+password/session mutation remain the reset workflow owner's responsibility.
+
 The prospective password issuer also accepts the closed
 `identity.username.signin`/`username-signin` v1 binding without relabeling it.
 It retains the same original password/cookie custody and session projection.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Derive a distinct canonical-target commitment for sessionless phone-password
+  recovery. It cannot substitute for password or OTP signin intent; the native
+  workflow still owns pre-auth authentication, risk and all recovery proofs.
+
 - Describe the direct original phone-update recovery contract for independently
   selected HTTP composition. Metadata alone enables no route or workflow.
 

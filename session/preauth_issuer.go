@@ -36,10 +36,14 @@ type PreAuthIssuerConfig struct {
 	LookupKey                             DigestKey
 	TokenSize                             int
 	Cookie                                CookiePolicy
+	// Purpose zero preserves login; phone recovery requires no Remember and
+	// an original nonzero identifier binding. It enables no reset workflow.
+	Purpose PreAuthPurpose
 }
 
 // PreAuthPrepareInput supplies server-selected command, tenant and correlation
-// identities plus the already-resolved final session choice. It cannot select
+// identities plus the already-resolved final session choice for login, or zero
+// Remember and a nonzero identifier commitment for phone recovery. It cannot select
 // the flow ID, nonce, cookie, original timeline or trusted profile. Retain the
 // returned preparation unchanged; calling Prepare again is not a retry.
 type PreAuthPrepareInput struct {
@@ -74,6 +78,10 @@ func NewPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig) (
 	// calling the clock or generating credential bytes during construction.
 	remember, _ := ResolveRememberPolicy(BrowserSession, LifetimeConfig{Default: BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
 	input := PreAuthPrepareInput{CommandID: "AQEBAQEBAQEBAQEBAQEBAQ", TenantID: "configuration", CorrelationID: "configuration", Remember: remember}
+	if c.Purpose == PreAuthPhonePasswordRecovery {
+		input.Remember = RememberPolicy{}
+		input.IdentifierBinding = [32]byte{1}
+	}
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	command, err := s.original(input, "AQEBAQEBAQEBAQEBAQEBAQ", [32]byte{1}, stamp, TokenDigest{KeyVersion: c.LookupKey.state.version, Sum: [32]byte{1}})
 	if err != nil || s.binding(command).ValidateFor(PreAuthIssueOperation()) != nil {
@@ -143,7 +151,7 @@ func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (out PreparedPreAuthI
 
 func (s *PreAuthIssuer) original(i PreAuthPrepareInput, id identity.PreAuthTransactionID, nonce [32]byte, now time.Time, digest TokenDigest) (PreAuthIssueCommand, error) {
 	c := s.config
-	record, err := NewPreAuthTransaction(PreAuthTransactionSpec{Binding: PreAuthBinding{ID: id, Intent: PreAuthIntent{TenantID: i.TenantID, Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: nonce, Remember: i.Remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: i.IdentifierBinding}, IssuedAt: now, ExpiresAt: now.Add(c.FlowTTL)}, Cookie: digest, Version: 1})
+	record, err := NewPreAuthTransaction(PreAuthTransactionSpec{Binding: PreAuthBinding{ID: id, Intent: PreAuthIntent{TenantID: i.TenantID, Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: nonce, Remember: i.Remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: i.IdentifierBinding, Purpose: c.Purpose}, IssuedAt: now, ExpiresAt: now.Add(c.FlowTTL)}, Cookie: digest, Version: 1})
 	return PreAuthIssueCommand{CommandID: i.CommandID, CorrelationID: strings.Clone(i.CorrelationID), Record: record}, err
 }
 
@@ -157,7 +165,7 @@ func (s *PreAuthIssuer) binding(c PreAuthIssueCommand) identity.CommandBinding {
 func (s *PreAuthIssuer) originalProfile(c PreAuthIssueCommand) bool {
 	p, err := c.Record.Bindings()
 	i := p.Binding.Intent
-	return err == nil && p.Version == 1 && i.Action == s.config.Action && i.Origin == s.config.Origin && i.CallbackURL == s.config.CallbackURL && i.PolicyID == s.config.PolicyID && i.PolicyVersion == s.config.PolicyVersion && s.binding(c).ValidateFor(PreAuthIssueOperation()) == nil
+	return err == nil && p.Version == 1 && i.Purpose == s.config.Purpose && i.Action == s.config.Action && i.Origin == s.config.Origin && i.CallbackURL == s.config.CallbackURL && i.PolicyID == s.config.PolicyID && i.PolicyVersion == s.config.PolicyVersion && s.binding(c).ValidateFor(PreAuthIssueOperation()) == nil
 }
 
 // Command returns the unchanged private original for durable recovery, without

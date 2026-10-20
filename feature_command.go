@@ -88,6 +88,7 @@ type featureCommandState struct {
 	passwordSignin      func() (primitive.Secret, authentication.BearerCredential)
 	passwordSignup      func() (string, authentication.BearerCredential)
 	passwordSignupInput func() (primitive.Secret, authentication.BearerCredential)
+	phonePasswordReset  func() phonePasswordResetCommandState
 }
 
 // NewFeatureCommand validates and freezes structural feature input, copying
@@ -146,6 +147,11 @@ func (c Command) Feature() (FeatureCommandSpec, bool) {
 }
 
 func (c Command) validFeatureVariant() bool {
+	// Compound phone recovery must never enter a legacy path that can omit its
+	// independent factor. Only its exact joint-custody accessors admit it.
+	if c.feature != nil && c.feature.phonePasswordReset != nil {
+		return false
+	}
 	if c.feature != nil && c.feature.recovery != nil && (c.feature.code != nil || c.feature.sessionToken != nil || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordReset != nil || c.feature.passwordResetInput != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil) {
 		return false
 	}

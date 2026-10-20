@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an explicit phone-password-recovery pre-auth purpose with no session or
+  remember choice, requiring the original canonical-identifier commitment.
+  Login framing remains unchanged; recovery cannot use a login issuer profile.
+
 - Prepare and bind distinct phone OTP signin sessions only with phone
   authentication provenance, preserving original remember and reveal-once
   custody. Native consuming admission remains required before issuance.

@@ -22,7 +22,7 @@ import (
 // without disclosing account, credential, callback or capability material.
 var ErrInvalidReset = errors.New("password: invalid reset")
 
-// ResetProfileConfig is trusted, explicit emailed-reset composition. Lifetime
+// ResetProfileConfig is trusted, explicit canonical-reset composition. Lifetime
 // is a positive whole-second duration at most one hour. Callbacks is an exact
 // HTTPS allowlist (1..32 entries, at most 2048 bytes each). Binding keys are
 // nonzero 32-byte keys indexed by positive versions (1..16 retained versions).
@@ -42,8 +42,9 @@ type ResetProfileConfig struct {
 // ASCII bytes; their canonical admission belongs to the identity owner. All
 // versions must be positive, and OriginCommandID must be canonical. Times are
 // positive UTC whole seconds; expiry must fit the explicit profile lifetime.
-// Only RecoveryPathEmail is supported by this emailed-reset profile. Current
-// account/factor/risk eligibility must be checked independently by the workflow.
+// NewResetProfile supports only RecoveryPathEmail; NewPhoneResetProfile selects
+// the distinct phone/TOTP scope. Current account/factor/risk eligibility must be
+// checked independently by the workflow.
 // FactorVersion is the independent MFA generation authenticated at issuance.
 // Zero preserves historical unbound payload bytes, not proof of no factors;
 // native factor-fenced completion must reject such historical grants.
@@ -55,20 +56,24 @@ type ResetGrantSpec struct {
 	IdentifierID                                                        identity.IdentifierID
 	IdentifierVersion                                                   uint64
 	FactorVersion                                                       uint64
-	OriginCommandID                                                     identity.CommandID
-	RecoveryPath                                                        auth.RecoveryPath
-	CallbackURL                                                         string
-	IssuedAt, ExpiresAt                                                 time.Time
+	// Phone is required only by the explicitly selected phone recovery profile.
+	// Its zero value preserves existing emailed-reset intent and payload bytes.
+	Phone               PhoneResetBinding `json:",omitzero"`
+	OriginCommandID     identity.CommandID
+	RecoveryPath        auth.RecoveryPath
+	CallbackURL         string
+	IssuedAt, ExpiresAt time.Time
 }
 
-// ResetProfile freezes a closed emailed-reset capability policy. Copies share
-// immutable state and are concurrent-safe. Zero denies. It performs no IO,
+// ResetProfile freezes a closed, explicitly selected reset capability policy.
+// Copies share immutable state and are concurrent-safe. Zero denies. No IO,
 // callbacks, clock sampling, consumption, persistence or session issuance.
 // Signature verification remains capability.Service's responsibility; protected
 // one-time use and current-state checks belong to the coordinated transaction.
 type ResetProfile struct{ state *resetProfileState }
 type resetProfileState struct {
 	issuer, audience string
+	path             auth.RecoveryPath
 	lifetime         time.Duration
 	callbacks        map[string]struct{}
 	current          uint32
@@ -79,6 +84,10 @@ type resetProfileState struct {
 // Issuer is HTTPS without userinfo/query/fragment, bounded to 256 bytes;
 // audience is 1..256 visible ASCII bytes. Invalid inputs return ErrInvalidReset.
 func NewResetProfile(c ResetProfileConfig) (ResetProfile, error) {
+	return newResetProfile(c, auth.RecoveryPathEmail)
+}
+
+func newResetProfile(c ResetProfileConfig, path auth.RecoveryPath) (ResetProfile, error) {
 	if !resetHTTPS(c.Issuer, 256) || !resetVisible(c.Audience, 256) || c.MaximumLifetime <= 0 || c.MaximumLifetime > time.Hour || c.MaximumLifetime%time.Second != 0 || len(c.Callbacks) < 1 || len(c.Callbacks) > 32 || len(c.RetainedBindingKeys) < 1 || len(c.RetainedBindingKeys) > 16 || c.CurrentBindingKeyVersion == 0 {
 		return ResetProfile{}, ErrInvalidReset
 	}
@@ -86,7 +95,7 @@ func NewResetProfile(c ResetProfileConfig) (ResetProfile, error) {
 	if u.RawQuery != "" || u.ForceQuery {
 		return ResetProfile{}, ErrInvalidReset
 	}
-	s := &resetProfileState{issuer: c.Issuer, audience: c.Audience, lifetime: c.MaximumLifetime, callbacks: make(map[string]struct{}, len(c.Callbacks)), current: c.CurrentBindingKeyVersion, keys: make(map[uint32][32]byte, len(c.RetainedBindingKeys))}
+	s := &resetProfileState{issuer: c.Issuer, audience: c.Audience, path: path, lifetime: c.MaximumLifetime, callbacks: make(map[string]struct{}, len(c.Callbacks)), current: c.CurrentBindingKeyVersion, keys: make(map[uint32][32]byte, len(c.RetainedBindingKeys))}
 	for _, callback := range c.Callbacks {
 		if !resetHTTPS(callback, 2048) {
 			return ResetProfile{}, ErrInvalidReset
@@ -120,7 +129,10 @@ func (p ResetProfile) Payload(s ResetGrantSpec) (capability.Payload, error) {
 }
 
 func (p ResetProfile) payload(s ResetGrantSpec, version uint32) (capability.Payload, error) {
-	if p.state == nil || !resetVisible(string(s.TenantID), 128) || !resetVisible(string(s.UserID), 128) || !resetVisible(string(s.CredentialID), 128) || !resetVisible(string(s.IdentifierID), 128) || s.CredentialVersion == 0 || s.CredentialAuthorityVersion == 0 || s.UserAuthorityVersion == 0 || s.IdentifierVersion == 0 || s.RecoveryPath != auth.RecoveryPathEmail || !resetSecond(s.IssuedAt) || !resetSecond(s.ExpiresAt) || !s.ExpiresAt.After(s.IssuedAt) || s.ExpiresAt.Sub(s.IssuedAt) > p.state.lifetime {
+	if p.state == nil || !resetVisible(string(s.TenantID), 128) || !resetVisible(string(s.UserID), 128) || !resetVisible(string(s.CredentialID), 128) || !resetVisible(string(s.IdentifierID), 128) || s.CredentialVersion == 0 || s.CredentialAuthorityVersion == 0 || s.UserAuthorityVersion == 0 || s.IdentifierVersion == 0 || s.RecoveryPath != p.state.path || !resetSecond(s.IssuedAt) || !resetSecond(s.ExpiresAt) || !s.ExpiresAt.After(s.IssuedAt) || s.ExpiresAt.Sub(s.IssuedAt) > p.state.lifetime {
+		return capability.Payload{}, ErrInvalidReset
+	}
+	if p.state.path == auth.RecoveryPathEmail && s.Phone != (PhoneResetBinding{}) || p.state.path == auth.RecoveryPathPhone && (s.FactorVersion == 0 || !s.Phone.valid()) {
 		return capability.Payload{}, ErrInvalidReset
 	}
 	if _, err := identity.ParseCommandID(string(s.OriginCommandID)); err != nil {
@@ -148,6 +160,13 @@ func (p ResetProfile) payload(s ResetGrantSpec, version uint32) (capability.Payl
 	}}
 	if s.FactorVersion != 0 {
 		payload.Caveats["password.factor-version"] = strconv.FormatUint(s.FactorVersion, 10)
+	}
+	if p.state.path == auth.RecoveryPathPhone {
+		payload.Operation = "identity.phone.password-reset-complete"
+		payload.Caveats["password.recovery-path"] = "phone_password_reset"
+		for name, value := range s.Phone.caveats() {
+			payload.Caveats[name] = value
+		}
 	}
 	return payload, nil
 }
