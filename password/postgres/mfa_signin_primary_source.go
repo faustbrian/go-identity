@@ -154,15 +154,24 @@ func (s *SigninService) ReadMFAPasswordPrimary(ctx context.Context, proof capabi
 	if status.AuthorityVersion != a.User.Version || status.User.Status != identity.StatusActive || continuation.RequirePending(s.c.Issuance.Clock.Now()) != nil {
 		return deny()
 	}
+	kind := identity.IdentifierEmail
+	if s.c.Phone != nil {
+		kind = identity.IdentifierPhone
+	}
 	var recipient kernel.RecipientRecord
 	for j, identifier := range identifiers.Identifiers {
 		if identifier.ID != primary.IdentifierID {
 			continue
 		}
-		if identifier.Kind != identity.IdentifierEmail || identifier.Version != primary.IdentifierVersion || identifiers.Verifications[j].Version != primary.VerificationVersion {
+		if identifier.Kind != kind || identifier.Version != primary.IdentifierVersion || identifiers.Verifications[j].Version != primary.VerificationVersion {
 			return deny()
 		}
-		recipient, err = s.domain.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: scope.TenantID, Kind: identity.IdentifierEmail, CanonicalValue: identifier.CanonicalValue, Eligibility: kernel.RecipientVerified})
+		query := kernel.RecipientQuery{TenantID: scope.TenantID, Kind: kind, CanonicalValue: identifier.CanonicalValue, Eligibility: kernel.RecipientVerified}
+		if s.c.Phone != nil {
+			profile := s.c.Phone.Profile()
+			query.NormalizationProfile, query.NormalizationVersion = profile.ID, profile.Version
+		}
+		recipient, err = s.domain.ResolveRecipient(ctx, query)
 		if err != nil {
 			return MFAPasswordPrimary{}, err
 		}

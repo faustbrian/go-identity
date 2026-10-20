@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Select verified-phone/password plus confirmed TOTP through
+  `NewPhoneMFASigninService`, retaining distinct signed non-final phone evidence
+  and exact original target/browser. Apply the forward phone-MFA primary suffix;
+  existing email/username signatures stay unchanged and no session precedes TOTP.
+
+- Map sealed joint phone-reset material through the canonical password writer
+  without dropping its original proof, SMS, independent TOTP or native scope.
+  Install `PhonePasswordResetMigrationSource` after existing password history
+  before selecting this material profile. Emailed reset and password change
+  remain separate. Native recovery admission, session effects and complete
+  workflow acceptance are still required.
+
 - Expose authenticated original replacement session, keyed destination and
   immutable challenge-lifetime metadata for transport admission. Reads create
   no challenge, proof use, debit, delivery or mutation and grant no current

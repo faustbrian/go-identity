@@ -259,7 +259,7 @@ func replacementEffectScope(op identity.FeatureOperation, l kernel.LifecyclePlan
 	if l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 {
 		return false
 	}
-	return op == replacementOperation() && l.EventType == "password.changed.v1" || op == resetOperation() && l.EventType == "password.reset.v1"
+	return op == replacementOperation() && l.EventType == "password.changed.v1" || (op == resetOperation() || op == phonePasswordResetOperation()) && l.EventType == "password.reset.v1"
 }
 
 // Non-secret binding complements the keyed journal rather than copying it.

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
@@ -59,6 +60,25 @@ func resetRequestOperation() identity.FeatureOperation {
 // then restored and staged together in its sole protected Work. A prepared
 // result is not evidence of current authority, commitment or delivery.
 func (r *Repository) generateResetRequestDelivery(ctx context.Context, b identity.CommandBinding, origin password.ResetGrantSpec, recipient kernel.RecipientRecord, admission risk.AuthenticationAdmission, generation uint64, c resetRequestDeliveryPreparation) (out resetRequestDelivery, err error) {
+	return r.generateResetRequestDeliveryMode(ctx, b, origin, recipient, admission, generation, c, false)
+}
+
+// The exact phone owner stages this alongside the original SMS at index zero.
+// This selects only canonical grant/rendering custody, not risk permission,
+// current factor admission, the protected transaction or actual dispatch.
+func (r *Repository) generatePhoneResetRequestDelivery(ctx context.Context, b identity.CommandBinding, origin password.ResetGrantSpec, recipient kernel.RecipientRecord, generation uint64, c resetRequestDeliveryPreparation) (resetRequestDelivery, error) {
+	return r.generateResetRequestDeliveryMode(ctx, b, origin, recipient, risk.AuthenticationAdmission{}, generation, c, true)
+}
+
+func phoneResetRequestOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.password-reset-request", SchemaID: "identity.phone.password-reset-request.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+// Share the actual canonical issuer, one-transfer checkpoint, local rendering
+// and encrypted delivery engine. The closed selector preserves installed email
+// bytes and anonymous recipient override; phone uses a known-user binding and
+// must never gain that override or occupy the original code's delivery index.
+func (r *Repository) generateResetRequestDeliveryMode(ctx context.Context, b identity.CommandBinding, origin password.ResetGrantSpec, recipient kernel.RecipientRecord, admission risk.AuthenticationAdmission, generation uint64, c resetRequestDeliveryPreparation, phone bool) (out resetRequestDelivery, err error) {
 	defer func() {
 		if recover() != nil {
 			err = password.ErrPasswordWork
@@ -75,17 +95,26 @@ func (r *Repository) generateResetRequestDelivery(ctx context.Context, b identit
 			out = resetRequestDelivery{}
 		}
 	}()
-	if ctx == nil || !r.configuredWriter() || b.ValidateFor(resetRequestOperation()) != nil || c.issuer == nil || c.codec == nil || c.owner == nil || c.renderer == nil || c.resolver == nil || c.scopeKey == ([32]byte{}) || c.templateVersion == 0 || c.providerVersion == 0 || !reauthenticationText(c.template, 128) || len(c.locales) == 0 || len(c.locales) > 16 || c.timeout <= 0 || c.timeout > 5*time.Second || generation == 0 {
+	op, kind, channel := resetRequestOperation(), identity.IdentifierEmail, delivery.ChannelEmail
+	subject, effect := b.AnonymousFlowID, uint16(0)
+	if phone {
+		op, kind, channel = phoneResetRequestOperation(), identity.IdentifierPhone, delivery.ChannelSMS
+		subject, effect = string(b.UserID), 1
+		if origin.RecoveryPath != auth.RecoveryPathPhone || b.UserID == "" || b.UserID != origin.UserID || b.RecordID != string(b.CommandID) || origin.Phone.OTPChallengeID != string(b.CommandID) || origin.Phone.VerificationVersion != recipient.Verification.Version {
+			return out, password.ErrPasswordWork
+		}
+	}
+	if ctx == nil || !r.configuredWriter() || b.ValidateFor(op) != nil || c.issuer == nil || c.codec == nil || c.owner == nil || c.renderer == nil || c.resolver == nil || c.scopeKey == ([32]byte{}) || c.templateVersion == 0 || c.providerVersion == 0 || !reauthenticationText(c.template, 128) || len(c.locales) == 0 || len(c.locales) > 16 || c.timeout <= 0 || c.timeout > 5*time.Second || generation == 0 {
 		return out, password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
-	if recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != kernel.RecipientVerified || origin.OriginCommandID != b.CommandID || origin.TenantID != b.TenantID || origin.UserID != recipient.User.ID || origin.UserAuthorityVersion != recipient.UserAuthorityVersion || origin.CredentialAuthorityVersion != recipient.CredentialAuthorityVersion || origin.IdentifierID != recipient.Identifier.ID || origin.IdentifierVersion != recipient.Identifier.Version || origin.FactorVersion == 0 {
+	if recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != kind || recipient.Query.Eligibility != kernel.RecipientVerified || origin.OriginCommandID != b.CommandID || origin.TenantID != b.TenantID || origin.UserID != recipient.User.ID || origin.UserAuthorityVersion != recipient.UserAuthorityVersion || origin.CredentialAuthorityVersion != recipient.CredentialAuthorityVersion || origin.IdentifierID != recipient.Identifier.ID || origin.IdentifierVersion != recipient.Identifier.Version || origin.FactorVersion == 0 {
 		return out, password.ErrPasswordWork
 	}
 	scope := admission.Prepared().Scope
-	if scope.Tenant != string(b.TenantID) || scope.Operation != risk.Action(b.OperationID) || scope.Attempt != string(b.CommandID) || admission.CheckAt(ctx, time.Now().UTC()) != nil {
+	if !phone && (scope.Tenant != string(b.TenantID) || scope.Operation != risk.Action(b.OperationID) || scope.Attempt != string(b.CommandID) || admission.CheckAt(ctx, time.Now().UTC()) != nil) {
 		return out, password.ErrPasswordWork
 	}
 	endpoint, err := url.Parse(c.endpoint)
@@ -102,7 +131,11 @@ func (r *Repository) generateResetRequestDelivery(ctx context.Context, b identit
 	}
 	work, stop := context.WithTimeout(ctx, c.timeout)
 	defer stop()
-	out.issuance, err = c.issuer.PrepareResetRecipient(work, b, origin.UserID, payload)
+	if phone {
+		out.issuance, err = c.issuer.Prepare(work, b, []capability.Payload{payload})
+	} else {
+		out.issuance, err = c.issuer.PrepareResetRecipient(work, b, origin.UserID, payload)
+	}
 	if err != nil {
 		return out, err
 	}
@@ -125,25 +158,39 @@ func (r *Repository) generateResetRequestDelivery(ctx context.Context, b identit
 		if len(link) > 2048 {
 			return password.ErrPasswordWork
 		}
-		frame, err := json.Marshal(struct {
-			Binding identity.CommandBinding
-			Origin  resetRecipientOrigin
-			Address string
-		}{b, resetRecipientOrigin(origin), recipient.Identifier.CanonicalValue})
+		var frame []byte
+		domain := "identity-password-reset-recipient-v1\x00"
+		if phone {
+			// The canonical payload already owns every phone/factor caveat. Keep
+			// its sensitive scalar frame confined to this local HMAC rather than
+			// weakening PhoneResetBinding's public serialization prohibition.
+			frame, err = json.Marshal(struct {
+				Binding identity.CommandBinding
+				Payload capability.Payload
+				Address string
+			}{b, payload, recipient.Identifier.CanonicalValue})
+			domain = "identity-phone-reset-recipient-v1\x00"
+		} else {
+			frame, err = json.Marshal(struct {
+				Binding identity.CommandBinding
+				Origin  resetRecipientOrigin
+				Address string
+			}{b, resetRecipientOrigin(origin), recipient.Identifier.CanonicalValue})
+		}
 		if err != nil {
 			return password.ErrPasswordWork
 		}
 		defer clear(frame)
 		mac := hmac.New(sha256.New, c.scopeKey[:])
-		_, _ = mac.Write([]byte("identity-password-reset-recipient-v1\x00"))
+		_, _ = mac.Write([]byte(domain))
 		_, _ = mac.Write(frame)
-		selected := delivery.Recipient{Channel: delivery.ChannelEmail, Address: recipient.Identifier.CanonicalValue, ScopeDigest: hex.EncodeToString(mac.Sum(nil))}
-		message := delivery.Message{Purpose: b.OperationID, Channel: delivery.ChannelEmail, Recipient: selected, TemplateID: c.template, TemplateVersion: uint64(c.templateVersion), LocaleChain: slices.Clone(c.locales), Variables: []delivery.TemplateVariable{{Name: "link", Kind: "url", URLValue: link, Sensitive: true}}}
+		selected := delivery.Recipient{Channel: channel, Address: recipient.Identifier.CanonicalValue, ScopeDigest: hex.EncodeToString(mac.Sum(nil))}
+		message := delivery.Message{Purpose: b.OperationID, Channel: channel, Recipient: selected, TemplateID: c.template, TemplateVersion: uint64(c.templateVersion), LocaleChain: slices.Clone(c.locales), Variables: []delivery.TemplateVariable{{Name: "link", Kind: "url", URLValue: link, Sensitive: true}}}
 		rendered, err := c.renderer.Render(ctx, message)
 		if err != nil {
 			return password.ErrPasswordWork
 		}
-		out.delivery, err = c.owner.Prepare(ctx, b, []deliverypg.IntentInput{{Purpose: b.OperationID, SubjectID: b.AnonymousFlowID, TemplateID: c.template, TemplateVersion: c.templateVersion, ProviderConfigVersion: c.providerVersion, ExpiresAt: origin.ExpiresAt, Recipient: selected, Rendered: rendered}})
+		out.delivery, err = c.owner.Prepare(ctx, b, []deliverypg.IntentInput{{EffectIndex: effect, Purpose: b.OperationID, SubjectID: subject, TemplateID: c.template, TemplateVersion: c.templateVersion, ProviderConfigVersion: c.providerVersion, ExpiresAt: origin.ExpiresAt, Recipient: selected, Rendered: rendered}})
 		if err != nil {
 			return password.ErrPasswordWork
 		}
@@ -153,7 +200,7 @@ func (r *Repository) generateResetRequestDelivery(ctx context.Context, b identit
 	if work.Err() != nil {
 		return out, work.Err()
 	}
-	if err != nil || len(out.issuanceWire) == 0 || len(out.deliveryWire) == 0 || admission.CheckAt(work, time.Now().UTC()) != nil {
+	if err != nil || len(out.issuanceWire) == 0 || len(out.deliveryWire) == 0 || !phone && admission.CheckAt(work, time.Now().UTC()) != nil {
 		return out, password.ErrPasswordWork
 	}
 	return out, nil

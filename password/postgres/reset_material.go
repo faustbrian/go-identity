@@ -2,6 +2,7 @@ package passwordpostgres
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
@@ -30,11 +31,18 @@ func (r *Repository) applyResetMaterial(ctx context.Context, w kernel.Work, owne
 		return identity.FeatureReceipt{}, password.ErrPasswordWork
 	}
 	spec, _ := command.PasswordResetFeature()
+	if spec.Operation == (identity.FeatureOperation{}) {
+		spec, _ = command.PhonePasswordResetFeature()
+	}
 	return r.applyReplacement(ctx, w, owner, spec, i.Replacement, hash)
 }
 
 func resetOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.reset-complete", SchemaID: "password-reset-complete", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+func phonePasswordResetOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.password-reset-complete", SchemaID: "identity.phone.password-reset-complete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
 // Mapping is deliberately private and structural. It supplies no contributor,
@@ -46,6 +54,10 @@ func passwordResetMaterial(c identity.Command, policy primitive.Policy) (kernel.
 	}
 	s, metadata := c.PasswordResetFeature()
 	raw, proof, custody := c.PasswordResetCustody()
+	if !metadata {
+		s, metadata = c.PhonePasswordResetFeature()
+		raw, proof, _, _, custody = c.PhonePasswordResetCustody()
+	}
 	if !metadata || !custody || proof.ValidateBounds(32, 4096) != nil || policy.Algorithm() == "" {
 		return fail()
 	}
@@ -66,15 +78,26 @@ func passwordResetIntent(s identity.FeatureCommandSpec) (kernel.CredentialResetI
 	fail := func() (kernel.CredentialResetIntent, error) {
 		return kernel.CredentialResetIntent{}, password.ErrPasswordWork
 	}
-	if s.Operation != resetOperation() || s.Binding.ValidateFor(resetOperation()) != nil || len(s.Fields) != 9 {
+	phone := s.Operation == phonePasswordResetOperation()
+	if !phone && s.Operation != resetOperation() || s.Binding.ValidateFor(s.Operation) != nil || !phone && len(s.Fields) != 9 {
 		return fail()
 	}
 	values := make(map[string]identity.FeatureValue, 9)
 	for _, field := range s.Fields {
+		// Phone/OTP/risk metadata remains in the full sealed command and its
+		// coordinator fingerprint. Its owning workflow validates that scope;
+		// this shared writer maps only canonical password predecessors and must
+		// not convert joint custody into a generic or emailed-reset command.
+		if phone && !strings.HasPrefix(field.Name, "credential.") && !strings.HasPrefix(field.Name, "reset.") {
+			continue
+		}
 		if _, duplicate := values[field.Name]; duplicate {
 			return fail()
 		}
 		values[field.Name] = field.Value
+	}
+	if len(values) != 9 {
+		return fail()
 	}
 	i := kernel.CredentialResetIntent{Replacement: kernel.CredentialReplacementIntent{
 		Credential:          identity.CredentialRef{ID: identity.CredentialID(values["credential.id"].Text), TenantID: identity.TenantID(values["credential.tenant"].Text), UserID: identity.UserID(values["credential.user"].Text), Owner: values["credential.owner"].Text, Kind: identity.CredentialPassword, Version: values["credential.version"].Uint64},

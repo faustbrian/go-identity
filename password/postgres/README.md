@@ -125,14 +125,28 @@ wrong selections fail rather than dropping unknown constraints. Install logout's
 ordinary revocation history separately. Old records and migration bytes remain
 unchanged; do not run older purpose suffixes after this extension.
 
-This selected phone profile requires **known-empty native MFA authority**.
+The `NewSigninService` phone profile requires **known-empty native MFA authority**.
 Missing, enrolled or changed authority denies; it is never initialized or inferred
-from absence. Phone-origin TOTP/OTP continuation remains unsupported and cannot
-use either MFA factory. `RecoverSignin` retains the exact original operation and
+from absence. Explicitly select `NewPhoneMFASigninService` for a confirmed-TOTP
+continuation instead: configure Phone without Username and select only `totp`
+(empty means TOTP). It retains a distinct signed phone primary and original
+target/browser, never issues a final session before completion and never uses
+the phone itself as a second factor. Install `PhoneMFASigninMigrationSource`
+after the password history and selected username-MFA suffix; retain that exact
+predecessor selection. Compose the actual TOTP and session owners separately.
+Phone-origin secondary OTP/recovery continuations are not enabled.
+`RecoverSignin` retains the exact original operation and
 returns authorized historical metadata only, including after restart or commit
 ambiguity; it never reissues credentials or repeats password comparison.
 Phone OTP login, phone reset/change/removal and HTTP/reference selection are
-separate unfinished profiles, not enabled by this constructor.
+separate profiles, not enabled by this constructor.
+
+Phone-reset password material additionally requires the forward
+`PhonePasswordResetMigrationSource` after the installed password reset history.
+It preserves prior rows/checksums and admits only the exact joint phone-reset
+operation to the existing replacement marker. This migration alone enables no
+reset service: original capability/SMS/TOTP/risk admission and atomic session
+revocation remain the native workflow's responsibility.
 
 ## Explicit username password signin
 

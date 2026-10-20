@@ -264,6 +264,9 @@ func (p *signinMFAChallengePhase) checkDelivery(ctx context.Context, now time.Ti
 	if admitSigninFlow(p.request, p.flow, p.key, f.Binding.PolicyID, f.Binding.PolicyVersion, now) != nil || now.Before(p.primary.Proof.IssuedAt) || !now.Before(p.primary.Proof.ExpiresAt) || !p.material.Authority().ExpiresAt.IsZero() && !now.Before(p.material.Authority().ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
+	if p.service.c.Phone != nil && p.service.requirePhoneSigninTarget(ctx, p.request, p.flow) != nil {
+		return identity.ForbiddenError{}
+	}
 	return p.admission.CheckAt(ctx, now)
 }
 func (p *signinMFAChallengePhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {

@@ -34,6 +34,8 @@ func persistMFASigninPrimary(ctx context.Context, w kernel.Work, owner kernel.Pa
 	profile := mfaSigninPrimaryProfile
 	if b.OperationID == "identity.username.signin" {
 		profile = usernameMFASigninPrimaryProfile
+	} else if b.OperationID == "identity.phone.password-signin" {
+		profile = phoneMFASigninPrimaryProfile
 	} else if b.OperationID != "identity.password.signin" {
 		return password.ErrPasswordWork
 	}

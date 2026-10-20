@@ -64,7 +64,8 @@ type signinMFAComposition struct {
 // The existing NewSigninService remains unchanged. Pool and policy collaborators
 // are borrowed and must outlive bounded concurrent calls. No session is issued
 // before actual second-factor completion. This factory rejects Username/Phone; use
-// NewUsernameMFASigninService for that explicitly selected TOTP profile, or
+// NewUsernameMFASigninService or NewPhoneMFASigninService for those explicitly
+// selected TOTP profiles, or
 // NewSigninService for the known-empty-factor username profile.
 func NewMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
 	// Keep the existing password factory bound to its original operation. The
@@ -119,6 +120,9 @@ func newMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConf
 }
 
 func (s *SigninService) mfaPrimaryProfile() string {
+	if s.c.Phone != nil {
+		return phoneMFASigninPrimaryProfile
+	}
 	if s.c.Username != nil {
 		return usernameMFASigninPrimaryProfile
 	}
