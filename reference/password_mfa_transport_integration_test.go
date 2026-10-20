@@ -24,6 +24,7 @@ type completionCommitFault struct {
 	replacementConfirmation  bool
 	emailRemoval             bool
 	phoneRemoval             bool
+	phonePasswordReset       bool
 	beforeCommit             bool
 	emailPreparation         bool
 	emailVerification        bool
@@ -92,6 +93,9 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	}
 	if c.fault.phoneRemoval {
 		selected = bytes.Contains(p, []byte("INSERT INTO identity.status_consumers("))
+	}
+	if c.fault.phonePasswordReset {
+		selected = bytes.Contains(p, []byte(".password_resets(tenant_id,command_id,purpose,user_id,credential_id,"))
 	}
 	if c.fault.emailPreparation {
 		selected = bytes.Contains(p, []byte("UPDATE identity.commands SET preparation_ciphertext="))

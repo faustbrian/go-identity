@@ -42,6 +42,10 @@ type liveStores struct {
 	phoneTOTPOnly                      bool
 	phoneTOTPRollback                  bool
 	phoneTOTPCompleted                 *bool
+	phonePasswordReset                 bool
+	phoneResetRollback                 bool
+	phoneResetCompleted                *bool
+	phoneResetConsumer                 *phoneResetConsumer
 	usernameTOTPOnly                   bool
 	usernamePrimaryRecovery            func(passwordhttp.SigninResponse, []*http.Cookie)
 	usernameTOTPPersistent             bool

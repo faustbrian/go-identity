@@ -247,14 +247,16 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
-	phoneEnrollment bool
-	phonePassword   bool
-	phoneTOTP       bool
-	phoneTOTPOnly   bool
-	phoneTOTPRollback bool
-	phoneOTP        string
-	phoneRemoval    string
-	phoneChange     bool
+	phoneEnrollment    bool
+	phonePassword      bool
+	phoneTOTP          bool
+	phoneTOTPOnly      bool
+	phonePasswordReset bool
+	phoneResetRollback bool
+	phoneTOTPRollback  bool
+	phoneOTP           string
+	phoneRemoval       string
+	phoneChange        bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -282,7 +284,7 @@ type signupGraphExtensions struct {
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
 	budget := 60 * time.Second
-	if extensions.factorReplacementPredecessorUse || extensions.replacementSourceMethod == "totp" {
+	if extensions.factorReplacementPredecessorUse || extensions.replacementSourceMethod == "totp" || extensions.phonePasswordReset {
 		// The genuine predecessor replay counter needs a later TOTP step. Only
 		// the whole test budget changes; native deadlines remain unchanged.
 		budget = 90 * time.Second
@@ -293,6 +295,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.usernameTOTP = extensions.usernameTOTP
 	f.phoneTOTP = extensions.phoneTOTP
 	f.phoneTOTPOnly = extensions.phoneTOTPOnly
+	f.phonePasswordReset = extensions.phonePasswordReset
+	f.phoneResetRollback = extensions.phoneResetRollback
+	if extensions.phonePasswordReset {
+		f.phoneResetCompleted = new(bool)
+	}
 	f.phoneTOTPRollback = extensions.phoneTOTPRollback
 	if extensions.phoneTOTP {
 		f.phoneTOTPCompleted = new(bool)
@@ -337,6 +344,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.completionCommitFault {
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.phoneRemoval = extensions.phoneRemoval != ""
+		f.completionFault.phonePasswordReset = extensions.phonePasswordReset
 		f.completionFault.beforeCommit = extensions.phoneRemoval == "before-commit"
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
@@ -352,7 +360,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			if f.verificationMFAHook != nil {
 				pc.ConnConfig.Tracer = f.verificationMFAHook
 			}
-			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification {
+			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification || f.completionFault.phonePasswordReset {
 				// Keep parameterized extended queries, but send their SQL rather
 				// than a previously cached statement name to the fault boundary.
 				pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
@@ -387,7 +395,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_device", SameSite: http.SameSiteLaxMode})
 	c.HTTPPreAuth = &reference.HTTPPreAuthConfiguration{Lifetime: session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute}, Device: &session.BrowserDeviceConfig{Namespace: "reference-registration", Keys: []session.BrowserDeviceKey{key}, ActiveVersion: 1, Lifetime: 24 * time.Hour, Cookie: cookie}}
 	resetRiskVersion := uint64(3)
-	if extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange {
+	if extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange || extensions.phonePasswordReset {
 		resetRiskVersion = 9
 	}
 	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "" && !extensions.phoneChange, extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange, extensions.factorRemovalReset || extensions.emailRemoval || extensions.phoneRemoval != "")
@@ -402,6 +410,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.phonePassword || extensions.phoneOTP != "" {
 		selectedAuthorization = referencePhoneSigninPolicy{}
+	}
+	if extensions.phonePasswordReset {
+		selectedAuthorization = referencePhonePasswordResetPolicy{}
 	}
 	if extensions.verificationSignin == "totp-original-expiry" {
 		f.verificationMFAOriginalExpiry = &verificationMFAOriginalExpiryPolicy{pool: f.pool}
@@ -640,6 +651,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.phoneOTP != "" {
 		configureReferencePhoneOTPSignin(t, &c)
 	}
+	if extensions.phonePasswordReset {
+		calls = configureReferencePhonePasswordReset(t, &c, origin)
+	}
 	if extensions.phoneRemoval != "" {
 		calls = configureReferencePhoneRemoval(t, &c, extensions.phoneRemoval)
 	}
@@ -834,6 +848,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selected := c
 		phoneChangeUpgrade, c.PhoneChange = &selected, nil
 	}
+	if extensions.phonePasswordReset && !extensions.phoneResetRollback && !extensions.completionCommitFault {
+		proveReferencePhoneResetMixedSchemaRejected(t, c, deps, selectedReset)
+	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		var invalid identity.InvalidInputError
@@ -866,6 +883,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	workers, err := reference.ComposeWorkers(stores, providers, workerConfigs...)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if extensions.phonePasswordReset {
+		f.phoneResetConsumer = &phoneResetConsumer{workers: workers, messages: messages}
 	}
 	features, err := reference.ComposeFeatures(stores, providers, workers)
 	if err != nil {
@@ -1008,6 +1028,14 @@ END $$`); err != nil {
 		}
 	} else if seen["identity.password.reset-request"] || seen["identity.password.reset-complete"] {
 		t.Fatal("unselected recovery route advertised")
+	}
+	if c.HTTPPhonePasswordReset != nil {
+		wantOperations += 2
+		if !seen["identity.phone.password-reset-request"] || !seen["identity.phone.password-reset-complete"] {
+			t.Fatal("selected phone recovery routes missing")
+		}
+	} else if seen["identity.phone.password-reset-request"] || seen["identity.phone.password-reset-complete"] {
+		t.Fatal("unselected phone recovery route advertised")
 	}
 	if c.HTTPSession == nil {
 		wantOperations -= 2
@@ -1265,7 +1293,7 @@ END $$`); err != nil {
 					proveReferencePhoneOTPHTTPS(t, ctx, f, workers, messages, client, network.URL, origin, user, readSession, extensions.phoneOTP == "persistent")
 				}
 			}
-			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified, c.HTTPPhoneRemoval != nil)
+			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified, c.HTTPPhoneRemoval != nil, c.HTTPPhonePasswordReset != nil)
 			if extensions.phoneTOTP {
 				// Phone verification correctly invalidates its initiating session.
 				// Obtain a real new email/password session before TOTP enrollment;
@@ -1470,6 +1498,9 @@ END $$`); err != nil {
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
 	if extensions.phoneTOTP && !*f.phoneTOTPCompleted {
 		t.Fatal("selected phone TOTP consumer was skipped")
+	}
+	if extensions.phonePasswordReset && !*f.phoneResetCompleted {
+		t.Fatal("selected phone reset consumer was skipped")
 	}
 	if extensions.emailSignin != "" {
 		proveReferenceEmailOTPSignin(t, ctx, f, features, workers, client, network.URL, origin, messages, extensions.emailSignin)

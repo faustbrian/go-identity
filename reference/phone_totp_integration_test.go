@@ -78,7 +78,11 @@ func proveReferencePhoneTOTP(t *testing.T, ctx context.Context, f liveStores, fe
 		t.Fatal(err)
 	}
 	caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: "phone-totp-consumer", Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.phone.password-signin", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.phone.password-signin"}}}
-	candidate, err := primitive.NewSecret([]byte("synthetic-registration-password"))
+	passwordValue := "synthetic-registration-password"
+	if f.phonePasswordReset && !f.phoneResetRollback {
+		passwordValue = referencePhoneResetPassword
+	}
+	candidate, err := primitive.NewSecret([]byte(passwordValue))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,32 @@
 # Identity reference composition
 
+## Explicit phone/password recovery
+
+`StoreConfiguration.PhonePasswordReset` explicitly composes the native recovery
+owner and original target-bound browser; `HTTPPhonePasswordReset` separately
+selects its two POSTs and named `phone-reset` preauth method. Both native carrier-
+risk acceptance flags are required. This reference profile requires
+`DurableAdmission`, native password/session configuration, OTP custody, delivery
+and the local keyring. It injects those real owners, independent confirmed-TOTP
+verification and the same durable counter state—not application stores.
+An optionally selected email reset must use that same session schema; conflicting
+combined stores are rejected without changing the email migration history.
+
+The original browser has recovery purpose and zero Remember. HTTP additionally
+requires `HTTPPreAuth` with the same signed device/cookie/origin and shared strong
+HTTP admission. Install/check every selected native migration through the
+existing reference operator APIs before initialization. Nil selection exposes
+neither routes nor metadata. A request202 is only an enumeration-safe public
+acknowledgment; it is not evidence that a recipient exists or delivery committed.
+
+The consuming native workflow owns canonical reset capability, purpose-bound
+SMS, independent TOTP, distinct risk, HIBP/password replacement and atomic
+all-session revocation. It never signs in or issues a cookie. Original recovery
+remains native, code-free and outcome-only. See the [selected recovery journey](PHONE.md#independently-selected-phonepassword-recovery)
+for concrete configuration, original retry and rollback semantics and the real
+PostgreSQL/HTTPS consumer commands. Selected-profile acceptance does not imply
+real-provider delivery, complete platform qualification or deployment.
+
 ## Optional existing-account phone verification
 
 See [phone enrollment and consumer journey](PHONE.md) for native/HTTP selection,

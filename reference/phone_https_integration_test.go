@@ -73,12 +73,15 @@ func proveReferencePhoneHTTPS(t *testing.T, ctx context.Context, f liveStores, f
 			t.Fatal("phone selection omitted its real route")
 		}
 	}
-	for _, path := range []string{"/v1/phone/password-reset", "/v1/phone/update"} {
+	for _, path := range []string{"/v1/phone/update"} {
 		if strings.Contains(document, path) {
 			t.Fatal("phone selection advertised an unsupported profile")
 		}
 	}
-	if strings.Contains(document, "/v1/phone/remove") != (len(selectedRemoval) == 1 && selectedRemoval[0]) {
+	if strings.Contains(document, "/v1/phone/password-reset") != (len(selectedRemoval) > 1 && selectedRemoval[1]) {
+		t.Fatal("phone reset HTTP selection differs from advertised routes")
+	}
+	if strings.Contains(document, "/v1/phone/remove") != (len(selectedRemoval) >= 1 && selectedRemoval[0]) {
 		t.Fatal("phone removal HTTP opt-in differs from advertised route")
 	}
 	if _, err := features.PhoneOTPSignin(); (err == nil) != strings.Contains(document, "/v1/phone/signin") {

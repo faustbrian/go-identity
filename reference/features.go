@@ -114,6 +114,8 @@ type featureState struct {
 	phone                        *phoneState
 	phoneRemoval                 *phoneRemovalState
 	phoneChange                  *phoneChangeState
+	phonePasswordReset           *phonePasswordResetState
+	httpPhonePasswordReset       *phonePasswordResetHTTPState
 	httpPhoneRemoval             *phoneRemovalHTTPState
 	httpPhoneChange              *phoneChangeHTTPState
 	phoneSignin                  *phoneSigninState
@@ -232,6 +234,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.PhoneSignin != nil && (c.PasswordSignin == nil || c.Session == nil || c.OTP == nil) || c.HTTPPhoneSignin != nil && c.PhoneSignin == nil {
 		return identity.InvalidInputError{Field: "reference_phone_signin"}
+	}
+	if c.PhonePasswordReset != nil && (c.PasswordSignin == nil || c.Session == nil || c.OTP == nil || c.Delivery == nil || c.DurableAdmission == nil) || c.HTTPPhonePasswordReset != nil && c.PhonePasswordReset == nil {
+		return identity.InvalidInputError{Field: "reference_phone_password_reset"}
 	}
 	if c.PhoneOTPSignin != nil && (c.OTP == nil || c.OTP.Signin == nil || c.OTP.PreAuth == nil || c.Session == nil) || c.HTTPPhoneOTPSignin != nil && c.PhoneOTPSignin == nil {
 		return identity.InvalidInputError{Field: "reference_phone_otp_signin"}
@@ -431,6 +436,34 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	var phoneResetEvaluation risk.Evaluator
+	if c.PhonePasswordReset != nil {
+		// Phone evidence issuance persists its required audit atomically through
+		// risk/postgres. Its issuer rejects a second pre-transaction audit owner.
+		// Reuse the same counted policy/store without the generic audit wrapper.
+		phoneResetEvaluation, err = risk.NewEvaluator(risk.EvaluatorConfig{Policy: s.policy, Counters: &counters, Clock: time.Now, Timeout: o.RiskTimeout})
+		if err != nil {
+			return err
+		}
+	}
+	phonePasswordResetOwner, err := composePhonePasswordReset(c, d, phoneResetEvaluation, passwordSigninOwner, s)
+	if err != nil {
+		return err
+	}
+	if phonePasswordResetOwner != nil {
+		migrationConfig.resetSchema = c.PasswordSignin.Native.Session.Schema
+		migrationConfig.preauthIssue = true
+	}
+	httpPhonePasswordReset, err := composePhonePasswordResetHTTP(c, phonePasswordResetOwner, httpPreAuth, s.httpRate)
+	if err != nil {
+		return err
+	}
+	phoneResetRetained := false
+	defer func() {
+		if !phoneResetRetained && httpPhonePasswordReset != nil {
+			httpPhonePasswordReset.close()
+		}
+	}()
 	passwordTOTP, err := composePasswordTOTP(c, d, passwordSigninOwner, evaluator)
 	if err != nil {
 		return err
@@ -748,6 +781,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.phone = phoneOwner
 	s.features.phoneRemoval = phoneRemovalOwner
 	s.features.phoneChange = phoneChangeOwner
+	s.features.phonePasswordReset = phonePasswordResetOwner
+	s.features.httpPhonePasswordReset = httpPhonePasswordReset
+	phoneResetRetained = true
 	s.features.httpPhoneRemoval = httpPhoneRemoval
 	s.features.httpPhoneChange = httpPhoneChange
 	s.features.phoneSignin = phoneSigninOwner
@@ -861,6 +897,9 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 	}
 	for tenant := range s.tenants {
+		if p := f.phonePasswordReset; p != nil && (!seen[tenant][p.provider] || !seen[tenant][p.linkProvider]) {
+			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
+		}
 		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] || f.phoneOTPSignin != nil && !seen[tenant][f.phoneOTPSignin.provider] || f.phoneRemoval != nil && !seen[tenant][f.phoneRemoval.provider] || f.phoneChange != nil && (!seen[tenant][f.phoneChange.provider] || !seen[tenant][f.phoneChange.noticeProvider]) {
 			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 		}
@@ -939,6 +978,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	}
 	if s.features.phoneChange != nil {
 		if err := s.features.phoneChange.owner.Initialize(w); err != nil {
+			return err
+		}
+	}
+	if s.features.phonePasswordReset != nil {
+		if err := s.features.phonePasswordReset.sms.Initialize(w, s.pool); err != nil {
 			return err
 		}
 	}

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 17:02 UTC
+## TL;DR — updated 2026-10-20 22:04 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -11,6 +11,92 @@ credentials, and four CAPTCHA adapters are delivered as bounded profiles.
 Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
+
+**New local consumer proof:** the full selected phone-reset reference journey
+now passes real PostgreSQL/HTTPS under race (final group216.846s: success,
+required-audit rollback, lost-COMMIT recovery and retained phone-removal
+HTTPS/commit-custody profiles). Actual preceding registration/verification,
+verified phone and confirmed TOTP lead to captured SMS/link, reset, old-password/
+session denial and new-password+TOTP session read/logout. Rollback preserves old
+credentials; unknown commit is recovered through the exact original completion.
+Complete independent review found two defects; the existing removal assertion
+and conflicting email/phone reset schema handling are corrected. The otherwise-
+valid mixed-schema control now rejects phone enablement without rewriting email
+history, while email-only and matching combined schemas remain accepted. Final
+source and public-pin review is APPROVE. Prerequisites are main-pushed `387cc56`
+and native workflow plus opt-in HTTP are main-pushed `da005d5`; both exact CI
+runs are green. Native PostgreSQL/race12.607s, ordinary race2.125s/tagged vet0 and
+HTTP-phone race5.890s/vet0 pass against authenticated public dependencies without
+local replacements. Reference public-pin adoption is now independently APPROVED;
+its genuine public-supplier PostgreSQL/HTTPS/race success, rollback and lost-COMMIT
+group PASS53.032s. Ordinary reference/cmd race8.624s/7.622s, tagged vet and module
+verification pass. Reference commit/push/exact CI remain pending for this accepted
+profile. No whole milestone or qualified unit is added: phone signup and lifecycle/
+privacy obligations still prevent full M08/unit closure.
+
+The entries below retain earlier checkpoints; their pending/local wording is
+historical where superseded by this current summary.
+
+**Current checkpoint:** organization archive/restore is now main-pushed in both
+owners: public root `d3aab92` (exact CI green) and native PostgreSQL `ab44333`
+(exact CI `39483890213` green). One complete independent review approved the
+final source and public-pin reconciliation. Actual native public-root consumption
+passes PostgreSQL/race 14.465s without local replacement. Current owners can
+archive and restore with genuine signed action proofs; archive denies local
+organization authority and restoration preserves terminal child decisions.
+HTTP/reference, external cascades, hard deletion and full M22 remain open.
+
+**Phone reset now works through the real native transaction locally:** original
+keyed request -> actual SMS/code-and-canonical-link dispatch -> distinct
+completion risk -> SMS plus independent TOTP -> HIBP/password replacement ->
+all-session revocation -> original metadata replay/code-free recovery. Actual
+Final affected PostgreSQL/race phone-request/source/completion, receipt and
+phone/email generation group now PASS13.111s; earlier native ordinary race2.154s and
+integration-tagged vet exits0. Each wrong SMS/TOTP conjunction charges
+one original SMS attempt without advancing TOTP replay, changing password/
+authority or revoking sessions. The rollback oracle proves successful audit
+persistence was reached after provisional reset effects before rollback.
+Fresh-service replay neither rehashes nor renews evidence; changed device,
+network, origin, evidence, issuance or password under the command is rejected.
+Outbox main493107bf already supported this profile; adopt its authenticated
+public module rather than reimplement it. Its exact CI is green; focused supplier
+race1.244s, ordinary race1.142s and vet0 pass. All diagnostic source changes in
+kernel/OTP were removed exactly. Native phone code remains local, unreviewed and
+uncommitted. Matching completion-risk retries now survive their own consumed
+browser/factor state without provider re-evaluation or renewed evidence. Changed
+network/device/issuance/new attempts deny. Original rate metadata is likewise
+authenticated after consumption without restoring current mutation authority.
+
+**HTTP implementation is now local:** request/completion handlers, closed OpenAPI,
+original flow/device custody, staged rate admission, enumeration-safe request
+acknowledgments and submitted-secret cleanup pass the full phone HTTP race suite
+(5.952s) and vet. Recovery preauth focused race passes2.170s. Reference
+selection/guarded handles, recovery-browser method,
+shared-rate lifecycle and native migration/readiness wiring compile and pass
+focused history/selection plus ordinary reference/cmd race8.807s/6.695s and
+tagged vet0. These are not real reference reset journey proof. Next is genuine
+PostgreSQL/HTTPS reset acceptance including old/new-password signin, revocation,
+rollback/lost-COMMIT and original retry. Independent whole-slice review and
+commit/push remain unfinished. No whole milestone
+or qualified-unit increment is claimed; primary continues the complete reset
+slice rather than delivering isolated helpers.
+
+**Retained request checkpoint (before native completion above):** public keyed
+phone-reset request and owned initiation-risk evaluation
+now reach actual encrypted SMS/code-and-canonical-link dispatch through the real
+PostgreSQL delivery worker. Fresh-instance replay queues no duplicate message;
+terminal receipt replay survives original TOTP withdrawal. Actual PostgreSQL/
+race passes3.049s. This remains local, unreviewed and uncommitted. Completion,
+HIBP-screened password replacement and session revocation were unfinished at
+that checkpoint; their current native proof is above. HTTP/reference and full
+reset/milestone closure remain unfinished.
+
+Organization archive/restore's real password/MFA proof prerequisites are
+independently approved and main-pushed132bbe2; exact Required39478223109 is green
+(structure/secrets, not hosted PostgreSQL). Both authenticated public modules
+match the committed changed files and manifests. The organization worker is
+implementing/testing the actual archive/restore business workflow against these
+suppliers. This prerequisite does not itself deliver archive/restore or M22.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
 
@@ -26,10 +112,41 @@ are covered; no new TOTP HTTP variant or weaker fallback is enabled.
 **Remaining:** full phone reset is still disconnected. Native MFA/session,
 password and joint OTP prerequisites are delivered/CI-green, including corrected
 terminal TOTP-receipt enforcement. Primary now connects request/delivery and
-completion through those real owners. Organization custom roles are in final
-re-review after concrete replay-admission and fresh-client binding-discovery
-fixes; they are not yet delivered. No whole milestone or qualified-unit increment
-is claimed for either partial family.
+completion through those real owners. Organization direct custom roles are now
+delivered: root `c86393f`, PostgreSQL `8028455`, independent approval and exact
+Required CI `39464598005` green. The downloaded native adapter's genuine-session
+consumer passes PostgreSQL/race 7.277s; all 69 public files match owning source
+(including inherited root license). Managers can create/update/delete roles,
+assign/revoke direct bindings, discover binding versions and check current
+permissions. Team-derived permissions are also delivered below; HTTP/reference
+and full M23 remain open.
+No whole milestone or qualified-unit increment is claimed for either family.
+
+**Primary local work:** actual phone-reset request composition now passes
+PostgreSQL/race2.926s: genuine original recovery browser, verified phone/current
+password/enrolled TOTP and real initiation risk -> one-use risk consumption +
+SMS + canonical reset capability + two encrypted delivery intents, atomically,
+then original receipt replay. No risk provider re-evaluation/expiry renewal;
+foreign-user original resolution denies. Required-audit failure rolls back SMS/
+delivery and does not finalize risk; success plus rollback pass PostgreSQL/race
+4.454s. Ordinary native race2.305s, tagged vet and module authentication pass.
+This phase is uncommitted/unreviewed. Keyed public orchestration and actual
+delivery dispatch now work locally as recorded above; protected completion/
+session revocation remain disconnected, so this is not usable full reset or
+another closed milestone.
+
+**Parallel:** WebAuthn same-Work registration prerequisite is independently
+approved and main-pushed4667db4; exact Required CI39471467101 is green. Its
+negative scope/digest cases pass real PostgreSQL and detect removed guards.
+Passkey enrollment still needs real identity/proof integration; no M16 closure.
+Organization team-derived roles are independently approved and main-pushed:
+root892822a and native489fd67. Exact Required CI39473905207 is green
+(structure/secrets, not hosted PostgreSQL). Genuine PostgreSQL/race consumption
+of the authenticated public root passes7.588s; unchanged direct/team race
+suite42.042s is retained. Current team members inherit bounded custom permissions;
+removal/readmission, deletion and revocation do not preserve stale grants.
+HTTP/reference and full M23 remain open. Migration proof covers install/replay,
+not upgrade over populated organization/team/role tables.
 
 **Retained earlier checkpoint:** phone-reset request contracts/kernel preparation are
 main-pushed at `eb40883` with exact Required CI green. The phone-MFA canonical

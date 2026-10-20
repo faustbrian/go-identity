@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add separately selected native phone/password recovery composition and opt-in
+  request/completion HTTP with a target-bound no-remember recovery browser.
+  The graph supplies actual SMS, delivery, confirmed-TOTP and durable counter
+  owners; selected forward histories retain installed predecessors. Recovery
+  requires explicit carrier-risk acceptance and enables no signin fallback.
+
 - Explicitly compose verified-phone/password plus independently confirmed TOTP
   through native primary, factor and session owners. Selection enables no TOTP
   HTTP route or weaker-factor fallback. Apply the forward phone primary and

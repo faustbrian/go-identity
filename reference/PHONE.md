@@ -2,7 +2,7 @@
 
 This optional backend profile attaches and verifies a phone on an existing,
 verified account. Password, SMS-code signin and password plus confirmed TOTP
-are separately selected below; phone signup and reset remain unselected.
+and password recovery are separately selected below; phone signup remains unselected.
 Authenticated replacement and self-removal are separate explicit selections
 described below. No other MFA method follows from phone selection.
 Unknown/enrolled/changed factor authority denies the
@@ -259,6 +259,55 @@ reexecutes removal or renews proof/session validity. An unknown response is not
 rollback and must not be resubmitted as a new logical request. A retained verified
 email/password signin and reset path remains usable after successful removal.
 
+## Independently selected phone/password recovery
+
+Select `PhonePasswordReset` for native recovery and separately
+`HTTPPhonePasswordReset` for its two POSTs and named `phone-reset` preauth method.
+This profile requires `DurableAdmission`, real password/session, OTP and delivery
+configuration, retained canonical issuer/key custody, an external carrier
+evaluator, HIBP screening and explicit `Enabled`/`AcceptCarrierRisk`. Leave the
+graph-injected owners described by `PhonePasswordResetConfiguration` zero.
+Select SMS code/link templates and actual workers for both provider versions.
+If email password reset is selected too, both reset owners must use the same
+session schema. A conflicting combined profile is rejected before any migration
+history changes; email-only deployments retain their separately selected store.
+The graph uses the existing durable counters and transactional risk audit owner;
+it does not introduce another session, proof, replay or audit authority.
+
+`phone_password_reset_integration_test.go` supplies the complete executable
+configuration and consumer journey:
+
+1. Establish the verified phone, password and independently confirmed TOTP
+   through their actual preceding workflows. A missing independent factor denies
+   recovery; SMS-only, email and recovery-code fallbacks are not enabled.
+2. POST `{method: "phone-reset", identifier: "+12025550123"}` to
+   `/v1/session/preauth-issue`. Retain the original flow ID and flow/device
+   cookies. Recovery forbids a `remember` field, including `false` or `null`.
+3. POST `{commandID, riskIssuanceCommandID, flowID, number}` to
+   `/v1/phone/password-reset-request` with those cookies, exact Origin and one
+   stable `Idempotency-Key`. HTTP 202 acknowledges only transport admission;
+   it reveals no account eligibility, private command or delivery outcome.
+4. Dispatch the code and canonical link through the selected SMS worker(s).
+   On explicit user submission, POST `{commandID, riskIssuanceCommandID, flowID,
+   token, phoneCode, totpCode, newPassword}` to
+   `/v1/phone/password-reset-complete`, without an idempotency header. Completion
+   has a new command and distinct completion-risk issuance; retain all originals
+   for retries. The native owner resolves the account rather than JSON input.
+5. Known commitment atomically consumes the conjunction, changes the password
+   and revokes all sessions. No session/cookie is issued. Old password/session
+   authority denies; a fresh new-password plus TOTP login can read/logout its
+   real authenticated session through the separately selected signin owners.
+6. An unknown outcome is not rollback: repeat the exact original completion or
+   use `FeatureSet.PhonePasswordReset().RecoverPasswordResetComplete` with the
+   original scoped recovery query and current disclosure policy. Recovery is
+   code-free and cannot rehash, refresh evidence or redeliver credentials.
+
+Required-audit failure rolls protected password/TOTP/session effects back. Proven
+noncommit closes the original SMS reservation as `released`, not reusable: request
+new recovery through the ordinary bounded admission rather than reopening it.
+Existing password/TOTP login remains usable. The integration suite independently
+proves this rollback and lost-COMMIT acknowledgement with actual durable effects.
+
 ## Reproduce the selected HTTPS journey
 
 Use [the disposable baseline setup](BASELINE.md), its explicit loopback port and
@@ -277,6 +326,9 @@ GOWORK=off go test -race -tags=integration \
 
 GOWORK=off go test -race -tags=integration \
   -run '^TestReferencePostgresPhoneRemoval(HTTPS|CommitCustody)$' -count=1 -v .
+
+GOWORK=off go test -race -tags=integration \
+  -run '^TestReferencePostgresPhonePasswordReset.*HTTPS$' -count=1 -v .
 ```
 
 The test uses real public registration, proof, session, OTP, PostgreSQL and

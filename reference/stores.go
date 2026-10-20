@@ -64,6 +64,11 @@ type StoreConfiguration struct {
 	// PasswordReset selects native request/completion/recovery over this graph's
 	// existing primary risk, delivery and session owners. Nil selects none.
 	PasswordReset *PasswordResetConfiguration
+	// PhonePasswordReset independently selects the explicitly carrier-risk-
+	// accepted SMS plus independent-TOTP recovery profile, not HTTP or signin.
+	PhonePasswordReset *PhonePasswordResetConfiguration
+	// HTTPPhonePasswordReset opts into its two routes and named recovery flow.
+	HTTPPhonePasswordReset *HTTPPhonePasswordResetConfiguration
 	// MagicLink selects native request and optional consumption/original flow,
 	// not HTTP. It shares this graph's risk, delivery and primary authority.
 	MagicLink *MagicLinkConfiguration
@@ -491,6 +496,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpPhoneChange != nil {
 		state.features.httpPhoneChange.close()
+	}
+	if state.features != nil && state.features.httpPhonePasswordReset != nil {
+		state.features.httpPhonePasswordReset.close()
 	}
 	if state.features != nil && state.features.httpEmailOTPChange != nil {
 		state.features.httpEmailOTPChange.close()

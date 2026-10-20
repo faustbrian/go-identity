@@ -2,6 +2,472 @@
 
 ## Active M08 — explicitly enabled phone-password recovery
 
+2026-10-20 22:04 UTC selected reference consumer acceptance is complete:
+GOWORKoff/public suppliers, genuine PostgreSQL/HTTPS/race success, required-audit
+rollback and lost-COMMIT recovery PASS53.032s. Ordinary reference/cmd race
+PASS8.624s/7.622s; taggedvet and module verification exit0; full reference secret
+scan and diffcheck pass. Consumed authenticated archives match every tracked
+file: phone34, OTP-PG151, HTTP-session27, native-password254, HTTP-phone22.
+Independent phone_reset_consumer_review APPROVE on complete79-path snapshot
+69dc965690daec69607841592d479b11b53e8db03dc598310f15070000e69ce5,
+base132bbe2/HEADda005d5. Source, contracts and public pins are accepted; reference
+commit/push/exact CI are the only pending delivery steps for this profile.
+No new whole-milestone or qualified-unit count: phone signup and lifecycle/
+privacy obligations still prevent broad M08/unit closure.
+
+2026-10-20 22:01 UTC native workflow plus opt-in HTTP committed and main-pushed
+da005d59c806228a9a567cf24ce354b45b6a400f; remote head verified and exact Required
+39504747695 SUCCESS. Complete source/public-pin review APPROVE from
+phone_reset_consumer_review on77-path snapshot457950f7b98db96cfba48c8e9db9463f517acdddf272ea470fb5bac4f6ddbdaf,
+base132bbe2 and prerequisite HEAD387cc56. Standalone public native ordinary
+race2.125s, PostgreSQL/race12.607s and taggedvet0; HTTP-phone ordinary race5.890s
+and vet0. No local replacements. Reference public-pin adoption and its clean
+public consumer are next. Full M08 stays open.
+
+2026-10-20 21:55 UTC complete independent source review APPROVE, native identity
+phone_reset_consumer_review, base132bbe2 +75-path snapshotb36c8c76; no remaining
+material findings. Parent final reference ordinary race8.722s/cmd6.639s and
+taggedvet0. Public prerequisite batch phone/OTP-PG/HTTP-session committed and
+main-pushed387cc56b91f6b99fe4a84ec76f4fe4da3c490a98; remote exact Required CI
+39503779856 SUCCESS. Actual authenticated phone/OTP module archives at that
+commit match all17 consumed changed/manifests/source paths byte-for-byte.
+Native workflow now consumes their public version20261020215141-387cc56b91f6;
+GOWORKoff actual affected PostgreSQL/race group PASS12.607s, no local replacement.
+HTTP phone public pin/tidy complete; its standalone checks are live. Native/HTTP
+commit and reference public-pin adoption remain subsequent delivery; source
+approval does not certify those pending boundaries or full M08/unit completion.
+
+2026-10-20 21:50 UTC final reference regression group PASS216.846s under race:
+three reset HTTPS profiles plus existing phone-removal HTTPS/commit custody
+(before COMMIT, lost acknowledgement, contention). First complete independent
+review REQUEST_CHANGES on75 snapshot3414969a found exactly two source-backed
+issues: removal fixture selection arity (actual RED3.855s) and overwriting a
+different selected email-reset migration schema (actual valid-control RED1.130s).
+Corrected len>=1 selection and explicit shared-reset-schema profile boundary;
+email-only and matching combined configurations remain valid. No existing
+history rewritten. Final75 snapshotb36c8c76 independently reconciled by reviewer;
+final disposition waits for affected ordinary reference/tagged vet. Native
+final PostgreSQL/race PASS13.224s, ordinary2.153s/vet0. Standalone GOWORKoff phone
+race1.446s/vet0; OTP ordinary1.712s/taggedvet0 and actual metadata/confirmation
+PostgreSQLrace1.809s (first attempt lacked native explicit DSN, corrected owned
+loopback configuration; no skip). Public pins/commit/push/CI remain pending.
+
+2026-10-20 21:38 UTC primary: genuine reference PostgreSQL/HTTPS success,
+required-audit rollback and lost-COMMIT recovery all PASS65.957s under race.
+Actual signup/verification/phone enrollment/TOTP precede SMS/link delivery and
+protected reset; success/history reject old password/session and prove fresh
+new-password+TOTP session read/logout. Rollback reaches actual success audit,
+preserves password/factor/session state and existing password/TOTP login; its
+original SMS reservation remains terminal released, not reusable. Lost COMMIT
+is reported Unknown without success metadata; exact retry recovers committed
+durable replacement/revocation without reissuance. Fixed reference command
+revision comparison and used non-preaudited evaluation with the SAME real
+counters because the actual risk issuer owns atomic audit. Diagnostic source
+changes removed. Whole-slice review, public pins, commit/push/CI still pending.
+
+2026-10-20 21:12 UTC primary: actual post-reset completion-risk retry reproduced
+Forbidden (RED2.571s) because live browser/factor admission preceded history.
+Recover-first now authenticates historical grant/browser/SMS, preserves original
+risk intent/reference/expiry and admits new evaluation only after authoritative
+consuming-command absence plus current live admission. Changed network/device/
+issuance/new attempt denies without providers. Full affected native PostgreSQL/
+race group PASS13.111s after reference's workspace selected public x/net0.60;
+the earlier native ordinary race2.154s/tagged vet0 retain their original inputs.
+Worker phone_reset_confirmation returned ownership: actual pre/post-consumption
+rate-source proof PASS5.135s, OTP historical metadata/unchanged issuance race
+PASS5.562s and both tagged vet0. No worker or owned service remains live.
+
+Primary added actual opt-in HTTP request/completion handlers and OpenAPI, with
+uniform202 public acknowledgment (not commitment/delivery), real source/risk
+ports, original flow/device custody, staged admission and terminal secret cleanup.
+Handler/full phone HTTP race now PASS5.952s under the same reference workspace;
+vet0; recovery preauth focused race2.170s; bounded hostile-body fuzz PASS
+6.375s (4 executions, not broad parser qualification). Request panic/error
+acknowledgments and historical-risk delegation had explicit RED/GREEN. Recovery
+preauth purpose/no-remember tests retain earlier public-supplier module proof.
+
+Reference native selection/guarded handles, recovery preauth method, HTTP opt-in,
+shared-rate cleanup, provider requirements and native migration/readiness suffixes
+are now implemented locally. Focused selection/history tests PASS0.380s;
+reference/cmd ordinary race PASS8.807s/6.695s; integration-tagged vet0.
+These are NOT the real selected PostgreSQL/HTTPS reset journey. Next: extend the
+existing genuine phone-enrollment/TOTP reference consumer, not a fake domain
+fixture. Prove selected bootstrap -> recovery browser -> captured SMS/link ->
+joint reset -> old-password denial/new-password-plus-TOTP signin -> old-session
+denial, plus actual rollback/lost-COMMIT and original retry. Keep the same slice;
+no independent final review, commit, push or milestone/unit closure yet.
+Bounded-run scratch identity-phone-http.Te8XoJ, PostgreSQL fixture and all owned
+Go caches are removed after terminal checks. Path-aware secret scans of all six
+affected module directories and diff-check pass; no scanner policy was changed.
+
+2026-10-20 20:27 UTC bounded ownership addition: same worker additionally owns
+new otp/postgres/phone_reset_metadata.go and tests; phone_reset_issuance.go only
+for extracting the unchanged existing AAD frame helper. Historical read may
+authenticate a private known-user AAD encoding candidate from genuine original
+anonymous recipient + SMSObservedAt, but must not produce a current recipient,
+factor snapshot or SendInput from it. Original envelope AEAD is the accepting
+oracle; no candidate leaves historical metadata processing. Consuming admission
+retains real known-user/current-primary reads. Actual SQL fixture supplies
+independent SMS interval oracle; helper runs pre/post consumption. No stored
+format migration merely for rate metadata and no renewed observation.
+
+2026-10-20 20:22 UTC same-slice split: primary owns existing HTTP/session
+preauth recovery-purpose support and all HTTP/reference composition. Worker
+phone_reset_confirmation owns only password/postgres/phone_reset_completion_rate.go,
+its new tests and phone_reset_completion_source.go if its existing original
+custody reader needs a narrow split. Preserve original consuming admission.
+Finite outcome: actual canonical capability plus original recovery browser and
+trusted current query policy -> original subject/credential/SMS challenge and
+immutable issued lifetime for HTTP rate admission. Metadata grants no mutation;
+foreign scope/cookie denies with zero output, no provider/hash/code work, no
+new journal/store/counter. Terminal receipt retries must remain rate-addressable
+after their own browser/password/factor consumption; historical source is not
+current recovery permission. Consume actual committed issuer34ff029/kernel
+d2d1fa59/sessionf96bcf8bf25d/OTP623cf56190f7 and existing local actual request
+custody proven by native group13.129s; this is coimplementation of the same
+frozen slice, not activation of a separate dependant. Primary injects the new
+helper's real-supplier assertion into its existing actual send fixture. Worker
+does not edit shared fixtures, manifests, docs, HTTP/reference or other files,
+and waits for serialized Go/service slot. No Git mutation/children; preserve
+concurrent primary work. Final acceptance/review/delivery remain primary-owned.
+
+2026-10-20 20:16 UTC primary native consuming journey now works locally. Actual
+original request/browser/verified phone/confirmed TOTP -> captured real SMS plus
+canonical capability -> distinct completion risk -> HIBP/protected hash ->
+consuming SMS+TOTP replay -> canonical password replacement and all-session
+revocation -> metadata-only replay/code-free recovery PASS3.221s. Corrected
+post-reservation issued-only browser check: original input requires issued state;
+exact retained generated input delegates browser reservation/current/finalized
+checks to the real OTP owner, preserving directory/current-credential fences.
+Kernel/OTP diagnostics removed and exact committed bytes rechecked. Added
+existing kernel reset/phone suffixes to the real populated fixture, not new
+schema. Commit then exposed stale outbox5c139522; actual remote main493107bf
+already owns phone support, now adopted through authenticated public module
+v0.0.0-20261020135213-493107bf82af. Downloaded formatter/test/module bytes match
+source; exact Required39436410501 SUCCESS. Supplier focused race1.244s,
+ordinary race1.142s and vet0. No outbox writes; task clone removed.
+Final email-only receipt projection was split into exact email/phone wrappers
+over shared output framing, never retagging one operation as the other. Focused
+absent-phone-mapper RED retained; phone-profile receipt and actual native consumer
+GREEN. Distinct rollback/wrong SMS/wrong TOTP cases PASS6.764s. Actual audit
+constraint then strengthened with a nontransactional fixture sequence proving
+success-audit INSERT after provisional effects; success+rollback PASS5.095s.
+Wrong codes debit the shared budget once, preserve actual password/session/factor
+state, and do not finalize completion risk/SMS. Exact fresh-service retry and
+changed transport/evidence/password rejection pass. Native ordinary race
+PASS2.156s; integration-tagged vet exit0. Final affected PostgreSQL/race native
+phone source/request/complete/rollback/wrong-code, receipt and phone/email
+generation group PASS13.129s. No whole milestone/unit closure or commit claimed.
+Phone_and_role_dependency_review completed one read-only HTTP/reference mapping:
+reuse actual session PreAuthPhonePasswordRecovery issuer; extend existing HTTP
+preauth trusted profile for recovery with mandatory target binder/zero Remember;
+add authenticated original phone completion rate-source metadata; use existing
+catalog/rate/device/origin/delivery/migration owners. No new engine or journal.
+Primary still owns this integration. Remaining:
+old/new-password signin, ambiguous commit, selected HTTP/reference, full affected
+regression/public-supplier adoption, independent whole-slice review and delivery.
+
+2026-10-20 20:08 UTC same-consumer dependency adoption: phone_reset_confirmation
+will own only postgres/identity/replacement.go, replacement_test.go and its
+CHANGELOG.md/README.md if necessary in an isolated outbox main clone, after
+the primary resolves its exact path/head. Existing canonical outbox checkout
+is an unrelated refactor branch and remains untouched. The current pinned
+outbox5c139522 rejects phone-reset lifecycle despite successful native password/
+session Apply; consume actual kernel/reset receipt and preserve all independent
+successor/subject checks, adding only the exact phone-reset operation to the
+existing reset event owner. Expected regression: genuine phone reset receipt
+cannot form the existing outbox envelope. Prove identical event/correlation/
+successors, cross-scope/mixed-purpose denial and unchanged email/change behavior.
+No new event store, schema, transaction, retry, Git mutation or children; primary
+owns actual native consumer adoption, integration pins and final acceptance.
+Correction before writes: actual remote main493107bf already has the exact phone
+support plus backward-byte and denial tests; worker edits remain zero. The
+failure is our stale5c139522 pin, not missing upstream implementation. Reuse
+that existing support, focused supplier checks and actual native consumer proof;
+do not manufacture a RED or change matching behavior. Worker has heavy slot.
+Organization
+native Required39483890213 is now SUCCESS on exact ab44333; M22 remains open.
+
+2026-10-20 19:34 UTC same-consumer implementation split: phone_reset_confirmation
+owns only new password/postgres/phone_reset_generation.go,
+phone_reset_generated_output.go and phone_reset_generation_integration_test.go.
+Consume actual joint-command kernel19670fe and protected HashPreparer19670fe,
+phone risk policy6d5c539 and capability34ff029; no owner/API replacement. Finite
+internal outcome is original jointly bound raw input -> HIBP-screened verifier
+-> encrypted native-journal output -> unchanged restored joint custody/facts.
+It is part of full phone reset, not a standalone delivery or milestone. Primary
+owns consuming service/phase, actual risk/OTP/TOTP/session transaction, manifests,
+HTTP/reference and final whole-slice review/delivery. Check signed original proof
+and target before provider work; preserve byte-exact password/codes/cookie and
+absolute provider times. Focused generation/output real-contract tests with
+controlled provider only; no Go/service run until serialized heavy slot. No Git,
+children, manifests or existing-file writes; preserve concurrent primary edits.
+
+2026-10-20 19:30 UTC: archive/restore root d3aab924bc3350500dda93aa6060347ed457f35f
+and native ab443331688c431e8c36e47b4fb3279af6d1b6e6 are main-pushed; repository
+clean. Root Required39482759607 SUCCESS; native Required39483890213 pending.
+Independent organization_lifecycle_review APPROVE final root plus native17
+repository-qualified digest588982efcffd27ca88289206e27f02aa4f960614447d91e0f659a4f8260f056d.
+Public-root PostgreSQL/race consumer14.465s passes with GOWORKoff and no local
+replacement. Original full26 review and affected native/race175.873s, root/race,
+tagged vet and bounded fuzz are retained. Improved actual proof-consumption
+oracles detect omitted Consume; protected action proof, state and child effects
+remain in the sole coordinator Work. Full M22/HTTP/reference/external cascades
+and hard deletion remain open. Selected-content path-aware secret scan passes;
+the first pathless concatenation reported two public go.sum checksums, not keys.
+
+Primary phone-reset local checkpoint: actual committed SMS input restoration,
+original-browser/current-factor denial and distinct owned completion-risk
+issuance/replay join the real keyed request and actual delivery worker. Native
+PostgreSQL/race3.322s passes. Original SMS AAD includes its actual narrower
+recipient observation time; retain that authenticated time, never substitute a
+new read timestamp. Root completion-risk input race1.151s passes. OTP worker
+bridge is locally complete: native/race8.069s, ordinary/race1.712s and tagged
+vet0; no Git changes or resources remain worker-owned. New OTP exports are not
+yet published or adopted in password completion. All phone code remains local
+and unreviewed; no isolated helper commit. Heavy slot returned to primary, no
+Go/PG handle live. Continue actual protected completion, HIBP/hash replacement,
+session revocation and reference composition. Overall~20%,8/39 unchanged.
+
+2026-10-20 19:05 UTC bounded M08 upstream lane: phone_reset_confirmation owns
+only new otp/postgres/phone_reset_confirmation*.go and narrowly necessary
+otp/postgres/README.md/CHANGELOG.md. Consume actual committed OTP623cf56190f7,
+joint OTP/core kernel5c1b014, delivered native MFAea96b3 and identity main132bbe2.
+Finite outcome: existing authenticated PreparedPhonePasswordResetSend supplies
+its actual original challenge/continuation/AttemptAuthority to a reset-only
+completion bridge, producing a real joint mapped input/OTP plan and invocation-
+local NewPhoneRecoveryContributor. No reconstruction from signed grant scalars,
+new challenge/code/store/authority or weakening of generic constructors. Match
+exact tenant/user/actor/policy/pre-auth/original credential/factor metadata;
+actual current challenge version, borrowed SMS/TOTP/password/capability/cookie
+remain original. No comparison/consumption/commit at the bridge; parent completes
+real phone RiskEvidence/HIBP/material/session Work. Zero/cross-scope/config/
+generation/tamper/cancellation/redaction denial and real issue/restore/map proof
+are required. Reuse existing codec/attempt/session owners and unchanged deadlines.
+Worker preserves concurrent edits, no children/Git; no Go/services until heavy
+slot grant. Organization currently owns that slot. Primary retains native
+password orchestration, kernel/reference/HTTP/manifests and final acceptance.
+
+2026-10-20 18:55 UTC primary: keyed public phone-reset request plus owned
+Number/Flow initiation-risk evaluation now reaches real encrypted SMS and
+canonical-link dispatch through the actual native worker. Real PostgreSQL/race
+PASS3.049s; fresh-service replay creates exactly two original delivery intents
+and one SMS challenge, and terminal replay survives actual factor withdrawal.
+No invented user/evidence, provider re-evaluation or renewed original freshness.
+New root phone input/native service are local, unreviewed and uncommitted;
+continue protected completion/HIBP/replacement/session effects in this frozen
+slice, not an isolated helper delivery. HTTP/reference remain open.
+
+Organization archive/restore prerequisite11-path batch is independently APPROVED
+by organization_lifecycle_dependency_review at original basef094bbc and source
+digestf6a870f696141a96a0507dff21834f394655affd02366ce045a4af794316354e.
+Main-pushed132bbe2b32dbdb6606b6e2b24a90652fc89b3d22; exact Required39478223109
+SUCCESS. Password/MFA public modules v0.0.0-20261020185005-132bbe2b32db
+authenticate and changed files/committed manifests byte-match. Native real
+signed-proof consume+rollback2.826s, ordinary password race2.154s/MFA1.385s and
+tagged vet exits0 retained from isolated exact11 supplier, excluding dirty phone
+coimplementation. Additive migration retains prior checksums/consumption marker
+shape and must be installed after all selected predecessor suffixes. This proves
+the owning proof/factor seam, not organization policy. Heavy slot transferred to
+organization_dynamic_roles for actual native archive/restore consumer series;
+no primary Go/service live. Overall remains~20%,8/39; no new milestone closure.
+
+2026-10-20 18:33 UTC parallel M22 successor: organization_dynamic_roles owns
+one explicit native archive -> deny organization authority -> restore profile
+in go-organization/main489fd67, retaining all delivered member/team/custom-role/
+invitation/domain-reservation owners. Writable: organization lifecycle API and
+its owning decoder/service files/tests; postgres lifecycle/contributor/service/
+queries/migrations and actual genuine consumer tests; module-local manifests,
+README/docs and changelogs. No identity/shared contracts, HTTP/reference, CI,
+Tools or other repositories. Inspect the first typed public boundary before
+integration. Archive and delete remain separate: hard deletion excluded from
+this finite profile, not removed from full scope. Current owner/session and
+organization version authorize archive/restore; archived state denies new
+member/team/custom permission/invitation/domain authority. Define deterministic
+effects on existing native children and preserve audit/current-authorized
+metadata recovery. Restoration must not resurrect canceled/revoked invitations,
+removed memberships, deleted teams/roles or withdrawn domain claims. Existing
+session active-selection/SSO/SCIM/API-key profiles must not be invented or silently
+enabled; report any real consumed-owner gap. Required acceptance: genuine issued
+sessions, tenant/owner/version denial, warm-instance denial, races, complete
+rollback, actual lost COMMIT and original recovery; additive history replay.
+Focused native/public tests, tagged vet/race/fuzz as affected. Worker requests
+serialized heavy slot, preserves other edits, no children or Git mutations.
+Primary owns review, public-pin integration, main delivery and later reference.
+
+2026-10-20 18:26 UTC primary: parallel team-derived-role profile delivered on
+go-organization main: root892822aa5c09b9cb01a90771790b95786c7c4920,
+native489fd67f78ea45ca03b63ece1e91f7265bfb4ca6. Exact remote matches; clean
+checkout and Required39473905207 SUCCESS (structure/secrets only). Independent
+organization_team_role_review APPROVE native10 digest288e92e88ba7e5ac2fe3fbaf04fe8e9fc2cd126a9a24fd0b23080634e0386d11;
+reconstructed original17 reproduces approvedc394a651 exactly. Public root9 and
+go.mod match source, authenticated sums. GOWORKoff genuine public-root
+PostgreSQL/race consumer PASS7.588s; retained unchanged native/direct/team
+race42.042s, vet and framing fuzz145608 executions. API root Required39472780137
+also succeeds. This is a usable native M23 profile, not HTTP/reference or full
+M23/unit qualification. Install/replay evidence does not prove populated org/team
+upgrade. Native delivery fixture is no longer needed and is being removed.
+
+Primary now implements original keyed phone-reset request custody, after the
+expected missing public service/constructor RED. Reuse kernel's existing
+RequestKeyPreparation, not a new mapping/journal. The key winner owns canonical
+consumer ID; original external attempt and risk issuance IDs stay distinct.
+Store only code-free AEAD input and original signed risk plan/CheckedAt, never
+re-evaluate providers or renew expiry. Terminal receipt recovery precedes current
+factor reads; pending retries must compare the exact original factor and epochs.
+Actual dispatch and protected completion/session revocation remain this slice's
+required unfinished work; no isolated helper commit or new milestone claim.
+
+2026-10-20 18:04 UTC primary: combined real native phone-reset request passes
+PostgreSQL/race2.926s: genuine original recovery source and committed initiation
+risk -> same-Work one-use risk/SMS/canonical reset grant/two encrypted delivery
+intents -> actual original receipt replay. Public OTP623cf561 is now consumed,
+not the earlier110c supplier. Source-discovered canonical lookup is preserved;
+the SMS owner's stricter known-user query is an actual narrower primary read
+with unchanged original predecessors. Request admission uses that exact recipient,
+not an anonymous-query snapshot in a user-bound Work. Recovery supplies the
+actual resolved user resource to the current query policy, never a client ID.
+Expected missing native phase RED preceded implementation. Actual required-audit
+failure rolls back SMS/delivery and does not finalize initiation risk; both
+success/source and rollback pass PostgreSQL/race4.454s. Affected ordinary native
+race passes2.305s, tagged vet exits0, and selected modules authenticate.
+This is LOCAL/UNREVIEWED phase
+composition, not a public keyed request service or full reset. Retained original
+keyed input/public risk issuance, protected completion, actual delivery dispatch,
+session revocation and HTTP/reference remain required in the same frozen slice.
+
+Parallel WebAuthn prerequisite reviewed and main-pushed4667db441889f4ef043ef250ddc6ffe24cc96678.
+Exact remote matches; Required CI39471467101 is SUCCESS on that exact head
+(structure/secrets, not hosted native PostgreSQL). Checkout is clean.
+Final independent APPROVE covers all9 paths/digestc45a24af; added real-root
+scope/digest denials pass PG0.602s and detect both safe predicate-removal mutants.
+Unchanged native production retains unit/vet/PG-race2.020s and standalone
+regression evidence. Native public artifact/adoption is not yet exercised by
+passkey. No passkey M16 closure: actual proof continuation/MFA
+selection/kernel passkey reference owners remain prerequisites.
+
+2026-10-20 17:52 UTC primary: genuine phone source plus real native risk
+issuance/original replay/protected-use preparation now passes PostgreSQL/race
+2.972s. The first constructor failed because issuance-only configuration
+incorrectly selected UseCounters before UseIssuer; split issuance/consuming
+configuration without weakening validation. Actual issuance then exposed the
+fixture's missing forward IssuanceIDMigrationSource; install the real history.
+Restart preserves the reference/absolute expiry and provider-call count;
+foreign-user resolution denies. This remains local/unreviewed component
+composition, not complete reset. Continue keyed SMS/canonical-capability request.
+
+Parallel M23 successor: `organization_dynamic_roles` owns opt-in team-derived
+custom-role assignment/revocation and effective permission checks in
+go-organization main80284551f3b0, consuming its delivered rootc86393f/native8028455
+and existing real team/membership/session/authorization owners. Writable paths:
+root dynamic_role.go/team*.go/organization.go and affected tests; postgres dynamic_role*,
+team*, service.go/contributor.go and affected consumer tests; module-local manifests/checksums,
+affected README/docs/CHANGELOG. Root CI/inventory and all other repos excluded.
+Finite outcome: a genuine manager binds a registered custom role to a team;
+current members receive its bounded permissions; revoke/team deletion/member
+removal immediately denies, including removed/readmitted members and warm
+service instances. Direct roles retain exact behavior and deny precedence;
+custom permissions never grant static management authority. Include discoverable
+binding versions, current-manager/session authority on terminal replay,
+same-Work policy/subject epochs, rollback/contention/lost-COMMIT and code-free
+original recovery. One bounded consumed-contract pass, then implement, no private
+policy/session engine. Focused root/native tests, tagged vet and real genuine-
+session PostgreSQL/race consumer; serialize heavy runs after passkey. Worker
+preserves other edits, no children/Git mutations. Primary owns integration,
+independent complete final review, ordinary main delivery/public-pin adoption.
+This closes a selected M23 profile, not whole M23 or unit qualification.
+
+2026-10-20 17:26 UTC parallel successor: `passkey_enrollment` owns the selected
+M16 existing-account authenticated resident-passkey enrollment -> actual ES256
+registration -> safe credential list -> fresh-service original recovery profile.
+Reserved writable paths are go-passkey root Go source/tests, postgres/**,
+module-local go.mod/go.sum, README/SECURITY/CHANGELOG and docs/**. Root shared
+inventory/CI, identity kernel/session/risk, HTTP/reference and WebAuthn stay
+primary-owned pending a concrete upstream request. Go-passkey main74cf48a is
+clean/current after fast-forward of existing remote changes; WebAuthn main43ab7e1
+is clean/current, with delivered identified/discoverable none/ES256 native
+ceremonies. Existing identity/password/session owners supply genuine fresh
+primary authority, not a bool or browser-selected identity.
+
+One bounded consumed-contract pass precedes code. Missing same-Work ceremony/
+mapping or primary-proof seams must be reported by exact owner/paths; no fake
+store, duplicated ceremony, independent commits called atomic, or substitute
+proof unlocks implementation. The worker then implements only dependency-ready
+owned behavior with TDD, immutable public pins and public native consumer proof.
+Acceptance retains stable RP-wide handles/credential uniqueness, tenant/RP/UV
+binding, current fresh authority, one-use, rollback/contention/unknown recovery,
+redaction and no re-revelation. Signup/signin/rename/delete/HTTP, non-ES256 and
+full M16/qualification are excluded from this first profile, not from the goal.
+Smallest checks: affected native/unit race, integration vet, real PostgreSQL
+genuine-session enrollment/list/recovery and retained WebAuthn regression for
+any actual upstream change. No Go/services until primary grants the serialized
+heavy slot. Worker no children/Git delivery; primary retains alignment, upstream
+ownership, final independent review, public integration/main delivery. Parent
+continues the frozen phone-reset workflow rather than waiting for this lane.
+
+17:28 UTC first-boundary correction within the same passkey lane: actual native
+WebAuthn Store independently commits CreateCeremony/FinalizeRegistration and has
+no public same-Work participation. The opaque root CeremonyCreation and
+RegistrationTransition already exist; do not add another crypto/preparation
+engine. `passkey_enrollment` is now assigned the necessary upstream owner paths
+go-webauthn/postgres/{store.go,phase.go,new registration_participant*.go}, their
+tests and affected native docs/CHANGELOG. Preserve every existing default API,
+current user/RP/origin/expiry/one-use check and recovery outcome. Add exact
+invocation-local parent-bound create/finalize participation through the existing
+kernel, with no independently committed domain transaction or application
+workflow callback. Show the actual passkey enrollment consumer integration and
+rollback/unknown/current-authority cases. Primary reviews/publishes that coherent
+prerequisite before downstream public-pin adoption; no stub unlocks passkey.
+All other WebAuthn/root shared contracts remain nonwritable without an evidenced
+owner request. Existing primary-proof and risk owners must also be inspected
+against real callable contracts before downstream implementation. Same frozen
+outcome; no second planning or per-helper approval programme.
+
+Same bounded pass identified the remaining parent-owned enrollment prerequisites:
+password action-primary exact passkey operation/self-target admission plus a
+forward purpose suffix; MFA known-empty-factor admission for this selected
+password-only enrollment profile; kernel typed same-Work initial passkey
+credential-reference insertion (foreign kernel writes remain prohibited).
+Worker is restricted to the granted WebAuthn prerequisite meanwhile. Those
+component tests cannot close M16 or replace the genuine fresh-auth consumer.
+Parent continues phone reset first; no downstream stub or competing proof owner.
+
+2026-10-20 17:24 UTC: direct custom-role native batch is DELIVERED at organization
+main `80284551f3b0f300e74de32a62f135bdb7b648d4` following root `c86393f`.
+Independent complete review approved native16 digest `a56b4087`; actual public
+root standalone native race1.346s/taggedvet0 and PG/race16.142s pass. Exact
+Required39464598005 SUCCESS; authenticated public native version
+v0.0.0-20261020171605-80284551f3b0 matches all69 source files (root license
+inherited). Its downloaded genuine-session PG/race consumer passes7.277s.
+No whole M23 or unit qualification claim. Organization checkout is clean.
+
+Primary phone-reset implementation now selects original browser/target and real
+verified phone/current enabled password/confirmed TOTP in `phone_reset_source`.
+Initial test RED was absent native constructor (after correcting a test token
+API typo); actual registration/enrollment-backed PG/race GREEN2.878s. Native
+MFA selector pin advances to authenticated ea96b3d; affected source remains
+local/unreviewed with the earlier signed-material fix. Do not publish per-helper
+checkpoints. Continue the same frozen complete request/delivery/completion slice.
+Final affected signed-material race passes1.359s; integration-tag vet0 and scoped
+secret/diff checks pass. They do not certify the missing public reset service.
+The completed bounded publication/source-check session's task caches and
+PostgreSQL fixtures are removed; source remains in its owning repository.
+
+Successor investigation corrected its source boundary: actual remote SSO main
+1edc51b is still scaffold-only; no implemented proof engine/transition exists.
+Do not start SSO/SCIM against fabricated authority. A future DNS challenge/proof
+consumer needs organization proof transition plus actual SSO/verifier owners.
+The earlier claimed pending-native-path blocker is withdrawn (now delivered).
+
+2026-10-20 17:09 UTC bounded successor investigation: `domain_proof_readiness`
+is read-only (no writable paths, Git, Go, services or children). Inspect actual
+organization rootc86393f/nativebbf7a6e domain reservation and committed SSO/
+domain-verification contracts to identify one finite verified-domain/proof
+transition/recovery consumer, exact real upstream gaps and owner paths/checks.
+Do not implement parsers, invent proof authority, restart planning or certify
+missing contracts. Parent continues native phone reset/organization delivery;
+any later implementation requires a separate non-overlapping frozen assignment.
+
 2026-10-20 17:02 UTC: selected phone/password -> genuine confirmed TOTP -> usable
 session/read/logout/original recovery profile is DELIVERED, not full M08/reset.
 Complete17 review APPROVE9b62e0b2, ordinary-main-pushed reference577df95,
