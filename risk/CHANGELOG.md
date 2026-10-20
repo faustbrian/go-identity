@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit exact organization custom-role assignment and revocation through the
+  existing privileged signal policy and protected actor/resource counters.
+  Unknown actions, aliases and missing signals continue to fail closed.
 - Prepare opaque phone-recovery evidence use through authorized original native
   resolution without exposing persistence records. Missing, denied, failed,
   unknown, foreign or expired originals yield no usable proof or replacement
