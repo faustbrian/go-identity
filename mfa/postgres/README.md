@@ -10,6 +10,14 @@ Existing rows/checksums remain unchanged; an incorrect predecessor fails rather
 than dropping an unknown constraint. This suffix does not compare passwords,
 authorize another factor, issue a session or enable HTTP.
 
+At initial phone-reset preparation, `TOTPFactorReader.SelectForPhoneRecovery`
+selects the lowest immutable confirmed TOTP ID for the genuinely resolved
+account and reads its encrypted snapshot. The existing recovery history supplies
+the subject-keyed factor lookup. Freeze that exact factor in the canonical grant;
+retry/completion uses `ReadForPhoneRecovery` for the original ID and must not
+select another factor after withdrawal. Selection is structural custody, not
+phone possession, factor verification or recovery authorization.
+
 The bounded phone-password-reset integration reads the original confirmed
 encrypted factor using `TOTPFactorReader.ReadForPhoneRecovery`; this is structural
 custody, not recovery authorization, a fabricated login continuation or session.

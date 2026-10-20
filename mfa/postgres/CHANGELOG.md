@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select a resolved phone-recovery account's original confirmed TOTP through
+  the native reader, without caller-selected factor IDs or domain SQL. Retain
+  that exact selection in the reset grant; retries never select a replacement.
+
 - Explicitly admit verified-phone/password primaries with independently confirmed
   TOTP. Append `PhoneContinuationMigrationSource` after the actual installed
   continuation history; retain original checksums and reject weaker factor or

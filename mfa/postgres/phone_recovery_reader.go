@@ -12,6 +12,50 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// SelectForPhoneRecovery selects the lowest immutable confirmed TOTP factor ID
+// for a resolved tenant/user, then reads its original encrypted custody. This
+// request-only deterministic policy never selects SMS or an unconfirmed factor.
+// Install the existing recovery history, whose subject-unique factor key also
+// supports this bounded lookup. No new migration, factor or permission is made.
+//
+// The phone owner must first authenticate its original browser and resolve the
+// verified phone/current password account. Capture this selection in the issued
+// reset grant; retries/completion must read that exact original factor rather
+// than select another. Concurrent withdrawal fails closed at the read or later
+// protected fences. One shared timeout covers both reads; no secret is decrypted,
+// replay changed, factor proof produced or validity interval renewed.
+func (r *TOTPFactorReader) SelectForPhoneRecovery(ctx context.Context, tenant identity.TenantID, user identity.UserID) (TOTPFactorSnapshot, error) {
+	if ctx == nil || r == nil || r.continuation == nil || r.continuation.pool == nil || r.continuation.pool.Raw() == nil || r.continuation.maximumDuration <= 0 || r.continuation.maximumDuration > 5*time.Second {
+		return TOTPFactorSnapshot{}, invalidAuthority()
+	}
+	if err := ctx.Err(); err != nil {
+		return TOTPFactorSnapshot{}, err
+	}
+	for _, id := range []string{string(tenant), string(user)} {
+		if _, err := identity.ParseIdentifierID(id); err != nil {
+			return TOTPFactorSnapshot{}, invalidAuthority()
+		}
+	}
+	bounded, cancel := context.WithTimeout(ctx, r.continuation.maximumDuration)
+	defer cancel()
+	var factorID string
+	err := r.continuation.pool.Raw().QueryRow(bounded, `SELECT factor_id
+FROM identity_mfa.totp_factors
+WHERE tenant_id=$1 AND user_id=$2 AND state=2
+AND confirmed_at IS NOT NULL AND encrypted_secret IS NOT NULL
+ORDER BY factor_id LIMIT 1`, string(tenant), string(user)).Scan(&factorID)
+	if bounded.Err() != nil {
+		return TOTPFactorSnapshot{}, bounded.Err()
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TOTPFactorSnapshot{}, identity.ForbiddenError{}
+	}
+	if err != nil {
+		return TOTPFactorSnapshot{}, identity.UnavailableError{}
+	}
+	return r.ReadForPhoneRecovery(bounded, tenant, user, factorID)
+}
+
 // ReadForPhoneRecovery reads one confirmed encrypted factor without inventing a
 // login continuation or authenticated session. Tenant/user/factor select only
 // structural custody, never recovery authorization. The native phone owner must

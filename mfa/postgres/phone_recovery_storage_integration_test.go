@@ -82,7 +82,7 @@ func TestPhoneRecoveryTOTPStoragePostgres(t *testing.T) {
 			t.Error("owned pool cleanup failed")
 		}
 	}()
-	if _, err := pool.Raw().Exec(ctx, authoritySQL+totpFactorSQL); err != nil {
+	if _, err := pool.Raw().Exec(ctx, authoritySQL+totpFactorSQL+recoverySetSQL); err != nil {
 		t.Fatal("MFA install failed", err)
 	}
 	v, fixture := phoneRecoveryFixture(t)
@@ -100,6 +100,31 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','mfa-user',1,1,dec
 	}
 	reader, err := NewTOTPFactorReader(pool, time.Second)
 	if err != nil {
+		t.Fatal(err)
+	}
+	cancelled, stopSelection := context.WithCancel(ctx)
+	stopSelection()
+	if _, err := reader.SelectForPhoneRecovery(cancelled, m.TenantID, m.UserID); !errors.Is(err, context.Canceled) {
+		t.Fatal("factor selection lost caller cancellation", err)
+	}
+	selected, err := reader.SelectForPhoneRecovery(ctx, m.TenantID, m.UserID)
+	selectedMetadata, selectedErr := selected.Metadata()
+	if err != nil || selectedErr != nil || selectedMetadata.FactorID != m.FactorID {
+		t.Fatal("native request cannot select its actual independent factor", err)
+	}
+	if _, err := reader.SelectForPhoneRecovery(ctx, "tenant-b", m.UserID); err == nil {
+		t.Fatal("factor selection escaped tenant scope")
+	}
+	if _, err := reader.SelectForPhoneRecovery(ctx, m.TenantID, "other-user"); err == nil {
+		t.Fatal("factor selection escaped subject scope")
+	}
+	if _, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='suspended' WHERE tenant_id=$1 AND user_id=$2`, string(m.TenantID), string(m.UserID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.SelectForPhoneRecovery(ctx, m.TenantID, m.UserID); err == nil {
+		t.Fatal("selected factor bypassed current account status")
+	}
+	if _, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active' WHERE tenant_id=$1 AND user_id=$2`, string(m.TenantID), string(m.UserID)); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := reader.ReadForPhoneRecovery(ctx, m.TenantID, m.UserID, m.FactorID)
