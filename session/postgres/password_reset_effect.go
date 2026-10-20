@@ -54,8 +54,12 @@ func passwordResetSessionOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.reset-complete", SchemaID: "password-reset-complete", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
+func phonePasswordResetSessionOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.password-reset-complete", SchemaID: "identity.phone.password-reset-complete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
 func resetSessionScope(b identity.CommandBinding, op identity.FeatureOperation, l kernel.LifecyclePlan) bool {
-	return op == passwordResetSessionOperation() && b.OperationID == op.OperationID && l.EventType == "password.reset.v1" && l.BeforeVersion > 0 && l.BeforeVersion < ^uint64(0) && l.AfterVersion == l.BeforeVersion+1
+	return (op == passwordResetSessionOperation() || op == phonePasswordResetSessionOperation()) && b.OperationID == op.OperationID && l.EventType == "password.reset.v1" && l.BeforeVersion > 0 && l.BeforeVersion < ^uint64(0) && l.AfterVersion == l.BeforeVersion+1
 }
 
 // Apply stages revocation and hash-free original effect evidence. Only the exact
@@ -77,6 +81,12 @@ func (e *PasswordResetEffect) Apply(ctx context.Context, w kernel.Work, owner ke
 	}
 	b, f, l, err := w.FeatureScope(owner)
 	spec, ok := command.PasswordResetFeature()
+	if !ok {
+		spec, ok = command.PhonePasswordResetFeature()
+		if err := w.RequireFeatureCommand(bounded, owner, command); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	if err != nil || !ok || spec.Binding != b || spec.Operation != f.Operation || !resetSessionScope(b, f.Operation, l) || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}

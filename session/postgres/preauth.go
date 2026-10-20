@@ -28,7 +28,9 @@ type PreAuthWriter[R SessionRows] interface {
 // command, complete coordinator fingerprint and positive ownership generation.
 // Values are structural correlation, not authentication or journal authority.
 // The owning native participant derives them from its live sealed Work; never
-// accept them from requests. Policy, tenant and action must match original flow.
+// accept them from requests. Policy and tenant must match the original flow.
+// Actions match directly except the closed phone-recovery request-to-completion
+// relation; that relation preserves the original sessionless identifier binding.
 type PreAuthUse struct {
 	Command     identity.CommandBinding
 	Fingerprint [32]byte
@@ -49,7 +51,17 @@ func (PreAuthUse) MarshalText() ([]byte, error) { return nil, ErrInvalidRecord }
 func (u PreAuthUse) valid(s session.PreAuthTransactionSpec) bool {
 	_, err := identity.ParseCommandID(string(u.Command.CommandID))
 	i := s.Binding.Intent
-	return err == nil && u.Fingerprint != ([32]byte{}) && u.Generation > 0 && u.Command.TenantID == i.TenantID && u.Command.OperationID == i.Action && u.Command.PolicyID == i.PolicyID && u.Command.PolicyVersion == i.PolicyVersion
+	if err != nil || u.Fingerprint == ([32]byte{}) || u.Generation == 0 || u.Command.TenantID != i.TenantID || u.Command.PolicyID != i.PolicyID || u.Command.PolicyVersion != i.PolicyVersion {
+		return false
+	}
+	if i.Purpose == session.PreAuthPhonePasswordRecovery {
+		// The core's validPreAuthBinding fixes this original action at issuance.
+		// Only completion consumes it; rewriting Action would invalidate cookie
+		// custody and renewing it would create a second recovery authority.
+		op := identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.password-reset-complete", SchemaID: "identity.phone.password-reset-complete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+		return i.Action == "identity.phone.password-reset-request" && i.Remember == (session.RememberPolicy{}) && i.IdentifierBinding != ([32]byte{}) && u.Command.ValidateFor(op) == nil
+	}
+	return u.Command.OperationID == i.Action
 }
 
 func preAuthContext(ctx context.Context, q any, c Config, record session.PreAuthTransaction) (context.Context, context.CancelFunc, session.PreAuthTransactionSpec, []byte, error) {

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Explicitly select session issuance after verified-phone/password and confirmed
+  TOTP in one protected transaction. Require the original phone browser purpose
+  and current verified-phone recipient; existing email completion stays separate.
+
+- Select the existing all-session revocation and retained-effect owner for the
+  exact joint phone-password-reset command. No session can be preserved and
+  recovery retains the original operation. Install the forward session-owned
+  `PhonePasswordResetMigrationSource` after password-reset effect history;
+  existing email-reset rows and installed migration bytes remain unchanged.
+  The complete workflow must still establish every factor and atomic effect.
+
+- Bind sessionless phone-recovery pre-auth use to its exact native completion
+  while preserving the original request action, identifier commitment, policy,
+  cookie and expiry. Request issuance and other profiles cannot consume it;
+  no installed storage or migration bytes change.
+
 - Preserve explicit no-session phone-recovery pre-auth purpose in durable
   records, native issuance and original recovery without a remember choice.
   Existing login payloads and installed migration bytes remain unchanged.

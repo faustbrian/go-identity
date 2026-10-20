@@ -1,5 +1,16 @@
 # PostgreSQL session storage
 
+## Explicit phone/password and confirmed TOTP
+
+`NewMFAPhonePasswordTOTPCompletionEffect` selects only the exact verified-phone
+password primary and independent confirmed TOTP. The real native MFA owner must
+authenticate the original signed primary/browser, repeat current authority and
+record TOTP in the same protected Work. The session effect requires its original
+phone browser purpose and verified-phone recipient; the existing email factory
+continues rejecting phone recipients. No secondary SMS/recovery fallback or
+HTTP route is implicit. Install the selected password/MFA session histories and
+the phone primary/continuation forward suffixes through their actual owners.
+
 ## Explicit sessionless recovery pre-authentication
 
 `PreAuthIssueExecutorConfig.Purpose` must match the core issuer's explicit
@@ -10,6 +21,21 @@ reject the new purpose rather than loading it as login. Apply the existing
 pre-auth/issuance histories before selection. This is not a phone-reset service:
 its owner still must consume the original flow and all required proofs with the
 protected credential mutation.
+
+Only the exact native phone-reset completion can reserve/finalize this original
+request flow. Its policy ID/version and tenant must remain unchanged, and its
+credential-scoped command must retain the full coordinator fingerprint and
+generation. Request issuance cannot consume the flow, and ordinary login/email
+profiles cannot borrow it. Original cookie, identifier commitment and exclusive
+expiry are not rewritten; live native proof/factor/risk checks remain mandatory.
+
+The canonical `PasswordResetEffect` also accepts that exact joint phone-reset
+command through the registered password owner. It revokes the complete active
+session set with no preservation choice; its retained receipt remains atomic
+with the password replacement. Install the session-owned
+`PhonePasswordResetMigrationSource` after `PasswordResetMigrationSource` before
+selecting phone recovery. The forward suffix preserves existing email-reset
+rows and history; neither the effect nor its migration authorizes recovery.
 
 `PasswordSigninSession` restores the same closed session fields from exact
 username-signin paired custody. It does not turn a username into a verified

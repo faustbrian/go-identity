@@ -28,6 +28,7 @@ type MFATOTPCompletionEffect struct {
 	profile      MagicLinkAdmissionConfig
 	password     *IdentifierAdmissionConfig
 	verification bool
+	phone        bool
 }
 
 // Format redacts correlated deployment configuration for every verb.
@@ -86,6 +87,21 @@ func NewMFAPasswordTOTPCompletionEffect(c Config, p IdentifierAdmissionConfig) (
 	}
 	profile := original.profile
 	return &MFATOTPCompletionEffect{native: original.native, config: original.config, profile: MagicLinkAdmissionConfig{GlobalAuthorityID: profile.GlobalAuthorityID, PolicyNamespace: profile.PolicyNamespace, Audience: profile.Audience}, password: &profile}, nil
+}
+
+// NewMFAPhonePasswordTOTPCompletionEffect explicitly selects verified-phone
+// password-primary plus independent TOTP. It requires the original phone browser
+// purpose and verified phone recipient in the protected Work; email, username,
+// SMS/recovery factors and magic-link origins cannot substitute. Original signed
+// primary, current credential and recorded same-Work TOTP remain mandatory.
+// Configuration, migrations and ownership follow NewMFAPasswordTOTPCompletionEffect.
+func NewMFAPhonePasswordTOTPCompletionEffect(c Config, p IdentifierAdmissionConfig) (*MFATOTPCompletionEffect, error) {
+	e, err := NewMFAPasswordTOTPCompletionEffect(c, p)
+	if err != nil {
+		return nil, err
+	}
+	e.phone = true
+	return e, nil
 }
 
 // Apply persists the exact command-bound session after a recorded TOTP
@@ -173,7 +189,24 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 	if m.RecoverySetID != factor.RecoverySetID || m.RecoverySetVersion != factor.RecoverySetVersion {
 		return deny()
 	}
-	if recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != kernel.RecipientVerified || recipient.User.ID != s.UserID || recipient.UserAuthorityVersion != a.User.Version || recipient.IdentifierAuthorityVersion != a.Identifier.Version || recipient.CredentialAuthorityVersion != a.Credential.Version {
+	kind := identity.IdentifierEmail
+	if e.phone {
+		if e.password == nil || method != "totp" || e.verification {
+			return deny()
+		}
+		// A phone recipient alone cannot relabel an email/username primary.
+		// Read the unchanged native browser intent under this same Work.
+		flow, err := ReadPreAuth(bounded, w, e.config, scope.TenantID, scope.SourcePreAuthID)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		original, err := flow.Bindings()
+		if err != nil || original.Binding.Intent.Action != "identity.phone.password-signin" {
+			return deny()
+		}
+		kind = identity.IdentifierPhone
+	}
+	if recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != kind || recipient.Query.Eligibility != kernel.RecipientVerified || recipient.User.ID != s.UserID || recipient.UserAuthorityVersion != a.User.Version || recipient.IdentifierAuthorityVersion != a.Identifier.Version || recipient.CredentialAuthorityVersion != a.Credential.Version {
 		return deny()
 	}
 	var query kernel.DirectoryAuthorityQuery
