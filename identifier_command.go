@@ -47,7 +47,7 @@ func validIdentifierChange(c IdentifierChange) bool {
 		return false
 	}
 	if c.Action == IdentifierAttach || c.Action == IdentifierReplace || c.Action == IdentifierRename || c.Action == IdentifierReplaceVerifiedPhone {
-		if !c.Kind.Valid() || !validIdentifierText(c.CanonicalValue) || c.DisplayValue != "" && !validIdentifierText(c.DisplayValue) || !validNormalizationBinding(c.NormalizationProfile, c.NormalizationVersion) {
+		if !c.Kind.Valid() || c.Kind == IdentifierAnonymousPlaceholder || !validIdentifierText(c.CanonicalValue) || c.DisplayValue != "" && !validIdentifierText(c.DisplayValue) || !validNormalizationBinding(c.NormalizationProfile, c.NormalizationVersion) {
 			return false
 		}
 		if c.Action == IdentifierRename && (c.Kind != IdentifierUsername || c.DisplayValue == "" || c.NormalizationProfile == "") {

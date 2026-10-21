@@ -32,6 +32,7 @@ type issueRequestState struct {
 	password  *passwordIssueRequestState
 	magicLink *magicLinkIssueRequestState
 	mfa       *mfaIssueRequestState
+	anonymous *anonymousIssueRequestState
 }
 
 // NewAuthenticatedIssueRequest preserves a command's complete authority vector,
@@ -67,7 +68,7 @@ func sameAuthenticationProof(a, b authentication.Proof) bool {
 // validity, one-time use or session authentication. Those checks and required
 // audit/outbox effects belong to the protected authoritative transaction.
 func (r IssueRequest) Validate(authority *authentication.AuthorityAuthenticator, now time.Time) error {
-	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil {
 		return ErrInvalidIssueRequest
 	}
 	issue, _ := r.state.command.Issue()
@@ -82,7 +83,7 @@ func (r IssueRequest) Validate(authority *authentication.AuthorityAuthenticator,
 // This projection intentionally loses proof admission; it cannot replace the
 // original request or grant execution authority to an adapter.
 func (r IssueRequest) Command() (SessionCommand, bool) {
-	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil {
 		return SessionCommand{}, false
 	}
 	return r.state.command, true
@@ -95,7 +96,7 @@ func (r IssueRequest) Command() (SessionCommand, bool) {
 // validate its private provenance and exact scope inside the authoritative
 // transaction. Bindings or Command projections cannot substitute this value.
 func (r IssueRequest) AuthenticatedProof() (authentication.AuthenticatedProof, bool) {
-	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil {
 		return authentication.AuthenticatedProof{}, false
 	}
 	return r.state.proof, true

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reserve a distinct anonymous-placeholder identifier namespace for anonymous
+  lifecycle ownership. It cannot become a verified/primary contact or enter
+  generic attachment, verification, replacement or removal workflows. Existing
+  email/phone discovery does not match this non-deliverable namespace.
+
 - Retain the original browser-flow cookie in exact joint phone-reset command
   custody without exposing it through legacy accessors or changing any factor.
   Binding validates syntax only; native flow admission remains required.

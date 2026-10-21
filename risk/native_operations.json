@@ -1,4 +1,5 @@
 {
+  "identity.anonymous.delete": "credential_mutation",
   "identity.email.verification-signin": "authentication",
   "identity.oauth-server.continue": "privileged",
   "identity.organization.domain.evidence.apply": "privileged",

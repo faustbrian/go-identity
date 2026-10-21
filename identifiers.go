@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -52,7 +53,22 @@ func (i Identifier) Validate(user UserID) error {
 	if !validDirectoryID(string(i.ID)) || !validDirectoryID(string(user)) || i.UserID != user || !i.Kind.Valid() || !validIdentifierText(i.CanonicalValue) || i.DisplayValue != "" && !validIdentifierText(i.DisplayValue) || i.Version == 0 || i.Primary && !i.Verified || !validNormalizationBinding(i.NormalizationProfile, i.NormalizationVersion) {
 		return InvalidInputError{Field: "identifier"}
 	}
+	if i.Kind == IdentifierAnonymousPlaceholder && (i.Verified || i.Primary || i.DisplayValue != "" || i.NormalizationProfile != "" || !validAnonymousPlaceholder(i.CanonicalValue)) {
+		return InvalidInputError{Field: "identifier"}
+	}
 	return nil
+}
+
+func validAnonymousPlaceholder(value string) bool {
+	// The anonymous reference contract reserves exactly anonymous.invalid and
+	// an opaque 128-bit canonical identifier. This is not a pending email contact
+	// or user-selected mailbox, even though its placeholder has an @ separator.
+	local, domain, found := strings.Cut(value, "@")
+	if !found || domain != "anonymous.invalid" {
+		return false
+	}
+	_, ok := decodeID(local)
+	return ok
 }
 
 // Match the public identifier owner's persisted profile-ID grammar without
@@ -77,7 +93,7 @@ func validNormalizationBinding(profile string, version uint32) bool {
 // Valid recognizes a persisted identifier kind. Empty is only an omitted list
 // filter, never a valid kind for an identifier record or mutation.
 func (k IdentifierKind) Valid() bool {
-	return k == IdentifierEmail || k == IdentifierPhone || k == IdentifierUsername || k == IdentifierProviderSubject
+	return k == IdentifierEmail || k == IdentifierPhone || k == IdentifierUsername || k == IdentifierProviderSubject || k == IdentifierAnonymousPlaceholder
 }
 
 func validIdentifierText(value string) bool {
@@ -267,7 +283,7 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 	}
 	candidate := change.Action == IdentifierAttach || change.Action == IdentifierReplace || change.Action == IdentifierRename || change.Action == IdentifierReplaceVerifiedPhone
 	if candidate {
-		if !change.Kind.Valid() || !validIdentifierText(change.CanonicalValue) || change.DisplayValue != "" && !validIdentifierText(change.DisplayValue) || !validNormalizationBinding(change.NormalizationProfile, change.NormalizationVersion) {
+		if !change.Kind.Valid() || change.Kind == IdentifierAnonymousPlaceholder || !validIdentifierText(change.CanonicalValue) || change.DisplayValue != "" && !validIdentifierText(change.DisplayValue) || !validNormalizationBinding(change.NormalizationProfile, change.NormalizationVersion) {
 			return zero, InvalidInputError{Field: "identifier_value"}
 		}
 	} else if change.Kind != "" || change.CanonicalValue != "" || change.DisplayValue != "" || change.NormalizationProfile != "" || change.NormalizationVersion != 0 {
@@ -287,6 +303,11 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		}
 		if index < 0 || state.Identifiers[index].Version != change.ExpectedIdentifierVersion || state.Verifications[index].Version != change.ExpectedVerificationVersion {
 			return zero, ConflictError{}
+		}
+		// Anonymous lifecycle owns creation and disposal. Generic contact mutation
+		// has neither anonymous-session custody nor its expiry/upgrade transition.
+		if state.Identifiers[index].Kind == IdentifierAnonymousPlaceholder {
+			return zero, InvalidInputError{Field: "identifier_kind"}
 		}
 		if change.Action == IdentifierReplace && state.Identifiers[index].Kind != change.Kind {
 			return zero, InvalidInputError{Field: "identifier_kind"}

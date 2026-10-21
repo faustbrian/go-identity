@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Expose tenant-bound credential lookup digests without revealing or consuming
+  bearer custody, for exact owned-operation metadata recovery after self-
+  revocation. This grants no active session or mutation authority.
+
+- Add explicit anonymous-session preparation and original-command binding with
+  commit-gated bearer/CSRF delivery. Keep verified, password and OTP issuance
+  separate; native anonymous lifecycle/persistence composition remains required.
+
+- Add explicitly unprivileged anonymous-session read admission with a distinct
+  result type and original bounded validity. Existing verified/mixed session
+  readers remain closed to anonymous credentials; native anonymous lifecycle
+  and issuance must be composed separately before enabling this profile.
+
 - Add an explicit phone-password-recovery pre-auth purpose with no session or
   remember choice, requiring the original canonical-identifier commitment.
   Login framing remains unchanged; recovery cannot use a login issuer profile.

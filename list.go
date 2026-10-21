@@ -20,6 +20,10 @@ const (
 	IdentifierPhone           IdentifierKind = "phone"
 	IdentifierUsername        IdentifierKind = "username"
 	IdentifierProviderSubject IdentifierKind = "provider-subject"
+	// IdentifierAnonymousPlaceholder is the reserved non-contact namespace owned
+	// by anonymous identity lifecycle. It is never verified, primary, deliverable
+	// or a generic identifier mutation target. Ordinary email lookup cannot match it.
+	IdentifierAnonymousPlaceholder IdentifierKind = "anonymous-placeholder"
 )
 
 // UserListFilters contains exact indexed filters; at least one known status is

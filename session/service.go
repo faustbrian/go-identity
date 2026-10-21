@@ -51,6 +51,20 @@ func NewCredential(kind CredentialKind, token Token) (Credential, error) {
 // Kind returns the retained transport; zero returns zero.
 func (c Credential) Kind() CredentialKind { return c.kind }
 
+// Digest derives the existing tenant-bound lookup commitment without exposing
+// or consuming the original bearer. It permits owned adapters to prove original
+// possession for exact metadata-only recovery after that operation revokes its
+// own session. A digest grants no active session, current authority or permission
+// to reexecute: those require the appropriate primary reader and native checks.
+// Zero/unknown transport, absent token/key and invalid tenant fail closed. Copies
+// retain Token's concurrent-safe custody; this method performs no IO or entropy.
+func (c Credential) Digest(key DigestKey, tenant string) (TokenDigest, error) {
+	if c.kind != CredentialCookie && c.kind != CredentialBearer || c.token.state == nil || !authorityKey(tenant, 128) {
+		return TokenDigest{}, ErrInvalidInput
+	}
+	return c.token.Digest(key, tenant)
+}
+
 // StorageProfile declares a deployment capability, not an automatic fallback.
 type StorageProfile uint8
 
@@ -167,6 +181,12 @@ func sessionMethodBit(kind AuthenticationKind) uint8 {
 }
 
 func (s *SessionService) admitsMethod(kind AuthenticationKind) bool {
+	if kind == AuthenticationAnonymous {
+		// Only the private validator behind AnonymousSessionService selects this
+		// method. Legacy and mixed services must never return authenticated-user
+		// results for anonymous credentials (identity/anonymous ownership contract).
+		return s.method == AuthenticationAnonymous && s.methods == 0
+	}
 	bit := sessionMethodBit(kind)
 	return bit != 0 && (s.method == 0 || s.method == kind) && (s.methods == 0 || s.methods&bit != 0)
 }

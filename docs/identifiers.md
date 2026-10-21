@@ -1,5 +1,20 @@
 # ID contracts
 
+## Reserved anonymous placeholders
+
+`IdentifierAnonymousPlaceholder` is a non-contact namespace, distinct from email
+even when its placeholder contains `@`. Its exact form is a canonical 128-bit
+opaque ID in unpadded base64url followed by `@anonymous.invalid`. It has no display
+or email-normalization binding and can never be verified or primary. Generic
+attachment, verification, replacement and removal cannot own this state; only
+the selected anonymous lifecycle may create or dispose of it. Email and phone
+recipient lookup cannot cross this namespace, including pending-contact lookup.
+
+The kernel's `AnonymousIdentityMigrationSource` appends the database constraints
+after installed identifier-retirement/normalization histories. Existing contacts
+and predecessor SQL remain unchanged. The migration alone enables no anonymous
+workflow or session. Anonymous lifecycle and full qualification remain pending.
+
 ## Versioned canonical identity
 
 `Identifier.NormalizationProfile` and `NormalizationVersion` retain the exact

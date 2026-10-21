@@ -90,6 +90,7 @@ type SessionIssuer struct {
 	mfa             bool
 	mfaPassword     bool
 	mfaVerification bool
+	anonymous       bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -155,6 +156,7 @@ type preparedIssuanceState struct {
 	password  *passwordPreparationState
 	magicLink *magicLinkPreparationState
 	mfa       *mfaPreparationState
+	anonymous *anonymousPreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -170,7 +172,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -251,7 +253,7 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 // without bearer bytes. Zero, OTP and password preparations deny: secret-bearing
 // consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil {
+	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -344,6 +346,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, err
 	}
 	now := s.config.Clock.Now()
+	if s.anonymous {
+		if err := validateAnonymousIssuanceAt(out.Session, now); err != nil {
+			return out, err
+		}
+	}
 	if s.mfa {
 		if e := validateMFAIssuanceAt(out.Session, now); e != nil {
 			return out, e
@@ -401,7 +408,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()

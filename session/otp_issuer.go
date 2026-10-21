@@ -131,6 +131,9 @@ func (p PreparedIssuance) Session() (Session, bool) {
 	if p.state == nil {
 		return Session{}, false
 	}
+	if p.state.anonymous != nil {
+		return p.state.anonymous.record, true
+	}
 	if p.state.mfa != nil {
 		return p.state.mfa.record, true
 	}
@@ -186,6 +189,10 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	if r.state == nil {
 		return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
 	}
+	if r.state.anonymous != nil {
+		p := r.state.anonymous
+		return p.binding, anonymousSigninOperation(), p.record, true
+	}
 	if r.state.mfa != nil {
 		p := r.state.mfa
 		m, err := p.record.MFAAuthentication().Bindings()
@@ -218,6 +225,15 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 }
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
+	if s.anonymous {
+		if r.state == nil || r.state.anonymous == nil {
+			return ErrInvalidIssuance
+		}
+		return validateAnonymousIssuanceAt(r.state.anonymous.record, now)
+	}
+	if r.state != nil && r.state.anonymous != nil {
+		return ErrInvalidIssuance
+	}
 	if s.mfa {
 		if r.state == nil || r.state.mfa == nil || r.state.magicLink != nil || r.state.password != nil || r.state.otp != nil {
 			return ErrInvalidIssuance

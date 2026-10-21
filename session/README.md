@@ -1,5 +1,30 @@
 # Session
 
+## Explicitly unprivileged anonymous recognition
+
+`NewAnonymousSessionService` selects anonymous-only primary validation and returns
+`AnonymousGetResult`, not authenticated-user `GetResult`. `Recognized` means only
+that the original anonymous session credential is currently valid; it grants no
+verified assurance, permanent-account authority or permission to select an upgrade
+target. `ValidateAt` and `ValidUntil` preserve the original bounded primary-read
+deadline. Ordinary verified/mixed readers continue to reject anonymous records.
+
+The configured owned reader must establish actual anonymous lifecycle, directory,
+expiry and exact session authority. This read contract does not issue a session
+or implement anonymous creation, deletion or upgrade; those native workflows and
+their explicit composition remain in development. Organization/factor/passkey
+authority and permanent credentials are rejected by this profile.
+
+For prospective creation, `NewAnonymousSessionIssuer` (or its explicit CSRF
+variant) selects a separate, unprivileged issuance profile. `PrepareAnonymous`
+retains the original session and remember policy; map its complete tokenless
+projection into native intent before the one-use `BindAnonymous`. Existing
+`Issue` delivers the original bearer only after an exact new committed receipt.
+Replay, ambiguity, failure, substituted records and expired delivery withhold it.
+This preparation is not risk approval or identity creation: native anonymous
+lifecycle and session persistence must still be connected before deployment.
+The anonymous request cannot enter verified-proof issuance or proof recovery.
+
 ## Sessionless phone-recovery pre-authentication
 
 Select `PreAuthPhonePasswordRecovery` in both `PreAuthIssuerConfig.Purpose` and

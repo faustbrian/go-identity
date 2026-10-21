@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit exact anonymous self-deletion through the existing credential-mutation
+  policy and transaction-owned subject/session/network counters. This is neither
+  anonymous authentication nor deletion permission; aliases and unfinished
+  upgrade stay closed.
+
 - Admit organization-owned domain-evidence publication and revocation through
   protected privileged policy and transaction-owned actor/resource counters.
   This is risk admission, not domain verification or organization permission;
