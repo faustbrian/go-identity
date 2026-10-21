@@ -3,6 +3,7 @@ go 1.27.2
 use (
 	.
 	./anonymous
+	./anonymous/postgres
 	./delivery
 	./delivery/postgres
 	./email
