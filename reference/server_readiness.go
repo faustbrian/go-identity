@@ -339,5 +339,26 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
+	if state.features != nil && state.features.anonymous != nil {
+		a := state.features.anonymous
+		for i := range guards {
+			if guards[i].schema != a.sessions.Schema {
+				continue
+			}
+			guards[i].constraints = slices.Clone(guards[i].constraints)
+			for j, name := range guards[i].constraints {
+				// Native anonymous issuance is installed last and preserves the
+				// complete selected purpose set. Readiness follows that actual
+				// successor, not a constraint deliberately replaced by its owner.
+				switch name {
+				case "session_issuances.session_issuances_purpose_check", "session_issuances.session_issuances_purpose_v2", "session_issuances.session_issuances_purpose_v3", "session_issuances.session_issuances_purpose_v4", "session_issuances.session_issuances_purpose_v5", "session_issuances.session_issuances_purpose_v6", "session_issuances.session_issuances_purpose_v7", "session_issuances.session_issuances_purpose_v8", "session_issuances.session_issuances_purpose_username_v1", "session_issuances.session_issuances_purpose_phone_password_v1", "session_issuances.session_issuances_purpose_phone_otp_v1", "session_issuances.session_issuances_purpose_anonymous_v1":
+					guards[i].constraints[j] = "session_issuances.session_issuances_purpose_anonymous_v1"
+					if a.upgrade != nil {
+						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_anonymous_upgrade_v1"
+					}
+				}
+			}
+		}
+	}
 	return guards
 }

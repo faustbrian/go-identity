@@ -154,6 +154,10 @@ type StoreConfiguration struct {
 	// HTTPMFA explicitly selects native TOTP completion transport, not other MFA
 	// routes. Original pre-auth/device, TOTP and strict rate owners are required.
 	HTTPMFA *HTTPMFAConfiguration
+	// Anonymous selects native unprivileged guest owners, not HTTP.
+	Anonymous *AnonymousConfiguration
+	// HTTPAnonymous independently opts into selected guest routes and read.
+	HTTPAnonymous *HTTPAnonymousConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native
@@ -464,6 +468,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	state.mu.Lock()
 	state.closed = true
 	state.cancel()
+	if state.features != nil && state.features.httpAnonymous != nil {
+		state.features.httpAnonymous.close()
+	}
 	if state.httpRate != nil {
 		state.httpRate.limiter.Close()
 	}

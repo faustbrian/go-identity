@@ -78,6 +78,10 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 		return nil, identity.InvalidInputError{Field: "reference_http_session"}
 	}
 	c := sessionhttp.SignOutConfig{GetConfig: sessionhttp.GetConfig{Network: network, Sessions: owner.reader, Rate: h.rate, Transport: h.config.Transport, Cookie: owner.config.Cookie, Now: time.Now, MaximumDuration: owner.config.MaximumDuration}, TrustedOrigins: h.config.TrustedOrigins}
+	c.Anonymous, err = s.anonymousGetSelection()
+	if err != nil {
+		return nil, err
+	}
 	if h.config.Transport == session.CredentialCookie {
 		c.CookieSignOut = owner.cookie
 	} else {

@@ -1,5 +1,66 @@
 # Identity reference composition
 
+## Optional anonymous browser workflows
+
+`StoreConfiguration.Anonymous` composes actual native guest signin/read and
+optionally deletion/upgrade. It enables no HTTP. The reference graph injects
+its counted risk and password-proof owners; applications supply configuration,
+keys and bounded policy callbacks, not domain stores or substitute workflows.
+`FeatureSet.Anonymous()` retains selected native operations/recovery under the
+initialized tenant and shutdown lifetime. Recovery never redelivers credentials.
+`FeatureSet.AnonymousPreAuth()` exposes the same guarded native initiation owner
+for Prepare/Issue and metadata-only Recover, without selecting any HTTP feature
+or changing the existing OTP/password flow profiles.
+
+`HTTPAnonymous` independently selects `Signin`, `Read`, `Deletion` and `Upgrade`.
+Signin adds the named `anonymous` method to `/v1/session/preauth-issue`; Read
+extends the existing cookie `/v1/session/get` with explicitly unprivileged guest
+metadata. The three mutation routes require one `Idempotency-Key`; upgrade
+additionally needs both original cookies/synchronizers and a genuine fresh
+password action proof. See [the exact browser contract](../http/anonymous/README.md).
+Nil selection exposes no routes, metadata, named method or guest read fallback.
+
+Select the same installed session store as password/OTP composition, separate
+guest/permanent cookie names, matching retained lookup/CSRF keys and the common
+signed device/exact Origin profile. `Anonymous.Validation.Clock` and deletion's
+validation configuration stay absent for graph injection. Upgrade additionally
+requires password signin/verification and permanent read/signout selection; its
+primary uses cookie custody, `identity.anonymous.upgrade` and the target-session
+audience. The graph injects password verification CSRF keys. The finite upgrade
+preserves its existing password target and transfers no application resources.
+Its issuer cookie must match the permanent cookie policy; permanent reading and
+signout must retain its lookup/CSRF keys. Incompatible selection fails before
+serving, while retained rotation keys remain supported.
+
+Apply every selected native history through `ReferenceMigrationApply` before
+initializing or serving. Anonymous histories append last to the existing kernel,
+session, password, MFA, capability, risk, audit and outbox predecessors; they do
+not rewrite installed prefixes. Keep the installed session lineage when adding
+later profiles. Readiness checks the selected successor constraints as well as
+the original migration ledgers. Closing the graph cancels/drains active native
+and HTTP work and permanently denies retained handles.
+
+The external-package integration journey is
+`TestReferencePostgresAnonymousUpgradeHTTP`: real PostgreSQL bootstrap → target
+registration/delivered verification/password signin → guest signin/read → fresh
+target proof → guest upgrade → permanent session read/logout. The companion
+`TestReferencePostgresAnonymousSigninReadDeleteHTTP` exercises self-deletion.
+They supply only declared application policy and external sender/HIBP seams;
+the graph supplies actual handlers, migrations, transactions and credentials.
+The deletion journey selects no neighboring atomic-rate HTTP feature, and
+`TestReferencePostgresAnonymousNativeWithoutHTTP` proves native initiation,
+signin, recognition and deletion with no HTTP graph or server selected.
+Run from this module with a task-owned PostgreSQL 18 fixture using the existing
+`IDENTITY_REFERENCE_POSTGRES_PORT` test input:
+
+```sh
+go test -race -tags=integration -count=1 -run '^TestReferencePostgresAnonymous' .
+```
+
+Agent runs must also set task-owned disposable Go caches and remove the fixture
+afterward. These journeys are selected-profile proof, not UI, provider delivery,
+deployment or complete platform/release qualification.
+
 ## Explicit phone/password recovery
 
 `StoreConfiguration.PhonePasswordReset` explicitly composes the native recovery

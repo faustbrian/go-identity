@@ -84,6 +84,8 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	anonymous                    *anonymousState
+	httpAnonymous                *anonymousHTTPState
 	migrations                   featureMigrationConfig
 	otp                          *otppg.SendService
 	signin                       *otppg.SigninService
@@ -157,6 +159,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.Anonymous != nil && c.OTP == nil || c.HTTPAnonymous != nil && c.Anonymous == nil {
+		return identity.InvalidInputError{Field: "reference_anonymous"}
+	}
 	if c.HTTPEmailOTPChange != nil && (c.Email == nil || c.Email.OTPChange == nil || c.Session == nil || c.OTP == nil || c.HTTPRate == nil) {
 		return identity.InvalidInputError{Field: "reference_http_email_otp_change"}
 	}
@@ -501,6 +506,22 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	anonymousOwner, err := composeAnonymous(c, d, evaluator, passwordVerificationOwner)
+	if err != nil {
+		return err
+	}
+	httpAnonymous, err := composeAnonymousHTTP(c, anonymousOwner, httpPreAuth, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpAnonymous != nil && !retainedResetHTTP {
+			httpAnonymous.close()
+		}
+	}()
+	if anonymousOwner != nil {
+		migrationConfig.preauthIssue = true
+	}
 	usernameOwner, err := composeUsername(c, d, evaluator, passwordVerificationOwner)
 	if err != nil {
 		return err
@@ -800,6 +821,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	s.features.session = sessionOwner
 	s.features.passwordVerification = passwordVerificationOwner
+	s.features.anonymous = anonymousOwner
+	s.features.httpAnonymous = httpAnonymous
 	s.features.email = emailOwner
 	s.features.passwordChange = passwordChangeOwner
 	s.features.mfaEnrollment = mfaEnrollmentOwner

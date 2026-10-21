@@ -95,6 +95,13 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "signup", Service: owner, Action: "identity.password.signup", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
 	}
 	var feature identityhttp.Feature
+	if selected := s.state.features.httpAnonymous; selected != nil && selected.config.Signin {
+		native := s.state.features.anonymous
+		if native == nil || native.preauth == nil {
+			return nil, identity.InvalidInputError{Field: "reference_http_anonymous_preauth"}
+		}
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "anonymous", Service: composedPreAuth{state: s.state, issuer: native.preauth}, Action: "identity.anonymous.signin", CallbackURL: native.preauthConfig.CallbackURL, PolicyID: native.policy, PolicyVersion: native.version})
+	}
 	if username := s.state.features.httpUsername; username != nil {
 		if selected := username.signup; selected != nil {
 			owner, err := f.UsernameSignupPreAuth()

@@ -154,6 +154,13 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 		return nil, invalid
 	}
 	contributions := []identityhttp.Feature{probe}
+	anonymousFeature, err := server.anonymousFeature(c.HTTP.Network)
+	if err != nil {
+		return nil, err
+	}
+	if anonymousFeature != nil {
+		contributions = append(contributions, *anonymousFeature)
+	}
 	phoneFeature, err := server.phoneVerificationFeature(c.HTTP.Network, f)
 	if err != nil {
 		return nil, invalid

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Independently compose native anonymous signin/read, self-deletion and the
+  existing-password, no-resource-transfer upgrade profile, with opt-in HTTPS
+  routes and metadata-only native recovery handles. Selected native forward
+  migrations retain installed predecessors; apply them before initialization.
+  All mutations require original retry keys and browser possession. Upgrade
+  consumes both original proof and capability once, revokes guest sessions,
+  and delivers permanent credentials only for its newly acknowledged commit.
+  Reject upgrade issuance incompatible with the selected permanent cookie,
+  session-reading and signout keys before serving; retained keys remain valid.
+  Expose native anonymous preauth without HTTP and include atomic-rate history
+  when anonymous deletion/upgrade is the only HTTP secret-rate consumer.
+
 - Add separately selected native phone/password recovery composition and opt-in
   request/completion HTTP with a target-bound no-remember recovery browser.
   The graph supplies actual SMS, delivery, confirmed-TOTP and durable counter
