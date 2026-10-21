@@ -101,6 +101,14 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// Anonymous creation can mutate kernel rows only through the closed owning
+	// seam. A schema alias must not bypass its creation/commit/recovery guards.
+	if op.OperationID == "identity.anonymous.signin" {
+		return op == anonymousCreationOperation() && d == anonymousCreationDescriptor()
+	}
+	if op.OperationID == "identity.anonymous.delete" {
+		return op == anonymousDisposalOperation() && d == anonymousCreationDescriptor()
+	}
 	// Phone recovery must retain the existing password/reset material writer;
 	// neither a same-owner alias nor a future schema can omit its typed phases.
 	if op.OperationID == "identity.phone.password-reset-complete" {

@@ -1,5 +1,46 @@
 # Identity PostgreSQL
 
+## Anonymous placeholder namespace
+
+Append `AnonymousIdentityMigrationSource{Base: installedHistory, Version: next}`
+after identifier retirement, normalization and every installed successor before
+selecting anonymous identity storage. It adds the non-contact placeholder kind
+without changing existing contact rows or predecessor migration bytes. Database
+constraints reject verification, primary selection, display/contact values and
+noncanonical opaque IDs; ordinary email/phone recipient discovery stays separate.
+No destructive down migration or anonymous workflow is provided by this source.
+The native anonymous lifecycle and session effects remain in development.
+
+`NewAnonymousCreationDomain` borrows the exact enlisted kernel repository.
+Include `AnonymousCreationFields` unchanged in the original native command;
+its closed `identity.anonymous.signin.native-v1` profile uses an anonymous-flow
+scope, not a fabricated credential or permanent-user actor. `Apply` owns user,
+admitted-attribute and placeholder SQL in that same Work; changed/foreign or
+repeated intent poisons it. `Work.AnonymousCreation` lends only actual provisional
+creation to the current native invocation. The suffix also retains immutable
+original-command creation bindings for recovery after payload pruning; it is
+not an anonymous lifecycle store or a second command journal. Native risk,
+expiry, session, deletion and upgrade still require their owning composition.
+
+## Closed anonymous self-disposal
+
+Append `AnonymousDisposalMigrationSource` after the installed anonymous creation
+and status/legal-hold histories. `GetAnonymousDisposal` preserves actual anonymous
+creation, placeholder and independent user/identifier/credential generations plus
+legal-hold version. It authenticates no bearer and grants no disposal permission.
+Freeze `AnonymousDisposalFields` before fingerprinting. The exact native
+`identity.anonymous.delete.native-v1` owner then calls
+`NewAnonymousDisposalDomain.Apply` inside its original Work after real session,
+risk and pure retention admission. It rejects extra contacts/credentials, changed
+epochs/hold and missing/duplicate/reconstructed invocation. Delete/anonymize erase
+kernel attributes/profile and retain distinct irreversible identity tombstones;
+retain preserves those payloads but terminalizes authentication. All ordinary
+kernel SQL stays here. `Check` is the final same-Work read fence; original retained
+effect correlation supports recovery without inferring success from absent data.
+Anonymous lifecycle and complete session/family revocation remain their owners'
+atomic effects, not private SQL in the workflow. No general privacy endpoint,
+permanent-user deletion or upgrade is enabled by this component alone.
+
 ## OAuth authentication-age continuation handoff
 
 The canonical native OAuth owner can select

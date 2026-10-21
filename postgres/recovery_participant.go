@@ -255,6 +255,12 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		if passwordRegistrationOperation(recovery.state.plan.feature.Operation) {
 			return recoverPasswordRegistration(ctx, recovery)
 		}
+		if recovery.state.plan.feature.Operation == anonymousCreationOperation() {
+			return recoverAnonymousCreation(ctx, recovery)
+		}
+		if recovery.state.plan.feature.Operation == anonymousDisposalOperation() {
+			return recoverAnonymousDisposal(ctx, recovery)
+		}
 		if authenticatedOperation(b) {
 			return recoverSignInProofUse(ctx, recovery)
 		}

@@ -37,6 +37,8 @@ type workState struct {
 	execution                 *domainExecution
 	creation                  *identity.User
 	registrationUser          *identity.User
+	anonymousCreation         *anonymousCreationProgress
+	anonymousDisposal         *anonymousDisposalProgress
 	registrationAccepted      bool
 	magicLinkRequestAccepted  bool
 	resetRecipient            *resetRecipientAdmission

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Add closed kernel-owned anonymous disposal with original legal-hold and
+  independent authority-generation fencing, retained command evidence and
+  terminal tombstones. Native anonymous/session/risk/retention admission remains
+  mandatory. Append `AnonymousDisposalMigrationSource` after creation and status
+  histories; delete/anonymize erase only this owner's attributes and profile.
+
+- Add closed kernel-owned anonymous creation in the original native transaction,
+  with complete intent binding, non-contact placeholder and retained original
+  creation correlation. No permanent credential is fabricated; native lifecycle,
+  risk and session composition remain required before enabling anonymous signin.
+
+- Add a forward-only anonymous-placeholder namespace migration, preserving
+  existing identifier history and contacts. Database constraints forbid contact
+  verification, primary selection and deliverable/display values; email/phone
+  recipient discovery remains separate. Anonymous lifecycle is not enabled.
+
 - Retain exact phone/password MFA challenge provenance through canonical plan
   encoding, decoding and original command recovery, without reinterpreting an
   email/username challenge or adding a second primary capability.
