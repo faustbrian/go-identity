@@ -1,9 +1,11 @@
 # PostgreSQL anonymous lifecycle
 
-Experimental primary storage and same-Work lifecycle effects. Public anonymous
-signin/recovery and self-deletion are implemented with authenticated public
-dependencies. Upgrade and HTTP/reference composition are still in development;
-this is not a delivered complete M09. No local replacement is required.
+Primary storage and same-Work lifecycle effects for public anonymous signin,
+recovery, self-deletion and the selected permanent-target password upgrade.
+The native services compose authenticated public dependencies; the upgrade
+profile and its limitations are documented below. HTTP/reference composition
+and broader anonymous lifecycle profiles remain unfinished, so this is not
+a delivered complete M09.
 
 The adapter owns anonymous metadata, original expiry and lifecycle versions.
 Kernel identities/placeholders remain kernel-owned; session records remain
@@ -26,7 +28,8 @@ Every read checks current lifecycle/status, all kernel and policy epochs and
 session/family state. Its original evidence expires within 20 seconds of the
 first lookup and never outlives anonymous expiry; copies and later owner reads
 cannot renew it. This factory performs no issuance, cache fallback or activity
-update. Permanent-account upgrade is not yet implemented by this profile.
+update. This reader does not perform permanent-account upgrade; that operation
+requires the explicit native composition below.
 
 See [anonymous policy](../README.md), [changelog](CHANGELOG.md) and
 [security](../../SECURITY.md).
@@ -93,3 +96,46 @@ credential/CSRF and exact ingress. Recovery authenticates original encrypted
 input even after self-revocation, reconciles the existing owners and returns
 metadata only. It never issues credentials or authorizes live access. Calls
 remain bounded and no background jobs, private ledger or cache are introduced.
+
+## Permanent-target upgrade
+
+`NewUpgradeService` composes the existing owners through `UpgradeConfig`:
+`Guest` supplies actual anonymous/session/kernel/risk/retention configuration;
+`Primary` is the password adapter's action-primary source for
+`identity.anonymous.upgrade` and `ProofAudience`; `Target` selects the real
+permanent password-session profile. Supply both retained CSRF key sets, the
+session issuer and the actual capability issuer/preparation configuration.
+Guest and permanent namespaces may differ, but tenant/global/audience/storage
+ownership must agree. The constructor performs no migration or network work.
+
+Install the selected kernel `AnonymousUpgradeDisposalMigrationSource`, password
+`AnonymousUpgradeReauthenticationMigrationSource`, the existing MFA factor-
+authority history, session `AnonymousUpgradeMigrationSource` and this module's
+`UpgradeMigrationSource`,
+plus the actual capability issuance/one-use and protected-risk-counter histories.
+Append these to their documented predecessors without rewriting installed steps.
+
+Call password verification for the selected upgrade action, then submit that
+fresh target proof, both original cookie credentials and CSRF synchronizers, the
+actual anonymous subject in a typed `anonymous.MergePlan`, matching remember
+policy, trusted ingress and one idempotency key to `Upgrade`. This finite profile
+preserves an existing permanent target, including canonical ULIDs and historical
+authentication. It transfers no application resources. Only no-conflict or
+`profile.display_name`/`KeepTarget` plans are supported; resource-transfer,
+other conflict decisions and enrolled/unknown MFA fail closed.
+
+The first durable command issues the real one-use capability. The second consumes
+that original grant and target proof atomically with anonymous disposal, all
+guest-session/family revocations, the new permanent session and required
+audit/outbox effects. Original evidence expires within 20 seconds of the first
+authoritative read, or the earlier proof/guest deadline; waits and retries never
+renew it. Acknowledged new completion alone reveals the new cookie/CSRF once.
+
+Persist both credential-free queries in `UpgradeResult`. Unknown is not rollback:
+`RecoverUpgrade` requires those exact queries, both original credentials/CSRF
+and original ingress. It reconciles the original commands without reexecution,
+new grants, fresh authentication or credential redelivery. Successful same-key
+replay is likewise metadata-only, including after the original grant expires.
+Retain original lookup/CSRF, request/envelope and capability verification keys for
+their respective recovery lifetimes. Keep `Guest.IntentKey` stable for retained
+requests; independent transport-key rotation does not change original intent.

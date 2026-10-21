@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Compose the selected no-resource-transfer permanent-account upgrade with
+  real target password reauthentication, both cookies/CSRF, retained original
+  intent and separate durable one-use grant issuance. Protected completion
+  consumes the grant and target proof atomically with guest disposal, every
+  guest session/family revocation and one permanent session. Only its new known
+  commit reveals that session; original recovery and replay are metadata-only.
+  Install the selected kernel, password, MFA, session, capability and anonymous
+  forward histories first. Resource transfer, other factors and HTTP/reference
+  composition remain unsupported, not weaker fallback paths.
+
+- Add anonymous-owned original source/target and typed merge commitments plus
+  same-Work upgrade/retained recovery storage. Append `UpgradeMigrationSource`;
+  existing subject/deletion histories are unchanged. The finite storage profile
+  transfers no resources and preserves the target; actual proof/session/retention
+  orchestration remains required before enabling upgrade.
+
 - Compose public anonymous signin and exact recovery through real kernel,
   pre-auth, risk, session, authorization, audit and outbox owners. Only a newly
   acknowledged original commit reveals bearer/CSRF; replay never regenerates it.

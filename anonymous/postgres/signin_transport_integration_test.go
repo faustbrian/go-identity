@@ -17,6 +17,7 @@ import (
 type anonymousCommitFault struct {
 	before   bool
 	disposal bool
+	issuance bool
 	hit      atomic.Bool
 }
 
@@ -36,7 +37,13 @@ type anonymousCommitConn struct {
 }
 
 func (c *anonymousCommitConn) Write(p []byte) (int, error) {
-	if !c.fault.disposal && bytes.Contains(p, []byte(`.subjects(tenant_id,user_id,subject_id,created_at,expires_at,state,version,cleanup,creation_command_id)`)) || c.fault.disposal && bytes.Contains(p, []byte(`identity.anonymous_disposals(`)) {
+	statement := `.subjects(tenant_id,user_id,subject_id,created_at,expires_at,state,version,cleanup,creation_command_id)`
+	if c.fault.issuance {
+		statement = `INSERT INTO public.capability_identity_one_use(`
+	} else if c.fault.disposal {
+		statement = `identity.anonymous_disposals(`
+	}
+	if bytes.Contains(p, []byte(statement)) {
 		c.mutation.Store(true)
 	}
 	if c.fault.before && c.mutation.Load() && len(p) >= 5 && p[0] == 'Q' && bytes.EqualFold(p[5:], []byte("commit\x00")) && c.fault.hit.CompareAndSwap(false, true) {
