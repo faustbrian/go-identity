@@ -8,6 +8,7 @@ use (
 	./delivery/postgres
 	./email
 	./http
+	./http/anonymous
 	./http/email
 	./http/magiclink
 	./http/mfa

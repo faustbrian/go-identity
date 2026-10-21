@@ -20,15 +20,23 @@ func sessionWire(c SignOutConfig, logout bool) *identityhttp.WireOperation {
 	errorSchema := object([]string{"error"}, map[string]any{"error": map[string]any{"type": "string", "enum": []string{"invalid_request", "not_found", "method_not_allowed", "misdirected_request", "rate_limited", "unavailable", "origin_denied", "denied", "conflict", "in_progress"}}})
 	principal := object([]string{"tenantID", "userID"}, map[string]any{"tenantID": text(256), "userID": text(256)})
 	state := object([]string{"id", "issuedAt", "lastActivityAt", "expiresAt", "absoluteExpiresAt"}, map[string]any{"id": text(256), "issuedAt": date, "lastActivityAt": date, "expiresAt": date, "absoluteExpiresAt": date})
-	success := any(map[string]any{"oneOf": []any{
+	readShapes := []any{
 		object([]string{"authenticated", "needsRefresh"}, map[string]any{"authenticated": map[string]any{"const": false}, "needsRefresh": map[string]any{"const": false}}),
 		object([]string{"authenticated", "needsRefresh", "principal", "session", "refreshEligibleAt"}, map[string]any{"authenticated": map[string]any{"const": true}, "needsRefresh": boolean, "principal": principal, "session": state, "refreshEligibleAt": date}),
-	}})
+	}
+	if !logout && c.Anonymous != nil {
+		guest := object([]string{"recognized", "principal", "session"}, map[string]any{"recognized": map[string]any{"const": true}, "principal": principal, "session": state})
+		readShapes = append(readShapes, object([]string{"authenticated", "needsRefresh", "anonymous"}, map[string]any{"authenticated": map[string]any{"const": false}, "needsRefresh": map[string]any{"const": false}, "anonymous": guest}))
+	}
+	success := any(map[string]any{"oneOf": readShapes})
 	response := func(schema any) map[string]any {
 		return map[string]any{"description": "Credential-free JSON. Cache-Control: no-store; X-Content-Type-Options: nosniff.", "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
 	}
 	id := "identity.session.get"
 	description := "Exact GET; no body, query, trailers or Idempotency-Key. Credentials are optional: absent/inactive returns unauthenticated metadata. No mutation, cookie emission or authority renewal."
+	if !logout && c.Anonymous != nil {
+		description += " Explicit optional guest cookie is recognized only when the permanent cookie is absent. Both selected cookies are singleton. A present permanent credential never falls back to a guest, including inactivity or failure. Guest metadata is distinct, unprivileged and never authenticated-user or refresh authority."
+	}
 	statuses := []string{"400", "404", "405", "421", "429", "503"}
 	if logout {
 		id = "identity.session.signout"
@@ -89,6 +97,13 @@ func sessionWire(c SignOutConfig, logout bool) *identityhttp.WireOperation {
 	if !logout {
 		data, _ = json.Marshal(scheme)
 		wire.SecuritySchemes = []identityhttp.WireComponent{{Name: schemeName, Definition: data}}
+		if c.Anonymous != nil {
+			guest, _ := c.Anonymous.Cookie.DeletionAttributes()
+			data, _ = json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": guest.Name, "description": "Explicit optional unprivileged guest cookie, used only if the permanent cookie is absent. Never verified-user admission or fallback after permanent validation."})
+			wire.SecuritySchemes = append(wire.SecuritySchemes, identityhttp.WireComponent{Name: "AnonymousSessionCookie", Definition: data})
+			definition["security"] = []any{map[string]any{}, map[string]any{schemeName: []string{}}, map[string]any{"AnonymousSessionCookie": []string{}}}
+			wire.Definition, _ = json.Marshal(definition)
+		}
 	}
 	return wire
 }

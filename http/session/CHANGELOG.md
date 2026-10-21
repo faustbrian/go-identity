@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Recheck original guest and permanent read custody at final response
+  commitment; expired results return unavailable without identity metadata.
+
+- Independently select guest recognition on cookie session GET. Guests appear
+  only in an unprivileged anonymous projection, never verified authentication.
+  A present permanent cookie always selects permanent validation with no guest
+  fallback. Original source/session deadlines remain enforced after hooks.
+
 - Allow explicitly selected target-bound phone-password recovery pre-auth
   profiles alongside login methods. Recovery forbids every remember member,
   carries zero session policy and requires no lifetime configuration when

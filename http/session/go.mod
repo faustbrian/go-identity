@@ -7,7 +7,7 @@ require (
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
 	github.com/faustbrian/go-identity v0.0.0-20261019000410-c5205a35b05c
 	github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8
-	github.com/faustbrian/go-identity/session v0.0.0-20261020084459-928f9b710602
+	github.com/faustbrian/go-identity/session v0.0.0-20261021111947-987fa2c0de56
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/felixge/httpsnoop v1.1.0
