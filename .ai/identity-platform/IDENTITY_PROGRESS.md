@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-21 02:54 UTC
+## TL;DR — updated 2026-10-21 05:34 UTC
 
 **Estimated whole-goal completion: approximately 20–25%, with low confidence.**
 **Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
@@ -11,6 +11,17 @@ credentials, and four CAPTCHA adapters are delivered as bounded profiles.
 Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
+
+**Newly delivered OAuth client discovery:** a fresh, currently authorized
+platform manager lists/gets safe client IDs and versions, then rotates/deletes
+using those discovered versions. Root39061aa and nativee429531 are independently
+APPROVED, main-pushed and exact-CI green (39549697571/39550056456). Public-root
+PostgreSQL/race discovery/custody/original-deadline acceptance passes45.503s;
+the downloaded public-native fresh discovery -> rotation/delete consumer passes
+10.273s without local replacements. All68 root/69 native downloaded files match
+committed source. Denial, pagination, actor-scoped cursor, late withdrawal and
+unchanged mutation recovery checks pass. This finite profile is CLOSED; full M30,
+HTTP/reference and unit/release qualification remain open. Still9/39 milestones.
 
 **Active M09 — guest signin/self-deletion native profile delivered:** genuine public signin creates the kernel
 identity, anonymous lifecycle and session atomically, with pre-auth/risk and no
@@ -35,12 +46,48 @@ v0.0.0-20261021024534-5a00abc431cb matches all23 files against source; its genui
 PostgreSQL/race self-deletion baseline/lost-COMMIT consumer PASS5.259s without
 local replacement. Final exact Required39534807911 is green. No unit increment.
 
-**Parallel OAuth client management:** genuine platform-manager creation -> warm
-ordinary code/S256 use -> terminal client deletion is implemented but not accepted.
-Independent complete review found three defects: mutable static registration
-projection, existing discovery not advertising selected managed Basic support,
-and noncanonical lifecycle event names. The existing worker owns these bounded
-corrections and focused regression checks; primary retains public pins/delivery.
+**Newly delivered OAuth client management profile:** a genuine current platform
+manager can create a confidential client, use it through two already-running
+ordinary code/S256 services, and terminally delete it. Old credentials and
+descendants then deny. Root023e5fe and native089714d are main-pushed, exact CI
+39537009275/39537703223 green and independently APPROVED. All three concrete
+review findings are corrected. Actual public-root failure/recovery consumer
+PostgreSQL/race43.997s and downloaded public-native warm consumer5.707s PASS;
+all64 root/60 native downloaded files match source. This finite profile is CLOSED,
+not full M30: remaining management and HTTP/reference remain open. The later
+rotation delivery is summarized below.
+
+**Current primary implementation:** permanent-target guest upgrade. Local typed
+merge plans and protected risk counters pass focused/full-core race/vet/fuzz.
+The existing password-proof owner now frames the permanent target independently
+from the guest resource; focused framing/compatibility race1.427s and vet pass.
+These are unfinished, unreviewed prerequisites, not native upgrade delivery.
+The closed kernel upgrade declaration and guest-only disposal now also pass
+actual PostgreSQL/race2.626s alongside retained self-deletion, including permanent
+ULID target preservation and late rollback. These kernel tests use explicit
+capability/counter probes; real cryptographic consumption, anonymous mapping,
+session replacement and HTTP/reference remain unfinished. No M09 closure.
+
+**New guest-upgrade component result:** real PostgreSQL/race 3.205s proves guest-only
+kernel disposal plus revocation of all 18 guest sessions/19 families, one new
+permanent session and unchanged permanent ULID target. Late failure rolls back
+both owners; an existing prospective-family collision now denies. These tests use
+explicit capability/counter probes, not actual signed-proof orchestration. Native
+proof issuance/consumption, full upgrade service and HTTP/reference remain open.
+Its capability verification prerequisite e01a370 is now main-pushed and exact
+Required 39544505289 green; the authenticated public adapter matches source.
+Primary adapter adoption remains pending.
+
+**OAuth rotation finite profile CLOSED:** approved native rotation f5ae7d0 and
+patched-toolchain metadata d130abc are main-pushed; exact Required 39545663160
+is green. The actual public-root PostgreSQL/race consumer passes 31.296s without local
+replacement. Clients can rotate with explicit bounded predecessor overlap;
+rotation invalidates older grants, and new explicit authorization is required.
+The original retained authentication deadline defect is corrected and independently
+reviewed. All 65 authenticated public-native files match source; that downloaded
+module's actual rollback and original pre/post-COMMIT recovery consumer passes
+PostgreSQL/race 23.681s without local replacement. Full M30, HTTP/reference and
+unit qualification remain open; closing this profile does not increment 9/39.
 
 **Delivered OIDC email profile:** consented email UserInfo works through actual
 code/PKCE/access-token and independent-RP consumers. Rootd80acf5, child9d8cd36
@@ -76,8 +123,10 @@ and full M25 remain open. The source check confirmed a kernel-owned typed
 participant-admission gap for atomic challenge consumption; that successor is
 parked, and no SSO worker/code is active. The dependency-ready OAuth lane is
 platform-owned confidential-client creation, ordinary code/S256 use and terminal
-deletion; its review corrections are active as described above. Primary-owned
-M09 continues independently.
+deletion; creation, rotation and private discovery profiles are now delivered as
+described above. A fresh bounded check confirms SSO/SCIM remain parked for actual
+primary-owned atomic challenge/provisioning admission, not missing parsers.
+Primary-owned M09 continues independently; its full native upgrade is unfinished.
 
 **Qualification gap:** whole-tree secret scanning flags11 unchanged delivery
 test/documentation locations; changed-path findings are zero. This is not a
