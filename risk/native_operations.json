@@ -1,6 +1,8 @@
 {
   "identity.email.verification-signin": "authentication",
   "identity.oauth-server.continue": "privileged",
+  "identity.organization.domain.evidence.apply": "privileged",
+  "identity.organization.domain.evidence.revoke": "privileged",
   "identity.organization.domain.reserve": "privileged",
   "identity.organization.domain.withdraw": "privileged",
   "identity.organization.invitation.expire": "privileged",

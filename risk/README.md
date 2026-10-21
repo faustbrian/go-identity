@@ -9,6 +9,19 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Organization-owned domain evidence
+
+`identity.organization.domain.evidence.apply` and
+`identity.organization.domain.evidence.revoke` use the same protected Privileged
+class as organization domain reservation and withdrawal. This explicit native
+split implements organization's sole proof-authority contract: publication and
+revocation mutate domain authority, so they require the configured mandatory
+signals plus exact transaction-owned tenant/actor/resource/network counters.
+Neither operation verifies DNS/HTTPS, authenticates a member or grants permission
+to publish a proof. The organization owner must independently enforce those
+requirements and original evidence expiry in its atomic command. Unlisted aliases
+and the separate unfinished SSO challenge/verify operations remain denied.
+
 ### Anonymous MFA OTP login-send counters
 
 `CommandCounterPolicy.PrepareMFALoginSend` selects only

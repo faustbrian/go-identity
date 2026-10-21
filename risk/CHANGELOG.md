@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit organization-owned domain-evidence publication and revocation through
+  protected privileged policy and transaction-owned actor/resource counters.
+  This is risk admission, not domain verification or organization permission;
+  missing signals, unlisted aliases and unfinished SSO actions stay closed.
 - Admit exact organization custom-role assignment and revocation through the
   existing privileged signal policy and protected actor/resource counters.
   Unknown actions, aliases and missing signals continue to fail closed.
