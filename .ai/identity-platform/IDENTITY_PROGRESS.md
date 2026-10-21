@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-21 05:34 UTC
+## TL;DR — updated 2026-10-21 08:24 UTC
 
 **Estimated whole-goal completion: approximately 20–25%, with low confidence.**
 **Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
@@ -12,6 +12,50 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
+**Current delivery checkpoint:** guest-upgrade source is independently APPROVED
+(79-path snapshot `60a4a297...36c45`). Capability recovery `183afe9` and the four
+identity contract roots `2eafc25` are on main with exact Required CI green
+(39562261222 / 39564542752); downloaded prerequisites match committed source.
+MFA/password/risk/session native owners are also main-pushed as `a33b0df`, exact
+Required CI 39567012786 green, after public-dependency race tests and vet.
+The anonymous upgrade service is independently approved and main-pushed as
+`51b6de2`, exact Required CI 39568175990 green. Its public-dependency journey and
+issuance/final commit-loss recovery pass (22.676s); the actual downloaded native
+module also passes the complete PostgreSQL/race consumer (3.254s), without local
+replacements. Independent delivery audit confirms the reviewed source, remote
+heads, public module and applicable CI. The finite native upgrade profile is
+**CLOSED**. HTTP/reference remains open;
+M09 is not closed. In parallel, the OAuth worker is implementing OIDC
+`prompt=none` with bounded, non-renewing consent reuse. Its real native
+explicit-consent → silent code/S256 → independent ID-token/UserInfo journey now
+passes locally, as do fourteen preflight denial/expiry/isolation cases and
+targeted late consent/session-withdrawal fences. Required-effect rollback,
+ambiguous-outcome recovery, original-budget checks, review and delivery remain.
+No milestone increment.
+
+**Retained M09 runtime evidence, source now native-main delivered:** the selected public
+guest-upgrade journey and its affected PostgreSQL/race acceptance pass92.978s.
+Real signed target password proof and durable one-use capability drive guest
+disposal, all18 guest sessions/19 families revoking and a usable permanent
+session preserving the ULID target, historical authentication and remember
+policy. Wrong credentials/CSRF, late hold/ban/session/factor withdrawal,
+audit/outbox rollback, competing commands, final pre/post-COMMIT recovery and
+metadata-only replay after original grant expiry pass. A new transport-key
+rotation regression first failed conflict1.381s, then passes2.776s and the race
+group: retained original keys no longer change retry identity.
+Pruned live guest-session payload recovery and wrong-possession denial now pass.
+Issuance before/after-COMMIT ambiguity passes8.895s after the capability owner
+added this exact profile to its existing fenced absence proof (the original
+case demonstrated unresolved recovery). Its native race/vet passes3.530s; the
+three-file prerequisite is independently APPROVED and main-pushed183afe9, with
+protected-main CI39562261222 green. Retained
+public signin/self-deletion/full-upgrade controls pass22.585s; native ordinary
+race/tagged vet and complete78file secret checking pass. The complete78file
+identity candidate and its public-pin/KeepTarget delta are independently approved
+and native-main delivered as summarized above. Final full M09 composition remains.
+HTTP/reference remains. This is not M09 closure; no count increment for an
+unfinished delivery.
+
 **Newly delivered OAuth client discovery:** a fresh, currently authorized
 platform manager lists/gets safe client IDs and versions, then rotates/deletes
 using those discovered versions. Root39061aa and nativee429531 are independently
@@ -22,6 +66,22 @@ the downloaded public-native fresh discovery -> rotation/delete consumer passes
 committed source. Denial, pagination, actor-scoped cursor, late withdrawal and
 unchanged mutation recovery checks pass. This finite profile is CLOSED; full M30,
 HTTP/reference and unit/release qualification remain open. Still9/39 milestones.
+
+**Newly delivered OAuth client replacement — finite profile CLOSED:** fresh
+manager discovery -> complete redirect/scope replacement -> old-grant denial ->
+new explicit consent/code/token works with unchanged Basic custody. Root3d1ae94
+and nativeb9a37e4 are independently APPROVED, main-pushed and exact-CI green
+(39559012902/39562093099). Public-root PostgreSQL/race journey and populated-
+history compatibility pass29.271s; the actual downloaded public-native journey
+passes12.868s without replacements. All70 root/75 native artifact files match
+committed source (native LICENSE inherits the root). Secret generations and
+original overlap expiry are preserved. The reviewed oracle defect is corrected;
+all ten affected race cases have observed passes, while the original fixture503
+group remains recorded as failed and its unchanged exact rerun as passed.
+Full M30, HTTP/reference and unit/release qualification remain open; still9/39.
+The bounded next-lane readiness pass is complete and the OIDC silent-
+reauthorization worker is active. Enterprise SSO/SCIM remain parked for missing
+atomic owner composition.
 
 **Active M09 — guest signin/self-deletion native profile delivered:** genuine public signin creates the kernel
 identity, anonymous lifecycle and session atomically, with pre-auth/risk and no
@@ -57,7 +117,7 @@ all64 root/60 native downloaded files match source. This finite profile is CLOSE
 not full M30: remaining management and HTTP/reference remain open. The later
 rotation delivery is summarized below.
 
-**Current primary implementation:** permanent-target guest upgrade. Local typed
+**Earlier guest-upgrade component checkpoints (superseded above):** local typed
 merge plans and protected risk counters pass focused/full-core race/vet/fuzz.
 The existing password-proof owner now frames the permanent target independently
 from the guest resource; focused framing/compatibility race1.427s and vet pass.
