@@ -66,7 +66,14 @@ func anonymousUpgradeIssuerFixture(t *testing.T) (*session.SessionIssuer, sessio
 }
 
 func TestAnonymousUpgradeIssuerRequiresExactTransitionAndKnownNewCommit(t *testing.T) {
-	issuer, prepared, command, _, _ := anonymousUpgradeIssuerFixture(t)
+	issuer, prepared, command, executor, clock := anonymousUpgradeIssuerFixture(t)
+	originalDeadline := clock.now.Add(20 * time.Second)
+	native := executor.execute
+	executor.execute = func(ctx context.Context, r session.IssueRequest) (session.IssueExecution, error) {
+		out, err := native(ctx, r)
+		clock.now = clock.now.Add(time.Second)
+		return out, err
+	}
 	if _, err := issuer.Issue(context.Background(), prepared); err == nil {
 		t.Fatal("unbound upgrade issued")
 	}
@@ -83,6 +90,9 @@ func TestAnonymousUpgradeIssuerRequiresExactTransitionAndKnownNewCommit(t *testi
 	out, err := issuer.Issue(context.Background(), bound)
 	if err != nil || out.CommitOutcome != identity.CommitOutcomeCommitted || out.Replayed {
 		t.Fatal("known new upgrade withheld", err)
+	}
+	if !out.DeliveryValidUntil.Equal(originalDeadline) {
+		t.Fatal("fresh delivery lost the original native deadline")
 	}
 	original, _ := prepared.Session()
 	want, _ := original.Bindings()
@@ -138,6 +148,9 @@ func TestAnonymousUpgradeIssuerWithholdsReplayUnknownWrongVersionAndLateDelivery
 				t.Fatal("invalid upgrade result accepted")
 			}
 			requireNoIssuedToken(t, out)
+			if !out.DeliveryValidUntil.IsZero() {
+				t.Fatal("historical or unsuccessful issuance retained delivery permission")
+			}
 		})
 	}
 }

@@ -287,6 +287,12 @@ type IssueResult struct {
 	Cookie        http.Cookie
 	Replayed      bool
 	RetryAfter    time.Duration
+	// DeliveryValidUntil is the original exclusive native delivery deadline for
+	// anonymous upgrade. Transports must preserve it through final commitment,
+	// not derive another lease from the returned session or their own clock.
+	// Zero means no deadline was projected: other issuance profiles, replay,
+	// recovery or failure. It is not current authentication or reusable proof.
+	DeliveryValidUntil time.Time
 }
 
 // Format redacts all scope and transport metadata.
@@ -310,6 +316,7 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		if recover() != nil {
 			out.Token = Token{}
 			out.Cookie = http.Cookie{}
+			out.DeliveryValidUntil = time.Time{}
 			if attempted && out.CommitOutcome == identity.CommitOutcomeUnknown {
 				out.Session = Session{}
 				err = identity.UnknownCommitError{CommandID: out.CommandID}
@@ -392,6 +399,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 	}
 	out.Cookie = cookie
 	out.Token = p.state.token
+	if s.anonymousUpgrade {
+		// The signed grant may expire before the replacement session. Preserve
+		// its exact original admission bound across subsequent HTTP forwarding.
+		out.DeliveryValidUntil = p.state.upgrade.until
+	}
 	p.state.csrfReady.Store(true)
 	return out, nil
 }

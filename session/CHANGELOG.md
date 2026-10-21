@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain anonymous upgrade's original exclusive delivery deadline in fresh
+  issuance results so transports cannot renew it after native commitment.
+  Other profiles, historical results and failures expose no delivery lease.
+
 - Expose a nil-safe, IO-free constructor-validity check for the explicit
   anonymous reader. It grants no possession, verified authentication or lease.
 
