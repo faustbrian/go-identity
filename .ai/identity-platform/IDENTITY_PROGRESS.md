@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 22:08 UTC
+## TL;DR — updated 2026-10-21 02:54 UTC
 
 **Estimated whole-goal completion: approximately 20–25%, with low confidence.**
 **Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
@@ -11,6 +11,78 @@ credentials, and four CAPTCHA adapters are delivered as bounded profiles.
 Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
+
+**Active M09 — guest signin/self-deletion native profile delivered:** genuine public signin creates the kernel
+identity, anonymous lifecycle and session atomically, with pre-auth/risk and no
+verified-user elevation. Own bearer/CSRF self-deletion applies retention/legal
+hold, all three disposal owners and session/family revocation atomically.
+Original metadata replay/fresh-instance recovery works without renewing or
+revealing credentials. Combined native PostgreSQL/race17.222s and tagged vet pass,
+including denial, late audit/outbox rollback, contention and real pre/post-COMMIT
+faults. Independent complete-source review is APPROVE. Its TTL precision
+finding is corrected: focused expected RED, full core race1.208s/vet0 GREEN.
+The added genuine-source fixture proves all18 sessions/19 families revoke across
+two pages, including an expired active sibling and an empty family. Fresh-service
+original recovery still succeeds after all live session payloads are pruned;
+wrong possession and restored guest authority deny. The reviewer reconciled the
+final complete89-path source. Permanent upgrade and HTTP/reference remain;
+no M09 closure is claimed. Root/session/risk46ae607, kernel607749d,
+anonymouscoreabfaf01, sessionnativecec88f4 and anonymousnative5a00abc are
+main-pushed and exact-CI green. Independent final source/public-pin review
+APPROVE; final checkout public-dependency PostgreSQL/race PASS11.195s, tagged
+vet and module verification pass. Actual downloaded native
+v0.0.0-20261021024534-5a00abc431cb matches all23 files against source; its genuine
+PostgreSQL/race self-deletion baseline/lost-COMMIT consumer PASS5.259s without
+local replacement. Final exact Required39534807911 is green. No unit increment.
+
+**Parallel OAuth client management:** genuine platform-manager creation -> warm
+ordinary code/S256 use -> terminal client deletion is implemented but not accepted.
+Independent complete review found three defects: mutable static registration
+projection, existing discovery not advertising selected managed Basic support,
+and noncanonical lifecycle event names. The existing worker owns these bounded
+corrections and focused regression checks; primary retains public pins/delivery.
+
+**Delivered OIDC email profile:** consented email UserInfo works through actual
+code/PKCE/access-token and independent-RP consumers. Rootd80acf5, child9d8cd36
+and native8a1518be are approved, main-pushed and exact-CI green. Default
+openid-only and minimal ID tokens are unchanged. This profile is CLOSED;
+full M31/HTTP/reference and release qualification remain open.
+
+**Delivered own-consent narrowing:** a genuine fresh same-browser user can
+reduce an existing consent's scopes; every older code/access/refresh/UserInfo
+descendant then denies, while a new explicit narrow authorization succeeds.
+Root8fdea7a and nativeb89d656 are independently approved, main-pushed and exact-
+CI green. Crash recovery and post-lock original expiry findings are resolved.
+The actual downloaded native module passes its keyed consumer under race9.332s;
+all52 authenticated files match source. This profile is CLOSED, not full M30.
+
+**Delivered OAuth protected-resource profile:** actual code/S256 access can now
+reach a demanded-scope-only resource read; refresh tokens, withdrawn authority
+and raced consent narrowing deny. Independent complete-source/public-pin review
+APPROVE; rootbfb5499, native0e3a9eb and documentation correctiona3ec583 are
+main-pushed. Actual authenticated public-native consumer passes PostgreSQL/race
+5.411s, with all55 downloaded files matching source. Native runtime/security
+checks passed; the sole spelling failure was corrected without runtime edits.
+Final exact-head Required39530758363 is green. This finite profile is CLOSED;
+full M30, HTTP/reference and unit qualification remain open.
+
+**Delivered organization domain-proof authority:** rootf7d9a1a and native4eac678
+are independently approved, main-pushed and exact-CI green. Real consumers can
+apply an observed proof, read exact current authority, revoke and recover without
+renewing expiry; archive/restore cannot resurrect proof. The authenticated public
+native module's genuine consumer passes PostgreSQL/race8.039s. Risk0e56be2 supplies
+the two exact privileged owner actions. DNS challenge/observation, SSO integration
+and full M25 remain open. The source check confirmed a kernel-owned typed
+participant-admission gap for atomic challenge consumption; that successor is
+parked, and no SSO worker/code is active. The dependency-ready OAuth lane is
+platform-owned confidential-client creation, ordinary code/S256 use and terminal
+deletion; its review corrections are active as described above. Primary-owned
+M09 continues independently.
+
+**Qualification gap:** whole-tree secret scanning flags11 unchanged delivery
+test/documentation locations; changed-path findings are zero. This is not a
+passing whole-tree scan or an established new credential leak. It does not
+block the current M09 implementation. Disposable initial-run resources are removed.
 
 **New delivered consumer:** the full selected phone-reset reference journey
 now passes real PostgreSQL/HTTPS under race (final group216.846s: success,

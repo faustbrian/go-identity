@@ -1,10 +1,9 @@
 # PostgreSQL anonymous lifecycle
 
 Experimental primary storage and same-Work lifecycle effects. Public anonymous
-signin/recovery and self-deletion are implemented locally; upgrade and reference
-composition are still in development. This is not a delivered complete M09.
-The native module's initial local `anonymous v0.0.0` input is development-only;
-an authenticated published dependency must replace it before delivery.
+signin/recovery and self-deletion are implemented with authenticated public
+dependencies. Upgrade and HTTP/reference composition are still in development;
+this is not a delivered complete M09. No local replacement is required.
 
 The adapter owns anonymous metadata, original expiry and lifecycle versions.
 Kernel identities/placeholders remain kernel-owned; session records remain
@@ -27,7 +26,7 @@ Every read checks current lifecycle/status, all kernel and policy epochs and
 session/family state. Its original evidence expires within 20 seconds of the
 first lookup and never outlives anonymous expiry; copies and later owner reads
 cannot renew it. This factory performs no issuance, cache fallback or activity
-update. It is not yet the complete public anonymous signin/delete/upgrade flow.
+update. Permanent-account upgrade is not yet implemented by this profile.
 
 See [anonymous policy](../README.md), [changelog](CHANGELOG.md) and
 [security](../../SECURITY.md).

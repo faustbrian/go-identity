@@ -1,5 +1,577 @@
 # Identity Implementation — Current Milestone
 
+2026-10-21 02:54 UTC: finite native guest signin/self-deletion profile CLOSED.
+Sessionnativecec88f467d1e89ab3fc762f58d65c74107f14345 and anonymousnative
+5a00abc431cb823b05c630f51e868fa4dcec6af2 are confirmed origin/main; exact CI
+39533651444/39534807911 SUCCESS. Final independent25-path source/pin review
+APPROVE, patch7f94e9112612cea2eeb96f5eb0b32f2a0f4129f1a74cf8bf6af37b56742b5c5d.
+Checkout public-dependency full native PG/race11.195s/taggedvet0/modverify all;
+actual authenticated public nativev0.0.0-20261021024534-5a00abc431cb matches all23
+files against source and genuine downloaded self-deletion baseline/lost-COMMIT
+PG/race PASS5.259s. No local replacements/authentication bypass. Its module sum
+h1:xM23zduyBVzUM5+BrKs2KPpmGWwbv9Nwd69jDBoiYWA=; modsum
+h1:k+znPmDkfVOf9+KcJuCAvThOQumuoUw3OYwZbmCrt4o=.
+Required filename-aware changed-content secret gate PASS; flattened stdin's
+single native go.sum public checksum finding was not a credential and no scanner
+or checksum was altered. Original full-history gap remains. PG stopped, no live
+primary Go/services. Upgrade/HTTP/reference remain, not M09/unit completion.
+
+OAuth correction assignment: existing oidc_email_userinfo worker owns the same
+25 root/native paths plus necessary discovery.go/discovery tests only, no shared
+identity, pins/manifests/CI/Git. Base a3ec583344ee7f4b5feb8c03fdb895a4e7c81d88;
+same committed consumed owners and finite create -> ordinary use -> delete profile.
+Full independent oauth_client_management_review REQUEST_CHANGES on frozen
+b47b2556e484d9c03fe63d1fc1c56f0045b79dc72eeb1e302e255c057fcfb1e3: static
+CurrentClient aliases frozen registration, selected managed Basic omitted from
+existing discovery, canonical oauth_client.created/revoked.v1 names not emitted.
+Primary source-confirmed all three. Reproduce each, fix owning boundary, run
+affected root race/vet, native genuine management/lifecycle/static isolation
+PG/race plus affected tagged vet; preserve unrelated behavior/evidence. Primary
+retains public-pin adoption/integration/Git and complete final review. No new
+scope/metadata endpoints, no review factory. Heavy slot now available to worker.
+
+2026-10-21 02:30 UTC: anonymous prerequisite delivery advanced: root/session/risk46ae607,
+kernel607749d1218224bb12382f351079d5e8272c5bca and coreabfaf01bf1264234159edfb7c94837b4ebe08263
+are confirmed origin/main, exactRequired39531711308/39532585678/39532950229SUCCESS.
+Kernel20actualpublic-pin candidate5223150d59f39a2152b5501df0486ca5aa57e2cbf2c862e051f1d092a0714a84
+and stagedcore15patch06f4dcd8e2338d1b0a5bde2c0b0ba09b8ad01d7ade86e30b36b71449e2df9822
+independentlyAPPROVE by anonymous_native_profile_review, retaining full89source
+review. Actualpublic versions: root/session/riskv0.0.0-20261021021214-46ae60703809;
+kernelv0.0.0-20261021022138-607749d12182;
+anonymouscorev0.0.0-20261021022530-abfaf01bf126. Authenticatedroot140/session94
+Go/manifestfiles independentlysource-compared; risk91/kernel489primarycompared,
+coreall13files match (inheritedLICENSEagainstroot). No bypass/devreplace.
+Kernelactualpublic-root ordinaryrace3.365s, nativecreation/disposal/placeholder
+PG/race2.097s, taggedvet0/modverify; corepublicroot+sessionrace1.209s/vet0/modverify.
+Core-only manifest/workspace/package hunks staged separately from pendingnative
+registration so no nativev0.0.0 dependency was published. Native-session17 source
+plusactual4publicpins digest a04e98e383acd897ba1d0cb45c1a454aa032ba5302214bc0db8ff6ed7c151017;
+ordinaryrace1.792s/anonymousatomicPG1.596s/taggedvet0/modverifyallverified terminal,
+PGstopped; sameindependentreviewer reconciling17beforecommit. Nativeanonymous
+still awaits publicnative-session pin, genuine publicconsumer and delivery;
+permanentupgrade/HTTP/reference remain. NoM09closure/unitqualification increment.
+
+OAuthworker actualmanagercreate -> already-runningtwoservicecode/S256use ->
+terminaldelete group passes native10.655s with denial/rollback/COMMIT recovery;
+not accepted yet. Primary's coherentbatchinspection found new platformpermission
+callback inside protectedWork/SQLlocks. Worker moving exactpermission decision
+outsideWork, retaining original20s/currentexistingactor-policyepoch fence, and
+proving actual lockobservation + lateepochwithdrawal + deletioninterleaving.
+No privateauthority/journal/sharedkernelchange authorized; worker holds heavy
+slot for bounded correction/regressions. This does not block primarypin delivery.
+
+2026-10-21 02:12 UTC: reviewed anonymous shared contracts delivered in
+46ae60703809a04c0019b6bea4d850856a442356, confirmed origin/main. Exactly21
+root/session/risk owned files,793added/11removed, from independently approved
+complete89 candidate9cd9c4ed5b81c19ee62bfa2312e56f6963765fe8233cb14b2903289a48ce9300.
+Actual GOWORKoff public-dependency checks rootrace1.505s/internalvelocity1.199s,
+sessionrace1.568s, riskrace1.369s/internalvelocity1.226s, allvet0. Staged secret
+scan0 and ACKminor valid. Exact Required39531711308 queued, not passed yet.
+The root/session/risk prerequisite commit is not full anonymous delivery;
+native owners and public pins/core/native remain local. Three new native
+manifest values failed existing cohesion schema, aligned stateless/caller/no
+duplicate companion with existing adapters; complete planning-check nowPASS.
+No Tools source/config/threshold changed; final pin/manifest reconciliation will
+reuse unchanged source review with actual resulting delta. OAuth worker has
+heavy slot available while primary prepares public pin adoption. No full M09
+closure, unit qualification or whole-goal percentage increment.
+
+2026-10-21 02:11 UTC: anonymous source first-pass independent APPROVE by
+anonymous_native_profile_review at e5bd364844fc61596d876da76ac061661f6d30fd92611050d38a105415233251
+against0e56be2 (89paths), TTL defect resolved. Accepted two bounded coverage
+requests: real-issued source plus17 complete repository-validated historical
+sibling rows includes expired active row and empty family; actual deletion
+revokes18sessions/19families and matches retained effect counts. Prune all18
+revoked live rows, newservice originalquery/bearer/CSRF metadata recovery succeeds,
+wrong bearer/changed intent deny, oldguest never resumes. FocusedPG/race1.677s,
+final whole anonymousnativePG/race17.222s/taggedvet0 GREEN. Initial fixture
+timestamp format violated existing9digit instant domain; fixed fixture only.
+Corrected nativeREADME to distinguish persistent reservation-owned attempt charges
+from disposal/audit/outbox's singleWork rollback. Final89 digest
+9cd9c4ed5b81c19ee62bfa2312e56f6963765fe8233cb14b2903289a48ce9300;
+same independent reviewer reconciling final tests/docs. Changed-content1.41MB
+secret scan0, diffcheck0; rootdocs gate notapplicable, not claimed runtime proof.
+Nothing staged; publicpins/adoption/delivery still pending. Parallel OAuth
+client-management worker now holds serialized root RED/GREEN heavy slot.
+
+2026-10-21 02:08 UTC: finite OAuth resource profile CLOSED. Rootbfb5499,
+native0e3a9eb and docs-onlya3ec583344ee7f4b5feb8c03fdb895a4e7c81d88 are
+origin/main; final Required39530758363 SUCCESS. Prior native runtime/security
+checks passed before the sole spelling correction; unchanged runtime evidence
+retained. Actual downloaded public-native genuine consumer PG/race5.411s and
+all55 source bytes match. Independent complete source/public-pin/docs review
+APPROVE. No full M30 closure or milestone-count increment.
+
+Anonymous review found an admitted sub-microsecond TTL cannot construct its
+microsecond-persisted original subject. Accepted smallest constructor fix and
+explicit precision docs, no rounding. New test RED0.248s, full core race1.208s/
+vet0 GREEN. Complete89-path source review reconciling4 changed files and bounded
+sibling-revocation coverage; public adoption/upgrade/HTTP/reference unfinished.
+
+Parallel finite assignment: oidc_email_userinfo owns platform-owned confidential
+client creation -> already-running ordinary code/S256 service use -> terminal
+deletion in go-oauth-server/main a3ec583344ee7f4b5feb8c03fdb895a4e7c81d88.
+Writable: root client-management/current-client APIs and necessary ordinary
+service/client-auth dispatch, postgres durable client repository/preparation/
+contributor/migration plus affected protocol/current-state/recovery seams,
+focused root/native tests/docs/changelogs. Primary owns manifests/pins, shared
+identity/kernel/session/risk, HTTP/reference, CI/Git/aggregate notes. Consume
+rootbfb5499/native0e3a9eb and native pinned identity928f9b710602,
+kernel67fa690247c5/session-nativeaf740fb7fb76, authorizationa55bbebb1060 and
+risk26fb47a06e0e/f16881100907: actual actor admission, encrypted prepared request
+key, sole Work, audit/outbox and current owner contracts already proven by real
+OAuth consumers. Missing OAuth client registry/epoch/secret admission is lane
+implementation, not permission to invent a kernel authority/journal.
+Trusted profile fixes one platform owner/management tenant/issuer/environment/
+resource, exact HTTPS redirect and OAuth-scope ceilings. Genuine human manager
+session with original fresh password proof, same-browser CSRF/origin and exact
+current policy authorization is required; owner-ID construction is not permission.
+Server-owned exclusive client namespace, Public=false/Basic, random reveal-once
+secret with digest-only durable verification. Optional current-client registry
+must reach ordinary already-running services and every protocol/recovery path;
+terminal version/tombstone denies old descendants within original validity bounds.
+Prove genuine create/use/delete; wrong owner/tenant/policy/freshness/CSRF/version,
+redirect/scope escalation/static collision; same-key intent/one reveal;
+actual audit/outbox rollback, lost COMMIT/original recovery and deletion races.
+Checks: root affected race/vet; genuine native PG/race consumer plus configured
+client/consent/resource regressions and tagged vet. Exclude rotation/overlap,
+user/org-owned clients, RFC7591/7592, workload/OIDC variants, HTTP/reference and
+fullM30 closure. Worker no Git/children/shared edits; report first public boundary
+and request serialized heavy slot. Primary integrates, reviews and delivers.
+
+2026-10-21 02:02 UTC: anonymous native full final suite PostgreSQL/race11.210s/
+taggedvet0, core race1.217s/vet0, full risk race1.376s/internalvelocity1.227s/vet0,
+identity root race1.521s/internalvelocity1.228s/vet0, sessionnative race1.874s/
+taggedvet0, kernel actual creation/disposal race2.380s/taggedvet0 terminal.
+Independent anonymous_native_profile_review reads complete89-path candidate
+against0e56be2, framed path-NUL-bytes-NUL digest
+94d30765443ade5b825a0a1c8216399987cf81a80d7251c377979c1e0d22f365.
+No source writes during review. Only later added structural go.work inclusion
+of anonymous and anonymous/postgres reconciled catalog mismatch; repo/docs
+checks now pass, selected complete source secret scan zero. Development pins
+still need actual public adoption before native delivery; no M09 closure.
+
+OAuth resource native0e3a9eb main-pushed; public native
+v0.0.0-20261021015819-0e3a9ebcf89d all55files match committed source and actual
+downloaded genuinePG/raceconsumer5.411s passes. Public-root native consumer
+groups51.436s, ordinaryrace1.227s/vet0/modverify and full repo secret scan pass;
+independent native7 public-pin reconciliation APPROVE. Intermediate rootCI
+39529836375 failed on not-yet-committed link; final nativeCI39530370275 passed
+runtime/tidy/race/security but failed docs spelling on one prose word. Only
+that wording changed, targeted full rootdocs gate passes (43links0errors),
+independent same-reviewer docs reconciliation APPROVE. Documentation fix main
+delivery/exactCI still pending; no source algorithm, scanner or check weakened.
+
+2026-10-21 01:59 UTC: M09 native signin/self-deletion is one complete public
+profile ready for independent source review, not full M09 closure. Same-Work
+kernel/lifecycle/session-family disposal and original metadata recovery are
+implemented. Full anonymous native PostgreSQL/race11.210s/taggedvet0 passes,
+including original signin and new denial/legal-hold-race/late-audit/outbox/
+contention/real-pre-and-post-COMMIT recovery. Core anonymous race1.217s/vet0,
+session native race1.874s/taggedvet0, affected kernel creation/disposal race2.380s/
+taggedvet0 pass. Original test oversubscribed the unchanged ten-attempt tenant
+signin ceiling; partitioned owned fixtures per finite case group instead of
+raising supported limits. Commit ambiguity retains actual Unknown outcome and
+now returns the documented typed UnknownCommitError at public service boundary.
+Permanent upgrade, HTTP/reference, public dependency pins and full qualification
+remain mandatory unfinished goal work. Primary retains all source ownership;
+review does not authorize a worker to implement shared kernel/session/risk.
+
+2026-10-21 01:54 UTC primary: genuine public anonymous self-deletion now GREEN
+PostgreSQL/race1.649s: real signin -> own bearer/CSRF -> retained kernel snapshot/
+legal-hold and pure retention -> protected risk counters -> kernel disposal,
+anonymous terminal state and all session/family revocation -> old guest denial,
+keyed metadata replay/fresh-instance recovery; wrong possession/changed intent deny.
+Kernel owner real disposal group race1.710s covers delete/anonymize/retain,
+held erasure denial, post-read hold/epoch changes, linked credential/contact,
+reconstructed/duplicate/missing owner, native/audit/outbox/final-check rollback.
+Risk exact action classification RED0.203s -> race1.205s. Source-session framing
+RED (destructive decoder map consumed before comparison) -> race1.473s/1.274s;
+public constructor APIabsence RED captured. First native failure was public
+counter-plan serialization rejection, fixed with a private authenticated envelope
+projection; then recovery caller resource type corrected to existing identity.user
+query policy. No serialization/query guard weakened. M09 source remains local,
+unreviewed/uncommitted; failure/contention/unknown tests and permanent upgrade/
+HTTP/reference remain. No M09 or verified-unit increment.
+
+Parallel OAuth resource-verification final10 source independently APPROVE by
+consent_narrowing_review at3da8e118ed4ab9ad895b5a07d88df5fef6200212a871a422323a73768a09e682.
+Root race1.466s/vet0, native resource/introspection/keyed narrowing race114.904s,
+late actual revocation/credential/expiry/cancel/outage plus demanded-scope-preserving
+consent-narrowing race31.881s/taggedvet0. Worker PG/caches removed; primary
+six-gate make check passes including full secrets. Rootbfb549924821 main-pushed;
+native source remains pending public-root pin/adoption/consumer and delivery.
+No whole M30 or milestone increment.
+
+2026-10-21 01:25 UTC: primary remains on M09 self-deletion. New typed deletion
+request passed focused RED/GREEN and anonymous core race1.209s/vet0. The session
+owner now derives its existing tenant-bound credential digest without revealing
+or consuming bearer custody, for historical recovery after self-revocation;
+API-absence RED, full session race1.554s/vet0. Neither helper closes M09.
+
+Parallel finite assignment: oidc_email_userinfo owns M30 native opaque protected-
+resource verification in go-oauth-server/main b89d6564523814dbebdb9ee4ba6fa7747f2f2870.
+Writable: new root resource*.go/tests, narrow necessary service/config wiring,
+native resource*.go/tests and shared introspection extraction if required,
+affected root/native README/docs/changelogs. No manifests/pins/CI/shared identity
+owners/HTTP/reference/Git/children. Consume committed root8fdea7ac3629,
+nativeb89d656, identity928f9b710602/kernel67fa690247c5,
+session-nativeaf740fb7fb76 and authorizationa55bbebb1060. Actual current owner
+lookups and genuine confidential human-client fixtures exist; Introspect Active
+alone is not access authority and refresh tokens must never be admitted.
+Outcome: genuine signup/verify/signin -> consent/code/S256 -> access-only
+verification -> scope-bound selected resource read, then revocation/consent
+narrowing/current authority withdrawal denies. Trusted config fixes issuer,
+resource/client/tenant/scopes; input cannot select them. Preserve earliest token/
+credential/read deadline, <=20s non-renewable evidence; no positive cache.
+Prove wrong kinds/scopes/tenant/client/resource/issuer, expiry/blocked subject/
+credential/consent generation, outage/cancellation and race denial; read recovery
+after transient fault issues/mutates nothing. Exclude workload/JWT/remote
+introspection transport/HTTP/reference/metadata/full M30 closure. Focused root
+race/vet, genuine native PG/race consumer, retained introspection/consent authority
+cases and tagged vet. Worker requests serialized heavy slot before Go/services;
+primary owns integration, independent complete-final-diff review and delivery.
+
+## Parallel M31 profile — consented OIDC email UserInfo
+
+2026-10-20 23:22 UTC: finite email profile CLOSED. Native8a1518be exact Required
+39514143043 is green; all49 authenticated public native-module files match the
+committed source (including Go's inherited root LICENSE). Whole M31 stays open.
+
+## Parallel M30 profile — authenticated own-consent narrowing
+
+2026-10-21 00:07 UTC: finite own-consent narrowing profile CLOSED. Root8fdea7a
+and nativeb89d656 ordinary-main pushed; exact Required39518449176 and39518968295
+SUCCESS, remote mainb89d656 and clean owner checkout confirmed. Complete source
+consent_narrowing_review APPROVE, final18 digest7a0afe0b144c81f634f892f4a208041a2c289f03bc6ee17f09234f94e27b8007;
+final native14 public-pin digest271c1ee957c4c8bfc93991f830aa11522548274fb145c2a6df9b0774e7a67c39.
+F1 actual pre-COMMIT RED8.97s -> GREEN6.288s; A1 guard-removal RED21.15s ->
+original guard restored. Final affected native race92.936s/taggedvet0; unchanged
+root race1.478s/vet0 reused. Actual GOWORKoff public-root native ordinary race
+1.262s/taggedvet0/modverify pass, genuine narrowing+pre-COMMIT+expiry consumer
+race45.633s. Local six-gate make check passes; affected repository/docs/full
+secrets repeat after final dependency pin also passes, without Tools edits.
+Authenticated public native v0.0.0-20261021000330-b89d65645238 has all52 files
+byte-identical to source (inherited LICENSE included); downloaded-native real
+keyed PostgreSQL/race consumer9.332s passes with -mod=readonly/GOWORKoff.
+Own PG is stopped, worker scratch/caches removed. Parent scratch remains in
+active bounded use. No fullM30/HTTP/reference/release/unit/milestone increment.
+
+2026-10-20 23:48 UTC: frozen17-path35e2cc4e snapshot passes root race1.478s/
+vet0, native consent race84.446s/taggedvet0 and changed-content secret scan.
+Independent consent_narrowing_review REQUEST_CHANGES: F1 new lifecycle is absent
+from participant recovery and consent-owned effect selection; real pre-COMMIT
+disconnect after final attachment cannot reconcile noncommit. Primary confirms
+source and accepts grouped fix plus actual pending->expired recovery regression.
+A1 accepted: native original positive-deadline expiry across wait/retry needs a
+focused denial case. Existing worker retains same path ownership and free heavy
+slot for correction; no manifests/Git/upstream edits. No source delivery claim.
+
+2026-10-20 23:22 UTC: assign the existing GPT6.1Sol/high OAuth worker the finite
+strict-subset same-client/resource own-consent update, on clean main8a1518be.
+Consumed committed rootd80acf5/child9d8cd36/native8a1518be, kernel67fa690247c5
+request-key preparation and existing native session/CSRF/current-authority,
+consent generation, audit/outbox and recovery. Native consent-update is absent;
+existing approval replacement is not management. No missing upstream contract
+identified in the bounded next_independent_consumer pass.
+Worker owns root consent*.go, native consent*.go plus necessary local phase/
+config/mutation/recovery dispatch/additive migration and consumer tests, affected
+READMEs/docs/changelogs. Primary retains manifests/pins, shared kernel/session,
+HTTP/reference, progress and Git; no other repository writes or children.
+
+Outcome: genuine signup/verification/signin -> authorize multiple grants ->
+fresh CSRF/keyed narrowing -> new consent/version -> old code/refresh/access/
+UserInfo denial -> explicitly approved narrower authorization succeeds. Preserve
+existing ConsentManager via additive capability. Exclude arbitrary claims/
+audience edits, client administration, HTTP/reference and whole-M30 closure.
+Prove scope/version/tenant/client/CSRF/stale-session denial, changed-intent key
+conflict, original fresh-instance recovery, refresh/approval contention, actual
+required-outbox rollback and lost-COMMIT with no tokens or repeated generation.
+Focused native/race/vet plus independent complete final review before delivery;
+compile/service-heavy checks remain primary-serialized. No milestone increment.
+
+## Delivered M31 email profile — retained checkpoints
+
+2026-10-20 23:20 UTC: implementation/source review and public-supplier adoption
+are complete. Native reviewer oidc_email_consumer_review APPROVE; original17
+source digest0423294a749ec06687dc1173cfadb99e49db965c84229ba282342671a4daf085,
+final native9 including manifestsbf5f55d45dc0e26781db692c82b1444481aac4686a1629332a30b4a6438eddca.
+Actual GOWORKoff public-root/child PostgreSQL/RP/race new email consumer group
+PASS77.820s; native ordinary race1.222s, integration/oauthflow vet0 and modverify
+pass. Prior complete OIDC/signing race300.704s retains unchanged-source scope.
+Rootd80acf5 and child9d8cd36 main-pushed/exact Required green; native8a1518be
+main-pushed, Required39514143043 pending. No fullM31/release/milestone increment.
+Task-owned expected-PG-directory omission failed fixture setup only; corrected
+environment and terminal public consumer pass, no production/source change.
+
+2026-10-20 22:42 UTC: primary assigns one separate-repository implementation
+worker on clean go-oauth-server/main964ea802370f (root17b853623f00,
+OIDC71a07e781726, native964ea802370f). Consumed native public pins already include
+identity928f9b710602, kernel67fa690247c5 and session-nativeaf740fb7fb76; the
+identifier-state reader exists there. Worker owns OIDC-prefixed root/native Go
+files, oidc Go files, new email-claim files and affected module docs/changelogs;
+no manifests/pins, shared identity/kernel/session/risk, HTTP/reference, CI or Git
+mutation. First public boundary and tested/pre-integration diffs remain primary
+checks; one independent final review and main delivery remain primary-owned.
+
+Outcome: explicit opt-in email scope, real consent/code/S256/access-token then
+RP UserInfo with unchanged subject and current authoritative email/verification.
+Openid-only stays unchanged; no other identity scopes, ID-token email expansion,
+HTTP/reference or whole-M31 closure. Acceptance includes no claim absent scope/
+consent, cross-client/tenant or wrong token, revocation/status/identifier changes,
+failure/cancellation, original freshness and retained rollback/unknown outcomes.
+Worker uses focused TDD/race/vet and genuine PostgreSQL/RP direct-consumer proof;
+heavy checks wait for primary's current local run. No current delivery increment.
+
+## Active M09 — anonymous session, self-deletion and verified-target upgrade
+
+2026-10-21 01:15 UTC successor check refinement: organization-only challenge
+composition cannot yet be implemented safely. Its pinned public kernel's
+plan_feature.go:88–137 fixes org+counter plans to five contributors and rejects
+an additional challenge owner; Work feature scope likewise cannot be lent to an
+unenlisted object. Existing registered participant recovery is already suitable.
+The missing owner is the kernel's additive typed checkpoint/participant admission,
+initial consume/final fence and retained-plan selection. Organization remains
+clean4eac678; worker made no speculative code or private authority. Park that
+successor until primary-owned kernel work supplies the real consumed contract;
+do not count an SSO worker as active. Primary M09 continues, not goal-blocked.
+
+2026-10-21 01:12 UTC parallel successor: one bounded actual-source check finds
+the new organization evidence facade cannot yet enlist a challenge owner in its
+sole Work. Concrete race: observe challengeN -> prepare evidence -> rotateN ->
+apply old evidence; uniqueness of one org proof/claim does not reject the stale
+challenge. Consume-before/after organization commit splits rollback/ambiguity.
+Existing proof-authority delivery remains closed; this is a newly demonstrated
+cross-owner composition requirement of the next DNS consumer, not a reopened
+historical review. Assign existing organization worker a finite additive typed
+evidence-participation seam, root/native evidence-owned files/tests/docs and new
+forward SQL only if necessary. Consume committed rootf7d9/native4eac678 and
+existing actual kernel/session/risk owners; no shared owner edits, SSO code,
+manifests/pins/CI, Git or children. Primary owns public integration and delivery.
+Acceptance: exact immutable challenge checkpoint in original command, registered
+current check/one-use consumption/final fence/recovery in the same coordinator
+Work as proof/audit/outbox; rotation/expiry contention denies stale evidence;
+late owner failure rolls both back; ambiguous recovery never re-observes.
+Keep default observer-only profile compatible, no raw transaction exposure,
+private journal or competing proof. Focused actual native PG/race composition
+and genuine existing-org consumer; no claim of DNS/SSO behavior before SSO exists.
+One complete independent final-diff review before prerequisite delivery. Worker
+must inspect the actual public kernel seams and request a missing owning API
+rather than constructing substitute transaction authority. Heavy slot serialized.
+
+2026-10-21 01:10 UTC primary checkpoint: full anonymous core race1.212s/vet0
+and full native PostgreSQL/race5.104s/taggedvet0 pass. Public signin now also
+proves actual audit/outbox late-failure rollback after provisional identity and
+session rows, original-browser rollback, metadata-only failed recovery, real
+pre-COMMIT disconnect and lost committed acknowledgement, identical-key
+contention with exactly one reveal/effect, and required-risk outage denial.
+Transport fixture initially reused ConnString's original database; an explicit
+current_database assertion reproduced that setup error, then Configure.Database
+selected the same isolated owner database. No production guard was relaxed.
+Temporary diagnostic code is gone. All M09 source remains local/unreviewed/
+uncommitted. Next is self-deletion, then protected permanent upgrade and selected
+HTTP/reference. No M09 or verified-unit increment.
+
+Parallel organization proof-authority prerequisite CLOSED: reviewed rootf7d9a1a
+and native4eac678 main-pushed, exact Required39524859142/39525377945 SUCCESS.
+Native public-root PG/race proof/genuine-consumer group22.083s, ordinary race
+1.321s/taggedvet0/modverify pass. Downloaded public native
+v0.0.0-20261021010629-4eac678ca4bd has all82 files source-identical, including
+inherited LICENSE; its genuine domain-evidence consumer passes PG/race8.039s
+with GOWORKoff/-modreadonly. Root/native independent final review APPROVE at
+final14 digestff977e572da5ca0c51ba8ace26b04e32824ad57a023eafa70af156530e695a91;
+full six-gate local repository check and final selected scans pass. Domain proof
+apply/current read/revoke/recovery, original expiry and archive retirement are
+delivered; external DNS/challenge/SSO integration and full M25 remain open.
+Task PG is stopped, organization worker/vet scratch removed. One bounded
+read-only successor check now audits actual SSO challenge rotation/consumption
+integration against this new public contract; no SSO worker/code is assigned.
+
+2026-10-21 00:54 UTC primary: real public anonymous Signin consumer GREEN under
+PostgreSQL/race1.758s. Exact cause was missing existing CSRFMigrationSource in
+the fixture bootstrap: genuine issuer emitted schema2, base-only constraint
+correctly denied. Installed that existing forward history; no security guard
+was weakened. All temporary stage/SQL probes removed. Genuine preauth -> risk ->
+atomic creation/flow consumption -> readable guest -> metadata-only keyed replay
+and fresh-service recovery pass; changed intent and foreign cookie deny. This
+remains local/unreviewed/uncommitted; required late-failure/unknown/contention
+cases, self-delete/upgrade and HTTP/reference remain in the frozen M09.
+
+2026-10-21 00:47 UTC primary: public anonymous Signin/RecoverSignin now compiles
+through genuine pre-auth issuance, durable risk, native prepared-input/generation
+custody and the existing session reveal gate. Actual PostgreSQL/race consumer
+remains RED: known rollback after generated/restored output and kernel creation;
+no SQLSTATE failure. Localizing the owning phase before changing its guard.
+No public anonymous success, independent review, commit or M09 closure claimed.
+
+Parallel prerequisite delivery: risk main0e56be2725e5 admits only the exact two
+organization-domain evidence operations as privileged. Native independent review
+APPROVE; focused RED->race GREEN/vet and exact Required39521714022 SUCCESS;
+authenticated public risk v0.0.0-20261021003004-0e56be2725e5 is available.
+The organization worker consumes that pin. Its apply/read/replay/expiry and
+selected recovery cases pass locally; concrete revocation/consumer test failures
+are being corrected before final acceptance. This is not SSO/M25 delivery.
+Full-history secret findings remain a separate unpassed qualification boundary;
+no scanner bypass, Tools repair or historical migration was performed.
+
+2026-10-21 00:15 UTC parallel prerequisite selected: organization domain-proof
+authority, in go-organization/main at ab443331688c431e8c36e47b4fb3279af6d1b6e6.
+One worker owns additive root proof/evidence contracts and their native PostgreSQL
+implementation, tests, module-local migration/docs/changelogs. Preserve completed
+reservation/role/archive behavior and existing public APIs. Consumed authority is
+the actual existing organization, kernel, session and capability owners pinned
+by that native revision, not a new SSO engine or proof journal. Finite outcome:
+the organization owner applies/reads/recovers an attributable domain-evidence
+transition with original proof/version/time, scoped current authority, atomic
+required effects and no authority on unknown. Focused public-contract tests and
+real PostgreSQL replay/conflict/expiry/revocation/rollback/recovery proof are
+required. Primary owns integration pins, any shared identity/risk change, review
+and Git delivery. SSO DNS/protocol, routing, HTTP/reference and full M25 closure
+are excluded; this prerequisite does not count as a delivered M25. No worker
+may run heavy checks while the primary holds the slot or commit/push/spawn.
+
+2026-10-21 00:14 UTC primary: added the actual anonymous core signin input and
+credential-free original-flow recovery correlation, preserving cookie, remember
+and opaque retry custody without accepting a selected user. API-absence RED
+captured after correcting the test token accessor; focused race1.210s, full core
+race1.128s and vet0 pass. Tenant/action/actor/input bounds and implicit diagnostic
+redaction are covered. This is structural input, not cookie possession or native
+public signin; no milestone, review, commit or delivery is claimed. The next
+native composition will use the existing kernel's prepared-key/generation owner
+and actual session-owner pre-auth reservation/finalization. Existing magic-link
+composition already demonstrates lending the actual original native receipt to
+SessionIssuer for commit-gated reveal, so no new delivery authority is needed.
+
+2026-10-20 23:48 UTC primary: actual anonymous-only primary session recognition
+is now composed in anonymous/postgres.NewSessionService, consuming concrete
+lifecycle, kernel, session and policy owners. API-absence RED captured; current
+PostgreSQL/race creation/read group1.639s proves live recognition and current
+status/epochs/policy/family/session denial, tenant/profile isolation, absolute
+expiry/original20s custody, delayed/backward/expired reads, cancellation and
+owner-outage fail-closed. Legacy verified factory still denies anonymous.
+Native ordinary race1.244s/taggedvet0; core race1.218s/vet0. No private engine,
+credential reference or bearer persistence. No public signin, deletion, upgrade
+or reference consumer yet; all M09 changes remain local/unreviewed/uncommitted.
+
+2026-10-20 23:40 UTC primary: actual kernel creation -> anonymous-owned lifecycle
+metadata -> session persistence now passes isolated PostgreSQL/race1.678s using
+the original native Work. Commit, expiry, missing/duplicate metadata, audit/
+outbox/final-check failure and rollback are exercised; primary Store preserves
+terminal state and tenant absence. Core immutable subject/policy race1.201s and
+vet0, native ordinary race1.230s/vet0 precede this new consumer. No public signin,
+anonymous primary session reader, deletion, upgrade or reference proof yet;
+source stays local/unreviewed/uncommitted and M09 stays open. PG stopped;
+heavy slot released to the frozen OAuth consent worker for final affected checks.
+
+2026-10-20 23:20 UTC primary: actual same-Work kernel anonymous creation now
+composes with session-owned family/session/issuance persistence. New effect API
+absence RED; real PostgreSQL purpose-constraint RED0.469s located missing selected
+anonymous issuance history. Forward suffix now supports base-only or explicit
+existing login predecessors without requiring unrelated methods. Original native
+atomic commit/replay/digest separation and missing creation/policy, changed epoch,
+foreign custody, rollback/audit/outbox/final-denial controls pass race1.598s after
+last test edit. Full session-native ordinary race1.788s, integration vet0. Kernel
+GetAnonymousAuthority/RequireAnonymousAuthority preserve actual status and all
+three user epochs; actual PG/race authority group1.776s retained. No fabricated
+credential or new transaction/command engine. Public lifecycle/service, primary
+anonymous session reader, delete/upgrade and HTTP/reference remain outstanding.
+This is local unreviewed/uncommitted source, not M09 closure. PG is stopped.
+
+2026-10-20 22:51 UTC primary: actual kernel-owned creation now exists locally.
+AnonymousCreationDomain binds all kernel intent to the exact original native
+invocation, creates user/admitted attributes/reserved placeholder and retains
+original-command effect correlation in the existing sole transaction. It
+fabricates no credential reference. New API absent RED, intent/custody GREEN0.246s;
+actual PG/race commit/changed-intent/foreign-command/missing-or-duplicate-domain/
+audit/outbox/final-check controls pass. The first native assertion incorrectly
+counted legitimate denied audit as successful; fixed the oracle to distinguish
+outcomes and require provisional successful-audit reach before late rollback.
+A separate real retired-placeholder collision RED0.484s exposed structural-ID
+reuse; corrected under the existing tenant fence. Final combined creation plus
+populated namespace PG/race PASS1.736s; native ordinary race3.367s/taggedvet0.
+
+Explicit anonymous issuer also now prepares/binds original session/token/CSRF
+custody using existing commit-gated delivery; verified/profile APIs remain
+closed. New API absent RED, focused GREEN0.219s; full session race1.625s/vet0.
+Replay/unknown/error/changed-record/late-expiry controls withhold delivery.
+These issuer tests use the declared executor boundary, not native session proof.
+Native creation and issuer are not yet connected. No anonymous adapter/service,
+deletion, upgrade or reference consumer is delivered; no M09/unit increment,
+independent final review or commit/push. Selected native/session secret scans
+and diff checks pass; unchanged whole-tree qualification gap remains above.
+Next: real anonymous session persistence and primary authority reader without
+fabricating a credential to obtain the user's existing credential epoch. Reuse
+KernelAuthorityKeys and existing session persistence, not password-only admission.
+The parallel OIDC worker holds the heavy-check slot after these terminal runs.
+Primary's isolated PostgreSQL is stopped and its1GB task-owned scratch/caches
+are removed at22:53UTC; no primary live test handle remains.
+
+2026-10-20 22:29 UTC first real M09 source is local/uncommitted, not delivered:
+explicit anonymous-only session recognition exposes a distinct unprivileged
+result with unchanged source validity; old/mixed authenticated-result APIs deny
+anonymous credentials. Initial API RED (absent constructor), focused GREEN0.282s,
+focused race1.317s; full session race1.561s/vet0. Root now reserves a separate
+anonymous-placeholder kind: canonical opaque128-bit ID@anonymous.invalid,
+never verified/primary/contact-normalized or a generic mutation target. Runtime
+RED0.234s absent namespace, then RED0.217s contact escalation/generic attachment;
+corrected focused root GREEN0.224s, full root/internal race1.524s/1.196s/vet0.
+
+Forward kernel migration preserves populated predecessor contacts/history.
+Actual isolated PG/race migration/constraints/recipient proof PASS1.593s after
+final formatting; prior pass1.454s. Fixture's first real attempt selected the
+base DSN because pgx.ConnString retains original input; corrected using the
+existing Configure.Database seam and asserted current_database before writes.
+That setup failure is not production RED. Native ordinary race3.336s/taggedvet0;
+migration-history/invalid-predecessor unit proof0.242s. Scoped secret/diff checks
+pass. These prove prerequisites only, not anonymous issuance/deletion/upgrade.
+
+Whole-tree Gitleaks scan is NOT passing:11 generic-api-key findings in unchanged
+delivery fixture/tests and risk/valkey README; exact five paths byte-identical
+to HEAD61b41d6. All changed/untracked-path findings are zero, and selected session/
+kernel module scans pass. Preserve that broader qualification gap; do not call
+it a new credential leak or restart historical/tooling cleanup in this slice.
+Initial bounded-run PostgreSQL fixture, private report and911MB task-owned Go
+caches removed at22:32UTC; no live handle or reusable scratch remains.
+
+Read-only source map is complete: reuse sole Coordinator Work/feature identity,
+kernel insertCreation and session persistence/evidence; existing password and
+magic-link creation are intentionally closed and cannot be reused unchanged.
+Next implementation is the closed kernel-owned anonymous creation domain and
+native anonymous/session issuance effects, then protected deletion/verified-target
+upgrade and real reference consumer. Do not write identity/session tables from
+anonymous adapter or invent a second engine. No independent final slice review,
+commit/push or M09 closure yet; completed M08 is not reopened.
+
+2026-10-20 22:14 UTC primary freezes the complete consumer outcome on main61b41d6:
+action-specific risk -> opaque anonymous identity in reserved anonymous.invalid
+namespace -> explicit unprivileged session -> current session read -> either
+self-delete with session invalidation or one-use upgrade to an independently
+verified permanent target with unchanged remember policy and atomic replacement
+session. The permanent target remains authority; no credential collision is
+force-linked. Preserve replay, exact original recovery, known rollback and
+unknown commit; no session bearer is delivered before commitment or on replay.
+Use configured Guest display, explicit 15min..30day TTL (reference24h), canonical
+IDs and database-time expiry. Placeholder is never verified/delivered contact.
+
+Primary owns root/kernel/session, native anonymous and HTTP/reference composition.
+Consumed current root19670fe0ec13, kernel d2d1fa59, session928f9b71 and current
+reviewed public risk/capability owners; adoption changes retain exact native
+ownership. Read-only phone_and_role_dependency_review maps only existing same-
+Work identity creation/disposal seams while primary implements anonymous session
+admission. No new identity/session/journal engine or direct kernel table writes
+from the anonymous adapter. Initial target profile: existing verified password
+account with exact fresh target-bound primary proof and known-empty MFA, plus
+original anonymous-session possession and one-use capability. Other target
+methods remain closed, not a weaker fallback. Typed merge selection must cover
+all transferred resources or deny; no arbitrary payload or callback authority.
+
+Focused TDD for explicit anonymous-kind admission and legacy-reader denial;
+native real PostgreSQL issuance/read/deletion/upgrade, tenant/status/expiry/
+collision/replay/concurrent winner/rollback/unknown cases; opt-in HTTP and real
+reference journey before milestone closure. Keep one complete independent final
+review and serialize heavy Go/service checks. No isolated helper delivery or
+M09/qualified-unit count before the full supported consumer is demonstrated.
+
 ## M08 consumer milestone CLOSED — existing-account phone profiles
 
 2026-10-20 22:09 UTC bounded independent scope reconciliation by
