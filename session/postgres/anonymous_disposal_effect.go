@@ -77,22 +77,41 @@ func anonymousDeletionSource(c identity.Command, source session.Session) error {
 // sessions. Risk, lifecycle and retention admission remain their owners' work.
 // Returned receipt is provisional and contains no bearer.
 func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session) (identity.FeatureReceipt, error) {
+	return e.apply(ctx, w, p, c, source, false)
+}
+
+func (e *AnonymousDisposalEffect) apply(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session, upgrade bool) (identity.FeatureReceipt, error) {
 	if ctx == nil || e == nil {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
 	if err := w.RequireFeatureCommand(ctx, p, c); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err := anonymousDeletionSource(c, source); err != nil {
-		return identity.FeatureReceipt{}, err
+	if !upgrade {
+		if err := anonymousDeletionSource(c, source); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
-	b, l, err := anonymousDeleteScope(w, p, c)
+	b, l, err := anonymousDisposalSessionScope(w, p, c, upgrade)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	u, err := w.AnonymousDisposal(p)
+	var u identity.User
+	if upgrade {
+		typed, ok := p.(kernel.AnonymousUpgradeContributor)
+		if !ok {
+			return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
+		}
+		u, err = w.AnonymousUpgradeDisposal(typed)
+	} else {
+		u, err = w.AnonymousDisposal(p)
+	}
 	s, se := source.Bindings()
-	if err != nil || se != nil || u.ID != s.UserID || u.TenantID != s.TenantID || u.ID != b.UserID || s.Authentication.Kind != session.AuthenticationAnonymous || u.Status != identity.StatusDeleted && u.Status != identity.StatusAnonymized {
+	sourceUser := b.UserID
+	if upgrade {
+		sourceUser = identity.UserID(b.RecordID)
+	}
+	if err != nil || se != nil || u.ID != s.UserID || u.TenantID != s.TenantID || u.ID != sourceUser || s.Authentication.Kind != session.AuthenticationAnonymous || u.Status != identity.StatusDeleted && u.Status != identity.StatusAnonymized {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
@@ -109,7 +128,7 @@ func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p ke
 	chain := resetSessionChain()
 	found := false
 	for {
-		rows, err := w.Query(bounded, `SELECT s.record::text,s.state,f.state,f.version::text,s.expires_at,s.tenant_id,s.session_id,s.user_id,s.family_id,s.version::text,s.family_version::text,s.digest_version,s.digest FROM `+e.schema+`.sessions s JOIN `+e.schema+`.families f USING(tenant_id,family_id,user_id) WHERE s.tenant_id=$1 AND s.user_id=$2 AND s.state='active' AND s.session_id>$3 ORDER BY s.session_id LIMIT 16 FOR UPDATE OF s`, string(b.TenantID), string(b.UserID), cursor)
+		rows, err := w.Query(bounded, `SELECT s.record::text,s.state,f.state,f.version::text,s.expires_at,s.tenant_id,s.session_id,s.user_id,s.family_id,s.version::text,s.family_version::text,s.digest_version,s.digest FROM `+e.schema+`.sessions s JOIN `+e.schema+`.families f USING(tenant_id,family_id,user_id) WHERE s.tenant_id=$1 AND s.user_id=$2 AND s.state='active' AND s.session_id>$3 ORDER BY s.session_id LIMIT 16 FOR UPDATE OF s`, string(b.TenantID), string(sourceUser), cursor)
 		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
@@ -129,7 +148,7 @@ func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p ke
 				break
 			}
 			spec, be := stored.Session.Bindings()
-			if be != nil || spec.UserID != b.UserID || spec.Authentication.Kind != session.AuthenticationAnonymous || spec.SessionID <= cursor || len(page) == 16 {
+			if be != nil || spec.UserID != sourceUser || spec.Authentication.Kind != session.AuthenticationAnonymous || spec.SessionID <= cursor || len(page) == 16 {
 				err = ErrInvalidRecord
 				break
 			}
@@ -155,7 +174,7 @@ func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p ke
 			return identity.FeatureReceipt{}, identity.ConflictError{}
 		}
 		for _, r := range page {
-			n, err := w.Exec(bounded, `UPDATE `+e.schema+`.sessions SET state='revoked' WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND state='active' AND version=$4::numeric`, string(b.TenantID), string(b.UserID), r.id, strconv.FormatUint(r.version, 10))
+			n, err := w.Exec(bounded, `UPDATE `+e.schema+`.sessions SET state='revoked' WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND state='active' AND version=$4::numeric`, string(b.TenantID), string(sourceUser), r.id, strconv.FormatUint(r.version, 10))
 			if err != nil {
 				return identity.FeatureReceipt{}, err
 			}
@@ -174,7 +193,7 @@ func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p ke
 	}
 	// The kernel tenant mutex serializes every session/family writer. Count
 	// families before their one bounded set update; excess aborts all prior rows.
-	rows, err := w.Query(bounded, `SELECT count(*) FROM `+e.schema+`.families WHERE tenant_id=$1 AND user_id=$2 AND state='active'`, string(b.TenantID), string(b.UserID))
+	rows, err := w.Query(bounded, `SELECT count(*) FROM `+e.schema+`.families WHERE tenant_id=$1 AND user_id=$2 AND state='active'`, string(b.TenantID), string(sourceUser))
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -187,7 +206,7 @@ func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p ke
 	if families < 1 || families > 100000 {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
-	n, err := w.Exec(bounded, `UPDATE `+e.schema+`.families SET state='revoked' WHERE tenant_id=$1 AND user_id=$2 AND state='active'`, string(b.TenantID), string(b.UserID))
+	n, err := w.Exec(bounded, `UPDATE `+e.schema+`.families SET state='revoked' WHERE tenant_id=$1 AND user_id=$2 AND state='active'`, string(b.TenantID), string(sourceUser))
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -196,14 +215,15 @@ func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p ke
 	}
 	id, binding := revocationEvidence(b, l)
 	result := anonymousDisposalSessionDigest(binding, source, count, uint32(families), chain)
-	n, err = w.Exec(bounded, `INSERT INTO `+e.schema+`.anonymous_disposals(tenant_id,command_id,purpose,user_id,source_id,before_version,after_version,revoked_count,family_count,effects_digest,binding_digest,result_digest) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9,$10,$11,$12)`, string(b.TenantID), id, b.OperationID, string(b.UserID), s.SessionID, strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), int64(count), families, chain[:], binding[:], result[:])
+	n, err = w.Exec(bounded, `INSERT INTO `+e.schema+`.anonymous_disposals(tenant_id,command_id,purpose,user_id,source_id,before_version,after_version,revoked_count,family_count,effects_digest,binding_digest,result_digest) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9,$10,$11,$12)`, string(b.TenantID), id, b.OperationID, string(sourceUser), s.SessionID, strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), int64(count), families, chain[:], binding[:], result[:])
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if n != 1 {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
-	return identity.FeatureReceipt{Operation: anonymousDeleteOperation(), BeforeVersion: l.BeforeVersion, AfterVersion: l.AfterVersion}, nil
+	f, _ := c.Feature()
+	return identity.FeatureReceipt{Operation: f.Operation, BeforeVersion: l.BeforeVersion, AfterVersion: l.AfterVersion}, nil
 }
 
 func anonymousDisposalSessionDigest(binding [32]byte, source session.Session, count, families uint32, chain [32]byte) [32]byte {
@@ -218,23 +238,33 @@ func anonymousDisposalSessionDigest(binding [32]byte, source session.Session, co
 // invocation, preserving original lifetime and admission deadline. It does not
 // read a revoked source as current authentication or reopen a session.
 func (e *AnonymousDisposalEffect) Check(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session, until time.Time) error {
+	return e.check(ctx, w, p, c, source, until, false)
+}
+
+func (e *AnonymousDisposalEffect) check(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session, until time.Time, upgrade bool) error {
 	if ctx == nil || e == nil {
 		return session.ErrInvalidSessionCommand
 	}
-	if err := anonymousDeletionSource(c, source); err != nil {
-		return err
+	if !upgrade {
+		if err := anonymousDeletionSource(c, source); err != nil {
+			return err
+		}
 	}
-	b, _, err := anonymousDeleteScope(w, p, c)
+	b, _, err := anonymousDisposalSessionScope(w, p, c, upgrade)
 	if err != nil {
 		return err
 	}
 	s, err := source.Bindings()
-	if err != nil || s.UserID != b.UserID || s.TenantID != b.TenantID {
+	sourceUser := b.UserID
+	if upgrade {
+		sourceUser = identity.UserID(b.RecordID)
+	}
+	if err != nil || s.UserID != sourceUser || s.TenantID != b.TenantID {
 		return session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
 	defer stop()
-	rows, err := w.Query(bounded, `SELECT EXISTS(SELECT 1 FROM `+e.schema+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND state='active') OR EXISTS(SELECT 1 FROM `+e.schema+`.families WHERE tenant_id=$1 AND user_id=$2 AND state='active')`, string(b.TenantID), string(b.UserID))
+	rows, err := w.Query(bounded, `SELECT EXISTS(SELECT 1 FROM `+e.schema+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND state='active') OR EXISTS(SELECT 1 FROM `+e.schema+`.families WHERE tenant_id=$1 AND user_id=$2 AND state='active')`, string(b.TenantID), string(sourceUser))
 	if err != nil {
 		return err
 	}
@@ -262,12 +292,20 @@ func (e *AnonymousDisposalEffect) Check(ctx context.Context, w kernel.Work, p ke
 // It neither grants current access nor restores tokens; the existing coordinator
 // must reconcile every owner before declaring the command terminal.
 func (e *AnonymousDisposalEffect) Recover(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor, source session.Session) (kernel.RecoveryStatus, error) {
+	return e.recover(ctx, w, p, source, false)
+}
+
+func (e *AnonymousDisposalEffect) recover(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor, source session.Session, upgrade bool) (kernel.RecoveryStatus, error) {
 	if ctx == nil || e == nil {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	b, f, l, err := w.FeatureScope(p)
 	s, se := source.Bindings()
-	if err != nil || se != nil || f.Operation != anonymousDeleteOperation() || p.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/anonymous/postgres", ContractID: "identity.anonymous", Version: 1}) || s.UserID != b.UserID || s.TenantID != b.TenantID || l.EventType != "anonymous.deleted.v1" || l.BeforeVersion == 0 || l.AfterVersion != l.BeforeVersion+1 {
+	op, event, sourceUser := anonymousDeleteOperation(), "anonymous.deleted.v1", b.UserID
+	if upgrade {
+		op, event, sourceUser = anonymousUpgradeSessionOperation(), "anonymous.upgraded.v1", identity.UserID(b.RecordID)
+	}
+	if err != nil || se != nil || f.Operation != op || p.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/anonymous/postgres", ContractID: "identity.anonymous", Version: 1}) || s.UserID != sourceUser || s.TenantID != b.TenantID || l.EventType != event || l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 || upgrade && b.UserID == sourceUser {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	id, binding := revocationEvidence(b, l)
@@ -290,7 +328,7 @@ func (e *AnonymousDisposalEffect) Recover(ctx context.Context, w kernel.Recovery
 	if err := rows.Scan(&user, &sourceID, &before, &after, &count, &families, &effects, &savedBinding, &savedResult); err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	if rows.Next() || rows.Err() != nil || user != string(b.UserID) || sourceID != s.SessionID || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) || count < 1 || count > 100000 || families < 1 || families > 100000 || len(effects) != 32 || subtle.ConstantTimeCompare(binding[:], savedBinding) != 1 {
+	if rows.Next() || rows.Err() != nil || user != string(sourceUser) || sourceID != s.SessionID || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) || count < 1 || count > 100000 || families < 1 || families > 100000 || len(effects) != 32 || subtle.ConstantTimeCompare(binding[:], savedBinding) != 1 {
 		return kernel.RecoveryUnknown, ErrInvalidRecord
 	}
 	var chain [32]byte

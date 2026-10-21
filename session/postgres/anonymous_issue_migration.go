@@ -62,6 +62,20 @@ func (s AnonymousSigninMigrationSource) Load(ctx context.Context) ([]migrations.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	constraint, purposes := anonymousIssuanceHistory(s)
+	sql := strings.NewReplacer("@schema@", pgx.Identifier{s.Schema}.Sanitize(), "@prior@", constraint, "@purposes@", purposes).Replace(`ALTER TABLE @schema@.session_issuances DROP CONSTRAINT @prior@;
+ALTER TABLE @schema@.session_issuances ADD CONSTRAINT session_issuances_purpose_anonymous_v1 CHECK(purpose IN(@purposes@));
+`)
+	step, err := migrations.NewMigration(s.Version, "identity_session_anonymous_signin", migrations.TransactionModeDefault, sql, "")
+	if err != nil {
+		return nil, identity.UnavailableError{}
+	}
+	return []migrations.Migration{step}, nil
+}
+
+// Share only the selected installed purpose set. Forward extensions must not
+// guess which optional histories were installed or rewrite their SQL/checksums.
+func anonymousIssuanceHistory(s AnonymousSigninMigrationSource) (string, string) {
 	constraint := "session_issuances_purpose_check"
 	if s.Predecessor > 1 {
 		constraint = "session_issuances_purpose_v" + strconv.Itoa(int(s.Predecessor))
@@ -97,12 +111,5 @@ func (s AnonymousSigninMigrationSource) Load(ctx context.Context) ([]migrations.
 		constraint = "session_issuances_purpose_phone_otp_v1"
 		purposes += ",'identity.phone.signin'"
 	}
-	sql := strings.NewReplacer("@schema@", pgx.Identifier{s.Schema}.Sanitize(), "@prior@", constraint, "@purposes@", purposes).Replace(`ALTER TABLE @schema@.session_issuances DROP CONSTRAINT @prior@;
-ALTER TABLE @schema@.session_issuances ADD CONSTRAINT session_issuances_purpose_anonymous_v1 CHECK(purpose IN(@purposes@));
-`)
-	step, err := migrations.NewMigration(s.Version, "identity_session_anonymous_signin", migrations.TransactionModeDefault, sql, "")
-	if err != nil {
-		return nil, identity.UnavailableError{}
-	}
-	return []migrations.Migration{step}, nil
+	return constraint, purposes
 }

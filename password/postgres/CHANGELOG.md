@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the closed anonymous-upgrade action to the existing permanent-account
+  password-proof source and its forward-only consumption migration. Guest
+  possession remains separate; this alone does not implement native upgrade.
+
 - Compose explicit native phone-password recovery with original browser,
   distinct initiation/completion risk, delivered SMS and canonical reset link,
   independently confirmed TOTP, HIBP-screened replacement and atomic all-session

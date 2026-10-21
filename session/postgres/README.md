@@ -39,6 +39,39 @@ through the existing coordinator. Recovery inspects original evidence after live
 session cleanup, issues no credential and grants no live access. Native anonymous
 retention, risk and kernel/lifecycle disposal are separately mandatory.
 
+## Anonymous upgrade session effects
+
+`AnonymousUpgradeSessionFields` binds complete retained guest and prospective
+permanent records with domain-separated commitments using the existing session
+codec. Keep the target's complete `source-session.*` vocabulary unchanged for
+the password proof owner. Three flattened records exceed the shared command
+limit; these commitments preserve complete metadata without widening that bound
+or accepting arbitrary JSON. The native authenticated preparation must retain
+both full records and compare them again in the sole Work. Fields authenticate
+nothing and cannot reconstruct a bearer or create a new validity lease.
+
+`NewAnonymousUpgradeEffect` selects only an existing single-factor password
+target with no organization, factor, passkey or credential continuation.
+`Apply` requires the exact registered typed upgrade contributor, real provisional
+capability consumption and kernel guest disposal. It revokes every guest
+session/family, then persists one permanent session in a genuinely new family.
+The permanent target remains separate from guest `RecordID`; its original source
+session, credential/owner epochs and historical authentication remain unchanged.
+Guest remember policy is preserved, not copied from another target preference.
+Call `Check` after downstream waits; the original earliest deadline is exclusive
+and never renewed. The issuer separately controls post-commit credential delivery.
+
+Append `AnonymousUpgradeMigrationSource{AnonymousSignin: installedProfile,
+Version: nextVersion}` after both selected anonymous signin and disposal
+histories. Its installed profile preserves every optional earlier issuance
+purpose without rewriting predecessor SQL or existing evidence. No older purpose
+suffix may be installed afterward. `Recover` reconciles retained revocation AND
+issuance evidence, even after live session cleanup; mixed evidence remains
+unknown and no credential is disclosed. Guest/target bearer/CSRF possession,
+fresh action-specific target reauthentication, risk, retention, merge and actual
+one-use proof verification/consumption must still be composed by the native
+anonymous workflow. This component alone exposes no usable upgrade endpoint.
+
 ## Explicit phone/password and confirmed TOTP
 
 `NewMFAPhonePasswordTOTPCompletionEffect` selects only the exact verified-phone

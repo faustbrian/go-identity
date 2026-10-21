@@ -109,6 +109,16 @@ func anonymousMFACounter(s identity.FeatureCommandSpec) bool {
 	return s.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: operation, SchemaID: schema, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}) && s.Binding.UserID == "" && s.Binding.AnonymousFlowID != "" && s.Binding.RecordID == ""
 }
 
+// Upgrade authenticates a permanent target but disposes the distinct guest.
+// Its credential-mutation budget must stay on that original guest and session,
+// not move to the target when command ownership changes. This exact tuple does
+// not admit arbitrary cross-subject mutation or a caller-authored resolution.
+func anonymousUpgradeCounter(s identity.FeatureCommandSpec) bool {
+	op := identity.FeatureOperation{Owner: "identity/anonymous", OperationID: "identity.anonymous.upgrade", SchemaID: "identity.anonymous.upgrade.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	_, err := identity.ParseSubjectID(s.Binding.RecordID)
+	return s.Operation == op && s.Binding.ValidateFor(op) == nil && s.Binding.RecordID != string(s.Binding.UserID) && string(s.Binding.ActorID) == string(s.Binding.UserID) && err == nil
+}
+
 func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Subject, capabilityID string, resolvedUser identity.UserID, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
 	fail := func() (identity.Command, identitypostgres.CommandCounterPlan, error) {
 		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
@@ -127,7 +137,14 @@ func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Sub
 	if e != nil {
 		return fail()
 	}
-	if admission.Profile.Class == risk.CredentialMutation && subject.User != string(s.Binding.UserID) && (resolvedUser == "" || subject.User != string(resolvedUser)) || admission.Profile.Class == risk.Privileged && (subject.Actor != string(s.Binding.ActorID) || subject.Resource != s.Binding.RecordID) {
+	user := string(s.Binding.UserID)
+	if s.Operation.OperationID == "identity.anonymous.upgrade" {
+		if !anonymousUpgradeCounter(s) {
+			return fail()
+		}
+		user = s.Binding.RecordID
+	}
+	if admission.Profile.Class == risk.CredentialMutation && subject.User != user && (resolvedUser == "" || subject.User != string(resolvedUser)) || admission.Profile.Class == risk.Privileged && (subject.Actor != string(s.Binding.ActorID) || subject.Resource != s.Binding.RecordID) {
 		return fail()
 	}
 	boundID := capabilityID
@@ -281,6 +298,12 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 	switch a.Profile.Class {
 	case risk.CredentialMutation:
 		subject.User = string(s.Binding.UserID)
+		if s.Operation.OperationID == "identity.anonymous.upgrade" {
+			if !anonymousUpgradeCounter(s) {
+				return fail()
+			}
+			subject.User = s.Binding.RecordID
+		}
 	case risk.Privileged:
 		subject.Actor = string(s.Binding.ActorID)
 		subject.Resource = s.Binding.RecordID

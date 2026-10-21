@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the closed anonymous-upgrade session effect: revoke the complete guest
+  session/family set and issue exactly one new permanent-target session in the
+  same protected Work. Preserve target authentication age, original authority,
+  guest remember policy and earliest deadline; reject family collisions. Append
+  `AnonymousUpgradeMigrationSource` after selected anonymous histories. Actual
+  guest/target authentication, target reauthentication and one-use consumption
+  remain mandatory native workflow responsibilities, not authority from fields.
+
 - Add explicit anonymous-source mapping and same-Work disposal of the complete
   anonymous session/family set after actual kernel disposal. Retained effect
   evidence supports metadata-only recovery without restoring revoked access.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence one original known-empty permanent-target factor generation for the
+  closed anonymous-upgrade preparation and consuming profiles. Guest identity,
+  changed generations and schema aliases cannot bypass MFA; missing/enrolled
+  state denies without initialization or weaker fallback.
+
 - Fence one original known-empty actor factor generation for exact self-only
   organization archive/restore commands. Foreign subjects, unequal versions,
   unsupported lifecycle actions and mismatched owners/schemas remain denied.

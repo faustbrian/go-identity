@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Keep protected anonymous-upgrade mutation counters bound to the original
+  guest record and guest session while command user/actor identify the distinct
+  permanent target. Only the exact native upgrade profile accepts this mapping;
+  existing mutation and privileged counter ownership is unchanged.
+
 - Preserve joint phone password-reset input, capability, independent SMS/TOTP
   and browser custody when binding independently issued completion evidence.
   Native phone evidence can now check current original durable counters and

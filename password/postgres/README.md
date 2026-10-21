@@ -281,6 +281,17 @@ rejection precedes that charge. Use the durable outbox for external delivery.
 
 ## Action-bound protected operations
 
+Anonymous upgrade selects `identity.anonymous.upgrade` over the same existing
+password-proof owner. Its command user and actor are the permanent target;
+the protected record is the distinct anonymous source. Keep the original target
+bearer in the proof/session custody and omit `TargetSubjectID`. Anonymous-session
+possession, current guest state and one-use transition remain the anonymous
+owner's independent responsibilities, never inferred from this password proof.
+Append `AnonymousUpgradeReauthenticationMigrationSource` after the installed
+action and every selected phone/email/organization suffix before consumption.
+This source adds no proof ledger or workflow; native atomic upgrade remains
+in development.
+
 `NewActionPrimarySource` explicitly selects `identity.username.update`,
 `identity.phone.send-verification`, `identity.phone.update`,
 `identity.phone.remove`, `identity.organization.owner-transfer`,

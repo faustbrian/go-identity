@@ -18,7 +18,9 @@ import (
 )
 
 // ActionPrimaryConfig selects username update, phone enrollment/change/removal, or
-// organization ownership transfer/archive/restore and its signed-proof audience.
+// organization ownership transfer/archive/restore, or anonymous upgrade and its
+// signed-proof audience. For upgrade, the original bearer/proof belongs to the
+// permanent target; the anonymous owner separately proves guest possession.
 // MaximumAge is positive and at most
 // fifteen minutes. Transport explicitly selects bearer or cookie; cookies need
 // retained CSRF keys. The source's exact issuance target must already be allowed.
@@ -92,6 +94,8 @@ func (s *ActionPrimarySource) Matches(action, audience string) bool {
 
 func actionPrimaryOperation(action string) identity.FeatureOperation {
 	switch action {
+	case "identity.anonymous.upgrade":
+		return identity.FeatureOperation{Owner: "identity/anonymous", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	case "identity.username.update":
 		return identity.FeatureOperation{Owner: "identity/username", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	case "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove":
@@ -107,6 +111,8 @@ func actionPrimaryOperation(action string) identity.FeatureOperation {
 
 func actionPrimaryDescriptor(action string) kernel.ContributorDescriptor {
 	switch action {
+	case "identity.anonymous.upgrade":
+		return kernel.ContributorDescriptor{Owner: "identity/anonymous/postgres", ContractID: "identity.anonymous", Version: 1}
 	case "identity.username.update":
 		return kernel.ContributorDescriptor{Owner: "identity/username/postgres", ContractID: "identity.username", Version: 1}
 	case "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove":
