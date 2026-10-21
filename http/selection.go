@@ -428,6 +428,13 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if r.OperationID == "identity.password.verify" && (r.CSRFOrigin.Mode == CSRFNone || (r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.RefererFallback == RefererFallbackDeny)) {
 			csrfMatches = true
 		}
+		// Anonymous mutations validate the original native session synchronizer
+		// atomically, including attributable historical retries after self-revoke.
+		// Upgrade additionally requires its distinct permanent synchronizer; the
+		// owned handler/wire profile must enforce both, without minting token age.
+		if (r.OperationID == "identity.anonymous.delete" || r.OperationID == "identity.anonymous.upgrade") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Native username rename checks the original issued synchronizer under
 		// mutation fences, including exact retries after identifier-session
 		// invalidation. It does not issue an independently aged CSRF token.

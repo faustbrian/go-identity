@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "profile": "native-cookie-v1",
+  "scope": "Existing native workflows and their explicitly selected HTTP profile. This does not remove broader anonymous-platform obligations or claim full qualification.",
+  "operations": [
+    {"id":"identity.anonymous.signin","owner":"identity/anonymous","method":{"interface":"anonymous.Issuer","name":"Signin","signature":"Signin(context.Context, SigninRequest) (SigninResult, error)"},"request_type":"identity.anonymous.signin.request","result_type":"identity.anonymous.signin.result","error_types":["identity.anonymous.signin.errors"],"transport":{"exposure":"both","http_method":"POST","http_path":"/v1/anonymous/signin","openapi_operation_id":"identity.anonymous.signin"}},
+    {"id":"identity.anonymous.delete","owner":"identity/anonymous","method":{"interface":"anonymous.Deleter","name":"Delete","signature":"Delete(context.Context, DeletionRequest) (DeletionResult, error)"},"request_type":"identity.anonymous.delete.request","result_type":"identity.anonymous.delete.result","error_types":["identity.anonymous.delete.errors"],"transport":{"exposure":"both","http_method":"POST","http_path":"/v1/anonymous/delete","openapi_operation_id":"identity.anonymous.delete"}},
+    {"id":"identity.anonymous.upgrade","owner":"identity/anonymous","method":{"interface":"anonymous.Upgrader","name":"Upgrade","signature":"Upgrade(context.Context, UpgradeRequest) (UpgradeResult, error)"},"request_type":"identity.anonymous.upgrade.request","result_type":"identity.anonymous.upgrade.result","error_types":["identity.anonymous.upgrade.errors"],"transport":{"exposure":"both","http_method":"POST","http_path":"/v1/anonymous/upgrade","openapi_operation_id":"identity.anonymous.upgrade"}}
+  ],
+  "types": [
+    {"id":"identity.anonymous.signin.request","owner":"identity/anonymous","category":"operation_request","definition":{
+      "name":"anonymous.SigninRequest","schema_id":"identity.anonymous.signin.request","representation":"Native opaque credential custody; automatic serialization denies. HTTP is a separate closed projection.",
+      "fields":{
+        "TenantID":"identity.TenantID; trusted exact tenant host",
+        "PreAuthID":"identity.PreAuthTransactionID; original anonymous flow locator",
+        "Cookie":"authentication.BearerCredential; original flow possession, never JSON",
+        "Remember":"session.RememberPolicy; resolved configuration matching original flow",
+        "Origin":"string; exact trusted HTTPS origin",
+        "CallbackURL":"string; exact selected callback or explicit empty callback",
+        "Caller":"authorization.DecisionContext; trusted service actor, policy and anonymous signin action",
+        "Network":"string; canonical trusted client IP",
+        "Device":"string; verified deployment-signed browser correlation, not authentication",
+        "IdempotencyKey":"identity.IdempotencyKey; required stable original scoped key"
+      },
+      "http":{"json_required":["flowID","callbackURL"],"json_optional":["remember"],"unknown_members":"deny","idempotency":"Exactly one Idempotency-Key header; body/query forbidden","cookies":["original flow","signed device"],"authorization":"forbidden","csrf_header":"forbidden"}
+    }},
+    {"id":"identity.anonymous.signin.result","owner":"identity/anonymous","category":"operation_result","definition":{
+      "name":"anonymous.SigninResult","schema_id":"identity.anonymous.signin.result",
+      "fields":{"Outcome":"identity.CommitOutcome; distinguish committed, not_committed, unknown, conflict and in_progress","Session":"session.IssueResult; secret-bearing only on a fresh acknowledged commit","CSRFToken":"session.CSRFToken; paired fresh delivery only","Recovery":"anonymous.SigninRecovery; original flow/actor/tenant/command metadata, not authority","Replayed":"bool; true forbids credential redelivery","RetryAfter":"time.Duration; positive only for in-progress work"},
+      "http":{"type":"anonymoushttp.SigninResponse","fresh":"signedIn:true, committed metadata, guest cookie and X-CSRF-Token; never verified-user authentication","historical":"signedIn:false, replayed:true, original metadata only; no credential headers","failure":"signedIn:false and redacted error; unknown remains unknown"}
+    }},
+    {"id":"identity.anonymous.signin.errors","owner":"identity/anonymous","category":"operation_errors","definition":{
+      "name":"AnonymousSigninErrors","schema_id":"identity.anonymous.signin.errors","variants":{"invalid":"anonymous.ErrInvalidInput","denied":"identity.ForbiddenError","conflict":"identity.ConflictError","in_progress":"identity.InProgressError with original retry metadata","unknown":"identity.UnknownCommitError; reconcile original command, never regenerate","unavailable":"bounded infrastructure/cancellation or redacted native custody failure"},"http":"400 malformed, 403 denial, 404 path, 405 method, 409 conflict/in-progress, 421 host, 429 rate, 503 unavailable/unknown; no secret diagnostics"
+    }},
+    {"id":"identity.anonymous.delete.request","owner":"identity/anonymous","category":"operation_request","definition":{
+      "name":"anonymous.DeletionRequest","schema_id":"identity.anonymous.delete.request","representation":"Original guest credential and synchronizer custody; no caller-selected target or cleanup mode.",
+      "fields":{"TenantID":"identity.TenantID; trusted exact tenant","Credential":"session.Credential; actual original guest cookie/bearer; this HTTP profile is cookie-only","CSRFToken":"session.CSRFToken; exact original synchronizer","ExpectedVersion":"uint64; positive, non-overflow original lifecycle version","Reason":"string; registered policy code, 1..64 visible bytes","Origin":"string; exact trusted HTTPS origin","Network":"string; canonical trusted client IP","Device":"string; original verified browser correlation","IdempotencyKey":"identity.IdempotencyKey; required original scoped key"},
+      "http":{"json_required":["expectedVersion","reason"],"unknown_members":"deny","idempotency":"Exactly one Idempotency-Key header","cookies":["guest","signed device"],"csrf_header":"Exactly one X-CSRF-Token","authorization":"forbidden"}
+    }},
+    {"id":"identity.anonymous.delete.result","owner":"identity/anonymous","category":"operation_result","definition":{
+      "name":"anonymous.DeletionResult","schema_id":"identity.anonymous.delete.result","fields":{"Outcome":"identity.CommitOutcome; protected transition durability, not completed retention job","Recovery":"identity.RecoveryQuery; original guest/self/tenant/command scope","Replayed":"bool; historical metadata, no active authority","RetryAfter":"time.Duration; original in-progress bound"},
+      "http":{"type":"anonymoushttp.DeletionResponse","known_success":"deleted:true only for error-free known commit; clear exactly the guest cookie, including idempotent historical clearing","failure":"deleted:false; retain original recovery/outcome without claiming rollback or clearing custody","credentials":"never issued"}
+    }},
+    {"id":"identity.anonymous.delete.errors","owner":"identity/anonymous","category":"operation_errors","definition":{
+      "name":"AnonymousDeletionErrors","schema_id":"identity.anonymous.delete.errors","variants":{"invalid":"anonymous.ErrInvalidInput","denied":"identity.ForbiddenError; wrong possession, version, retention or legal hold","conflict":"identity.ConflictError","in_progress":"identity.InProgressError","unknown":"identity.UnknownCommitError; original metadata-only recovery","unavailable":"bounded infrastructure/cancellation or redacted native custody failure"},"http":"400 malformed, 403 denial, 404 path, 405 method, 409 conflict/in-progress, 421 host, 429 rate, 503 unavailable/unknown"
+    }},
+    {"id":"identity.anonymous.upgrade.request","owner":"identity/anonymous","category":"operation_request","definition":{
+      "name":"anonymous.UpgradeRequest","schema_id":"identity.anonymous.upgrade.request","representation":"Two distinct original possessions and the actual signed target proof. Structured fields/locators alone confer no authority.",
+      "fields":{"TenantID":"identity.TenantID; trusted exact tenant","TargetSession":"authentication.BearerCredential; original permanent session cookie in this HTTP profile","TargetProof":"authentication.ReauthenticationProof; genuine committed single-factor password proof, purpose identity.password.verify, action identity.anonymous.upgrade, exact configured audience/session/version","TargetCSRF":"session.CSRFToken; permanent original synchronizer","Guest":"session.Credential; distinct original guest possession","GuestCSRF":"session.CSRFToken; guest original synchronizer","Plan":"anonymous.MergePlan; actual source metadata and authenticated target; no resource transfers; empty conflicts or sole display_name KeepTarget","Remember":"session.RememberPolicy; matches both original policies, no lifetime expansion","Caller":"authorization.DecisionContext; actual target actor, exact tenant/action/guest resource; ingress Time absent to preserve stable keyed intent","Origin":"string; exact trusted HTTPS origin","Network":"string; canonical trusted client IP","Device":"string; original verified browser correlation","IdempotencyKey":"identity.IdempotencyKey; required original scoped key, not a replacement for one-use proof/capability"},
+      "http":{"json_required":["guestID","expectedVersion","proofID","conflicts"],"unknown_members":"deny","idempotency":"Exactly one Idempotency-Key header; body/query forbidden","cookies":["guest","permanent","signed device"],"csrf_headers":{"X-CSRF-Token":"guest","X-Target-CSRF-Token":"permanent"},"authorization":"forbidden","locators":"native repositories load original proof and lifecycle; browser cannot supply proof authority or target ID"}
+    }},
+    {"id":"identity.anonymous.upgrade.result","owner":"identity/anonymous","category":"operation_result","definition":{
+      "name":"anonymous.UpgradeResult","schema_id":"identity.anonymous.upgrade.result","fields":{"Outcome":"identity.CommitOutcome; final protected transition durability","Preparation":"identity.RecoveryQuery; distinct original durable capability issuance command","Recovery":"identity.RecoveryQuery; original protected consuming command","Session":"session.IssueResult; newly committed permanent session preserves target authentication/remember, new ID/family","CSRFToken":"session.CSRFToken; fresh permanent synchronizer only","Replayed":"bool; true forbids credential redelivery","RetryAfter":"time.Duration; original in-progress bound"},
+      "http":{"type":"anonymoushttp.UpgradeResponse","fresh":"upgraded:true only for fresh error-free acknowledged commit; permanent cookie/X-CSRF-Token, clear guest cookie","historical":"upgraded:false, replayed:true, both original correlations; no Set-Cookie or CSRF delivery","failure":"upgraded:false, error and available original correlations; unknown is not rollback","atomicity":"Original capability and target proof consumed once with guest disposal, all guest session/family revocation, permanent issuance and required risk/audit/outbox"}
+    }},
+    {"id":"identity.anonymous.upgrade.errors","owner":"identity/anonymous","category":"operation_errors","definition":{
+      "name":"AnonymousUpgradeErrors","schema_id":"identity.anonymous.upgrade.errors","variants":{"invalid":"anonymous.ErrInvalidInput; unsupported merge/factor/transport denies","denied":"identity.ForbiddenError; wrong/stale custody, target/source/factor/retention authority","conflict":"identity.ConflictError; changed original keyed intent","in_progress":"identity.InProgressError; retain both original phases","unknown":"identity.UnknownCommitError; original metadata-only recovery, no fresh mutation","unavailable":"bounded infrastructure/cancellation or redacted native custody failure"},"http":"400 malformed, 403 known denial, 404 path, 405 method, 409 conflict/in-progress, 421 host, 429 rate, 503 unavailable/unknown; do not remap opaque unknown to known rollback"
+    }}
+  ]
+}

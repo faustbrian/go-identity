@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Describe the selected native-cookie HTTP projection and required original
+  retry key without changing native proof consumption or recovery semantics.
+
 - Add bounded two-credential upgrade and two-command recovery contracts.
   Target proof, guest possession, explicit merge plan and unchanged remember
   policy remain distinct; replay/recovery is metadata-only and forbids

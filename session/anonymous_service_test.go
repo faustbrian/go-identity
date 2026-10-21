@@ -9,6 +9,32 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
+func TestAnonymousSessionConfigurationIsObservableWithoutAuthorityLookup(t *testing.T) {
+	_, _, _, _, config, _ := validationFixture(t)
+	service, err := session.NewAnonymousSessionService(observedSession(func(context.Context, session.SessionLookup) (session.SessionObservation, error) {
+		t.Fatal("configuration inspection performed an authority read")
+		return session.SessionObservation{}, nil
+	}), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		value *session.AnonymousSessionService
+		want  bool
+	}{{"nil", nil, false}, {"zero", &session.AnonymousSessionService{}, false}, {"constructed", service, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			configured, ok := any(tc.value).(interface{ Configured() bool })
+			if !ok {
+				t.Fatal("anonymous reader exposes no configuration contract to its transport consumer")
+			}
+			if configured.Configured() != tc.want {
+				t.Fatal("configuration inspection accepted an uninitialized reader or rejected the constructed owner")
+			}
+		})
+	}
+}
+
 func TestAnonymousSessionReadIsExplicitAndCannotBecomeVerifiedAdmission(t *testing.T) {
 	legacy, request, clock, observed, config, reader := validationFixture(t)
 	verified := observed.Session

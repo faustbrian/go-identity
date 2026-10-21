@@ -90,10 +90,39 @@ func testNativePublicAnonymousSelfDeletion(t *testing.T, group string) {
 	}
 	key, _ := identity.NewIdempotencyKey([]byte("self-deletion-original"))
 	r := anonymous.DeletionRequest{TenantID: spec.TenantID, Credential: credential, CSRFToken: issued.CSRFToken, ExpectedVersion: 1, Reason: "self-request", Origin: request.Origin, Network: request.Network, Device: request.Device, IdempotencyKey: key}
+	type rateSource interface {
+		DeletionRateSource(context.Context, anonymous.DeletionRequest) (identity.UserID, error)
+	}
+	var rateOwner rateSource
+	if group == "baseline" {
+		var ok bool
+		rateOwner, ok = any(service).(rateSource)
+		if !ok {
+			t.Fatal("native deletion lacks possession-owned HTTP rate source")
+		}
+		user, err := rateOwner.DeletionRateSource(ctx, r)
+		if err != nil || user != spec.UserID {
+			t.Fatal("original guest possession did not select its actual rate subject", err)
+		}
+		bad := r
+		bad.CSRFToken = session.CSRFToken{}
+		if user, err := rateOwner.DeletionRateSource(ctx, bad); err == nil || user != "" {
+			t.Fatal("unproven guest synchronizer selected a rate subject")
+		}
+		var disposals int
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM anonymous_store.disposals`).Scan(&disposals); err != nil || disposals != 0 {
+			t.Fatal("rate source performed deletion work", err)
+		}
+	}
 	var deleter anonymous.Deleter = service
 	result, err := deleter.Delete(ctx, r)
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Recovery.RecordID != string(spec.UserID) || result.Recovery.CommandID == "" || result.Replayed {
 		t.Fatal("public self-deletion did not commit", err, result.Outcome)
+	}
+	if rateOwner != nil {
+		if user, err := rateOwner.DeletionRateSource(ctx, r); err != nil || user != spec.UserID {
+			t.Fatal("self-revoked original custody lost its stable retry rate scope", err)
+		}
 	}
 	reader, err := anonymouspg.NewSessionService(f.pool, anonymouspg.SessionServiceConfig{Repository: config.Repository, Sessions: config.Sessions, Profile: config.Profile, Validation: validation})
 	if err != nil {

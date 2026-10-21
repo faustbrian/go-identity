@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Provide bounded, read-only original-flow and guest-possession rate sources
+  for optional HTTP signin/deletion. Historical custody selects only the
+  original retry budget, never active authentication or a new mutation.
+
 - Compose the selected no-resource-transfer permanent-account upgrade with
   real target password reauthentication, both cookies/CSRF, retained original
   intent and separate durable one-use grant issuance. Protected completion

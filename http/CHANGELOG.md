@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Require one header-only Idempotency-Key for anonymous upgrade, preserving
+  native one-use proof consumption and metadata-only retry. Admit explicitly
+  selected anonymous deletion/upgrade under the native stored synchronizer
+  profile with exact Origin and no independently renewable CSRF age.
+
 - Register code-free phone-update recovery and allow explicitly selected
   replacement/update recovery under the native stored-session synchronizer
   profile. Disabled features still expose no route or advertised capability.

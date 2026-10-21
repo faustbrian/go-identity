@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose a nil-safe, IO-free constructor-validity check for the explicit
+  anonymous reader. It grants no possession, verified authentication or lease.
+
 - Add a closed prospective session issuer for native anonymous upgrade. It
   preserves the permanent target's historical authentication and exact guest
   transition version, with one shared bind/issue claim and an unchanged original

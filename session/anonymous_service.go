@@ -16,6 +16,14 @@ import (
 // observation. Dependencies are borrowed, concurrency-safe and context-bounded.
 type AnonymousSessionService struct{ validation *SessionService }
 
+// Configured reports immutable constructor validity without IO or clock calls.
+// Nil/zero owners are false. This does not establish dependency health, guest
+// possession, current authority or a validity lease; Get must still admit each
+// credential. Concurrent inspection never changes the service or its evidence.
+func (s *AnonymousSessionService) Configured() bool {
+	return s != nil && s.validation.Configured()
+}
+
 // NewAnonymousSessionService freezes the explicit anonymous-only read profile
 // without IO, resource ownership or issuance. Config retains ServiceConfig's
 // limits and immutable key selection. A verified session, organization authority
