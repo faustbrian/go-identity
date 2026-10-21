@@ -79,18 +79,19 @@ type IssuerConfig struct {
 // Dependencies remain borrowed and must outlive calls. Copies of preparations
 // share one execution claim; unrelated preparations can execute concurrently.
 type SessionIssuer struct {
-	executor        IssueExecutor
-	config          IssuerConfig
-	csrfKey         CSRFKey
-	otp             bool
-	password        bool
-	signup          bool
-	magicLink       bool
-	verification    bool
-	mfa             bool
-	mfaPassword     bool
-	mfaVerification bool
-	anonymous       bool
+	executor         IssueExecutor
+	config           IssuerConfig
+	csrfKey          CSRFKey
+	otp              bool
+	password         bool
+	signup           bool
+	magicLink        bool
+	verification     bool
+	mfa              bool
+	mfaPassword      bool
+	mfaVerification  bool
+	anonymous        bool
+	anonymousUpgrade bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -157,6 +158,7 @@ type preparedIssuanceState struct {
 	magicLink *magicLinkPreparationState
 	mfa       *mfaPreparationState
 	anonymous *anonymousPreparationState
+	upgrade   *anonymousUpgradePreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -172,7 +174,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -253,7 +255,7 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 // without bearer bytes. Zero, OTP and password preparations deny: secret-bearing
 // consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil {
+	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil || p.state.upgrade != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -346,6 +348,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, err
 	}
 	now := s.config.Clock.Now()
+	if s.anonymousUpgrade {
+		if err := validateAnonymousUpgradeIssuanceAt(out.Session, p.state.upgrade.until, now); err != nil {
+			return out, err
+		}
+	}
 	if s.anonymous {
 		if err := validateAnonymousIssuanceAt(out.Session, now); err != nil {
 			return out, err
@@ -408,7 +415,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()
@@ -431,11 +438,14 @@ func (s *SessionIssuer) finish(ctx context.Context, r IssueRequest, e IssueExecu
 	out.CommandID = binding.CommandID
 	out.CommitOutcome = identity.CommitOutcomeUnknown
 	receipt := e.Receipt
-	after := uint64(0)
+	before, after := uint64(0), uint64(0)
 	if operation.RecordRequirement == identity.FeatureRecordRequired {
 		after = 1
 	}
-	if receipt.Validate() != nil || receipt.Binding != binding || receipt.Feature == nil || receipt.Feature.Operation != operation || (receipt.Outcome == identity.CommitOutcomeCommitted && (receipt.Feature.BeforeVersion != 0 || receipt.Feature.AfterVersion != after || !sameIssuedSession(e.Session, record))) || (receipt.Outcome != identity.CommitOutcomeCommitted && e.Session != (Session{})) {
+	if r.state != nil && r.state.upgrade != nil {
+		before, after = r.state.upgrade.before, r.state.upgrade.before+1
+	}
+	if receipt.Validate() != nil || receipt.Binding != binding || receipt.Feature == nil || receipt.Feature.Operation != operation || (receipt.Outcome == identity.CommitOutcomeCommitted && (receipt.Feature.BeforeVersion != before || receipt.Feature.AfterVersion != after || !sameIssuedSession(e.Session, record))) || (receipt.Outcome != identity.CommitOutcomeCommitted && e.Session != (Session{})) {
 		return out, identity.UnknownCommitError{CommandID: out.CommandID}
 	}
 	out.CommitOutcome = receipt.Outcome

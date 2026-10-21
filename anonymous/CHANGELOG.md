@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add bounded two-credential upgrade and two-command recovery contracts.
+  Target proof, guest possession, explicit merge plan and unchanged remember
+  policy remain distinct; replay/recovery is metadata-only and forbids
+  implicit credential disclosure. Native authenticated orchestration is still
+  required before selecting an upgrade endpoint.
+
+- Define bounded typed upgrade merge decisions with a distinct permanent target,
+  canonical conflict ordering and owned snapshots. Plans carry no credentials
+  or transfer authority; native atomic upgrade remains in development.
+
 - Reject anonymous TTLs with sub-microsecond remainders during policy
   construction, rather than accepting configuration that native signin cannot
   persist without changing its original expiry.

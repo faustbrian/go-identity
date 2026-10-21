@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a closed prospective session issuer for native anonymous upgrade. It
+  preserves the permanent target's historical authentication and exact guest
+  transition version, with one shared bind/issue claim and an unchanged original
+  admission deadline of at most20s. Bearer/CSRF delivery requires a known new
+  atomic commit; replay/unknown outcomes disclose neither. Native target
+  reauthentication, guest revocation, merge and capability consumption remain
+  mandatory before this profile can be enabled.
+
 - Expose tenant-bound credential lookup digests without revealing or consuming
   bearer custody, for exact owned-operation metadata recovery after self-
   revocation. This grants no active session or mutation authority.

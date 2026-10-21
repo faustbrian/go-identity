@@ -25,6 +25,27 @@ This preparation is not risk approval or identity creation: native anonymous
 lifecycle and session persistence must still be connected before deployment.
 The anonymous request cannot enter verified-proof issuance or proof recovery.
 
+## Prospective permanent-session upgrade
+
+`NewAnonymousUpgradeSessionIssuer` (or its CSRF variant) selects only the native
+`identity.anonymous.upgrade.native-v1` profile. `PrepareAnonymousUpgrade` retains
+the permanent target's prospective session, exact guest lifecycle version and
+earliest original admission deadline, bounded to20s. The guest is the distinct
+command resource, not its user/actor. Bind the complete session to native intent
+before `BindAnonymousUpgrade`; the command must retain target-bearer custody and
+the exact `anonymous.source-version`. No scalar projection proves possession.
+
+This single-factor password profile preserves historical authentication metadata
+and age; it does not fabricate a signin proof. The native executor must verify
+both actual sessions, consume fresh target-specific reauthentication and the
+one-use transition, apply supported merges, revoke the guest and persist exactly
+one permanent session atomically. The guest's resolved remember policy must not
+change. Other factor/organization/passkey or credential-continuation profiles
+deny. Issuance uses the original exclusive deadline again after the executor;
+only an exact new committed receipt permits bearer/CSRF delivery. Historical,
+unknown and failed results disclose neither. Recovery is the native workflow's
+credential-free original correlation, never a new preparation or token.
+
 ## Sessionless phone-recovery pre-authentication
 
 Select `PreAuthPhonePasswordRecovery` in both `PreAuthIssuerConfig.Purpose` and

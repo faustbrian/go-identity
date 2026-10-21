@@ -97,14 +97,21 @@ type DeletionRequest struct {
 // Zero and overflow versions deny; native policy separately admits the exact
 // reason, origin, original session possession and current lifecycle/retention.
 func (r DeletionRequest) Validate() error {
-	if !visibleText(string(r.TenantID), 128) || r.Credential == (session.Credential{}) || r.CSRFToken == (session.CSRFToken{}) || r.IdempotencyKey == (identity.IdempotencyKey{}) || r.ExpectedVersion == 0 || r.ExpectedVersion == ^uint64(0) || !visibleText(r.Reason, 64) || !visibleText(r.Origin, 2048) || !visibleText(r.Network, 128) || r.Device != "" && !visibleText(r.Device, 128) {
+	if r.IdempotencyKey == (identity.IdempotencyKey{}) || r.ExpectedVersion == 0 || r.ExpectedVersion == ^uint64(0) || !visibleText(r.Reason, 64) {
 		return ErrInvalidInput
 	}
-	if kind := r.Credential.Kind(); kind != session.CredentialBearer && kind != session.CredentialCookie {
+	return validateAnonymousPossession(r.TenantID, r.Credential, r.CSRFToken, r.Origin, r.Network, r.Device)
+}
+
+func validateAnonymousPossession(tenant identity.TenantID, credential session.Credential, csrf session.CSRFToken, origin, network, device string) error {
+	if !visibleText(string(tenant), 128) || credential == (session.Credential{}) || csrf == (session.CSRFToken{}) || !visibleText(origin, 2048) || !visibleText(network, 128) || device != "" && !visibleText(device, 128) {
 		return ErrInvalidInput
 	}
-	address, err := netip.ParseAddr(r.Network)
-	if err != nil || address.Zone() != "" || address.String() != r.Network {
+	if kind := credential.Kind(); kind != session.CredentialBearer && kind != session.CredentialCookie {
+		return ErrInvalidInput
+	}
+	address, err := netip.ParseAddr(network)
+	if err != nil || address.Zone() != "" || address.String() != network {
 		return ErrInvalidInput
 	}
 	return nil

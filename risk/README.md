@@ -9,6 +9,17 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Anonymous upgrade counters
+
+`identity.anonymous.upgrade` selects protected CredentialMutation counters,
+reserved and finalized with the original native upgrade command. The risk plan
+binds its exact tenant, subject, session, network and attempt and preserves its
+original exclusive expiry. This classification grants neither guest possession
+nor permanent-account authority. The anonymous owner must independently require
+both, consume its one-use transition, fence current factors and commit merge,
+disposal and session rotation atomically. Native upgrade remains in development;
+unselected action aliases are still denied.
+
 ### Organization-owned domain evidence
 
 `identity.organization.domain.evidence.apply` and

@@ -41,6 +41,49 @@ Anonymous lifecycle and complete session/family revocation remain their owners'
 atomic effects, not private SQL in the workflow. No general privacy endpoint,
 permanent-user deletion or upgrade is enabled by this component alone.
 
+### Guest disposal during permanent upgrade
+
+Append `AnonymousUpgradeDisposalMigrationSource` after the installed disposal
+history before selecting the closed `identity.anonymous.upgrade.native-v1`
+profile. Existing migration bytes and guest tombstones are preserved. The native
+`AnonymousUpgradeContributor` must independently validate the verified permanent
+target, guest possession and typed merge decisions. `UserID` and `ActorID` remain
+the permanent target; the distinct guest is `RecordID`. Missing one-use proof,
+protected counters or exact owner/schema/audit/lifecycle declarations deny.
+
+During that exact Apply invocation, `Work.AnonymousUpgradeConsumption` exposes
+only the original provisionally consumed declaration. Call `ApplyUpgrade` with
+the unchanged `AnonymousDisposalFields`; all its SQL addresses the guest, never
+the permanent target. `Work.AnonymousUpgradeDisposal` exposes the actual guest
+effect only to that owner. `CheckUpgrade` repeats guest state and original hold
+before commit. Original retained disposal evidence supports recovery without
+reinterpreting target IDs or relying on prunable payloads. The native workflow
+must still fence target authority, apply supported merges and enlist the real
+session owner for guest revocation and exactly one permanent session. No generic
+capability feature, separate transaction or automatic endpoint is introduced.
+
+### Internal anonymous-upgrade issuance
+
+The closed `identity.anonymous.upgrade.prepare.native-v1` profile is a native
+preparation phase, not another public HTTP operation or the upgrade mutation.
+It selects only `AnonymousUpgradePreparationContributor` under the existing
+anonymous owner, with permanent user/actor, no record transition and one protected
+preparation audit. Original admission is issuance-free; only acknowledged
+generation may add exactly one `identity.anonymous.upgrade` grant through the
+existing capability issuance participant. A final command without that grant,
+recipient overrides, delivery, consumption or a schema alias is rejected.
+Both commands retain the canonical `identity.anonymous.upgrade` action and
+permission, with distinct exact schemas, record policies and command IDs.
+
+The native owner must freeze both real sessions, merge intent, unchanged remember
+choice and original deadlines in the existing encrypted preparation. Signing
+alone is not durable issuance: commit this phase before the real one-use owner
+reserves the grant for the protected upgrade. Only that later command consumes
+the target action proof and applies risk, guest disposal, merge and session
+effects atomically. Neither preparation nor a retained signature authenticates
+an upgrade by itself. No additional transaction, journal or public endpoint is
+introduced.
+
 ## OAuth authentication-age continuation handoff
 
 The canonical native OAuth owner can select

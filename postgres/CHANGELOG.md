@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add a closed internal anonymous-upgrade preparation profile that durably
+  issues one original-target grant through the existing capability owner.
+  Typed native authentication and original-deadline fences remain mandatory;
+  preparation cannot consume proofs or mutate guest/target/session state and
+  does not expose an additional public HTTP operation.
+
+- Add a closed one-use anonymous-upgrade profile with a distinct permanent
+  target and guest resource, typed native admission and original proof recovery.
+  `AnonymousDisposalDomain.ApplyUpgrade` disposes only the guest in the same
+  Work; append `AnonymousUpgradeDisposalMigrationSource` after existing disposal
+  history. Native target/guest authentication, merge and session effects remain
+  mandatory; these contracts alone enable no upgrade endpoint.
+
 - Add closed kernel-owned anonymous disposal with original legal-hold and
   independent authority-generation fencing, retained command evidence and
   terminal tombstones. Native anonymous/session/risk/retention admission remains

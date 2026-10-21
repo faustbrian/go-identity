@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Classify anonymous upgrade as a protected credential mutation with original
+  transaction-owned counters. This does not enable native upgrade or substitute
+  for verified permanent-account authority and anonymous-session possession.
+
 - Admit exact anonymous self-deletion through the existing credential-mutation
   policy and transaction-owned subject/session/network counters. This is neither
   anonymous authentication nor deletion permission; aliases and unfinished

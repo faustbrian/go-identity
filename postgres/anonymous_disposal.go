@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -153,6 +154,30 @@ func (r *Repository) GetAnonymousDisposal(ctx context.Context, q identity.UserSt
 // authority or legal hold deny before erasure. Errors poison Work even when a
 // caller ignores them. Success remains provisional until every owner commits.
 func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent) (identity.User, error) {
+	return d.apply(ctx, w, p, command, i, false)
+}
+
+// ApplyUpgrade disposes only the guest in RecordID while UserID/ActorID remain
+// the distinct permanent target. It requires the exact typed upgrade invocation
+// and provisional one-use consumption. It never changes the permanent user or
+// proves its credentials; the native owner must fence target authority and
+// enlist the session transition in the same Work before commitment.
+func (d *AnonymousDisposalDomain) ApplyUpgrade(ctx context.Context, w Work, p AnonymousUpgradeContributor, command identity.Command, i AnonymousDisposalIntent) (identity.User, error) {
+	return d.apply(ctx, w, p, command, i, true)
+}
+
+func anonymousDisposalScope(b identity.CommandBinding, op identity.FeatureOperation, l LifecyclePlan, i AnonymousDisposalIntent, upgrade bool) bool {
+	source := i.Snapshot.Authority.User
+	if b.ValidateFor(op) != nil || b.TenantID != source.TenantID || b.RecordID != string(source.ID) || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 {
+		return false
+	}
+	if upgrade {
+		return op == anonymousUpgradeOperation() && b.UserID != source.ID && l.EventType == "anonymous.upgraded.v1"
+	}
+	return op == anonymousDisposalOperation() && b.UserID == source.ID && l.EventType == "anonymous.deleted.v1"
+}
+
+func (d *AnonymousDisposalDomain) apply(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent, upgrade bool) (identity.User, error) {
 	if err := w.usable(); err != nil {
 		return identity.User{}, err
 	}
@@ -164,9 +189,19 @@ func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureEx
 		return identity.User{}, err
 	}
 	b, f, l, err := w.FeatureScope(p)
-	if err != nil || p.Descriptor() != anonymousCreationDescriptor() || f.Operation != anonymousDisposalOperation() || b.UserID != i.Snapshot.Authority.User.ID || b.TenantID != i.Snapshot.Authority.User.TenantID || b.RecordID != string(b.UserID) || string(b.ActorID) != string(b.UserID) || l.EventType != "anonymous.deleted.v1" || l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 || w.state.anonymousDisposal != nil || w.state.anonymousCreation != nil || w.state.creation != nil || w.state.update != nil || w.state.status != nil || w.state.profile != nil || w.state.identifier != nil {
+	if err != nil || p.Descriptor() != anonymousCreationDescriptor() || !anonymousDisposalScope(b, f.Operation, l, i, upgrade) || w.state.anonymousDisposal != nil || w.state.anonymousCreation != nil || w.state.creation != nil || w.state.update != nil || w.state.status != nil || w.state.profile != nil || w.state.identifier != nil {
 		return fail(invalidAnonymousDisposal())
 	}
+	if upgrade {
+		owner, ok := p.(AnonymousUpgradeContributor)
+		if !ok {
+			return fail(invalidAnonymousDisposal())
+		}
+		if _, err := w.AnonymousUpgradeConsumption(owner); err != nil {
+			return fail(err)
+		}
+	}
+	source := i.Snapshot.Authority.User.ID
 	spec, ok := command.Feature()
 	if !ok || spec.Binding != b || spec.Operation != f.Operation {
 		return fail(invalidAnonymousDisposal())
@@ -207,11 +242,11 @@ func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureEx
 	if !enlisted {
 		return fail(invalidWork())
 	}
-	rows, err := w.Query(ctx, anonymousDisposalSelect()+" FOR UPDATE OF u,i", string(b.TenantID), string(b.UserID))
+	rows, err := w.Query(ctx, anonymousDisposalSelect()+" FOR UPDATE OF u,i", string(b.TenantID), string(source))
 	if err != nil {
 		return identity.User{}, err
 	}
-	current, err := readAnonymousDisposal(identity.UserStatusQuery{TenantID: b.TenantID, UserID: b.UserID}, rows)
+	current, err := readAnonymousDisposal(identity.UserStatusQuery{TenantID: b.TenantID, UserID: source}, rows)
 	rows.Close()
 	if err != nil || current != i.Snapshot {
 		return fail(identity.ForbiddenError{})
@@ -226,7 +261,7 @@ func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureEx
 	// original command/audit foreign keys. Physical payload erasure is bounded
 	// to these kernel-owned single-user rows; anonymous/session owners dispose
 	// their own state inside this same Work, never through a later callback.
-	n, err := w.Exec(ctx, `UPDATE identity.users SET status=$3,version=version+1,authority_version=authority_version+1,identifier_version=identifier_version+1,credential_version=credential_version+1 WHERE tenant_id=$1 AND user_id=$2 AND status='active' AND version=$4::numeric AND legal_hold_version=$5::numeric`, string(b.TenantID), string(b.UserID), string(u.Status), strconv.FormatUint(current.Authority.User.Version, 10), strconv.FormatUint(current.LegalHoldVersion, 10))
+	n, err := w.Exec(ctx, `UPDATE identity.users SET status=$3,version=version+1,authority_version=authority_version+1,identifier_version=identifier_version+1,credential_version=credential_version+1 WHERE tenant_id=$1 AND user_id=$2 AND status='active' AND version=$4::numeric AND legal_hold_version=$5::numeric`, string(b.TenantID), string(source), string(u.Status), strconv.FormatUint(current.Authority.User.Version, 10), strconv.FormatUint(current.LegalHoldVersion, 10))
 	if err != nil {
 		return identity.User{}, err
 	}
@@ -235,7 +270,7 @@ func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureEx
 	}
 	if i.Action != AnonymousDisposeRetain {
 		for _, table := range []string{"identity.user_attributes", "identity.user_profiles"} {
-			if _, err := w.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id=$1 AND user_id=$2`, string(b.TenantID), string(b.UserID)); err != nil {
+			if _, err := w.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id=$1 AND user_id=$2`, string(b.TenantID), string(source)); err != nil {
 				return identity.User{}, err
 			}
 		}
@@ -244,7 +279,7 @@ func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureEx
 	if err != nil || len(id) != 16 {
 		return fail(invalidAnonymousDisposal())
 	}
-	n, err = w.Exec(ctx, `INSERT INTO identity.anonymous_disposals(tenant_id,purpose,command_id,user_id,action,before_version,after_version,before_user_version,before_authority_version,before_identifier_version,before_credential_version,legal_hold,legal_hold_version,retention_policy_version) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10::numeric,$11::numeric,$12,$13::numeric,$14::numeric)`, string(b.TenantID), b.OperationID, id, string(b.UserID), string(i.Action), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), strconv.FormatUint(current.Authority.User.Version, 10), strconv.FormatUint(current.Authority.UserAuthorityVersion, 10), strconv.FormatUint(current.Authority.IdentifierAuthorityVersion, 10), strconv.FormatUint(current.Authority.CredentialAuthorityVersion, 10), current.LegalHold, strconv.FormatUint(current.LegalHoldVersion, 10), strconv.FormatUint(i.RetentionPolicyVersion, 10))
+	n, err = w.Exec(ctx, `INSERT INTO identity.anonymous_disposals(tenant_id,purpose,command_id,user_id,action,before_version,after_version,before_user_version,before_authority_version,before_identifier_version,before_credential_version,legal_hold,legal_hold_version,retention_policy_version) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10::numeric,$11::numeric,$12,$13::numeric,$14::numeric)`, string(b.TenantID), b.OperationID, id, string(source), string(i.Action), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), strconv.FormatUint(current.Authority.User.Version, 10), strconv.FormatUint(current.Authority.UserAuthorityVersion, 10), strconv.FormatUint(current.Authority.IdentifierAuthorityVersion, 10), strconv.FormatUint(current.Authority.CredentialAuthorityVersion, 10), current.LegalHold, strconv.FormatUint(current.LegalHoldVersion, 10), strconv.FormatUint(i.RetentionPolicyVersion, 10))
 	if err != nil {
 		return identity.User{}, err
 	}
@@ -259,12 +294,30 @@ func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureEx
 // exact delete participant's Apply invocation. It cannot be supplied by a caller
 // as permanent-user mutation or authentication evidence, and expires with Work.
 func (w Work) AnonymousDisposal(p FeatureExecutionContributor) (identity.User, error) {
+	return w.anonymousDisposalResult(p, false)
+}
+
+// AnonymousUpgradeDisposal reads only the guest's actual provisional disposal
+// during its exact typed upgrade Apply. It never represents a mutation of the
+// permanent target, authentication evidence or a completed session transition.
+func (w Work) AnonymousUpgradeDisposal(p AnonymousUpgradeContributor) (identity.User, error) {
+	if _, err := w.AnonymousUpgradeConsumption(p); err != nil {
+		return identity.User{}, err
+	}
+	return w.anonymousDisposalResult(p, true)
+}
+
+func (w Work) anonymousDisposalResult(p FeatureExecutionContributor, upgrade bool) (identity.User, error) {
 	b, f, _, err := w.FeatureScope(p)
-	if err != nil || p.Descriptor() != anonymousCreationDescriptor() || f.Operation != anonymousDisposalOperation() || !w.state.featureApplying || w.state.anonymousDisposal == nil {
+	op := anonymousDisposalOperation()
+	if upgrade {
+		op = anonymousUpgradeOperation()
+	}
+	if err != nil || p.Descriptor() != anonymousCreationDescriptor() || f.Operation != op || !w.state.featureApplying || w.state.anonymousDisposal == nil {
 		return identity.User{}, invalidWork()
 	}
 	u := w.state.anonymousDisposal.after
-	if u.TenantID != b.TenantID || u.ID != b.UserID {
+	if u.TenantID != b.TenantID || string(u.ID) != b.RecordID || upgrade == (u.ID == b.UserID) {
 		return identity.User{}, invalidWork()
 	}
 	return u, nil
@@ -275,6 +328,17 @@ func (w Work) AnonymousDisposal(p FeatureExecutionContributor) (identity.User, e
 // renews an admission deadline. The workflow separately fences its original
 // session, anonymous transition, risk and retention decision.
 func (d *AnonymousDisposalDomain) Check(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent) error {
+	return d.check(ctx, w, p, command, i, false)
+}
+
+// CheckUpgrade repeats the guest's terminal state and original legal hold in
+// the exact upgrade commit fence, without renewing authority. Target and session
+// owners must independently check their own current state in that same fence.
+func (d *AnonymousDisposalDomain) CheckUpgrade(ctx context.Context, w Work, p AnonymousUpgradeContributor, command identity.Command, i AnonymousDisposalIntent) error {
+	return d.check(ctx, w, p, command, i, true)
+}
+
+func (d *AnonymousDisposalDomain) check(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent, upgrade bool) error {
 	if err := w.usable(); err != nil {
 		return err
 	}
@@ -284,8 +348,8 @@ func (d *AnonymousDisposalDomain) Check(ctx context.Context, w Work, p FeatureEx
 	if w.state.featureApplying || w.state.featureCommitCommand == nil || *w.state.featureCommitCommand != command {
 		return w.fail(ctx, invalidWork())
 	}
-	b, f, _, err := w.FeatureScope(p)
-	if err != nil || f.Operation != anonymousDisposalOperation() || p.Descriptor() != anonymousCreationDescriptor() || w.state.anonymousDisposal == nil || w.state.anonymousDisposal.before != i || b.TenantID != i.Snapshot.Authority.User.TenantID || b.UserID != i.Snapshot.Authority.User.ID {
+	b, f, l, err := w.FeatureScope(p)
+	if err != nil || !anonymousDisposalScope(b, f.Operation, l, i, upgrade) || p.Descriptor() != anonymousCreationDescriptor() || w.state.anonymousDisposal == nil || w.state.anonymousDisposal.before != i || upgrade && !w.state.anonymousUpgradeConsumed {
 		return w.fail(ctx, invalidAnonymousDisposal())
 	}
 	want := i.Snapshot
@@ -293,11 +357,12 @@ func (d *AnonymousDisposalDomain) Check(ctx context.Context, w Work, p FeatureEx
 	want.Authority.UserAuthorityVersion++
 	want.Authority.IdentifierAuthorityVersion++
 	want.Authority.CredentialAuthorityVersion++
-	rows, err := w.Query(ctx, anonymousDisposalSelect()+" FOR SHARE OF u,i", string(b.TenantID), string(b.UserID))
+	source := i.Snapshot.Authority.User.ID
+	rows, err := w.Query(ctx, anonymousDisposalSelect()+" FOR SHARE OF u,i", string(b.TenantID), string(source))
 	if err != nil {
 		return err
 	}
-	got, err := readAnonymousDisposal(identity.UserStatusQuery{TenantID: b.TenantID, UserID: b.UserID}, rows)
+	got, err := readAnonymousDisposal(identity.UserStatusQuery{TenantID: b.TenantID, UserID: source}, rows)
 	rows.Close()
 	if err != nil || got != want {
 		return w.fail(ctx, identity.ForbiddenError{})
@@ -307,7 +372,18 @@ func (d *AnonymousDisposalDomain) Check(ctx context.Context, w Work, p FeatureEx
 
 func recoverAnonymousDisposal(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
 	b, err := w.Scope()
-	if err != nil || w.state.plan.feature == nil || w.state.plan.feature.Operation != anonymousDisposalOperation() || w.state.plan.lifecycle == nil {
+	if err != nil || w.state.plan.feature == nil || w.state.plan.lifecycle == nil {
+		return RecoveryUnknown, invalidAnonymousDisposal()
+	}
+	source := b.UserID
+	switch w.state.plan.feature.Operation {
+	case anonymousDisposalOperation():
+	case anonymousUpgradeOperation():
+		if w.state.plan.capability == nil || b.RecordID == string(b.UserID) {
+			return RecoveryUnknown, invalidAnonymousDisposal()
+		}
+		source = identity.UserID(b.RecordID)
+	default:
 		return RecoveryUnknown, invalidAnonymousDisposal()
 	}
 	id, err := base64.RawURLEncoding.Strict().DecodeString(string(b.CommandID))
@@ -330,7 +406,7 @@ func recoverAnonymousDisposal(ctx context.Context, w RecoveryWork) (RecoveryStat
 	if err := rows.Scan(&user, &before, &after); err != nil {
 		return RecoveryUnknown, err
 	}
-	if rows.Next() || rows.Err() != nil || user != string(b.UserID) || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) {
+	if rows.Next() || rows.Err() != nil || user != string(source) || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) {
 		return RecoveryUnknown, identity.UnavailableError{}
 	}
 	return RecoveryCommitted, nil

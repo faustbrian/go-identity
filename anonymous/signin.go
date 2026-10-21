@@ -58,8 +58,12 @@ func (r SigninRequest) Validate() error {
 // Canonical UTC metadata and IP text prevent multiple representations of one
 // request identity; neither supplies authoritative time or risk admission.
 func validateIngress(tenant identity.TenantID, caller authorization.DecisionContext, origin, network, device string) error {
+	return validateIngressAction(tenant, caller, "identity.anonymous.signin", origin, network, device)
+}
+
+func validateIngressAction(tenant identity.TenantID, caller authorization.DecisionContext, action authorization.Action, origin, network, device string) error {
 	r := caller.Request
-	if !visibleText(string(tenant), 128) || r.Tenant != authorization.TenantID(tenant) || r.Action != "identity.anonymous.signin" || !visibleText(string(r.Subject.ID), 128) || !visibleText(string(r.Resource.Type), 128) || r.Resource.ID != "" && !visibleText(string(r.Resource.ID), 128) || r.Environment.Time.Location() != time.UTC || len(r.Subject.Groups) > 64 {
+	if !visibleText(string(tenant), 128) || r.Tenant != authorization.TenantID(tenant) || r.Action != action || !visibleText(string(r.Subject.ID), 128) || !visibleText(string(r.Resource.Type), 128) || r.Resource.ID != "" && !visibleText(string(r.Resource.ID), 128) || r.Environment.Time.Location() != time.UTC || len(r.Subject.Groups) > 64 {
 		return ErrInvalidInput
 	}
 	switch r.Subject.Kind {

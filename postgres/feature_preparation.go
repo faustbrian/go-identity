@@ -412,6 +412,9 @@ func consumptionAuthenticationPreparation(p CommandPlan) bool {
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
+	if anonymousUpgradePreparationSelected(original) && (!validAnonymousUpgradePreparation(b, original) || !validAnonymousUpgradePreparation(b, final) || final.CapabilityIssuance == nil) {
+		return false
+	}
 	if (original.OrganizationInvitationOrigin == nil) != (final.OrganizationInvitationOrigin == nil) || original.OrganizationInvitationOrigin != nil && *original.OrganizationInvitationOrigin != *final.OrganizationInvitationOrigin {
 		return false
 	}
@@ -428,12 +431,13 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	} else if final.Capability != nil {
 		return false
 	}
-	// Only closed signup, reset, magic-link and managed-email profiles add issuance.
+	// Only closed native profiles add issuance, including the distinct internal
+	// anonymous-upgrade preparation. That phase cannot consume or mutate a guest.
 	// Their selected targets are admitted by distinct native transaction fences;
 	// original admission stays issuance-free and cannot introduce consumption.
 	withoutIssuance := final
 	withoutIssuance.CapabilityIssuance = nil
-	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) && !validOrganizationInvitationIssuance(b, final) && !phoneResetRequestPreparation(final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
+	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) && !validOrganizationInvitationIssuance(b, final) && !phoneResetRequestPreparation(final) && !validAnonymousUpgradePreparation(b, final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
 		return false
 	}
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || original.MagicLinkRequestAcceptance != final.MagicLinkRequestAcceptance || len(original.Audits) != len(final.Audits) {

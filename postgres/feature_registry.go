@@ -109,6 +109,9 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	if op.OperationID == "identity.anonymous.delete" {
 		return op == anonymousDisposalOperation() && d == anonymousCreationDescriptor()
 	}
+	if op.OperationID == "identity.anonymous.upgrade" {
+		return (op == anonymousUpgradeOperation() || op == anonymousUpgradePreparationOperation()) && d == anonymousCreationDescriptor()
+	}
 	// Phone recovery must retain the existing password/reset material writer;
 	// neither a same-owner alias nor a future schema can omit its typed phases.
 	if op.OperationID == "identity.phone.password-reset-complete" {

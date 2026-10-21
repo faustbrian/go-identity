@@ -131,6 +131,9 @@ func (p PreparedIssuance) Session() (Session, bool) {
 	if p.state == nil {
 		return Session{}, false
 	}
+	if p.state.upgrade != nil {
+		return p.state.upgrade.record, true
+	}
 	if p.state.anonymous != nil {
 		return p.state.anonymous.record, true
 	}
@@ -189,6 +192,10 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	if r.state == nil {
 		return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
 	}
+	if r.state.upgrade != nil {
+		p := r.state.upgrade
+		return p.binding, anonymousUpgradeOperation(), p.record, true
+	}
 	if r.state.anonymous != nil {
 		p := r.state.anonymous
 		return p.binding, anonymousSigninOperation(), p.record, true
@@ -225,6 +232,15 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 }
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
+	if s.anonymousUpgrade {
+		if r.state == nil || r.state.upgrade == nil {
+			return ErrInvalidIssuance
+		}
+		return validateAnonymousUpgradeIssuanceAt(r.state.upgrade.record, r.state.upgrade.until, now)
+	}
+	if r.state != nil && r.state.upgrade != nil {
+		return ErrInvalidIssuance
+	}
 	if s.anonymous {
 		if r.state == nil || r.state.anonymous == nil {
 			return ErrInvalidIssuance

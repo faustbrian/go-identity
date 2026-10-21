@@ -47,6 +47,8 @@ type workState struct {
 	magicLinkFinalized        bool
 	invitationConsumed        bool
 	invitationFinalized       bool
+	anonymousUpgradeConsumed  bool
+	anonymousUpgradeFinalized bool
 	invitationMembership      *OrganizationInvitationMembership
 	invitationRecipient       *organizationInvitationRecipientAdmission
 	oauthConsent              *OAuthConsentMutation

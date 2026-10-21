@@ -25,7 +25,7 @@ import (
 // Methods must support concurrent calls with independent serial-use handles.
 // Risk execution additionally requires its exact typed current-check/finalize
 // owner. The exact registration-email, password-reset and magic-link profiles
-// and organization invitation profiles require their typed atomic participants. Other capability/OTP
+// and organization invitation/anonymous upgrade profiles require their typed atomic participants. Other capability/OTP
 // profiles remain rejected until their typed phases exist.
 type FeatureExecutionContributor interface {
 	FeatureContributor
@@ -62,6 +62,13 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	}
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
+	}
+	if anonymousUpgradePreparationSelected(plan) {
+		owner, ok := phase.(AnonymousUpgradePreparationContributor)
+		if !ok {
+			return invalidPlan()
+		}
+		return owner.ValidateAnonymousUpgradePreparation(command, cloneCapabilityIssuancePlan(plan.CapabilityIssuance))
 	}
 	if oauthConsentSelected(plan) {
 		owner, ok := phase.(OAuthConsentContributor)
@@ -145,6 +152,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		return validateMFAContinuation(phase, command, plan)
 	}
 	if plan.Capability != nil {
+		if plan.Feature != nil && plan.Feature.Operation == anonymousUpgradeOperation() {
+			return validateAnonymousUpgrade(phase, command, plan)
+		}
 		if plan.Feature != nil && plan.Feature.Operation == organizationInvitationAcceptOperation() {
 			return validateOrganizationInvitationConsumption(phase, command, plan)
 		}
@@ -207,7 +217,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -227,6 +237,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
+	}
+	if anonymousUpgradePreparationSelected(p) {
+		if _, ok := feature.contributor.(AnonymousUpgradePreparationContributor); !ok || !validAnonymousUpgradePreparation(b, p) || !preparation && p.CapabilityIssuance == nil || preparation && p.CapabilityIssuance != nil {
+			return nil, invalidPlan()
+		}
 	}
 	if organizationInvitationIssuanceOperation(p.Feature.Operation) {
 		if _, ok := feature.contributor.(OrganizationInvitationIssuanceContributor); !ok {
@@ -316,7 +331,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		}
 	}
 	if p.Capability != nil {
-		if p.Feature.Operation == organizationInvitationAcceptOperation() {
+		if p.Feature.Operation == anonymousUpgradeOperation() {
+			if _, ok := feature.contributor.(AnonymousUpgradeContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else if p.Feature.Operation == organizationInvitationAcceptOperation() {
 			if _, ok := feature.contributor.(OrganizationInvitationConsumptionContributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -687,7 +706,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 	}
 	if p.capability != nil {
-		if p.feature.Operation == organizationInvitationAcceptOperation() {
+		if p.feature.Operation == anonymousUpgradeOperation() {
+			if e := prepareAnonymousUpgradeConsumption(ctx, w); e != nil {
+				return result, e
+			}
+		} else if p.feature.Operation == organizationInvitationAcceptOperation() {
 			if e := prepareOrganizationInvitationConsumption(ctx, w); e != nil {
 				return result, e
 			}

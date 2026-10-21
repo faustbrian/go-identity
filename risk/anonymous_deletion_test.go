@@ -37,10 +37,10 @@ func TestAnonymousSelfDeletionRequiresOriginalProtectedCounters(t *testing.T) {
 	if counters.Validate(command, c, s, c.Now.Add(15*time.Minute)) == nil {
 		t.Fatal("deletion counter expiry renewed")
 	}
-	for _, op := range []Action{"identity.anonymous.Delete", "identity.anonymous.delete ", "identity.anonymous.upgrade"} {
+	for _, op := range []Action{"identity.anonymous.Delete", "identity.anonymous.delete ", "identity.anonymous.upgrade-prepare"} {
 		c.Operation = op
 		if _, err := counters.Prepare(c, s, c.Now); err == nil {
-			t.Fatal("alias/unfinished upgrade admitted")
+			t.Fatal("alias/unselected preparation admitted")
 		}
 	}
 }

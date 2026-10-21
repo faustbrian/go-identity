@@ -15,7 +15,7 @@ import (
 // that declaration complete. The coordinator alone computes authoritative keyed
 // intent and matches its frozen registry. Preparation grants no reservation,
 // Work or execution readiness. Only the exact native registration-email,
-// password-reset, magic-link and organization-invitation profiles support original proof consumption
+// password-reset, magic-link, organization-invitation and anonymous-upgrade profiles support original proof consumption
 // through their typed atomic phases. Other capability/cascade inputs are rejected. Invalid
 // input returns redacted identity.InvalidInputError. Do not mutate inputs
 // concurrently with this call.
@@ -34,6 +34,9 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 // proofBase is private to fixed-depth, closed consumption envelopes. Public
 // preparation never admits their proof-free base as a standalone declaration.
 func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, proofBase bool) ([]byte, error) {
+	if p.Feature != nil && p.Feature.Operation.SchemaID == anonymousUpgradePreparationOperation().SchemaID && !validAnonymousUpgradePreparation(binding, p) {
+		return nil, invalidPlan()
+	}
 	if p.OrganizationInvitationOrigin != nil && !validOrganizationInvitationOrigin(p) {
 		return nil, invalidPlan()
 	}
@@ -60,6 +63,9 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	}
 	if p.Feature != nil && p.Feature.Operation == organizationInvitationAcceptOperation() && !proofBase {
 		return encodeOrganizationInvitationConsumptionPlan(binding, fingerprint, p)
+	}
+	if p.Feature != nil && p.Feature.Operation.OperationID == "identity.anonymous.upgrade" && !proofBase && !anonymousUpgradePreparationSelected(p) {
+		return encodeAnonymousUpgradePlan(binding, fingerprint, p)
 	}
 	if p.Capability != nil {
 		return encodeEmailVerificationPlan(binding, fingerprint, p)
