@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-21 08:24 UTC
+## TL;DR — updated 2026-10-21 09:25 UTC
 
 **Estimated whole-goal completion: approximately 20–25%, with low confidence.**
 **Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
@@ -12,26 +12,33 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Current delivery checkpoint:** guest-upgrade source is independently APPROVED
-(79-path snapshot `60a4a297...36c45`). Capability recovery `183afe9` and the four
-identity contract roots `2eafc25` are on main with exact Required CI green
-(39562261222 / 39564542752); downloaded prerequisites match committed source.
-MFA/password/risk/session native owners are also main-pushed as `a33b0df`, exact
-Required CI 39567012786 green, after public-dependency race tests and vet.
-The anonymous upgrade service is independently approved and main-pushed as
-`51b6de2`, exact Required CI 39568175990 green. Its public-dependency journey and
-issuance/final commit-loss recovery pass (22.676s); the actual downloaded native
-module also passes the complete PostgreSQL/race consumer (3.254s), without local
-replacements. Independent delivery audit confirms the reviewed source, remote
-heads, public module and applicable CI. The finite native upgrade profile is
-**CLOSED**. HTTP/reference remains open;
-M09 is not closed. In parallel, the OAuth worker is implementing OIDC
-`prompt=none` with bounded, non-renewing consent reuse. Its real native
-explicit-consent → silent code/S256 → independent ID-token/UserInfo journey now
-passes locally, as do fourteen preflight denial/expiry/isolation cases and
-targeted late consent/session-withdrawal fences. Required-effect rollback,
-ambiguous-outcome recovery, original-budget checks, review and delivery remain.
-No milestone increment.
+**Latest delivered behavior:** native OIDC `prompt=none` reuses original bounded
+explicit consent without interaction or renewal, then issues a one-use code for
+S256 exchange and independently verified ID-token/UserInfo. Root `9f0f023`, OIDC
+child `284bf8e` and PostgreSQL `723fdfd` are on OAuth main; exact Required CI
+39576005546 is green. The downloaded native public module passes the real
+PostgreSQL/race RP journey (6.351s), without workspace or replacements. The
+public-dependency required-effect/commit-loss cohort also passes (30.581s).
+Independent regression, compatibility, correctness and delivery audits close
+this **finite native silent profile**, not full M30/M31 or release qualification.
+Activation requires forward history and positive consent TTL on every accepting
+writer; mixed/zero-TTL writers after activation are unsupported.
+
+**Current implementation:** M09 anonymous HTTP/reference. Guest reads now keep
+unprivileged recognition separate from verified authentication, preserve permanent
+cookie precedence without guest fallback, and reject expired custody after hooks.
+Affected HTTP race/schema checks pass. Signin strict-key/original-flow/device
+decoding tests pass; the native authenticated flow-rate source passes real
+PostgreSQL/race, including consumed-flow retries without mutation. These changes
+are local, unreviewed and not delivered. Signin credential-delivery, deletion,
+upgrade, opt-in feature/catalog and reference journey remain unfinished.
+Upgrade HTTP requires exactly one Idempotency-Key; actual proof consumption
+remains one-use and replay/recovery metadata-only. No milestone increment.
+
+**Retained delivery:** native guest upgrade `51b6de2`, supporting owners
+`a33b0df`/`2eafc25` and capability `183afe9` remain independently reviewed,
+main-pushed, public-consumer proven and applicable-CI green. The finite native
+upgrade profile is **CLOSED**, but HTTP/reference and full M09 remain open.
 
 **Retained M09 runtime evidence, source now native-main delivered:** the selected public
 guest-upgrade journey and its affected PostgreSQL/race acceptance pass92.978s.

@@ -1,5 +1,50 @@
 # Identity Implementation — Current Milestone
 
+2026-10-21 09:25 UTC: finite native silent OIDC profile CLOSED. OAuth main
+9f0f023 ->284bf8e ->723fdfd; exact Required39576005546 SUCCESS. Original
+regression/compatibility/correctness and public-adoption reviews plus fresh
+delivery audit inspected directly; public root72/child13/native81 archive files
+match Git. GOWORKoff public-dependency native race/vet/checksums pass; real
+PG/race RP+rollback/commit-recovery30.581s and downloaded-native external RP
+consumer6.351s pass. Initial private SQL_ASCII fixture failed before scenario;
+explicit UTF8 recreation cleared it without package changes. Earlier broad
+168.375s/retained29.017s evidence stays retained, not rerun. All accepting writers
+must retain positive TTL after forward activation; mixed/zero rollback unsupported.
+Full M30/M31/HTTP/reference/release remain open; no milestone increment.
+
+Primary M09 transport remains local/unreviewed: guest GET strict selection,
+no verified elevation/fallback, original hook expiry and selected wire schema
+pass affected HTTP race18.420s; core anonymous race1.241s. New anonymous signin
+strict browser/key decoding race1.492s/vet pass. Native original-flow rate source
+API absence RED55600, then real PG/race92666 PASS1.713s verifies possession,
+isolation, no domain writes and stable consumed-flow rate scope. Complete signin
+delivery/delete/upgrade/features/catalog/reference acceptance remains unfinished.
+
+2026-10-21 08:41 UTC: explicit user decision resolves upgrade retry contract:
+require exactly one Idempotency-Key HTTP header to match the native keyed
+workflow; real target proof/capability remain one-use and retries/recovery
+metadata-only. Reconcile only the affected local operation/request/catalog/wire
+rows and implementation documentation; no Tools historical republishing or
+alternative once-custody engine. Existing one-pass QA remains applicable.
+
+2026-10-21 08:39 UTC: primary M09 transport/reference slice entered from clean
+main30e2739, adopting delivered native51b6de2/C2a33b0df/C12eafc25/cap183afe9.
+One fresh read-only contract map and QA artifact (produceranonymous_http_qa_plan,
+commitmentc1b8f74e...b8f67) identify actual reusable owners and finite success,
+strictcustody/tenant/origin/remember, no-elevation, atomicity/replay/unknown tests.
+No Tools/history migration. Primary owns HTTP/session, new opt-in anonymous HTTP,
+reference composition/migrations/manifests/pins. Frozen outcome: actual public
+HTTPS guestpreauth/signin/explicitanonymousread/selfdelete plus verifiedpassword
+targetproof/upgrade/newpermanentread/logout; no applicationdomainstores/handlers.
+Existing singlefactor/noresource/KeepTarget limits remain. Canonical upgrade
+once versus native requiredkey is one material request-contract question asked
+asynchronously; signin/read/deletion continue. No invented recovery route or
+transport-derived replay authority. Sessionread must keep anonymous recognition
+separate from verified admission, and reject uninitialized selected owners with
+no constructor IO. First focused coreconsumer test authored; worker has current
+bounded OIDC heavy slot, then primary runs expectedRED/implementation/affected
+Go checks with a new task-owned disposable cache. Fullunit/release/M09 remain open.
+
 2026-10-21 08:24 UTC: independent deliveryauditor directly inspected original
 native79/C2/C3 and capability native reports and reproduced committed C2/C3/cap
 digests; fresh remotes/Required/publicnative33file identity confirm selected
