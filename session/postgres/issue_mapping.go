@@ -39,7 +39,7 @@ func sessionRecordFields(record session.Session, otp bool) ([]identity.FeatureFi
 
 func sessionRecordFieldsKind(record session.Session, kind session.AuthenticationKind) ([]identity.FeatureField, error) {
 	s, err := record.Bindings()
-	if err != nil || s.Authentication.Kind != kind || kind != session.AuthenticationVerified && kind != session.AuthenticationOTP && kind != session.AuthenticationMagicLink {
+	if err != nil || s.Authentication.Kind != kind || kind != session.AuthenticationVerified && kind != session.AuthenticationOTP && kind != session.AuthenticationMagicLink && kind != session.AuthenticationAnonymous {
 		return nil, session.ErrInvalidSessionCommand
 	}
 	remember, _ := s.Remember.Bindings()
@@ -78,7 +78,11 @@ func sessionRecordFieldsKind(record session.Session, kind session.Authentication
 	add("lookup.digest", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: s.Lookup.Sum[:]})
 	a := s.Authentication
 	number("authentication.kind", uint64(a.Kind))
-	if kind == session.AuthenticationOTP {
+	if kind == session.AuthenticationAnonymous {
+		text("tenant.id", string(s.TenantID))
+		text("user.id", string(s.UserID))
+		instant("anonymous.created", s.Authentication.AnonymousAt)
+	} else if kind == session.AuthenticationOTP {
 		p, err := record.OTPAuthentication().Bindings()
 		if err != nil {
 			return nil, session.ErrInvalidSessionCommand
@@ -252,7 +256,13 @@ func sessionRecordFromFieldsKind(b identity.CommandBinding, values map[string]id
 	s.Authentication.Kind = session.AuthenticationKind(small("authentication.kind", 255))
 	var metadata session.OTPAuthentication
 	var magic session.MagicLinkAuthentication
-	if kind == session.AuthenticationOTP {
+	if kind == session.AuthenticationAnonymous {
+		s.TenantID, s.UserID = identity.TenantID(text("tenant.id")), identity.UserID(text("user.id"))
+		s.Authentication.AnonymousAt = instant("anonymous.created")
+		if s.TenantID != b.TenantID || b.UserID != "" && s.UserID != b.UserID {
+			return fail()
+		}
+	} else if kind == session.AuthenticationOTP {
 		s.TenantID, s.UserID = identity.TenantID(text("tenant.id")), identity.UserID(text("user.id"))
 		p := session.OTPAuthenticationSpec{CommandID: identity.CommandID(text("otp.command")), SendCommandID: identity.CommandID(text("otp.send")), ChallengeID: text("otp.challenge"), AttemptID: text("otp.attempt"), IdentifierID: identity.IdentifierID(text("otp.identifier")), IdentifierKind: identity.IdentifierKind(text("otp.kind")), IdentifierVersion: number("otp.identifier-version"), VerificationVersion: number("otp.verification-version"), AuthenticatedAt: instant("otp.authenticated"), ValidUntil: instant("otp.valid-until")}
 		if s.TenantID != b.TenantID || (b.UserID != "" && s.UserID != b.UserID) || p.CommandID != b.CommandID {
@@ -299,7 +309,7 @@ func sessionRecordFromFieldsKind(b identity.CommandBinding, values map[string]id
 		}
 	}
 	authority := session.AuthoritySnapshotSpec{Global: binding("authority.global"), Tenant: binding("authority.tenant"), User: binding("authority.user"), Identifier: binding("authority.identifier"), Credential: binding("authority.credential"), SessionFamily: binding("authority.family"), Session: binding("authority.session"), Authorization: binding("authority.authorization"), ActiveOrganizationID: text("authority.organization.id"), Organization: optional("authority.organization"), Factor: optional("authority.factor"), Passkey: optional("authority.passkey")}
-	if !valid || s.Authentication.Kind != kind || kind != session.AuthenticationVerified && kind != session.AuthenticationOTP && kind != session.AuthenticationMagicLink {
+	if !valid || s.Authentication.Kind != kind || kind != session.AuthenticationVerified && kind != session.AuthenticationOTP && kind != session.AuthenticationMagicLink && kind != session.AuthenticationAnonymous {
 		return fail()
 	}
 	var err error

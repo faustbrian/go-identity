@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add explicit anonymous-source mapping and same-Work disposal of the complete
+  anonymous session/family set after actual kernel disposal. Retained effect
+  evidence supports metadata-only recovery without restoring revoked access.
+  Install `AnonymousDisposalMigrationSource` before selecting the native workflow;
+  verified-user source admission and unrelated session methods stay unchanged.
+
+- Add explicit anonymous-only session mapping and same-Work persistence/final
+  checks against actual kernel creation, directory and guest policy authority.
+  No credential reference or verified proof is fabricated. Append the forward
+  anonymous issuance-purpose suffix after the explicitly selected installed
+  history; base issuance needs no unrelated login method. Anonymous lifecycle,
+  risk, public workflow and current-session reader remain separately required.
+
 - Explicitly select session issuance after verified-phone/password and confirmed
   TOTP in one protected transaction. Require the original phone browser purpose
   and current verified-phone recipient; existing email completion stays separate.

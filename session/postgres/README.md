@@ -1,5 +1,44 @@
 # PostgreSQL session storage
 
+## Anonymous creation session effects
+
+`AnonymousSigninSessionFields` freezes the complete initial anonymous session
+before command fingerprinting. `AnonymousSigninEffect` consumes only the exact
+native anonymous command, actual same-Work kernel creation and original user
+epochs. The anonymous owner must separately persist its lifecycle/TTL, admit
+action-specific risk and initialize the explicit guest authorization namespace.
+The session effect never invents a credential, verified proof, policy permission
+or expiry authority. Call `Check` during the owner's final read-only commit
+phase; `Recover` inspects retained original issuance evidence without delivering
+a bearer or renewing authentication.
+
+Append `AnonymousSigninMigrationSource` last among selected issuance-purpose
+extensions. `Predecessor` and optional suffix flags must describe the installed
+history exactly. The base-issuance profile requires no OTP/password/MFA methods;
+combined profiles preserve every selected older purpose. Wrong predecessor
+selection fails rather than adopting another installed constraint. No old
+migration bytes or retained digests change. This component alone enables no
+anonymous endpoint, lifecycle cleanup, deletion, upgrade or session reader.
+
+## Anonymous self-disposal
+
+`AnonymousSourceSessionFields` and its exact inverse preserve only a complete
+existing anonymous source, including unchanged remember/authority/lookup/CSRF;
+they do not widen verified-user `OriginalSessionFields` or prove possession.
+The workflow must prove the original bearer/CSRF and current primary owners.
+`NewAnonymousDisposalEffect` then requires actual kernel disposal in that exact
+delete invocation before terminally revoking every anonymous session and family,
+including expired active-state siblings. A permanent-method sibling denies the
+entire disposal rather than deleting its sessions. The bounded set is atomic:
+more than100000 session/family rows fails, not partial success.
+
+Append session `AnonymousDisposalMigrationSource` after installed anonymous
+issuance history. Required retained effect evidence belongs here, not a second
+workflow journal. Call `Check` in the final same-Work phase and `Recover` only
+through the existing coordinator. Recovery inspects original evidence after live
+session cleanup, issues no credential and grants no live access. Native anonymous
+retention, risk and kernel/lifecycle disposal are separately mandatory.
+
 ## Explicit phone/password and confirmed TOTP
 
 `NewMFAPhonePasswordTOTPCompletionEffect` selects only the exact verified-phone

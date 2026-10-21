@@ -24,7 +24,7 @@ const originalSessionPrefix = "source-session."
 // coordinator transaction. Never log these correlated storage projections.
 func OriginalSessionFields(original session.Session) ([]identity.FeatureField, error) {
 	spec, err := original.Bindings()
-	if err != nil {
+	if err != nil || spec.Authentication.Kind == session.AuthenticationAnonymous {
 		return nil, session.ErrInvalidSessionCommand
 	}
 	fields, err := sessionRecordFieldsKind(original, spec.Authentication.Kind)
