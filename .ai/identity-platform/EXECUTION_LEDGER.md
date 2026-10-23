@@ -1,5 +1,46 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 18:08 UTC: M16 existing-account reference-native profile CLOSED,
+not full M16. Primary delivered exact reviewed 16-path candidate ab031fc3...9b5ad8
+as main bacc2e6c27bf259cf4cd5a39859b808d2f81d978; Required40000721264 SUCCESS
+(structure/current-range secrets, not hosted runtime). Independent native report
+/root/passkey_reference_final APPROVE/no findings binds base98464b4 and that
+candidate. Final public-supplier PostgreSQL/race passkey+baseline+TOTP cohort
+12.983s; complete ordinary reference race8.657s; taggedvet0, modverify all,
+changed-content secrets0. Separate example.com/reference-passkey-consumer uses
+authenticated public Reference v0.0.0-20261023180714-bacc2e6c27bf, GOWORK=off,
+no replacements; real fresh-install and populated-upgrade registration ->
+captured verification delivery -> verified password signin -> exact fresh
+proofs -> real resident/UV enrollment -> identified assertion -> issued session
+-> safe inventory/read -> cookie-CSRF logout PASS PostgreSQL/race7.765s.
+All342 archive files match committed source; module sums verify. No domain
+stores, protocol verification or user/session/proof records are fabricated.
+Selected native facade enforces initialization/tenant/lifetime; existing HTTP
+session routes do not implicitly adopt the new authentication method. HTTP,
+passkey-first signup, identifier-free/conditional signin and credential
+rename/delete remain required. Still11/39/~25% low-confidence whole goal;
+all67 units and full qualification retained. No tag/release/deployment claim.
+
+2026-10-23 17:50 UTC: next primary M16 profile frozen: opt-in reference-native
+existing-account enrollment -> identified signin -> session/inventory/logout,
+using the delivered passkey97cb16c public native API. Primary owns reference/**,
+its dependency pins and aggregate notes; no worker shares those writes. The
+graph supplies real password proof, counted risk, native stores and migration
+composition; applications supply configuration/keys/policy, not domain engines.
+Nil selection exposes no handles/routes; retained handles enforce initialized
+tenant/lifetime and Close. Exact source/profile/key matching, immutable owner
+migration prefixes, real fresh proof, UV/browser/CSRF/current authority and
+atomic effects remain mandatory. Acceptance: real existing baseline registration/
+delivery/verification/password session -> selected passkey journey, wrong/stale
+proof/browser/tenant denials, disabled/uninitialized/closed graph, populated
+successor migration and original recovery. No passkey HTTP/signup/usernameless/
+rename/delete enabled by this profile. Focused reference runtime tests first,
+then real PostgreSQL/race journey, tagged vet, relevant retained baseline and
+public-only dependency proof; one independent complete-final-diff review and
+ordinary main/CI delivery. Existing native security/recovery/browser evidence
+is retained unchanged, not restarted. Previous future timestamp labels below
+refer to the actual17:47 UTC delivery checkpoint; no future run is asserted.
+
 2026-10-23 17:52 UTC: M16 existing-account native profile CLOSED, not full M16.
 Actual separate example.com/native-passkey-consumer, GOWORK=off, downloaded
 native97cb16c and no replacements: both complete enrollment/signin/inventory/

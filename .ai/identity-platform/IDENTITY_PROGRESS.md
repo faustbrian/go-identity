@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 17:52 UTC
+## TL;DR — updated 2026-10-23 18:08 UTC
 
 - **Whole goal: approximately 25% complete (low-confidence estimate),
   11/39 consumer milestones closed; all 67 units remain required.** Milestone
@@ -18,7 +18,14 @@
   all 37 source files; all 144 consumer modules verify without replacements.
   Workspace correction `2912f67` is main-pushed with exact Required CI green.
   This is selected native behavior, not a release or full passkey milestone.
-- **Next:** integrate that backend into the opt-in reference composition.
+- **Newly delivered reference integration:** real baseline registration,
+  captured verification delivery and password signin now lead to passkey
+  enrollment, signin, safe inventory, session read and cookie-CSRF logout.
+  Fresh-install and populated-upgrade external consumers pass PostgreSQL/race
+  (7.765s) using the authenticated public Reference module without replacements.
+  Main `bacc2e6` is independently approved and Required CI `40000721264` green;
+  all 342 public archive files match the committed source.
+- **Next:** opt-in passkey HTTP composition over the delivered native owners.
   Full M16 still needs signup, identifier-free/conditional signin and management;
   remaining roadmap families and whole-unit/release qualification stay open.
   No user decision needed. This is a backend library, not a UI.
@@ -2283,7 +2290,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account native profile delivered: fresh password proof -> real resident/UV enrollment -> identified assertion -> session/inventory/read/cookie-CSRF logout. Reviewed main `97cb16c`, workspace `2912f67`, exact green CI and actual downloaded-public consumer PostgreSQL/race19.116s, including five current-owner denials. Signup, usernameless/conditional signin, management and HTTP/reference composition remain required; full row stays open. |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account native and selected Reference profiles delivered: actual baseline registration/verification/password session -> fresh proofs -> real resident/UV enrollment -> identified assertion -> session/inventory/read/cookie-CSRF logout. Native `97cb16c` / workspace `2912f67` and Reference `bacc2e6` are reviewed/main-pushed/exact-CI green. Downloaded-public native consumer19.116s and Reference fresh-install/populated-upgrade consumer7.765s pass PostgreSQL/race. Signup, usernameless/conditional signin, management and HTTP remain required; full row stays open. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
