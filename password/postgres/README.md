@@ -1,5 +1,13 @@
 # Password PostgreSQL adapter
 
+`ActionPrimaryRequest` is a source-compatible alias of
+`password.ActionPrimaryRequest`. Feature/transport ports may import the neutral
+core carrier while existing native callers keep their adapter spelling.
+Fields, redacted diagnostic marker and serialization sentinel are unchanged;
+reflection now reports the core package as the type owner. The native source
+still authenticates, reserves, consumes and checks the original proof inside
+the protected transaction; the input carrier grants none of that authority.
+
 `PhoneVerificationService.PhoneEnrollmentDestination` authenticates the complete
 original keyed phone input before transport delivery admission. Absent mappings
 perform native preliminary reads only, with an unretained candidate ID; existing

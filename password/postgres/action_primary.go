@@ -33,22 +33,10 @@ type ActionPrimaryConfig struct {
 	CSRFKeys         []session.CSRFKey
 }
 
-// ActionPrimaryRequest borrows the original bearer and action-specific proof.
-// Caller and TenantID come from trusted composition. RecordID identifies the
-// protected username, phone or organization, not the password credential.
-// Ownership transfer requires a distinct TargetSubjectID; username update and
-// phone verification enrollment are self-only and omit TargetSubjectID.
-// IDs and structural proof fields do not independently grant any authority.
-type ActionPrimaryRequest struct {
-	TenantID        identity.TenantID
-	TargetSubjectID identity.UserID
-	CommandID       identity.CommandID
-	RecordID        string
-	Session         auth.BearerCredential
-	Proof           auth.ReauthenticationProof
-	Caller          authorization.DecisionContext
-	CSRFToken       session.CSRFToken
-}
+// ActionPrimaryRequest preserves the native public name for the adapter-neutral
+// original-custody input. The selected native source still owns all validation,
+// admission, consumption and final checks; the carrier grants no authority.
+type ActionPrimaryRequest = password.ActionPrimaryRequest
 
 // ActionPrimarySource composes the existing password proof/session owners for
 // closed native operation profiles. It owns no transaction, cache, retry,
@@ -331,17 +319,6 @@ func (s *ActionPrimarySource) Recover(ctx context.Context, w kernel.RecoveryWork
 	}
 	return kernel.RecoveryCommitted, nil
 }
-
-// Format redacts borrowed original proof, bearer and caller metadata.
-func (ActionPrimaryRequest) Format(s fmt.State, _ rune) {
-	_, _ = io.WriteString(s, "passwordpostgres.ActionPrimaryRequest(redacted)")
-}
-
-// MarshalJSON rejects implicit request export.
-func (ActionPrimaryRequest) MarshalJSON() ([]byte, error) { return nil, password.ErrPasswordWork }
-
-// MarshalText rejects implicit request export.
-func (ActionPrimaryRequest) MarshalText() ([]byte, error) { return nil, password.ErrPasswordWork }
 
 // Format redacts borrowed owners and startup policy.
 func (ActionPrimarySource) Format(s fmt.State, _ rune) {

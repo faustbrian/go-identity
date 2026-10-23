@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Accept the password core's adapter-neutral action request through the
+  compatible `ActionPrimaryRequest` alias. Existing native source calls,
+  fields, proof custody, diagnostic marker and serialization errors remain
+  unchanged; consumers may now declare ports without a storage dependency.
+  Reflected type ownership now points to `identity/password`.
+
 - Admit exact self-only passkey registration-options and registration-verify
   action-primary custody. Their signed actions, native schemas and owners stay
   distinct; signin and credential management are not selected. Install the
