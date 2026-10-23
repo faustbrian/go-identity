@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 13:21 UTC
+## TL;DR — updated 2026-10-23 14:21 UTC
 
 - **Whole goal: approximately 25% complete, low confidence; 11/39 consumer
   milestones closed.** All 67 units remain in scope. This is a whole-outcome
@@ -16,10 +16,25 @@
   pass (181.707s). A separate no-replacement public consumer passes OTP
   one/all/COMMIT recovery and retained TOTP one/all disable (127.790s), with
   module checksums verified. This closes the finite profile, not all of M12.
-- **Parallel implementation:** human code-issued OAuth exchange passes its
-  first real code/PKCE/descendant-introspection journey, including retained
-  refresh/logout behavior. Remaining security/recovery checks are running.
-  It is not yet reviewed, delivered or counted as completed.
+- **Newly delivered:** explicitly selected confidential clients can exchange
+  genuine human code/PKCE-issued access for narrower children and descendants,
+  introspect and verify them, and enforce source/ancestor/current-owner withdrawal.
+  Original-command retry and real COMMIT recovery preserve lineage and return
+  no replacement secret. OAuth root `599225f` and native `3b58e4c` are independently
+  source-approved, main-pushed and exact-CI green (`39967343443` / `39968402888`).
+  Five actual downloaded public-native PostgreSQL/race journeys pass (64.253s),
+  with authenticated modules and all 105 native archive files matching source.
+  This closes the finite human-exchange profile, not full M33; API-key and
+  organization sources, HTTP/reference and remaining variants stay required.
+- **Primary implementation:** M16 existing-account passkey enrollment ->
+  identified assertion -> usable session/read/logout is the frozen next slice.
+  Enrollment proof-custody, factor authority, initial credential persistence and
+  atomic one-use proof consumption now pass focused pinned-Go1.27.2 checks,
+  including rollback and retained organization actions. WebAuthn same-Work
+  assertion participation is independently source-approved, main-pushed as
+  `b64dd7d` and exact-CI green (`39968403285`); protocol PostgreSQL/race and
+  retained standalone assertion checks pass. Full passkey identity/session
+  composition, usable session/read/logout and public journey remain unfinished.
 - **Remaining:** OTP replacement and remaining management/method/composition
   profiles; the other open roadmap families; full-unit/release qualification.
   The earlier unexplained prerequisite 503 and failed full-history secret scan

@@ -1,5 +1,127 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 14:21 UTC: finite M33 human code-issued opaque access-exchange
+profile CLOSED. Root599225f6758a/native3b58e4c6d7dc main-pushed, independently
+source-approved; exact Required39967343443/39968402888 SUCCESS. External
+example.invalid/identity-human-exchange consumes only public authenticated
+owners with GOWORKoff/no replacements: five PG/race journeys PASS64.253s;
+genuine code/S256/consent, consumed-code expiry, narrower introspection/resource,
+disabled/foreign/corrupt lineage, reusable-source concurrency and actual before/
+after-COMMIT/outbox failure covered. Modules verified; all105 downloaded native
+files match3b58e4c, including inherited root LICENSE. Native public version
+v0.0.0-20261023141728-3b58e4c6d7dc,
+sumh1:qFZ/XxPkHCQtn7+A3VjnrriHa7UplsdPrIDDOrGL+eI=,
+modsumh1:Tiw6zOTZCHGkGUil9TM8dR4j1T1jtlc7DNEUdCepb+k=.
+Actual failed252.911s historical cohort remains failed/unattributed, not erased
+by this fresh narrower run. Full M33/API-key/organization/HTTP/reference and
+67-unit qualification remain open; still11/39/~25% low confidence.
+WebAuthn participantb64dd7d1c3a5 exact Required39968403285 SUCCESS; actual
+public native v0.0.0-20261023141728-b64dd7d1c3a5 authenticates to that commit,
+all25 archive files match. Sumh1:23vJcUc+B3DCWjOvsGcTRdy8ZcfIsuiRe7DOm3mSdOE=,
+modsumh1:HKurrPylUyu2F+oRnDHo5jr5IvjSbwLczta45nX2+Zo=.
+This unlocks actual passkey composition, not M16 completion or a standalone
+new consumer closure. OAuth/WebAuthn bounded supplier scratch is now disposable;
+primary M16 cache and task-owned PG56427 remain for current implementation.
+
+2026-10-23 14:19 UTC: OAuth human code-exchange source/public-root adoption
+APPROVE/no findings from human_exchange_final_review. Native16 source paths
+retain approved af63cde2 snapshot; public-root pin599225 and authenticated sums
+are the only additional changes. Root599225 exact Required39967343443 SUCCESS.
+Native3b58e4c6d7dc and WebAuthn assertion participantb64dd7d1c3a5 are now
+main-pushed; exact hosted CI and public-native consumption remain pending.
+Native public-supplier PG/race25.064s, current ordinaryrace1.284s, taggedvet0
+and module verification pass. Earlier252.911s cohort remains FAILED at
+unattributed prerequisite signin503; isolated failed partition5.650s and final
+query/recovery cohort42.258s pass, not a relabeled historical run.
+Actual native public version v0.0.0-20261023141728-3b58e4c6d7dc authenticates
+to commit3b58e4c; root599225 remains explicit. External five-journey consumer
+prepared from public test seams; primary owns execution in borrowed PG56427.
+WebAuthn seven-path921eabf1 snapshot independently source-approved by
+webauthn_assertion_final_review; ordinary0.259s, assertionPG/race2.371s,
+retained standalonePG/race3.210s and taggedvet0. ProducerGo1.27.3 differs
+from repository pin1.27.2; hosted pin qualification remains pending. No full
+M16/M33 closure or new fully-qualified unit is claimed.
+Primary M16 kernel reference GREEN0.738s and actual password proof-consumption
+GREEN2.092s on pinnedGo1.27.2 now prove commit/rollback/duplicate/disabled/stale
+admission and one-use enrollment proof with retained organization actions.
+Next shared owner is passkey session issuance/current read/logout; bounded
+consumed-contract mapping is complete, not a new preflight. Still11/39/~25%.
+
+2026-10-23 13:56 UTC: primary original/retained custody/factor checks GREEN on
+authentically downloaded task-local Go1.27.2: password/postgres0.380s and
+mfa/postgres0.280s; identity toolchain pin unchanged. Kernel initial-passkey
+reference real-coordinator RED0.533s reached missing writer, with positive
+commit and successful-prefix rollback controls rejecting absence. Added exact
+Work writer and canonical original reference/three-epoch mapping; no independent
+transaction, epoch reset or reference upsert. Kernel GREEN pending worker slot.
+WebAuthn participant worker captured missing-API compile RED (not runtime proof)
+and now implements protocol participation; actual PG/counter/rollback/recovery
+evidence remains required. OAuth repaired cohort FAILED252.911s solely at real
+password signin503 before authorization-withdrawal exchange; cause unproved.
+Original216.870s remains historical passed. Source review APPROVE with F4 narrow
+tenant predicate action, now written; exact partition/changed-query checks and
+complete final source review remain open. No new consumer closure/delivery.
+
+2026-10-23 13:45 UTC: dependency-ready M16 protocol lane assigned to
+webauthn_assertion_participant. Writable scope: go-webauthn/postgres new
+assertion_participant*.go, minimal existing postgres protocol helpers if needed,
+docs/assertion-participation.md and postgres CHANGELOG/README only. Root protocol,
+registration participant, manifests/pins and Git delivery remain unchanged or
+primary-owned; request any unavoidable shared change. Consumes actual root
+ed89b240ab20 opaque ceremony/assertion transitions and native4667db441889 current
+registration participation/coordinator implementation. Outcome is an upstream
+same-Work identified-UV/ES256 assertion participant consumed inside the current
+complete passkey journey, not a separately closed consumer milestone. Parent
+descriptor passkey/postgres identity.passkeyv1; exact signin-options/signin-verify
+native-v1 operations, required record and0->1 command lifecycle. Real protocol
+creation/finalization/counter/effect rollback, one-use/concurrency/current owner,
+precommit failure and original COMMIT recovery need focused PostgreSQL proof.
+No independently committed protocol mutation, writable verified proof, copied
+counter store, second journal or authentication claim. Primary owns real identity/
+factor/risk/session composition and final integration. Worker codes/tests first;
+heavy slot remains OAuth worker until explicitly handed off; no worker children.
+
+2026-10-23 13:42 UTC: primary passkey custody/factor RED completed as expected:
+password/postgres0.330s work_unavailable and mfa/postgres0.285s invalid input
+for both exact enrollment operations; no compilation/setup failure. Actual
+toolchain was installed Go1.27.3, not identity's committed1.27.2 pin. Exact
+self-only ActionPrimary operation/descriptor selection and native MFA factor
+guard extension are now written with regression tests/changelogs; green and
+actual native proof consumption/journey remain open. No delivery counted.
+Heavy slot returned to existing OAuth worker for the reconciled complete
+review: F1 token-vs-grant subject attribution and F2 workload-policy namespace
+alias accepted after owning-source inspection; F3 scope/expired-code assertions
+accepted. Worker retains original source ownership, no pins/Git writes, and
+must establish RED/GREEN then freeze for complete changed-final-diff review.
+OAuth's own committed pin is1.27.3; original native race216.870s passed, but
+changed inputs require affected reruns. All67 units/11of39/~25% retained.
+
+2026-10-23 13:34 UTC: next primary profile frozen: M16 existing-account
+password-only fresh authenticated resident-required UV/none/ES256 passkey
+add/list -> identified assertion -> actual session read/logout. This is one
+complete native consumer slice, not closure of all M16 or the67-unit goal.
+Retain passkey-first signup, discoverable/usernameless session orchestration,
+conditional UI and rename/delete as later required profiles. Current shared-RP
+uniqueness still spans the complete RP namespace, never tenant-disambiguated.
+Primary owns go-identity password/MFA/kernel/session prerequisites and passkey/
+Reference integration; no passkey worker is assigned. Consume existing native
+WebAuthn4667db441889 (public/main), rooted89b240ab20, delivered M15 protocol and
+registration-participant evidence; actual workflow/public adoption is not proven.
+Reuse its real registration participant, never duplicate protocol/counter stores.
+Bounded readiness pass passkey_consumed_contracts found exact missing owners:
+password ActionPrimarySource/consumption/purpose suffix and known-empty MFA
+fence exclude passkey enrollment; kernel has no initial passkey reference writer;
+WebAuthn lacks same-Work assertion participation; session rejects passkey authority.
+Extend those actual owners within this slice, not substitute writable proof,
+private session issuance or independently committed assertion. First regression
+restores exact signed enrollment custody and its self-only command bindings.
+Remaining acceptance: actual password reauthentication, RP/tenant/user/handle/
+credential isolation, real UV responses, immutable expiry, one-use/race/replay,
+atomic protocol/mapping/credential/session/audit effects, withdrawal and real
+rollback/COMMIT recovery; selected public consumer, browser protocol proof,
+affected race/vet/hostile-input checks and one independent final source review.
+Heavy slot remains OAuth worker; no new primary Go command until hand-back.
+
 2026-10-23 13:22 UTC: human_exchange_readiness first actual root selected
 GREEN0.248s and native genuine code-source journey GREEN10.398s, both terminal.
 Version7/epoch1 adoption, consumed-code ancestry, descendants, refresh-version
