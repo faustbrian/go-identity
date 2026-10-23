@@ -1,0 +1,265 @@
+//go:build integration
+
+package mfapostgres
+
+import (
+	"context"
+	"os"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/faustbrian/go-audit"
+	auditpg "github.com/faustbrian/go-audit/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	identity "github.com/faustbrian/go-identity"
+	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-identity/session"
+	migrations "github.com/faustbrian/go-migrations/v3"
+	migrationpg "github.com/faustbrian/go-migrations/v3/postgres"
+	database "github.com/faustbrian/go-postgres"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+)
+
+// The controlled feature supplies only an invocation seam. Factor authority is
+// the real MFA owner/table, and Work comes from the genuine coordinator. This
+// is not proof of WebAuthn authentication or a complete passkey consumer.
+type passkeyFactorInvocation struct {
+	op         identity.FeatureOperation
+	descriptor kernel.ContributorDescriptor
+	record     session.Session
+	foreign    bool
+	admitted   bool
+}
+
+func (p *passkeyFactorInvocation) Descriptor() kernel.ContributorDescriptor { return p.descriptor }
+func (p *passkeyFactorInvocation) FeatureOperations() []identity.FeatureOperation {
+	return []identity.FeatureOperation{p.op}
+}
+func (*passkeyFactorInvocation) ValidateFeatureCommand(identity.Command, kernel.CommandPlan) error {
+	return nil
+}
+func (*passkeyFactorInvocation) RecoverParticipant(context.Context, kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	return kernel.RecoveryUnknown, identity.UnavailableError{}
+}
+func (p *passkeyFactorInvocation) ApplyFeature(ctx context.Context, w kernel.Work, _ identity.Command) (identity.FeatureReceipt, error) {
+	if _, err := w.Exec(ctx, `INSERT INTO passkey_factor_probe VALUES(1)`); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	owner := p
+	if p.foreign {
+		copy := *p
+		owner = &copy
+	}
+	err := RequirePasskeySessionFactors(ctx, w, owner, p.record)
+	p.admitted = err == nil
+	// Always abort after the guard: this unit owns no protocol/session mutation.
+	// The probe verifies earlier writes cannot survive the denied/aborted Work.
+	if err == nil {
+		err = identity.UnavailableError{}
+	}
+	return identity.FeatureReceipt{}, err
+}
+
+func TestPasskeySessionFactorAuthorityPostgres(t *testing.T) {
+	dsn := os.Getenv("IDENTITY_MFA_TEST_DSN")
+	config, err := pgx.ParseConfig(dsn)
+	if dsn == "" || err != nil || config.Host != "127.0.0.1" || config.Database != "identity_test" {
+		t.Fatal("explicit disposable loopback identity_test cluster required")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	admin, err := pgx.ConnectConfig(ctx, config)
+	if err != nil {
+		t.Fatal("owned cluster unavailable")
+	}
+	defer admin.Close(context.Background())
+	id, err := identity.NewSubjectID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "passkey_factors_" + string(id)
+	quoted := pgx.Identifier{name}.Sanitize()
+	if _, err = admin.Exec(ctx, "CREATE DATABASE "+quoted); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+		defer stop()
+		if _, err := admin.Exec(cleanup, "DROP DATABASE "+quoted); err != nil {
+			t.Error("owned database cleanup failed")
+		}
+	}()
+	config.Database = name
+	db := stdlib.OpenDB(*config)
+	defer db.Close()
+	backend, err := migrationpg.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := migrations.NewRunner(kernel.MigrationSource{}, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = runner.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 4, Configure: func(c *database.PoolConfig) error { c.ConnConfig.Database = name; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+		defer stop()
+		if err := pool.Close(cleanup); err != nil {
+			t.Error("owned pool cleanup failed")
+		}
+	}()
+	if _, err = pool.Raw().Exec(ctx, authoritySQL+`CREATE TABLE passkey_factor_probe(value integer);
+INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES('tenant-a','user-a','active',1);
+INSERT INTO identity.identity_command_id_claims(command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields) VALUES(decode(repeat('01',16),'hex'),'tenant-a','identity.password.signup',decode(repeat('01',32),'hex'),1,decode('01','hex'));
+INSERT INTO identity.commands(command_id,tenant_id,purpose) VALUES(decode(repeat('01',16),'hex'),'tenant-a','identity.password.signup');
+INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decode(repeat('01',16),'hex'),'identity.password.signup')`); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auditing, err := auditpg.NewIdentityContributor(auditpg.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lifecycle, err := identityoutbox.NewContributor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"known-empty", "missing", "enrolled", "stale", "foreign-owner", "foreign-user", "foreign-tenant", "foreign-schema", "foreign-lifecycle", "foreign-record", "foreign-factor-key", "password-record", "revoke-target", "revoke-source"} {
+		t.Run(mode, func(t *testing.T) {
+			if _, err := pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=1,active_factors=0`); err != nil {
+				t.Fatal(err)
+			}
+			record := passkeyFactorSession(t)
+			spec, _ := record.Bindings()
+			commandID, _ := identity.NewCommandID()
+			op := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.signin-verify", SchemaID: "identity.passkey.signin-verify.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+			descriptor := kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
+			life := kernel.LifecyclePlan{EventType: "session.created.v1", AfterVersion: 1}
+			b := identity.CommandBinding{CommandID: commandID, TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, RecordID: spec.SessionID, PolicyID: "policy", PolicyVersion: 1, CorrelationID: "correlation"}
+			switch mode {
+			case "missing":
+				if _, err := pool.Raw().Exec(ctx, `DELETE FROM identity_mfa.factor_authorities`); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decode(repeat('01',16),'hex'),'identity.password.signup')`); err != nil {
+						t.Error(err)
+					}
+				}()
+			case "enrolled":
+				if _, err := pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET active_factors=1`); err != nil {
+					t.Fatal(err)
+				}
+			case "stale":
+				if _, err := pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=2`); err != nil {
+					t.Fatal(err)
+				}
+			case "foreign-user":
+				b.UserID = "other-user"
+				b.ActorID = "other-user"
+			case "foreign-tenant":
+				b.TenantID = "other-tenant"
+			case "foreign-schema":
+				op.SchemaID = "other-schema"
+			case "foreign-lifecycle":
+				life.EventType = "passkey.updated.v1"
+			case "foreign-record":
+				b.RecordID = "other-session"
+			case "foreign-factor-key":
+				v, _ := spec.Authority.Bindings()
+				v.Factor.Binding.ScopeKey = "other-factor"
+				spec.Authority, err = session.NewAuthoritySnapshot(v)
+				if err != nil {
+					t.Fatal(err)
+				}
+				record, err = session.NewSession(spec)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "password-record":
+				spec.Authentication.Proof.Method = "password"
+				spec.Authentication.Proof.Assurance = 1
+				record, err = session.NewSession(spec)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "revoke-target", "revoke-source":
+				op = session.RevokeOneOperation()
+				descriptor = kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1}
+				life = kernel.LifecyclePlan{EventType: "session.revoked.v1", BeforeVersion: 1, AfterVersion: 2}
+				if mode == "revoke-source" {
+					b.RecordID = "sibling-target"
+				}
+			}
+			readErr := ReadPasskeySessionFactors(ctx, pool, record, time.Second)
+			readDenies := mode == "missing" || mode == "enrolled" || mode == "stale" || mode == "foreign-factor-key" || mode == "password-record"
+			if (readErr != nil) != readDenies {
+				t.Fatal("original primary factor read", readErr)
+			}
+			b.OperationID, b.SchemaID, b.SchemaVersion = op.OperationID, op.SchemaID, op.SchemaVersion
+			command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: []identity.FeatureField{{Name: "factor-test", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: mode}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			feature := &passkeyFactorInvocation{op: op, descriptor: descriptor, record: record, foreign: mode == "foreign-owner"}
+			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, auditing, lifecycle, feature})
+			if err != nil {
+				t.Fatal(err)
+			}
+			coordinator, err := kernel.NewCoordinator(pool, registry, kernel.CoordinatorConfig{MaximumDuration: time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {2}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			builder, _ := audit.NewBuilder(audit.BuilderConfig{})
+			seed, e := builder.Build(audit.RecordInput{OccurredAt: spec.IssuedAt, Action: b.OperationID, Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "session", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(b.CommandID), "aggregate.type": "session", "aggregate.id": b.RecordID, "aggregate.before_version": strconv.FormatUint(life.BeforeVersion, 10), "aggregate.after_version": strconv.FormatUint(life.AfterVersion, 10), "retention.class": "protected"}})
+			if e != nil {
+				t.Fatal(e)
+			}
+			digest, e := kernel.FeatureAuditBindingDigest(b, op, "session", seed)
+			if e != nil {
+				t.Fatal(e)
+			}
+			declaration := kernel.CommandPlan{Contributors: registry.Descriptors(), SubjectType: "session", Feature: &kernel.FeatureRegistration{Contributor: descriptor, Operation: op}, Lifecycle: &life, Audits: []kernel.AuditPlan{{EventType: op.OperationID, SchemaVersion: 1, BindingDigest: digest, RetentionClass: "protected", RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}}
+			plan, err := coordinator.PrepareCommandPlan(b, command, declaration)
+			if err != nil {
+				t.Fatal("prepare", err)
+			}
+			reservation, _, err := coordinator.ReserveCommand(ctx, b, command, plan)
+			if err != nil {
+				t.Fatal("reserve", err)
+			}
+			work, err := coordinator.Begin(ctx, reservation)
+			if err != nil {
+				t.Fatal("begin", err)
+			}
+			_, applyErr := coordinator.ApplyFeature(ctx, work, command)
+			if applyErr == nil {
+				t.Fatal("test seam must abort after guard")
+			}
+			result, _ := coordinator.Abort(work, applyErr)
+			want := mode == "known-empty" || mode == "revoke-target" || mode == "revoke-source"
+			if feature.admitted != want {
+				t.Fatalf("factor guard admitted=%v want=%v", feature.admitted, want)
+			}
+			if result.Outcome == identity.CommitOutcomeCommitted {
+				t.Fatal("aborted guard committed")
+			}
+			var count int
+			if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM passkey_factor_probe`).Scan(&count); err != nil || count != 0 {
+				t.Fatal("provisional write survived aborted Work", count, err)
+			}
+		})
+	}
+}

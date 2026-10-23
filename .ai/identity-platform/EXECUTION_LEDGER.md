@@ -1,5 +1,44 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 15:18 UTC:219499bdccd5 main-pushed with exact Required39974698193
+SUCCESS. Authenticated public root/session/kernel/password-native/MFA-native
+v0.0.0-20261023150127-219499bdccd5 resolve to that origin. The new passkey
+mapping PG/race test actually consumes the downloaded public kernel, PASS1.733s;
+this proves initial RP-wide mapping/handle constraints, not authentication.
+Primary go-passkey/main now has opaque lossless handles and display labels
+(runtime nested-diagnostic RED0.181s -> raceGREEN1.195s), initial owned mapping
+history/tests and bounded label fuzzPASS5.347s. RP-to-namespace persistence
+is being added; no go-passkey commit, usable auth journey or M16 closure.
+
+passkey_factor_fence delivered the assigned4 native MFA paths. Runtime guard
+RED36667 falsely denied only known-empty/signin/revoke-target/revoke-source
+before existing row-fence implementation; PG GREEN17101/0.492s, ordinary
+72340/0.243s, PG/race36059/1.687s, parent taggedvet52836exit0. Explicit Abort
+probe proves rollback, not automatic poisoning or authentication. Independent
+passkey_factor_final_review APPROVE/no findings at219499 plus4-path hashes;
+staged redacted scanPASS20023bytes. Public/native consumption and CI follow
+main delivery; primary actual passkey authority port will consume this owner,
+never duplicate MFA SQL. Still11/39/~25% low confidence; all67 retained.
+
+2026-10-23 15:03 UTC: shared M16 prerequisite219499bdccd5 is main-pushed;
+exact Required39974698193 is running. One bounded upstream M16 implementation
+lane is assigned to passkey_factor_fence while primary implements go-passkey.
+Writable: mfa/postgres/passkey_session_authority*.go (new source/tests only),
+its module CHANGELOG entry; no existing source, manifests, notes or Git writes.
+Consume committed219499 kernel Work/session AuthoritySnapshot/Factor fences
+and prior native known-empty factor store, whose current focused PG/race and
+consumer evidence is recorded above. Outcome: owned MFA fence callable by
+the real passkey adapter during signin and source/target revocation, retaining
+the original positive known-empty generation; no private SQL factor store,
+inferred absence, epoch refresh or fabricated password command. Strict actual
+Work/owner/operation/self-scope, factor key/generation and known-empty primary
+checks; missing/enrolled/stale/foreign state denies before effects and must
+abort Work. Test through real coordinator/PG with rollback/current denial,
+focused unit/race/tagged-vet. Heavy checks remain primary-serialized; worker
+codes first and requests slot. Primary owns final API/consumer integration,
+review and Git delivery. This is a prerequisite within M16, not a new closed
+milestone or permission to broaden shared contracts.
+
 2026-10-23 14:58 UTC: M16 shared-owner prerequisites now include root passkey
 issuance and native same-Work session persistence/current read/revocation.
 Still local, not a closed milestone: genuine passkey/WebAuthn/MFA composition

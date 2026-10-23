@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence original known-empty MFA authority for native passkey session signin,
+  current reads and self-logout. Missing, enrolled or changed generations and
+  foreign owners/scopes deny without adopting newer authority or weakening MFA.
+
 - Fence the original known-empty factor generation for exact self-only native
   passkey enrollment commands. Changed authority, foreign subjects and aliased
   owners or schemas deny without initialization or password-only fallback.
