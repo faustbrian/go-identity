@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Select authenticated email-OTP step-up independently from enrollment/login,
+  using existing generation, delivery and consuming-attempt owners. Preserve
+  completed password/MFA provenance in versioned encrypted session custody;
+  existing single-factor bytes remain unchanged. Current session, factor,
+  recipient and action admission remains required in the owning transaction.
+
 - Bridge authenticated original phone-reset SMS preparation into a joint
   completion attempt using the actual stored challenge version, original
   continuation and credential authority. Preserve original factor selection,

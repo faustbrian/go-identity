@@ -1,5 +1,17 @@
 # OTP PostgreSQL
 
+## Authenticated MFA action issuance
+
+`NewMFAActiveIssuer` explicitly selects email-OTP `PurposeStepUp` issuance and
+consuming preparation for the native authenticated factor-update workflow.
+It borrows existing digest, delivery and coordinator participants, not a new
+store or journal. Its generation callback runs only after durable preparation
+acknowledgement; retries restore the original encrypted input/output.
+Versioned custody preserves complete password/MFA provenance and CSRF while
+retaining existing single-factor bytes. Native MFA must fence the original
+session, confirmed factor, recipient, action and current policy in the same Work.
+This does not enable pending enrollment, partial login, SMS or an HTTP route.
+
 ## Joint phone-reset participant
 
 The native phone owner restores the **original committed** reset request's

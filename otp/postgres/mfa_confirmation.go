@@ -102,7 +102,7 @@ func (p *mfaEnrollmentConfirmation) RestorePrepared(ctx context.Context, root id
 			version = uint32(field.Value.Uint64)
 		}
 	}
-	if !ok || !token || !reflect.DeepEqual(base, static) || base.Operation != mfaEnrollmentConfirmationOperation() || base.Binding.RecordID != p.source.Binding.RecordID || base.Binding.TenantID != p.source.Binding.TenantID || base.Binding.UserID != p.source.Binding.UserID || base.Binding.CommandID == p.source.Binding.CommandID {
+	if !ok || !token || !reflect.DeepEqual(base, static) || base.Operation != p.issuer.verificationOperation() || base.Binding.RecordID != p.source.Binding.RecordID || base.Binding.TenantID != p.source.Binding.TenantID || base.Binding.UserID != p.source.Binding.UserID || base.Binding.CommandID == p.source.Binding.CommandID {
 		return bad()
 	}
 	custody, err := p.issuer.store.codec.restoreCustody(retained)
@@ -169,7 +169,7 @@ func (p *mfaEnrollmentConfirmation) prepare(ctx context.Context, root identity.C
 	bearer, token := root.SessionToken()
 	_, submitted := root.OneTimeCode()
 	b, source := spec.Binding, p.source.Binding
-	if !ok || !token || submitted || spec.Operation != mfaEnrollmentConfirmationOperation() || b.CommandID == source.CommandID || b.TenantID != source.TenantID || b.UserID != source.UserID || b.ActorID != source.ActorID || b.ActorKind != source.ActorKind || b.RecordID != source.RecordID || b.PolicyID != source.PolicyID || b.PolicyVersion != source.PolicyVersion || b.LinkMode != source.LinkMode {
+	if !ok || !token || submitted || spec.Operation != p.issuer.verificationOperation() || b.CommandID == source.CommandID || b.TenantID != source.TenantID || b.UserID != source.UserID || b.ActorID != source.ActorID || b.ActorKind != source.ActorKind || b.RecordID != source.RecordID || b.PolicyID != source.PolicyID || b.PolicyVersion != source.PolicyVersion || b.LinkMode != source.LinkMode {
 		return bad(ErrInvalidCommand)
 	}
 	issuer, retained := p.issuer.store.codec.issuers[keyVersion]

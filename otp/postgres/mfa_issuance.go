@@ -20,7 +20,6 @@ import (
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
-	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
@@ -50,6 +49,7 @@ type MFAEnrollmentIssuerConfig struct {
 type MFAEnrollmentIssuer struct {
 	store         *Contributor
 	configuration [32]byte
+	active        bool
 }
 
 var _ mfapg.OTPEnrollmentIssuanceOwner = (*MFAEnrollmentIssuer)(nil)
@@ -85,7 +85,7 @@ func (s *MFAEnrollmentIssuer) restoreEnrollmentInput(root identity.Command, wire
 		return MFAEnrollmentSendInput{}, ErrInvalidCommand
 	}
 	spec, ok := root.Feature()
-	if !ok || spec.Operation != mfaEnrollmentSendOperation() {
+	if !ok || spec.Operation != s.sendOperation() {
 		return MFAEnrollmentSendInput{}, ErrInvalidCommand
 	}
 	record, err := decodeSendRequestRecord(wire, spec.Binding)
@@ -127,7 +127,7 @@ func (s *MFAEnrollmentIssuer) CaptureInput(ctx context.Context, pool *database.P
 	ctx, stop := context.WithTimeout(ctx, s.store.codec.maximumDuration)
 	defer stop()
 	op, err := boundIssuanceOperation(binding)
-	if err != nil || op != mfaEnrollmentSendOperation() || recipient.Validate() != nil || recipient.Suppressed {
+	if err != nil || op != s.sendOperation() || recipient.Validate() != nil || recipient.Suppressed {
 		return MFAEnrollmentSendInput{}, ErrInvalidCommand
 	}
 	repo, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: s.store.codec.maximumDuration})
@@ -144,7 +144,7 @@ func (s *MFAEnrollmentIssuer) CaptureInput(ctx context.Context, pool *database.P
 	if err != nil {
 		return MFAEnrollmentSendInput{}, err
 	}
-	_, credential, _, err := sessionpg.OriginalSessionAdmission(s.store.session.profile, original, binding)
+	_, credential, _, err := s.store.originalSessionAdmission(original, binding)
 	if err != nil {
 		return MFAEnrollmentSendInput{}, ErrInvalidCommand
 	}
@@ -164,7 +164,11 @@ func (s *MFAEnrollmentIssuer) CaptureInput(ctx context.Context, pool *database.P
 	if err != nil {
 		return MFAEnrollmentSendInput{}, err
 	}
-	continuation, err := otp.NewContinuation(otp.DigestScopeSpec{TenantID: string(binding.TenantID), SubjectID: string(binding.UserID), Purpose: otp.PurposeMFA, Channel: channel, Destination: destination, ChallengeID: string(binding.CommandID), TargetID: binding.RecordID, PolicyVersion: binding.PolicyVersion, Generation: 1}, flow, session.RememberPolicy{})
+	purpose := otp.PurposeMFA
+	if s.active {
+		purpose = otp.PurposeStepUp
+	}
+	continuation, err := otp.NewContinuation(otp.DigestScopeSpec{TenantID: string(binding.TenantID), SubjectID: string(binding.UserID), Purpose: purpose, Channel: channel, Destination: destination, ChallengeID: string(binding.CommandID), TargetID: binding.RecordID, PolicyVersion: binding.PolicyVersion, Generation: 1}, flow, session.RememberPolicy{})
 	if err != nil {
 		return MFAEnrollmentSendInput{}, err
 	}
@@ -202,8 +206,16 @@ func (s *MFAEnrollmentIssuer) RecoverEnrollmentSend(ctx context.Context, w kerne
 // IO or generation. MFA-purpose consuming-only challenges are required; an
 // ordinary signin/check deployment cannot silently become enrollment issuance.
 func NewMFAEnrollmentIssuer(c MFAEnrollmentIssuerConfig) (*MFAEnrollmentIssuer, error) {
+	return newMFAIssuer(c, false)
+}
+
+func newMFAIssuer(c MFAEnrollmentIssuerConfig, active bool) (*MFAEnrollmentIssuer, error) {
 	profile, checks, err := c.Policy.Bindings()
-	if err != nil || profile.Purpose != otp.PurposeMFA || checks.Enabled || c.Delivery == nil {
+	purpose := otp.PurposeMFA
+	if active {
+		purpose = otp.PurposeStepUp
+	}
+	if err != nil || profile.Purpose != purpose || checks.Enabled || c.Delivery == nil {
 		return nil, ErrInvalidConfiguration
 	}
 	store, err := NewContributorWithSession(c.Store, c.Session)
@@ -218,11 +230,15 @@ func NewMFAEnrollmentIssuer(c MFAEnrollmentIssuerConfig) (*MFAEnrollmentIssuer, 
 	if err != nil {
 		return nil, err
 	}
-	configuration, err := sessionIssuanceConfiguration(store, c.Session, c.Policy, "identity-otp-mfa-enrollment-owner-v1\x00")
+	domain := "identity-otp-mfa-enrollment-owner-v1\x00"
+	if active {
+		domain = "identity-otp-mfa-active-owner-v1\x00"
+	}
+	configuration, err := sessionIssuanceConfiguration(store, c.Session, c.Policy, domain)
 	if err != nil {
 		return nil, err
 	}
-	return &MFAEnrollmentIssuer{store: store, configuration: configuration}, nil
+	return &MFAEnrollmentIssuer{store: store, configuration: configuration, active: active}, nil
 }
 
 // Keep retained MFA framing byte-identical while sharing immutable dependency
@@ -295,7 +311,11 @@ func (s *MFAEnrollmentIssuer) original(ctx context.Context, root identity.Comman
 	if s == nil || s.store == nil || s.store.send == nil {
 		return sendRequestRecord{}, envelope.Context{}, ErrInvalidCommand
 	}
-	return originalMFASend(ctx, s.store, root, input, generation, mfaEnrollmentSendOperation(), "identity-otp-mfa-enrollment-send-v1", s.store.send.configuration)
+	profile := "identity-otp-mfa-enrollment-send-v1"
+	if s.active {
+		profile = "identity-otp-mfa-active-send-v1"
+	}
+	return originalMFASend(ctx, s.store, root, input, generation, s.sendOperation(), profile, s.store.send.configuration)
 }
 
 func originalMFASend(ctx context.Context, store *Contributor, root identity.Command, input MFAEnrollmentSendInput, generation uint64, operation identity.FeatureOperation, profile string, configuration [32]byte) (sendRequestRecord, envelope.Context, error) {
@@ -313,7 +333,7 @@ func originalMFASend(ctx context.Context, store *Contributor, root identity.Comm
 	if !ok || err != nil || op != operation || spec.Operation != op || len(spec.Fields) > 124 {
 		return bad(ErrInvalidCommand)
 	}
-	parent := ""
+	parent, action := "", ""
 	for _, field := range spec.Fields {
 		if otpField(field.Name) {
 			return bad(ErrInvalidCommand)
@@ -324,9 +344,21 @@ func originalMFASend(ctx context.Context, store *Contributor, root identity.Comm
 			}
 			parent = field.Value.Text
 		}
+		if field.Name == "factor.action" {
+			if action != "" || field.Value.Kind != identity.FeatureText {
+				return bad(ErrInvalidCommand)
+			}
+			action = field.Value.Text
+		}
 	}
-	if _, err := identity.ParseCommandID(parent); err != nil || parent == string(spec.Binding.CommandID) || parent == spec.Binding.RecordID {
-		return bad(ErrInvalidCommand)
+	if operation == mfaActiveSendOperation() {
+		if parent != "" || action != "identity.mfa.factor-update" {
+			return bad(ErrInvalidCommand)
+		}
+	} else {
+		if _, err := identity.ParseCommandID(parent); err != nil || parent == string(spec.Binding.CommandID) || parent == spec.Binding.RecordID || action != "" {
+			return bad(ErrInvalidCommand)
+		}
 	}
 	if operation == mfaLoginSendOperation() {
 		b, err := input.Continuation.Bindings()

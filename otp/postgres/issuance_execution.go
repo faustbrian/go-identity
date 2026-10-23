@@ -120,7 +120,7 @@ func (p *issuanceContributor) applyPreparedIssuance(ctx context.Context, w kerne
 	if !ok || opErr != nil || binding != spec.Binding || registration.Operation != spec.Operation || spec.Operation != op {
 		return bad(ErrInvalidCommand)
 	}
-	if op == mfaEnrollmentSendOperation() {
+	if op == mfaEnrollmentSendOperation() || op == mfaActiveSendOperation() {
 		if transition.EventType != "otp.sent.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
 			return bad(ErrInvalidCommand)
 		}

@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"encoding/binary"
 	"time"
 
@@ -9,9 +10,18 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
+// Legacy records start with a session-ID length of at most 128. This disjoint
+// prefix versions completed password/MFA provenance without changing existing
+// single-factor custody bytes or interpreting historical metadata as authority.
+const mfaSessionRecordPrefix = "\xff\xff\x01"
+
 // Private encrypted custody only: this never serializes a bearer, opaque proof
 // or validity lease and cannot replace the session owner's admission/storage.
 func appendSessionRecord(out []byte, record session.Session) []byte {
+	factor, factorErr := record.MFAAuthentication().Bindings()
+	if factorErr == nil {
+		out = append(out, mfaSessionRecordPrefix...)
+	}
 	s, _ := record.Bindings()
 	a, _ := s.Authority.Bindings()
 	p, _ := s.Remember.Bindings()
@@ -48,6 +58,18 @@ func appendSessionRecord(out []byte, record session.Session) []byte {
 		out = binary.BigEndian.AppendUint32(out, csrf.KeyVersion)
 		out = append(out, csrf.Digest[:]...)
 	}
+	if factorErr == nil {
+		for _, text := range []string{string(factor.CommandID), string(factor.PrimaryCommandID), string(factor.ContinuationID), factor.Method, factor.FactorID, string(factor.RecoverySetID)} {
+			out = appendAuthorityText(out, text)
+		}
+		out = append(out, factor.ContinuationScopeDigest[:]...)
+		for _, n := range []uint64{factor.EnrollmentVersion, factor.FactorAuthorityVersion, factor.ContinuationVersion, factor.RecoverySetVersion} {
+			out = binary.BigEndian.AppendUint64(out, n)
+		}
+		for _, at := range []time.Time{factor.VerifiedAt, factor.ValidUntil} {
+			out = appendAuthorityText(out, at.UTC().Format(time.RFC3339Nano))
+		}
+	}
 	return out
 }
 
@@ -57,6 +79,10 @@ func appendSessionAuthorityRecord(out []byte, b session.AuthorityBinding) []byte
 }
 
 func readSessionRecord(r *recordReader, csrfBound bool) (session.Session, error) {
+	mfaBound := bytes.HasPrefix(r.data, []byte("\xff\xff"))
+	if mfaBound && !bytes.Equal(r.take(len(mfaSessionRecordPrefix)), []byte(mfaSessionRecordPrefix)) {
+		return session.Session{}, ErrInvalidCommand
+	}
 	s := session.SessionSpec{}
 	a := session.AuthoritySnapshotSpec{}
 	m := &s.Authentication
@@ -103,7 +129,7 @@ func readSessionRecord(r *recordReader, csrfBound bool) (session.Session, error)
 	if err != nil {
 		return session.Session{}, ErrInvalidCommand
 	}
-	var record session.Session
+	var csrfState session.CSRFState
 	if csrfBound {
 		csrf := session.CSRFStateSpec{Binding: session.CSRFBinding{TenantID: s.TenantID, SessionID: s.SessionID, SessionVersion: s.Version}, KeyVersion: r.u32()}
 		copy(csrf.Digest[:], r.take(32))
@@ -111,8 +137,37 @@ func readSessionRecord(r *recordReader, csrfBound bool) (session.Session, error)
 		if !r.ok || stateErr != nil {
 			return session.Session{}, ErrInvalidCommand
 		}
-		record, err = session.NewSessionWithCSRF(s, state)
-	} else {
+		csrfState = state
+	}
+	var factor session.MFAAuthentication
+	if mfaBound {
+		f := session.MFAAuthenticationSpec{Remember: p}
+		f.CommandID, f.PrimaryCommandID, f.ContinuationID = identity.CommandID(r.text(22)), identity.CommandID(r.text(22)), identity.CommandID(r.text(22))
+		f.Method, f.FactorID, f.RecoverySetID = r.text(32), r.text(22), identity.CommandID(r.text(22))
+		copy(f.ContinuationScopeDigest[:], r.take(32))
+		f.EnrollmentVersion, f.FactorAuthorityVersion, f.ContinuationVersion, f.RecoverySetVersion = r.u64(), r.u64(), r.u64(), r.u64()
+		for _, target := range []*time.Time{&f.VerifiedAt, &f.ValidUntil} {
+			text := r.text(35)
+			at, e := time.Parse(time.RFC3339Nano, text)
+			if e != nil || at.UTC().Format(time.RFC3339Nano) != text {
+				return session.Session{}, ErrInvalidCommand
+			}
+			*target = at
+		}
+		factor, err = session.NewMFAAuthentication(f)
+		if !r.ok || err != nil {
+			return session.Session{}, ErrInvalidCommand
+		}
+	}
+	var record session.Session
+	switch {
+	case mfaBound && csrfBound:
+		record, err = session.NewSessionWithPasswordMFAAndCSRF(s, factor, csrfState)
+	case mfaBound:
+		record, err = session.NewSessionWithPasswordMFA(s, factor)
+	case csrfBound:
+		record, err = session.NewSessionWithCSRF(s, csrfState)
+	default:
 		record, err = session.NewSession(s)
 	}
 	if err != nil {

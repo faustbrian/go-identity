@@ -7,6 +7,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
@@ -17,8 +18,10 @@ import (
 // are copied, versioned 32..64-byte nonzero keys. FreshnessLimit is an explicit
 // operation-policy cap, positive and at most24h; original remember freshness
 // and lifetime remain additional earlier caps. No retry can renew either.
-// Only the session owner's current single-factor profile is supported; optional
-// organization/factor/passkey authority denies until those owners are composed.
+// Ordinary OTP selects the session owner's single-factor profile. The explicit
+// native MFA active-action owner may preserve password/MFA provenance, provided
+// that owner fences the actual original factor inside the same protected Work.
+// Organization/passkey variants remain unsupported.
 // Construction is bounded, performs no IO and proves no authentication/Allow.
 type SessionAdmissionConfig struct {
 	Store             sessionpg.Config
@@ -84,11 +87,27 @@ func (p *Contributor) sessionAuthority(original session.Session, binding identit
 	if p == nil || p.session == nil {
 		return ErrInvalidCommand
 	}
-	d, c, a, err := sessionpg.OriginalSessionAdmission(p.session.profile, original, binding)
+	d, c, a, err := p.originalSessionAdmission(original, binding)
 	if err != nil || expected.Directory != d || expected.Credential != c.Credential || expected.UserAuthorization != a || expected.UserAuthorityVersion != c.UserAuthorityVersion || expected.IdentifierAuthorityVersion != c.IdentifierAuthorityVersion || expected.CredentialAuthorityVersion != c.CredentialAuthorityVersion {
 		return ErrInvalidCommand
 	}
 	return nil
+}
+
+// The explicit active-MFA profile may preserve a completed password/MFA
+// session's original primary expectations. This does not omit its factor:
+// native MFA must fence the exact original method/enrollment/account epoch in
+// its own Work before OTP effect/consumption. Ordinary OTP/enrollment profiles
+// retain their strict single-factor derivation and cannot select this arm.
+func (p *Contributor) originalSessionAdmission(original session.Session, b identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	if p == nil || p.session == nil {
+		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, ErrInvalidCommand
+	}
+	active := b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.otp-send" && b.SchemaID == "mfa-otp-step-up-send" || b.OperationID == "identity.mfa.otp-verify" && b.SchemaID == "mfa-otp-step-up")
+	if active && original.MFAAuthentication() != (session.MFAAuthentication{}) {
+		return sessionpg.OriginalMFAPasswordSessionAdmission(p.session.profile, original, b)
+	}
+	return sessionpg.OriginalSessionAdmission(p.session.profile, original, b)
 }
 
 func (p *Contributor) sessionTime(original session.Session, now time.Time) error {

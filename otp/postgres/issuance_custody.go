@@ -29,6 +29,10 @@ func mfaEnrollmentSendOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
+func mfaActiveSendOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-step-up-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
 func mfaLoginSendOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 }
@@ -64,7 +68,12 @@ func boundIssuanceOperation(b identity.CommandBinding) (identity.FeatureOperatio
 	}
 	if b.OperationID == mfaEnrollmentSendOperation().OperationID {
 		op = mfaEnrollmentSendOperation()
-		if b.UserID == "" {
+		if b.SchemaID == mfaActiveSendOperation().SchemaID {
+			op = mfaActiveSendOperation()
+			if b.UserID == "" || b.ActorID != identity.ActorID(b.UserID) || b.ActorKind != authorization.SubjectUser {
+				return identity.FeatureOperation{}, ErrInvalidCommand
+			}
+		} else if b.UserID == "" {
 			op = mfaLoginSendOperation()
 		} else if b.ActorID != identity.ActorID(b.UserID) || b.ActorKind != authorization.SubjectUser {
 			return identity.FeatureOperation{}, ErrInvalidCommand
@@ -110,6 +119,9 @@ func issuanceScopeMatches(b identity.CommandBinding, scope otp.DigestScopeSpec) 
 	}
 	if op == mfaEnrollmentSendOperation() {
 		return scope.Purpose == otp.PurposeMFA && scope.TargetID == b.RecordID && scope.ChallengeID == string(b.CommandID)
+	}
+	if op == mfaActiveSendOperation() {
+		return scope.Purpose == otp.PurposeStepUp && scope.Channel == otp.ChannelEmail && scope.TargetID == b.RecordID && scope.ChallengeID == string(b.CommandID)
 	}
 	return scope.ChallengeID == b.RecordID
 }
@@ -160,7 +172,7 @@ func validIssuance(challenge otp.Challenge, spec identity.FeatureCommandSpec) bo
 		return false
 	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
-		if op == mfaEnrollmentSendOperation() || op == mfaLoginSendOperation() || phoneSMSIssuance(op) {
+		if op == mfaEnrollmentSendOperation() || op == mfaActiveSendOperation() || op == mfaLoginSendOperation() || phoneSMSIssuance(op) {
 			return false
 		}
 		r, err := original.Bindings()
