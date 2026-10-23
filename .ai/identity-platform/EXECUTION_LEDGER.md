@@ -1,5 +1,170 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 07:08 UTC: finite native RP-logout profile CLOSED. Exact Required
+39915425644 SUCCESS at03b57e375a0146ba1108ffa201b207327893dfa6; remote main
+matches and source tree is clean. Source reviews, actual public adoption and
+downloaded-native37.888s consumer above establish bounded delivery, not full
+M31/HTTP/reference or unit qualification. No additional milestone count beyond
+the M09 closure10/39. Main continues hands-on; no new role factories.
+
+Next primary finite outcome M11: compose existing OTP enrollment/send/confirm
+into the public Reference graph, then its existing password-origin OTP login.
+The native methods already exist (mfa/postgresa33b0df, otp/postgres387cc56,
+password/postgresa33b0df; current public Reference64cee17); the Reference graph
+currently composes only TOTP enrollment. Primary owns necessary reference/
+configuration, guarded handles, startup, selected migration/readiness wiring,
+tests and docs. No replacement MFA/OTP/delivery/coordinator engine. Success:
+real registration/verification/session -> fresh enable proof -> pending OTP
+enrollment -> captured purpose-bound delivery -> explicit confirmation with
+no login session -> signout/password continuation -> captured secondary code
+-> MFA session/read/logout. Before confirmation no enrolled authority/session;
+wrong/withdrawn/foreign/expired or replayed custody denies, original recovery
+reveals no codes and retained handles deny before startup/after Close. Use real
+public supplier pins, focused Reference unit/PG-race journey and existing
+native confirmation/login failure proofs; independent final review plus ordinary
+main/public consumer delivery closes the slice. Email/password-primary profile;
+SMS/security-key/trusted-device/administrative variants remain separate, never
+silent fallback. First add the observable missing graph test and demonstrate
+RED before production wiring; do not restart delivered TOTP or M09 work.
+
+2026-10-23 07:06 UTC: native OAuth logout source/public-adoption reviews
+APPROVE/no findings; cd78b7a7...110a57 committed and main-pushed
+03b57e375a0146ba1108ffa201b207327893dfa6. Public-only native23521 affected
+PG/race60.304s, ordinary1.271s, taggedvet0/modverify pass. Actual downloaded
+native v0.0.0-20261023070407-03b57e375a01 matches all88 committed module files
+plus inheritedLICENSE. Actual public-native1967 PG/race exact-source independent
+RP, original activation compatibility and required rollback/COMMIT recovery
+PASS37.888s; readonly/GOWORKoff, modverify pass. Public sum
+h1:xaKog4XgLDgF2OT/Vpt98COJjm95Fus3At3vyWqSvA4=, go.mod sum
+h1:ntyMBVFdp2u9OmZNb/aa3oR4o6rOOUoicleEK3wMjsk=; origin exact03b57e3.
+Root5da178d/child8f25462 exact Required39914519374/39914572544 SUCCESS;
+native39915425644 still live. Native published consumer proof is established,
+but finite delivery awaits that CI. Full M31, HTTP/reference and unit/release
+qualification remain open. No separate audit/receipt factory is required.
+
+2026-10-23 06:58 UTC: M09 selected consumer milestone CLOSED,10/39. Reference
+C2 complete review APPROVE/no findings f78f579e...5dee7c; nine paths committed
+and main-pushed64cee17250e7b9e178f6a8c6a1e2189a309a3956, remote exact and
+Required39914521812 SUCCESS. Actual downloaded public Reference version
+v0.0.0-20261023065538-64cee17250e7 has all nine adopted files byte-equal;
+GOWORKoff/readonly realPG/race five-journey53363 PASS16.170s, modverify pass.
+Signin/read/delete/upgrade plus trusted cleanup now compose through supported
+public owners. U1 historical startup uncertainty remains broader qualification
+debt, not a claimed fix; reviewer found no current C2 defect or missing frozen
+acceptance. No whole-unit qualification increment. OAuth root CI39914237023
+failed only two documentation spelling words after root tests/race/security
+passed; corrected in separate main-pushed5da178d, not hidden or bypassed.
+Approved public child8f25462 main-pushed; current CI/native adoption pending.
+
+2026-10-23 06:54 UTC: OAuth complete42 source review R3 APPROVE/no findings
+binds d9c19d0c...b67ea2; native7824 selected regression PG/race PASS73.421s,
+ordinary race1.236s/taggedvet0. Root14 source paths committed and main-pushed
+ef452a3939d3ed9cb0cd54da9d7b28752c203532; remote exact, Required39914237023
+pending. Matching child/native public adoption remains work, not delivered.
+Current42 whole-file path-aware Gitleaks8.30.0 passes; stdin scanning had lost
+the go.sum filename context and is not the path-aware gate result.
+
+Reference bounded diagnostic28704 constructed64 exact upgrade servers without
+constructor failure, then exhausted the original whole-test100s context at
+Initialize (FAILED100.900s). Removed that temporary loop; no production limits
+changed. Actual public-only/GOWORKoff current four-journey66388 PASS9.855s and
+separate exact UpgradeWithCleanupSelected14249 PASS4.650s; taggedvet0/diffcheck0.
+Current nine-path f78f579e...5dee7c complete C2 review resumed with the original
+reviewer. Historical78993 startup failure remains unattributed; it is neither
+erased nor described as a passing combined run. No M09 increment yet.
+
+2026-10-23 06:45 UTC: F3 primary intended RED38014 reproduced the original
+preactivation retained-response rejection (`oauthserver: unavailable`,10.589s).
+Then changed only authenticated original selection in native phase.restore and
+issued-hint staging, plus native changelog/adoption note. GREEN16054
+PASS14.062s proves actual original execution, unchanged signed bytes/expiry and
+ciphertext/generation, no legacy association and a real newly selected binding.
+Earlier32174/29371/86797 failed fixture setup (SQL_ASCII, duplicate extension,
+text versus binary kernel ID) and are not intended RED evidence; cluster was
+recreated UTF8 before38014. Current42path d9c19d0c...b67ea2 is frozen for fresh
+complete independent oidc_logout_review_r3; affected7824group is live, not yet
+claimed passing. Source/public delivery and native M31 remain unfinished.
+
+2026-10-23 06:34 UTC: primary takes over OAuth F3 in existing owned
+postgres/phase.go, postgres/logout.go and postgres/logout_integration_test.go
+plus affected module notes; worker is terminal after authoring the genuine
+activation regression, before any production correction or Go execution.
+Its two new disposable roots were inspected empty, with no live test/service.
+Acceptance is unchanged: exact original prepared output resumes after selection
+without regenerated claims, ciphertext/generation/expiry changes or backfilled
+association; newly selected output still receives the required atomic binding.
+First run the existing new test RED, correct only original-selection ownership,
+then run focused retained/new-issuance and required-effects checks. Prior whole
+source reviews and unrelated evidence stay original-attributed. Primary now
+owns the local heavy slot; no new agent/strategy/engine is introduced.
+
+2026-10-23 06:26 UTC: bounded Reference diagnostic run ended; owned PG55517
+stopped and entire identity-cleanup-reference.ucyy8G scratch/cache removed.
+Reference source remains intact,
+local and inconclusive for U1, with no claimed C2 commit. OAuth worker receives
+the existing-path F3 compatibility regression/correction assignment and sole
+heavy slot; no new role/planning programme. Source/authority requirements and
+complete review before delivery remain unchanged.
+
+2026-10-23 06:25 UTC: native cleanup C1 independently approved, committed and
+main-pushed `d2f004fd7b329f13ac0d016b8bcb110ea68801e2`; exact Required
+39908869694 SUCCESS and remote main match. Malformed-subject error RED53507
+preceded validation-order correction; current standalone cleanup PG/race22003
+PASS10.495s, ordinary race1.311s, taggedvet/moduleverify pass. Native service
+selection, retained policy, genuine concurrent upgrade, hold/directory/deadline
+fences, rollback and original COMMIT recovery are delivered, not full M09.
+
+Reference C2 nine paths remain local. Actual public pins: anonymous/kernel
+50a36bd, sessionpg24a0cbb and anonymouspgd2f004f; no replacements/workspace.
+Ordinary race85906 PASS11.936s/command10.382s; taggedvet0/moduleverify pass.
+Public PG group31082 FAILED10.321s during migration. Diagnostic81405 proves
+one-second whole-command expiry with original attributed prefixes (2->6 and
+12/13 receipts); exact retry does not guarantee completion inside that bound.
+The fixture now uses the same real selected catalog in a separately composed
+10s offline migration graph, closed before original1s live graph use. No native
+authentication/read/authority limit changed; no new migration/replay engine.
+New selected cleanup-only, upgrade+cleanup, native-only and signin/delete
+partitions pass in78993, but that combined command remains FAILED41.052s:
+retained upgrade NewServer returned InvalidInput. Exact partition24780 then
+PASS7.595s and targeted six-repeat47036 PASS40.049s; neither explains the failure.
+Safe field diagnostics are retained. Exact public HTTP code has a hard5s
+OpenAPI construction context, a source-reachable timing discriminator, not yet
+historical failure attribution. Reviewer cleanup_service_review_r2 current
+nine-path716cb3a1...d1447 COMMENT/inconclusive U1. No C2 publication, public
+Reference consumer or M09 increment. Current taggedvet24780 and selected changed
+content Gitleaks8.30.0/diffcheck402793 pass; no whole-history/CI8.30.1 claim.
+
+OAuth complete reviewR2 ac46074b...c20143 resolves prior direct-state and actual
+code/resource consumer findings, but REQUEST_CHANGES F3: phase.restore applies
+today's RPInitiatedLogout to older authenticated prepared IDToken output with
+no EndSessionCommand, while the configuration identity remains unchanged.
+Metadata-only recovery is not affected and does not substitute for execution
+resumption. Worker82269 focused PG/race PASS56.183s and36458 ordinary1.302s/
+taggedvet0 retain their original narrower claim. Current worker is idle and
+source unchanged after read-only mapping; existing COMMIT-fault fixture does
+not prove successful pending-output resumption. Next work is one genuine
+preactivation preparation -> activation -> original-request regression and the
+owning compatibility correction, not a drain/activation programme. Full source
+review/public adoption remain pending. Overall20–25%,9/39; goal stays active.
+
+2026-10-23 05:29 UTC: public cleanup service/phase/indexed selector and native
+integration tests are local, uncommitted and unreviewed. Missing public API
+RED70086 preceded production writes. First genuine PG/race GREEN26377 passed
+1.849s. Expanded group67078 failed on held-item callback redaction and missing
+typed unknown-COMMIT errors, while hold-race/outbox rollback passed. Corrected
+only native call-local validated deferral and existing-style unknown projection;
+GREEN27381 passed6.343s. Added unavailable-policy/bounds/cancellation assertions;
+current group65787 passed6.271s, actual Go1.27.3/public pins/GOWORKoff/PG18.6.
+Original random command survives terminal retry and real before/after wire
+COMMIT loss, without expired guest authority or another journal. Remaining:
+finish stored-policy/upgrade and indexed-selection acceptance, reference wiring,
+coherent final review and public delivery. OAuth worker reports current direct
+namespace/read-start RED39144 then GREEN21981 race13.598s and actual exact-source/
+required-fault/original-recovery cohort96488 race41.122s; source review/public
+delivery pending. Earlier broad native pass predates that correction and is not
+relabeled current. No milestone increment:9/39,rough20–25%. Owned cleanup PG is
+stopped and disposable local run resources removed after capturing this note.
+
 2026-10-23 04:52 UTC: shared-owner source batches are main-pushed: kernel/core
 50a36bd, sessionpg24a0cbb, anonymouspg71baace; exact Required39901527647/
 39901906215/39902437216 SUCCESS. Complete original35path correctness and
