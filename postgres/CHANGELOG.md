@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a distinct service-authorized expired-guest disposal profile, preserving
+  original kernel/hold generations and retained recovery evidence. Append
+  `AnonymousExpiryDisposalMigrationSource` after selected disposal/upgrade
+  histories; existing browser deletion and target-bound upgrade remain separate.
+- Admit the exact OIDC end-session schema through the existing OAuth native
+  contributor, not a generic cross-owner registration. Session invalidation
+  and required protocol effects remain their actual owners' responsibilities.
+
 - Add a closed internal anonymous-upgrade preparation profile that durably
   issues one original-target grant through the existing capability owner.
   Typed native authentication and original-deadline fences remain mandatory;

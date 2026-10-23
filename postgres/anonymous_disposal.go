@@ -55,9 +55,21 @@ type anonymousDisposalProgress struct {
 	after  identity.User
 }
 
+type anonymousDisposalMode uint8
+
+const (
+	anonymousDisposalSelf anonymousDisposalMode = iota + 1
+	anonymousDisposalUpgrade
+	anonymousDisposalExpired
+)
+
 func invalidAnonymousDisposal() error { return identity.InvalidInputError{Field: "anonymous_disposal"} }
 func anonymousDisposalOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/anonymous", OperationID: "identity.anonymous.delete", SchemaID: "identity.anonymous.delete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+func anonymousExpiryDisposalOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/anonymous", OperationID: "identity.anonymous.expire", SchemaID: "identity.anonymous.expire.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
 // NewAnonymousDisposalDomain checks explicit owner composition without IO.
@@ -154,7 +166,7 @@ func (r *Repository) GetAnonymousDisposal(ctx context.Context, q identity.UserSt
 // authority or legal hold deny before erasure. Errors poison Work even when a
 // caller ignores them. Success remains provisional until every owner commits.
 func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent) (identity.User, error) {
-	return d.apply(ctx, w, p, command, i, false)
+	return d.apply(ctx, w, p, command, i, anonymousDisposalSelf)
 }
 
 // ApplyUpgrade disposes only the guest in RecordID while UserID/ActorID remain
@@ -163,21 +175,48 @@ func (d *AnonymousDisposalDomain) Apply(ctx context.Context, w Work, p FeatureEx
 // proves its credentials; the native owner must fence target authority and
 // enlist the session transition in the same Work before commitment.
 func (d *AnonymousDisposalDomain) ApplyUpgrade(ctx context.Context, w Work, p AnonymousUpgradeContributor, command identity.Command, i AnonymousDisposalIntent) (identity.User, error) {
-	return d.apply(ctx, w, p, command, i, true)
+	return d.apply(ctx, w, p, command, i, anonymousDisposalUpgrade)
+}
+
+// ApplyExpired disposes the exact guest targeted by a trusted service command.
+// It grants no maintenance authorization or expiry evidence: the native owner
+// must separately fence its original database-time-expired lifecycle, current
+// service policy and retention decision, and revoke all guest session families
+// in this same Work. It accepts neither browser deletion nor upgrade authority.
+func (d *AnonymousDisposalDomain) ApplyExpired(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent) (identity.User, error) {
+	return d.apply(ctx, w, p, command, i, anonymousDisposalExpired)
 }
 
 func anonymousDisposalScope(b identity.CommandBinding, op identity.FeatureOperation, l LifecyclePlan, i AnonymousDisposalIntent, upgrade bool) bool {
-	source := i.Snapshot.Authority.User
-	if b.ValidateFor(op) != nil || b.TenantID != source.TenantID || b.RecordID != string(source.ID) || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 {
-		return false
-	}
+	mode := anonymousDisposalSelf
 	if upgrade {
-		return op == anonymousUpgradeOperation() && b.UserID != source.ID && l.EventType == "anonymous.upgraded.v1"
+		mode = anonymousDisposalUpgrade
 	}
-	return op == anonymousDisposalOperation() && b.UserID == source.ID && l.EventType == "anonymous.deleted.v1"
+	return anonymousDisposalScopeFor(b, op, l, i, mode)
 }
 
-func (d *AnonymousDisposalDomain) apply(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent, upgrade bool) (identity.User, error) {
+func anonymousDisposalScopeFor(b identity.CommandBinding, op identity.FeatureOperation, l LifecyclePlan, i AnonymousDisposalIntent, mode anonymousDisposalMode) bool {
+	source := i.Snapshot.Authority.User
+	if b.ValidateFor(op) != nil || b.TenantID != source.TenantID || b.RecordID != string(source.ID) || l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 {
+		return false
+	}
+	if mode == anonymousDisposalExpired {
+		return op == anonymousExpiryDisposalOperation() && b.ActorKind == authorization.SubjectServiceAccount && b.UserID == source.ID && l.EventType == "anonymous.expired.v1"
+	}
+	if b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) {
+		return false
+	}
+	switch mode {
+	case anonymousDisposalUpgrade:
+		return op == anonymousUpgradeOperation() && b.UserID != source.ID && l.EventType == "anonymous.upgraded.v1"
+	case anonymousDisposalSelf:
+		return op == anonymousDisposalOperation() && b.UserID == source.ID && l.EventType == "anonymous.deleted.v1"
+	default:
+		return false
+	}
+}
+
+func (d *AnonymousDisposalDomain) apply(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent, mode anonymousDisposalMode) (identity.User, error) {
 	if err := w.usable(); err != nil {
 		return identity.User{}, err
 	}
@@ -189,10 +228,10 @@ func (d *AnonymousDisposalDomain) apply(ctx context.Context, w Work, p FeatureEx
 		return identity.User{}, err
 	}
 	b, f, l, err := w.FeatureScope(p)
-	if err != nil || p.Descriptor() != anonymousCreationDescriptor() || !anonymousDisposalScope(b, f.Operation, l, i, upgrade) || w.state.anonymousDisposal != nil || w.state.anonymousCreation != nil || w.state.creation != nil || w.state.update != nil || w.state.status != nil || w.state.profile != nil || w.state.identifier != nil {
+	if err != nil || p.Descriptor() != anonymousCreationDescriptor() || !anonymousDisposalScopeFor(b, f.Operation, l, i, mode) || w.state.anonymousDisposal != nil || w.state.anonymousCreation != nil || w.state.creation != nil || w.state.update != nil || w.state.status != nil || w.state.profile != nil || w.state.identifier != nil {
 		return fail(invalidAnonymousDisposal())
 	}
-	if upgrade {
+	if mode == anonymousDisposalUpgrade {
 		owner, ok := p.(AnonymousUpgradeContributor)
 		if !ok {
 			return fail(invalidAnonymousDisposal())
@@ -294,7 +333,7 @@ func (d *AnonymousDisposalDomain) apply(ctx context.Context, w Work, p FeatureEx
 // exact delete participant's Apply invocation. It cannot be supplied by a caller
 // as permanent-user mutation or authentication evidence, and expires with Work.
 func (w Work) AnonymousDisposal(p FeatureExecutionContributor) (identity.User, error) {
-	return w.anonymousDisposalResult(p, false)
+	return w.anonymousDisposalResult(p, anonymousDisposalSelf)
 }
 
 // AnonymousUpgradeDisposal reads only the guest's actual provisional disposal
@@ -304,20 +343,34 @@ func (w Work) AnonymousUpgradeDisposal(p AnonymousUpgradeContributor) (identity.
 	if _, err := w.AnonymousUpgradeConsumption(p); err != nil {
 		return identity.User{}, err
 	}
-	return w.anonymousDisposalResult(p, true)
+	return w.anonymousDisposalResult(p, anonymousDisposalUpgrade)
 }
 
-func (w Work) anonymousDisposalResult(p FeatureExecutionContributor, upgrade bool) (identity.User, error) {
+// AnonymousExpiredDisposal projects only the actual provisional kernel change
+// in this exact service-expiry Apply. It is not caller-supplied destruction,
+// session revocation, authorization, or completed transaction evidence.
+func (w Work) AnonymousExpiredDisposal(p FeatureExecutionContributor) (identity.User, error) {
+	return w.anonymousDisposalResult(p, anonymousDisposalExpired)
+}
+
+func (w Work) anonymousDisposalResult(p FeatureExecutionContributor, mode anonymousDisposalMode) (identity.User, error) {
 	b, f, _, err := w.FeatureScope(p)
-	op := anonymousDisposalOperation()
-	if upgrade {
+	var op identity.FeatureOperation
+	switch mode {
+	case anonymousDisposalSelf:
+		op = anonymousDisposalOperation()
+	case anonymousDisposalUpgrade:
 		op = anonymousUpgradeOperation()
+	case anonymousDisposalExpired:
+		op = anonymousExpiryDisposalOperation()
+	default:
+		return identity.User{}, invalidWork()
 	}
 	if err != nil || p.Descriptor() != anonymousCreationDescriptor() || f.Operation != op || !w.state.featureApplying || w.state.anonymousDisposal == nil {
 		return identity.User{}, invalidWork()
 	}
 	u := w.state.anonymousDisposal.after
-	if u.TenantID != b.TenantID || string(u.ID) != b.RecordID || upgrade == (u.ID == b.UserID) {
+	if u.TenantID != b.TenantID || string(u.ID) != b.RecordID || (mode == anonymousDisposalUpgrade) == (u.ID == b.UserID) {
 		return identity.User{}, invalidWork()
 	}
 	return u, nil
@@ -328,17 +381,24 @@ func (w Work) anonymousDisposalResult(p FeatureExecutionContributor, upgrade boo
 // renews an admission deadline. The workflow separately fences its original
 // session, anonymous transition, risk and retention decision.
 func (d *AnonymousDisposalDomain) Check(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent) error {
-	return d.check(ctx, w, p, command, i, false)
+	return d.check(ctx, w, p, command, i, anonymousDisposalSelf)
 }
 
 // CheckUpgrade repeats the guest's terminal state and original legal hold in
 // the exact upgrade commit fence, without renewing authority. Target and session
 // owners must independently check their own current state in that same fence.
 func (d *AnonymousDisposalDomain) CheckUpgrade(ctx context.Context, w Work, p AnonymousUpgradeContributor, command identity.Command, i AnonymousDisposalIntent) error {
-	return d.check(ctx, w, p, command, i, true)
+	return d.check(ctx, w, p, command, i, anonymousDisposalUpgrade)
 }
 
-func (d *AnonymousDisposalDomain) check(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent, upgrade bool) error {
+// CheckExpired repeats the exact terminal kernel state and original hold in the
+// service-expiry commit fence. It does not renew the service's original validity
+// window or replace native lifecycle, retention and complete-session checks.
+func (d *AnonymousDisposalDomain) CheckExpired(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent) error {
+	return d.check(ctx, w, p, command, i, anonymousDisposalExpired)
+}
+
+func (d *AnonymousDisposalDomain) check(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, i AnonymousDisposalIntent, mode anonymousDisposalMode) error {
 	if err := w.usable(); err != nil {
 		return err
 	}
@@ -349,7 +409,7 @@ func (d *AnonymousDisposalDomain) check(ctx context.Context, w Work, p FeatureEx
 		return w.fail(ctx, invalidWork())
 	}
 	b, f, l, err := w.FeatureScope(p)
-	if err != nil || !anonymousDisposalScope(b, f.Operation, l, i, upgrade) || p.Descriptor() != anonymousCreationDescriptor() || w.state.anonymousDisposal == nil || w.state.anonymousDisposal.before != i || upgrade && !w.state.anonymousUpgradeConsumed {
+	if err != nil || !anonymousDisposalScopeFor(b, f.Operation, l, i, mode) || p.Descriptor() != anonymousCreationDescriptor() || w.state.anonymousDisposal == nil || w.state.anonymousDisposal.before != i || mode == anonymousDisposalUpgrade && !w.state.anonymousUpgradeConsumed {
 		return w.fail(ctx, invalidAnonymousDisposal())
 	}
 	want := i.Snapshot
@@ -378,6 +438,10 @@ func recoverAnonymousDisposal(ctx context.Context, w RecoveryWork) (RecoveryStat
 	source := b.UserID
 	switch w.state.plan.feature.Operation {
 	case anonymousDisposalOperation():
+	case anonymousExpiryDisposalOperation():
+		if b.ActorKind != authorization.SubjectServiceAccount || b.RecordID != string(b.UserID) || w.state.plan.lifecycle.EventType != "anonymous.expired.v1" {
+			return RecoveryUnknown, invalidAnonymousDisposal()
+		}
 	case anonymousUpgradeOperation():
 		if w.state.plan.capability == nil || b.RecordID == string(b.UserID) {
 			return RecoveryUnknown, invalidAnonymousDisposal()

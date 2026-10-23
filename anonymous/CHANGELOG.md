@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose original expired-lifecycle eligibility without granting maintenance
+  or erasure authority or weakening active browser-session requirements.
+  Native abandoned-guest cleanup composition remains in development.
+
 - Describe the selected native-cookie HTTP projection and required original
   retry key without changing native proof consumption or recovery semantics.
 

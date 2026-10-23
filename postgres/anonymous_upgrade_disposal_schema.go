@@ -32,7 +32,7 @@ func (s AnonymousUpgradeDisposalMigrationSource) Load(ctx context.Context) ([]mi
 	}
 	found := false
 	for _, m := range history {
-		if m.Version() >= s.Version {
+		if m.Version() >= s.Version || m.Name() == "identity_anonymous_expiry_disposals" {
 			return nil, invalid
 		}
 		found = found || m.Name() == "identity_anonymous_disposals"

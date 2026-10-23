@@ -161,6 +161,22 @@ func (s AnonymousSubject) RequireActive(tenant identity.TenantID, now time.Time)
 	return nil
 }
 
+// RequireExpired checks only an active lifecycle's exact tenant and exclusive
+// original expiry at trusted now. Maintenance must supply authoritative database
+// time and separately authorize/fence the protected cleanup with all owners.
+// This grants no service, session or erasure authority; terminal states, including
+// an already expired/disposed lifecycle, are never candidates for another change.
+func (s AnonymousSubject) RequireExpired(tenant identity.TenantID, now time.Time) error {
+	r, err := s.Record()
+	if err != nil {
+		return err
+	}
+	if r.TenantID != tenant || !validInstant(now) || now.Before(r.ExpiresAt) || r.State != StateActive {
+		return ErrInactive
+	}
+	return nil
+}
+
 func (Policy) Format(f fmt.State, _ rune)   { _, _ = f.Write([]byte("anonymous.Policy(redacted)")) }
 func (Policy) MarshalJSON() ([]byte, error) { return nil, ErrDisclosure }
 func (Policy) MarshalText() ([]byte, error) { return nil, ErrDisclosure }

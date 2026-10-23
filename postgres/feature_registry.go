@@ -101,6 +101,12 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// The OIDC child owns logout protocol semantics; the existing OAuth native
+	// participant composes its session-owned effect. Admit only this closed
+	// tuple, not arbitrary child operations or a second native authority.
+	if op.OperationID == "identity.oauth-server.end-session" {
+		return op == (identity.FeatureOperation{Owner: "oauth-server/oidc", OperationID: "identity.oauth-server.end-session", SchemaID: "identity.oauth-server.end-session.native-rp-logout-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) && d == (ContributorDescriptor{Owner: "oauth-server/postgres", ContractID: "identity.oauth-server", Version: 1})
+	}
 	// Anonymous creation can mutate kernel rows only through the closed owning
 	// seam. A schema alias must not bypass its creation/commit/recovery guards.
 	if op.OperationID == "identity.anonymous.signin" {
@@ -108,6 +114,9 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	}
 	if op.OperationID == "identity.anonymous.delete" {
 		return op == anonymousDisposalOperation() && d == anonymousCreationDescriptor()
+	}
+	if op.OperationID == "identity.anonymous.expire" {
+		return op == anonymousExpiryDisposalOperation() && d == anonymousCreationDescriptor()
 	}
 	if op.OperationID == "identity.anonymous.upgrade" {
 		return (op == anonymousUpgradeOperation() || op == anonymousUpgradePreparationOperation()) && d == anonymousCreationDescriptor()

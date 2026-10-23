@@ -258,7 +258,7 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		if recovery.state.plan.feature.Operation == anonymousCreationOperation() {
 			return recoverAnonymousCreation(ctx, recovery)
 		}
-		if recovery.state.plan.feature.Operation == anonymousDisposalOperation() || recovery.state.plan.feature.Operation == anonymousUpgradeOperation() {
+		if recovery.state.plan.feature.Operation == anonymousDisposalOperation() || recovery.state.plan.feature.Operation == anonymousUpgradeOperation() || recovery.state.plan.feature.Operation == anonymousExpiryDisposalOperation() {
 			return recoverAnonymousDisposal(ctx, recovery)
 		}
 		if authenticatedOperation(b) {
