@@ -1,5 +1,53 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 09:10 UTC: M34 source-owner prerequisite delivered, not device-flow
+closure. Kernelc9d9dd761138d1e1a839dfcc275a26cdf28133ac and sessionpg
+cf1f8c1d8e20e01bebdce01683cb4ddb32d7be3b are main-pushed, independently
+APPROVE (device_source_final_review; source6da84a8e...695d, session adoption
+886670d9...8b51), Required39929382467/39929741962 SUCCESS. Actual public kernel
+PG/race41406 PASS3.503s;508committed archive files match. Public session race
+43977 PASS1.278s with old OriginalSessionAdmission controls, all modules verified,
+271committed files plus inherited LICENSE match. Session standalone public-pin
+race55668 PASS1.782s, tagged vet exit0. Native worker pins now use these public
+suppliers; MFApostgres665a40f is the required transitive advancement. Existing
+task-owned PG56418/cache are borrowed by device_flow_worker for exclusive native
+runtime testing; primary remains final cleanup owner. No current delivery/user
+decision blocker, native token seam/journeys still unfinished. Still11/39, ~25%.
+
+2026-10-23 09:03 UTC: grouped device-source owner APIs are implemented locally.
+Original missing-API REDs44605/95682 retained. Focused owner guards/mapping
+GREEN7020/73980; standalone real PostgreSQL/race29994 PASS1.531s, then full
+source cohort21608 PASS3.473s including observed authorization lock wait across
+credential expiry. Earlier55515 selected unrelated legacy fixture prerequisites
+and failed; it is not passing proof. The new test uses existing isolated DB
+setup independently; legacy TestPostgresIntegration is unchanged. Ordinary
+kernel race51044 PASS3.411s and session race82624 PASS1.798s; tagged vet7054/
+13621 exit0. Nine selected source/doc paths scan and diff check exit0; local
+scanner is not pinned hosted/full-history clearance. Independent read-only
+device_source_final_review is active on complete source candidate6da84a8e...695d.
+Nothing staged or delivered yet. Worker has one bounded compile slot, no service
+slot or unpublished contract substitution. No milestone/unit increment.
+
+2026-10-23 08:52 UTC: preceding turn is progress: OTP inventory delivered and
+fixtures removed; reporting615a486 Required39926836251 SUCCESS. M34 grouped
+source prerequisite stays primary-owned in postgres/oauth_device_source* and
+session/postgres/device_grant_admission*, affected docs/changelogs and pins.
+Consume kernel02338b2 and public sessionc4d031c original fields/admission owners.
+Contract: exact native client-actor/anonymous device-token invocation derives
+and locks its approved original human credential and authorization epochs,
+without replacing actor/binding, source metadata, original validity or the sole
+transaction. Kernel checks original coordinator command selectors in preparation,
+apply and final phases; session derives full existing single-factor owner keys,
+including credential continuation, through its pure mapping. Current directory
+fence remains separate. Malformed/foreign/off-phase/cancelled input poisons live
+Work before SQL. Current source withdrawal rejects and rolls back provisional
+effects. Existing human actor APIs and password/OAuth variants remain unchanged.
+TDD: focused new owner guards/derivation first; real same-Work PostgreSQL source
+admission/current-withdrawal/rollback, affected ordinary race/vet, selected
+content scanning and one complete independent source review; public kernel then
+session adoption. Native actual device journey is the worker integration point,
+not a claimed result of these prerequisites. No Tools or full-repo reruns.
+
 2026-10-23 08:44 UTC: finite M12 native/Reference OTP inventory profile CLOSED.
 C1 MFA855d87dfdcc57a7ad4c279064728b984ac2c7a2f and C2 Reference
 f822677440e029c23cb481b33c4ad8c019416b29 are independently approved,

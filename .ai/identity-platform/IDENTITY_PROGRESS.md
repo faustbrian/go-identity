@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 08:44 UTC
+## TL;DR — updated 2026-10-23 09:10 UTC
 
 - **Whole goal: approximately 25% complete, low confidence.** Consumer
   milestones are **11/39 closed**; retained scope is **67 units**. These are
@@ -14,11 +14,13 @@
   journeys (40.289s). Mixed-method metadata, corruption and logout denial are
   covered; this does not close M12's remaining factor-management scope.
 - **Parallel device flow:** protocol/core permission checks and native compile
-  pass in the worker lane; actual device journeys remain unexecuted. Kernel
-  registration/consent prerequisite `02338b2` is reviewed/main-pushed/green.
-  Next shared prerequisite is human grant-source admission during genuine
-  client-actor polling; existing actor APIs intentionally reject that scope.
-  No synthetic human binding or duplicate credential/session engine is used.
+  pass in the worker lane. The shared human grant-source prerequisite is now
+  independently reviewed, main-pushed and CI-green: kernel `c9d9dd7`, session
+  `cf1f8c1`. The downloaded public kernel passes real PostgreSQL/race source
+  withdrawal and lock-wait expiry cases; the public session mapping preserves
+  original authority and credential continuation. The worker now uses these
+  actual public dependencies and is running its first native device journeys.
+  Full device issuance/approval/polling is not yet demonstrated or delivered.
 - **Qualification remains open:** scheduled full-history secrets run
   `39925320307` failed; the separate current-change push checks above passed.
   No whole-history clearance, new full-unit qualification or platform
@@ -50,8 +52,8 @@
   including changed-authority denial, rollback/recovery and separate enrollment
   selection. Canonical public-dependency TOTP compatibility also passes.
   Broader MFA variants and whole-unit qualification remain open.
-- **Next:** finish the shared device grant-source prerequisite, then continue
-  retained M12 factor management without restarting MFA. No new Tools,
+- **Next:** complete native device-flow integration against the delivered owners
+  while continuing retained M12 factor management without restarting MFA. No Tools,
   evidence framework, whole-repository verification or user decision is needed.
 
 ## Earlier checkpoint detail — preserved 2026-10-23 05:29 UTC
