@@ -1,6 +1,26 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 18:48 UTC
+## TL;DR — updated 2026-10-23 19:22 UTC
+
+- **Whole goal: approximately 25%, low confidence; 11/39 complete milestones.**
+  All 67 units remain required. Finite delivered profiles are not full-unit
+  qualification; this update does not close full M16 or add a qualified unit.
+- **New working consumer behavior:** explicit `Session.Passkey` lets genuinely
+  issued identified or identifier-free passkey sessions use the existing common
+  native and HTTP session read/logout paths. Default-off selection stays off.
+  Fresh and populated-upgrade journeys pass over real PostgreSQL/loopback TLS,
+  including wrong-CSRF/foreign-origin denial, exact cookie deletion and native/
+  HTTP post-logout rejection.
+- **Delivered:** independently approved main `1d2fcbd`; Required `40010533635`
+  green. A separate clean external module passes all four downloaded-public
+  Reference journeys under race (19.166s), without replacements. SumDB/Origin
+  authenticate the public module; all 341 archived source files match commit.
+- **Next:** finish actual passkey enrollment/signin HTTP composition. Its leaf
+  worker identified missing portable request records, original-ceremony rate
+  custody and shared rate/CSRF variants; no substitute authority or scaffold was
+  introduced. Signup, conditional signin, management and full M16 remain open.
+
+## Retained checkpoint — 2026-10-23 18:48 UTC
 
 - **Whole goal: approximately 25% complete (low-confidence estimate),
   11/39 consumer milestones closed; all 67 units remain required.** Milestone

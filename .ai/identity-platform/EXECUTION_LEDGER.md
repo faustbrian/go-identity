@@ -1,5 +1,58 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 19:22 UTC: common Reference session profile DELIVERED as
+1d2fcbd13ddfd5726822643d01e4355f761437e3, origin/main confirmed, exact Required
+40010533635 SUCCESS. Independent /root/reference_common_passkey_final APPROVE
+for final twelve-path diff26db5ba4...c7cd4; ineffective owner unit replaced by
+otherwise-valid composition rejection reaching the exact reference_session
+guard. Final four-path journey race19.100s, taggedvet0, scopedsecrets32270bytes/
+no leaks and diffcheck0. Unchanged ordinary8.614s and retained native/baseline/
+TOTP18.820s evidence retain their original identity.
+Authenticated public Reference v0.0.0-20261023191930-1d2fcbd13ddf,
+sum h1:3kk6kP3hNyjK6pa6m0jC57GDwlTCCTv2je1rBWm6t3U=, Origin.Hash exact1d2fcbd.
+All341 archived files byte-match committed source. Downloaded-module journey
+race18.765s; then a distinct clean external module requiring only that public
+Reference runs its four actual PostgreSQL/TLS consumer tests, race19.166s.
+No replacements/GOWORK bindings, no simulated domain owners. These are finite
+profile results, not full M16, release/browser interoperability or unit gates.
+
+2026-10-23 19:17 UTC: common Reference passkey sessions now pass real loopback
+HTTPS read/logout in four identified/discovery x fresh/populated-upgrade paths
+(race18.602s). Explicit Session.Passkey selects the same native RP authority for
+standalone/common readers and transactional revocation; false remains native-only.
+Wrong CSRF and foreign origin preserve active sessions/cookies; successful logout
+deletes the original cookie tuple and denies subsequent native/HTTP reads.
+Retained native passkey/baseline/TOTP cohort race18.820s; ordinary Reference
+race8.614s; taggedvet0, authenticated modulesverifyall and diffsecrets0.
+Missing-field RED and actual unselected HTTP200/unauthenticated RED observed.
+Fixture absolute RequestURI and separate-listener cross-origin failures were
+corrected at the test boundary, not by weakening production origin policy.
+Twelve Reference paths are frozen for /root/reference_common_passkey_final;
+runtime commit/public consumer still pending. No full M16 or unit closure.
+Native2f4d913 and selectedsessionba5034f are both remote-main/exact Required green.
+The leaf HTTP worker stopped with no files: actual upstream neutral request
+types, original-ceremony rate custody and exact shared rate/CSRF variants are
+missing. Parent owns those prerequisites; no substitute authority/scaffold used.
+
+2026-10-23 19:07 UTC: independent leaf HTTP lane assigned to existing
+passkey_options_idempotency worker (native source ownership released after
+main2f4d913 push). Own ONLY go-identity/http/passkey/**, no existing HTTP/core/
+Reference, root manifests/workspace, integration pins, aggregate notes or Git.
+Consume authenticated public native2f4d913 (typed keyed options and existing
+one-use completion/inventory/session contracts), baseHTTP987fa2c/sessionHTTP
+ab3f4a2 and actual canonical passkey operation rows. Native/public request-key
+and session authorities are not application-replaceable engines. Finite existing
+account cookie-only transport: two distinct fresh enrollment proofs; keyed
+registration and identified/discoverable options; one-use verification; safe
+inventory. Existing session HTTP owners provide read/logout; primary composes
+actual Reference journey and acceptance. Exclude signup/conditional/rename/delete
+and MFA fallback. Strict origin/CSRF/device/flow/tenant/size/idempotency/no-store,
+metadata-only replay and no new challenge/journal. First public configuration
+boundary inspected by parent before broader implementation. Focused transport
+TDD and tests at real public HTTP/native seams; independent full review then
+primary serialized module/manifests/main delivery before Reference pin adoption.
+No heavy runs until explicitly granted; primary owns common Reference profile.
+
 2026-10-23 19:04 UTC: two native prerequisites independently approved for main
 delivery, not full M16/Reference HTTP closure. Shared session/postgres nine-path
 candidateb7eebdee...56984 APPROVE by /root/selected_passkey_session_final;
