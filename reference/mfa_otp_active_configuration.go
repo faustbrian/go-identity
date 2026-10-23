@@ -25,6 +25,12 @@ type MFAOTPActiveStepUpConfiguration struct {
 	// Primary/Sessions/RemovalRecovery and replacement overrides must be nil;
 	// the graph supplies the actual selected password-reset recovery owner.
 	FactorManagement *mfapg.FactorUpdateConfig
+	// Disable separately selects native sole-active-OTP disable and one/all
+	// pending-sibling disposition. Native.AllowedPurposes must include disable.
+	// Primary, Sessions and Recovery must be absent; the graph supplies real
+	// owners. Email recovery and selected password reset are required. No HTTP
+	// route or factor-update capability is selected by this field.
+	Disable *mfapg.DisableConfig
 }
 
 func composeMFAOTPActiveStepUp(c StoreConfiguration, d ReferenceDependencies, state *mfaOTPEnrollmentState, store otppg.ContributorConfig, delivery *deliverypg.Contributor, reset *passwordpg.ResetService) error {
@@ -43,7 +49,7 @@ func composeMFAOTPActiveStepUp(c StoreConfiguration, d ReferenceDependencies, st
 	if err != nil {
 		return err
 	}
-	issuer, err := otppg.NewMFAActiveIssuer(otppg.MFAActiveIssuerConfig{Store: store, Session: otppg.SessionAdmissionConfig{Store: c.Session.Native.Execution.Repository, Profile: c.PasswordSignin.Native.Profile, RetainedTokenKeys: p.SessionKeys, FreshnessLimit: p.FreshnessLimit}, Delivery: delivery, Policy: p.ActiveStepUp.Policy, TemplateID: p.TemplateID, TemplateVersion: p.TemplateVersion, ProviderVersion: c.OTP.ProviderVersion, LocaleChain: p.LocaleChain, Templates: c.Delivery.Templates})
+	issuer, err := otppg.NewMFAActiveIssuerForPurposes(otppg.MFAActiveIssuerConfig{Store: store, Session: otppg.SessionAdmissionConfig{Store: c.Session.Native.Execution.Repository, Profile: c.PasswordSignin.Native.Profile, RetainedTokenKeys: p.SessionKeys, FreshnessLimit: p.FreshnessLimit}, Delivery: delivery, Policy: p.ActiveStepUp.Policy, TemplateID: p.TemplateID, TemplateVersion: p.TemplateVersion, ProviderVersion: c.OTP.ProviderVersion, LocaleChain: p.LocaleChain, Templates: c.Delivery.Templates}, native.AllowedPurposes)
 	if err != nil {
 		return err
 	}
@@ -70,6 +76,25 @@ func composeMFAOTPActiveStepUp(c StoreConfiguration, d ReferenceDependencies, st
 			}
 		}
 		state.manage, err = mfapg.NewOTPFactorUpdateService(state.enable, state.active, management)
+		if err != nil {
+			return err
+		}
+	}
+	if selected := p.ActiveStepUp.Disable; selected != nil {
+		if selected.Primary != nil || selected.Sessions != nil || selected.Recovery != nil || selected.RecoveryPath != auth.RecoveryPathEmail {
+			return invalid
+		}
+		effects, e := sessionpg.NewMFADisableSessionEffect(c.PasswordVerification.Native.Session, c.PasswordVerification.Native.Profile)
+		if e != nil {
+			return e
+		}
+		recovery, e := passwordpg.NewFactorRemovalRecoverySource(reset)
+		if e != nil {
+			return e
+		}
+		disable := *selected
+		disable.Primary, disable.Sessions, disable.Recovery = primary, effects, recovery
+		state.disable, err = mfapg.NewOTPDisableService(state.enable, state.active, disable)
 		if err != nil {
 			return err
 		}

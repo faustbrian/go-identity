@@ -52,8 +52,24 @@ func proveOTPFactorInventory(t *testing.T, ctx context.Context, f liveStores, fe
 	request := otpInventoryRequest(t, cookies)
 	check := func(out mfa.ListResult, err error) {
 		t.Helper()
-		if err != nil || out.Outcome != 0 || len(out.Factors) != 1 || string(out.Factors[0].ID) != factor || out.Factors[0].Method != "otp" || out.Factors[0].State != state || out.Factors[0].Version == 0 || out.RecoveryCodeCount != remaining || len(out.TrustedDevices) != 0 {
+		want := 1
+		if f.pendingDisableFactor != "" {
+			want = 2
+		}
+		if err != nil || out.Outcome != 0 || len(out.Factors) != want || out.RecoveryCodeCount != remaining || len(out.TrustedDevices) != 0 {
 			t.Fatal("OTP inventory lost native state or recovery count", err)
+		}
+		found, pending := false, f.pendingDisableFactor == ""
+		for _, item := range out.Factors {
+			if string(item.ID) == factor {
+				found = item.Method == "otp" && item.State == state && item.Version > 0
+			}
+			if string(item.ID) == f.pendingDisableFactor {
+				pending = item.Method == "otp" && item.State == mfa.FactorPending && item.Version == 1
+			}
+		}
+		if !found || !pending {
+			t.Fatal("OTP inventory lost target or genuine pending sibling")
 		}
 	}
 	check(owner.List(ctx, request))

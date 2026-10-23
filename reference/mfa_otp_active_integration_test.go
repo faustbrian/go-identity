@@ -64,6 +64,11 @@ func configureReferenceMFAOTPActive(t *testing.T, c *reference.StoreConfiguratio
 
 func proveReferenceMFAOTPActive(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, bearer, csrfWire, origin string, factor mfa.FactorID, user identity.UserID, messages <-chan string, previous mfa.OTPAuthenticatedStepUp) string {
 	t.Helper()
+	if f.mfaOTPDisable {
+		if owner, err := features.MFAOTPDisable(); err != nil || owner == nil {
+			t.Fatal("OTP disable is not composed through the public reference backend", err)
+		}
+	}
 	service, err := features.MFAOTPActiveStepUp()
 	if err != nil {
 		t.Fatal("selected active OTP public handle unavailable", err)
@@ -75,6 +80,9 @@ func proveReferenceMFAOTPActive(t *testing.T, ctx context.Context, f liveStores,
 	caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(user)}, Action: "identity.mfa.otp-send", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}, Environment: authorization.Environment{Time: time.Now().UTC()}}}
 	key, _ := identity.NewIdempotencyKey([]byte("reference-otp-active-send"))
 	custody := mfa.OTPAuthenticatedStepUp{Session: auth.NewBearerCredential(bearer), CSRFToken: csrf, Purpose: "identity.mfa.factor-update"}
+	if f.mfaOTPDisable {
+		custody.Purpose = "identity.mfa.disable"
+	}
 	r := mfa.OtpSendRequest{TenantID: otpTenant, FactorID: factor, Channel: delivery.ChannelEmail, Caller: caller, Origin: origin, Network: "127.0.0.1", IdempotencyKey: key, StepUp: &custody}
 	sent, err := service.OtpSend(ctx, r)
 	if err != nil || sent.Outcome != identity.CommitOutcomeCommitted || sent.CommandID == "" || sent.DeliveryState != delivery.StateQueued {
@@ -140,7 +148,7 @@ func proveReferenceMFAOTPActive(t *testing.T, ctx context.Context, f liveStores,
 	}
 	out, err := service.OtpVerify(ctx, check)
 	proof := out.StepUpProof.Bindings()
-	if err != nil || out.Outcome != identity.CommitOutcomeCommitted || proof.Proof.ID != auth.ProofID(check.CommandID) || proof.Proof.Method != "otp" || proof.Proof.Purpose != "identity.mfa.factor-update" || proof.SessionID == "" || proof.SessionVersion == 0 {
+	if err != nil || out.Outcome != identity.CommitOutcomeCommitted || proof.Proof.ID != auth.ProofID(check.CommandID) || proof.Proof.Method != "otp" || proof.Proof.Purpose != custody.Purpose || proof.SessionID == "" || proof.SessionVersion == 0 {
 		command, _ := base64.RawURLEncoding.DecodeString(string(check.CommandID))
 		var state string
 		var started, output bool
@@ -166,6 +174,10 @@ func proveReferenceMFAOTPActive(t *testing.T, ctx context.Context, f liveStores,
 	check.CommandID, _ = identity.NewCommandID()
 	if replay, err := service.OtpVerify(ctx, check); err == nil || replay.Outcome == identity.CommitOutcomeCommitted || replay.StepUpProof.Bindings().Proof.ID != "" {
 		t.Fatal("consumed active OTP authorized another proof")
+	}
+	if f.mfaOTPDisable {
+		proveReferenceOTPDisable(t, ctx, f, features, bearer, csrf, origin, factor, user, proof)
+		return ""
 	}
 	if f.config.MFAOTPEnrollment.ActiveStepUp.FactorManagement != nil {
 		token, err := session.ParseToken(bearer)

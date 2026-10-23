@@ -156,6 +156,29 @@ func proveReferenceMFAOTPEnrollment(t *testing.T, ctx context.Context, f liveSto
 	if err != nil || repeat.Outcome != identity.CommitOutcomeCommitted || len(repeat.RecoveryMaterial.Codes) != 0 {
 		t.Fatal("enrollment replay disclosed new recovery material", err)
 	}
+	if f.mfaOTPDisable {
+		verifyCaller := caller.Clone()
+		verifyCaller.Request.Action = "identity.password.verify"
+		extraProof, e := verifier.Verify(ctx, password.CookieVerificationRequest{Request: password.VerificationRequest{TenantID: otpTenant, Session: enable.Session, Password: candidate, Target: password.VerificationTarget{Purpose: "identity.password.verify", Action: "identity.mfa.enable", Audience: "reference-mfa-enable"}, Caller: verifyCaller, Network: "127.0.0.1", Device: "reference-enrollment-device"}, CSRFToken: csrf})
+		if e != nil {
+			t.Fatal("pending sibling needs genuine primary proof", e)
+		}
+		extra := enable
+		extra.Reauthentication = extraProof.Proof
+		extra.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("otp-disable-extra-pending"))
+		sibling, e := enroller.Enable(ctx, extra)
+		for _, code := range sibling.RecoveryMaterial.Codes {
+			code.Destroy()
+		}
+		if e != nil || sibling.Outcome != identity.CommitOutcomeCommitted || sibling.Enrollment.ID == "" {
+			t.Fatal("genuine pending OTP sibling unavailable", e)
+		}
+		// Each enrollment advances factor authority. Confirm the newer target;
+		// the earlier pending record remains a genuine unconfirmed sibling. Do
+		// not renew the original target's now-stale admission to make it pass.
+		f.pendingDisableFactor = string(pending.Enrollment.ID)
+		pending.Enrollment = sibling.Enrollment
+	}
 	caller.Request.Action = "identity.mfa.otp-send"
 	key, _ = identity.NewIdempotencyKey([]byte("reference-otp-enrollment-send"))
 	send := mfa.OtpSendRequest{TenantID: otpTenant, FactorID: mfa.FactorID(pending.Enrollment.ID), Channel: delivery.ChannelEmail, Caller: caller, Origin: origin, Network: "127.0.0.1", IdempotencyKey: key, Enrollment: &mfa.OTPEnrollmentContext{Session: enable.Session, CSRFToken: csrf}}
@@ -355,8 +378,10 @@ func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStor
 	proveOTPLogoutCurrentAuthority(t, ctx, f, credential, csrf)
 	if f.config.MFAOTPEnrollment.Listing {
 		proveOTPFactorInventory(t, ctx, f, features, client, base, issued, string(factor), mfa.FactorActive, 10)
-		proveOTPMixedFactorInventory(t, ctx, f, features, issued, binding.UserID, string(factor))
-		proveOTPInventoryCorruption(t, ctx, f, features, issued, binding.UserID)
+		if !f.mfaOTPDisable {
+			proveOTPMixedFactorInventory(t, ctx, f, features, issued, binding.UserID, string(factor))
+			proveOTPInventoryCorruption(t, ctx, f, features, issued, binding.UserID)
+		}
 	}
 	if f.config.MFAOTPEnrollment.ActiveStepUp != nil {
 		label := proveReferenceMFAOTPActive(t, ctx, f, features, workers, issued[0].Value, csrf, origin, factor, binding.UserID, messages, previous)
@@ -440,7 +465,7 @@ func proveOTPLogoutCurrentAuthority(t *testing.T, ctx context.Context, f liveSto
 		t.Fatal(err)
 	}
 	for _, tc := range []struct{ name, change, restore string }{
-		{"enrollment epoch", `UPDATE identity_mfa.otp_factors SET enrollment_version=enrollment_version+1 WHERE tenant_id=$1 AND user_id=$2`, `UPDATE identity_mfa.otp_factors SET enrollment_version=enrollment_version-1 WHERE tenant_id=$1 AND user_id=$2`},
+		{"enrollment epoch", `UPDATE identity_mfa.otp_factors SET enrollment_version=enrollment_version+1 WHERE tenant_id=$1 AND user_id=$2 AND state=2`, `UPDATE identity_mfa.otp_factors SET enrollment_version=enrollment_version-1 WHERE tenant_id=$1 AND user_id=$2 AND state=2`},
 		{"recipient verification", `UPDATE identity.identifiers SET verification_version=verification_version+1 WHERE tenant_id=$1 AND user_id=$2`, `UPDATE identity.identifiers SET verification_version=verification_version-1 WHERE tenant_id=$1 AND user_id=$2`},
 		{"factor generation", `UPDATE identity_mfa.factor_authorities SET version=version+1 WHERE tenant_id=$1 AND user_id=$2`, `UPDATE identity_mfa.factor_authorities SET version=version-1 WHERE tenant_id=$1 AND user_id=$2`},
 	} {

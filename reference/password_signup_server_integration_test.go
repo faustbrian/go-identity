@@ -254,6 +254,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	mfaOTPDisable        bool
+	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
 	mfaOTPManage         bool
 	mfaOTPRemoval        bool
@@ -317,6 +319,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.mfaOTPActiveCase = extensions.mfaOTPActiveCase
 	f.mfaOTPRemoval = extensions.mfaOTPRemoval
 	f.mfaOTPRemovalRace = extensions.mfaOTPRemovalRace
+	f.mfaOTPDisable, f.mfaOTPDisableAll = extensions.mfaOTPDisable, extensions.mfaOTPDisableAll
 	f.mfaOTPEnrollmentOnly = extensions.mfaOTPEnrollmentOnly
 	f.usernameTOTP = extensions.usernameTOTP
 	f.phoneTOTP = extensions.phoneTOTP
@@ -542,6 +545,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 				if extensions.mfaOTPRemoval {
 					c.MFAOTPEnrollment.ActiveStepUp.FactorManagement.RemovalRecoveryPath = auth.RecoveryPathEmail
 				}
+			}
+			if extensions.mfaOTPDisable {
+				c.MFAOTPEnrollment.Listing = true
+				c.MFAOTPEnrollment.ActiveStepUp.Native.AllowedPurposes = []auth.Purpose{"identity.mfa.factor-update", "identity.mfa.disable"}
+				c.MFAOTPEnrollment.ActiveStepUp.Disable = &mfapg.DisableConfig{MaximumAge: time.Minute, PrimaryMaximumAge: 5 * time.Minute, RecoveryPath: auth.RecoveryPathEmail}
 			}
 		}
 		if extensions.mfaOTPListingHTTP {

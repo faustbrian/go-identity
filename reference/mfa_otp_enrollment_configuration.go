@@ -54,6 +54,7 @@ type mfaOTPEnrollmentState struct {
 	active       *mfapg.OTPActiveStepUpService
 	activeIssuer *otppg.MFAActiveIssuer
 	manage       *mfapg.FactorUpdateService
+	disable      *mfapg.DisableService
 }
 
 func composeMFAOTPEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator, reset *passwordpg.ResetService) (*mfaOTPEnrollmentState, error) {

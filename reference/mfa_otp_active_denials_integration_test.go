@@ -81,6 +81,12 @@ func proveOTPActiveCustodyDenials(t *testing.T, ctx context.Context, f liveStore
 		"wrong-csrf":     func(r *mfa.OtpVerifyRequest) { r.StepUp.CSRFToken, _ = session.NewCSRFToken() },
 		"foreign-origin": func(r *mfa.OtpVerifyRequest) { r.Origin = "https://other.invalid" },
 		"wrong-purpose":  func(r *mfa.OtpVerifyRequest) { r.StepUp.Purpose = "identity.mfa.recovery-regenerate" },
+		"other-selected-purpose": func(r *mfa.OtpVerifyRequest) {
+			r.StepUp.Purpose = "identity.mfa.disable"
+			if original.StepUp.Purpose == "identity.mfa.disable" {
+				r.StepUp.Purpose = "identity.mfa.factor-update"
+			}
+		},
 		"mixed-enrollment": func(r *mfa.OtpVerifyRequest) {
 			r.Enrollment = &mfa.OTPEnrollmentContext{Session: r.StepUp.Session, CSRFToken: r.StepUp.CSRFToken}
 		},

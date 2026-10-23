@@ -1499,6 +1499,25 @@ the removed-factor session cannot continue, and delivered email reset remains
 usable. This selects no HTTP route, disable, replacement or weaker-factor
 fallback.
 
+For native OTP disable, select `ActiveStepUp.Disable` with positive proof/primary
+maximum ages and `RecoveryPath: authentication.RecoveryPathEmail`. Leave its
+`Primary`, `Sessions` and `Recovery` absent. Select complete `PasswordReset`
+and include `identity.mfa.disable` in `ActiveStepUp.Native.AllowedPurposes`.
+The graph supplies actual session/CSRF, OTP/delivery, recovery and effect owners.
+Use `FeatureSet.MFAOTPActiveStepUp()` to send and verify a fresh challenge with
+`StepUp.Purpose: "identity.mfa.disable"`, then pass that proof to the owner
+returned by `FeatureSet.MFAOTPDisable()`. `OneFactor` requires the factor ID and
+preserves unconfirmed OTP siblings; `AllFactors` requires an empty factor ID
+and erases those siblings too. Both require the sole active OTP factor and
+current usable email recovery. Apply the appended OTP disable and shared
+session-disable histories before use. Original retries/recovery expose outcome
+metadata only; they never redeliver proof or repeat erasure. Factor management
+and HTTP are independent selections. Native one/all, competing commands and
+actual COMMIT recovery are exercised by `TestReferencePostgresOTPDisable*`.
+All-target has the native bound of 63 retained pending siblings, including
+expired pending rows. Overflow rolls back the complete operation without
+partial erasure; one-target preserves untargeted pending history.
+
 Set `MFAEnrollmentConfiguration.ActiveStepUp`, then optional
 `FactorManagement` with explicit primary/factor maximum ages. The graph supplies
 the actual native primary and session-effect owners; caller-written overrides

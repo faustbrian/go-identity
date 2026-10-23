@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Separately compose native OTP disable through
+  `MFAOTPEnrollment.ActiveStepUp.Disable` and `FeatureSet.MFAOTPDisable`.
+  Supply real recovery/session owners and selected forward history; preserve
+  one/all intent, atomic erasure and metadata-only recovery. Enable the disable
+  step-up purpose explicitly. No HTTP, replacement or TOTP fallback is selected.
+
 - Independently select sole-active email-OTP removal through native factor
   management's explicit email-recovery policy. Require selected password-reset
   request/completion owners, append OTP removal history and preserve atomic

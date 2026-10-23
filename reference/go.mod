@@ -29,10 +29,10 @@ require (
 	github.com/faustbrian/go-identity/http/session v0.0.0-20261021120851-ab3f4a286f93
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
-	github.com/faustbrian/go-identity/mfa v0.0.0-20261023111815-6bc180019089
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023120955-f67a8364fc5e
+	github.com/faustbrian/go-identity/mfa v0.0.0-20261023130507-5fd8f73dd722
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023130952-8fbebd6d61f1
 	github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089
-	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261023113327-8954d0d06cb5
+	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261023131125-38648609fbb6
 	github.com/faustbrian/go-identity/password v0.0.0-20261020120243-19670fe0ec13
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261021080757-a33b0dfc3840
 	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6

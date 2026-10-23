@@ -27,7 +27,8 @@ func (s StoreSet) otpActiveMigrationCatalog(ctx context.Context, catalog []migra
 		}
 		owners[17] = "identity/mfa/postgres"
 		catalog[i] = migrationHistory{namespace: h.namespace, history: steps, owners: owners, guards: append(append([]migrationGuard(nil), h.guards...), migrationGuard{version: 17, schema: "identity_mfa", tables: []string{"otp_factor_verifications"}})}
-		if s.state.features.mfaOTPEnrollment.manage != nil {
+		otp := s.state.features.mfaOTPEnrollment
+		if otp.manage != nil || otp.disable != nil {
 			steps, err = (mfapg.OTPFactorManagementMigrationSource{Base: fixedMigrationSource(steps), Version: 18}).Load(ctx)
 			if err != nil {
 				return nil, err
@@ -35,7 +36,7 @@ func (s StoreSet) otpActiveMigrationCatalog(ctx context.Context, catalog []migra
 			owners[18] = "identity/mfa/postgres"
 			catalog[i].history = steps
 			catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 18, schema: "identity_mfa", tables: []string{"otp_factor_update_effects"}, columns: []string{"otp_factors.label"}})
-			if s.state.features.mfaOTPEnrollment.manage.RemovalConfigured() {
+			if otp.disable != nil || otp.manage.RemovalConfigured() {
 				steps, err = (mfapg.OTPFactorRemovalMigrationSource{Base: fixedMigrationSource(steps), Version: 19}).Load(ctx)
 				if err != nil {
 					return nil, err
@@ -43,6 +44,15 @@ func (s StoreSet) otpActiveMigrationCatalog(ctx context.Context, catalog []migra
 				owners[19] = "identity/mfa/postgres"
 				catalog[i].history = steps
 				catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 19, schema: "identity_mfa", columns: []string{"otp_factor_update_effects.action", "otp_factor_update_effects.recovery_identity"}})
+			}
+			if otp.disable != nil {
+				steps, err = (mfapg.OTPDisableMigrationSource{Base: fixedMigrationSource(steps), Version: 20}).Load(ctx)
+				if err != nil {
+					return nil, err
+				}
+				owners[20] = "identity/mfa/postgres"
+				catalog[i].history = steps
+				catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 20, schema: "identity_mfa", columns: []string{"otp_factor_update_effects.disable_target"}})
 			}
 			// Reuse the existing session disposition history when TOTP management
 			// already selected it. OTP does not create another session-effect owner.
@@ -60,7 +70,7 @@ func (s StoreSet) otpActiveMigrationCatalog(ctx context.Context, catalog []migra
 						}
 						catalog[j].owners[2] = "identity/session/postgres"
 					}
-					return catalog, nil
+					return appendOTPDisableSessionHistory(ctx, catalog, j, s.state.features.migrations.passwordSigninSchema, otp.disable != nil)
 				}
 			}
 			schema := s.state.features.migrations.passwordSigninSchema
@@ -73,8 +83,30 @@ func (s StoreSet) otpActiveMigrationCatalog(ctx context.Context, catalog []migra
 				return nil, e
 			}
 			catalog = append(catalog, migrationHistory{namespace: "identity_mfa_recovery_dispositions", history: append(dispositions, extension...), owners: map[migrations.Version]ModuleID{1: "identity/session/postgres", 2: "identity/session/postgres"}, guards: []migrationGuard{{version: 1, schema: schema, tables: []string{"mfa_recovery_dispositions"}}}})
+			return appendOTPDisableSessionHistory(ctx, catalog, len(catalog)-1, schema, otp.disable != nil)
 		}
 		return catalog, nil
 	}
 	return nil, identity.InvalidInputError{Field: "reference_mfa_otp_active_history"}
+}
+
+func appendOTPDisableSessionHistory(ctx context.Context, catalog []migrationHistory, index int, schema string, selected bool) ([]migrationHistory, error) {
+	// Replacement v4 independently includes disable. It may follow [1,2]
+	// without optional v3; inserting v3 afterward both reorders installed
+	// history and would narrow v4's confirmation-purpose constraint.
+	if !selected || catalog[index].owners[3] != "" || catalog[index].owners[4] == "identity/session/postgres" {
+		return catalog, nil
+	}
+	steps, err := (sessionpg.MFADisableSessionMigrationSource{Schema: schema, Version: 3}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	catalog[index].history = append(catalog[index].history[:len(catalog[index].history):len(catalog[index].history)], steps...)
+	owners := make(map[migrations.Version]ModuleID, len(catalog[index].owners)+1)
+	for version, owner := range catalog[index].owners {
+		owners[version] = owner
+	}
+	owners[3] = "identity/session/postgres"
+	catalog[index].owners = owners
+	return catalog, nil
 }

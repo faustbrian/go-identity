@@ -3,12 +3,55 @@ package reference
 import (
 	"context"
 	"testing"
+	"time"
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 )
+
+func TestOTPDisablePreservesInstalledReplacementSessionHistory(t *testing.T) {
+	ctx := t.Context()
+	first, err := (sessionpg.MFARecoverySessionMigrationSource{Schema: "session_store", Version: 1}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := (sessionpg.MFAFactorUpdateSessionMigrationSource{Schema: "session_store", Version: 2}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := (sessionpg.MFATOTPReplacementSessionMigrationSource{Schema: "session_store", Version: 4}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history := append(append(first, second...), replacement...)
+	var records []migrations.Record
+	for _, step := range history {
+		record, err := migrations.NewRecord(migrations.RecordKindMigration, step.Version(), step.Name(), step.Checksum(), time.Now().UTC(), 0, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		records = append(records, record)
+	}
+	catalog := []migrationHistory{{namespace: "identity_mfa_recovery_dispositions", history: history, owners: map[migrations.Version]ModuleID{1: "identity/session/postgres", 2: "identity/session/postgres", 4: "identity/session/postgres"}}}
+	got, err := appendOTPDisableSessionHistory(ctx, catalog, 0, "session_store", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrations.PlanUp(got[0].history, records); err != nil {
+		t.Fatal("selecting OTP disable broke installed replacement bootstrap", err)
+	}
+	if len(got[0].history) != len(history) {
+		t.Fatal("disable inserted history already supplied by installed replacement")
+	}
+	for i, step := range history {
+		if got[0].history[i] != step {
+			t.Fatal("disable rewrote installed replacement history")
+		}
+	}
+}
 
 func TestMFAOTPManagementAppendsMissingSharedDisposition(t *testing.T) {
 	c := featureMigrationConfig{otpSchema: "otp_store", sessionSchema: "session_store", signinSchema: "session_store", passwordSigninSchema: "session_store", global: "deployment"}
@@ -60,6 +103,9 @@ func TestMFAOTPActiveSelectionAndRetainedLifetime(t *testing.T) {
 	if owner, err := absent.MFAOTPFactorManagement(); err == nil || owner != nil {
 		t.Fatal("absent graph exposed OTP management")
 	}
+	if owner, err := absent.MFAOTPDisable(); err == nil || owner != nil {
+		t.Fatal("absent graph exposed OTP disable")
+	}
 	_, _, graph := serverFixture(t)
 	graph.state.features.mfaOTPEnrollment = &mfaOTPEnrollmentState{}
 	if owner, err := graph.MFAOTPActiveStepUp(); err == nil || owner != nil {
@@ -68,13 +114,21 @@ func TestMFAOTPActiveSelectionAndRetainedLifetime(t *testing.T) {
 	if owner, err := graph.MFAOTPFactorManagement(); err == nil || owner != nil {
 		t.Fatal("unselected graph exposed OTP management")
 	}
+	if owner, err := graph.MFAOTPDisable(); err == nil || owner != nil {
+		t.Fatal("unselected graph exposed OTP disable")
+	}
 	graph.state.features.mfaOTPEnrollment.active = &mfapg.OTPActiveStepUpService{}
 	graph.state.features.mfaOTPEnrollment.manage = &mfapg.FactorUpdateService{}
+	graph.state.features.mfaOTPEnrollment.disable = &mfapg.DisableService{}
 	active, err := graph.MFAOTPActiveStepUp()
 	if err != nil {
 		t.Fatal(err)
 	}
 	management, err := graph.MFAOTPFactorManagement()
+	if err != nil {
+		t.Fatal(err)
+	}
+	disable, err := graph.MFAOTPDisable()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +154,12 @@ func TestMFAOTPActiveSelectionAndRetainedLifetime(t *testing.T) {
 		if _, err := management.RecoverFactorUpdate(ctx, q, caller); err == nil {
 			t.Fatal("unadmitted OTP rename recovery")
 		}
+		if out, err := disable.Disable(ctx, mfa.DisableRequest{TenantID: tenant}); err == nil || out.Factors != nil {
+			t.Fatal("unadmitted OTP disable returned metadata")
+		}
+		if _, err := disable.RecoverDisable(ctx, q, caller); err == nil {
+			t.Fatal("unadmitted OTP disable recovery")
+		}
 		if graph.state.active != 0 {
 			t.Fatal("denied OTP request leaked graph admission")
 		}
@@ -117,5 +177,8 @@ func TestMFAOTPActiveSelectionAndRetainedLifetime(t *testing.T) {
 	}
 	if owner, err := graph.MFAOTPFactorManagement(); err == nil || owner != nil {
 		t.Fatal("closed graph exposed OTP mutation owner")
+	}
+	if owner, err := graph.MFAOTPDisable(); err == nil || owner != nil {
+		t.Fatal("closed graph exposed OTP disable")
 	}
 }
