@@ -1,5 +1,22 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 18:48 UTC: Reference identifier-free M16 profile CLOSED, not full M16.
+Reviewed main0acc093c022267aaa44a920c3d520e71329b6363 is pushed; exact
+Required40005974807 SUCCESS. Committed Reference patch matches independently
+approved complete ten-file candidate98d17050...43866. Separate external
+example.com/reference-passkey-consumer uses authenticated public Reference
+v0.0.0-20261023184542-0acc093c0222, GOWORKoff/no replacements. Four actual
+fresh/upgrade identified/discoverable registration->capturedverification->
+passwordsignin->freshenrollment->assertion->session/inventory/read/CSRFlogout
+journeys PASS PostgreSQL/race14.327s; all modules verify. Public sum
+h1:iWyD3lqvVVvrjJwvVXCVIAnDbg8utpTt3WROXr6ieYI=; all342 archive files
+match committed source. No new browser/hardware qualification, HTTP, signup,
+conditional UI or management claim. Full M16/all67 remain required,11/39 and
+~25% low-confidence estimate unchanged. Native keyed-options worker has one
+expected missing-API RED, is code-only until heavy-slot grant; it uses existing
+kernel request-key/recovery owners, not a transport journal. Primary consumer
+and focused checks are terminal; its runtime evidence is preserved above.
+
 2026-10-23 18:45 UTC: Reference discovery final source candidate
 98d170503baf437c7f35a06123083cc315c812f2ff8b991d35f9b6be4b043866
 independently APPROVED/no remaining findings by /root/reference_discovery_final.

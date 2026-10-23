@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 18:32 UTC
+## TL;DR — updated 2026-10-23 18:48 UTC
 
 - **Whole goal: approximately 25% complete (low-confidence estimate),
   11/39 consumer milestones closed; all 67 units remain required.** Milestone
@@ -31,12 +31,22 @@
   are independently approved and exact-CI green. A separate authenticated public
   module consumer passes PostgreSQL/race (33.567s), including mode-switch and
   opt-out denials plus retained identified/current-owner checks. All 41 native
-  archive files match source. Reference adoption is next, then HTTP; no new
+  archive files match source. No new
   browser/hardware interoperability or whole-unit qualification is claimed.
   Full M16 still needs signup, conditional signin, management and remaining
   Reference/HTTP integration;
   remaining roadmap families and whole-unit/release qualification stay open.
   No user decision needed. This is a backend library, not a UI.
+- **Identifier-free Reference adoption delivered:** real baseline registration,
+  captured verification, password signin and fresh-proof passkey enrollment now
+  lead to identifier-free assertion and usable session/inventory/read/logout.
+  Both modes pass fresh and populated-upgrade journeys in a separate downloaded
+  public Reference consumer (PostgreSQL/race14.327s, no replacements, authenticated
+  modules). Reviewed main `0acc093` is pushed with Required `40005974807` green;
+  all342 public archive files match source. HTTP remains unfinished. A bounded
+  native worker is implementing keyed options required by the HTTP contract;
+  it does not own Reference/HTTP or shared identity contracts. Full M16 and the
+  11/39/~25% low-confidence whole-goal estimate are unchanged.
 
 ## Retained checkpoint — 2026-10-23 17:23 UTC
 
