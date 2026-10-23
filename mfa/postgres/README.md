@@ -127,6 +127,13 @@ first-factor activation, changed generation or unavailable state denies even
 if the original password session remains live. No MFA-bearing transfer/rename
 profile, proof issuance or factor initialization is enabled by this guard.
 
+The same guard admits exact self-only `identity.passkey.register-options`,
+`identity.passkey.register-verify` and `identity.passkey.update` operations from
+the `passkey/postgres` contributor. Each retains its distinct `.native-v1`
+schema and equal original actor/target factor generations. Update does not
+select deletion or weaken active-factor denial; the passkey owner still proves
+the exact signed action and applies metadata inside its sole protected Work.
+
 Required-email username signup reuses `InitializeSignup` under the exact native
 password contributor's `identity.username.signup`/`username-signup` v1 scope.
 It requires actual account creation and original registration evidence in the

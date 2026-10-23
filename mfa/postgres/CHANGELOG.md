@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence original known-empty factor authority for exact self-only passkey
+  credential-label updates. Keep enrollment scopes distinct; foreign owners/
+  subjects, changed generations and deletion aliases remain denied.
+  No factor is initialized and no password-only fallback is introduced.
+
 - Fence original known-empty MFA authority for native passkey session signin,
   current reads and self-logout. Missing, enrolled or changed generations and
   foreign owners/scopes deny without adopting newer authority or weakening MFA.

@@ -96,7 +96,16 @@ func TestActionPrimaryFactorScopeRequiresOriginalVersionsAndClosedOwner(t *testi
 }
 
 func TestPasskeyEnrollmentFactorScopeKeepsExactNativeOwner(t *testing.T) {
-	for _, action := range []string{"identity.passkey.register-options", "identity.passkey.register-verify"} {
+	testPasskeyActionFactorScope(t, []string{"identity.passkey.register-options", "identity.passkey.register-verify"})
+}
+
+func TestPasskeyUpdateFactorScopeKeepsExactNativeOwner(t *testing.T) {
+	testPasskeyActionFactorScope(t, []string{"identity.passkey.update"})
+}
+
+func testPasskeyActionFactorScope(t *testing.T, actions []string) {
+	t.Helper()
+	for _, action := range actions {
 		t.Run(action, func(t *testing.T) {
 			s, registration := actionFactorFixture(t, false)
 			s.Operation = identity.FeatureOperation{Owner: "passkey", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
@@ -104,9 +113,9 @@ func TestPasskeyEnrollmentFactorScopeKeepsExactNativeOwner(t *testing.T) {
 			registration = kernel.FeatureRegistration{Operation: s.Operation, Contributor: kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}}
 			subjects, err := actionPrimaryFactorSubjects(s, registration, 7, 7)
 			if err != nil || len(subjects) != 1 || subjects[0].user != s.Binding.UserID || subjects[0].version != 7 {
-				t.Fatal("native self-only passkey enrollment lost its original factor scope", err)
+				t.Fatal("native self-only passkey action lost its original factor scope", err)
 			}
-			for _, mode := range []string{"foreign-subject", "foreign-owner", "wrong-schema", "missing-field", "changed-generation"} {
+			for _, mode := range []string{"foreign-subject", "foreign-owner", "wrong-schema", "missing-field", "changed-generation", "unselected-action"} {
 				request, owner := s, registration
 				request.Fields = append([]identity.FeatureField(nil), s.Fields...)
 				switch mode {
@@ -120,9 +129,14 @@ func TestPasskeyEnrollmentFactorScopeKeepsExactNativeOwner(t *testing.T) {
 					request.Fields = request.Fields[:1]
 				case "changed-generation":
 					request.Fields[1].Value.Uint64++
+				case "unselected-action":
+					request.Operation.OperationID = "identity.passkey.delete"
+					request.Operation.SchemaID = request.Operation.OperationID + ".native-v1"
+					request.Binding.OperationID, request.Binding.SchemaID = request.Operation.OperationID, request.Operation.SchemaID
+					owner.Operation = request.Operation
 				}
 				if _, err := actionPrimaryFactorSubjects(request, owner, 7, 7); err == nil {
-					t.Fatal("passkey enrollment accepted substituted factor custody", mode)
+					t.Fatal("passkey action accepted substituted factor custody", mode)
 				}
 			}
 		})
