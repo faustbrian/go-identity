@@ -1,5 +1,71 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 21:26 UTC: native+HTTP Reference rename consumer profile CLOSED.
+Main19a0ef9050c9039d3c9fab7cec71b8c079e051a9 remote-confirmed; exact Required
+40026477944 SUCCESS. Independent /root/reference_passkey_rename_final APPROVE,
+no findings; committed16paths match reviewed78b8d01f...314bc0a. Actual native/
+HTTP fresh+upgrade plus retained HTTP PG/race63.015s, ordinaryReference1.060s/
+command2.922s, taggedvet and moduleverify pass. Changed-content secret scan and
+diffcheck pass. Authenticated publicReferencev0.0.0-20261023212346-19a0ef9050c9,
+Origin.Hash exact19a0ef9, Sumh1:jR8Dp3yNctjLfPB+KgxTmAfKDqqVJ8iVTAirQMYxdDw=;
+all346publicfiles match committed source (Go supplies the unchanged rootLICENSE).
+Separate clean external module compiles publicselection and passes allfour
+native/HTTP fresh+populated rename/inventory/newsignin/read/CSRFlogout journeys
+under PG/race30.836s; all modulesverify, no replacements/GOWORK. Original pinned
+owners remain authoritative. No full M16/unit/release/browser claim; ~25%/11of39.
+
+Next bounded native lane: passkey self-deletion in go-passkey root/postgres,
+consuming committed nativefa925a3/root43285ac, passwordd618c1a, MFA14c2b7d,
+kernel9a09aa4 and WebAuthn84664c3. Worker owns only go-passkey root/postgres
+source/tests/docs/manifests; primary retains all other repositories and
+Reference/HTTP integration. First check actual deletion/proof/recovery/authority
+participant contracts; request missing upstream behavior rather than invent it.
+Finite outcome: genuine current signed delete proof -> one keyed atomic removal
+of safe reference/protocol credential -> relevant session denial -> metadata-only
+retry, with current password recovery preserving the last usable path. Include
+wrong/stale/scope/version/proof denial, required-effects rollback and unknown
+recovery. Unsupported primary/factor/recovery variants fail closed. No signup,
+conditional signin or other lifecycle expansion. Focused native tests and real
+PG/race journey plus affected static/consumer proof, then one independent review.
+Primary owns heavy slot until99941 ends; worker starts source-only and requests
+the slot before any Go/service run. No Git changes by this worker.
+
+2026-10-23 21:12 UTC: native rename DELIVERED fa925a3801c5d0ccee77d5594d8fb6e159b4b4ce,
+remote main confirmed, Required40024769807 SUCCESS. Complete independent
+review2 APPROVE5281b4af...1ed7; two accepted new-boundary test gaps cover current
+factor authority and actual mutation quota/retry without production changes.
+Public nativev0.0.0-20261023211003-fa925a3801c5 authenticates/exactsource15paths;
+separate clean no-replacement consumer compiles and runs real rename-through-
+signin/read/logout plus populated migration runner PG/race5.156s, modulesverify.
+Primary now owns Reference native+HTTP rename composition, preserving real
+proof/session/request/risk owners and mapping1/signin2 + explicit metadata3.
+Select optional management primary, guard graph/tenant/drain, append original
+password proof suffix41 after40; wrong/stale proof/CSRF/version/key denial,
+metadata-only retry, changed safe inventory then same passkey new signin and
+read/logout over fresh/populated installations. HTTP waits for public leaf
+delivery; no uncommitted native contract is adopted. BaseHTTP9856715 is main/
+CI-green; leaf runtime/projection/race3.878s and boundedfuzz6.263s pass, review
+requested four promised wrong-session bindings; affected tests2.158s, final
+re-review pending. No full M16/unit closure or percentage change is claimed.
+
+2026-10-23 21:03 UTC: primary owns the same rename slice's HTTP leaf in
+http/passkey/**, consuming published neutral root43285ac and retained shared
+HTTPfaf3471/session219499b/password324d. Native worker retains go-passkey/postgres
+and heavy slot. Finite transport: explicit cookie-only POST passkey/update,
+required single header key, closed proofID/referenceID/expectedVersion/name,
+actual current password-session+CSRF and original signed update-proof lookup,
+shared keyed rate.secret, one native Update and safe metadata-only projection.
+No device ceremony, command/user/tenant override, proof reconstruction, new
+auth/replay/rate owner, deletion or signup. Prove closed ingress, wrong action/
+session/CSRF denial, exact original key/custody forwarding, retained outcome,
+hook expiry, selected wire and default-off; genuine success remains the same
+primary-owned public-native Reference PostgreSQL rename/inventory/signin/logout
+journey. Focused leaf race/parser fuzz/static checks then complete independent
+review; primary does not adopt uncommitted native implementation. Existing
+native selected rename race cohort passed46.221s. Newly reproduced migration
+collision is corrected by native-owned explicit forward suffix, not rewriting
+installed mapping1/signin2. No new milestone/unit closure is claimed.
+
 2026-10-23 20:53 UTC: exact update MFA selector DELIVERED as main14c2b7df99f1e6a8
 ba34f590a9627e4a1741a5f6, remote confirmed, Required40022467514 SUCCESS.
 Independent /root/passkey_management_prerequisite_final APPROVE complete4paths
