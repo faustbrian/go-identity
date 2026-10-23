@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add closed service-expiry lifecycle mapping, same-Work terminalization and
+  retained original-command recovery after actual kernel disposal. Append
+  `ExpiryMigrationSource` after disposal history: expired deletion is distinct
+  from self-deletion, while stored anonymize/retain actions keep their terminal
+  classifications. Maintenance authorization, retention and complete-session
+  orchestration remain required; these owner APIs expose no cleanup endpoint.
+
 - Provide bounded, read-only original-flow and guest-possession rate sources
   for optional HTTP signin/deletion. Historical custody selects only the
   original retry budget, never active authentication or a new mutation.

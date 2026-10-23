@@ -139,3 +139,17 @@ replay is likewise metadata-only, including after the original grant expires.
 Retain original lookup/CSRF, request/envelope and capability verification keys for
 their respective recovery lifetimes. Keep `Guest.IntentKey` stable for retained
 requests; independent transport-key rotation does not change original intent.
+
+### Expired-subject owner composition
+
+`ExpiryFields`/`ExpirySubject` preserve the exact stored lifecycle in the closed
+service-expiry command; neither is authorization or current-expiry evidence.
+`StageExpiredDisposal` requires actual same-Work kernel disposal and authoritative
+database-time expiry. `RequireExpiredDisposal` repeats the original terminal
+state/time fence; `RecoverExpiredDisposal` reads retained command evidence,
+never infers success from a missing subject. Install `ExpiryMigrationSource`
+after disposal history without changing any predecessor SQL. Stored delete
+becomes `StateExpired`; anonymize/retain keep their distinct classifications.
+The native maintenance workflow must still provide service authorization,
+current retention/legal-hold policy, complete session effects and audit/outbox.
+These owner entry points are not a public cleanup service or HTTP route.

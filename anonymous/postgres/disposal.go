@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/anonymous"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -15,27 +16,58 @@ func deletionOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/anonymous", OperationID: "identity.anonymous.delete", SchemaID: "identity.anonymous.delete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
+func expiryOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/anonymous", OperationID: "identity.anonymous.expire", SchemaID: "identity.anonymous.expire.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
 // DeletionFields freezes this owner's original lifecycle before fingerprinting.
 // It neither authorizes disposal nor selects retention or kernel/session state.
 func DeletionFields(subject anonymous.AnonymousSubject) ([]identity.FeatureField, error) {
+	return disposalFields(subject, "anonymous.delete.")
+}
+
+// ExpiryFields freezes the original lifecycle for the exact service-expiry
+// command. Mapping grants neither maintenance authority nor expiry, retention,
+// kernel or session evidence. The returned fields are caller-owned.
+func ExpiryFields(subject anonymous.AnonymousSubject) ([]identity.FeatureField, error) {
+	return disposalFields(subject, "anonymous.expire.")
+}
+
+func disposalFields(subject anonymous.AnonymousSubject, prefix string) ([]identity.FeatureField, error) {
 	f, err := CreationFields(subject)
 	if err != nil {
 		return nil, err
 	}
 	for n := range f {
-		f[n].Name = strings.Replace(f[n].Name, "anonymous.subject.", "anonymous.delete.", 1)
+		f[n].Name = strings.Replace(f[n].Name, "anonymous.subject.", prefix, 1)
 	}
 	return f, nil
 }
 
 func deletionSubject(c identity.Command) (anonymous.AnonymousSubject, error) {
+	return disposalSubject(c, false)
+}
+
+// ExpirySubject reconstructs only the complete original lifecycle in an exact
+// service-expiry command. This pure projection performs no IO, authentication,
+// expiry check or authorization. It cannot convert browser custody into service
+// authority; current owners must fence the command in the coordinator's Work.
+func ExpirySubject(c identity.Command) (anonymous.AnonymousSubject, error) {
+	return disposalSubject(c, true)
+}
+
+func disposalSubject(c identity.Command, expired bool) (anonymous.AnonymousSubject, error) {
 	f, ok := c.Feature()
-	if !ok || f.Operation != deletionOperation() {
+	op, prefix := deletionOperation(), "anonymous.delete."
+	if expired {
+		op, prefix = expiryOperation(), "anonymous.expire."
+	}
+	if !ok || f.Operation != op || expired && (f.Binding.ActorKind != authorization.SubjectServiceAccount || f.Binding.RecordID != string(f.Binding.UserID)) {
 		return anonymous.AnonymousSubject{}, anonymous.ErrInvalidInput
 	}
 	values := make(map[string]identity.FeatureValue, 7)
 	for _, field := range f.Fields {
-		if name, owned := strings.CutPrefix(field.Name, "anonymous.delete."); owned {
+		if name, owned := strings.CutPrefix(field.Name, prefix); owned {
 			values[name] = field.Value
 		}
 	}
@@ -55,13 +87,28 @@ func terminalDeletionState(cleanup anonymous.CleanupPolicy) anonymous.State {
 	return anonymous.StateDeleted
 }
 
+func terminalDisposalState(cleanup anonymous.CleanupPolicy, expired bool) anonymous.State {
+	if expired && cleanup == anonymous.CleanupDelete {
+		return anonymous.StateExpired
+	}
+	return terminalDeletionState(cleanup)
+}
+
 func disposalScope(w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command) (identity.CommandBinding, anonymous.SubjectSpec, error) {
+	return disposalScopeFor(w, p, c, false)
+}
+
+func disposalScopeFor(w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, expired bool) (identity.CommandBinding, anonymous.SubjectSpec, error) {
 	b, f, l, err := w.FeatureScope(p)
 	spec, ok := c.Feature()
-	if err != nil || !ok || spec.Binding != b || spec.Operation != deletionOperation() || f.Operation != spec.Operation || p.Descriptor() != creationOwner() || l.EventType != "anonymous.deleted.v1" || l.BeforeVersion != 1 || l.AfterVersion != 2 || b.RecordID != string(b.UserID) || string(b.ActorID) != string(b.UserID) {
+	op, event, actor := deletionOperation(), "anonymous.deleted.v1", b.ActorKind == authorization.SubjectUser && string(b.ActorID) == string(b.UserID)
+	if expired {
+		op, event, actor = expiryOperation(), "anonymous.expired.v1", b.ActorKind == authorization.SubjectServiceAccount
+	}
+	if err != nil || !ok || spec.Binding != b || spec.Operation != op || f.Operation != spec.Operation || p.Descriptor() != creationOwner() || l.EventType != event || l.BeforeVersion != 1 || l.AfterVersion != 2 || b.RecordID != string(b.UserID) || !actor {
 		return identity.CommandBinding{}, anonymous.SubjectSpec{}, anonymous.ErrInvalidInput
 	}
-	s, err := deletionSubject(c)
+	s, err := disposalSubject(c, expired)
 	if err != nil {
 		return identity.CommandBinding{}, anonymous.SubjectSpec{}, err
 	}
@@ -75,17 +122,34 @@ func disposalScope(w kernel.Work, p kernel.FeatureExecutionContributor, c identi
 // credentials, bearer or application merge payloads are duplicated here.
 // Every error must abort the complete command, including session effects.
 func (r *Repository) StageDisposal(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command) error {
+	return r.stageDisposal(ctx, w, p, c, false)
+}
+
+// StageExpiredDisposal terminalizes the exact database-time-expired active
+// subject after actual kernel disposal in the same service-expiry Work. Stored
+// cleanup is preserved; delete becomes expired, anonymize and retain keep their
+// distinct terminal states. Upgrade/version races deny, never erase a target.
+func (r *Repository) StageExpiredDisposal(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command) error {
+	return r.stageDisposal(ctx, w, p, c, true)
+}
+
+func (r *Repository) stageDisposal(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, expired bool) error {
 	if ctx == nil || r == nil || r.pool == nil {
 		return anonymous.ErrInvalidInput
 	}
 	if err := w.RequireFeatureCommand(ctx, p, c); err != nil {
 		return err
 	}
-	b, expected, err := disposalScope(w, p, c)
+	b, expected, err := disposalScopeFor(w, p, c, expired)
 	if err != nil {
 		return err
 	}
-	user, err := w.AnonymousDisposal(p)
+	var user identity.User
+	if expired {
+		user, err = w.AnonymousExpiredDisposal(p)
+	} else {
+		user, err = w.AnonymousDisposal(p)
+	}
 	if err != nil || user.ID != b.UserID || user.TenantID != b.TenantID {
 		return identity.ForbiddenError{}
 	}
@@ -108,10 +172,15 @@ func (r *Repository) StageDisposal(ctx context.Context, w kernel.Work, p kernel.
 	if err != nil {
 		return err
 	}
-	if err := subject.RequireActive(b.TenantID, now); err != nil {
+	if expired {
+		err = subject.RequireExpired(b.TenantID, now)
+	} else {
+		err = subject.RequireActive(b.TenantID, now)
+	}
+	if err != nil {
 		return err
 	}
-	state := terminalDeletionState(expected.Cleanup)
+	state := terminalDisposalState(expected.Cleanup, expired)
 	n, err := w.Exec(bounded, `UPDATE `+r.schema+`.subjects SET state=$3,version=2 WHERE tenant_id=$1 AND user_id=$2 AND state=1 AND version=1`, string(b.TenantID), string(b.UserID), int16(state))
 	if err != nil {
 		return err
@@ -136,10 +205,21 @@ func (r *Repository) StageDisposal(ctx context.Context, w kernel.Work, p kernel.
 // RequireDisposal verifies this owner's exact terminal state and original
 // lifetime during the final read-only same-Work fence; no time is renewed.
 func (r *Repository) RequireDisposal(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command) error {
+	return r.requireDisposal(ctx, w, p, c, false)
+}
+
+// RequireExpiredDisposal repeats the exact terminal lifecycle and original
+// database-time expiry in the same final Work fence. It cannot renew expiry or
+// replace current kernel, service, retention or session-owner checks.
+func (r *Repository) RequireExpiredDisposal(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command) error {
+	return r.requireDisposal(ctx, w, p, c, true)
+}
+
+func (r *Repository) requireDisposal(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, expired bool) error {
 	if ctx == nil || r == nil || r.pool == nil {
 		return anonymous.ErrInvalidInput
 	}
-	b, before, err := disposalScope(w, p, c)
+	b, before, err := disposalScopeFor(w, p, c, expired)
 	if err != nil {
 		return err
 	}
@@ -155,7 +235,7 @@ func (r *Repository) RequireDisposal(ctx context.Context, w kernel.Work, p kerne
 		return err
 	}
 	expected := before
-	expected.State, expected.Version = terminalDeletionState(before.Cleanup), 2
+	expected.State, expected.Version = terminalDisposalState(before.Cleanup, expired), 2
 	actual, _ := subject.Record()
 	if actual != expected {
 		return identity.ForbiddenError{}
@@ -164,7 +244,7 @@ func (r *Repository) RequireDisposal(ctx context.Context, w kernel.Work, p kerne
 	if err != nil {
 		return err
 	}
-	if now.Before(before.CreatedAt) || !now.Before(before.ExpiresAt) {
+	if now.Before(before.CreatedAt) || expired == now.Before(before.ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	return nil
@@ -174,11 +254,27 @@ func (r *Repository) RequireDisposal(ctx context.Context, w kernel.Work, p kerne
 // deletion from absence or mutable user/session status. Only the sole existing
 // coordinator can reconcile this participant with kernel/session/audit/outbox.
 func (r *Repository) RecoverDisposal(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
+	return r.recoverDisposal(ctx, w, p, false)
+}
+
+// RecoverExpiredDisposal votes only from retained original expiry-command
+// evidence. Missing lifecycle rows do not prove success, and recovery grants
+// no current access or right to re-execute. The existing coordinator reconciles
+// this vote with kernel, sessions and required audit/outbox effects.
+func (r *Repository) RecoverExpiredDisposal(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
+	return r.recoverDisposal(ctx, w, p, true)
+}
+
+func (r *Repository) recoverDisposal(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor, expired bool) (kernel.RecoveryStatus, error) {
 	if ctx == nil || r == nil || r.pool == nil {
 		return kernel.RecoveryUnknown, anonymous.ErrInvalidInput
 	}
 	b, f, l, err := w.FeatureScope(p)
-	if err != nil || f.Operation != deletionOperation() || p.Descriptor() != creationOwner() || l.EventType != "anonymous.deleted.v1" || l.BeforeVersion != 1 || l.AfterVersion != 2 {
+	op, event := deletionOperation(), "anonymous.deleted.v1"
+	if expired {
+		op, event = expiryOperation(), "anonymous.expired.v1"
+	}
+	if err != nil || f.Operation != op || p.Descriptor() != creationOwner() || l.EventType != event || l.BeforeVersion != 1 || l.AfterVersion != 2 || expired && (b.ActorKind != authorization.SubjectServiceAccount || b.RecordID != string(b.UserID)) {
 		return kernel.RecoveryUnknown, anonymous.ErrInvalidInput
 	}
 	id, err := base64.RawURLEncoding.Strict().DecodeString(string(b.CommandID))
@@ -203,7 +299,7 @@ func (r *Repository) RecoverDisposal(ctx context.Context, w kernel.RecoveryWork,
 	if err := rows.Scan(&user, &before, &after, &state, &cleanup); err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	if rows.Next() || rows.Err() != nil || user != string(b.UserID) || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) || cleanup < 1 || cleanup > 3 || anonymous.State(state) != terminalDeletionState(anonymous.CleanupPolicy(cleanup)) {
+	if rows.Next() || rows.Err() != nil || user != string(b.UserID) || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) || cleanup < 1 || cleanup > 3 || anonymous.State(state) != terminalDisposalState(anonymous.CleanupPolicy(cleanup), expired) {
 		return kernel.RecoveryUnknown, identity.UnavailableError{}
 	}
 	return kernel.RecoveryCommitted, nil
