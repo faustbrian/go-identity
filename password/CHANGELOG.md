@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose the adapter-neutral `ActionPrimaryRequest` input carrier for typed
+  feature and transport composition. It preserves original session, signed
+  proof, caller and CSRF custody without granting admission; diagnostics redact
+  and implicit export retains the native request's serialization error.
+
 - Reuse provider-only screened hashing for exact phone-reset completion without
   charging or inventing a second velocity allowance. Required HIBP, original
   provider freshness and native risk-evidence consumption remain mandatory;
