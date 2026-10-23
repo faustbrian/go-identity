@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 22:24 UTC
+## TL;DR — updated 2026-10-23 22:28 UTC
 
 - **Overall: approximately 25% complete, low confidence; 11/39 milestones closed.**
   This estimates delivered outcomes plus remaining scope/qualification, not file
@@ -23,22 +23,24 @@
   Required CI `40026477944` green. A clean consumer of the authenticated public
   Reference module passes all four management journeys under race (30.836s),
   with no replacements; all 346 public files match committed source.
-- **Current deletion:** genuine native proof/recovery -> atomic removal ->
+- **Deletion delivered:** genuine native proof/recovery -> atomic removal ->
   affected-session denial -> original-password-session retry passes locally,
   including PostgreSQL/race rollback, ambiguity and retained inventory/rename.
   Native review is closed; `e175ffe` is main-pushed with required CI green. A
   clean downloaded-public consumer passes the genuine journey under race
-  (6.076s). Reference native/HTTP fresh+upgrade removal, session denial and
-  password-session retry/read/logout now pass locally, including management-off
-  native removal. The 13-journey deletion/retained cohort passes PostgreSQL/race
-  (106.362s); independent review and Reference delivery remain pending.
+  (6.076s). Reviewed Reference `85c7651` is on main with Required CI green.
+  Its clean public consumer passes native/HTTP fresh+upgrade removal, session
+  denial and password-session retry/read/logout, plus management-off native
+  removal, under PostgreSQL/race (42.348s) without replacements. The local
+  deletion/retained 13-journey cohort passes race (106.362s). This closes the
+  finite deletion profile, not full M16 or another unit's qualification.
 - **HTTP deletion leaf delivered:** reviewed `5bb695c` is main-pushed with
   Required `40031504986` green. Race tests and bounded parser fuzz pass;
   rate-denial counterfactual detects bypass. Public archive authenticates and
   all 12 changed files match. This transport alone is not the usable native/
   Reference deletion journey and does not close M16 or qualify another unit.
-- **Next/remaining:** signed-proof deletion and its session/recovery effects. Passkey-first
-  signup, conditional signin, deletion, other roadmap families and full-unit/
+- **Next/remaining:** passkey-first signup, then conditional signin. Other
+  roadmap families and full-unit/
   release qualification remain open. No user decision is needed. Full M16 stays open.
 
 ## Retained checkpoint — 2026-10-23 19:22 UTC
@@ -2369,7 +2371,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account enrollment, identified/identifier-free signin, safe inventory and session read/logout are delivered through native/Reference/HTTP. Keyed retries retain original metadata. Signed-proof label rename is delivered through native `fa925a3`, HTTP `c5b0fcf` and Reference `19a0ef9`; independent reviews and exact CI green. A clean public Reference consumer passes fresh/populated native and HTTP rename-through-new-signin journeys under PostgreSQL/race (30.836s). Signup, conditional signin, deletion and remaining qualification keep the full row open. |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account enrollment, identified/identifier-free signin, safe inventory, label rename and session read/logout are delivered through native/Reference/HTTP. Keyed retries retain original metadata. Signed-proof deletion is also delivered: native `e175ffe`, HTTP `5bb695c`, Reference `85c7651`, independent reviews and exact Required CI green. A clean public Reference consumer passes native/HTTP fresh/populated and management-off deletion, affected-session denial, metadata retry and retained password-session read/logout under PostgreSQL/race (42.348s). Signup, conditional signin and remaining qualification keep the full row open. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
