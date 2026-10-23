@@ -276,5 +276,25 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','factor-owner',1,0
 			t.Fatal("control characters persisted in public factor label")
 		}
 		testOTPFactorVerificationSourcePostgres(t, ctx, conn, dsn, name, string(proofID), oldWriterFactor)
+		var populated string
+		if err := conn.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(f) ORDER BY factor_id)::text FROM identity_mfa.otp_factors f`).Scan(&populated); err != nil {
+			t.Fatal("populated OTP removal predecessor unavailable", err)
+		}
+		removed, err := (OTPFactorRemovalMigrationSource{Base: OTPFactorManagementMigrationSource{Base: proofs, Version: 17}, Version: 18}).Load(ctx)
+		if err != nil || len(removed) != len(history)+1 {
+			t.Fatal("OTP removal suffix did not append", err)
+		}
+		for i := range history {
+			if removed[i] != history[i] {
+				t.Fatal("OTP removal changed installed migration bytes")
+			}
+		}
+		if _, err := conn.Exec(ctx, removed[len(removed)-1].UpSQL()); err != nil {
+			t.Fatal("populated OTP removal suffix failed", err)
+		}
+		var after string
+		if err := conn.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(f) ORDER BY factor_id)::text FROM identity_mfa.otp_factors f`).Scan(&after); err != nil || after != populated {
+			t.Fatal("OTP removal migration changed populated factor/recipient metadata", err)
+		}
 	})
 }

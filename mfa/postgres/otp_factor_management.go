@@ -12,12 +12,16 @@ import (
 
 // NewOTPFactorUpdateService selects confirmed email-OTP factor rename with
 // original action-proof consumption and required session revocation. Enrollment
-// and step-up must share their exact native owner. Removal, disable and
-// replacement are not selected by this constructor. Install OTP management,
-// proof and session-effect histories before use. Owners are borrowed; no IO,
+// and step-up must share their exact native owner. Explicit email recovery adds
+// sole-active-factor removal; it requires a real selected recovery owner and
+// the OTP removal history. Disable/replacement remain unselected. Install OTP
+// management, proof and session-effect histories before use. Owners are borrowed; no IO,
 // credential comparison, journal or background lifetime is created here.
 func NewOTPFactorUpdateService(enrollment *OTPEnrollmentService, stepup *OTPActiveStepUpService, c FactorUpdateConfig) (*FactorUpdateService, error) {
-	if enrollment == nil || enrollment.engine == nil || enrollment.engine.state == nil || stepup == nil || stepup.state == nil || nilEnrollmentPrimary(c.Primary) || nilEnrollmentPrimary(c.Sessions) || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute || c.PrimaryMaximumAge <= 0 || c.PrimaryMaximumAge > 5*time.Minute || c.RemovalRecoveryPath != auth.RecoveryPathUnspecified || !nilEnrollmentPrimary(c.RemovalRecovery) || c.Replacement != nil {
+	if enrollment == nil || enrollment.engine == nil || enrollment.engine.state == nil || stepup == nil || stepup.state == nil || nilEnrollmentPrimary(c.Primary) || nilEnrollmentPrimary(c.Sessions) || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute || c.PrimaryMaximumAge <= 0 || c.PrimaryMaximumAge > 5*time.Minute || c.Replacement != nil {
+		return nil, invalidAuthority()
+	}
+	if c.RemovalRecoveryPath != auth.RecoveryPathUnspecified && c.RemovalRecoveryPath != auth.RecoveryPathEmail || c.RemovalRecoveryPath == auth.RecoveryPathUnspecified && !nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecoveryPath == auth.RecoveryPathEmail && (nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecovery.FactorRemovalRecoveryIdentity() == ([32]byte{})) {
 		return nil, invalidAuthority()
 	}
 	shared := enrollment.engine.state()

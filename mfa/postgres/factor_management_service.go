@@ -41,8 +41,9 @@ type FactorRemovalRecoverySource interface {
 // Sessions borrow native owners; they cannot open transactions or retain Work.
 // Default selection supports TOTP rename; explicit email recovery selection
 // adds removal of the sole active TOTP. Explicit Replacement adds a pending
-// same-profile successor. NewOTPFactorUpdateService selects rename only for
-// confirmed email OTP and rejects removal/replacement configuration.
+// same-profile successor. NewOTPFactorUpdateService selects confirmed email OTP
+// rename and, with explicit email recovery, sole-active-OTP removal; it rejects
+// replacement configuration.
 type FactorUpdateConfig struct {
 	Primary           FactorUpdatePrimarySource
 	Sessions          RecoveryRegenerationSessionEffects

@@ -320,8 +320,19 @@ is no longer usable; a fresh password/OTP signin retains the renamed factor.
 Use `NewOTPFactorManagementListReader` for its safe managed labels, optionally
 including an independently selected TOTP management owner.
 
+For sole-active email-OTP removal, explicitly select
+`FactorUpdateConfig.RemovalRecoveryPath = authentication.RecoveryPathEmail` and
+borrow `password/postgres.NewFactorRemovalRecoverySource` from a fully selected
+reset request/completion owner. Append `OTPFactorRemovalMigrationSource` after
+the installed OTP management history. `FactorUpdate(Remove)` takes the original
+fresh action proof and optimistic version with an empty name. It fences current
+usable email/password recovery, erases all three recipient references, retires
+the factor's recovery set, advances factor authority and revokes sessions in
+the same commit. Missing recovery or another active factor denies without
+mutation. The caller must sign in again; recovery never creates a session.
+
 Retries and recovery disclose historical outcome, not another proof or fresh
-factor projection. Unsupported SMS, removal, disable, replacement and HTTP
+factor projection. Unsupported SMS, disable, replacement and HTTP
 variants remain separate; no TOTP fallback or new transaction engine is selected.
 
 ## Native disable

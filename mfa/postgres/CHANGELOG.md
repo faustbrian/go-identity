@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Explicitly select sole-active email-OTP removal with a real emailed-password-
+  reset recovery owner. Erase recipient references, retire recovery sets, consume
+  the original action proof and revoke sessions atomically. Install the additive
+  `OTPFactorRemovalMigrationSource` after existing OTP management history; old
+  rename effects retain their original meaning and recovery stays metadata-only.
+
 - Independently select authenticated email-OTP action-proof issuance and factor
   rename. Consume original signed proof atomically with optimistic metadata,
   factor-authority advancement, required session revocation and audit/lifecycle

@@ -31,6 +31,20 @@ func TestOTPFactorVerificationHistoryIsAdditiveAndExplicit(t *testing.T) {
 			t.Fatal("OTP management rewrote existing proof history")
 		}
 	}
+	removed, err := (OTPFactorRemovalMigrationSource{Base: OTPFactorManagementMigrationSource{Base: source, Version: 3}, Version: 4}).Load(t.Context())
+	if err != nil || len(removed) != len(managed)+1 {
+		t.Fatal("OTP removal history did not append its owned step", err)
+	}
+	for i := range managed {
+		if managed[i] != removed[i] {
+			t.Fatal("OTP removal rewrote existing management/proof history")
+		}
+	}
+	for _, bad := range []OTPFactorRemovalMigrationSource{{}, {Base: source, Version: 2}} {
+		if _, err := bad.Load(t.Context()); err == nil {
+			t.Fatal("missing/conflicting OTP removal history accepted")
+		}
+	}
 	for _, bad := range []OTPFactorVerificationMigrationSource{{}, {Base: base, Version: 1}} {
 		if _, err := bad.Load(t.Context()); err == nil {
 			t.Fatal("missing/conflicting OTP history accepted")
@@ -40,6 +54,9 @@ func TestOTPFactorVerificationHistoryIsAdditiveAndExplicit(t *testing.T) {
 	cancel()
 	if _, err := source.Load(ctx); err == nil {
 		t.Fatal("OTP history ignored cancellation")
+	}
+	if _, err := (OTPFactorRemovalMigrationSource{Base: source, Version: 4}).Load(ctx); err == nil {
+		t.Fatal("OTP removal history ignored cancellation")
 	}
 }
 

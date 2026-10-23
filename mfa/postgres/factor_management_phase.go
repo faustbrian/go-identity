@@ -649,6 +649,9 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	statement := `UPDATE ` + p.state.factorTable() + ` SET label=$5,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
 	if r.Action == mfa.Remove {
 		statement = `UPDATE identity_mfa.totp_factors SET label=$5,state=3,encrypted_secret=NULL,last_step=NULL,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
+		if p.state.otp != nil {
+			statement = `UPDATE identity_mfa.otp_factors SET label=$5,state=3,identifier_id=NULL,identifier_version=NULL,verification_version=NULL,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
+		}
 	}
 	n, err := w.Exec(ctx, statement, string(b.TenantID), string(b.UserID), string(r.FactorID), version, r.Name)
 	if err != nil {
@@ -680,7 +683,7 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	}
 	statement = `UPDATE identity_mfa.factor_authorities SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors BETWEEN 1 AND 64`
 	if r.Action == mfa.Remove {
-		statement = `UPDATE identity_mfa.factor_authorities SET version=version+1,active_factors=0 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors=1 AND NOT EXISTS(SELECT 1 FROM identity_mfa.totp_factors t WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.state=2)`
+		statement = `UPDATE identity_mfa.factor_authorities SET version=version+1,active_factors=0 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors=1 AND NOT EXISTS(SELECT 1 FROM ` + p.state.factorTable() + ` t WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.state=2)`
 	}
 	n, err = w.Exec(ctx, statement, string(b.TenantID), string(b.UserID), strconv.FormatUint(p.input.Record.FactorAuthorityVersion, 10))
 	if err != nil {
@@ -704,7 +707,7 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	}
 	if r.Action == mfa.Remove && p.disable == nil {
 		recovery := p.state.config.RemovalRecovery.FactorRemovalRecoveryIdentity()
-		n, err = w.Exec(ctx, `UPDATE identity_mfa.factor_update_effects SET action=2,recovery_identity=$4 WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND action=1 AND recovery_identity IS NULL`, string(b.TenantID), string(b.UserID), id, recovery[:])
+		n, err = w.Exec(ctx, `UPDATE `+p.state.effectsTable()+` SET action=2,recovery_identity=$4 WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND action=1 AND recovery_identity IS NULL`, string(b.TenantID), string(b.UserID), id, recovery[:])
 		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
@@ -827,7 +830,7 @@ func (p *factorUpdatePhase) RecoverParticipant(ctx context.Context, w kernel.Rec
 	}
 	if removed {
 		rows.Close()
-		query := `SELECT recovery_identity FROM identity_mfa.factor_update_effects WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND action=2`
+		query := `SELECT recovery_identity FROM ` + p.state.effectsTable() + ` WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND action=2`
 		if p.operation() == disableOperation() {
 			query += ` AND purpose='identity.mfa.disable' AND disable_target IN(1,2)`
 		}
@@ -856,7 +859,11 @@ func (p *factorUpdatePhase) checkRemoval(ctx context.Context, w kernel.Work) err
 	if err := p.state.config.RemovalRecovery.CheckFactorRemovalRecovery(ctx, w, p, p.command); err != nil {
 		return err
 	}
-	rows, err := w.Query(ctx, `SELECT t.enrollment_version::text,t.encrypted_secret IS NULL AND t.last_step IS NULL,NOT EXISTS(SELECT 1 FROM identity_mfa.recovery_sets s WHERE s.tenant_id=t.tenant_id AND s.user_id=t.user_id AND s.factor_id=t.factor_id AND s.state<>3) FROM identity_mfa.totp_factors t WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.factor_id=$3 AND t.state=3`, string(b.TenantID), string(b.UserID), string(p.targetID()))
+	erasedFields := `t.encrypted_secret IS NULL AND t.last_step IS NULL`
+	if p.state.otp != nil {
+		erasedFields = `t.identifier_id IS NULL AND t.identifier_version IS NULL AND t.verification_version IS NULL`
+	}
+	rows, err := w.Query(ctx, `SELECT t.enrollment_version::text,`+erasedFields+`,NOT EXISTS(SELECT 1 FROM identity_mfa.recovery_sets s WHERE s.tenant_id=t.tenant_id AND s.user_id=t.user_id AND s.factor_id=t.factor_id AND s.state<>3) FROM `+p.state.factorTable()+` t WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.factor_id=$3 AND t.state=3`, string(b.TenantID), string(b.UserID), string(p.targetID()))
 	if err != nil {
 		return err
 	}
