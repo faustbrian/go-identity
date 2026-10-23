@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
@@ -47,9 +48,10 @@ type MFAEnrollmentIssuerConfig struct {
 // goroutine, transaction or command authority and cannot authenticate an MFA
 // factor. Inputs and dependencies must remain immutable during calls.
 type MFAEnrollmentIssuer struct {
-	store         *Contributor
-	configuration [32]byte
-	active        bool
+	store          *Contributor
+	configuration  [32]byte
+	active         bool
+	activePurposes []auth.Purpose
 }
 
 var _ mfapg.OTPEnrollmentIssuanceOwner = (*MFAEnrollmentIssuer)(nil)
@@ -314,6 +316,23 @@ func (s *MFAEnrollmentIssuer) original(ctx context.Context, root identity.Comman
 	profile := "identity-otp-mfa-enrollment-send-v1"
 	if s.active {
 		profile = "identity-otp-mfa-active-send-v1"
+		spec, ok := root.Feature()
+		if !ok {
+			return sendRequestRecord{}, envelope.Context{}, ErrInvalidCommand
+		}
+		selected := s.activePurposes
+		if len(selected) == 0 {
+			selected = []auth.Purpose{"identity.mfa.factor-update"}
+		}
+		matched := false
+		for _, field := range spec.Fields {
+			if field.Name == "factor.action" && field.Value.Kind == identity.FeatureText {
+				matched = slices.Contains(selected, auth.Purpose(field.Value.Text))
+			}
+		}
+		if !matched {
+			return sendRequestRecord{}, envelope.Context{}, ErrInvalidCommand
+		}
 	}
 	return originalMFASend(ctx, s.store, root, input, generation, s.sendOperation(), profile, s.store.send.configuration)
 }
@@ -352,7 +371,7 @@ func originalMFASend(ctx context.Context, store *Contributor, root identity.Comm
 		}
 	}
 	if operation == mfaActiveSendOperation() {
-		if parent != "" || action != "identity.mfa.factor-update" {
+		if parent != "" || action != "identity.mfa.factor-update" && action != "identity.mfa.disable" {
 			return bad(ErrInvalidCommand)
 		}
 	} else {

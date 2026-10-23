@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit closed-purpose selection for authenticated MFA OTP challenge
+  generation, including disable. Default issuance remains factor-update-only;
+  selected action identity and original challenge custody survive retry without
+  renewed evidence. MFA retains authentication and protected-mutation ownership.
+
 - Select authenticated email-OTP step-up independently from enrollment/login,
   using existing generation, delivery and consuming-attempt owners. Preserve
   completed password/MFA provenance in versioned encrypted session custody;

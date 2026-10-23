@@ -2,6 +2,16 @@
 
 ## Authenticated MFA action issuance
 
+`NewMFAActiveIssuerForPurposes` explicitly selects one or both closed actions:
+`identity.mfa.factor-update` and `identity.mfa.disable`. Empty selection preserves
+the original factor-update-only issuer and composition identity. Duplicate or
+unsupported actions fail before IO. Selection contributes to immutable owner
+identity; an existing prepared MFA command cannot be restored under a different
+selection. The MFA owner must use matching explicit step-up configuration and
+enforce current session/CSRF, factor, recovery and protected effects. This OTP
+adapter only generates/restores the original challenge; it grants no disable
+permission, fallback, independent transaction or refreshed evidence lifetime.
+
 `NewMFAActiveIssuer` explicitly selects email-OTP `PurposeStepUp` issuance and
 consuming preparation for the native authenticated factor-update workflow.
 It borrows existing digest, delivery and coordinator participants, not a new

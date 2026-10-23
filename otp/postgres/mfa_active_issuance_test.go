@@ -13,12 +13,21 @@ import (
 )
 
 func TestMFAActiveIssuerRetainsDistinctActionBoundChallenge(t *testing.T) {
+	proveMFAActiveIssuerPurpose(t, "identity.mfa.factor-update")
+}
+
+func TestMFAActiveIssuerRetainsSelectedDisableChallenge(t *testing.T) {
+	proveMFAActiveIssuerPurpose(t, "identity.mfa.disable")
+}
+
+func proveMFAActiveIssuerPurpose(t *testing.T, purpose auth.Purpose) {
+	t.Helper()
 	codec, old, spec, bearer, authority := mfaEnrollmentIssuanceFixture(t)
 	s, _ := old.Bindings()
 	b, _ := s.Continuation.Bindings()
 	spec.Operation = identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-step-up-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	spec.Binding.SchemaID = spec.Operation.SchemaID
-	spec.Fields = []identity.FeatureField{{Name: "factor.action", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "identity.mfa.factor-update"}}}
+	spec.Fields = []identity.FeatureField{{Name: "factor.action", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(purpose)}}}
 	b.Scope.Purpose, b.Scope.AuthorizationBinding = otp.PurposeStepUp, [32]byte{}
 	continuation, err := otp.NewContinuation(b.Scope, b.Authorization, b.RememberPolicy)
 	if err != nil {
@@ -38,6 +47,9 @@ func TestMFAActiveIssuerRetainsDistinctActionBoundChallenge(t *testing.T) {
 	config := MFAActiveIssuerConfig{Store: native.ContributorConfig, Session: *native.Session, Delivery: owner,
 		Policy: policy, TemplateID: "otp-code", TemplateVersion: 1, ProviderVersion: 1, LocaleChain: []string{"en"}, Templates: preparedSendTemplates("{{.code}}")}
 	issuer, err := NewMFAActiveIssuer(config)
+	if purpose == "identity.mfa.disable" {
+		issuer, err = NewMFAActiveIssuerForPurposes(config, []auth.Purpose{purpose})
+	}
 	if err != nil {
 		t.Fatal("explicit step-up owner unavailable", err)
 	}
@@ -97,7 +109,11 @@ func TestMFAActiveIssuerRetainsDistinctActionBoundChallenge(t *testing.T) {
 		t.Fatal("MFA enrollment purpose selected active step-up owner")
 	}
 	bad := spec
-	bad.Fields = []identity.FeatureField{{Name: "factor.action", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "identity.mfa.disable"}}}
+	other := "identity.mfa.disable"
+	if purpose == "identity.mfa.disable" {
+		other = "identity.mfa.factor-update"
+	}
+	bad.Fields = []identity.FeatureField{{Name: "factor.action", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: other}}}
 	wrong, _ := identity.NewFeatureSessionCommand(bad, bearer)
 	if wire, err := issuer.GenerateStepUpSend(t.Context(), wrong, inputWire, 1); err == nil || len(wire) != 0 {
 		t.Fatal("active OTP code generated for an unselected action")

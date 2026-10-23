@@ -13,8 +13,8 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018075123-8130cedf7a5f
-	github.com/faustbrian/go-identity/mfa v0.0.0-20261023111815-6bc180019089
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023112246-cdca7c429bc0
+	github.com/faustbrian/go-identity/mfa v0.0.0-20261023130507-5fd8f73dd722
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023130952-8fbebd6d61f1
 	github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089
 	github.com/faustbrian/go-identity/phone v0.0.0-20261019135025-b1c611f961b7
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261023111815-6bc180019089

@@ -2,9 +2,13 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
@@ -37,6 +41,42 @@ func NewMFAActiveIssuer(c MFAActiveIssuerConfig) (*MFAActiveIssuer, error) {
 		return nil, err
 	}
 	return &MFAActiveIssuer{native: native}, nil
+}
+
+// NewMFAActiveIssuerForPurposes explicitly selects a closed set of factor-update
+// and/or disable actions. Empty preserves NewMFAActiveIssuer's original profile
+// and identity. This owns only challenge custody; MFA must authenticate the
+// selected action and enforce recovery and session effects in its protected Work.
+// Invalid/duplicate selections fail without IO. Input slices are copied.
+func NewMFAActiveIssuerForPurposes(c MFAActiveIssuerConfig, purposes []auth.Purpose) (*MFAActiveIssuer, error) {
+	if len(purposes) == 0 {
+		return NewMFAActiveIssuer(c)
+	}
+	if len(purposes) > 2 {
+		return nil, ErrInvalidConfiguration
+	}
+	purposes = slices.Clone(purposes)
+	slices.Sort(purposes)
+	for i, p := range purposes {
+		if p != "identity.mfa.factor-update" && p != "identity.mfa.disable" || i > 0 && p == purposes[i-1] {
+			return nil, ErrInvalidConfiguration
+		}
+	}
+	s, err := NewMFAActiveIssuer(c)
+	if err != nil {
+		return nil, err
+	}
+	frame, err := json.Marshal(struct {
+		Base     [32]byte
+		Purposes []auth.Purpose
+	}{s.native.configuration, purposes})
+	if err != nil {
+		return nil, ErrInvalidConfiguration
+	}
+	s.native.configuration = sha256.Sum256(frame)
+	clear(frame)
+	s.native.activePurposes = purposes
+	return s, nil
 }
 
 func (s *MFAEnrollmentIssuer) sendOperation() identity.FeatureOperation {
