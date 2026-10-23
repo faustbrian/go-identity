@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit explicitly selected passkey label updates under the original stored
+  session synchronizer, exact token header and Origin, without inventing a
+  renewable CSRF age or enabling deletion, signin or a route by default.
+
 - Apply the shared authentication IP and optional canonical-identifier budgets
   to passkey options. Passkey assertion verification can instead count its
   authenticated original identifier or anonymous browser-flow source, alongside

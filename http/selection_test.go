@@ -39,10 +39,10 @@ func TestCanonicalEmailStoredSynchronizerPolicy(t *testing.T) {
 	}
 }
 
-func TestCanonicalPasskeyEnrollmentUsesOriginalSessionSynchronizer(t *testing.T) {
+func TestCanonicalPasskeyEnrollmentAndUpdateUseOriginalSessionSynchronizer(t *testing.T) {
 	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	stored := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
-	for _, operation := range []string{"identity.passkey.register-options", "identity.passkey.register-verify"} {
+	for _, operation := range []string{"identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update"} {
 		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "passkey", OperationID: operation, Handler: handler, CSRF: stored, MaximumSerializedBytes: 16384}); err != nil {
 			t.Fatal("original passkey enrollment synchronizer rejected", operation, err)
 		}
@@ -58,7 +58,7 @@ func TestCanonicalPasskeyEnrollmentUsesOriginalSessionSynchronizer(t *testing.T)
 			}
 		}
 	}
-	for _, operation := range []string{"identity.passkey.signin-options", "identity.passkey.signin-verify"} {
+	for _, operation := range []string{"identity.passkey.signin-options", "identity.passkey.signin-verify", "identity.passkey.delete"} {
 		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "passkey", OperationID: operation, Handler: handler, CSRF: stored, MaximumSerializedBytes: 16384}); err == nil {
 			t.Fatal("authenticated enrollment exception leaked into signin", operation)
 		}
