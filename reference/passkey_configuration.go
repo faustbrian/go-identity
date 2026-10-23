@@ -37,7 +37,11 @@ type PasskeyConfiguration struct {
 	KeyedOptions *PasskeyKeyedOptionsConfiguration
 	// Management independently selects keyed self-label rename. It requires
 	// KeyedOptions for the same kernel request-key owner, not another journal.
-	Management                          *PasskeyManagementConfiguration
+	Management *PasskeyManagementConfiguration
+	// Deletion independently selects signed-proof self-removal backed by this
+	// graph's actual configured PasswordReset owner. It requires KeyedOptions;
+	// enabling label management is not a prerequisite.
+	Deletion                            *PasskeyDeletionConfiguration
 	Protocol                            webauthn.Config
 	RPNamespace                         string
 	OptionsPrimary, RegistrationPrimary passwordpg.ActionPrimaryConfig
@@ -60,6 +64,29 @@ type PasskeyConfiguration struct {
 // does not enable HTTP, deletion, passkey-first signup or MFA fallback.
 type PasskeyManagementConfiguration struct {
 	Primary passwordpg.ActionPrimaryConfig
+}
+
+// PasskeyDeletionConfiguration selects an exact identity.passkey.delete proof.
+// Primary CSRF keys must be absent for graph injection. Native cookie and bearer
+// profiles remain explicit; HTTP selection separately requires cookie transport.
+// The graph supplies its concrete PasswordReset recovery owner, not a callback
+// asserting recovery eligibility. No signup or browser capability is enabled.
+type PasskeyDeletionConfiguration struct {
+	Primary passwordpg.ActionPrimaryConfig
+}
+
+func (PasskeyDeletionConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("reference.PasskeyDeletionConfiguration(redacted)"))
+}
+
+// MarshalJSON prohibits implicit proof/deployment configuration export.
+func (PasskeyDeletionConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+
+// MarshalText prohibits implicit proof/deployment configuration export.
+func (PasskeyDeletionConfiguration) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
 }
 
 func (PasskeyManagementConfiguration) Format(s fmt.State, _ rune) {
@@ -137,6 +164,7 @@ type passkeyState struct {
 	signin      *native.SigninService
 	inventory   *native.InventoryService
 	management  *native.ManagementService
+	deletion    *native.DeletionService
 	reader      *session.SessionService
 	logout      *session.CookieSignOutService
 	revoke      *sessionpg.CookieRevokeOneExecutor
@@ -158,7 +186,7 @@ func composePasskeySessionAuthority(c StoreConfiguration, d ReferenceDependencie
 	return authority, nil
 }
 
-func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passwordVerificationState, evaluation risk.Evaluator, counters *risk.CounterCoordinator, authority *native.SessionAuthority) (*passkeyState, error) {
+func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passwordVerificationState, evaluation risk.Evaluator, counters *risk.CounterCoordinator, authority *native.SessionAuthority, reset *passwordpg.ResetService) (*passkeyState, error) {
 	if c.Passkey == nil {
 		return nil, nil
 	}
@@ -257,6 +285,33 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 			return nil, identity.InvalidInputError{Field: "reference_passkey_management"}
 		}
 	}
+	var deletion *native.DeletionService
+	if n.Deletion != nil {
+		primary := n.Deletion.Primary
+		if n.KeyedOptions == nil || reset == nil || c.PasswordReset == nil || primary.Action != "identity.passkey.delete" || len(primary.CSRFKeys) != 0 {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_deletion"}
+		}
+		if primary.Transport == session.CredentialCookie {
+			if len(c.PasswordVerification.CSRFKeys) == 0 {
+				return nil, identity.InvalidInputError{Field: "reference_passkey_deletion"}
+			}
+			primary.CSRFKeys = slices.Clone(c.PasswordVerification.CSRFKeys)
+		}
+		source, err := passwordpg.NewActionPrimarySource(proofs.native, primary)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_deletion"}
+		}
+		recovery, err := passwordpg.NewPasskeyRemovalRecoverySource(reset)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_deletion"}
+		}
+		// The recovery owner binds its password-action policy, not the unrelated
+		// session-signout policy used by the graph's common session executor.
+		deletion, err = native.NewDeletionService(d.PostgreSQL, native.DeletionConfig{ManagementConfig: native.ManagementConfig{TenantID: n.Protocol.TenantID, RPNamespace: n.RPNamespace, RPID: n.Protocol.RelyingParty.ID, ProofAudience: primary.Audience, Password: sessionpg.SessionServiceConfig{Repository: e.Repository, Profile: c.PasswordSignin.Native.Profile, Validation: validation}, Source: source, RequestKeys: requestKeys, RequestTokenKey: selected.tokenKey, RequestCSRFKey: selected.csrfKey, Coordinator: e.Coordinator, Authorization: e.Authorization, Risk: protected, PolicyID: c.PasswordReset.Native.PolicyID, PolicyVersion: e.PolicyVersion, MaximumDuration: n.Protocol.MaximumDuration}, Recovery: recovery})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_deletion"}
+		}
+	}
 	if len(c.Session.CSRFKeys) == 0 {
 		return nil, invalid
 	}
@@ -275,5 +330,5 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if _, err := (sessionpg.PasskeySigninMigrationSource{Schema: e.Repository.Schema, Version: 1, PreviousConstraint: n.SessionPredecessor}).Load(context.Background()); err != nil {
 		return nil, invalid
 	}
-	return &passkeyState{tenant: n.Protocol.TenantID, enrollment: enrollment, signin: signin, inventory: inventory, management: management, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
+	return &passkeyState{tenant: n.Protocol.TenantID, enrollment: enrollment, signin: signin, inventory: inventory, management: management, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
 }

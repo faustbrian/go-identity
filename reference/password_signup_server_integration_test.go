@@ -57,7 +57,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		return authorization.Decision{}, err
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 {
-		if c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.passkey.register-options" || c.Request.Action == "identity.passkey.update") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
+		if c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.passkey.register-options" || c.Request.Action == "identity.passkey.update" || c.Request.Action == "identity.passkey.delete") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		if c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && c.Request.Action == "identity.passkey.signin-options" {
@@ -65,7 +65,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		}
 		if c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 			switch c.Request.Action {
-			case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.register-verify.recover", "identity.passkey.signin-verify", "identity.passkey.list", "identity.passkey.update":
+			case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.register-verify.recover", "identity.passkey.signin-verify", "identity.passkey.list", "identity.passkey.update", "identity.passkey.delete":
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
 		}
@@ -279,6 +279,7 @@ type signupGraphExtensions struct {
 	passkeyKeyed         bool
 	passkeyHTTP          bool
 	passkeyManagement    bool
+	passkeyDeletion      bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -457,7 +458,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange || extensions.phonePasswordReset {
 		resetRiskVersion = 9
 	}
-	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.mfaOTPRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "" && !extensions.phoneChange, extensions.factorRemoval || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange, extensions.factorRemovalReset || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "")
+	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.mfaOTPRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "" && !extensions.phoneChange && !extensions.passkeyDeletion, extensions.factorRemoval || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange || extensions.passkeyDeletion, extensions.factorRemovalReset || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "")
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
@@ -506,7 +507,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Email.Addresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{MaximumDuration: time.Second}
 		c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true, AdministrativeTargets: true}
 	}
-	if extensions.factorRemoval || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange {
+	if extensions.factorRemoval || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange || extensions.passkeyDeletion {
 		c.PasswordReset = selectedReset
 		c.PasswordReset.Native.Coordinator.QueryPolicy = c.OTP.Signin.Coordinator.QueryPolicy
 		c.PasswordReset.Native.Coordinator.AdmissionPolicy = c.OTP.Signin.Coordinator.QueryPolicy
@@ -567,9 +568,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			c.Passkey.Management = &reference.PasskeyManagementConfiguration{Primary: passwordpg.ActionPrimaryConfig{Action: "identity.passkey.update", Audience: "reference-passkey", MaximumAge: time.Minute, Transport: session.CredentialCookie}}
 			c.PasswordVerification.Native.Targets = append(c.PasswordVerification.Native.Targets, passwordpg.ReauthenticationTarget{Purpose: "identity.password.verify", Action: "identity.passkey.update", Audience: "reference-passkey"})
 		}
+		if extensions.passkeyDeletion {
+			c.Passkey.Deletion = &reference.PasskeyDeletionConfiguration{Primary: passwordpg.ActionPrimaryConfig{Action: "identity.passkey.delete", Audience: "reference-passkey", MaximumAge: time.Minute, Transport: session.CredentialCookie}}
+			c.PasswordVerification.Native.Targets = append(c.PasswordVerification.Native.Targets, passwordpg.ReauthenticationTarget{Purpose: "identity.password.verify", Action: "identity.passkey.delete", Audience: "reference-passkey"})
+		}
 		if extensions.passkeyHTTP {
 			c.Passkey.Flow.FlowTTL = 5 * time.Minute
-			c.HTTPPasskey = &reference.HTTPPasskeyConfiguration{Registration: true, Signin: true, Inventory: true, Discoverable: extensions.passkeyDiscovery, Update: extensions.passkeyManagement}
+			c.HTTPPasskey = &reference.HTTPPasskeyConfiguration{Registration: true, Signin: true, Inventory: true, Discoverable: extensions.passkeyDiscovery, Update: extensions.passkeyManagement, Delete: extensions.passkeyDeletion}
 		}
 		c.Session.Passkey = extensions.passkeySessionHTTP
 		if extensions.passkeyDiscovery {
@@ -998,6 +1003,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		proveReferencePasskeyHTTPPrimarySelection(t, selected, deps)
 	}
+	if extensions.passkeyDeletion {
+		selected := c
+		if passkeyUpgrade != nil {
+			selected = *passkeyUpgrade
+		}
+		proveReferencePasskeyDeletionSelection(t, selected, deps)
+	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		var invalid identity.InvalidInputError
@@ -1112,7 +1124,10 @@ END $$`); err != nil {
 		if c.HTTPPasskey.Update {
 			wantOperations++
 		}
-		if seen["identity.passkey.update"] != c.HTTPPasskey.Update || seen["identity.passkey.delete"] {
+		if c.HTTPPasskey.Delete {
+			wantOperations++
+		}
+		if seen["identity.passkey.update"] != c.HTTPPasskey.Update || seen["identity.passkey.delete"] != c.HTTPPasskey.Delete {
 			t.Fatal("unselected passkey management advertised")
 		}
 	} else {

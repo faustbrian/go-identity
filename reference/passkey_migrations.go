@@ -146,12 +146,24 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 	if err := appendOwned("identity_passkey_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 40, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.register-verify"}); err != nil {
 		return nil, err
 	}
-	if p.management != nil {
+	// Deletion retains the published label-proof suffix even when its runtime
+	// owner is off. Otherwise an existing signed/consumed update row could lose
+	// its allowance when the deletion suffix replaces the shared constraint.
+	if p.management != nil || p.deletion != nil {
 		steps, err := (passwordpg.PasskeyManagementReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 41}).Load(ctx)
 		if err != nil {
 			return nil, err
 		}
 		if err := appendOwned("identity_passkey_management_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 41, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.update"}); err != nil {
+			return nil, err
+		}
+	}
+	if p.deletion != nil {
+		steps, err := (passwordpg.PasskeyDeletionReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 42}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := appendOwned("identity_passkey_deletion_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 42, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.delete"}); err != nil {
 			return nil, err
 		}
 	}

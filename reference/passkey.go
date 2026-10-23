@@ -117,6 +117,23 @@ func (f *PasskeyService) Update(ctx context.Context, r passkey.UpdateRequest) (p
 	return owner.Update(w, r)
 }
 
+// Delete delegates explicitly selected self-removal to the real signed-proof,
+// recovery and original-key owner under graph tenant/lifetime admission. The
+// original password session is retained for metadata-only retries; no credential
+// or replacement recovery projection is returned, including after ambiguity.
+func (f *PasskeyService) Delete(ctx context.Context, r passkey.DeleteRequest) (passkey.DeleteResult, error) {
+	w, done, err := f.enter(ctx, r.Primary.TenantID)
+	if err != nil {
+		return passkey.DeleteResult{}, err
+	}
+	defer done()
+	owner := f.state.features.passkey.deletion
+	if owner == nil {
+		return passkey.DeleteResult{}, identity.UnavailableError{}
+	}
+	return owner.Delete(w, r)
+}
+
 // RecoverEnrollment returns original outcome metadata, never a fresh challenge,
 // credential, signed proof or permission to rerun an ambiguous command.
 func (f *PasskeyService) RecoverEnrollment(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (identity.CommandResult, error) {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Independently compose native passkey deletion and opt-in cookie HTTP deletion
+  with genuine action-bound password proofs, the configured reset recovery owner
+  and original request-key custody. Atomic removal denies affected passkey
+  sessions while preserving password-session retries. Apply forward password
+  proof suffix42 after retained enrollment40/management41; label management is
+  not a runtime prerequisite and installed proof histories remain unchanged.
+
 - Select self-service passkey label rename with `Passkey.Management` and
   optionally `HTTPPasskey.Update`. Genuine signed update proofs and original
   session CSRF feed the existing keyed mutation owner; retries expose only

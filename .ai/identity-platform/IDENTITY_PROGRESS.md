@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 21:26 UTC
+## TL;DR — updated 2026-10-23 22:24 UTC
 
 - **Overall: approximately 25% complete, low confidence; 11/39 milestones closed.**
   This estimates delivered outcomes plus remaining scope/qualification, not file
@@ -23,9 +23,20 @@
   Required CI `40026477944` green. A clean consumer of the authenticated public
   Reference module passes all four management journeys under race (30.836s),
   with no replacements; all 346 public files match committed source.
-- **Current:** one bounded native deletion worker is checking actual upstream
-  proof/recovery/removal contracts. Primary owns missing upstream behavior and
-  later Reference/HTTP integration; no substitute authority or new engine.
+- **Current deletion:** genuine native proof/recovery -> atomic removal ->
+  affected-session denial -> original-password-session retry passes locally,
+  including PostgreSQL/race rollback, ambiguity and retained inventory/rename.
+  Native review is closed; `e175ffe` is main-pushed with required CI green. A
+  clean downloaded-public consumer passes the genuine journey under race
+  (6.076s). Reference native/HTTP fresh+upgrade removal, session denial and
+  password-session retry/read/logout now pass locally, including management-off
+  native removal. The 13-journey deletion/retained cohort passes PostgreSQL/race
+  (106.362s); independent review and Reference delivery remain pending.
+- **HTTP deletion leaf delivered:** reviewed `5bb695c` is main-pushed with
+  Required `40031504986` green. Race tests and bounded parser fuzz pass;
+  rate-denial counterfactual detects bypass. Public archive authenticates and
+  all 12 changed files match. This transport alone is not the usable native/
+  Reference deletion journey and does not close M16 or qualify another unit.
 - **Next/remaining:** signed-proof deletion and its session/recovery effects. Passkey-first
   signup, conditional signin, deletion, other roadmap families and full-unit/
   release qualification remain open. No user decision is needed. Full M16 stays open.

@@ -28,6 +28,9 @@ func TestPasskeyPortableOperationsRetainGraphLifetime(t *testing.T) {
 			if out, err := owner.KeyedRegistrationOptions(t.Context(), passkey.KeyedRegistrationOptionsRequest{}); err == nil || out.CommandID != "" {
 				t.Fatal("unadmitted keyed enrollment")
 			}
+			if out, err := owner.Delete(t.Context(), passkey.DeleteRequest{}); err == nil || out.CommandID != "" {
+				t.Fatal("unadmitted passkey removal")
+			}
 			if out, err := owner.KeyedAuthenticationOptions(t.Context(), passkey.KeyedSigninOptionsRequest{}); err == nil || out.CommandID != "" {
 				t.Fatal("unadmitted keyed identified signin")
 			}
@@ -163,11 +166,11 @@ func TestPasskeyHandleRetainsStartupTenantAndClose(t *testing.T) {
 }
 
 func TestPasskeyCompositionDoesNotInventOwnersOrDiscloseKeys(t *testing.T) {
-	if owner, err := composePasskey(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}, nil, nil); err != nil || owner != nil {
+	if owner, err := composePasskey(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}, nil, nil, nil); err != nil || owner != nil {
 		t.Fatal("unselected owner invented")
 	}
 	c := StoreConfiguration{Passkey: &PasskeyConfiguration{IdentifierKey: []byte("private-fixture-material")}}
-	if owner, err := composePasskey(c, ReferenceDependencies{}, nil, risk.Evaluator{}, nil, nil); err == nil || owner != nil {
+	if owner, err := composePasskey(c, ReferenceDependencies{}, nil, risk.Evaluator{}, nil, nil, nil); err == nil || owner != nil {
 		t.Fatal("missing actual owners accepted")
 	}
 	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
@@ -219,4 +222,47 @@ func TestPasskeyMigrationsPreserveInstalledPrefixes(t *testing.T) {
 			t.Fatal("selected passkey omitted actual owner history", expected)
 		}
 	}
+}
+
+func TestPasskeyDeletionMigrationsRetainAllInstalledProofHistories(t *testing.T) {
+	f := &featureState{migrations: featureMigrationConfig{otpSchema: "otp_store", sessionSchema: "preauth_store", authenticatedSchema: "session_store", passwordSigninSchema: "session_store", global: "deployment"}, passwordSignin: &passwordpg.SigninService{}, passwordVerification: &passwordVerificationState{native: &passwordpg.ReauthenticationService{}}, passkey: &passkeyState{schema: "session_store", predecessor: "session_issuances_purpose_v3", management: &native.ManagementService{}}}
+	s := StoreSet{state: &storeState{config: VelocityStoreConfiguration{Schema: "risk_store"}, features: f}}
+	before, err := s.migrationCatalog(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.passkey.deletion = &native.DeletionService{}
+	// Runtime label management may be off after its proof history was installed.
+	// Deletion must retain those bytes and old signed/consumed proof allowances.
+	f.passkey.management = nil
+	after, err := s.migrationCatalog(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, old := range before {
+		found := false
+		for _, current := range after {
+			if old.namespace != current.namespace {
+				continue
+			}
+			found = true
+			for i, step := range old.history {
+				if i >= len(current.history) || step != current.history[i] || old.owners[step.Version()] != current.owners[step.Version()] {
+					t.Fatal("deletion rewrote installed proof history", old.namespace)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("deletion discarded installed owner", old.namespace)
+		}
+	}
+	for _, history := range after {
+		if history.namespace == "identity_passkey_deletion_password" {
+			if len(history.history) != 1 || history.history[0].Version() != 42 {
+				t.Fatal("deletion proof suffix collided")
+			}
+			return
+		}
+	}
+	t.Fatal("selected deletion omitted owned password proof suffix")
 }

@@ -32,7 +32,7 @@ func TestPasskeyHTTPIsAbsentUntilSelected(t *testing.T) {
 	if out, err := composePasskeyHTTP(StoreConfiguration{}, nil, nil, nil, nil, nil, nil, nil, nil); err != nil || out != nil {
 		t.Fatal("unselected transport acquired dependencies")
 	}
-	for _, config := range []HTTPPasskeyConfiguration{{}, {Registration: true}, {Signin: true}, {Inventory: true}, {Discoverable: true}, {Update: true}} {
+	for _, config := range []HTTPPasskeyConfiguration{{}, {Registration: true}, {Signin: true}, {Inventory: true}, {Discoverable: true}, {Update: true}, {Delete: true}} {
 		if out, err := composePasskeyHTTP(StoreConfiguration{HTTPPasskey: &config}, nil, nil, nil, nil, nil, nil, nil, nil); err == nil || out != nil {
 			t.Fatal("missing native authority exposed transport")
 		}

@@ -524,7 +524,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	passkeyOwner, err := composePasskey(c, d, passwordVerificationOwner, evaluator, &counters, passkeyAuthority)
+	passkeyOwner, err := composePasskey(c, d, passwordVerificationOwner, evaluator, &counters, passkeyAuthority, resetOwner)
 	if err != nil {
 		return err
 	}

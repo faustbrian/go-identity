@@ -66,6 +66,14 @@ func TestReferencePostgresPasskeyHTTPManagement(t *testing.T) {
 	}
 }
 
+func TestReferencePostgresPasskeyHTTPDeletion(t *testing.T) {
+	for _, upgrade := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "populated-upgrade"}[upgrade], func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyHTTP: true, passkeyManagement: true, passkeyDeletion: true, passkeyUpgrade: upgrade}, true)
+		})
+	}
+}
+
 func proveReferencePasskeyHTTPPrimarySelection(t *testing.T, c reference.StoreConfiguration, deps reference.ReferenceDependencies) {
 	t.Helper()
 	if c.Passkey.Management != nil {
@@ -573,6 +581,48 @@ func proveReferencePasskeyHTTP(t *testing.T, ctx context.Context, features refer
 	credential, err := session.NewCredential(session.CredentialCookie, token)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if c.HTTPPasskey.Delete {
+		body := map[string]any{"proofID": proof("identity.passkey.delete"), "referenceID": page.Credentials[0].ReferenceID, "expectedVersion": page.Credentials[0].Version}
+		for _, denied := range []struct{ origin, csrf string }{{origin, "wrong"}, {"https://foreign.example", csrfWire}} {
+			out := request(http.MethodPost, "/v1/passkey/delete", body, "denied-http-delete", denied.csrf, cookies, denied.origin)
+			if out.code != 403 || len(out.cookies) != 0 {
+				t.Fatal("HTTP deletion bypassed origin/CSRF", out.code)
+			}
+		}
+		removed := request(http.MethodPost, "/v1/passkey/delete", body, "reference-http-delete", csrfWire, cookies, origin)
+		var out passkeyhttp.DeleteResponse
+		if removed.code != 200 || json.Unmarshal(removed.body, &out) != nil || out.CommitOutcome != "committed" || out.Replayed || len(removed.cookies) != 0 || removed.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("genuine HTTP deletion", removed.code, string(removed.body))
+		}
+		retried := request(http.MethodPost, "/v1/passkey/delete", body, "reference-http-delete", csrfWire, cookies, origin)
+		var replay passkeyhttp.DeleteResponse
+		if retried.code != 200 || json.Unmarshal(retried.body, &replay) != nil || !replay.Replayed || replay.CommandID != out.CommandID || len(retried.cookies) != 0 {
+			t.Fatal("HTTP original deletion retry", retried.code)
+		}
+		body["expectedVersion"] = page.Credentials[0].Version + 1
+		if conflict := request(http.MethodPost, "/v1/passkey/delete", body, "reference-http-delete", csrfWire, cookies, origin); conflict.code != 409 {
+			t.Fatal("same deletion key accepted changed version", conflict.code)
+		}
+		if got, e := common.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential}); e != nil || got.Authenticated {
+			t.Fatal("removed passkey retained common authority", e)
+		}
+		if denied := request(http.MethodGet, "/v1/passkey/list", nil, "", "", issued, ""); denied.code != 401 {
+			t.Fatal("removed passkey retained HTTP inventory", denied.code)
+		}
+		passwordToken, e := session.ParseToken(cookies[0].Value)
+		if e != nil {
+			t.Fatal(e)
+		}
+		passwordCredential, e := session.NewCredential(session.CredentialCookie, passwordToken)
+		if e != nil {
+			t.Fatal(e)
+		}
+		proveReferencePasskeySessionHTTP(t, ctx, handler, c, user, cookies[0].Value, csrfWire, func() bool {
+			got, e := common.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: passwordCredential})
+			return e == nil && got.Authenticated
+		})
+		return
 	}
 	proveReferencePasskeySessionHTTP(t, ctx, handler, c, user, issued[0].Value, signed.header.Get("X-CSRF-Token"), func() bool {
 		out, err := common.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential})

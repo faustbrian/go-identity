@@ -46,8 +46,8 @@ PostgreSQL risk owner; it is not qualified for the four-target Valkey profile.
 
 ### Selected HTTP profile
 
-`StoreConfiguration.HTTPPasskey` independently selects `Registration`, `Signin`
-and `Inventory`. `Discoverable` additionally opts signin into identifier-free
+`StoreConfiguration.HTTPPasskey` independently selects `Registration`, `Signin`,
+`Inventory`, `Update` and `Delete`. `Discoverable` additionally opts signin into identifier-free
 input; the native authentication risk policy must also permit discovery. Nil
 exposes no passkey routes or metadata. This is backend transport, not a UI.
 
@@ -93,7 +93,7 @@ selected, configure its explicit inventory rate namespace, emergency bound and
 bounded degradation recorder; competing ownership is rejected. Mutation routes
 share auth and verification rate identities. All native risk, original expiry,
 current authority and atomic-consumption checks remain mandatory. No HTTP signup,
-conditional UI, deletion, MFA fallback or browser interoperability is claimed.
+conditional UI, MFA fallback or browser interoperability is claimed.
 
 ### Label management
 
@@ -127,6 +127,38 @@ readers and the existing shared HTTP secret-rate backend/namespace/key. Other
 passkey operation groups stay independently selected. A rename neither revokes
 otherwise valid sessions nor changes protocol keys, counters or authentication
 versions; the same passkey can perform a new genuine signin afterward.
+
+### Credential removal
+
+Select `Passkey.Deletion = &PasskeyDeletionConfiguration{Primary: ...}` with
+exact action `identity.passkey.delete`, proof audience, maximum age and native
+cookie or bearer transport. Register that action/audience in
+`PasswordVerification.Native.Targets`; leave primary CSRF keys absent for
+graph injection. `Passkey.KeyedOptions` and the graph's actual configured
+`PasswordReset` request/completion owner are required. Label management and
+HTTP reset routes are not prerequisites. Recovery policy/realm must match the
+selected password-session authority; another passkey is not recovery.
+
+Use `Passkeys().Delete` with a safe inventory reference, its metadata version,
+fresh signed delete-specific password proof, original session/CSRF and one
+typed idempotency key. Leave primary command/record IDs empty. Authorization
+must allow the exact self operation, request admission and original disclosure.
+The native owner rechecks current account, credential, factor and configured
+email/password recovery authority in the protected transaction; it consumes
+the proof, erases the protocol key, disables the identity reference and advances
+passkey authority with required audit/outbox effects atomically. Affected passkey
+sessions deny; the unrelated password session remains usable. Local authenticator
+storage is not erased. Reference lifecycle versions are independent of the
+inventory metadata version. Results, including original-key retries, contain
+durability metadata only, never replacement secrets or a credential projection.
+
+Set `HTTPPasskey.Delete` independently for `POST /v1/passkey/delete`. Native
+deletion must select cookie transport. Closed JSON contains `proofID`,
+`referenceID` and positive `expectedVersion`; one `Idempotency-Key` header owns
+retry custody. Send the original password-session cookie, `X-CSRF-Token` and
+exact trusted Origin. The existing shared keyed secret limiter applies before
+native deletion; no device ceremony, command/tenant/user override or private
+recovery engine is introduced. Disabled selection advertises no deletion route.
 
 `PasskeyConfiguration.Protocol` fixes tenant, RP, origins, challenge key and
 bounded duration before any browser input. `RPNamespace` is a deployment scope,
@@ -196,6 +228,9 @@ password action/session issuance allowances. It does not copy DDL or create a
 second migration engine. Preserve installed mapping1/signin2 unchanged; this
 native version appends metadata3 for inventory even when management is off.
 Selected management additionally appends password proof suffix41 after40.
+Selected deletion appends proof suffix42 and retains41 even when runtime label
+management is disabled. These forward allowances preserve existing signed and
+consumed proof records; never rewrite applied checksums to enable removal.
 Apply these forward histories before adopting the updated inventory reader;
 old binaries may continue authenticating but old inventory readers cannot
 project the current label version after a rename.
@@ -229,8 +264,7 @@ delivery and password signin precede fresh reauthentication and the passkey
 journey; none of those domain records or proofs are fabricated. Only HIBP/email
 external IO and raw none/ES256 authenticator responses are controlled seams.
 
-This is native passkey reference composition with opt-in common session HTTP
-read/logout, not passkey enrollment/signin HTTP transport. Existing `Sessions()`
+Native composition and passkey HTTP transport are separate selections. Existing `Sessions()`
 and HTTP session routes do not implicitly adopt the new method. The common
 session HTTP tests cover identified and identifier-free signin, fresh install
 and populated upgrade, wrong-CSRF/foreign-origin denial, original cookie
@@ -238,7 +272,16 @@ deletion and both native/HTTP post-logout rejection over real loopback TLS.
 The keyed-options journey additionally covers both modes on fresh and populated
 installations, matching metadata-only retries, authenticated original rate
 sources and genuine completion into that same usable session/read/logout path.
-Passkey enrollment/signin HTTP,
-signup, conditional signin, credential rename/delete, completed
-secondary MFA and organization profiles remain separate required work. This
+Native and HTTP management/removal journeys are also executable:
+
+```sh
+go test -race -tags=integration -count=1 \
+  -run '^TestReferencePostgresPasskey(HTTP)?(Management|Deletion)$' .
+```
+
+These exercise actual fresh and populated-upgrade registration/verification,
+enrollment/assertion, signed rename/delete proofs and original-key retry. Removal
+also proves passkey-session denial and retained password-session read/logout;
+native removal runs without label management too. Signup, conditional signin,
+completed secondary MFA and organization profiles remain required work. This
 profile is not complete M16, full release qualification, deployment or a UI.

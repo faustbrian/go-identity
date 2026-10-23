@@ -1,5 +1,108 @@
 # Identity Implementation — Current Milestone
 
+Reference deletion final review: /root/reference_passkey_deletion_final APPROVE,
+no findings, complete16path diff against5bb695c; independently rechecked patch
+a46f67796dcabe75b0648c6598aa08d5aa1bd0cb4a4a7761246fc8165a779d2f.
+Final taggedvet/modverify/changed-content secrets/diffcheck pass. Review does
+not certify future public/CI delivery or newly execute reset after deletion;
+configured recovery owner and unchanged password/email effects are proven.
+
+2026-10-23 22:24 UTC: Reference deletion native/HTTP fresh+populated and native
+without-label-management journeys now pass. Complete selected deletion/retained
+rename/HTTP signin cohort passes PostgreSQL/race106.362s (13 journeys); ordinary
+Reference1.195s/command2.984s pass. Real reset owner retained in fixture; native
+recovery matches its policy rather than unrelated signout policy. Keep original
+velocity policy3; changing it to9 broke baseline signup and was rejected.
+Explicit constructor tests reject missing reset/wrong delete action/HTTP bearer
+or missing native owner. No user decision. Final review/static checks pending;
+Reference source is local, not delivered. Full M16 and 67-unit scope remain open.
+
+2026-10-23 22:14 UTC: native deletion reviewed/main-pushed e175ffe1ffb510a87f3e07a996b3f8f56324443f.
+Required40032072137SUCCESS; complete13path final review
+/root/passkey_native_deletion_final APPROVE7cd239bf...1526bd, no findings.
+Actual new quota/retry PG/race4.791s; missing-counter-plan counterfactual
+fails0.824s. Prior unchanged ordinaryrace1.398s and PG/race159.894s retained;
+vet/moduleverify/diff/changed-content secrets pass. Authenticated publicnative
+v0.0.0-20261023221207-e175ffe1ffb5, exactOrigin.Hash, sumh1:3BKRwquqTFsS6qdSaqtqnnGgfYFlc8cJQxPq21ZKsgA=;
+all13 changed archive files match source. Separate clean external module,
+no replacements/GOWORK, compiles public owner and passes actual downloaded
+signed-proof/recovery->independent removal->passkey-session denial->live
+password-session original-key retry under PG/race6.076s; modulesverifyall.
+Consumer scratch removed; no fixture DB/audit roles remain. This unlocks
+primary Reference native+HTTP deletion composition, preserving real reset,
+proof/session/risk/key owners and installed histories. Full M16/67 remain open.
+Frozen Reference outcome: actual baseline registration/verification/password
+signin -> enrolled/asserted/renamed passkey -> genuine delete proof -> removal
+and old passkey-session denial -> metadata retry and password-session/recovery
+still usable. Prove native+HTTP fresh and populated-upgrade profiles, default-off,
+missing recovery/cookie-primary/proof/CSRF/version denial and original history.
+Append password deletion proof42 after retained enrollment40/management41;
+management runtime is optional but all installed proof history stays intact.
+Focused unit/PG-race/retained rename/public consumer checks and one final review;
+no signup/conditional/profile expansion until this consumer outcome closes.
+
+2026-10-23 22:07 UTC: optional HTTP deletion leaf reviewed and main-pushed
+5bb695cf2da05d2974872c46ab59cf6cc43e633e; Required40031504986SUCCESS.
+Complete12path final review /root/passkey_delete_http_leaf_review APPROVE
+1eb92702...b4f9f43, no findings. Actual rate-gate removal counterfactual fails
+all denial/outage/closed cases0.246s; actual final fullrace5.317s, vet and secret/
+diff checks pass; unchanged bounded parserfuzz5.353s/96155execs and moduleverify
+retained. Leaf exposes original durability only and preserves independent
+reference/metadata versions plus imported canonical refs. Native worker final
+ordinaryrace1.398s and real PG/race deletion+retained inventory/rename159.894s
+pass; complete13path independent review ongoing. No Reference deletion or full
+M16/unit qualification is claimed. Primary next integrates delivered native
+and HTTP owners into fresh/upgrade real Reference journeys.
+Public leafv0.0.0-20261023220657-5bb695cf2da0 authenticates exactOrigin.Hash;
+sumh1:0SfeChDQoMC3Q2TlSzZ5JTW5MAkvFt/fQRk49pum8YQ= and all12 changed archive
+files match source. Native review narrowed a specific risk-denial coverage gap;
+no native delivery/full M16 claim until that finite finding closes.
+
+2026-10-23 21:59 UTC: shared HTTP deletion admission delivered5ea9c7d4e69c,
+Required40030499977SUCCESS. Actual constructor CSRF RED0.252s and original-key
+rate RED0.247s; final full HTTP ordinary2.475s, vet/modverify/diffcheck0.
+Independent complete5path /root/passkey_delete_http_policy_review APPROVE
+2f630257...b12e96. PublicHTTPv0.0.0-20261023215809-5ea9c7d4e69c authenticates
+with exact Origin.Hash and sumh1:x7gqsQs8NWwSqeHb0D+rxI3FhuFxK/7J2kLAzTLpk3k=.
+Leaf pin adopts this actual shared owner; native deletion worker retains heavy
+slot. First genuine native path committed exact independent owners and denied
+the passkey session, then exposed erased-key inventory lookup; owning native
+filter correction is part of the same frozen consumer journey, not delivery yet.
+
+2026-10-23 21:58 UTC: deletion prerequisites delivered on main: kernel60943f4,
+protocolacf8ef4, rootcarriersac3373f and password/MFA58d491b; exact Required CI
+green for each. Public password/MFA v0.0.0-20261023214952-58d491b11060 have
+authenticated exact Origin.Hash. Separate public root/kernel/protocol consumer
+and actual downloaded protocol removal journey passed PostgreSQL/race2.295s;
+its exact DB, audit roles and scratch removed. Prior signed-proof4.214s and
+actual configured reset/recovery5.275s PG/race results retain their source.
+Native worker resumes against these public pins, exclusively holding heavy
+slot. Primary owns HTTP leaf http/passkey/**: exact delete-only POST with
+single header key, closed proof/reference/positive metadata-version body,
+real borrowed session+CSRF+original signed delete-proof, shared keyed rate.secret,
+one native Delete and durability-only response. No cookie clearing/issuance,
+credential projection, device ceremony, substitute recovery or proof authority.
+Focused ingress/proof/session/outcome/wire/default-off tests and bounded parser
+fuzz/race/static checks; genuine mutation stays the same native/Reference PG
+consumer journey. Leaf public contracts consume delivered rootac3373f; primary
+Reference adoption waits for the actual delivered native deletion owner.
+
+Deletion prerequisite scope (21:28 UTC): primary owns kernel exact active
+passkey-reference -> disabled successor under canonical remove lifecycle,
+password-owned signed delete-proof/one-use suffix and configured reset-backed
+last-recovery admission, plus exact known-empty MFA guard selection. Preserve
+installed SQL, exact passkey-version/authority transitions and original password
+session for retries; no user-wide credential epoch bump. Prove real Work/proof
+rollback/commit/replay, closed scope denials, recovery withdrawal and forward
+populated migrations with focused PG/race and affected ordinary/static checks.
+Separate worker owns only go-webauthn/postgres protocol removal participation
+at base84664c3: exact current protocol credential -> retained denied successor
+in parent Work, no independent transaction, credential ID/handle reuse or copied
+crypto. Tests cover shared-Work rollback, stale/scope denial, verification denial
+after removal and version-aware recovery. Native worker owns root/postgres
+orchestration; waits for these committed public contracts. Primary serializes
+all heavy runs; code/review may overlap. Full M16 remains open.
+
 2026-10-23 21:26 UTC: native+HTTP Reference rename consumer profile CLOSED.
 Main19a0ef9050c9039d3c9fab7cec71b8c079e051a9 remote-confirmed; exact Required
 40026477944 SUCCESS. Independent /root/reference_passkey_rename_final APPROVE,

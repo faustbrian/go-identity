@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -48,6 +49,70 @@ func TestReferencePostgresPasskeyManagement(t *testing.T) {
 			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyUpgrade: upgrade, passkeyKeyed: true, passkeyManagement: true, passkeySessionHTTP: true}, true)
 		})
 	}
+}
+
+func TestReferencePostgresPasskeyDeletion(t *testing.T) {
+	for _, upgrade := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "populated-upgrade"}[upgrade], func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyUpgrade: upgrade, passkeyKeyed: true, passkeyManagement: true, passkeyDeletion: true, passkeySessionHTTP: true}, true)
+		})
+	}
+	t.Run("without-label-management", func(t *testing.T) {
+		proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeyDeletion: true, passkeySessionHTTP: true}, true)
+	})
+}
+
+func proveReferencePasskeyDeletionSelection(t *testing.T, c reference.StoreConfiguration, deps reference.ReferenceDependencies) {
+	t.Helper()
+	deny := func(name string, selected reference.StoreConfiguration, field string) {
+		t.Helper()
+		graph, err := reference.ComposeStores(selected, deps)
+		if err == nil {
+			bounded, stop := context.WithTimeout(t.Context(), time.Second)
+			_ = graph.Close(bounded)
+			stop()
+			t.Fatal(name, "accepted incomplete deletion authority")
+		}
+		var input identity.InvalidInputError
+		if !errors.As(err, &input) || input.Field != field {
+			t.Fatal(name, "did not reach the selected dependency guard", err)
+		}
+	}
+	selected := c
+	selected.PasswordReset, selected.HTTPPasswordReset = nil, nil
+	deny("missing real reset owner", selected, "reference_passkey_deletion")
+	for _, action := range []string{"identity.passkey.update", "identity.password.change"} {
+		selected = c
+		native, deletion := *c.Passkey, *c.Passkey.Deletion
+		deletion.Primary.Action = action
+		native.Deletion = &deletion
+		selected.Passkey = &native
+		deny("wrong signed action", selected, "reference_passkey_deletion")
+	}
+	if c.HTTPPasskey == nil || !c.HTTPPasskey.Delete {
+		return
+	}
+	selected = c
+	native, deletion := *c.Passkey, *c.Passkey.Deletion
+	deletion.Primary.Transport = session.CredentialBearer
+	native.Deletion = &deletion
+	selected.Passkey, selected.HTTPPasskey = &native, nil
+	graph, err := reference.ComposeStores(selected, deps)
+	if err != nil {
+		t.Fatal("valid native bearer deletion was removed", err)
+	}
+	bounded, stop := context.WithTimeout(t.Context(), time.Second)
+	err = graph.Close(bounded)
+	stop()
+	if err != nil {
+		t.Fatal("native selection cleanup", err)
+	}
+	selected.HTTPPasskey = c.HTTPPasskey
+	deny("HTTP bearer deletion", selected, "reference_http_passkey")
+	native = *c.Passkey
+	native.Deletion = nil
+	selected.Passkey = &native
+	deny("HTTP without native deletion", selected, "reference_http_passkey")
 }
 
 func TestReferencePostgresPasskeyPopulatedUpgrade(t *testing.T) {
@@ -515,6 +580,53 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	}
 	if got, err := owner.Get(ctx, read); err != nil || !got.Authenticated {
 		t.Fatal("denied logout invalidated session", err)
+	}
+	if c.Passkey.Deletion != nil {
+		attempt, _ = identity.NewCommandID()
+		page, err := owner.List(ctx, native.InventoryRequest{Credential: browser, Caller: listCaller, AttemptID: attempt, Limit: 10})
+		if err != nil || len(page.Credentials) != 1 {
+			t.Fatal("genuine removal reference", err)
+		}
+		primary := registration("identity.passkey.delete").Primary
+		primary.CommandID, primary.RecordID = "", ""
+		key, _ := identity.NewIdempotencyKey([]byte("reference-delete-original"))
+		request := passkey.DeleteRequest{Primary: primary, ReferenceID: identity.CredentialID(page.Credentials[0].ReferenceID), ExpectedVersion: page.Credentials[0].Version, IdempotencyKey: key, Network: "127.0.0.1"}
+		wrong := request
+		wrong.Primary.Proof.SessionID = "foreign-session"
+		if out, e := owner.Delete(ctx, wrong); e == nil || out.CommandID != "" {
+			t.Fatal("foreign proof removed credential")
+		}
+		removed, e := owner.Delete(ctx, request)
+		if e != nil || removed.Outcome != identity.CommitOutcomeCommitted || removed.Replayed || removed.Receipt.Feature == nil || removed.Receipt.Feature.BeforeVersion != 1 || removed.Receipt.Feature.AfterVersion != 2 {
+			t.Fatal("Reference native deletion failed independent version transition", e)
+		}
+		replay, e := owner.Delete(ctx, request)
+		if e != nil || !replay.Replayed || replay.CommandID != removed.CommandID {
+			t.Fatal("Reference original deletion retry", e)
+		}
+		if got, e := owner.Get(ctx, read); e != nil || got.Authenticated {
+			t.Fatal("removed passkey retained native session", e)
+		}
+		if got, e := common.Get(ctx, read); e != nil || got.Authenticated {
+			t.Fatal("removed passkey retained common session", e)
+		}
+		passwordToken, e := session.ParseToken(cookies[0].Value)
+		if e != nil {
+			t.Fatal(e)
+		}
+		passwordCredential, e := session.NewCredential(session.CredentialCookie, passwordToken)
+		if e != nil {
+			t.Fatal(e)
+		}
+		passwordRead := session.GetRequest{TenantID: otpTenant, Credential: passwordCredential}
+		if got, e := common.Get(ctx, passwordRead); e != nil || !got.Authenticated {
+			t.Fatal("deletion revoked unrelated password session", e)
+		}
+		if sessionHandler == nil {
+			t.Fatal("selected deletion profile lacks common session HTTP proof")
+		}
+		proveReferencePasskeySessionHTTP(t, ctx, sessionHandler, c, user, cookies[0].Value, csrfWire, func() bool { got, e := common.Get(ctx, passwordRead); return e == nil && got.Authenticated })
+		return
 	}
 	csrfOut, err := issued.CSRF.Reveal()
 	if err != nil {
