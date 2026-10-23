@@ -5,7 +5,7 @@ cookie-only operations. The base HTTP module imports neither this package nor a
 PostgreSQL adapter. Omitting the feature exposes no passkey routes or metadata.
 
 Construct `NewFeature(FeatureConfig{Registration: registration, Signin: signin,
-Inventory: inventory})`, where each pointer is optional and at least one is
+Inventory: inventory, Update: update})`, where each pointer is optional and at least one is
 selected. Pass the returned contribution to `identityhttp.FeatureServices` and
 the existing `NewRouter`. `NewFeatureWithMiddleware` uses the same owner stages;
 standalone handler constructors are also available. Construction performs no
@@ -19,6 +19,7 @@ requests and outlive the handlers.
 | POST `/v1/passkey/signin-options` | `mode`, `flowID`, identified `identifier` | Required |
 | POST `/v1/passkey/signin-verify` | Same original mode/flow/identifier plus `commandID`, `ceremonyID`, `response` | Forbidden |
 | GET `/v1/passkey/list` | Optional `after`, `limit` (1..100, default100) | Forbidden |
+| POST `/v1/passkey/update` | `proofID`, `referenceID`, `expectedVersion`, `name` | Required |
 
 ## Composition and custody
 
@@ -51,6 +52,27 @@ projects only native reference ID/version/state/label/AAGUID/backup flags and
 timestamps, with a bounded keyset cursor. RP credential IDs, public keys, user
 handles, counters and proofs are absent. Native read-risk policy remains separate
 from shared HTTP safe admission.
+
+`UpdateConfig` independently selects display-label rename under a genuine
+password-authenticated session, its original synchronizer and a signed
+`identity.passkey.update` proof. Supply the native management owner's actual
+session/proof readers, shared `KeyedSecretRateLimiter`, retained CSRF keys,
+session audience, exact HTTPS Origin and trusted revision/clock. No device
+ceremony or browser-supplied command, user, tenant or RP is accepted. ReferenceID
+is the safe inventory reference, not raw WebAuthn credential bytes; the positive
+expected metadata version and exact non-whitespace/control-free UTF-8 name
+(at most128bytes) belong in the closed JSON body. The sole retry key comes from
+one `Idempotency-Key` header. Native owns signature, freshness, current authority,
+one-time proof use and the protected transaction. Install its forward metadata
+and password proof migrations before enabling management.
+
+Fresh acknowledged update returns original command metadata, `replayed:false`
+and one safe `credential` projection. Matching original-key retries return
+`replayed:true` and no `credential`, including after proof consumption/expiry;
+they still need the original current authorized session. Protocol keys, counters
+and authentication authority are not changed. Unknown/error outcomes disclose
+only validated original durability metadata, never replacement authentication.
+HTTP shared secret quotas do not replace native mutation-risk admission.
 
 ## Rates, responses and retries
 

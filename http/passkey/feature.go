@@ -27,7 +27,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 		}
 		csrf := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}
 		switch name {
-		case "register-options", "register-verify":
+		case "register-options", "register-verify", "update":
 			csrf = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
 		case "list":
 			csrf = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}
@@ -63,6 +63,12 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 	if c.Inventory != nil {
 		h, err := NewListHandlerWithMiddleware(*c.Inventory, middleware)
 		if err := add("list", h, err); err != nil {
+			return identityhttp.Feature{}, err
+		}
+	}
+	if c.Update != nil {
+		h, err := NewUpdateHandlerWithMiddleware(*c.Update, middleware)
+		if err := add("update", h, err); err != nil {
 			return identityhttp.Feature{}, err
 		}
 	}

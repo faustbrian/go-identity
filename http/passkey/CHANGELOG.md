@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add independently selected cookie-only credential-label updates with original
+  signed update proofs, session-bound CSRF and header-only idempotency. Native
+  mutation and shared secret-risk owners remain authoritative; historical
+  retries return original command metadata without another credential projection.
+
 - Add opt-in existing-account cookie-only passkey registration, identified and
   explicitly discoverable signin, and safe self-user inventory HTTP operations.
   Enrollment requires distinct genuine action proofs and original session CSRF;

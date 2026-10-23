@@ -8,6 +8,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
+	passkey "github.com/faustbrian/go-passkey"
 )
 
 // Body fields are locators or untrusted intent, never authentication. The native
@@ -17,6 +18,8 @@ type requestBody struct {
 	identifier, label                      string
 	discoverable                           bool
 	response                               json.RawMessage
+	referenceID, name                      string
+	expectedVersion                        uint64
 }
 
 func decodeBody(operation string, fields map[string]json.RawMessage) (requestBody, error) {
@@ -39,6 +42,23 @@ func decodeBody(operation string, fields map[string]json.RawMessage) (requestBod
 	allowed := map[string]bool{}
 	completion := operation == "register-verify" || operation == "signin-verify"
 	switch operation {
+	case "update":
+		for _, name := range []string{"proofID", "referenceID", "expectedVersion", "name"} {
+			allowed[name] = true
+		}
+		if !command("proofID", &out.proofID) || !text("referenceID", &out.referenceID) || !text("name", &out.name) {
+			return invalid()
+		}
+		if _, err := identity.ParseIdentifierID(out.referenceID); err != nil {
+			return invalid()
+		}
+		if _, err := passkey.NewDeviceLabel(out.name); err != nil {
+			return invalid()
+		}
+		raw := bytes.TrimSpace(fields["expectedVersion"])
+		if len(raw) == 0 || raw[0] < '1' || raw[0] > '9' || json.Unmarshal(raw, &out.expectedVersion) != nil || out.expectedVersion == 0 || out.expectedVersion == ^uint64(0) {
+			return invalid()
+		}
 	case "register-options", "register-verify":
 		allowed["proofID"] = true
 		if !command("proofID", &out.proofID) {

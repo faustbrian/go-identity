@@ -47,6 +47,37 @@ type InventoryService interface {
 	List(context.Context, passkey.InventoryRequest) (passkey.InventoryPage, error)
 }
 
+// ManagementService is the existing native keyed self-label mutation owner.
+// Its original signed proof, request-key admission, current authority and
+// protected transaction remain authoritative. Implementations must honor
+// bounded contexts and concurrent calls; HTTP supplies no replacement store.
+type ManagementService interface {
+	Update(context.Context, passkey.UpdateRequest) (passkey.UpdateResult, error)
+}
+
+// UpdateConfig independently selects cookie-authenticated label management.
+// Sessions and Proofs must be the native management owner's actual password
+// session and signed-proof readers. Audience is the session audience, not an
+// override of the native proof audience. Rate is the shared keyed rate.secret
+// owner. CSRF keys are copied, nonzero and version-distinct (at most16).
+// Dependencies and prompt clock are borrowed, concurrency-safe and bounded.
+// MaximumDuration is1ms..30s; no caller deadline or original validity is renewed.
+// No device ceremony, deletion, authentication issuance or fallback is selected.
+type UpdateConfig struct {
+	Network         identityhttp.NetworkConfig
+	Sessions        *session.SessionService
+	Proofs          auth.ReauthenticationSource
+	Service         ManagementService
+	Rate            *identityhttp.KeyedSecretRateLimiter
+	Origin          identityhttp.Origin
+	SessionCookie   session.CookiePolicy
+	CSRFKeys        []session.CSRFKey
+	PolicyRevision  authorization.Revision
+	Audience        string
+	Now             func() time.Time
+	MaximumDuration time.Duration
+}
+
 // SigninConfig explicitly selects cookie-only original-flow signin. Borrowed
 // Service and shared rates must outlive requests and support concurrent calls.
 // Origin/device/flow cookie must match native initiation. FlowCookie must be
@@ -118,13 +149,25 @@ type InventoryConfig struct {
 
 // FeatureConfig explicitly selects operation groups; nil exposes neither
 // routes nor metadata. Registration selects options+verify, Signin selects
-// options+verify and Inventory selects list. At least one group is required.
-// No signup, conditional UI, rename/delete or MFA fallback is selected.
+// options+verify, Inventory selects list and Update selects label rename.
+// At least one group is required. No signup, conditional UI, deletion or MFA
+// fallback is selected.
 type FeatureConfig struct {
 	Registration *RegistrationConfig
 	Signin       *SigninConfig
 	Inventory    *InventoryConfig
+	Update       *UpdateConfig
 }
+
+func (UpdateConfig) Format(f fmt.State, _ rune) {
+	_, _ = f.Write([]byte("passkeyhttp.UpdateConfig(redacted)"))
+}
+
+// MarshalJSON prohibits implicit runtime-owner and key export.
+func (UpdateConfig) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// MarshalText prohibits implicit runtime-owner and key export.
+func (UpdateConfig) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
 func (SigninConfig) Format(f fmt.State, _ rune) {
 	_, _ = f.Write([]byte("passkeyhttp.SigninConfig(redacted)"))
