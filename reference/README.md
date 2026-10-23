@@ -20,7 +20,11 @@ explicit; identifier-free mode additionally requires both HTTP and native risk
 opt-ins. Common session read/logout remains independently selected. The graph
 supplies actual native owners, signed device custody, shared rates and exact
 email comparison policy, not application-written handlers. Signup, conditional
-UI and credential management remain outside this selected HTTP profile.
+UI and credential deletion remain outside this selected HTTP profile.
+Independently select `Passkey.Management` for signed-proof label rename, and
+`HTTPPasskey.Update` for its cookie endpoint. Retain original retry custody;
+the graph appends forward metadata/proof histories without changing signin
+authority. See the linked passkey guide for the exact configuration and rollout.
 
 ## Native secondary-OTP enrollment
 

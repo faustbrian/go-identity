@@ -146,6 +146,15 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 	if err := appendOwned("identity_passkey_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 40, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.register-verify"}); err != nil {
 		return nil, err
 	}
+	if p.management != nil {
+		steps, err := (passwordpg.PasskeyManagementReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 41}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := appendOwned("identity_passkey_management_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 41, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.update"}); err != nil {
+			return nil, err
+		}
+	}
 	protocol, err := (webauthnpg.MigrationSource{}).Load(ctx)
 	if err != nil {
 		return nil, err
@@ -161,7 +170,14 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 	if err != nil {
 		return nil, err
 	}
-	if err := appendOwned("identity_passkey", "passkey/postgres", fixedMigrationSource(append(mapping, signin...)), migrationGuard{version: 1, schema: "identity_passkey"}, migrationGuard{version: 2, schema: "identity_passkey", tables: []string{"signin_contexts"}}); err != nil {
+	metadata, err := (native.MetadataVersionMigrationSource{Version: 3}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Mapping1 and signin2 retain their installed identities. Updated native
+	// inventory always reads metadata_version, even when mutation is disabled.
+	history := append(append(mapping, signin...), metadata...)
+	if err := appendOwned("identity_passkey", "passkey/postgres", fixedMigrationSource(history), migrationGuard{version: 1, schema: "identity_passkey"}, migrationGuard{version: 2, schema: "identity_passkey", tables: []string{"signin_contexts"}}, migrationGuard{version: 3, schema: "identity_passkey", columns: []string{"credentials.metadata_version"}}); err != nil {
 		return nil, err
 	}
 	if err := appendOwned("identity_passkey_session", "identity/session/postgres", sessionpg.PasskeySigninMigrationSource{Schema: p.schema, Version: 1, PreviousConstraint: p.predecessor}, migrationGuard{version: 1, schema: p.schema, constraints: []string{"session_issuances.session_issuances_purpose_passkey_v1"}}); err != nil {

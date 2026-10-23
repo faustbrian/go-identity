@@ -20,6 +20,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	passkeyhttp "github.com/faustbrian/go-identity/http/passkey"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
@@ -57,8 +58,51 @@ func TestReferencePostgresPasskeyHTTP(t *testing.T) {
 	}
 }
 
+func TestReferencePostgresPasskeyHTTPManagement(t *testing.T) {
+	for _, upgrade := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "populated-upgrade"}[upgrade], func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyHTTP: true, passkeyManagement: true, passkeyUpgrade: upgrade}, true)
+		})
+	}
+}
+
 func proveReferencePasskeyHTTPPrimarySelection(t *testing.T, c reference.StoreConfiguration, deps reference.ReferenceDependencies) {
 	t.Helper()
+	if c.Passkey.Management != nil {
+		selected := c
+		native := *c.Passkey
+		management := *native.Management
+		management.Primary.Transport = session.CredentialBearer
+		native.Management = &management
+		selected.Passkey = &native
+		selected.HTTPPasskey = nil
+		graph, err := reference.ComposeStores(selected, deps)
+		if err != nil {
+			t.Fatal("valid native management bearer profile removed", err)
+		}
+		bounded, stop := context.WithTimeout(t.Context(), time.Second)
+		closeErr := graph.Close(bounded)
+		stop()
+		if closeErr != nil {
+			t.Fatal(closeErr)
+		}
+		selected.HTTPPasskey = c.HTTPPasskey
+		if graph, err := reference.ComposeStores(selected, deps); err == nil {
+			bounded, stop := context.WithTimeout(t.Context(), time.Second)
+			_ = graph.Close(bounded)
+			stop()
+			t.Fatal("cookie HTTP update accepted bearer native management")
+		}
+		native = *c.Passkey
+		native.Management = nil
+		selected.Passkey = &native
+		if graph, err := reference.ComposeStores(selected, deps); err == nil {
+			bounded, stop := context.WithTimeout(t.Context(), time.Second)
+			_ = graph.Close(bounded)
+			stop()
+			t.Fatal("HTTP update invented native management")
+		}
+	}
 	for _, options := range []bool{true, false} {
 		selected := c
 		native := *c.Passkey
@@ -442,11 +486,81 @@ func proveReferencePasskeyHTTP(t *testing.T, ctx context.Context, features refer
 	inventory := request(http.MethodGet, "/v1/passkey/list", nil, "", "", issued, "")
 	var page struct {
 		Credentials []struct {
-			Label string `json:"label"`
+			Label       string `json:"label"`
+			ReferenceID string `json:"referenceID"`
+			Version     uint64 `json:"version"`
 		} `json:"credentials"`
 	}
 	if inventory.code != 200 || json.Unmarshal(inventory.body, &page) != nil || len(page.Credentials) != 1 || page.Credentials[0].Label != "HTTP key" || bytes.Contains(inventory.body, []byte(creation.PublicKey.User.ID)) || bytes.Contains(inventory.body, []byte(base64.RawURLEncoding.EncodeToString(id))) {
 		t.Fatal("safe HTTP inventory", inventory.code)
+	}
+	if c.HTTPPasskey.Update {
+		body := map[string]any{"proofID": proof("identity.passkey.update"), "referenceID": page.Credentials[0].ReferenceID, "expectedVersion": page.Credentials[0].Version, "name": "Renamed HTTP key"}
+		for _, denied := range []struct{ origin, csrf string }{{origin, "wrong"}, {"https://foreign.example", csrfWire}} {
+			out := request(http.MethodPost, "/v1/passkey/update", body, "denied-http-rename", denied.csrf, cookies, denied.origin)
+			if out.code != 403 || len(out.cookies) != 0 {
+				t.Fatal("HTTP rename bypassed origin/CSRF", out.code)
+			}
+		}
+		changed := request(http.MethodPost, "/v1/passkey/update", body, "reference-http-rename", csrfWire, cookies, origin)
+		var update passkeyhttp.UpdateResponse
+		if changed.code != 200 || json.Unmarshal(changed.body, &update) != nil || update.CommitOutcome != "committed" || update.Replayed || update.Credential == nil || update.Credential.Label != "Renamed HTTP key" || update.Credential.Version != page.Credentials[0].Version+1 || len(changed.cookies) != 0 || changed.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("genuine HTTP rename", changed.code, "bytes", len(changed.body))
+		}
+		retry := request(http.MethodPost, "/v1/passkey/update", body, "reference-http-rename", csrfWire, cookies, origin)
+		var replay passkeyhttp.UpdateResponse
+		if retry.code != 200 || json.Unmarshal(retry.body, &replay) != nil || !replay.Replayed || replay.Credential != nil || replay.CommandID != update.CommandID || len(retry.cookies) != 0 {
+			t.Fatal("HTTP rename retry lost original metadata", retry.code)
+		}
+		body["name"] = "Changed original input"
+		conflict := request(http.MethodPost, "/v1/passkey/update", body, "reference-http-rename", csrfWire, cookies, origin)
+		if conflict.code != 409 || len(conflict.cookies) != 0 {
+			t.Fatal("HTTP retry key accepted another label", conflict.code)
+		}
+		inventory = request(http.MethodGet, "/v1/passkey/list", nil, "", "", issued, "")
+		if inventory.code != 200 || json.Unmarshal(inventory.body, &page) != nil || len(page.Credentials) != 1 || page.Credentials[0].Label != "Renamed HTTP key" || page.Credentials[0].Version != update.Credential.Version {
+			t.Fatal("HTTP renamed inventory", inventory.code)
+		}
+		// A new real browser initiation and monotonic authenticator assertion,
+		// not an old session read, proves rename preserved future authentication.
+		nextFlow := request(http.MethodPost, "/v1/session/preauth-issue", map[string]any{"method": "passkey", "remember": false}, "", "", nil, origin)
+		oldFlow := flowOut.FlowID
+		if nextFlow.code != 200 || json.Unmarshal(nextFlow.body, &flowOut) != nil || !flowOut.Issued || flowOut.FlowID == oldFlow {
+			t.Fatal("post-rename new HTTP flow", nextFlow.code)
+		}
+		flowCookies = nil
+		for _, cookie := range nextFlow.cookies {
+			if cookie.Name == "__Host-identity_flow" {
+				flowCookies = append(flowCookies, cookie)
+			}
+		}
+		if len(flowCookies) != 1 {
+			t.Fatal("post-rename original flow cookie absent")
+		}
+		body = map[string]any{"mode": "identified", "flowID": flowOut.FlowID, "identifier": "registered@example.invalid"}
+		if discoverable {
+			body["mode"] = "discoverable"
+			delete(body, "identifier")
+		}
+		nextOptions := options("/v1/passkey/signin-options", body, "reference-http-after-rename", flowCookies, "")
+		if json.Unmarshal(nextOptions.Options, &assertion) != nil || assertion.PublicKey.Challenge == "" {
+			t.Fatal("post-rename assertion options absent")
+		}
+		nextCommand, _ := identity.NewCommandID()
+		body["commandID"], body["ceremonyID"], body["response"] = nextCommand, nextOptions.CommandID, json.RawMessage(referencePasskeyAssertion(t, key, id, userHandle, assertion.PublicKey.Challenge, 2))
+		signed = request(http.MethodPost, "/v1/passkey/signin-verify", body, "", "", flowCookies, origin)
+		if signed.code != 200 || json.Unmarshal(signed.body, &signinOut) != nil || !signinOut.SignedIn || signinOut.CommitOutcome != "committed" {
+			t.Fatal("same passkey new HTTP signin after rename", signed.code)
+		}
+		issued = nil
+		for _, cookie := range signed.cookies {
+			if cookie.Name == sessionCookie.Name {
+				issued = append(issued, cookie)
+			}
+		}
+		if len(issued) != 1 || issued[0].Value == "" || signed.header.Get("X-CSRF-Token") == "" {
+			t.Fatal("post-rename HTTP session custody absent")
+		}
 	}
 	common, err := features.Sessions()
 	if err != nil {

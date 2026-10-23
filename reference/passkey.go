@@ -100,6 +100,23 @@ func (f *PasskeyService) Register(ctx context.Context, r native.RegistrationComp
 	return f.state.features.passkey.enrollment.Register(w, r)
 }
 
+// Update delegates explicitly selected self-label management to the native
+// signed-proof/request-key owner. Incoming command and record overrides deny;
+// historical retries return original metadata, not a fresh credential projection.
+// Tenant, initialization and lifetime/drain guards match other graph operations.
+func (f *PasskeyService) Update(ctx context.Context, r passkey.UpdateRequest) (passkey.UpdateResult, error) {
+	w, done, err := f.enter(ctx, r.Primary.TenantID)
+	if err != nil {
+		return passkey.UpdateResult{}, err
+	}
+	defer done()
+	owner := f.state.features.passkey.management
+	if owner == nil {
+		return passkey.UpdateResult{}, identity.UnavailableError{}
+	}
+	return owner.Update(w, r)
+}
+
 // RecoverEnrollment returns original outcome metadata, never a fresh challenge,
 // credential, signed proof or permission to rerun an ambiguous command.
 func (f *PasskeyService) RecoverEnrollment(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (identity.CommandResult, error) {

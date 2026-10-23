@@ -12,14 +12,16 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// HTTPPasskeyConfiguration independently selects cookie enrollment, signin and
-// safe self inventory. Nil selects no passkey routes or metadata. Native
+// HTTPPasskeyConfiguration independently selects cookie enrollment, signin,
+// safe self inventory and label update. Nil selects no passkey routes or metadata. Native
 // passkeys and session owners are required. Enrollment/signin also require the
 // signed original browser-device profile; enrollment requires both native
 // action primaries to select cookie transport. Signin/inventory require the explicit
 // Session.Passkey common admission. Options require Passkey.KeyedOptions. Discoverable
 // additionally requires Signin and native risk-policy opt-in; no fallback is
-// attempted. No signup, conditional UI, rename/delete or MFA is enabled.
+// attempted. Update requires explicit native Management with a cookie primary
+// and actual signed proof reader, but no browser-device ceremony. No signup,
+// conditional UI, deletion or MFA fallback is enabled.
 //
 // Inventory reuses an existing session/MFA/email safe limiter. Only when none
 // exists must its three explicit inventory rate settings select that owner;
@@ -28,6 +30,7 @@ import (
 // verification identities; no consumer store or alternative workflow is accepted.
 type HTTPPasskeyConfiguration struct {
 	Registration, Signin, Inventory, Discoverable bool
+	Update                                        bool
 	InventoryRateNamespace                        string
 	InventoryEmergencyMaximumKeys                 int
 	InventoryDegraded                             func(context.Context, identityhttp.SafeRateEvent) error
@@ -50,6 +53,7 @@ func (HTTPPasskeyConfiguration) MarshalText() ([]byte, error) {
 type passkeyHTTPState struct {
 	config       HTTPPasskeyConfiguration
 	verification *identityhttp.ChallengeVerificationRateLimiter
+	secret       *identityhttp.KeyedSecretRateLimiter
 	safe         *identityhttp.SafeRateLimiter
 	ownedSafe    bool
 	native       PasskeyConfiguration
@@ -66,6 +70,9 @@ func (h *passkeyHTTPState) close() {
 	if h.verification != nil {
 		h.verification.Close()
 	}
+	if h.secret != nil {
+		h.secret.Close()
+	}
 	if h.ownedSafe && h.safe != nil {
 		h.safe.Close()
 	}
@@ -77,7 +84,7 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_passkey"}
 	h := *c.HTTPPasskey
-	if !h.Registration && !h.Signin && !h.Inventory || h.Discoverable && !h.Signin || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil || c.PasswordSignin == nil {
+	if !h.Registration && !h.Signin && !h.Inventory && !h.Update || h.Discoverable && !h.Signin || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil || c.PasswordSignin == nil {
 		return nil, invalid
 	}
 	n := *c.Passkey
@@ -111,6 +118,15 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	if h.Registration && (proofs == nil || proofs.proofs == nil || len(c.Session.CSRFKeys) == 0) {
 		return nil, invalid
+	}
+	if h.Update {
+		if n.Management == nil || owner.management == nil || n.Management.Primary.Transport != session.CredentialCookie || proofs == nil || proofs.proofs == nil || len(c.Session.CSRFKeys) == 0 {
+			return nil, invalid
+		}
+		out.secret, err = identityhttp.NewKeyedSecretRateLimiter(identityhttp.KeyedSecretRateConfig{Shared: shared.backend, Namespace: c.HTTPRate.Namespace, Key: c.HTTPRate.IdentifierKey, Now: out.now, MaximumDuration: c.HTTPRate.MaximumDuration})
+		if err != nil {
+			return nil, invalid
+		}
 	}
 	if h.Signin {
 		out.address, err = email.NewAddressParser(c.PasswordSignin.Native.Address)

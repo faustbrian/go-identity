@@ -42,6 +42,14 @@ func TestReferencePostgresPasskeyNative(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true}, true)
 }
 
+func TestReferencePostgresPasskeyManagement(t *testing.T) {
+	for _, upgrade := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "populated-upgrade"}[upgrade], func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyUpgrade: upgrade, passkeyKeyed: true, passkeyManagement: true, passkeySessionHTTP: true}, true)
+		})
+	}
+}
+
 func TestReferencePostgresPasskeyPopulatedUpgrade(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyUpgrade: true}, true)
 }
@@ -415,6 +423,47 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	if err != nil {
 		t.Fatal("reference-native actual passkey signin", err)
 	}
+	if c.Passkey.Management != nil {
+		first, _ := session.NewCredential(session.CredentialCookie, issued.Session.Token)
+		listCaller := caller.Clone()
+		listCaller.Request.Action = "identity.passkey.list"
+		listCaller.Request.Resource = authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}
+		attempt, _ := identity.NewCommandID()
+		page, e := owner.List(ctx, native.InventoryRequest{Credential: first, Caller: listCaller, AttemptID: attempt, Limit: 10})
+		if e != nil || len(page.Credentials) != 1 {
+			t.Fatal("genuine safe rename reference", e)
+		}
+		primary := registration("identity.passkey.update").Primary
+		primary.CommandID, primary.RecordID = "", ""
+		requestKey, _ := identity.NewIdempotencyKey([]byte("reference-rename-original"))
+		update := passkey.UpdateRequest{Primary: primary, ReferenceID: identity.CredentialID(page.Credentials[0].ReferenceID), ExpectedVersion: page.Credentials[0].Version, Name: "Renamed reference key", IdempotencyKey: requestKey, Network: "127.0.0.1"}
+		wrong := update
+		wrong.Primary.Proof.SessionID = "foreign-session"
+		if out, e := owner.Update(ctx, wrong); e == nil || out.Credential != nil {
+			t.Fatal("wrong original session renamed")
+		}
+		out, e := owner.Update(ctx, update)
+		if e != nil || out.Outcome != identity.CommitOutcomeCommitted || out.Replayed || out.Credential == nil || out.Credential.Label != update.Name || out.Credential.Version != update.ExpectedVersion+1 {
+			t.Fatal("real Reference rename", e)
+		}
+		replay, e := owner.Update(ctx, update)
+		if e != nil || !replay.Replayed || replay.CommandID != out.CommandID || replay.Credential != nil {
+			t.Fatal("Reference rename redelivered metadata", e)
+		}
+		attempt, _ = identity.NewCommandID()
+		page, e = owner.List(ctx, native.InventoryRequest{Credential: first, Caller: listCaller, AttemptID: attempt, Limit: 10})
+		if e != nil || len(page.Credentials) != 1 || page.Credentials[0].Label != update.Name || page.Credentials[0].Version != update.ExpectedVersion+1 {
+			t.Fatal("renamed inventory not visible", e)
+		}
+		if got, e := owner.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: first}); e != nil || !got.Authenticated {
+			t.Fatal("metadata rename invalidated authentication", e)
+		}
+		firstLogout, _ := identity.NewCommandID()
+		if result, e := owner.SignOut(ctx, session.SignOutRequest{TenantID: otpTenant, CommandID: firstLogout, CorrelationID: "reference-rename-first-session", Transport: session.CredentialCookie, Credential: first}, issued.CSRF); e != nil || !result.SignedOut {
+			t.Fatal("first passkey session logout", e)
+		}
+		issued = referencePasskeySigninAfterRename(t, ctx, owner, c, key, id, credential.UserHandle)
+	}
 	wire, err := issued.Session.Token.Reveal()
 	if err != nil {
 		t.Fatal(err)
@@ -451,7 +500,11 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	listCaller.Request.Action = "identity.passkey.list"
 	listCaller.Request.Resource = authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}
 	attempt, _ := identity.NewCommandID()
-	if page, err := owner.List(ctx, native.InventoryRequest{Credential: browser, Caller: listCaller, AttemptID: attempt, Limit: 10}); err != nil || len(page.Credentials) != 1 || page.Credentials[0].Label != "Reference key" {
+	expectedLabel := "Reference key"
+	if c.Passkey.Management != nil {
+		expectedLabel = "Renamed reference key"
+	}
+	if page, err := owner.List(ctx, native.InventoryRequest{Credential: browser, Caller: listCaller, AttemptID: attempt, Limit: 10}); err != nil || len(page.Credentials) != 1 || page.Credentials[0].Label != expectedLabel {
 		t.Fatal("safe reference passkey inventory", err)
 	}
 	logoutID, _ := identity.NewCommandID()
@@ -484,6 +537,43 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	if got, err := owner.Get(ctx, read); err != nil || got.Authenticated {
 		t.Fatal("logged-out passkey authenticated", err)
 	}
+}
+
+func referencePasskeySigninAfterRename(t *testing.T, ctx context.Context, owner *reference.PasskeyService, c reference.StoreConfiguration, key *ecdsa.PrivateKey, id, handle []byte) native.SigninResult {
+	t.Helper()
+	remember, e := session.ResolveRememberPolicy(session.BrowserSession, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
+	if e != nil {
+		t.Fatal(e)
+	}
+	command, _ := identity.NewCommandID()
+	prepared, e := owner.PrepareFlow(ctx, session.PreAuthPrepareInput{CommandID: command, TenantID: otpTenant, CorrelationID: "reference-after-rename", Remember: remember})
+	if e != nil {
+		t.Fatal(e)
+	}
+	flow, e := owner.IssueFlow(ctx, prepared)
+	if e != nil {
+		t.Fatal(e)
+	}
+	binding, e := flow.Flow.Bindings()
+	if e != nil {
+		t.Fatal(e)
+	}
+	input := native.SigninRequest{FlowID: binding.Binding.ID, Cookie: flow.Token, Identifier: "registered@example.invalid", Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1", Device: "reference-passkey", CorrelationID: "reference-after-rename"}
+	requestKey, _ := identity.NewIdempotencyKey([]byte("reference-after-rename-options"))
+	options, e := owner.KeyedAuthenticationOptions(ctx, passkey.KeyedSigninOptionsRequest{SigninRequest: input, IdempotencyKey: requestKey, Caller: authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.Passkey.Flow.ActorID)}, Action: "identity.passkey.signin-options", Resource: authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(binding.Binding.ID)}}}})
+	if e != nil {
+		t.Fatal("post-rename actual options", e)
+	}
+	ceremony, ok := options.Options.Ceremony()
+	if !ok {
+		t.Fatal("post-rename challenge absent")
+	}
+	input.CommandID, _ = identity.NewCommandID()
+	result, e := owner.Signin(ctx, native.SigninCompletion{SigninRequest: input, CeremonyID: ceremony.ID, Response: referencePasskeyAssertion(t, key, id, handle, referencePasskeyChallenge(t, ctx, options.Options.TransferJSON), 2)})
+	if e != nil || result.Session.Token == (session.Token{}) {
+		t.Fatal("same passkey cannot authenticate after rename", e)
+	}
+	return result
 }
 
 func proveReferencePasskeySessionHTTP(t *testing.T, ctx context.Context, handler http.Handler, c reference.StoreConfiguration, user identity.UserID, token, csrf string, nativeRead func() bool) {
@@ -624,14 +714,21 @@ func referencePasskeyRegistration(t *testing.T, key *ecdsa.PrivateKey, id []byte
 	return wire
 }
 
-func referencePasskeyAssertion(t *testing.T, key *ecdsa.PrivateKey, id, handle []byte, challenge string) []byte {
+func referencePasskeyAssertion(t *testing.T, key *ecdsa.PrivateKey, id, handle []byte, challenge string, counters ...uint32) []byte {
 	t.Helper()
+	counter := uint32(1)
+	if len(counters) > 1 {
+		t.Fatal("ambiguous synthetic authenticator counter")
+	}
+	if len(counters) == 1 {
+		counter = counters[0]
+	}
 	client, err := json.Marshal(map[string]any{"type": "webauthn.get", "challenge": challenge, "origin": "https://identity.example", "crossOrigin": false})
 	if err != nil {
 		t.Fatal(err)
 	}
 	rp := sha256.Sum256([]byte("identity.example"))
-	data := binary.BigEndian.AppendUint32(append(append([]byte{}, rp[:]...), 0x05), 1)
+	data := binary.BigEndian.AppendUint32(append(append([]byte{}, rp[:]...), 0x05), counter)
 	hash := sha256.Sum256(client)
 	message := sha256.Sum256(append(bytes.Clone(data), hash[:]...))
 	signature, err := ecdsa.SignASN1(rand.Reader, key, message[:])

@@ -57,7 +57,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		return authorization.Decision{}, err
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 {
-		if c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Action == "identity.passkey.register-options" && c.Request.Resource.Type == "identity.request-admission" && c.Request.Resource.ID == "identity.passkey.register-options" {
+		if c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.passkey.register-options" || c.Request.Action == "identity.passkey.update") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		if c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && c.Request.Action == "identity.passkey.signin-options" {
@@ -65,7 +65,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		}
 		if c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 			switch c.Request.Action {
-			case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.register-verify.recover", "identity.passkey.signin-verify", "identity.passkey.list":
+			case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.register-verify.recover", "identity.passkey.signin-verify", "identity.passkey.list", "identity.passkey.update":
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
 		}
@@ -278,6 +278,7 @@ type signupGraphExtensions struct {
 	passkeySessionHTTP   bool
 	passkeyKeyed         bool
 	passkeyHTTP          bool
+	passkeyManagement    bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -562,9 +563,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if extensions.passkeyKeyed {
 			configureReferencePasskeyKeyed(t, &c)
 		}
+		if extensions.passkeyManagement {
+			c.Passkey.Management = &reference.PasskeyManagementConfiguration{Primary: passwordpg.ActionPrimaryConfig{Action: "identity.passkey.update", Audience: "reference-passkey", MaximumAge: time.Minute, Transport: session.CredentialCookie}}
+			c.PasswordVerification.Native.Targets = append(c.PasswordVerification.Native.Targets, passwordpg.ReauthenticationTarget{Purpose: "identity.password.verify", Action: "identity.passkey.update", Audience: "reference-passkey"})
+		}
 		if extensions.passkeyHTTP {
 			c.Passkey.Flow.FlowTTL = 5 * time.Minute
-			c.HTTPPasskey = &reference.HTTPPasskeyConfiguration{Registration: true, Signin: true, Inventory: true, Discoverable: extensions.passkeyDiscovery}
+			c.HTTPPasskey = &reference.HTTPPasskeyConfiguration{Registration: true, Signin: true, Inventory: true, Discoverable: extensions.passkeyDiscovery, Update: extensions.passkeyManagement}
 		}
 		c.Session.Passkey = extensions.passkeySessionHTTP
 		if extensions.passkeyDiscovery {
@@ -1104,7 +1109,10 @@ END $$`); err != nil {
 				t.Fatal("selected passkey operation missing", operation)
 			}
 		}
-		if seen["identity.passkey.update"] || seen["identity.passkey.delete"] {
+		if c.HTTPPasskey.Update {
+			wantOperations++
+		}
+		if seen["identity.passkey.update"] != c.HTTPPasskey.Update || seen["identity.passkey.delete"] {
 			t.Fatal("unselected passkey management advertised")
 		}
 	} else {

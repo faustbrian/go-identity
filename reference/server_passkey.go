@@ -41,6 +41,12 @@ func (s *Server) passkeyFeature(network identityhttp.NetworkConfig, f FeatureSet
 	if h.config.Inventory {
 		config.Inventory = &passkeyhttp.InventoryConfig{Network: network, Sessions: state.session.reader, Service: owner, Rate: h.safe, SessionCookie: n.Issuer.Cookie, PolicyRevision: revision, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
 	}
+	if h.config.Update {
+		if state.passwordVerification == nil {
+			return nil, identity.InvalidInputError{Field: "reference_http_passkey"}
+		}
+		config.Update = &passkeyhttp.UpdateConfig{Network: network, Sessions: state.session.reader, Proofs: state.passwordVerification.proofs, Service: owner, Rate: h.secret, Origin: identityhttp.Origin(n.Flow.Origin), SessionCookie: n.Issuer.Cookie, CSRFKeys: h.csrf, PolicyRevision: revision, Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
+	}
 	feature, err := passkeyhttp.NewFeature(config)
 	if err != nil {
 		return nil, err

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Select self-service passkey label rename with `Passkey.Management` and
+  optionally `HTTPPasskey.Update`. Genuine signed update proofs and original
+  session CSRF feed the existing keyed mutation owner; retries expose only
+  original command metadata. Authentication authority and protocol counters
+  remain unchanged. Apply the native metadata suffix and selected management
+  proof history before adopting the updated inventory reader.
+
 - Select existing-account cookie passkey enrollment, identified or explicitly
   identifier-free signin and safe inventory with `HTTPPasskey`. The reference
   server composes real shared browser, session, proof and rate owners; options

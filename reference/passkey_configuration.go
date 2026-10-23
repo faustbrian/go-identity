@@ -34,7 +34,10 @@ import (
 type PasskeyConfiguration struct {
 	// KeyedOptions explicitly selects native original-key admission for both
 	// enrollment and signin options. Nil preserves existing keyless behavior.
-	KeyedOptions                        *PasskeyKeyedOptionsConfiguration
+	KeyedOptions *PasskeyKeyedOptionsConfiguration
+	// Management independently selects keyed self-label rename. It requires
+	// KeyedOptions for the same kernel request-key owner, not another journal.
+	Management                          *PasskeyManagementConfiguration
 	Protocol                            webauthn.Config
 	RPNamespace                         string
 	OptionsPrimary, RegistrationPrimary passwordpg.ActionPrimaryConfig
@@ -48,6 +51,29 @@ type PasskeyConfiguration struct {
 	// Retain it for this deployment; incompatible later feature histories deny
 	// instead of rewriting an already installed passkey migration checksum.
 	SessionPredecessor string
+}
+
+// PasskeyManagementConfiguration selects an exact signed update proof for
+// password-session self management. Configure its target in PasswordVerification.
+// Primary.Action must be identity.passkey.update; CSRF keys must be absent for
+// graph injection. Cookie and bearer native profiles remain explicit. Selection
+// does not enable HTTP, deletion, passkey-first signup or MFA fallback.
+type PasskeyManagementConfiguration struct {
+	Primary passwordpg.ActionPrimaryConfig
+}
+
+func (PasskeyManagementConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("reference.PasskeyManagementConfiguration(redacted)"))
+}
+
+// MarshalJSON prohibits implicit deployment/proof-owner export.
+func (PasskeyManagementConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+
+// MarshalText prohibits implicit deployment/proof-owner export.
+func (PasskeyManagementConfiguration) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
 }
 
 // PasskeyKeyedOptionsConfiguration selects the existing kernel request-key
@@ -110,6 +136,7 @@ type passkeyState struct {
 	enrollment  *native.EnrollmentService
 	signin      *native.SigninService
 	inventory   *native.InventoryService
+	management  *native.ManagementService
 	reader      *session.SessionService
 	logout      *session.CookieSignOutService
 	revoke      *sessionpg.CookieRevokeOneExecutor
@@ -171,11 +198,13 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 		return nil, identity.InvalidInputError{Field: "reference_passkey_protected_risk"}
 	}
 	var keyed native.OptionsRequestConfig
+	var selected passkeyKeyedOptionsInput
+	var requestKeys kernel.RequestKeyConfig
 	if n.KeyedOptions != nil {
 		if e.Coordinator.QueryPolicy == nil || n.KeyedOptions.state == nil {
 			return nil, invalid
 		}
-		selected := n.KeyedOptions.state()
+		selected = n.KeyedOptions.state()
 		keys, err := kernel.NewRequestKeyConfig(selected.namespace, selected.lookupKey, *e.Coordinator.QueryPolicy)
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: "reference_passkey_keyed_options"}
@@ -184,6 +213,7 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: "reference_passkey_keyed_options"}
 		}
+		requestKeys = keys
 	}
 	enrollment, err := native.NewEnrollmentService(d.PostgreSQL, native.EnrollmentConfig{OptionsRequests: keyed, Protocol: n.Protocol, RPNamespace: n.RPNamespace, Coordinator: e.Coordinator, Authorization: e.Authorization, OptionsSource: options, RegistrationSource: registration, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
 	if err != nil {
@@ -206,6 +236,27 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if err != nil {
 		return nil, invalid
 	}
+	var management *native.ManagementService
+	if n.Management != nil {
+		primary := n.Management.Primary
+		if n.KeyedOptions == nil || primary.Action != "identity.passkey.update" || len(primary.CSRFKeys) != 0 {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_management"}
+		}
+		if primary.Transport == session.CredentialCookie {
+			if len(c.PasswordVerification.CSRFKeys) == 0 {
+				return nil, identity.InvalidInputError{Field: "reference_passkey_management"}
+			}
+			primary.CSRFKeys = slices.Clone(c.PasswordVerification.CSRFKeys)
+		}
+		source, err := passwordpg.NewActionPrimarySource(proofs.native, primary)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_management"}
+		}
+		management, err = native.NewManagementService(d.PostgreSQL, native.ManagementConfig{TenantID: n.Protocol.TenantID, RPNamespace: n.RPNamespace, RPID: n.Protocol.RelyingParty.ID, ProofAudience: primary.Audience, Password: sessionpg.SessionServiceConfig{Repository: e.Repository, Profile: c.PasswordSignin.Native.Profile, Validation: validation}, Source: source, RequestKeys: requestKeys, RequestTokenKey: selected.tokenKey, RequestCSRFKey: selected.csrfKey, Coordinator: e.Coordinator, Authorization: e.Authorization, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion, MaximumDuration: n.Protocol.MaximumDuration})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_management"}
+		}
+	}
 	if len(c.Session.CSRFKeys) == 0 {
 		return nil, invalid
 	}
@@ -224,5 +275,5 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if _, err := (sessionpg.PasskeySigninMigrationSource{Schema: e.Repository.Schema, Version: 1, PreviousConstraint: n.SessionPredecessor}).Load(context.Background()); err != nil {
 		return nil, invalid
 	}
-	return &passkeyState{tenant: n.Protocol.TenantID, enrollment: enrollment, signin: signin, inventory: inventory, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
+	return &passkeyState{tenant: n.Protocol.TenantID, enrollment: enrollment, signin: signin, inventory: inventory, management: management, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
 }

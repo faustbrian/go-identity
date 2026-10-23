@@ -93,7 +93,40 @@ selected, configure its explicit inventory rate namespace, emergency bound and
 bounded degradation recorder; competing ownership is rejected. Mutation routes
 share auth and verification rate identities. All native risk, original expiry,
 current authority and atomic-consumption checks remain mandatory. No HTTP signup,
-conditional UI, rename/delete, MFA fallback or browser interoperability is claimed.
+conditional UI, deletion, MFA fallback or browser interoperability is claimed.
+
+### Label management
+
+Select `Passkey.Management = &PasskeyManagementConfiguration{Primary: ...}`
+with exact action `identity.passkey.update`, the chosen proof audience and
+maximum age, and explicit native cookie or bearer transport. Register that
+action/audience in `PasswordVerification.Native.Targets`. Leave primary CSRF
+keys absent for graph injection. Management requires `Passkey.KeyedOptions`;
+it reuses that same configured kernel request-key owner and dedicated input
+correlation keys, not another workflow journal. Native management requires a
+genuine password-session proof with known-empty secondary factors; a passkey
+session or age flag is not a replacement.
+
+Obtain a safe credential reference and metadata version from `List`. Call
+`Passkeys().Update` with that reference, expected version, exact UTF-8 display
+name, original signed primary/session/CSRF and one typed idempotency key. Leave
+primary command/record IDs empty: the native key owner allocates the sole
+original command. Authorization must allow that exact self-user operation,
+its request admission and historical disclosure. Only a fresh acknowledged
+commit returns safe `Credential`; matching retries return original receipt
+metadata without that projection. Retain original input/key after an ambiguous
+outcome; never allocate a replacement operation to recover it.
+
+Set `HTTPPasskey.Update` independently for `POST /v1/passkey/update`. Native
+management must select cookie transport. Closed JSON contains `proofID`,
+`referenceID`, positive `expectedVersion` and `name`; the sole retry key is one
+`Idempotency-Key` header. Send the original password-session cookie, its
+`X-CSRF-Token` and exact trusted Origin. No device ceremony, browser command,
+tenant, user or RP override is accepted. The graph supplies real proof/session
+readers and the existing shared HTTP secret-rate backend/namespace/key. Other
+passkey operation groups stay independently selected. A rename neither revokes
+otherwise valid sessions nor changes protocol keys, counters or authentication
+versions; the same passkey can perform a new genuine signin afterward.
 
 `PasskeyConfiguration.Protocol` fixes tenant, RP, origins, challenge key and
 bounded duration before any browser input. `RPNamespace` is a deployment scope,
@@ -160,7 +193,13 @@ Use `ReferenceMigrationPlan` and `ReferenceMigrationApply`, selecting the existi
 baseline owners plus `passkey/postgres` and `webauthn/postgres`. The graph appends
 actual owner histories, including WebAuthn's native discovery suffix and exact
 password action/session issuance allowances. It does not copy DDL or create a
-second migration engine. `MigrationSource()` alone is not the complete selected
+second migration engine. Preserve installed mapping1/signin2 unchanged; this
+native version appends metadata3 for inventory even when management is off.
+Selected management additionally appends password proof suffix41 after40.
+Apply these forward histories before adopting the updated inventory reader;
+old binaries may continue authenticating but old inventory readers cannot
+project the current label version after a rename.
+`MigrationSource()` alone is not the complete selected
 independent-owner catalog. Apply before `FeatureSet.Initialize` or serving.
 
 `SessionPredecessor` pins the actual existing session-issuance CHECK, such as

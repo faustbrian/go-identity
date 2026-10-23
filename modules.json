@@ -8,7 +8,7 @@
       "module_path": "github.com/faustbrian/go-identity/http/passkey",
       "go_version": "1.27.0",
       "packages": [{"module_directory":"http/passkey","directory":".","name":"passkeyhttp","import_path":"github.com/faustbrian/go-identity/http/passkey","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
-      "purpose": "Opt-in native passkey enrollment, identified/discoverable signin and safe inventory HTTP; complete passkey and release qualification pending.",
+      "purpose": "Opt-in native passkey enrollment, identified/discoverable signin, safe inventory and keyed label update HTTP; complete passkey and release qualification pending.",
       "lifecycle": "experimental",
       "kind": "public library",
       "releasable": true,
