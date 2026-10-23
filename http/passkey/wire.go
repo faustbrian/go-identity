@@ -24,14 +24,16 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	options := strings.HasSuffix(name, "-options")
 	list := name == "list"
 	update := name == "update"
+	deletion := name == "delete"
+	management := update || deletion
 	parameters := []any{}
 	if !list {
 		parameters = append(parameters, map[string]any{"name": "Origin", "in": "header", "required": true, "schema": wireText(2048)})
 	}
-	if registration || update {
+	if registration || management {
 		parameters = append(parameters, map[string]any{"name": "X-CSRF-Token", "in": "header", "required": true, "schema": map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$", "writeOnly": true}})
 	}
-	if options || update {
+	if options || management {
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}$"}})
 	}
 	if list {
@@ -40,7 +42,12 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 			map[string]any{"name": "limit", "in": "query", "required": false, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 100}})
 	}
 	var request any
-	if update {
+	if deletion {
+		// A stored reference is an exact bounded kernel ID, not a newly
+		// allocated command ID. In particular, imported ULIDs remain unchanged.
+		reference := map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "pattern": `^[^\x00-\x20\x7f]+$`, "description": "Exact canonical kernel credential reference, at most128 UTF-8 bytes; never a raw authenticator credential."}
+		request = wireObject([]string{"proofID", "referenceID", "expectedVersion"}, map[string]any{"proofID": wireID(), "referenceID": reference, "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 1}})
+	} else if update {
 		request = wireObject([]string{"proofID", "referenceID", "expectedVersion", "name"}, map[string]any{"proofID": wireID(), "referenceID": wireID(), "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 1}, "name": map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "description": "Exact UTF-8 display label, at most128bytes, non-whitespace and no controls; not authenticator provenance."}})
 	} else if registration {
 		fields, required := map[string]any{"proofID": wireID()}, []string{"proofID"}
@@ -72,6 +79,8 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	}
 	var success any
 	switch {
+	case deletion:
+		success = wireObject([]string{"commandID", "commitOutcome", "replayed"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"type": "boolean"}})
 	case update:
 		fields := map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "credential": metadataWire()}
 		fresh := wireObject([]string{"commandID", "commitOutcome", "replayed", "credential"}, fields)
@@ -102,7 +111,7 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	if name == "signin-verify" {
 		responses["200"].(map[string]any)["headers"] = map[string]any{"Set-Cookie": map[string]any{"description": "Owned secure HttpOnly session cookie; never replayed.", "schema": wireText(4096)}, "X-CSRF-Token": map[string]any{"description": "Original session synchronizer, never replayed.", "schema": wireText(43)}}
 	}
-	operation := map[string]any{"operationId": "identity.passkey." + name, "description": "Explicit existing-account cookie-only passkey profile. Trusted HTTPS tenant/origin and original session/proof or original flow/mode custody are mandatory; ceremonies additionally require original device custody. Header-only keys apply to options and label update; ceremony completion forbids keys and is one-use. No body identity/remember/cookie/CSRF/command-allocation override, signup, conditional UI, deletion or fallback. Native authorization, risk and atomic consumption remain authoritative. Responses are synchronously bounded; hooks cannot acquire credential custody.", "parameters": parameters, "responses": responses}
+	operation := map[string]any{"operationId": "identity.passkey." + name, "description": "Explicit existing-account cookie-only passkey profile. Trusted HTTPS tenant/origin and original session/proof or original flow/mode custody are mandatory; ceremonies additionally require original device custody. Header-only keys apply to options, label update and deletion; ceremony completion forbids keys and is one-use. No body identity/remember/cookie/CSRF/command-allocation override, signup, conditional UI or fallback. Native authorization, recovery, risk and atomic consumption remain authoritative. Responses are synchronously bounded; hooks cannot acquire credential custody.", "parameters": parameters, "responses": responses}
 	if !list {
 		operation["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}}
 	}
@@ -115,6 +124,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		security[prefix+suffix] = []any{}
 	}
 	switch {
+	case deletion:
+		policy, _ := c.Delete.SessionCookie.DeletionAttributes()
+		cookie("Session", policy.Name)
 	case update:
 		policy, _ := c.Update.SessionCookie.DeletionAttributes()
 		cookie("Session", policy.Name)
@@ -128,7 +140,7 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		policy, _ := c.Signin.FlowCookie.DeletionAttributes()
 		cookie("Flow", policy.Name)
 	}
-	if !list && !update {
+	if !list && !management {
 		cookie("Device", "__Host-identity_device")
 	}
 	operation["security"] = []any{security}

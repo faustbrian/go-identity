@@ -8,11 +8,11 @@ require (
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
 	github.com/faustbrian/go-identity v0.0.0-20261021021214-46ae60703809
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
-	github.com/faustbrian/go-identity/http v0.0.0-20261023210546-9856715c0d17
+	github.com/faustbrian/go-identity/http v0.0.0-20261023215809-5ea9c7d4e69c
 	github.com/faustbrian/go-identity/password v0.0.0-20261023192729-324d7aeea43e
 	github.com/faustbrian/go-identity/session v0.0.0-20261023150127-219499bdccd5
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
-	github.com/faustbrian/go-passkey v0.0.0-20261023204144-43285aca38b3
+	github.com/faustbrian/go-passkey v0.0.0-20261023213208-ac3373f55928
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/faustbrian/go-webauthn v0.0.0-20261020074004-ed89b240ab20
 )

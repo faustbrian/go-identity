@@ -55,6 +55,46 @@ type ManagementService interface {
 	Update(context.Context, passkey.UpdateRequest) (passkey.UpdateResult, error)
 }
 
+// DeletionService borrows the native signed-proof and original-key removal
+// owner. It must atomically enforce current recovery, protocol/reference removal
+// and session effects; transport validation does not establish these facts.
+// Implementations honor bounded contexts and concurrent calls.
+type DeletionService interface {
+	Delete(context.Context, passkey.DeleteRequest) (passkey.DeleteResult, error)
+}
+
+// DeleteConfig independently selects cookie-authenticated self-removal. Sessions
+// and Proofs must be the native deletion owner's real password session and signed
+// proof readers. Audience is the session audience; Rate is shared keyed
+// rate.secret. Keys are copied, nonzero and version-distinct (at most16).
+// Borrowed dependencies must outlive concurrent requests. MaximumDuration is
+// 1ms..30s; caller deadlines and current validity cannot be renewed. No device,
+// authenticator-local erasure, replacement recovery or session issuance is added.
+type DeleteConfig struct {
+	Network         identityhttp.NetworkConfig
+	Sessions        *session.SessionService
+	Proofs          auth.ReauthenticationSource
+	Service         DeletionService
+	Rate            *identityhttp.KeyedSecretRateLimiter
+	Origin          identityhttp.Origin
+	SessionCookie   session.CookiePolicy
+	CSRFKeys        []session.CSRFKey
+	PolicyRevision  authorization.Revision
+	Audience        string
+	Now             func() time.Time
+	MaximumDuration time.Duration
+}
+
+func (DeleteConfig) Format(f fmt.State, _ rune) {
+	_, _ = f.Write([]byte("passkeyhttp.DeleteConfig(redacted)"))
+}
+
+// MarshalJSON prohibits implicit runtime-owner and key export.
+func (DeleteConfig) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// MarshalText prohibits implicit runtime-owner and key export.
+func (DeleteConfig) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
 // UpdateConfig independently selects cookie-authenticated label management.
 // Sessions and Proofs must be the native management owner's actual password
 // session and signed-proof readers. Audience is the session audience, not an
@@ -149,14 +189,15 @@ type InventoryConfig struct {
 
 // FeatureConfig explicitly selects operation groups; nil exposes neither
 // routes nor metadata. Registration selects options+verify, Signin selects
-// options+verify, Inventory selects list and Update selects label rename.
-// At least one group is required. No signup, conditional UI, deletion or MFA
-// fallback is selected.
+// options+verify, Inventory selects list, Update selects label rename and
+// Delete selects self-removal. At least one group is required. No signup,
+// conditional UI or MFA fallback is selected.
 type FeatureConfig struct {
 	Registration *RegistrationConfig
 	Signin       *SigninConfig
 	Inventory    *InventoryConfig
 	Update       *UpdateConfig
+	Delete       *DeleteConfig
 }
 
 func (UpdateConfig) Format(f fmt.State, _ rune) {

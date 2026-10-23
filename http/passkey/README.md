@@ -5,7 +5,7 @@ cookie-only operations. The base HTTP module imports neither this package nor a
 PostgreSQL adapter. Omitting the feature exposes no passkey routes or metadata.
 
 Construct `NewFeature(FeatureConfig{Registration: registration, Signin: signin,
-Inventory: inventory, Update: update})`, where each pointer is optional and at least one is
+Inventory: inventory, Update: update, Delete: deletion})`, where each pointer is optional and at least one is
 selected. Pass the returned contribution to `identityhttp.FeatureServices` and
 the existing `NewRouter`. `NewFeatureWithMiddleware` uses the same owner stages;
 standalone handler constructors are also available. Construction performs no
@@ -20,6 +20,7 @@ requests and outlive the handlers.
 | POST `/v1/passkey/signin-verify` | Same original mode/flow/identifier plus `commandID`, `ceremonyID`, `response` | Forbidden |
 | GET `/v1/passkey/list` | Optional `after`, `limit` (1..100, default100) | Forbidden |
 | POST `/v1/passkey/update` | `proofID`, `referenceID`, `expectedVersion`, `name` | Required |
+| POST `/v1/passkey/delete` | `proofID`, `referenceID`, `expectedVersion` | Required |
 
 ## Composition and custody
 
@@ -73,6 +74,23 @@ they still need the original current authorized session. Protocol keys, counters
 and authentication authority are not changed. Unknown/error outcomes disclose
 only validated original durability metadata, never replacement authentication.
 HTTP shared secret quotas do not replace native mutation-risk admission.
+
+`DeleteConfig` independently selects self-removal under the native deletion
+owner's actual password session reader and original signed
+`identity.passkey.delete` proof. It uses the same retained synchronizer, exact
+Origin, session audience and shared keyed secret-rate owner as update, without
+a device ceremony. The body contains only proof/reference locators and the
+positive observed metadata version; exactly one header carries the original
+retry key. Consumers supply the actual native deletion owner with its configured
+reset-backed recovery source, not a boolean recovery assertion or another store.
+
+Both fresh deletion and matching historical retry return only `commandID`,
+`commitOutcome:"committed"` and `replayed`. Native atomically owns protocol key
+invalidation, mapping/reference removal, passkey authority and session effects.
+No authenticator-local erasure is claimed. HTTP does not clear or renew the
+original password session: it remains usable for authorized metadata-only
+retries. Unknown outcomes do not establish rollback and disclose only validated
+original durability metadata. No removed credential projection is returned.
 
 ## Rates, responses and retries
 

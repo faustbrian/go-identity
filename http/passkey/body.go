@@ -42,18 +42,24 @@ func decodeBody(operation string, fields map[string]json.RawMessage) (requestBod
 	allowed := map[string]bool{}
 	completion := operation == "register-verify" || operation == "signin-verify"
 	switch operation {
-	case "update":
-		for _, name := range []string{"proofID", "referenceID", "expectedVersion", "name"} {
+	case "update", "delete":
+		for _, name := range []string{"proofID", "referenceID", "expectedVersion"} {
 			allowed[name] = true
 		}
-		if !command("proofID", &out.proofID) || !text("referenceID", &out.referenceID) || !text("name", &out.name) {
+		if !command("proofID", &out.proofID) || !text("referenceID", &out.referenceID) {
 			return invalid()
 		}
 		if _, err := identity.ParseIdentifierID(out.referenceID); err != nil {
 			return invalid()
 		}
-		if _, err := passkey.NewDeviceLabel(out.name); err != nil {
-			return invalid()
+		if operation == "update" {
+			allowed["name"] = true
+			if !text("name", &out.name) {
+				return invalid()
+			}
+			if _, err := passkey.NewDeviceLabel(out.name); err != nil {
+				return invalid()
+			}
 		}
 		raw := bytes.TrimSpace(fields["expectedVersion"])
 		if len(raw) == 0 || raw[0] < '1' || raw[0] > '9' || json.Unmarshal(raw, &out.expectedVersion) != nil || out.expectedVersion == 0 || out.expectedVersion == ^uint64(0) {

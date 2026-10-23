@@ -203,7 +203,7 @@ func (i *ingress) decode(r *http.Request, operation string, csrf bool) (identity
 		return facts, body, key, identityhttp.ErrInvalidInput
 	}
 	mode := identityhttp.HeaderForbidden
-	if strings.HasSuffix(operation, "options") || operation == "update" {
+	if strings.HasSuffix(operation, "options") || operation == "update" || operation == "delete" {
 		mode = identityhttp.HeaderRequired
 	}
 	var err error
