@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Remove an exact passkey reference through its original native Work, preserving
+  the terminal disabled successor and independent password authority. Native
+  fresh-proof, recovery, protocol, mapping and session fences remain required.
+
 - Admit the canonical `identity.passkey.create_credential` lifecycle for initial
   passkey references while retaining the earlier native lifecycle name.
 

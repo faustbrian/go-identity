@@ -76,6 +76,7 @@ type workState struct {
 	issuance                  *workIssuance
 	credentialIntent          *CredentialCompromiseIntent
 	credentialReceipt         *CredentialCompromiseReceipt
+	passkeyRemoval            *passkeyCredentialRemovalProgress
 	replacementIntent         *CredentialReplacementIntent
 	replacementReceipt        *CredentialReplacementReceipt
 	resetIntent               *CredentialResetIntent
@@ -308,6 +309,7 @@ func invalidateWork(w Work) {
 	w.state.counterCommand = nil
 	w.state.featureCommitCommand = nil
 	w.state.featureApplyCommand = nil
+	w.state.passkeyRemoval = nil
 	w.state.emailVerification = nil
 	w.state.emailAttachment = nil
 	w.state.phoneEnrollment = nil
