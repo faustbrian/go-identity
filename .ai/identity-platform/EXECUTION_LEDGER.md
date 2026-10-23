@@ -1,5 +1,96 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 10:00 UTC: finite unbound native device profile CLOSED, full M34 open.
+Rootdba31679feeadbc77cfda9cb1020ae37412ce303 / childca7b0b8a9b26e64b698ab93cabc1d3ba2f807735 /
+workspacef0d0a8897f73bef7ab4bb8968fbe445eba5ba05d / nativec1d476a8e61fbcdc27526dca6187fc7ee91c6a02
+are main-pushed. Required39934786380/39935429744/39935662993 SUCCESS; childold
+39935113201 remains failed on the now-corrected missing workspace registration.
+One independent reviewer device_native_final_review APPROVE: fullsource03d701c4
+...5cff; childadoptionc7cdef18...72f3; nativeadoption24276dad...d934. Actual public
+root80files, child9plusLICENSE and native94plusLICENSE match committed source.
+Canonical public-only native PG/race35427 PASS88.436s, both integration/oauthflow
+tags, matching vet/module verification pass. Separate baseno-devicehistory85716
+PASS5.288s. Actual downloaded native readonly publicconsumer37372 PASS30.396s
+for pending/+5/approval/onewinner, livecrossclient, human/consentwithdrawal,
+approval/token ACKloss and basehistory; modules verified. Nativeordinary20273
+racePASS1.225s and selectedscan pass, not whole-history/pinned-hosted assurance.
+Publicnative v0.0.0-20261023095740-c1d476a8e61f,
+sumh1:DdjRS3W4oTAtMcjXg1Z3M9RSFkjP/hFBlR5HCYWHteQ=,
+modsumh1:7CXIhkDP69ppaocHitXxe9VtT3mDYKARfjBP1R/ZfYc=.
+Selected profile supplies no UI/routes/Reference, OIDC/prebound/workload device
+composition or whole-unit qualification; these remain retained obligations.
+Separate clean baseconsumer92674 build and production-dependency inspection
+pass: no device child in the compiled base graph; all modules verified.
+Still11/39 closed consumer milestones and ~25% whole-goal estimate, low confidence.
+
+2026-10-23 09:56 UTC: current continuation is progress, not another preflight.
+Device source review device_native_final_review APPROVE at34path03d701c4...5cff,
+including live valid-client-B poll/cancel isolation followed by A completion
+(worker10064 PG/race12.721s). Rootdba3167 main-pushed/Required39934786380 SUCCESS.
+Childca7b0b8 main-pushed, actual public-root adoption reviewed at12pathc7cdef18
+...72f3; child public-only race91882 PASS1.219s, vet/module verification pass.
+Child Required39935113201 FAILED on missing ./device in tracked go.work;
+one-line owning registration fix is under independent review, not a Tools/gate
+change. Native public-root/child pins are adopted locally; actual oauthflow-tagged
+PG/race35427 is live. Earlier98555 omitted oauthflow and proves ordinary tagged
+compilation only, not the device journeys. Native not committed or delivered.
+
+Primary M12: OTP signed-record codec/source and additive proof/label histories
+have real populated-PG/race coverage78974 PASS1.659s, including legacy writer,
+method/subject FKs, committed-only lookup, original signed bytes, corruption and
+canonical retirement. Structural storage fixtures are not a verified OTP flow.
+New typed current OTP session ports have genuine missing-method RED49688,
+then exact-schema RED86559 and focused old/new custody raceGREEN4207 PASS1.288s.
+Local3module workspace otp.go.work selects only this repository's changed core,
+MFA adapter and session adapter; all external suppliers remain public. Native
+send/verify/rename, required effects and Reference consumer integration remain
+unfinished. No primary profile closure or new milestone/unit count. No other
+writer in go-identity; primary owns Go/service slot and exact final cleanup of
+borrowed task root/PG56418. Device worker is terminal and released its slot.
+
+2026-10-23 09:22 UTC: preceding continuation is progress: kernelc9d9dd7 and
+sessioncf1f8c1 delivered with public-consumer/CI proof; progress40a18b1 is
+main-pushed and Required39930158315 SUCCESS. New primary M12 OTP request arm
+has genuine missing-type/field RED30838, focused GREEN26987 PASS0.263s, MFA
+ordinary race1543 PASS1.233s and vet exit0. Local only: mfa/otp_completion.go,
+otp_step_up.go and otp_step_up_test.go. No native/Reference OTP-management
+implementation, review, public adoption or profile closure claimed. Existing
+core eligibleFreshFactorProof already supports OTP; missing native verified
+action evidence remains in FactorVerificationSource (currently committed
+totp-verify only), its record codec and actual active-session/OTP owners.
+Native enrollment/login remain separate. Do not commit this isolated core arm
+as consumer delivery. Worker regained exclusive heavy/service slot after1543.
+Its first actual device journey/collision race group64595 PASS3.941s. Broader
+23171 failed85.224s on pre-COMMIT issuance recovery and a managed fixture;
+the worker corrected attribution of the latter to missing actual client registry
+dependency in its fixture, not production consent. Remaining recovery is under
+investigation; all reported native results remain worker-attributed/unreviewed.
+Borrowed PG56418 and task caches /private/tmp/identity-device-source.zRhwsp
+remain needed by its active runtime work; primary owns final cleanup. Do not
+launch another Go/service run until worker releases the slot; no duplicate run.
+
+2026-10-23 09:15 UTC: primary next finite M12 profile frozen: native/reference
+authenticated OTP factor rename. Public path: confirmed email OTP enrollment ->
+password/OTP session -> action-bound OTP request/delivery/verification -> fresh
+one-use factor proof -> optimistic rename -> safe inventory, required session
+effects and new signin. Original command recovery/replay discloses no new code
+or proof. Preserve current TOTP management, enrollment and login branches.
+Consume MFA855d87d/OTPpostgres387cc56, public sessioncf1f8c1/kernelc9d9dd7 and
+Referencef822677; actual recipient, OTP, signed authentication evidence,
+coordinator, risk/delivery and session owners remain sole authorities. Primary
+owns mfa/ OTP-step-up/management, necessary otp/postgres/session/password
+adapters, Reference/HTTP selection and their tests/docs/pins. Worker owns no
+paths in this repository. Exclude OTP removal/disable/replacement, SMS,
+trusted-device and administrative recovery from this profile, not full goal.
+Require exact purpose/source-session/factor/original-send binding; current
+credential/factor/recipient/authority/freshness after waits; bounded attempts,
+atomic OTP/proof use and effects; wrong/stale/mixed/foreign/replayed input denies;
+required-effect rollback and original unknown-COMMIT recovery. Focused public
+contract RED then real selected PG/race full journey/denials/recovery, retained
+OTP enrollment/signin and TOTP controls, affected vet/secret checks, one complete
+independent review and actual public-consumer delivery. No isolated helper counts
+as closure; no suite runs while device worker holds exclusive heavy slot.
+
 2026-10-23 09:10 UTC: M34 source-owner prerequisite delivered, not device-flow
 closure. Kernelc9d9dd761138d1e1a839dfcc275a26cdf28133ac and sessionpg
 cf1f8c1d8e20e01bebdce01683cb4ddb32d7be3b are main-pushed, independently

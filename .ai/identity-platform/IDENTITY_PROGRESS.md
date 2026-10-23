@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 09:10 UTC
+## TL;DR — updated 2026-10-23 10:00 UTC
 
 - **Whole goal: approximately 25% complete, low confidence.** Consumer
   milestones are **11/39 closed**; retained scope is **67 units**. These are
@@ -13,14 +13,23 @@
   public Reference module passes all three PostgreSQL/race native/HTTP/TOTP
   journeys (40.289s). Mixed-method metadata, corruption and logout denial are
   covered; this does not close M12's remaining factor-management scope.
-- **Parallel device flow:** protocol/core permission checks and native compile
-  pass in the worker lane. The shared human grant-source prerequisite is now
-  independently reviewed, main-pushed and CI-green: kernel `c9d9dd7`, session
-  `cf1f8c1`. The downloaded public kernel passes real PostgreSQL/race source
-  withdrawal and lock-wait expiry cases; the public session mapping preserves
-  original authority and credential continuation. The worker now uses these
-  actual public dependencies and is running its first native device journeys.
-  Full device issuance/approval/polling is not yet demonstrated or delivered.
+- **New native device profile delivered:** explicitly enabled public/Basic
+  clients can request a device code, a genuine recent password-session user
+  can inspect and approve it with explicit comparison/CSRF, and the device can
+  poll for one access/refresh-token winner. Denial, expiry, cancellation,
+  cross-client isolation, human/client/consent withdrawal, rollback and original
+  commit recovery are covered. OAuth root `dba3167`, child `ca7b0b8`, workspace
+  correction `f0d0a88` and native `c1d476a` are main-pushed and independently
+  approved. Final Required `39935662993` succeeds. Public-only native
+  PostgreSQL/race checks pass (88.436s); downloaded public-native consumer
+  journeys pass (30.396s). Base OAuth needs no device tables or selected factory.
+  Full M34 remains open for retained variants and HTTP/reference composition;
+  no UI, full-unit qualification or platform completion is claimed.
+- **Current primary implementation:** OTP-authenticated factor rename. New
+  current-session custody and original signed-OTP evidence storage checks pass,
+  including populated migrations and preserved TOTP/enrollment contracts.
+  The complete send/delivery/verify/rename/session-effects/Reference journey is
+  unfinished. These local changes are not delivered or counted as a milestone.
 - **Qualification remains open:** scheduled full-history secrets run
   `39925320307` failed; the separate current-change push checks above passed.
   No whole-history clearance, new full-unit qualification or platform
@@ -52,9 +61,9 @@
   including changed-authority denial, rollback/recovery and separate enrollment
   selection. Canonical public-dependency TOTP compatibility also passes.
   Broader MFA variants and whole-unit qualification remain open.
-- **Next:** complete native device-flow integration against the delivered owners
-  while continuing retained M12 factor management without restarting MFA. No Tools,
-  evidence framework, whole-repository verification or user decision is needed.
+- **Next:** finish the retained M12 OTP factor-management consumer journey
+  without restarting delivered MFA behavior. No Tools, evidence framework,
+  whole-repository verification or user decision is needed.
 
 ## Earlier checkpoint detail — preserved 2026-10-23 05:29 UTC
 
