@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Derive the original password-session authority for the exact native device
+  poll while retaining its client actor and anonymous flow. Credential
+  continuation and original authentication times are preserved; the mapping
+  grants no authentication, consent, permission or refreshed validity.
+
 - Revoke password/OTP sessions using their actual confirmed OTP factor and
   verified recipient, rather than the TOTP factor table. Existing TOTP and
   recovery-code revocation remains unchanged; use the matching MFA adapter.

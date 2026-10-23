@@ -648,6 +648,16 @@ dimensions and performs no IO. It neither authenticates a bearer nor grants
 permission. Native participants must separately authenticate possession, use
 primary `RequireSession` checks, and recheck original freshness after waits.
 
+`OriginalDeviceGrantAdmission` selects the exact native-device-v1 password
+profile for client-authenticated token polling. It derives those same original
+human owner expectations without modifying the client command's actor or
+anonymous flow. Original credential continuation and authentication times remain
+unchanged. The native owner must bind and match the complete original source to
+its locked approved grant, require current directory and session authority and
+the kernel's `RequireOAuthDeviceGrantSource`, then check client/consent and every
+original deadline. The pure mapping does not authenticate the human or client,
+grant consent/permission, or support other authentication profiles implicitly.
+
 `OriginalMFAPasswordSessionAdmission` is the explicit password/MFA counterpart.
 It preserves the password-primary linkage and factor authority scope; it does
 not turn MFA provenance into a single-factor record. Consumers must additionally
