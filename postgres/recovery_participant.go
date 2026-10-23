@@ -249,6 +249,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		if recovery.state.plan.magicLinkRegistration != nil {
 			return recoverMagicLinkRegistration(ctx, recovery)
 		}
+		if recovery.state.plan.passkeyRegistration != nil {
+			return recoverPasskeyRegistration(ctx, recovery)
+		}
 		if recovery.state.plan.feature.Operation == registrationEmailVerificationOperation() && recovery.state.plan.capability != nil {
 			return recoverEmailVerification(ctx, recovery)
 		}

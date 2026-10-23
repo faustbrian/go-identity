@@ -36,6 +36,9 @@ type CommandPlan struct {
 	// consuming transaction. Nil preserves the existing signin declaration.
 	// This structural input grants neither email-possession nor creation authority.
 	MagicLinkRegistration *MagicLinkRegistrationPlan
+	// PasskeyRegistration selects prospective passkey-only creation under the
+	// exact anonymous signup verification profile. Nil preserves old plan bytes.
+	PasskeyRegistration *PasskeyRegistrationPlan
 	// SignupAcceptance declares the anonymous password-signup alternative which
 	// commits a neutral acknowledgement rather than creating a conflicting account.
 	// False preserves historical declarations; this flag grants no authority.
@@ -121,7 +124,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
-	if plan.OrganizationInvitationOrigin != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.MagicLinkRequestAcceptance {
+	if plan.OrganizationInvitationOrigin != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.PasskeyRegistration != nil || plan.MagicLinkRequestAcceptance {
 		return nil, invalidPlan()
 	}
 	if plan.Delivery != nil {
@@ -210,6 +213,7 @@ type admittedKernelPlan struct {
 	mfaCompletion              *MFACompletionPlan
 	mfaContinuation            *MFAContinuationPlan
 	magicLinkRegistration      *MagicLinkRegistrationPlan
+	passkeyRegistration        *PasskeyRegistrationPlan
 	signupAcceptance           bool
 	magicLinkRequestAcceptance bool
 	identifierAdmission        *registeredContributor

@@ -276,6 +276,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), plan.Contributors...), Audits: append([]AuditPlan(nil), plan.Audits...)}
 	snapshot.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(plan.MagicLinkRegistration)
+	snapshot.PasskeyRegistration = clonePasskeyRegistrationPlan(plan.PasskeyRegistration)
 	if plan.IdentifierAdmission != nil {
 		d := *plan.IdentifierAdmission
 		snapshot.IdentifierAdmission = &d

@@ -211,6 +211,11 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 }
 
 func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan, preparation bool) (*admittedKernelPlan, error) {
+	if p.Feature != nil && p.Feature.Operation == passkeyRegistrationOperation() {
+		if r == nil || r.state == nil || p.PasskeyRegistration == nil {
+			return nil, invalidPlan()
+		}
+	}
 	if p.MFAContinuation != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
@@ -306,6 +311,27 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		} else {
 			if _, ok := feature.contributor.(MagicLinkMFAChallengeContributor); !ok {
 				return nil, invalidPlan()
+			}
+		}
+	}
+	if p.PasskeyRegistration != nil {
+		if _, ok := feature.contributor.(PasskeyRegistrationContributor); !ok {
+			return nil, invalidPlan()
+		}
+		entries, err := r.selectContributors(p.Contributors)
+		if err != nil {
+			return nil, invalidPlan()
+		}
+		for _, entry := range entries {
+			if entry.descriptor.Owner == "identity/postgres" {
+				if _, ok := entry.contributor.(*Repository); !ok {
+					return nil, invalidPlan()
+				}
+			}
+			if entry.descriptor.Owner == "outbox/postgres" {
+				if _, ok := entry.contributor.(PasskeyRegistrationLifecycleContributor); !ok {
+					return nil, invalidPlan()
+				}
 			}
 		}
 	}
@@ -551,7 +577,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), passkeyRegistration: clonePasskeyRegistrationPlan(p.PasskeyRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
@@ -747,6 +773,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if w.state.rows != nil || receipt.Operation != p.feature.Operation || receipt.BeforeVersion != p.lifecycle.BeforeVersion || receipt.AfterVersion != p.lifecycle.AfterVersion {
 		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})
+	}
+	if p.passkeyRegistration != nil && w.state.registrationUser == nil {
+		return result, w.fail(ctx, invalidPasskeyRegistration())
 	}
 	if oauthConsentSelected(p.snapshot()) && w.state.oauthConsent == nil || p.feature.Operation == organizationInvitationAcceptOperation() && w.state.invitationMembership == nil {
 		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})

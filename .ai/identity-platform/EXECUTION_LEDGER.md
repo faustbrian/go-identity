@@ -1,5 +1,130 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 22:55 UTC: kernel prospective creation final review APPROVE/no
+findings by /root/passkey_first_kernel_final, complete18path candidate
+55bf64afacedb1b50aac78d86eaf602621683addb0a506ee583946719f0a0bd8
+against9cdf7da. Late-expiry counterexample actually failed (invalid signup
+committed) before original-NULL-expiry fence. Final signup+retained password/
+magic-link/passkey-reference PostgreSQL/race5.420s and taggedvet pass. Ordinary
+module/race3.508s, bounded parser smoke11.293s (only4executions), modverify and
+changed-content secrets retained at their actual inputs; no full qualification
+claim. This review is kernel-only, not genuine native signup, MFA/session or
+whole ambiguous-commit recovery. Preparing exact explicit-path main delivery;
+native consumers must wait for the committed public kernel source, not a stub.
+Carriers worker has the single heavy slot for its bounded root test batch;
+primary must not launch Go checks until it returns. No PostgreSQL worker run.
+
+Dependency-ready parallel prerequisite: passkey_first_carriers owns ONLY
+go-passkey root signup.go/signup_test.go plus root README.md/CHANGELOG.md, at
+e175ffe1ffb510a87f3e07a996b3f8f56324443f. Consumes existing public identity,
+session and authorization types (no new kernel/MFA/session API). Publish closed
+adapter-neutral signup request/completion/result and keyed-options request;
+reuse existing KeyedRegistrationOptionsResult. No email/user/tenant/RP/actor or
+proof input; original pre-auth flow/cookie/remember custody stays with session.
+This is a required native/HTTP public-data prerequisite, not a consumer milestone
+or workflow engine. Root privacy/ownership tests, focused static/secret checks
+and one final review precede its separate main delivery. No worker changes to
+postgres, shared contracts, manifests/pins, .ai or Git state. Primary owns native
+orchestration, MFA/session effects, Reference/HTTP and acceptance. Worker asks
+before any Go/service execution; no children or independent delivery authority.
+
+2026-10-23 22:53 UTC: protocol prospective-signup prerequisite independently
+reviewed APPROVE by /root/passkey_first_protocol_final, complete10path candidate
+12554541902467408962577d59f0eac00ff4a63eea0683bafb81dd22875c3a83
+against acf8ef4. Delivered go-webauthn main bdbb114376e0b4261b40325ab97468b4bc0d9147;
+Required40035602285SUCCESS. Exact public postgres module
+v0.0.0-20261023224451-bdbb114376e0 authenticates Origin.Hash and
+Sumh1:WVyjQXUca7PSBaqNb/JJv/gEOd8RkLM5Py0O/Iri7wQ=; all10 changed
+archive files match source. Actual downloaded-public signup, signup unknown,
+retained enrollment and populated migration PostgreSQL/race pass respectively
+1.555s/1.551s/1.886s/1.207s; all modules verify. This is protocol participation,
+not native account/MFA/session completion. Signup tests remain sequential;
+native composition must exercise actual racing completions, not relabel -race.
+Install protocol migration4 before adopting this revision, including retained
+operations. No root crypto/wire change or public release/tag is claimed.
+
+Kernel same-Work creation is implemented locally, not delivered. Its native
+phase test initially failed on absent APIs. Real PostgreSQL test now proves
+new active user/admitted attrs/initial passkey reference/original correlation
+and mandatory account+credential effects commit together, with no email/password
+or recovery invented; ignored duplicates, wrong invocation/intent, existing
+blocked subjects and required-effect/final-authority failures abort. Historical
+plan roundtrip first failed, then passed after fixed-depth canonical decoding.
+Kernel original-correlation recovery reader and populated suffix preservation
+pass. Current new selector PostgreSQL/race1.713s; ordinary kernel/race3.508s;
+bounded parser fuzz11.293s has low exploration (4 executions), not exhaustive
+proof. Tagged vet, modules and changed-content secrets pass. Complete18path
+kernel candidate af098133c37e0838fbe6e4ecad35516cca4ecc0dc9f7b8272bc8a26a4704fa3b
+against9cdf7da is in independent review /root/passkey_first_kernel_final.
+Primary retains heavy slot; no worker Go process remains live. Next after actual
+kernel delivery/public pin: exact MFA initialization/current factor fence and
+session issuance, then full native/Reference signup integration. M16 stays open.
+
+2026-10-23 22:38 UTC: passkey-first actual implementation underway. Primary
+kernel prospective creation fields/digest/privacy tests first failed on missing
+API, then passed focused exactGo1.27.2 test0.288s after production implementation.
+Files postgres/passkey_registration.go and _test.go remain local/uncommitted;
+this is input binding, not working account creation or session issuance.
+Next primary write is the same-Work kernel creation/correlation/recovery path,
+then exact MFA/session profile. Protocol worker's real registration test red
+refused a service actor; initial green0.233s follows additive signup participant.
+Actual schema FK blocked pre-account ceremonies; narrow migration4 pending
+signup namespace retains existing FKs and promotes association only upon verified
+same-Work consumption. Worker owns the heavy slot for final affected checks;
+primary must not launch Go/services until it returns. No native/Reference signup
+or additional milestone closure yet. Bounded resources/runner are under
+/private/tmp/identity-passkey-signup.1eomVv; old deletion resources were removed.
+
+M16 passkey-first profile frozen after the single source pass: explicit native
+startup opt-in, usernameless no-email/no-password resident-required UV/none/ES256
+registration; session-owned original pre-auth/remember -> committed options ->
+real verifier registration -> same-Work active account/passkey/known-empty MFA/
+authorization/session -> read/logout and new discoverable signin. No user,
+credential or authenticated session may persist before successful verification;
+only bounded original pre-auth/ceremony intent may persist. Preserve original
+request/expiry and metadata-only recovery, fail closed on unavailable authority,
+tenant/RP/actor/origin mismatch, expiry/replay/races and required-effect failure.
+No new recovery assurance is invented for passkey-only accounts; last-method
+removal must deny absent independently configured actual recovery. Existing
+password-based enrollment/deletion remain unchanged. HTTP/Reference adoption
+is primary-owned after native public-owner behavior is proven; browser UI,
+conditional options, organization/MFA/synced variants are not this profile.
+
+Dependency mapping: existing Coordinator/Work and structural insertCreation are
+reusable, not public generic nested creation. Add exact kernel same-Work creation
+intent/domain/correlation/recovery and MFA initializer/session issuance profile;
+do not use password/magiclink/anonymous owner identities or fake password/proof.
+Authorization a55bbebb1060 InitializeAuthority/RequireAuthority already work
+through borrowed Work; no authorization package change is required. Native
+passkey owner composes all original effects; no second transaction or journal.
+
+Worker passkey_first_protocol owns ONLY go-webauthn postgres registration
+participation and its tests/docs/changelog/module-local files, at acf8ef48564b.
+It reuses real root BeginRegistration/opaque transitions, adds exact pre-auth
+parent profile for canonical register-options/register-verify .signup-v1, and
+preserves existing .native-v1 enrollment unchanged. Parent subject is original
+anonymous flow/service actor; prospective user is bound in registration.user,
+not asserted to be an existing authenticated subject. Protocol context may use
+that preallocated ID before an identity exists; no identity rows are created by
+the protocol owner. No root crypto/wire changes unless a demonstrated blocker
+requires parent agreement. Tests: actual root UV creation/finalization in parent
+Work, rollback/commit/recovery, exact-scope rejection and retained enrollment;
+focused unit/PG-race/static checks, one final review, ordinary main delivery.
+Worker asks before any Go/service execution; primary serializes heavy runs and
+owns shared identity/session/risk contracts, native integration and final journey.
+
+Next M16 passkey-first registration: one bounded dependency investigation,
+not a new preflight. Primary retains shared identity contracts, Reference/HTTP
+and integration. passkey_first_kernel_map is read-only (no writable paths),
+inspecting current kernel60943f4/public and main9cdf7da, factor58d491b and
+authorization composition for same-Work no-password user creation. Parent
+inspects passkey e175ffe/WebAuthn acf8ef4/pre-auth/sessionba503. Outcome remains
+pre-auth -> UV registration -> atomic real account/credential/session -> usable
+session, with no durable user before verification, original remember/retry
+custody and recovery. Missing owners become concrete implementation, never
+private substitutes. Freeze finite native/Reference acceptance after this pass;
+do not restart delivered existing-account enrollment or deletion.
+
 2026-10-23 22:28 UTC: Reference passkey deletion consumer profile CLOSED.
 Reviewed source85c76519014b33fb833632f96ddfc8429297f34a is on origin/main;
 Required40033621112SUCCESS. Clean external public-module consumer passes all

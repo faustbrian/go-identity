@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add original-command passkey-only account creation inside the native signup
+  transaction, with an initial passkey reference, admitted attributes and
+  separate account/credential lifecycle events. Append
+  `PasskeyRegistrationMigrationSource` after existing selected registration
+  histories. Existing accounts cannot be retargeted or resurrected; no email,
+  password or recovery factor is invented. WebAuthn verification, pre-auth,
+  signup policy, MFA, authorization and session composition remain native-owned.
+
 - Remove an exact passkey reference through its original native Work, preserving
   the terminal disabled successor and independent password authority. Native
   fresh-proof, recovery, protocol, mapping and session fences remain required.

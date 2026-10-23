@@ -134,6 +134,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	result.MagicLinkRequestAcceptance = p.magicLinkRequestAcceptance
 	result.OrganizationInvitationOrigin = cloneOrganizationInvitationOrigin(p.invitationOrigin)
 	result.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.magicLinkRegistration)
+	result.PasskeyRegistration = clonePasskeyRegistrationPlan(p.passkeyRegistration)
 	result.MFAContinuation = cloneMFAContinuationPlan(p.mfaContinuation)
 	result.MFACompletion = cloneMFACompletionPlan(p.mfaCompletion)
 	if p.identifierAdmission != nil {
@@ -301,6 +302,8 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 				err = entry.contributor.(OAuthConsentLifecycleContributor).PersistOAuthConsent(w.state.ctx, w)
 			} else if w.state.invitationMembership != nil {
 				err = entry.contributor.(OrganizationInvitationLifecycleContributor).PersistOrganizationInvitation(w.state.ctx, w)
+			} else if w.state.execution.reservation.plan.passkeyRegistration != nil {
+				err = entry.contributor.(PasskeyRegistrationLifecycleContributor).PersistPasskeyRegistration(w.state.ctx, w)
 			} else if w.state.execution.reservation.plan.magicLinkRegistration != nil {
 				err = entry.contributor.(MagicLinkRegistrationLifecycleContributor).PersistMagicLinkRegistration(w.state.ctx, w)
 			} else if w.state.credentialReceipt != nil {

@@ -454,6 +454,9 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if (original.MagicLinkRegistration == nil) != (final.MagicLinkRegistration == nil) || original.MagicLinkRegistration != nil && *original.MagicLinkRegistration != *final.MagicLinkRegistration {
 		return false
 	}
+	if (original.PasskeyRegistration == nil) != (final.PasskeyRegistration == nil) || original.PasskeyRegistration != nil && *original.PasskeyRegistration != *final.PasskeyRegistration {
+		return false
+	}
 	// Child signing may occur only after acknowledged original preparation.
 	// It cannot introduce MFA, replace its primary proof or renew the exact
 	// original challenge scope, including issue time and absolute expiry.

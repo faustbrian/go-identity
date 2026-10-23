@@ -15,6 +15,9 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 }
 
 func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
+	if !proofBase && binding.OperationID == passkeyRegistrationOperation().OperationID && binding.SchemaID == passkeyRegistrationOperation().SchemaID && len(encoded) > 0 && encoded[0] == 0xa3 {
+		return decodePasskeyRegistrationPlan(binding, fingerprint, encoded)
+	}
 	if !proofBase && binding.OperationID == organizationInvitationSendOperation().OperationID && len(encoded) > 0 && encoded[0] == 0xa5 {
 		return decodeOrganizationInvitationOrigin(binding, fingerprint, encoded)
 	}

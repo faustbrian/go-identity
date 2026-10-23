@@ -1,5 +1,42 @@
 # Identity PostgreSQL
 
+## Passkey-only prospective creation
+
+`PasskeyRegistrationIntent` contains a trusted generated prospective user,
+already admitted attributes and an initial passkey-owned `CredentialRef`, not
+authenticator material or signup permission. Bind `PasskeyRegistrationFields`
+unchanged into the original `identity.passkey.register-verify.signup-v1` command:
+its subject is the original anonymous flow and its actor is the configured
+service account. `registration.user` binds the real protocol participant's
+prospective subject. The command record is the new credential reference.
+
+Append `PasskeyRegistrationMigrationSource{Base: installedHistory, Version: next}`
+after credential references, registration/acceptance and all selected historical
+magic-link/username suffixes. It extends the existing original-command evidence;
+it adds no journal, backfill, email, password or recovery method. Old rows and
+predecessor migration bytes remain unchanged. Native signup is explicit opt-in;
+installing this schema does not enable it.
+
+Enlist the actual repository, `PasskeyRegistrationContributor` and
+`PasskeyRegistrationLifecycleContributor`. Freeze the prospective IDs, complete
+creation digest and distinct account-creation event index in
+`CommandPlan.PasskeyRegistration`. During that exact native Apply, **after real
+WebAuthn verification**, `NewPasskeyRegistrationDomain.Apply` creates the active
+initial user/attributes and passkey reference inside the sole Work. Duplicate,
+foreign/reconstructed commands, changed intent and existing subjects deny. The
+returned user is provisional. `Work.PasskeyRegistrationUser` lends only that
+actual creation during Apply/final Check, including original correlation and
+current initial user/reference authority; it is not a renewable proof.
+
+The outbox must persist both the canonical zero-to-one
+`identity.passkey.create_credential` primary event and
+`Work.StagedPasskeyRegistrationLifecycle` (`user.created.v1`). Native risk,
+pre-auth consumption, protocol finalization, known-empty MFA, authorization
+initialization and session issuance must commit in this same Work. This kernel
+seam alone is not a working signup/session API. Retained original-command
+creation evidence and canonical plan decoding support recovery without
+inferring success from an existing user or revealing session material.
+
 ## Anonymous placeholder namespace
 
 Append `AnonymousIdentityMigrationSource{Base: installedHistory, Version: next}`
