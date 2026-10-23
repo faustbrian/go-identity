@@ -12,7 +12,8 @@ import (
 
 // OTPAuthenticatedStepUp borrows a genuine current session and synchronizer
 // for the explicit active-OTP factor-management profile. Purpose must be
-// identity.mfa.factor-update. SendCommandID is absent on a keyed send and names
+// identity.mfa.factor-update or identity.mfa.disable; the native owner must
+// explicitly select the requested purpose. SendCommandID is absent on a keyed send and names
 // its original committed issuance on verification; it cannot equal the verify
 // command or factor ID. No field grants authentication or permission.
 //
@@ -31,7 +32,7 @@ type OTPAuthenticatedStepUp struct {
 func validOTPStepUpInput(tenant identity.TenantID, command identity.CommandID,
 	factor FactorID, caller authorization.DecisionContext, origin, network string,
 	custody OTPAuthenticatedStepUp, action authorization.Action, keyed bool) bool {
-	if custody.Purpose != "identity.mfa.factor-update" {
+	if custody.Purpose != "identity.mfa.factor-update" && custody.Purpose != "identity.mfa.disable" {
 		return false
 	}
 	if keyed {

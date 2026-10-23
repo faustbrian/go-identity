@@ -31,6 +31,18 @@ func authenticatedOTPRequests(t *testing.T) (mfa.OtpSendRequest, mfa.OtpVerifyRe
 	return send, verify
 }
 
+func TestAuthenticatedOTPDisablePurposeReachesSelectedOwner(t *testing.T) {
+	send, verify := authenticatedOTPRequests(t)
+	send.StepUp.Purpose = "identity.mfa.disable"
+	verify.StepUp.Purpose = "identity.mfa.disable"
+	if err := send.Validate(); err != nil {
+		t.Fatal("distinct disable-purpose send cannot reach selected native owner", err)
+	}
+	if err := verify.Validate(); err != nil {
+		t.Fatal("distinct disable-purpose verification cannot reach selected native owner", err)
+	}
+}
+
 // These are intrinsic public input checks, not proof of delivery, ownership,
 // signature validation, current authority or atomic OTP/proof consumption.
 func TestAuthenticatedOTPStepUpIsDisjointFromLoginAndEnrollment(t *testing.T) {

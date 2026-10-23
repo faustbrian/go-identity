@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Allow the distinct disable purpose in authenticated OTP requests. Selected
+  native owners still enforce action policy and consume one-use proof atomically;
+  parsing alone neither authenticates nor enables disable.
+
 - Add an explicit authenticated OTP step-up request arm for factor update,
   disjoint from pending enrollment and partial login. Verification binds the
   original send and session; parsing neither authenticates nor consumes proof.
