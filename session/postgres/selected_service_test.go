@@ -7,6 +7,49 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
+func TestSelectedPasskeyOwnerRetainsCommonScopeAndDistinctCacheCustody(t *testing.T) {
+	password := IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}
+	one := SingleFactorSessionAdmissionConfig{Verified: &password}
+	_, legacy, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{SingleFactor: one})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := PasskeySessionAdmission{Profile: PasskeyAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "service-a", RPNamespace: "rp-a"}, Authority: &passkeyTestAuthority{}}
+	methods, only, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{Passkey: &p})
+	if err != nil || len(methods) != 1 || methods[0] != session.AuthenticationVerified || only == legacy {
+		t.Fatal("passkey-only custody collapsed", err)
+	}
+	methods, both, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{SingleFactor: one, Passkey: &p})
+	if err != nil || len(methods) != 1 || both == only || both == legacy {
+		t.Fatal("combined passkey custody collapsed", err)
+	}
+	for _, field := range []string{"deployment", "namespace", "audience", "RP", "authority", "typed-nil"} {
+		foreign := p
+		switch field {
+		case "deployment":
+			foreign.Profile.GlobalAuthorityID = "foreign"
+		case "namespace":
+			foreign.Profile.PolicyNamespace = "foreign"
+		case "audience":
+			foreign.Profile.Audience = "foreign"
+		case "RP":
+			foreign.Profile.RPNamespace = ""
+		case "authority":
+			foreign.Authority = nil
+		case "typed-nil":
+			foreign.Authority = (*passkeyTestAuthority)(nil)
+		}
+		if _, _, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{SingleFactor: one, Passkey: &foreign}); err == nil {
+			t.Fatal("foreign or missing passkey owner admitted", field)
+		}
+	}
+	other := p
+	other.Profile.RPNamespace = "rp-b"
+	if _, different, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{SingleFactor: one, Passkey: &other}); err != nil || different == both {
+		t.Fatal("RP selection not bound to cache custody", err)
+	}
+}
+
 func TestSelectedPasswordMFARetainsDistinctCacheCustodyAndOwnerProfile(t *testing.T) {
 	password := IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}
 	one := SingleFactorSessionAdmissionConfig{Verified: &password}

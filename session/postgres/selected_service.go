@@ -8,8 +8,8 @@ import (
 	database "github.com/faustbrian/go-postgres"
 )
 
-// SelectedSessionAdmissionConfig explicitly selects single-factor and original
-// magic-link/TOTP owners. An MFA record always requires the MFA selection; a
+// SelectedSessionAdmissionConfig explicitly selects single-factor, passkey and
+// original magic-link/TOTP owners. An MFA record requires the MFA selection; a
 // failed factor read never falls back to a single-factor profile. All selected
 // owners must share deployment, policy namespace and audience.
 type SelectedSessionAdmissionConfig struct {
@@ -18,6 +18,9 @@ type SelectedSessionAdmissionConfig struct {
 	// MFAPassword selects genuine password-plus-TOTP/OTP/recovery owners independently
 	// of single-factor password and magic-link profiles. No fallback is allowed.
 	MFAPassword *IdentifierAdmissionConfig
+	// Passkey selects the owned RP/mapping and known-empty factor authority.
+	// Stored passkey provenance selects only this owner, never another method.
+	Passkey *PasskeySessionAdmission
 }
 
 // SelectedSessionServiceConfig retains the native repository and validation
@@ -30,6 +33,50 @@ type SelectedSessionServiceConfig struct {
 }
 
 func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.AuthenticationKind, string, error) {
+	if c.Passkey != nil {
+		p := c.Passkey.Profile
+		if !p.valid() || nilIssueDependency(c.Passkey.Authority) {
+			return nil, "", session.ErrInvalidInput
+		}
+		common := OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience}
+		profiles := []*OTPAdmissionConfig{c.SingleFactor.OTP}
+		if v := c.SingleFactor.Verified; v != nil {
+			profiles = append(profiles, &OTPAdmissionConfig{v.GlobalAuthorityID, v.PolicyNamespace, v.Audience})
+		}
+		for _, v := range []*MagicLinkAdmissionConfig{c.SingleFactor.MagicLink, c.MFAMagicLink} {
+			if v != nil {
+				profile := OTPAdmissionConfig(*v)
+				profiles = append(profiles, &profile)
+			}
+		}
+		if v := c.MFAPassword; v != nil {
+			profiles = append(profiles, &OTPAdmissionConfig{v.GlobalAuthorityID, v.PolicyNamespace, v.Audience})
+		}
+		for _, v := range profiles {
+			if v != nil && *v != common {
+				return nil, "", session.ErrInvalidInput
+			}
+		}
+		var methods []session.AuthenticationKind
+		var previous string
+		if c.SingleFactor.Verified != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil || c.MFAPassword != nil {
+			prior := c
+			prior.Passkey = nil
+			var err error
+			methods, previous, err = selectedSessionAdmission(prior)
+			if err != nil {
+				return nil, "", err
+			}
+		}
+		found := false
+		for _, kind := range methods {
+			found = found || kind == session.AuthenticationVerified
+		}
+		if !found {
+			methods = append(methods, session.AuthenticationVerified)
+		}
+		return methods, nativeAdmissionCacheProfile("native-selected-passkey-session-v1", previous, p.GlobalAuthorityID, p.PolicyNamespace, p.Audience, p.RPNamespace), nil
+	}
 	if c.MFAPassword != nil {
 		p := *c.MFAPassword
 		if !p.valid() || p.AuthenticationMethod != "password" || p.CredentialKind != identity.CredentialPassword || p.CredentialOwner != "identity/password" {
@@ -107,13 +154,14 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 // without IO, writes or goroutines. One primary lookup dispatches on immutable
 // stored provenance. Cache custody binds the complete selected set and retains
 // the earliest contributing read deadline; selecting MFA cannot renew it.
-// With no MFA selection, existing single-factor cache identity is unchanged.
+// With no additional MFA/passkey selection, single-factor cache identity is
+// unchanged. Passkey selection shares one lookup, not another reader fallback.
 func NewSelectedSessionService(pool *database.Pool, c SelectedSessionServiceConfig) (*session.SessionService, error) {
 	methods, profile, err := selectedSessionAdmission(c.Admission)
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, methods, profile)
+	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, methods, profile)
 }
 
 // Format redacts deployment, profile and key configuration.

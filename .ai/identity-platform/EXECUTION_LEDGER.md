@@ -1,5 +1,51 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 19:04 UTC: two native prerequisites independently approved for main
+delivery, not full M16/Reference HTTP closure. Shared session/postgres nine-path
+candidateb7eebdee...56984 APPROVE by /root/selected_passkey_session_final;
+selected passkey SQL/current-epoch/native logout race1.762s, retained password/
+MFA negative cohort4.625s, ordinary module race1.788s, fresh taggedvet0, verified
+modules and selecteddiffsecrets0. Initial missing-public-field RED observed.
+Retained legacy family fixture leaves audit_writer/reader/retention roles after
+dropping its DB (issue_integration_test.go291;revocation_integration_test.go151).
+This caused sibling expiry setupfailure; parent verified orphan/no-dependencies,
+removed exact roles on owned51100, and final cohort included explicit cleanup.
+Pre-existing fixture ownership cleanup remains required qualification debt,
+not a product-authority defect or a reason to weaken audit preflight.
+Native keyed options eight-path candidatec32352b9...62ca APPROVE/no remaining
+findings by /root/native_keyed_options_final. Public keyed original admission
+through existing kernel owner reaches genuine enrollment and identified/
+discoverable session/inventory/read/logout; matching retries reveal metadata
+only. Actual proof/flow expiry tests1.990s, final TestKeyed6.289s, retained unit
+.262s and same-key race7.268s, fresh taggedvet0/full-currentpathsecrets0. Real
+before/after options-COMMIT disconnect is enrollment-only; no signin-disconnect
+execution claim. Optional test clock preserves defaulttime.Now; no signed
+expiry rewriting. Both source reviews/test gaps converged without production
+security weakening. Required CI/public adoption still pending. Primary next
+uses these committed suppliers in the actual common Reference HTTP journey.
+
+2026-10-23 18:52 UTC: primary next M16 profile frozen: explicitly selected
+common session read/logout for genuine passkey sessions alongside retained
+password/OTP/MFA profiles, then actual Reference HTTP session read/logout over
+the real registration/enrollment/signin journey. Own session/postgres/** then
+reference/** and primary pins/notes; native keyed worker owns go-passkey only.
+Consume committed native955b370 SessionAuthority and existing session219499
+passkey read/revocation owners. Extend existing SelectedSessionAdmissionConfig
+through its public typed PasskeySessionAdmission port, dispatch from immutable
+stored provenance after one primary lookup, never try another reader on denial.
+Unselected legacy cache profile remains identical; selected custody binds exact
+RP/deployment/authority, preserves earliest20s validity and original known-empty
+MFA. Both read and actual cookie-CSRF revocation use identical selected owners.
+Reference selection must be explicit and immutable, not automatic adoption by
+Passkey config or password fallback. Existing generic HTTP routes stay opt-in.
+Prove real session SQL component/failure/withdrawal/retained profiles, then real
+Reference fresh/upgrade native signin->HTTP read/logout and public consumer.
+Focused race/static/secrets and independent full review per owning coherent
+delivery; no new state/migrations/authority or broader requalification. Keyed
+HTTP options remain the separate worker's prerequisite, not required to use
+the already committed native signin and generic session HTTP contracts here.
+Reference predecessor metadata4b2a5fd is main-pushed,Required40006427807 SUCCESS.
+
 2026-10-23 18:48 UTC: Reference identifier-free M16 profile CLOSED, not full M16.
 Reviewed main0acc093c022267aaa44a920c3d520e71329b6363 is pushed; exact
 Required40005974807 SUCCESS. Committed Reference patch matches independently

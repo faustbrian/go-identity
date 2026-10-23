@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Explicitly select passkey authority alongside existing single-factor and MFA
+  profiles in `SelectedSessionAdmissionConfig`. One primary lookup dispatches
+  from stored provenance, without method fallback or renewed freshness. Bind
+  the complete selected set and RP namespace into cache custody; unselected
+  deployments retain their original cache profile.
+
 - Add explicit identified passkey session staging, current-authority reads and
   cookie logout composition. Preserve original RP/passkey and known-empty MFA
   epochs through the owned passkey authority port; do not fall back to password

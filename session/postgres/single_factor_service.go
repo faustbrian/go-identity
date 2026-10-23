@@ -76,10 +76,10 @@ func NewSingleFactorSessionService(pool *database.Pool, c SingleFactorSessionSer
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, c, nil, nil, methods, profile)
+	return newSelectedNativeSessionService(pool, c, nil, nil, nil, methods, profile)
 }
 
-func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
+func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, passkey *PasskeySessionAdmission, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
 	if c.Repository.MaximumDuration > c.Validation.MaximumDuration {
 		return nil, session.ErrInvalidInput
 	}
@@ -98,6 +98,9 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	}
 	if passwordMFA != nil {
 		audience = passwordMFA.Audience
+	}
+	if passkey != nil {
+		audience = passkey.Profile.Audience
 	}
 	if audience != c.Validation.Audience {
 		return nil, session.ErrInvalidInput
@@ -144,6 +147,10 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 		copied := *p
 		copied.GlobalAuthorityID, copied.PolicyNamespace, copied.Audience, copied.AuthenticationMethod, copied.CredentialOwner = clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience), clone(p.AuthenticationMethod), clone(p.CredentialOwner)
 		r.mfaPasswordReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: copied, mfaPassword: true, mfaFactors: r.mfaFactors, mfaOTPFactors: r.mfaOTPFactors}
+	}
+	if p := passkey; p != nil {
+		selected := &passkeySessionSelection{profile: freezePasskeyProfile(p.Profile), authority: p.Authority}
+		r.passkeyReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, passkey: selected}
 	}
 	return session.NewSelectedProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))
 }

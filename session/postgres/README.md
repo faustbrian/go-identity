@@ -21,6 +21,16 @@ epochs survive issuance, reads and logout. No password fallback or original
 epoch refresh is permitted. Positive evidence ends at the earliest contributing
 owner deadline, at most20s after its original authoritative read begins.
 
+For a common reader, select `SelectedSessionAdmissionConfig.Passkey` with that
+same `PasskeySessionAdmission` alongside the desired password/OTP/magic-link/MFA
+profiles. `NewSelectedSessionService` makes one primary token lookup and uses
+the stored method and authority dimensions, not caller selection or fallback.
+All selected owners must share deployment, policy namespace and audience.
+Pass the identical admission to `RevokeOneExecutorConfig.Passkey` for logout.
+Passkey-only selection is also supported. Adding this owner changes the selected
+cache profile; leaving it absent preserves legacy custody exactly. Selection
+does not enable signup, HTTP routes or completed passkey-plus-secondary MFA.
+
 Append `PasskeySigninMigrationSource` after the complete installed session history,
 with `PreviousConstraint` naming its actual issuance-purpose constraint and a
 new permanently allocated version. PostgreSQL preserves that existing validated

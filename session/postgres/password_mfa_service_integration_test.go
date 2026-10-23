@@ -112,6 +112,22 @@ func testPasswordMFASessionRead(t *testing.T, ctx context.Context, pool *databas
 	if err != nil || !selected.Authenticated || selected.Session.MFAAuthentication() == (session.MFAAuthentication{}) || !selected.ValidUntil().Equal(result.ValidUntil()) {
 		t.Fatal("combined password reader lost factor or renewed freshness", err)
 	}
+	withPasskey, err := NewSelectedSessionService(pool, SelectedSessionServiceConfig{
+		Repository: repository, Validation: validation,
+		Admission: SelectedSessionAdmissionConfig{
+			SingleFactor: SingleFactorSessionAdmissionConfig{Verified: &profile}, MFAPassword: &profile,
+			Passkey: &PasskeySessionAdmission{
+				Profile:   PasskeyAdmissionConfig{GlobalAuthorityID: p.GlobalAuthorityID, PolicyNamespace: p.PolicyNamespace, Audience: p.Audience, RPNamespace: "rp-a"},
+				Authority: &passkeyTestAuthority{},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := withPasskey.Get(ctx, request); err != nil || !got.Authenticated || got.Session.MFAAuthentication() == (session.MFAAuthentication{}) || !got.ValidUntil().Equal(result.ValidUntil()) {
+		t.Fatal("passkey selection weakened or replaced password MFA", err)
+	}
 	ordinary, err := NewSessionService(pool, c)
 	if err != nil {
 		t.Fatal(err)
@@ -127,6 +143,9 @@ func testPasswordMFASessionRead(t *testing.T, ctx context.Context, pool *databas
 	}
 	if denied, err := combined.Get(ctx, request); err != nil || denied.Authenticated {
 		t.Fatal("combined reader fell back after credential denial", err)
+	}
+	if denied, err := withPasskey.Get(ctx, request); err != nil || denied.Authenticated {
+		t.Fatal("passkey-selected reader fell back after password credential denial", err)
 	}
 	if _, err = pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=true WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3`, string(s.TenantID), string(s.UserID), credentialID); err != nil {
 		t.Fatal(err)
@@ -144,5 +163,8 @@ func testPasswordMFASessionRead(t *testing.T, ctx context.Context, pool *databas
 	}
 	if denied, err := combined.Get(ctx, request); err != nil || denied.Authenticated {
 		t.Fatal("combined reader fell back after factor denial", err)
+	}
+	if denied, err := withPasskey.Get(ctx, request); err != nil || denied.Authenticated {
+		t.Fatal("passkey-selected reader fell back after password factor denial", err)
 	}
 }

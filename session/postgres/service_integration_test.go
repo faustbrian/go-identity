@@ -119,6 +119,22 @@ func testNativeSessionAuthentication(t *testing.T, ctx context.Context, pool *da
 	if err != nil || !positive.Authenticated || positive.ValidateAt(now) != nil || !positive.ValidUntil().Equal(now.Add(20*time.Second-time.Millisecond)) {
 		t.Fatal("native primary authority denied", err)
 	}
+	selected, err := NewSelectedSessionService(pool, SelectedSessionServiceConfig{
+		Repository: config.Repository, Validation: config.Validation,
+		Admission: SelectedSessionAdmissionConfig{
+			SingleFactor: SingleFactorSessionAdmissionConfig{Verified: &profile},
+			Passkey: &PasskeySessionAdmission{
+				Profile:   PasskeyAdmissionConfig{GlobalAuthorityID: profile.GlobalAuthorityID, PolicyNamespace: profile.PolicyNamespace, Audience: profile.Audience, RPNamespace: "rp-a"},
+				Authority: &passkeyTestAuthority{},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal("combined password/passkey reader", err)
+	}
+	if got, err := selected.Get(ctx, request); err != nil || !got.Authenticated || !got.ValidUntil().Equal(positive.ValidUntil()) {
+		t.Fatal("selecting passkeys changed password authority or freshness", err)
+	}
 	for _, dimension := range []string{"organization", "factor", "passkey", "scope"} {
 		changed := spec
 		a, _ := changed.Authority.Bindings()
@@ -150,6 +166,9 @@ func testNativeSessionAuthentication(t *testing.T, ctx context.Context, pool *da
 		}
 		if got, e := service.Get(ctx, request); e != nil || got.Authenticated {
 			t.Fatal("unsupported or foreign authority admitted", e)
+		}
+		if got, e := selected.Get(ctx, request); e != nil || got.Authenticated {
+			t.Fatal("passkey selection admitted unsupported or foreign password authority", e)
 		}
 	}
 	original, _ := session.NewSession(spec)
@@ -199,6 +218,9 @@ func testNativeSessionAuthentication(t *testing.T, ctx context.Context, pool *da
 		}
 		if got, e := service.Get(ctx, request); e != nil || got.Authenticated || got.Session != (session.Session{}) {
 			t.Fatal("changed primary authority admitted", e)
+		}
+		if got, e := selected.Get(ctx, request); e != nil || got.Authenticated || got.Session != (session.Session{}) {
+			t.Fatal("passkey selection bypassed current password authority", e)
 		}
 		// Fixture restoration only; product lifecycle never resets security epochs.
 		if _, err = pool.Raw().Exec(ctx, `UPDATE identity.global_authorities SET version=1 WHERE authority_id='deployment-issue'; UPDATE identity.tenant_authorities SET version=1,enabled=true WHERE tenant_id='session-read'; UPDATE identity.users SET authority_version=1,identifier_version=1,credential_version=1,status='active' WHERE tenant_id='session-read'; UPDATE identity.credential_references SET version=1,enabled=true,kind=1,owner='identity/password' WHERE tenant_id='session-read'; UPDATE authorization_subject_authorities SET version=1 WHERE tenant_id='session-read'; UPDATE session_store.families SET version=1,state='active' WHERE tenant_id='session-read'; UPDATE session_store.sessions SET state='active' WHERE tenant_id='session-read'`); err != nil {

@@ -114,6 +114,7 @@ type primarySessionReader struct {
 	mfaPassword       bool
 	mfaPasswordReader *primarySessionReader
 	passkey           *passkeySessionSelection
+	passkeyReader     *primarySessionReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -185,6 +186,9 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	}
 	vector, _ := spec.Authority.Bindings()
 	if spec.Authentication.Proof.Method == "passkey" || vector.Passkey.Present {
+		if r.passkeyReader != nil {
+			return r.passkeyReader.observeCredential(bounded, stored, start)
+		}
 		if r.passkey == nil {
 			return session.SessionObservation{}, session.ErrUnauthenticated
 		}

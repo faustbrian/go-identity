@@ -269,7 +269,26 @@ func TestPasskeySessionAtomicNativePersistence(t *testing.T) {
 				if got, err := passwordReader.Get(ctx, request); err != nil || got.Authenticated {
 					t.Fatal("passkey authority downgraded to password", err)
 				}
-				testPasskeySessionOwnedLogout(t, ctx, pool, service, request, accepted, profile, authority)
+				selected, err := NewSelectedSessionService(pool, SelectedSessionServiceConfig{
+					Repository: Config{Schema: "session_store", MaximumDuration: time.Second}, Validation: validation,
+					Admission: SelectedSessionAdmissionConfig{
+						SingleFactor: SingleFactorSessionAdmissionConfig{Verified: &legacy},
+						Passkey:      &PasskeySessionAdmission{Profile: profile, Authority: authority},
+					},
+				})
+				if err != nil {
+					t.Fatal("explicit combined passkey session owner", err)
+				}
+				combined, err := selected.Get(ctx, request)
+				if err != nil || !combined.Authenticated {
+					t.Fatal("selected common reader denied real passkey session", err)
+				}
+				authority.passkeyVersion = 2
+				if got, err := selected.Get(ctx, request); err != nil || got.Authenticated {
+					t.Fatal("selected reader fell back after passkey authority withdrawal", err)
+				}
+				authority.passkeyVersion = 1
+				testPasskeySessionOwnedLogout(t, ctx, pool, selected, request, combined, profile, authority)
 			}
 		})
 	}
