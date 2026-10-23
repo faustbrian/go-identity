@@ -291,6 +291,19 @@ bindings. Only human approval with `grant.authorized.v1` selects the independent
 consent contribution. Registration alone authenticates neither client nor user
 and does not initialize device storage or expose a route.
 
+For client-authenticated polling of an approved human grant,
+`RequireOAuthDeviceGrantSource` fences the source user's exact credential,
+independent user/identifier/credential epochs and user-policy authority in the
+same Work. It admits only the exact native device-token command during its
+owner's preparation, apply or final invocation, checking its original source,
+client and grant selectors. The command's client actor and anonymous flow never
+become the source user. Current withdrawal poisons Work; credential expiry is
+checked again after authorization lock waits. Derive expectations through the
+session owner's `OriginalDeviceGrantAdmission`; the native owner must still
+match the complete original session to its locked grant, fence directory,
+session, client and consent authority, and retain original temporal bounds.
+This check is neither authentication nor a renewable validity lease.
+
 These are library prerequisites. Complete native invitation/OAuth consumers,
 their public dependency pins, real delivery/denial/replay/rollback acceptance and
 whole-unit qualification remain separate requirements; these declarations alone

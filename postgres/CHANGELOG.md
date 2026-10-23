@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fence an approved human device-grant source during client-authenticated
+  polling without relabeling its client actor or anonymous command. The exact
+  native profile locks current credential and authorization epochs, denies
+  withdrawal and expiry after lock waits, and prevents ignored denials from
+  committing. Native session, directory, client and consent checks remain required.
+
 - Admit four exact device-authorization schemas through the existing OAuth
   native contributor. Authenticated device approval records its independent
   consent mutation and lifecycle event in the same protected transaction;
