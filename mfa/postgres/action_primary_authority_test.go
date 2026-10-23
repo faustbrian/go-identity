@@ -103,6 +103,10 @@ func TestPasskeyUpdateFactorScopeKeepsExactNativeOwner(t *testing.T) {
 	testPasskeyActionFactorScope(t, []string{"identity.passkey.update"})
 }
 
+func TestPasskeyDeletionFactorScopeKeepsExactNativeOwner(t *testing.T) {
+	testPasskeyActionFactorScope(t, []string{"identity.passkey.delete"})
+}
+
 func testPasskeyActionFactorScope(t *testing.T, actions []string) {
 	t.Helper()
 	for _, action := range actions {
@@ -130,7 +134,7 @@ func testPasskeyActionFactorScope(t *testing.T, actions []string) {
 				case "changed-generation":
 					request.Fields[1].Value.Uint64++
 				case "unselected-action":
-					request.Operation.OperationID = "identity.passkey.delete"
+					request.Operation.OperationID = "identity.passkey.signin-verify"
 					request.Operation.SchemaID = request.Operation.OperationID + ".native-v1"
 					request.Binding.OperationID, request.Binding.SchemaID = request.Operation.OperationID, request.Operation.SchemaID
 					owner.Operation = request.Operation

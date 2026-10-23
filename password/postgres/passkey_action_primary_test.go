@@ -16,6 +16,10 @@ func TestPasskeyUpdateActionPrimaryRetainsExactSelfCustody(t *testing.T) {
 	testPasskeyActionPrimarySelfCustody(t, []string{"identity.passkey.update"})
 }
 
+func TestPasskeyDeletionActionPrimaryRetainsExactSelfCustody(t *testing.T) {
+	testPasskeyActionPrimarySelfCustody(t, []string{"identity.passkey.delete"})
+}
+
 func testPasskeyActionPrimarySelfCustody(t *testing.T, actions []string) {
 	t.Helper()
 	for _, action := range actions {
@@ -68,7 +72,7 @@ func testPasskeyActionPrimarySelfCustody(t *testing.T, actions []string) {
 }
 
 func TestPasskeyActionPrimaryDoesNotSelectOtherOperations(t *testing.T) {
-	for _, action := range []string{"identity.passkey.signin-options", "identity.passkey.signin-verify", "identity.passkey.update-other", "identity.passkey.delete"} {
+	for _, action := range []string{"identity.passkey.signin-options", "identity.passkey.signin-verify", "identity.passkey.update-other", "identity.passkey.delete-other"} {
 		source, request, fields, _ := phonePrimaryFixture(t, action)
 		if _, err := source.Restore(context.Background(), request, fields); err == nil {
 			t.Fatal("enrollment selection admitted an unrelated passkey operation")

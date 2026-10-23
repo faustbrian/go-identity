@@ -69,6 +69,9 @@ func testPublicResetRequest(t *testing.T, ctx context.Context, previous *ResetSe
 	if err != nil {
 		t.Fatal("public reset request composition", err)
 	}
+	t.Run("passkey removal recovery owner", func(t *testing.T) {
+		testPasskeyRemovalRecoveryOwner(t, ctx, service, canonical)
+	})
 	var public password.ResetService = service
 	id, _ := identity.NewCommandID()
 	key, _ := identity.NewIdempotencyKey([]byte("synthetic-public-reset-request-001"))

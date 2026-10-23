@@ -1,5 +1,26 @@
 # Password PostgreSQL adapter
 
+## Passkey self-deletion prerequisites
+
+Select an exact `identity.passkey.delete` target/audience in the existing
+reauthentication owner and `ActionPrimarySource`. Install
+`PasskeyDeletionReauthenticationMigrationSource` after the complete installed
+passkey proof history, including management when present. Existing migration
+bytes and signed/consumed rows remain unchanged. Proof verification does not
+consume; the native protected transaction owns one-time use.
+
+`NewPasskeyRemovalRecoverySource(reset)` requires actual selected native reset
+request/completion, not an application-supplied recovery boolean. The native
+deletion constructor must require `Matches` for its primary pool, password
+session schema/realm and policy. Bind `Fields` into the original command and
+call `CheckPasskeyRemovalRecovery` under the same Work before mutation and at
+final admission. Abort on every error. The guard checks a current verified
+email accepted unchanged by the selected reset parser, active account, unique
+enabled/unexpired password and consistent real material; it does not issue or
+deliver a reset. Native fresh-proof, factor/risk, protocol/mapping removal and
+session effects remain independently mandatory. These prerequisites enable no
+HTTP route or standalone passkey deletion workflow.
+
 `ActionPrimaryRequest` is a source-compatible alias of
 `password.ActionPrimaryRequest`. Feature/transport ports may import the neutral
 core carrier while existing native callers keep their adapter spelling.

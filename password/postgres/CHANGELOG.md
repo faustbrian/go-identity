@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Admit genuine self-deletion passkey action proofs through the existing
+  signed-primary owner. Append `PasskeyDeletionReauthenticationMigrationSource`
+  after every installed selected proof suffix; consumption remains atomic with
+  the protected native mutation, not proof verification.
+
+- Select concrete reset-backed passkey-removal recovery with same-primary,
+  session-realm and policy matching. Protected checks require verified email,
+  real matching password material and current expiry; no reset is issued.
+
 - Admit exact self-only `identity.passkey.update` action-primary custody for
   credential-label changes. Append
   `PasskeyManagementReauthenticationMigrationSource` after the complete installed

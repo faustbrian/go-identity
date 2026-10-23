@@ -87,6 +87,11 @@ func TestNativePasskeyUpdateActionPrimary(t *testing.T) {
 	testNativeSelfActionPrimary(t, []string{"identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update"}, base, PasskeyManagementReauthenticationMigrationSource{Base: base, Version: 122})
 }
 
+func TestNativePasskeyDeletionActionPrimary(t *testing.T) {
+	base := PasskeyManagementReauthenticationMigrationSource{Base: PasskeyReauthenticationMigrationSource{Base: nativeSelfActionProofHistory(), Version: 121}, Version: 122}
+	testNativeSelfActionPrimary(t, []string{"identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update", "identity.passkey.delete"}, base, PasskeyDeletionReauthenticationMigrationSource{Base: base, Version: 123})
+}
+
 func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory migrations.Source, upgrades ...migrations.Source) {
 	t.Helper()
 	testNativeSigninPhaseIntegration(t, "organization lifecycle password owner", func(t *testing.T, ctx context.Context, pool *database.Pool, _ *SignupService, signup SignupConfig, keys *keyring.Provider, fresh func(string, byte) password.SignupRequest) {
@@ -145,7 +150,9 @@ func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory mi
 			}
 			for _, action := range actions {
 				t.Run(action, func(t *testing.T) {
-					if action == "identity.passkey.update" && len(upgrades) != 0 {
+					// Install the selected suffix only after real predecessor proofs
+					// have been consumed, preserving their populated signed rows.
+					if len(upgrades) != 0 && action == actions[len(actions)-1] {
 						var before, after []byte
 						const snapshot = `SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY proof_id),'[]'::jsonb) FROM identity_password.reauthentication_records r`
 						if err := pool.Raw().QueryRow(ctx, snapshot).Scan(&before); err != nil || bytes.Equal(before, []byte("[]")) {
@@ -238,6 +245,9 @@ func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory mi
 						}
 						if action == "identity.passkey.update" {
 							plan.Lifecycle.EventType = "identity.passkey.rename_credential"
+						}
+						if action == "identity.passkey.delete" {
+							plan.Lifecycle.EventType = "identity.passkey.remove_credential"
 						}
 						plan, err = coordinator.PrepareCommandPlan(binding, command, plan)
 						if err != nil {

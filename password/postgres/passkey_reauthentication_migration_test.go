@@ -78,3 +78,43 @@ func TestPasskeyManagementProofMigrationPreservesInstalledHistory(t *testing.T) 
 		}
 	}
 }
+
+func TestPasskeyDeletionProofMigrationPreservesInstalledHistory(t *testing.T) {
+	base := PasskeyManagementReauthenticationMigrationSource{Base: PasskeyReauthenticationMigrationSource{Base: ActionReauthenticationMigrationSource{Base: EmailReauthenticationMigrationSource{}, Version: 70}, Version: 74}, Version: 75}
+	before, err := base.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := PasskeyDeletionReauthenticationMigrationSource{Base: base, Version: 76}
+	history, err := source.Load(t.Context())
+	if err != nil || len(history) != len(before)+1 {
+		t.Fatal("forward deletion proof history unavailable", err)
+	}
+	for n := range before {
+		if history[n] != before[n] {
+			t.Fatal("installed enrollment/rename proof history rewritten")
+		}
+	}
+	if history[len(before)].DownSQL() != "" {
+		t.Fatal("destructive proof-use rollback offered")
+	}
+	if rows, err := source.Load(nil); err == nil || rows != nil {
+		t.Fatal("nil migration context admitted")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if rows, err := source.Load(ctx); !errors.Is(err, context.Canceled) || rows != nil {
+		t.Fatal("migration cancellation lost", err)
+	}
+	// Deletion is independent of selecting rename; its installed history must
+	// still be included whenever present.
+	withoutManagement := PasskeyDeletionReauthenticationMigrationSource{Base: base.Base, Version: 76}
+	if history, err := withoutManagement.Load(t.Context()); err != nil || len(history) != len(before) {
+		t.Fatal("deletion forced unrelated management selection", err)
+	}
+	for _, invalid := range []PasskeyDeletionReauthenticationMigrationSource{{}, {Base: base}, {Base: base, Version: 75}, {Base: base, Version: ^migrations.Version(0)}, {Base: base.Base.(PasskeyReauthenticationMigrationSource).Base, Version: 76}, {Base: EmailReauthenticationMigrationSource{}, Version: 76}} {
+		if rows, err := invalid.Load(t.Context()); !errors.Is(err, password.ErrPasswordWork) || rows != nil {
+			t.Fatal("invalid deletion history returned partial migration", err)
+		}
+	}
+}

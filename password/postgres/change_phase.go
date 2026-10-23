@@ -231,7 +231,7 @@ WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' 
 
 func reauthenticationConsumptionAction(action string) bool {
 	switch action {
-	case "identity.password.change", "identity.mfa.enable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.username.update", "identity.organization.owner-transfer", "identity.organization.archive", "identity.organization.restore", "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove", "identity.anonymous.upgrade", "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update":
+	case "identity.password.change", "identity.mfa.enable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.username.update", "identity.organization.owner-transfer", "identity.organization.archive", "identity.organization.restore", "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove", "identity.anonymous.upgrade", "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update", "identity.passkey.delete":
 		return true
 	default:
 		return false

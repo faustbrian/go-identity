@@ -11,7 +11,7 @@ import (
 
 // RequireActionPrimaryFactors fences original known-empty MFA generations for
 // selected native username rename, organization transfer/lifecycle and self-only
-// passkey enrollment and credential-label update. Read the
+// passkey enrollment, credential-label update and self-deletion. Read the
 // generations using ReadPasswordSigninFactors before freezing command intent;
 // bind both action-primary.actor-factor-version and
 // action-primary.target-factor-version as uint64 fields. Username rename is
@@ -75,7 +75,7 @@ func actionPrimaryFactorSubjects(s identity.FeatureCommandSpec, f kernel.Feature
 			op = identity.FeatureOperation{Owner: "organization", OperationID: s.Operation.OperationID, SchemaID: "organization-lifecycle", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 			descriptor = kernel.ContributorDescriptor{Owner: "organization/postgres", ContractID: "organization.membership", Version: 1}
 		}
-		if s.Operation.OperationID == "identity.passkey.register-options" || s.Operation.OperationID == "identity.passkey.register-verify" || s.Operation.OperationID == "identity.passkey.update" {
+		if s.Operation.OperationID == "identity.passkey.register-options" || s.Operation.OperationID == "identity.passkey.register-verify" || s.Operation.OperationID == "identity.passkey.update" || s.Operation.OperationID == "identity.passkey.delete" {
 			op = identity.FeatureOperation{Owner: "passkey", OperationID: s.Operation.OperationID, SchemaID: s.Operation.OperationID + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 			descriptor = kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 		}
