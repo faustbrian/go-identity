@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit explicitly selected passkey self-deletion under its native stored-session
+  synchronizer, exact token header and Origin. Signin retains its separate
+  pre-auth profile. Its native keyed repeat profile preserves original shared
+  secret-rate debit identity without admitting unrelated repeat operations;
+  no routes are enabled by this policy selection alone.
+
 - Admit explicitly selected passkey label updates under the original stored
   session synchronizer, exact token header and Origin, without inventing a
   renewable CSRF age or enabling deletion, signin or a route by default.

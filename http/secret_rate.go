@@ -96,7 +96,12 @@ func NewKeyedSecretRateLimiter(c KeyedSecretRateConfig) (*KeyedSecretRateLimiter
 	originalOperations := make(map[string]bool)
 	inspectionOperations := make(map[string]bool)
 	for id, row := range readCatalog() {
-		if row.Rate == "rate.secret" && row.Idempotency == "keyed" && row.Exposure != "direct" {
+		// Native passkey removal preserves repeat semantics through an original
+		// request-key command, not a fresh one-use proof on each retry. Admit
+		// only that explicit keyed profile; other repeat inspections remain
+		// separately charged through the inspection methods below.
+		keyedRemoval := id == "identity.passkey.delete" && row.Idempotency == "repeat"
+		if row.Rate == "rate.secret" && (row.Idempotency == "keyed" || keyedRemoval) && row.Exposure != "direct" {
 			operations[id] = true
 		}
 		// Recovery-set rotation has an explicit native command, not a request

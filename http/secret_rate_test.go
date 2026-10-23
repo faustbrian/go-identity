@@ -120,6 +120,37 @@ func TestKeyedSecretRateMapsFixedAtomicPolicyAndOriginalKey(t *testing.T) {
 	}
 }
 
+func TestPasskeyRemovalRepeatProfileRetainsOriginalKeyRateCustody(t *testing.T) {
+	l, b := secretLimiter(t)
+	r := secretRequest(t)
+	r.OperationID = "identity.passkey.delete"
+	facts := safeFacts(t, "198.51.100.1")
+	if out, err := l.Admit(t.Context(), facts, r); err != nil || !out.Allowed {
+		t.Fatal("native keyed removal denied", err)
+	}
+	first := b.last
+	if len(first.Requests) != 2 || first.CommandID == "" {
+		t.Fatal("missing shared removal dimensions")
+	}
+	if out, err := l.Admit(t.Context(), facts, r); err != nil || !out.Allowed || b.last.CommandID != first.CommandID {
+		t.Fatal("original deletion retry changed debit", err)
+	}
+	r.OperationID = "identity.password.change"
+	if _, err := l.Admit(t.Context(), facts, r); err != nil || b.last.CommandID == first.CommandID || b.last.Requests[1].Key != first.Requests[1].Key {
+		t.Fatal("deletion isolated shared subject budget", err)
+	}
+	before := b.calls
+	for _, operation := range []string{"identity.session.revoke-one", "identity.password.reset-inspect"} {
+		r.OperationID = operation
+		if _, err := l.Admit(t.Context(), facts, r); !errors.Is(err, identityhttp.ErrInvalidInput) {
+			t.Fatal("removal exception leaked into repeat", operation, err)
+		}
+	}
+	if b.calls != before {
+		t.Fatal("unsupported repeat debited")
+	}
+}
+
 func TestKeyedSecretRateDenialUnknownAndCancellation(t *testing.T) {
 	l, b := secretLimiter(t)
 	r := secretRequest(t)
