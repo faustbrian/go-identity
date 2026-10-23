@@ -14,6 +14,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
+	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/otp"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
@@ -135,6 +136,7 @@ type featureState struct {
 	email                        *emailState
 	mfaEnrollment                *mfaEnrollmentState
 	mfaOTPEnrollment             *mfaOTPEnrollmentState
+	mfaListing                   *mfa.ListService
 	passwordChange               *passwordChangeState
 	httpPasswordVerification     *passwordVerificationHTTPState
 	httpPasswordChange           *passwordChangeHTTPState
@@ -184,7 +186,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if c.HTTPMFAFactorUpdate != nil && (c.MFAEnrollment == nil || c.MFAEnrollment.FactorManagement == nil || c.Session == nil) {
 		return identity.InvalidInputError{Field: "reference_http_mfa_factor_update"}
 	}
-	if c.HTTPMFAList != nil && (c.MFAEnrollment == nil || !c.MFAEnrollment.Listing || c.Session == nil) {
+	if c.HTTPMFAList != nil && (!(c.MFAEnrollment != nil && c.MFAEnrollment.Listing || c.MFAOTPEnrollment != nil && c.MFAOTPEnrollment.Listing) || c.Session == nil) {
 		return identity.InvalidInputError{Field: "reference_http_mfa_list"}
 	}
 	if c.HTTPMFARecoveryRegeneration != nil && (c.MFAEnrollment == nil || c.MFAEnrollment.Regeneration == nil || c.Session == nil) {
@@ -616,7 +618,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	if err := composeMFAListing(c, mfaEnrollmentOwner, sessionOwner); err != nil {
+	mfaListingOwner, err := composeMFAListing(c, mfaEnrollmentOwner, mfaOTPEnrollmentOwner, sessionOwner)
+	if err != nil {
 		return err
 	}
 	migrationConfig.mfaEnrollment = mfaEnrollmentOwner != nil
@@ -704,7 +707,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpSession.rate.Close()
 		}
 	}()
-	httpMFAList, err := composeMFAListHTTP(c, mfaEnrollmentOwner, sessionOwner, httpSession, s.httpRate)
+	httpMFAList, err := composeMFAListHTTP(c, mfaListingOwner, sessionOwner, httpSession, s.httpRate)
 	if err != nil {
 		return err
 	}
@@ -835,6 +838,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.passwordChange = passwordChangeOwner
 	s.features.mfaEnrollment = mfaEnrollmentOwner
 	s.features.mfaOTPEnrollment = mfaOTPEnrollmentOwner
+	s.features.mfaListing = mfaListingOwner
 	s.features.httpPasswordVerification = httpPasswordVerification
 	s.features.httpPasswordChange = httpPasswordChange
 	s.features.httpSession = httpSession

@@ -593,6 +593,14 @@ Set `MFAEnrollmentConfiguration.Listing = true` for guarded native
 engine and the TOTP-only PostgreSQL metadata owner; graph startup/tenant/shutdown
 guards remain effective. Other MFA methods/devices remain outside this profile.
 
+For a graph selecting `MFAOTPEnrollment`, set its `Listing = true` to compose
+the coherent native OTP/TOTP reader instead. The same public handle returns
+unexpired pending, confirmed and retained revoked metadata plus unused recovery
+counts. Recipient destinations and credentials are never returned. This remains
+independent of OTP login, HTTP and factor mutation. If TOTP management is also
+selected, its safe labels are included; unsupported factor authority fails
+closed rather than returning a partial inventory.
+
 Set `StoreConfiguration.HTTPMFAList = &HTTPMFAListConfiguration{}` to select
 `GET /v1/mfa/list` when HTTP session routes already exist. Both borrow the exact
 same safe limiter, including emergency capacity. Without HTTP session routes,

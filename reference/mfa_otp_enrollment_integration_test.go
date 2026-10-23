@@ -149,6 +149,9 @@ func proveReferenceMFAOTPEnrollment(t *testing.T, ctx context.Context, f liveSto
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_mfa.otp_factors WHERE tenant_id=$1 AND user_id=$2 AND state=2`, otpTenant, string(bindings.UserID)).Scan(&active); err != nil || active != 0 {
 		t.Fatal("enrollment activated without confirmation", err)
 	}
+	if f.config.MFAOTPEnrollment.Listing {
+		proveOTPFactorInventory(t, ctx, f, features, client, base, cookies, string(pending.Enrollment.ID), mfa.FactorPending, 0)
+	}
 	repeat, err := enroller.Enable(ctx, enable)
 	if err != nil || repeat.Outcome != identity.CommitOutcomeCommitted || len(repeat.RecoveryMaterial.Codes) != 0 {
 		t.Fatal("enrollment replay disclosed new recovery material", err)
@@ -186,9 +189,16 @@ func proveReferenceMFAOTPEnrollment(t *testing.T, ctx context.Context, f liveSto
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_mfa.otp_factors WHERE tenant_id=$1 AND user_id=$2 AND state=2`, otpTenant, string(bindings.UserID)).Scan(&active); err != nil || active != 1 {
 		t.Fatal("OTP factor did not activate", err)
 	}
+	if f.config.MFAOTPEnrollment.Listing {
+		proveOTPFactorInventory(t, ctx, f, features, client, base, cookies, string(pending.Enrollment.ID), mfa.FactorActive, 10)
+	}
 	if f.mfaOTPEnrollmentOnly {
 		if owner, err := features.PasswordOTP(); err == nil || owner != nil {
 			t.Fatal("enrollment selected an unrequested login method")
+		}
+		if f.config.MFAOTPEnrollment.Listing {
+			proveRegistrationSessionLogout(t, ctx, client, base, origin, cookies, csrfWire, bindings.SessionID, f, features)
+			proveOTPInventoryLoggedOut(t, ctx, features, cookies)
 		}
 		return
 	}
@@ -331,7 +341,15 @@ func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStor
 		t.Fatal("OTP replay redelivered session")
 	}
 	proveOTPLogoutCurrentAuthority(t, ctx, f, credential, csrf)
+	if f.config.MFAOTPEnrollment.Listing {
+		proveOTPFactorInventory(t, ctx, f, features, client, base, issued, string(factor), mfa.FactorActive, 10)
+		proveOTPMixedFactorInventory(t, ctx, f, features, issued, binding.UserID, string(factor))
+		proveOTPInventoryCorruption(t, ctx, f, features, issued, binding.UserID)
+	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, issued, csrf, binding.SessionID, f, features)
+	if f.config.MFAOTPEnrollment.Listing {
+		proveOTPInventoryLoggedOut(t, ctx, features, issued)
+	}
 }
 
 // Prepare real caller custody before changing authority, then execute it while

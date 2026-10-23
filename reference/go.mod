@@ -30,7 +30,7 @@ require (
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261018013113-bb569ec9d44c
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023075430-665a40ff4c1a
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023083556-855d87dfdcc5
 	github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6
 	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6
 	github.com/faustbrian/go-identity/password v0.0.0-20261020120243-19670fe0ec13

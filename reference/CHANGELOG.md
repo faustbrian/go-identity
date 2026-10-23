@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently select authenticated native OTP/TOTP factor inventory through
+  `MFAOTPEnrollmentConfiguration.Listing`, including pending/confirmed state
+  and safe recovery counts. Existing opt-in MFA-list HTTP uses that same owner;
+  selection adds no mutation or login route and retains graph/session lifetime
+  and post-read authority checks. TOTP-only composition remains compatible.
+
 - Independently compose native secondary-OTP enrollment, delivery, confirmation
   and original recovery with graph/tenant/lifetime guards. Password-origin OTP
   login and HTTP remain separate selections. Follow selected OTP session

@@ -105,6 +105,8 @@ github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261021080757-a33b0dfc384
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261021080757-a33b0dfc3840/go.mod h1:+yM7FTZeO69grsc0TC07tr2Ttp9+FYMDsRZS4m9R26s=
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023075430-665a40ff4c1a h1:GLUXnEqI924mkiz/q+112oSqXlNU3Oh3cGndJhaY14U=
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023075430-665a40ff4c1a/go.mod h1:+yM7FTZeO69grsc0TC07tr2Ttp9+FYMDsRZS4m9R26s=
+github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023083556-855d87dfdcc5 h1:vWV4YmX0tBycSReVzDgT6Q2tWTSO9FuDHdWUXJiCB5U=
+github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023083556-855d87dfdcc5/go.mod h1:+yM7FTZeO69grsc0TC07tr2Ttp9+FYMDsRZS4m9R26s=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6 h1:ohdM4yyDKIaMf3iZbwR8irICYZhzvx2LnuhOCswXiNE=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6/go.mod h1:qxYVoKX0qfE9ZwMxL773dOwGxhixbKprZGgIg619Ekg=
 github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6 h1:8vtFdLM7k55fznPVEGZkgnJ+o1wrfZTHN/PJFWQJHeo=

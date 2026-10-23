@@ -8,6 +8,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	mfahttp "github.com/faustbrian/go-identity/http/mfa"
+	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/session"
 )
 
@@ -52,15 +53,16 @@ type mfaListHTTPState struct {
 	timeout time.Duration
 }
 
-func composeMFAListHTTP(c StoreConfiguration, owner *mfaEnrollmentState, sessions *sessionState, existing *sessionHTTPState, shared *httpRateState) (*mfaListHTTPState, error) {
+func composeMFAListHTTP(c StoreConfiguration, owner *mfa.ListService, sessions *sessionState, existing *sessionHTTPState, shared *httpRateState) (*mfaListHTTPState, error) {
 	if c.HTTPMFAList == nil {
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_mfa_list"}
-	if c.MFAEnrollment == nil || !c.MFAEnrollment.Listing || owner == nil || owner.listing == nil || sessions == nil || sessions.reader == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || shared == nil || c.HTTPRate == nil {
+	_, budget := mfaListingProfile(c)
+	if budget == 0 || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || shared == nil || c.HTTPRate == nil {
 		return nil, invalid
 	}
-	out := &mfaListHTTPState{now: c.Session.Native.Execution.Clock.Now, timeout: c.MFAEnrollment.Native.MaximumDuration}
+	out := &mfaListHTTPState{now: c.Session.Native.Execution.Clock.Now, timeout: budget}
 	if existing != nil {
 		if c.HTTPMFAList.StandaloneRate != nil {
 			return nil, invalid

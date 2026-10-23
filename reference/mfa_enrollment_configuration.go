@@ -5,7 +5,6 @@ import (
 
 	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
-	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -59,7 +58,6 @@ type mfaEnrollmentState struct {
 	confirm     *mfapg.TOTPConfirmationService
 	stepup      *mfapg.TOTPActiveStepUpService
 	regenerate  *mfapg.RecoveryRegenerationService
-	listing     *mfa.ListService
 	manage      *mfapg.FactorUpdateService
 	disable     *mfapg.DisableService
 	emailChange bool

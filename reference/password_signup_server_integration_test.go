@@ -256,6 +256,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	mfaOTPEnrollment     bool
 	mfaOTPEnrollmentOnly bool
+	mfaOTPListing        bool
+	mfaOTPListingHTTP    bool
 	phoneEnrollment      bool
 	phonePassword        bool
 	phoneTOTP            bool
@@ -515,6 +517,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.mfaOTPEnrollment {
 		configureReferenceMFAOTPEnrollment(t, &c, origin, extensions.mfaOTPEnrollmentOnly)
+		c.MFAOTPEnrollment.Listing = extensions.mfaOTPListing
+		if extensions.mfaOTPListingHTTP {
+			c.HTTPMFAList = &reference.HTTPMFAListConfiguration{}
+		}
 	}
 	if extensions.mfaListing {
 		c.MFAEnrollment.Listing = true

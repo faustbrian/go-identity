@@ -27,6 +27,9 @@ import (
 // password-session owners. FreshnessLimit cannot renew original session custody.
 // Configuration and borrowed dependencies must remain immutable during use.
 type MFAOTPEnrollmentConfiguration struct {
+	// Listing independently selects safe native TOTP/OTP inventory. HTTP still
+	// requires HTTPMFAList; selecting inventory enables no factor mutation.
+	Listing           bool
 	Native            mfapg.OTPEnrollmentConfig
 	Primary           passwordpg.MFAEnablePrimaryConfig
 	CSRFKeys          []session.CSRFKey
