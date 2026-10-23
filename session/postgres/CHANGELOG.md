@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add source-free expired-guest session/family disposal after actual same-Work
+  kernel disposal, including already-pruned or fully revoked sets. Append
+  `AnonymousExpiryMigrationSource` after the selected anonymous history;
+  browser delete/upgrade still require their original source custody.
+- Add exact-source OIDC logout as an effect in the existing OAuth transaction,
+  reusing single-session revocation and retained original-record evidence.
+  Append `OIDCEndSessionMigrationSource` after single-session history. The
+  separate RP-logout disposition survives payload pruning without changing
+  ordinary browser-signout grant policy; protocol/hint/transport composition
+  remains required and unsupported authentication profiles deny.
+
 - Add the closed anonymous-upgrade session effect: revoke the complete guest
   session/family set and issue exactly one new permanent-target session in the
   same protected Work. Preserve target authentication age, original authority,

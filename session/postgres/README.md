@@ -1587,3 +1587,27 @@ selected disposition history; independently optional disable v3 is not required.
 Recovery
 authenticates the original retained disposition; it does not require a live source
 cookie, disclose a new session or repeat revocation.
+
+### Service expiry and OIDC termination owner effects
+
+`AnonymousDisposalEffect.ApplyExpired` accepts only the closed service-expiry
+command after actual kernel disposal. It revokes the complete guest set,
+including empty/pruned sets; it does not authenticate an expired guest. Install
+`AnonymousExpiryMigrationSource` last after the selected disposal/upgrade
+histories. Its `Upgrade` flag must describe the already-installed history.
+
+`NewOIDCEndSessionEffect` selects exact-source password-session termination in
+the OAuth owner's existing transaction. `OIDCEndSessionFields` preserves the
+original session and microsecond-exact deadline; floor finer clock precision,
+never round up. Install `OIDCEndSessionMigrationSource` after single-session
+revocation history. Apply, final Check and original Recover share the existing
+session tombstone; siblings and family epochs remain unchanged. The protocol
+owner still authenticates the cookie, verifies the issued ID-token hint and
+current client/key/origin, and requires the protected OIDC audit plus
+`session.revoked.v1` in that transaction. These effects enable no endpoint.
+
+`OIDCEndSessionRevoked` is a bounded primary structural read, not authentication
+or a renewable positive lease. `RequireNotRevoked` fences that disposition in
+the selected native OAuth token Work. Only RP logout creates this disposition;
+ordinary signout does not silently change existing grant policy. Recovery uses
+retained original evidence even after source payload pruning, not active Get.

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -38,6 +39,37 @@ func NewAnonymousDisposalEffect(c Config) (*AnonymousDisposalEffect, error) {
 }
 func anonymousDeleteOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/anonymous", OperationID: "identity.anonymous.delete", SchemaID: "identity.anonymous.delete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+type anonymousDisposalSessionMode uint8
+
+const (
+	anonymousSessionSelf anonymousDisposalSessionMode = iota + 1
+	anonymousSessionUpgrade
+	anonymousSessionExpired
+)
+
+func anonymousExpirySessionOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/anonymous", OperationID: "identity.anonymous.expire", SchemaID: "identity.anonymous.expire.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+func anonymousExpiryBinding(b identity.CommandBinding, op identity.FeatureOperation, l kernel.LifecyclePlan, d kernel.ContributorDescriptor) bool {
+	return b.ValidateFor(op) == nil && op == anonymousExpirySessionOperation() && b.ActorKind == authorization.SubjectServiceAccount && b.RecordID == string(b.UserID) && d == (kernel.ContributorDescriptor{Owner: "identity/anonymous/postgres", ContractID: "identity.anonymous", Version: 1}) && l.EventType == "anonymous.expired.v1" && l.BeforeVersion > 0 && l.BeforeVersion < ^uint64(0) && l.AfterVersion == l.BeforeVersion+1
+}
+
+func anonymousDisposalScopeForSession(w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, mode anonymousDisposalSessionMode) (identity.CommandBinding, kernel.LifecyclePlan, error) {
+	if mode == anonymousSessionSelf || mode == anonymousSessionUpgrade {
+		return anonymousDisposalSessionScope(w, p, c, mode == anonymousSessionUpgrade)
+	}
+	if mode != anonymousSessionExpired {
+		return identity.CommandBinding{}, kernel.LifecyclePlan{}, session.ErrInvalidSessionCommand
+	}
+	b, f, l, err := w.FeatureScope(p)
+	spec, ok := c.Feature()
+	if err != nil || !ok || spec.Binding != b || spec.Operation != f.Operation || !anonymousExpiryBinding(b, f.Operation, l, p.Descriptor()) {
+		return identity.CommandBinding{}, kernel.LifecyclePlan{}, session.ErrInvalidSessionCommand
+	}
+	return b, l, nil
 }
 func anonymousDeleteScope(w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command) (identity.CommandBinding, kernel.LifecyclePlan, error) {
 	b, f, l, err := w.FeatureScope(p)
@@ -81,47 +113,69 @@ func (e *AnonymousDisposalEffect) Apply(ctx context.Context, w kernel.Work, p ke
 }
 
 func (e *AnonymousDisposalEffect) apply(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session, upgrade bool) (identity.FeatureReceipt, error) {
+	mode := anonymousSessionSelf
+	if upgrade {
+		mode = anonymousSessionUpgrade
+	}
+	return e.applyFor(ctx, w, p, c, source, mode)
+}
+
+// ApplyExpired revokes the complete guest set without requiring a live source
+// session. Only the exact trusted service-expiry invocation with an actual
+// provisional kernel disposal is admitted. An empty or already-pruned set is
+// valid; non-anonymous contamination or an excess bound aborts the entire Work.
+// The native owner supplies expiry, service policy and retention fences.
+func (e *AnonymousDisposalEffect) ApplyExpired(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command) (identity.FeatureReceipt, error) {
+	return e.applyFor(ctx, w, p, c, session.Session{}, anonymousSessionExpired)
+}
+
+func (e *AnonymousDisposalEffect) applyFor(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session, mode anonymousDisposalSessionMode) (identity.FeatureReceipt, error) {
 	if ctx == nil || e == nil {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
 	if err := w.RequireFeatureCommand(ctx, p, c); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if !upgrade {
+	if mode == anonymousSessionSelf {
 		if err := anonymousDeletionSource(c, source); err != nil {
 			return identity.FeatureReceipt{}, err
 		}
 	}
-	b, l, err := anonymousDisposalSessionScope(w, p, c, upgrade)
+	b, l, err := anonymousDisposalScopeForSession(w, p, c, mode)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	var u identity.User
-	if upgrade {
+	if mode == anonymousSessionUpgrade {
 		typed, ok := p.(kernel.AnonymousUpgradeContributor)
 		if !ok {
 			return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 		}
 		u, err = w.AnonymousUpgradeDisposal(typed)
+	} else if mode == anonymousSessionExpired {
+		u, err = w.AnonymousExpiredDisposal(p)
 	} else {
 		u, err = w.AnonymousDisposal(p)
 	}
 	s, se := source.Bindings()
 	sourceUser := b.UserID
-	if upgrade {
+	if mode == anonymousSessionUpgrade {
 		sourceUser = identity.UserID(b.RecordID)
 	}
-	if err != nil || se != nil || u.ID != s.UserID || u.TenantID != s.TenantID || u.ID != sourceUser || s.Authentication.Kind != session.AuthenticationAnonymous || u.Status != identity.StatusDeleted && u.Status != identity.StatusAnonymized {
+	if err != nil || u.ID != sourceUser || u.TenantID != b.TenantID || u.Status != identity.StatusDeleted && u.Status != identity.StatusAnonymized || mode != anonymousSessionExpired && (se != nil || u.ID != s.UserID || u.TenantID != s.TenantID || s.Authentication.Kind != session.AuthenticationAnonymous) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
 	defer stop()
-	if err := RequireSession(bounded, w, e.config, source); err != nil {
-		return identity.FeatureReceipt{}, err
-	}
-	original, _, err := encodeRecord(source)
-	if err != nil {
-		return identity.FeatureReceipt{}, err
+	var original []byte
+	if mode != anonymousSessionExpired {
+		if err := RequireSession(bounded, w, e.config, source); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		original, _, err = encodeRecord(source)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	cursor := ""
 	count := uint32(0)
@@ -152,7 +206,7 @@ func (e *AnonymousDisposalEffect) apply(ctx context.Context, w kernel.Work, p ke
 				err = ErrInvalidRecord
 				break
 			}
-			if spec.SessionID == s.SessionID {
+			if mode != anonymousSessionExpired && spec.SessionID == s.SessionID {
 				encoded, _, ee := encodeRecord(stored.Session)
 				if ee != nil || !bytes.Equal(encoded, original) {
 					err = identity.ConflictError{}
@@ -188,7 +242,7 @@ func (e *AnonymousDisposalEffect) apply(ctx context.Context, w kernel.Work, p ke
 			break
 		}
 	}
-	if !found || count == 0 {
+	if mode != anonymousSessionExpired && (!found || count == 0) {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
 	// The kernel tenant mutex serializes every session/family writer. Count
@@ -203,7 +257,7 @@ func (e *AnonymousDisposalEffect) apply(ctx context.Context, w kernel.Work, p ke
 		return identity.FeatureReceipt{}, ErrInvalidRecord
 	}
 	rows.Close()
-	if families < 1 || families > 100000 {
+	if families < 0 || families > 100000 || mode != anonymousSessionExpired && families == 0 {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
 	n, err := w.Exec(bounded, `UPDATE `+e.schema+`.families SET state='revoked' WHERE tenant_id=$1 AND user_id=$2 AND state='active'`, string(b.TenantID), string(sourceUser))
@@ -215,7 +269,11 @@ func (e *AnonymousDisposalEffect) apply(ctx context.Context, w kernel.Work, p ke
 	}
 	id, binding := revocationEvidence(b, l)
 	result := anonymousDisposalSessionDigest(binding, source, count, uint32(families), chain)
-	n, err = w.Exec(bounded, `INSERT INTO `+e.schema+`.anonymous_disposals(tenant_id,command_id,purpose,user_id,source_id,before_version,after_version,revoked_count,family_count,effects_digest,binding_digest,result_digest) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9,$10,$11,$12)`, string(b.TenantID), id, b.OperationID, string(sourceUser), s.SessionID, strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), int64(count), families, chain[:], binding[:], result[:])
+	var sourceID any
+	if mode != anonymousSessionExpired {
+		sourceID = s.SessionID
+	}
+	n, err = w.Exec(bounded, `INSERT INTO `+e.schema+`.anonymous_disposals(tenant_id,command_id,purpose,user_id,source_id,before_version,after_version,revoked_count,family_count,effects_digest,binding_digest,result_digest) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9,$10,$11,$12)`, string(b.TenantID), id, b.OperationID, string(sourceUser), sourceID, strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), int64(count), families, chain[:], binding[:], result[:])
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -230,6 +288,8 @@ func anonymousDisposalSessionDigest(binding [32]byte, source session.Session, co
 	s, _ := source.Bindings()
 	// Reuse the session owner's existing chain/digest algorithm, not a second
 	// authority. The source ID/version and family count remain domain-separated.
+	// Service expiry has no source session: its zero tuple is separated from
+	// browser disposal by the original operation-bound command digest.
 	base := resetSessionDigest(binding, s.Version, uint64(families), s.FamilyVersion, count, chain)
 	return resetSessionNext(base, s.SessionID, s.Version)
 }
@@ -242,24 +302,39 @@ func (e *AnonymousDisposalEffect) Check(ctx context.Context, w kernel.Work, p ke
 }
 
 func (e *AnonymousDisposalEffect) check(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session, until time.Time, upgrade bool) error {
+	mode := anonymousSessionSelf
+	if upgrade {
+		mode = anonymousSessionUpgrade
+	}
+	return e.checkFor(ctx, w, p, c, source, until, mode)
+}
+
+// CheckExpired fences the absence of every active guest session and family in
+// the original service admission window. No expired or invented source session
+// is authenticated, and no observation deadline is renewed.
+func (e *AnonymousDisposalEffect) CheckExpired(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, until time.Time) error {
+	return e.checkFor(ctx, w, p, c, session.Session{}, until, anonymousSessionExpired)
+}
+
+func (e *AnonymousDisposalEffect) checkFor(ctx context.Context, w kernel.Work, p kernel.FeatureExecutionContributor, c identity.Command, source session.Session, until time.Time, mode anonymousDisposalSessionMode) error {
 	if ctx == nil || e == nil {
 		return session.ErrInvalidSessionCommand
 	}
-	if !upgrade {
+	if mode == anonymousSessionSelf {
 		if err := anonymousDeletionSource(c, source); err != nil {
 			return err
 		}
 	}
-	b, _, err := anonymousDisposalSessionScope(w, p, c, upgrade)
+	b, _, err := anonymousDisposalScopeForSession(w, p, c, mode)
 	if err != nil {
 		return err
 	}
 	s, err := source.Bindings()
 	sourceUser := b.UserID
-	if upgrade {
+	if mode == anonymousSessionUpgrade {
 		sourceUser = identity.UserID(b.RecordID)
 	}
-	if err != nil || s.UserID != sourceUser || s.TenantID != b.TenantID {
+	if mode != anonymousSessionExpired && (err != nil || s.UserID != sourceUser || s.TenantID != b.TenantID) {
 		return session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
@@ -281,7 +356,9 @@ func (e *AnonymousDisposalEffect) check(ctx context.Context, w kernel.Work, p ke
 	if err != nil {
 		return err
 	}
-	_, err = source.Lifetime(now)
+	if mode != anonymousSessionExpired {
+		_, err = source.Lifetime(now)
+	}
 	if err != nil || !now.Before(until) || until.After(now.Add(20*time.Second)) {
 		return identity.ForbiddenError{}
 	}
@@ -296,16 +373,34 @@ func (e *AnonymousDisposalEffect) Recover(ctx context.Context, w kernel.Recovery
 }
 
 func (e *AnonymousDisposalEffect) recover(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor, source session.Session, upgrade bool) (kernel.RecoveryStatus, error) {
+	mode := anonymousSessionSelf
+	if upgrade {
+		mode = anonymousSessionUpgrade
+	}
+	return e.recoverFor(ctx, w, p, source, mode)
+}
+
+// RecoverExpired reads retained service-expiry effects even after every guest
+// session payload is pruned. Absence is participant evidence only: the existing
+// coordinator must reconcile all owners before declaring the original outcome.
+// This returns no bearer and never re-executes cleanup.
+func (e *AnonymousDisposalEffect) RecoverExpired(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
+	return e.recoverFor(ctx, w, p, session.Session{}, anonymousSessionExpired)
+}
+
+func (e *AnonymousDisposalEffect) recoverFor(ctx context.Context, w kernel.RecoveryWork, p kernel.FeatureExecutionContributor, source session.Session, mode anonymousDisposalSessionMode) (kernel.RecoveryStatus, error) {
 	if ctx == nil || e == nil {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	b, f, l, err := w.FeatureScope(p)
 	s, se := source.Bindings()
 	op, event, sourceUser := anonymousDeleteOperation(), "anonymous.deleted.v1", b.UserID
-	if upgrade {
+	if mode == anonymousSessionUpgrade {
 		op, event, sourceUser = anonymousUpgradeSessionOperation(), "anonymous.upgraded.v1", identity.UserID(b.RecordID)
+	} else if mode == anonymousSessionExpired {
+		op, event = anonymousExpirySessionOperation(), "anonymous.expired.v1"
 	}
-	if err != nil || se != nil || f.Operation != op || p.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/anonymous/postgres", ContractID: "identity.anonymous", Version: 1}) || s.UserID != sourceUser || s.TenantID != b.TenantID || l.EventType != event || l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 || upgrade && b.UserID == sourceUser {
+	if err != nil || f.Operation != op || p.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/anonymous/postgres", ContractID: "identity.anonymous", Version: 1}) || l.EventType != event || l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 || mode == anonymousSessionUpgrade && b.UserID == sourceUser || mode == anonymousSessionExpired && !anonymousExpiryBinding(b, f.Operation, l, p.Descriptor()) || mode != anonymousSessionExpired && (se != nil || s.UserID != sourceUser || s.TenantID != b.TenantID) || mode < anonymousSessionSelf || mode > anonymousSessionExpired {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	id, binding := revocationEvidence(b, l)
@@ -322,13 +417,20 @@ func (e *AnonymousDisposalEffect) recover(ctx context.Context, w kernel.Recovery
 		}
 		return kernel.RecoveryNotCommitted, nil
 	}
-	var user, sourceID, before, after string
+	var user, before, after string
+	var sourceID *string
 	var count, families int64
 	var effects, savedBinding, savedResult []byte
 	if err := rows.Scan(&user, &sourceID, &before, &after, &count, &families, &effects, &savedBinding, &savedResult); err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	if rows.Next() || rows.Err() != nil || user != string(sourceUser) || sourceID != s.SessionID || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) || count < 1 || count > 100000 || families < 1 || families > 100000 || len(effects) != 32 || subtle.ConstantTimeCompare(binding[:], savedBinding) != 1 {
+	validSource := sourceID == nil
+	minimum := int64(0)
+	if mode != anonymousSessionExpired {
+		validSource = sourceID != nil && *sourceID == s.SessionID
+		minimum = 1
+	}
+	if rows.Next() || rows.Err() != nil || user != string(sourceUser) || !validSource || before != strconv.FormatUint(l.BeforeVersion, 10) || after != strconv.FormatUint(l.AfterVersion, 10) || count < minimum || count > 100000 || families < minimum || families > 100000 || len(effects) != 32 || subtle.ConstantTimeCompare(binding[:], savedBinding) != 1 {
 		return kernel.RecoveryUnknown, ErrInvalidRecord
 	}
 	var chain [32]byte

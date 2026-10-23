@@ -62,9 +62,19 @@ func (r *Repository) applyRevokeOne(ctx context.Context, w kernel.Work, one sess
 	if err != nil || b != one.Binding || feature.Operation != session.RevokeOneOperation() || transition.BeforeVersion != spec.Version || transition.AfterVersion != spec.Version+1 {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
+	return r.applySingleSessionRevocation(ctx, w, r, b, feature, transition, one.Session)
+}
+
+// Both self-signout and the exact selected OIDC effect retain this sole
+// single-session mutation/journal owner; protocol code cannot write sessions.
+func (r *Repository) applySingleSessionRevocation(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, b identity.CommandBinding, feature kernel.FeatureRegistration, transition kernel.LifecyclePlan, original session.Session) (identity.FeatureReceipt, error) {
+	spec, err := original.Bindings()
+	if err != nil {
+		return identity.FeatureReceipt{}, err
+	}
 	bounded, cancel := context.WithTimeout(ctx, r.maximumDuration)
 	defer cancel()
-	if err = r.requireRevokeRecordAuthority(bounded, w, one.Session, b); err != nil {
+	if err = r.requireRevokeRecordAuthorityFor(bounded, w, owner, original, b); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	// Acquire the mutation lock before the shared record admission, so two
@@ -82,10 +92,10 @@ func (r *Repository) applyRevokeOne(ctx context.Context, w kernel.Work, one sess
 	// This remains the exact original active record, not a refreshed vector.
 	// Family share locks prevent concurrent family revocation from crossing the
 	// transition; no family or sibling version is advanced by this operation.
-	if err = RequireSession(bounded, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, one.Session); err != nil {
+	if err = RequireSession(bounded, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, original); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	payload, _, err := encodeRecord(one.Session)
+	payload, _, err := encodeRecord(original)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}

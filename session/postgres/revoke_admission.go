@@ -124,29 +124,33 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 }
 
 func (r *Repository) requireRevokeRecordAuthority(ctx context.Context, w kernel.Work, record session.Session, b identity.CommandBinding) error {
+	return r.requireRevokeRecordAuthorityFor(ctx, w, r, record, b)
+}
+
+func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session, b identity.CommandBinding) error {
 	a, err := r.revokeRecordAdmission(record, b)
 	if err != nil {
 		return err
 	}
-	if err := w.RequireActiveDirectoryAuthority(ctx, r, a.directory); err != nil {
+	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.directory); err != nil {
 		return err
 	}
 	if a.credential != nil {
-		if _, err := w.RequireActiveCredential(ctx, r, *a.credential); err != nil {
+		if _, err := w.RequireActiveCredential(ctx, owner, *a.credential); err != nil {
 			return err
 		}
 	} else if a.identifier != nil {
-		if err := w.RequireVerifiedIdentifier(ctx, r, *a.identifier); err != nil {
+		if err := w.RequireVerifiedIdentifier(ctx, owner, *a.identifier); err != nil {
 			return err
 		}
 	} else {
 		return identity.ForbiddenError{}
 	}
-	if err := w.RequireActiveUserAuthorization(ctx, r, a.policy); err != nil {
+	if err := w.RequireActiveUserAuthorization(ctx, owner, a.policy); err != nil {
 		return err
 	}
 	if a.factor != nil {
-		return mfapg.RequireTOTPSessionFactor(ctx, w, r, b.UserID, a.factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
+		return mfapg.RequireTOTPSessionFactor(ctx, w, owner, b.UserID, a.factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
 	}
 	return nil
 }
