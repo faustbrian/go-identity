@@ -1,9 +1,9 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 07:08 UTC
+## TL;DR — updated 2026-10-23 08:01 UTC
 
-- **Whole goal: approximately 20–25% complete, low confidence.** Consumer
-  milestones are **10/39 closed**; retained scope is **67 units**. These are
+- **Whole goal: approximately 25% complete, low confidence.** Consumer
+  milestones are **11/39 closed**; retained scope is **67 units**. These are
   delivered consumer profiles, not full-unit/release qualification.
 - **Newly delivered:** trusted abandoned-guest cleanup/anonymization in native
   `anonymous/postgres`, main `d2f004f`, exact Required CI `39908869694` green.
@@ -24,8 +24,16 @@
   exact-source denial, sibling preservation and original COMMIT recovery.
   Root/child/native CI is green, including exact native run `39915425644`.
   This finite native profile is delivered; full M31 and HTTP/reference remain open.
-- **Next:** complete secondary-OTP enrollment and login in the public Reference graph,
-  reusing the existing native owners rather than rebuilding MFA. No new Tools,
+- **M11 consumer milestone closed:** secondary-OTP enrollment/delivery/
+  confirmation, password/OTP signin and usable session/read/logout are delivered.
+  MFA `665a40f`, session `c4d031c` and Reference `f721a66` are independently
+  approved, main-pushed and exact-CI green. The actual downloaded public
+  Reference module passes both real PostgreSQL/race OTP journeys (37.995s),
+  including changed-authority denial, rollback/recovery and separate enrollment
+  selection. Canonical public-dependency TOTP compatibility also passes.
+  Broader MFA variants and whole-unit qualification remain open.
+- **Next:** finish the retained M12 factor-management consumer outcome, adopting
+  its existing implementation and proof rather than restarting MFA. No new Tools,
   evidence framework, whole-repository verification or user decision is needed.
 
 ## Earlier checkpoint detail — preserved 2026-10-23 05:29 UTC
@@ -973,11 +981,11 @@ whole-unit qualification is claimed.
 
 | Measure | Current position |
 | --- | --- |
-| Complete consumer milestones | **10/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey, M06 selected magic-link journey, M07 selected email OTP journey, M08 existing-account phone lifecycle/signin/reset, M09 anonymous lifecycle/cleanup, M10 confirmed TOTP enrollment/signin, M15 selected WebAuthn ceremony. The unweighted count is 25.6%; it is not the whole-goal effort estimate. |
-| Remaining milestones | **29/39 not closed**: M04, M11–M14 and M16–M39. Existing implementation is not assumed absent. |
+| Complete consumer milestones | **11/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey, M06 selected magic-link journey, M07 selected email OTP journey, M08 existing-account phone lifecycle/signin/reset, M09 anonymous lifecycle/cleanup, M10 confirmed TOTP enrollment/signin, M11 secondary-OTP enrollment/signin, M15 selected WebAuthn ceremony. The unweighted count is 28.2%; it is not the whole-goal effort estimate. |
+| Remaining milestones | **28/39 not closed**: M04, M12–M14 and M16–M39. Existing implementation is not assumed absent. |
 | Additional delivered behavior | **13 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not thirteen additional closed milestones. |
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
-| Last consumer milestone closure | **23 October:** M09 anonymous signin/read/self-deletion/permanent upgrade plus abandoned cleanup. Final reference `64cee17`, independent review, exact green CI and actual downloaded public-module PostgreSQL/race five-journey proof. Broader startup reliability and whole-unit qualification remain open. |
+| Last consumer milestone closure | **23 October:** M11 secondary-OTP enrollment, delivered confirmation and password/OTP signin with usable session/read/logout. Final Reference `f721a66`, independent review, exact green CI and downloaded public-module PostgreSQL/race37.995s proof. Broader profiles and whole-unit qualification remain open. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
 | Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer, self-leave and current-subject organization listing.** Root `956176f` / native `804dbe8` adds bounded policy-filtered pages with original freshness and post-callback primary/scoped authority checks. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
 | Delivered username profiles | **M05 consumer profile closed:** required-email registration/signin, advisory availability, protected rename and explicitly selected TOTP signin through `4315bbf`. Original retry/recovery, CSRF, session effects and independent/coexisting selections are proven through real PostgreSQL and public modules. Broader catalog profiles and package qualification remain open. |
@@ -2119,7 +2127,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Enrollment/verification, distinct phone/password signin, SMS-code signin, fresh-authenticated self-removal and verified-phone replacement are delivered through actual public-reference PostgreSQL/HTTPS consumers, independent review and green CI; latest replacement reference `10eb07f`. Signup, phone password reset, remaining assigned variants and full qualification remain open. One intermittent router-startup failure remains unproved, not a claimed fix. |
 | M09 | Anonymous session, self-deletion and collision-safe permanent upgrade: identity/anonymous, identity/anonymous/postgres | Closed selected native/opt-in HTTP/reference profile, including abandoned cleanup with stored policy/holds, upgrade fences, atomic owner effects and original recovery. Native `d2f004f`, reference `64cee17`, independent reviews, exact green CI and downloaded-public Reference five-journey PostgreSQL/race16.170s. Unsupported transfer/authentication profiles and full unit/release qualification remain separate; historical startup uncertainty remains disclosed. |
 | M10 | Confirmed TOTP enrollment and TOTP signin: identity/mfa, identity/mfa/postgres | Closed selected cookie/password-primary TOTP profile, including username-primary composition: genuine registration, fresh proof, pending enrollment, reveal-once URI, explicit confirmation, challenge-only primary, TOTP completion and usable session/read/logout. Reviewed/pushed reference `4315bbf` and `02c6195`, green CI and original canonical/downloaded consumers retained. Fresh source audit at `d65ed4c` found the closure row stale; current downloaded combined phone/username/TOTP consumer also passes (13.824s). Broader MFA profiles and unit/release qualification remain separate. |
-| M11 | Confirmed secondary-OTP enrollment, delivered-code signin and session: MFA/OTP/password/session owners | Selected email profile proven; full milestone not closed |
+| M11 | Confirmed secondary-OTP enrollment, delivered-code signin and session: MFA/OTP/password/session owners | Closed selected email/password-primary profile: genuine pending enrollment, delivered explicit confirmation without a session, challenge-only primary, counted delivered-code completion, session read/logout and original recovery. Reviewed MFA `665a40f`, session `c4d031c` and Reference `f721a66` are main-pushed/exact-CI green; actual downloaded public Reference PostgreSQL/race37.995s. Enrollment without login and retained TOTP controls pass separately. Broader MFA variants and full-unit qualification remain open. |
 | M12 | Factor listing/update/removal/disable/replacement with fresh proof: MFA owners | Closure not reassessed |
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |

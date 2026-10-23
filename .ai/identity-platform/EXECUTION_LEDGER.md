@@ -1,5 +1,83 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 08:01 UTC: M11 selected email/password-primary secondary-OTP
+consumer milestone CLOSED,11/39. C3 f721a66850a0c70f81c61f7e6e25a7036a7a31bf
+is independently approved, main-pushed, remote exact and Required39921529145
+SUCCESS. Actual downloaded public Reference
+v0.0.0-20261023075939-f721a66850a0 matches all323 module files plus inherited
+LICENSE. Public-only/GOWORKoff/readonly32852 realPG/race full and standalone
+OTP journeys PASS37.995s; modverify pass. Archive sum
+h1:T1Pfv8nlTMwlaBPSvfeuLCDC5Yl+FF4hS2xSCCyvBBQ=, go.mod sum
+h1:Vse/+TpPWfwJhtttPxGt1T2L6vJz+VXIWD8etpSLtlU=.
+Enrollment and HTTP/login remain separately selected. Current factor/recipient
+fences, challenge-only primary, shared wrong-code debit, one-use completion,
+session/read/logout, required-effect rollback and original recovery are proven.
+No SMS/security-key/trusted-device/admin or whole-unit qualification claim.
+Owned PostgreSQL56284 stopped and verified terminal; phase caches are next
+removed after the reporting commit. No existing services/data accessed.
+Next primary outcome: reassess M12's existing public factor-management profile
+once against its complete operation/consumer acceptance, then finish the actual
+missing behavior without reopening delivered M10/M11 or a planning programme.
+
+2026-10-23 07:59 UTC: C2 five-path adoption review APPROVE/no findings
+c91059be...f0665; main-pushedc4d031c89188f9c22cae0000a42c286614aa4fbb and
+Required39921236644 SUCCESS. Its actual public archive matches all269 module
+files. C3 fifteen-path adoption review APPROVE/no findings622c2db2...5a423;
+ordinary public-only9631 race8.692s, selected realPG/race44.579s, taggedvet0,
+modverify and changed-manifest scans pass. Source thirteen-path01a14c0c...8f6d0
+remains unchanged from original review. C3 committed/main-pushed
+f721a66850a0c70f81c61f7e6e25a7036a7a31bf; Required39921529145 queued.
+Downloaded C3 consumer proof and CI remain pending; still10/39, no M11 closure.
+
+2026-10-23 07:56 UTC: M11 complete20path source review m11_otp_final_review
+APPROVE/no findings, digestc60fdf16...1864d. C1 four-path native MFA scope
+9a4d60ce...144d14 committed/main-pushed665a40ff4c1a818fd83edc681485c609b55dcbba;
+remote exact and Required39920948282 SUCCESS. Actual downloaded public MFA
+v0.0.0-20261023075430-665a40ff4c1a matches all166 committed module files;
+sumh1:GLUXnEqI924mkiz/q+112oSqXlNU3Oh3cGndJhaY14U=.
+C2 adopts only this public MFA pin; public-only readonly47500 ordinary race
+PASS1.872s, taggedvet0 and modverify pass. C2 public adoption review pending;
+session and Reference remain local. No M11 closure yet.
+
+2026-10-23 07:52 UTC: M11 complete local selected public graph acceptance36845
+PASS45.577s under PostgreSQL/race: genuine enrollment/delivery/confirmation,
+password/OTP session/read/logout, required lifecycle rollback/original recovery,
+standalone enrollment without login and retained TOTP compatibility/COMMIT loss.
+Cached native OTP revoke admission is prepared before advancing original factor
+enrollment, verified-recipient or account-factor epochs; each actual execution
+denies not_committed with zero revocation/outbox effects, then restored owned
+fixtures permit the real public HTTP logout. These are fault fixtures after
+genuine public enrollment/login, not seeded authentication authority.
+Focused graph69824 PASS1.465s; native guards48981 MFA1.186s/session1.205s.
+Final ordinary race5436: public-only MFA1.351s, workspace session1.798s and
+Reference8.747s; each tagged vet exits0. Path-aware Gitleaks8.30.0 scans all20
+current source/test/docs paths with no findings; diffcheck0. Required CI uses
+its own8.30.1 pin. No current-source publication/CI claim.
+Complete20path source candidate frozen for independent m11_otp_final_review,
+baseeda4f8e, reviewer-captured digestc60fdf168c5db3014aa39d05280abbd01bdf2a966873b5f9766b30b6ddf1864d.
+Next is review disposition, then sequential public MFA -> session -> Reference
+adoption and actual public-consumer proof. Still10/39; M11 not closed.
+
+2026-10-23 07:36 UTC: M11 Reference graph handles and real pending OTP enrollment,
+delivery and explicit confirmation work (2062 PG2.152s; no login-session claim).
+Missing graph API RED29030 preceded wiring; readiness RED51664 exposed obsolete
+session constraints for passwordOTP-only selection. Current readiness now
+requires native v9/v6 successors, not removed predecessors. Test-only setup
+corrections and shared real30s resend cooldown are not production fixes.
+Full journey52796 reaches genuine password/OTP signin and session read, then
+fails logout before injected lifecycle rollback:403/not_committed/denied. Source
+first divergence is session/postgres/revoke_admission.go: shared MFA revoke
+always invokes RequireTOTPSessionFactor even for sealed Method=otp, although
+the reader dispatches OTP correctly. This is a necessary owning prerequisite,
+not adjacent scope. Primary now owns the narrowly added MFA OTP same-Work fence,
+method-correct session revocation and focused proof, then public-pin adoption
+back into this same M11 slice. Preserve the existing TOTP fence/API and fail
+closed; do not add OTP-as-TOTP fallback or duplicate factor tables/transactions.
+Temporary secret-free send/completion diagnostics have been removed byte-exact.
+Wrong-code HTTP409 is existing counted first-attachment denial taxonomy; the
+new oracle requires not_committed, exactly one shared debit and zero child use
+or new session, rather than treating status alone as proof.
+
 2026-10-23 07:08 UTC: finite native RP-logout profile CLOSED. Exact Required
 39915425644 SUCCESS at03b57e375a0146ba1108ffa201b207327893dfa6; remote main
 matches and source tree is clean. Source reviews, actual public adoption and
