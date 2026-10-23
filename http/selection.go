@@ -428,6 +428,13 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if r.OperationID == "identity.password.verify" && (r.CSRFOrigin.Mode == CSRFNone || (r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.RefererFallback == RefererFallbackDeny)) {
 			csrfMatches = true
 		}
+		// Authenticated passkey enrollment consumes the original session-bound
+		// synchronizer inside the native protected transaction. This narrows the
+		// canonical session/pre-auth union; it neither invents token age nor
+		// extends the cookie exception to anonymous assertion/signin routes.
+		if (r.OperationID == "identity.passkey.register-options" || r.OperationID == "identity.passkey.register-verify") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Anonymous mutations validate the original native session synchronizer
 		// atomically, including attributable historical retries after self-revoke.
 		// Upgrade additionally requires its distinct permanent synchronizer; the

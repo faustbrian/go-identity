@@ -22,12 +22,30 @@ type ChallengeVerificationRateConfig = PasswordVerificationRateConfig
 // must come from the owning workflow's authenticated, purpose-bound original
 // issuance. ChallengeLifetime is its immutable policy lifetime, not remaining
 // expiry, a renewed interval or an override; integral microseconds in 1s..24h.
-// This subject-bound profile does not support identifier-only challenges.
+// This subject-bound input retains its existing shape; anonymous passkey signin
+// uses the separately typed PasskeyVerificationRateRequest below.
 // It proves neither authority nor challenge validity. Explicit/private field
 // copies remain sensitive; inputs must remain immutable during the call.
 type ChallengeVerificationRateRequest struct {
 	OperationID       string
 	UserID            identity.UserID
+	ChallengeID       string
+	ChallengeLifetime time.Duration
+}
+
+// PasskeyVerificationRateRequest contains native-authenticated original assertion
+// custody, not JSON-selected identity or bearer bytes. Exactly one original
+// canonical Identifier or AnonymousFlowID is required. Discovery's flow is an
+// anonymous rate dimension, never a user ID or authenticated principal. There is
+// no user or operation selector: this input serves identity.passkey.signin-verify
+// only. ChallengeID and integral-microsecond ChallengeLifetime (1s..24h) belong
+// to the original issued ceremony, never remaining expiry or a renewed interval.
+// The native owner must first authenticate exact browser/ceremony/mode custody;
+// cryptographic verification still owns identity. Fields remain borrowed and
+// immutable during a call. This record grants no authentication or validity.
+type PasskeyVerificationRateRequest struct {
+	Identifier        string
+	AnonymousFlowID   identity.PreAuthTransactionID
 	ChallengeID       string
 	ChallengeLifetime time.Duration
 }
@@ -87,6 +105,39 @@ func (l *ChallengeVerificationRateLimiter) Admit(ctx context.Context, facts Netw
 }
 
 func (l *ChallengeVerificationRateLimiter) admit(ctx context.Context, facts NetworkFacts, r ChallengeVerificationRateRequest, ip, challenge bool) (out AuthRateResult, err error) {
+	return l.admitSource(ctx, facts, r, "subject", string(r.UserID), ip, challenge)
+}
+
+// AdmitPasskeyChallenge applies only the original assertion source10/10m and
+// challenge10/lifetime after this attempt's successful AdmitIP and native custody
+// authentication. Identifier and anonymous-flow buckets have separate HMAC
+// domains; neither impersonates the existing user-subject bucket. No IP recount,
+// source lookup, workflow retry or authentication occurs here.
+func (l *ChallengeVerificationRateLimiter) AdmitPasskeyChallenge(ctx context.Context, facts NetworkFacts, r PasskeyVerificationRateRequest) (AuthRateResult, error) {
+	return l.admitPasskey(ctx, facts, r, false)
+}
+
+// AdmitPasskey counts all three original assertion dimensions atomically for an
+// already custody-authenticated direct caller. Do not call after AdmitIP for the
+// same attempt. Outage, ambiguity, panic, cancellation and closure deny without
+// retry. Only nil error and Allowed permit continuing to native verification.
+func (l *ChallengeVerificationRateLimiter) AdmitPasskey(ctx context.Context, facts NetworkFacts, r PasskeyVerificationRateRequest) (AuthRateResult, error) {
+	return l.admitPasskey(ctx, facts, r, true)
+}
+
+func (l *ChallengeVerificationRateLimiter) admitPasskey(ctx context.Context, facts NetworkFacts, r PasskeyVerificationRateRequest, ip bool) (AuthRateResult, error) {
+	kind, value := "anonymous-flow", string(r.AnonymousFlowID)
+	if r.Identifier != "" {
+		if r.AnonymousFlowID != "" {
+			return AuthRateResult{}, ErrInvalidInput
+		}
+		kind, value = "identifier", r.Identifier
+	}
+	original := ChallengeVerificationRateRequest{OperationID: "identity.passkey.signin-verify", ChallengeID: r.ChallengeID, ChallengeLifetime: r.ChallengeLifetime}
+	return l.admitSource(ctx, facts, original, kind, value, ip, true)
+}
+
+func (l *ChallengeVerificationRateLimiter) admitSource(ctx context.Context, facts NetworkFacts, r ChallengeVerificationRateRequest, sourceKind, sourceValue string, ip, challenge bool) (out AuthRateResult, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = AuthRateResult{}, ErrRateUnavailable
@@ -95,7 +146,14 @@ func (l *ChallengeVerificationRateLimiter) admit(ctx context.Context, facts Netw
 	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant {
 		return out, ErrInvalidInput
 	}
-	if challenge && (!l.operations[r.OperationID] || !ascii(string(r.UserID), 128, false) || !rateIdentifier(r.ChallengeID) || len(r.ChallengeID) > 256 || r.ChallengeLifetime < time.Second || r.ChallengeLifetime > 24*time.Hour || r.ChallengeLifetime%time.Microsecond != 0) {
+	validSource := (sourceKind == "subject" || sourceKind == "anonymous-flow") && ascii(sourceValue, 128, false)
+	if sourceKind == "identifier" {
+		validSource = rateIdentifier(sourceValue)
+	}
+	if sourceKind != "subject" && r.OperationID != "identity.passkey.signin-verify" {
+		validSource = false
+	}
+	if challenge && (!l.operations[r.OperationID] || !validSource || !rateIdentifier(r.ChallengeID) || len(r.ChallengeID) > 256 || r.ChallengeLifetime < time.Second || r.ChallengeLifetime > 24*time.Hour || r.ChallengeLifetime%time.Microsecond != 0) {
 		return out, ErrInvalidInput
 	}
 	ctx, cancel := context.WithTimeout(ctx, l.owner.config.MaximumDuration)
@@ -126,7 +184,7 @@ func (l *ChallengeVerificationRateLimiter) admit(ctx context.Context, facts Netw
 		}
 	}
 	if challenge {
-		if err := appendBucket("verify-subject", l.owner.digest("subject", string(facts.TenantID()), string(r.UserID)), 10, 10*time.Minute); err != nil {
+		if err := appendBucket("verify-"+sourceKind, l.owner.digest(sourceKind, string(facts.TenantID()), sourceValue), 10, 10*time.Minute); err != nil {
 			return out, err
 		}
 		if err := appendBucket("verify-challenge", l.owner.digest("challenge", string(facts.TenantID()), r.OperationID, r.ChallengeID), 10, r.ChallengeLifetime); err != nil {
@@ -144,6 +202,22 @@ func (l *ChallengeVerificationRateLimiter) Close() error {
 	}
 	return l.owner.Close()
 }
+
+// Format redacts original passkey assertion correlation and source bindings.
+func (PasskeyVerificationRateRequest) Format(f fmt.State, _ rune) {
+	_, _ = io.WriteString(f, "identityhttp.PasskeyVerificationRateRequest(redacted)")
+}
+
+// LogValue exposes only the fixed redacted diagnostic marker.
+func (PasskeyVerificationRateRequest) LogValue() slog.Value {
+	return slog.StringValue("identityhttp.PasskeyVerificationRateRequest(redacted)")
+}
+
+// MarshalJSON rejects implicit original-custody projection.
+func (PasskeyVerificationRateRequest) MarshalJSON() ([]byte, error) { return nil, ErrInvalidInput }
+
+// MarshalText rejects implicit text/map-key correlation.
+func (PasskeyVerificationRateRequest) MarshalText() ([]byte, error) { return nil, ErrInvalidInput }
 
 // Format redacts source bindings.
 func (ChallengeVerificationRateRequest) Format(f fmt.State, _ rune) {

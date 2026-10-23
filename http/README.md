@@ -149,8 +149,23 @@ Proceed only on nil error and Allowed. Native expiry, current authority and
 stricter transaction-owned attempt limits still apply. Each phase uses fresh
 server debit correlation, never HTTP retry keys or workflow command IDs.
 Ambiguity, outage, cancellation and closure deny without retry or fallback.
-Close after draining handlers; borrowed storage remains open. Identifier-only
-challenges and endpoint adoption remain separate implementation work.
+Close after draining handlers; borrowed storage remains open.
+
+For `identity.passkey.signin-verify`, use the separate
+`PasskeyVerificationRateRequest` with exactly one original `Identifier` or
+`AnonymousFlowID`, then `AdmitPasskeyChallenge` after the IP phase (or
+`AdmitPasskey` for a custody-authenticated direct caller). It has no user or
+operation selector and leaves `ChallengeVerificationRateRequest` unchanged.
+The native passkey owner
+must first authenticate the exact original browser/ceremony and bind the
+identifier when present. Discovery cannot know a user before cryptographic
+verification: its original anonymous flow is a separate rate source, **not**
+a user ID or authenticated principal. The selected source receives10/10m under
+its own domain-separated key, while original IP and challenge buckets remain
+unchanged. Missing/ambiguous source, an alternate operation or renewed challenge
+lifetime is not admissible input. Existing user-subject profiles are unchanged.
+These are admission ports, not delivered passkey handlers or original-custody
+verification; those must be explicitly composed with their native owner.
 
 ## Safe-route admission
 
@@ -203,6 +218,16 @@ flow or any operation with those dimensions; their applicable buckets remain
 required. HTTPS/origin admission belongs to the handler, and rate admission
 must precede flow entropy or durable writes. Original-flow, signup, signin and delivery
 budgets are independent. This method does not register or advertise a route.
+
+Passkey `register-options` and `signin-options` instead use
+`AdmitPasskeyOptionsIP`, sharing the same `rate.auth` IP20/10m budget before
+native proof/flow processing. Identified signin then calls
+`AdmitPasskeyOptionsIdentifier` once with its owner-canonical identifier;
+enrollment and identifier-free signin have no such dimension. These options
+have no issued ceremony yet: never invent a challenge from a session, proof,
+flow or retry key. Verification uses the original issued ceremony through the
+separate verification owner above. Neither phase grants reusable clearance,
+and the generic `Admit` API retains its original signin/signup/delivery contract.
 
 Call `Admit(ctx, facts, AuthRateRequest{OperationID: operationID,
 Identifier: canonicalIdentifier, UserID: authenticatedUserID})`. Identifiers

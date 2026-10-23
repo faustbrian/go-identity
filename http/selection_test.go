@@ -39,6 +39,32 @@ func TestCanonicalEmailStoredSynchronizerPolicy(t *testing.T) {
 	}
 }
 
+func TestCanonicalPasskeyEnrollmentUsesOriginalSessionSynchronizer(t *testing.T) {
+	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	stored := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
+	for _, operation := range []string{"identity.passkey.register-options", "identity.passkey.register-verify"} {
+		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "passkey", OperationID: operation, Handler: handler, CSRF: stored, MaximumSerializedBytes: 16384}); err != nil {
+			t.Fatal("original passkey enrollment synchronizer rejected", operation, err)
+		}
+		for _, mutate := range []func(*identityhttp.CSRFPolicy){
+			func(p *identityhttp.CSRFPolicy) { p.TokenHeader = "X-Other" },
+			func(p *identityhttp.CSRFPolicy) { p.TokenMaximumAge = time.Minute },
+			func(p *identityhttp.CSRFPolicy) { p.RefererFallback = identityhttp.RefererFallbackSameOriginHTTPS },
+		} {
+			policy := stored
+			mutate(&policy)
+			if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "passkey", OperationID: operation, Handler: handler, CSRF: policy, MaximumSerializedBytes: 16384}); err == nil {
+				t.Fatal("changed or independently aged synchronizer admitted", operation)
+			}
+		}
+	}
+	for _, operation := range []string{"identity.passkey.signin-options", "identity.passkey.signin-verify"} {
+		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "passkey", OperationID: operation, Handler: handler, CSRF: stored, MaximumSerializedBytes: 16384}); err == nil {
+			t.Fatal("authenticated enrollment exception leaked into signin", operation)
+		}
+	}
+}
+
 // HTTPSEL-01/06/07: selecting no feature exposes nothing; selecting probes
 // returns real owned handlers, not fabricated domain-route placeholders.
 func TestSelectedProbeOperations(t *testing.T) {

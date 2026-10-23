@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Apply the shared authentication IP and optional canonical-identifier budgets
+  to passkey options. Passkey assertion verification can instead count its
+  authenticated original identifier or anonymous browser-flow source, alongside
+  trusted IP and the unchanged original ceremony lifetime. A flow never becomes
+  an authenticated user; other verification profiles keep their subject contract.
+
+- Admit the explicitly selected authenticated passkey enrollment profile with
+  its original stored-session synchronizer, exact `X-CSRF-Token` and denied
+  Referer fallback. Do not invent a separate token age or extend that policy
+  to anonymous passkey signin; actual handlers remain independently selected.
+
 - Require one header-only Idempotency-Key for anonymous upgrade, preserving
   native one-use proof consumption and metadata-only retry. Admit explicitly
   selected anonymous deletion/upgrade under the native stored synchronizer

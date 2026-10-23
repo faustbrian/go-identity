@@ -89,6 +89,9 @@ func NewAuthRateLimiter(c AuthRateConfig) (*AuthRateLimiter, error) {
 		if row.Rate == "rate.signup" || row.Rate == "rate.signin" || row.Rate == "rate.delivery" {
 			operations[id] = row.Rate
 		}
+		if row.Rate == "rate.auth" && (id == "identity.passkey.register-options" || id == "identity.passkey.signin-options") {
+			operations[id] = row.Rate
+		}
 	}
 	return &AuthRateLimiter{shared: shared, config: c, operations: operations, closed: &atomic.Bool{}}, nil
 }
@@ -149,7 +152,7 @@ func (l *AuthRateLimiter) Admit(ctx context.Context, facts NetworkFacts, r AuthR
 		return out, ErrInvalidInput
 	}
 	profile := l.operations[r.OperationID]
-	if profile == "" || profile == "rate.signup" && (r.UserID != "" || facts.Realm() != RealmTenant) {
+	if (profile != "rate.signin" && profile != "rate.signup" && profile != "rate.delivery") || profile == "rate.signup" && (r.UserID != "" || facts.Realm() != RealmTenant) {
 		return out, ErrInvalidInput
 	}
 	ctx, cancel := context.WithTimeout(ctx, l.config.MaximumDuration)
@@ -216,6 +219,30 @@ func (l *AuthRateLimiter) AdmitSigninIdentifier(ctx context.Context, facts Netwo
 		return AuthRateResult{}, ErrInvalidInput
 	}
 	return l.admitAuthDimension(ctx, facts, r.OperationID, r.Identifier, true, "rate.signin")
+}
+
+// AdmitPasskeyOptionsIP applies the shared rate.auth IP20/10m bucket before
+// native flow/proof lookup for exactly register-options and signin-options.
+// It shares AdmitOriginalFlow's namespace and budget, never signin's bucket.
+// Options have no issued ceremony yet: do not invent a challenge from a proof,
+// session, flow or retry key. Identified signin additionally requires the
+// same attempt's AdmitPasskeyOptionsIdentifier after owner canonicalization.
+// Discovery and enrollment have no identifier input. This is rate admission,
+// not authentication or reusable permission; outages and ambiguity deny.
+func (l *AuthRateLimiter) AdmitPasskeyOptionsIP(ctx context.Context, facts NetworkFacts, operationID string) (AuthRateResult, error) {
+	return l.admitAuthDimension(ctx, facts, operationID, "", false, "rate.auth")
+}
+
+// AdmitPasskeyOptionsIdentifier debits only rate.auth's tenant/identifier10/10m
+// after successful AdmitPasskeyOptionsIP for this same identified signin-options
+// attempt. Identifier must be owner-canonical; UserID must be absent. Neither
+// anonymous discovery nor authenticated enrollment may invent this dimension.
+// Earlier IP debit survives denial; no second IP debit, retry or lookup occurs.
+func (l *AuthRateLimiter) AdmitPasskeyOptionsIdentifier(ctx context.Context, facts NetworkFacts, r AuthRateRequest) (AuthRateResult, error) {
+	if r.OperationID != "identity.passkey.signin-options" || r.UserID != "" {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	return l.admitAuthDimension(ctx, facts, r.OperationID, r.Identifier, true, "rate.auth")
 }
 
 // AdmitSignupIP applies shared rate.signup IP5/hour before native address
@@ -287,6 +314,8 @@ func (l *AuthRateLimiter) admitAuthDimension(ctx context.Context, facts NetworkF
 		name, period, identifierPeriod, ipCapacity, identifierCapacity = "signup", time.Hour, 24*time.Hour, 5, 3
 	} else if profile == "rate.delivery" {
 		name, period, identifierPeriod, ipCapacity, identifierCapacity = "delivery", time.Hour, time.Hour, 10, 5
+	} else if profile == "rate.auth" {
+		name = "auth"
 	}
 	kind, value, capacity := name+"-ip", facts.ClientIP().String(), ipCapacity
 	if source {
