@@ -182,7 +182,7 @@ func (p *factorUpdatePhase) PrepareRequestKey(ctx context.Context, k kernel.Requ
 		return nil, identity.ForbiddenError{}
 	}
 	proof := auth.ReauthenticationProof{Proof: r.FactorProof, SessionID: s.SessionID, SessionVersion: s.Version, Action: p.operation().OperationID}
-	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(s.TenantID), Subject: string(s.UserID), Purpose: auth.Purpose(p.operation().OperationID), Audience: p.state.stepup.config.Audience}, SessionID: s.SessionID, SessionVersion: s.Version, Action: p.operation().OperationID, MaximumAge: p.state.config.MaximumAge}
+	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(s.TenantID), Subject: string(s.UserID), Purpose: auth.Purpose(p.operation().OperationID), Audience: p.state.evidenceProfile().audience}, SessionID: s.SessionID, SessionVersion: s.Version, Action: p.operation().OperationID, MaximumAge: p.state.config.MaximumAge}
 	if err := p.state.validator.ValidateReauthenticationProof(ctx, proof, use); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -199,7 +199,7 @@ func (p *factorUpdatePhase) PrepareRequestKey(ctx context.Context, k kernel.Requ
 	if p.disable != nil && p.disable.Target == mfa.AllFactors {
 		factor = mfa.FactorID(record.Original.CredentialID)
 	}
-	err = p.state.shared.pool.Raw().QueryRow(ctx, `SELECT row_version::text,label,created_at,clock_timestamp() FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND confirmed_at IS NOT NULL`, string(r.TenantID), string(s.UserID), string(factor)).Scan(&version, &label, &created, &now)
+	err = p.state.shared.pool.Raw().QueryRow(ctx, `SELECT row_version::text,label,created_at,clock_timestamp() FROM `+p.state.factorTable()+` WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND confirmed_at IS NOT NULL`, string(r.TenantID), string(s.UserID), string(factor)).Scan(&version, &label, &created, &now)
 	if err != nil {
 		return nil, enrollmentReadError(ctx)
 	}
@@ -213,7 +213,7 @@ func (p *factorUpdatePhase) PrepareRequestKey(ctx context.Context, k kernel.Requ
 	if version != strconv.FormatUint(expected, 10) {
 		return nil, identity.ConflictError{}
 	}
-	before := mfa.FactorProjection{ID: factor, Method: "totp", Label: label, State: mfa.FactorActive, CreatedAt: created, Version: expected}
+	before := mfa.FactorProjection{ID: factor, Method: p.state.method(), Label: label, State: mfa.FactorActive, CreatedAt: created, Version: expected}
 	if (mfa.ListResult{Factors: []mfa.FactorProjection{before}}).ValidateAt(now) != nil {
 		return nil, identity.UnavailableError{}
 	}
@@ -293,10 +293,10 @@ func (p *factorUpdatePhase) restoreInput(ctx context.Context, k kernel.RequestKe
 	if p.disable != nil {
 		matched = in.Before.ID == mfa.FactorID(in.Record.Original.CredentialID) && (p.disable.Target == mfa.AllFactors || in.Before.ID == p.disable.FactorID)
 	}
-	if err != nil || !ok || !reflect.DeepEqual(fields, in.Intent) || in.Schema != 1 || b.ValidateFor(p.operation()) != nil || b.CommandID != k.Admission.CommandID || b.TenantID != r.TenantID || b.UserID != identity.UserID(k.Scope.ActorID) || b.ActorID != k.Scope.ActorID || b.ActorKind != authorization.SubjectUser || b.RecordID != string(b.UserID) || b.PolicyID != p.state.shared.config.PolicyID || b.PolicyVersion != p.state.shared.config.Coordinator.AdmissionPolicy.PolicyVersion || b.CorrelationID != string(b.CommandID) || in.Record.FactorAuthorityVersion == 0 || in.Record.FactorAuthorityVersion == math.MaxUint64 || in.Record.Original.Proof.Proof != r.FactorProof || !matched || in.Before.State != mfa.FactorActive || in.Before.Method != "totp" || in.CreatedAt.IsZero() || in.CreatedAt.Nanosecond()%1000 != 0 || len(in.Primary) < 1 || len(in.Primary) > 32768 {
+	if err != nil || !ok || !reflect.DeepEqual(fields, in.Intent) || in.Schema != 1 || b.ValidateFor(p.operation()) != nil || b.CommandID != k.Admission.CommandID || b.TenantID != r.TenantID || b.UserID != identity.UserID(k.Scope.ActorID) || b.ActorID != k.Scope.ActorID || b.ActorKind != authorization.SubjectUser || b.RecordID != string(b.UserID) || b.PolicyID != p.state.shared.config.PolicyID || b.PolicyVersion != p.state.shared.config.Coordinator.AdmissionPolicy.PolicyVersion || b.CorrelationID != string(b.CommandID) || in.Record.FactorAuthorityVersion == 0 || in.Record.FactorAuthorityVersion == math.MaxUint64 || in.Record.Original.Proof.Proof != r.FactorProof || !matched || in.Before.State != mfa.FactorActive || in.Before.Method != p.state.method() || in.CreatedAt.IsZero() || in.CreatedAt.Nanosecond()%1000 != 0 || len(in.Primary) < 1 || len(in.Primary) > 32768 {
 		return identity.ForbiddenError{}
 	}
-	if _, err := encodeFactorVerificationRecord(in.Record); err != nil {
+	if _, err := p.state.encodeRecord(in.Record); err != nil {
 		return err
 	}
 	if (mfa.ListResult{Factors: []mfa.FactorProjection{in.Before}}).ValidateAt(in.CreatedAt) != nil {
@@ -331,7 +331,7 @@ func (p *factorUpdatePhase) restoreInput(ctx context.Context, k kernel.RequestKe
 			until = candidate
 		}
 	}
-	if !until.Equal(in.Until) || !in.CreatedAt.Before(in.Until) || in.Record.Original.Issuer != p.state.stepup.config.Issuer || in.Record.Original.Environment != p.state.stepup.config.Environment {
+	if !until.Equal(in.Until) || !in.CreatedAt.Before(in.Until) || in.Record.Original.Issuer != p.state.evidenceProfile().issuer || in.Record.Original.Environment != p.state.evidenceProfile().environment {
 		return identity.ForbiddenError{}
 	}
 	p.input, p.primary = &in, primary
@@ -343,7 +343,7 @@ func (p *factorUpdatePhase) buildCommand() error {
 	if i == nil || p.primary == nil {
 		return invalidAuthority()
 	}
-	wire, err := encodeFactorVerificationRecord(i.Record)
+	wire, err := p.state.encodeRecord(i.Record)
 	if err != nil {
 		return err
 	}
@@ -435,7 +435,7 @@ func (p *factorUpdatePhase) admit(ctx context.Context, w kernel.Work, c identity
 		}
 	}
 	r := p.input.Record
-	if err := RequireTOTPSessionFactor(ctx, w, p, p.input.Binding.UserID, r.Original.CredentialID, TOTPSessionFactorState{EnrollmentVersion: r.Original.CredentialVersion, AuthorityVersion: r.FactorAuthorityVersion}); err != nil {
+	if err := p.state.requireFactor(ctx, w, p, p.input.Binding.UserID, r, false); err != nil {
 		return err
 	}
 	return p.lockProof(ctx, w, false)
@@ -554,7 +554,7 @@ func (p *factorUpdatePhase) RestoreFeatureAdmission(ctx context.Context, c ident
 func (p *factorUpdatePhase) lockProof(ctx context.Context, w kernel.Work, used bool) error {
 	i, b := p.input, p.input.Binding
 	record := i.Record
-	rows, err := w.Query(ctx, `SELECT v.record,v.used_command_id,v.used_purpose FROM identity_mfa.factor_verifications v
+	rows, err := w.Query(ctx, `SELECT v.record,v.used_command_id,v.used_purpose FROM `+p.state.proofTable()+` v
 JOIN identity.commands j ON j.tenant_id=v.tenant_id AND j.command_id=v.command_id AND j.purpose=v.purpose
 JOIN identity.identity_command_id_claims c ON c.command_id=j.command_id AND c.tenant_id=j.tenant_id AND c.purpose=j.purpose
 WHERE v.tenant_id=$1 AND v.user_id=$2 AND v.proof_id=$3 AND v.factor_id=$4 AND v.enrollment_version=$5::numeric AND v.factor_authority_version=$6::numeric AND j.state='committed' AND NOT c.retired AND octet_length(v.record) BETWEEN 1 AND 32768 FOR UPDATE OF v`, string(b.TenantID), string(b.UserID), string(record.Original.Proof.Proof.ID), record.Original.CredentialID, strconv.FormatUint(record.Original.CredentialVersion, 10), strconv.FormatUint(record.FactorAuthorityVersion, 10))
@@ -575,7 +575,7 @@ WHERE v.tenant_id=$1 AND v.user_id=$2 AND v.proof_id=$3 AND v.factor_id=$4 AND v
 	extra, rowErr := rows.Next(), rows.Err()
 	rows.Close()
 	defer clear(wire)
-	want, encodeErr := encodeFactorVerificationRecord(record)
+	want, encodeErr := p.state.encodeRecord(record)
 	defer clear(want)
 	if err != nil || extra || rowErr != nil || encodeErr != nil {
 		return identity.UnavailableError{}
@@ -595,7 +595,7 @@ WHERE v.tenant_id=$1 AND v.user_id=$2 AND v.proof_id=$3 AND v.factor_id=$4 AND v
 		return err
 	}
 	proof := record.Original.Proof
-	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(b.TenantID), Subject: string(b.UserID), Purpose: auth.Purpose(b.OperationID), Audience: p.state.stepup.config.Audience, Now: now}, SessionID: proof.SessionID, SessionVersion: proof.SessionVersion, Action: b.OperationID, MaximumAge: p.state.config.MaximumAge}
+	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(b.TenantID), Subject: string(b.UserID), Purpose: auth.Purpose(b.OperationID), Audience: p.state.evidenceProfile().audience, Now: now}, SessionID: proof.SessionID, SessionVersion: proof.SessionVersion, Action: b.OperationID, MaximumAge: p.state.config.MaximumAge}
 	if proof.Validate(use) != nil || !now.Before(i.Until) {
 		return identity.ForbiddenError{}
 	}
@@ -623,7 +623,7 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	if r.Action == mfa.Replace {
 		return p.applyReplacement(ctx, w, c, now)
 	}
-	rows, err := w.Query(ctx, `SELECT row_version::text,label,created_at FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND confirmed_at IS NOT NULL FOR UPDATE`, string(b.TenantID), string(b.UserID), string(r.FactorID))
+	rows, err := w.Query(ctx, `SELECT row_version::text,label,created_at FROM `+p.state.factorTable()+` WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND confirmed_at IS NOT NULL FOR UPDATE`, string(b.TenantID), string(b.UserID), string(r.FactorID))
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -646,7 +646,7 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	if version != strconv.FormatUint(r.ExpectedVersion, 10) || label != p.input.Before.Label || !created.Equal(p.input.Before.CreatedAt) {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
-	statement := `UPDATE identity_mfa.totp_factors SET label=$5,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
+	statement := `UPDATE ` + p.state.factorTable() + ` SET label=$5,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
 	if r.Action == mfa.Remove {
 		statement = `UPDATE identity_mfa.totp_factors SET label=$5,state=3,encrypted_secret=NULL,last_step=NULL,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
 	}
@@ -663,7 +663,7 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 		}
 	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
-	n, err = w.Exec(ctx, `UPDATE identity_mfa.factor_verifications SET used_command_id=$4,used_purpose=$5,used_at=$6 WHERE tenant_id=$1 AND user_id=$2 AND proof_id=$3 AND used_command_id IS NULL AND used_purpose IS NULL AND used_at IS NULL`, string(b.TenantID), string(b.UserID), string(p.input.Record.Original.Proof.Proof.ID), id, b.OperationID, now)
+	n, err = w.Exec(ctx, `UPDATE `+p.state.proofTable()+` SET used_command_id=$4,used_purpose=$5,used_at=$6 WHERE tenant_id=$1 AND user_id=$2 AND proof_id=$3 AND used_command_id IS NULL AND used_purpose IS NULL AND used_at IS NULL`, string(b.TenantID), string(b.UserID), string(p.input.Record.Original.Proof.Proof.ID), id, b.OperationID, now)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -694,7 +694,7 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 		recovery := p.state.config.RemovalRecovery.FactorRemovalRecoveryIdentity()
 		n, err = w.Exec(ctx, `INSERT INTO identity_mfa.factor_update_effects(tenant_id,user_id,command_id,purpose,factor_id,before_version,after_version,before_authority,after_authority,proof_id,action,recovery_identity,disable_target) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10,2,$11,$12)`, string(b.TenantID), string(b.UserID), id, b.OperationID, string(r.FactorID), version, strconv.FormatUint(r.ExpectedVersion+1, 10), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), string(p.input.Record.Original.Proof.Proof.ID), recovery[:], int16(p.disable.Target))
 	} else {
-		n, err = w.Exec(ctx, `INSERT INTO identity_mfa.factor_update_effects(tenant_id,user_id,command_id,purpose,factor_id,before_version,after_version,before_authority,after_authority,proof_id) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10)`, string(b.TenantID), string(b.UserID), id, b.OperationID, string(r.FactorID), version, strconv.FormatUint(r.ExpectedVersion+1, 10), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), string(p.input.Record.Original.Proof.Proof.ID))
+		n, err = w.Exec(ctx, `INSERT INTO `+p.state.effectsTable()+`(tenant_id,user_id,command_id,purpose,factor_id,before_version,after_version,before_authority,after_authority,proof_id) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10)`, string(b.TenantID), string(b.UserID), id, b.OperationID, string(r.FactorID), version, strconv.FormatUint(r.ExpectedVersion+1, 10), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), string(p.input.Record.Original.Proof.Proof.ID))
 	}
 	if err != nil {
 		return identity.FeatureReceipt{}, err
@@ -744,7 +744,7 @@ func (p *factorUpdatePhase) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 			return err
 		}
 	} else {
-		if err := RequireTOTPSessionFactor(ctx, w, p, b.UserID, r.Original.CredentialID, TOTPSessionFactorState{EnrollmentVersion: r.Original.CredentialVersion, AuthorityVersion: r.FactorAuthorityVersion + 1}); err != nil {
+		if err := p.state.requireFactor(ctx, w, p, b.UserID, r, true); err != nil {
 			return err
 		}
 	}
@@ -755,7 +755,7 @@ func (p *factorUpdatePhase) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 	if p.request.Action == mfa.Remove {
 		wantedState = 3
 	}
-	rows, err := w.Query(ctx, `SELECT row_version::text,label FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=$4`, string(b.TenantID), string(b.UserID), string(p.targetID()), wantedState)
+	rows, err := w.Query(ctx, `SELECT row_version::text,label FROM `+p.state.factorTable()+` WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=$4`, string(b.TenantID), string(b.UserID), string(p.targetID()), wantedState)
 	if err != nil {
 		return err
 	}
@@ -803,7 +803,7 @@ func (p *factorUpdatePhase) RecoverParticipant(ctx context.Context, w kernel.Rec
 		return kernel.RecoveryUnknown, err
 	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
-	rows, err := w.Query(ctx, `SELECT e.before_version::text,e.after_version::text,e.before_authority::text,e.after_authority::text,v.used_purpose FROM identity_mfa.factor_update_effects e JOIN identity_mfa.factor_verifications v ON v.tenant_id=e.tenant_id AND v.user_id=e.user_id AND v.proof_id=e.proof_id AND v.used_command_id=e.command_id WHERE e.tenant_id=$1 AND e.user_id=$2 AND e.command_id=$3 AND e.purpose=$4`, string(b.TenantID), string(b.UserID), id, b.OperationID)
+	rows, err := w.Query(ctx, `SELECT e.before_version::text,e.after_version::text,e.before_authority::text,e.after_authority::text,v.used_purpose FROM `+p.state.effectsTable()+` e JOIN `+p.state.proofTable()+` v ON v.tenant_id=e.tenant_id AND v.user_id=e.user_id AND v.proof_id=e.proof_id AND v.used_command_id=e.command_id WHERE e.tenant_id=$1 AND e.user_id=$2 AND e.command_id=$3 AND e.purpose=$4`, string(b.TenantID), string(b.UserID), id, b.OperationID)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

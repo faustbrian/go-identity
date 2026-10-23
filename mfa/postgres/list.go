@@ -46,7 +46,7 @@ func NewTOTPManagementListReader(management *FactorUpdateService) (*TOTPListRead
 		return nil, invalidAuthority()
 	}
 	s := management.state()
-	if s == nil {
+	if s == nil || s.otp != nil {
 		return nil, invalidAuthority()
 	}
 	query := strings.Replace(factorListSQL, "SELECT t.factor_id,t.state,t.created_at,t.row_version", "SELECT t.factor_id,t.state,t.created_at,t.row_version,t.label", 1)

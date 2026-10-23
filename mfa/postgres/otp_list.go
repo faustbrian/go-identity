@@ -39,12 +39,38 @@ func NewOTPManagementListReader(enrollment *OTPEnrollmentService, management *Fa
 		return nil, invalidAuthority()
 	}
 	m := management.state()
-	if m == nil || m.shared == nil || m.shared.pool != r.native.shared.pool {
+	if m == nil || m.otp != nil || m.shared == nil || m.shared.pool != r.native.shared.pool {
 		return nil, invalidAuthority()
 	}
 	// Only this constructor selects the separately installed management column.
 	// The base reader must still work against the original enrollment schema.
 	r.native.query = strings.Replace(otpFactorListSQL, "''::text AS label", "t.label AS label", 1)
+	if m.shared.config.MaximumDuration < r.native.shared.config.MaximumDuration {
+		shared := *r.native.shared
+		shared.config.MaximumDuration = m.shared.config.MaximumDuration
+		r.native.shared = &shared
+	}
+	return r, nil
+}
+
+// NewOTPFactorManagementListReader selects OTP labels from the actual OTP
+// management owner. Optional totpManagement retains separately selected TOTP
+// labels too; nil requires no TOTP management schema. All selected owners must
+// borrow the same primary pool. The earliest whole-read budget wins. This does
+// not authorize mutations or permit partial inventories.
+func NewOTPFactorManagementListReader(enrollment *OTPEnrollmentService, management, totpManagement *FactorUpdateService) (*OTPListReader, error) {
+	r, err := NewOTPListReader(enrollment)
+	if totpManagement != nil {
+		r, err = NewOTPManagementListReader(enrollment, totpManagement)
+	}
+	if err != nil || management == nil || management.state == nil {
+		return nil, invalidAuthority()
+	}
+	m := management.state()
+	if m == nil || m.otp == nil || m.shared == nil || m.shared != enrollment.engine.state() {
+		return nil, invalidAuthority()
+	}
+	r.native.query = strings.Replace(r.native.query, "o.confirmed_at,''::text", "o.confirmed_at,o.label", 1)
 	if m.shared.config.MaximumDuration < r.native.shared.config.MaximumDuration {
 		shared := *r.native.shared
 		shared.config.MaximumDuration = m.shared.config.MaximumDuration

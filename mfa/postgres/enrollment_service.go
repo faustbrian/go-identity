@@ -225,6 +225,13 @@ func (s *totpEnrollmentState) coordinator(p kernel.FeatureExecutionContributor) 
 	if phase, ok := p.(*totpURIPhase); ok && phase.otpConfirmation != nil {
 		contributors = append(contributors, phase.otpConfirmation.owner.ConfirmationContributor())
 	}
+	if phase, ok := p.(*otpActivePhase); ok {
+		if phase.verify {
+			contributors = append(contributors, phase.state.config.Issuance.ConfirmationContributor())
+		} else {
+			contributors = append(contributors, phase.state.config.Issuance.DeliveryContributor())
+		}
+	}
 	r, err := kernel.NewContributorRegistry(contributors)
 	if err != nil {
 		return nil, nil, err

@@ -24,6 +24,7 @@ import (
 type FactorVerificationSource struct {
 	pool            *database.Pool
 	maximumDuration time.Duration
+	otp             bool
 }
 
 var _ auth.ReauthenticationSource = (*FactorVerificationSource)(nil)
@@ -36,6 +37,21 @@ func NewFactorVerificationSource(pool *database.Pool, maximumDuration time.Durat
 		return nil, invalidAuthority()
 	}
 	return &FactorVerificationSource{pool: pool, maximumDuration: maximumDuration}, nil
+}
+
+// NewOTPFactorVerificationSource selects only committed native active-OTP
+// factor-update evidence in its distinct method-owned storage. Install
+// OTPFactorVerificationMigrationSource first. It otherwise retains the existing
+// source's bounded reads, errors, immutable signed history and borrowed pool
+// lifetime. It grants no current authentication, permission or one-time use.
+// It cannot read TOTP, pending enrollment or partial-login evidence as OTP.
+func NewOTPFactorVerificationSource(pool *database.Pool, maximumDuration time.Duration) (*FactorVerificationSource, error) {
+	source, err := NewFactorVerificationSource(pool, maximumDuration)
+	if err != nil {
+		return nil, err
+	}
+	source.otp = true
+	return source, nil
 }
 
 // Reauthentication selects the immutable original proof by its globally unique
@@ -67,13 +83,17 @@ func (s *FactorVerificationSource) readRecord(ctx context.Context, id auth.Proof
 	raw, _ := base64.RawURLEncoding.DecodeString(string(id))
 	var tenant, user, factor, enrollment, authority string
 	var payload []byte
+	table, purpose := "identity_mfa.factor_verifications", "identity.mfa.totp-verify"
+	if s.otp {
+		table, purpose = "identity_mfa.otp_factor_verifications", "identity.mfa.otp-verify"
+	}
 	err := s.pool.Raw().QueryRow(bounded, `SELECT v.tenant_id,v.user_id,v.factor_id,v.enrollment_version::text,v.factor_authority_version::text,
 CASE WHEN octet_length(v.record) BETWEEN 1 AND 32768 THEN v.record END
-FROM identity_mfa.factor_verifications v
+FROM `+table+` v
 JOIN identity.commands j ON j.tenant_id=v.tenant_id AND j.command_id=v.command_id AND j.purpose=v.purpose
 JOIN identity.identity_command_id_claims c ON c.tenant_id=j.tenant_id AND c.command_id=j.command_id AND c.purpose=j.purpose
-WHERE v.proof_id=$1 AND v.command_id=$2 AND v.purpose='identity.mfa.totp-verify'
-AND j.state='committed' AND NOT c.retired`, string(id), raw).Scan(&tenant, &user, &factor, &enrollment, &authority, &payload)
+WHERE v.proof_id=$1 AND v.command_id=$2 AND v.purpose=$3
+AND j.state='committed' AND NOT c.retired`, string(id), raw, purpose).Scan(&tenant, &user, &factor, &enrollment, &authority, &payload)
 	if bounded.Err() != nil {
 		return zero, bounded.Err()
 	}
@@ -83,7 +103,11 @@ AND j.state='committed' AND NOT c.retired`, string(id), raw).Scan(&tenant, &user
 	if err != nil {
 		return zero, identity.UnavailableError{}
 	}
-	r, err := decodeFactorVerificationRecord(id, tenant, user, payload)
+	decode := decodeFactorVerificationRecord
+	if s.otp {
+		decode = decodeOTPFactorVerificationRecord
+	}
+	r, err := decode(id, tenant, user, payload)
 	if err != nil || r.Original.CredentialID != factor || strconv.FormatUint(r.Original.CredentialVersion, 10) != enrollment || strconv.FormatUint(r.FactorAuthorityVersion, 10) != authority {
 		return zero, identity.UnavailableError{}
 	}

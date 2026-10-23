@@ -296,6 +296,34 @@ opt-in HTTP handlers supply the selected password-primary continuation, sending
 and atomic session completion. OTP management, other channels and full release
 qualification remain pending; enrollment confirmation never issues a session.
 
+## Authenticated email-OTP factor rename
+
+Select `NewOTPActiveStepUpService` over the actual OTP enrollment owner and
+`otp/postgres.NewMFAActiveIssuer`. Its consuming `PurposeStepUp` policy is
+separate from enrollment/login. Supply the actual native session primary,
+allowed origins, retained attempt/signature keys and bounded TTL. Install
+`OTPFactorVerificationMigrationSource` after the selected OTP histories.
+
+`OtpSend` takes `StepUp` session/CSRF custody, the confirmed factor and an
+idempotency key. Process delivery through the existing worker. `OtpVerify`
+requires the exact original send, a new command and the delivered code, and
+returns one signed `identity.mfa.factor-update` proof. It does not issue a session
+or renew primary authentication. Wrong codes use the existing counted budget.
+
+Select `NewOTPFactorUpdateService` with the same enrollment/step-up owners,
+actual factor-update primary and session effects. Append
+`OTPFactorManagementMigrationSource` and the selected session disposition
+histories. `FactorUpdate(Rename)` requires that original proof, source session,
+CSRF and optimistic inventory version. Proof use, label/version, account factor
+epoch, session revocation and required events commit atomically. The old session
+is no longer usable; a fresh password/OTP signin retains the renamed factor.
+Use `NewOTPFactorManagementListReader` for its safe managed labels, optionally
+including an independently selected TOTP management owner.
+
+Retries and recovery disclose historical outcome, not another proof or fresh
+factor projection. Unsupported SMS, removal, disable, replacement and HTTP
+variants remain separate; no TOTP fallback or new transaction engine is selected.
+
 ## Native disable
 
 `NewDisableService(enrollment, stepup, DisableConfig)` selects a distinct native

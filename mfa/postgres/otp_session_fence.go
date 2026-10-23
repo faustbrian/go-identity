@@ -11,7 +11,8 @@ import (
 
 // RequireOTPSessionFactor fences the original confirmed OTP enrollment, current
 // verified recipient and account-wide factor epoch inside native session-revoke-
-// one Work. It grants no OTP comparison, TOTP fallback or MFA-action authority.
+// one or explicitly selected active-OTP MFA Work. It grants no OTP comparison,
+// TOTP fallback or factor-mutation authority.
 // Directory, primary credential and policy must already be fenced by that owner.
 // Locks follow account, factor authority, then factor/recipient and remain owned
 // by the coordinator until commit/rollback. Missing, stale or unavailable state
@@ -25,7 +26,7 @@ func RequireOTPSessionFactor(ctx context.Context, w kernel.Work, owner kernel.Fe
 		return err
 	}
 	b, f, _, err := w.FeatureScope(owner)
-	if err != nil || b.OperationID != "identity.session.revoke-one" || f.Operation.Owner != "identity/session" || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1}) || b.UserID != user || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(user) {
+	if err != nil || !nativeOTPSessionFactorConsumer(b, f) || b.UserID != user || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(user) {
 		return invalidAuthority()
 	}
 	if _, err := identity.ParseCommandID(factorID); err != nil {
@@ -68,4 +69,10 @@ FOR UPDATE OF f FOR SHARE OF i`, string(b.TenantID), string(user), factorID)
 		return identity.ForbiddenError{}
 	}
 	return ctx.Err()
+}
+
+func nativeOTPSessionFactorConsumer(b identity.CommandBinding, f kernel.FeatureRegistration) bool {
+	sessionOwner := b.OperationID == "identity.session.revoke-one" && f.Operation.Owner == "identity/session" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1})
+	mfaOwner := b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.otp-send" && b.SchemaID == "mfa-otp-step-up-send" || b.OperationID == "identity.mfa.otp-verify" && b.SchemaID == "mfa-otp-step-up" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update") && f.Operation.Owner == "identity/mfa" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1})
+	return sessionOwner || mfaOwner
 }

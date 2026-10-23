@@ -219,4 +219,62 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','factor-owner',1,0
 	if _, err := conn.Exec(ctx, `INSERT INTO identity_mfa.otp_factors(tenant_id,user_id,factor_id,state,enrollment_version,row_version,channel,identifier_id,identifier_version,verification_version,created_command_id,created_purpose,created_at,enrollment_expires_at) VALUES('tenant-a','factor-owner',$1,1,1,1,'email','email-factor',1,1,$2,'identity.mfa.enable',clock_timestamp(),clock_timestamp()+interval '5 minutes')`, legacyFactor, legacyCommand); err == nil {
 		t.Fatal("TOTP identity retargeted into OTP")
 	}
+	t.Run("OTP action history preserves populated factors", func(t *testing.T) {
+		totpProofs := FactorVerificationMigrationSource{Base: OTPFactorMigrationSource{Base: source, Version: 14}, Version: 15}
+		proofs := OTPFactorVerificationMigrationSource{Base: totpProofs, Version: 16}
+		history, err := (OTPFactorManagementMigrationSource{Base: proofs, Version: 17}).Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range history[len(history)-3:] {
+			if _, err := conn.Exec(ctx, step.UpSQL()); err != nil {
+				t.Fatal("OTP action history install", err)
+			}
+		}
+		var label string
+		var state, version int
+		if err := conn.QueryRow(ctx, `SELECT label,state,row_version FROM identity_mfa.otp_factors WHERE tenant_id='tenant-a' AND factor_id=$1`, confirmedFactor).Scan(&label, &state, &version); err != nil || label != "" || state != 3 || version != 1 {
+			t.Fatal("additive management history changed retained factor state", err)
+		}
+		// The old INSERT shape still works; a label is not required for an
+		// enrollment writer that does not select active factor management.
+		oldWriterFactor, oldWriterCommand := seed()
+		if _, err := conn.Exec(ctx, `INSERT INTO identity_mfa.otp_factors(tenant_id,user_id,factor_id,state,enrollment_version,row_version,channel,identifier_id,identifier_version,verification_version,created_command_id,created_purpose,created_at,enrollment_expires_at) VALUES('tenant-a','factor-owner',$1,1,1,1,'email','email-factor',1,1,$2,'identity.mfa.enable',clock_timestamp(),clock_timestamp()+interval '5 minutes')`, oldWriterFactor, oldWriterCommand); err != nil {
+			t.Fatal("unselected legacy enrollment writer rejected", err)
+		}
+		proofID, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		proofCommand := mustContinuationCommandBytes(string(proofID))
+		if _, err := conn.Exec(ctx, `INSERT INTO identity.identity_command_id_claims(command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields) VALUES($1,'tenant-a','identity.mfa.otp-verify',$2,1,decode('01','hex'))`, proofCommand, make([]byte, 32)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Exec(ctx, `INSERT INTO identity.commands(command_id,tenant_id,purpose) VALUES($1,'tenant-a','identity.mfa.otp-verify')`, proofCommand); err != nil {
+			t.Fatal(err)
+		}
+		insertProof := func(factor, user, purpose string) error {
+			_, err := conn.Exec(ctx, `INSERT INTO identity_mfa.otp_factor_verifications(proof_id,tenant_id,user_id,factor_id,enrollment_version,factor_authority_version,command_id,purpose,record) VALUES($1,'tenant-a',$2,$3,1,1,$4,$5,decode('01','hex'))`, string(proofID), user, factor, proofCommand, purpose)
+			return err
+		}
+		if err := insertProof(legacyFactor, "factor-owner", "identity.mfa.otp-verify"); err == nil {
+			t.Fatal("OTP proof accepted a TOTP predecessor")
+		}
+		if err := insertProof(oldWriterFactor, "other-owner", "identity.mfa.otp-verify"); err == nil {
+			t.Fatal("OTP proof crossed factor owner")
+		}
+		if err := insertProof(oldWriterFactor, "factor-owner", "identity.mfa.totp-verify"); err == nil {
+			t.Fatal("OTP proof accepted a TOTP command")
+		}
+		if err := insertProof(oldWriterFactor, "factor-owner", "identity.mfa.otp-verify"); err != nil {
+			t.Fatal("actual OTP predecessor rejected", err)
+		}
+		if _, err := conn.Exec(ctx, `UPDATE identity_mfa.otp_factor_verifications SET used_at=clock_timestamp() WHERE proof_id=$1`, string(proofID)); err == nil {
+			t.Fatal("partial proof-use marker accepted")
+		}
+		if _, err := conn.Exec(ctx, `UPDATE identity_mfa.otp_factors SET label=E'line\nbreak' WHERE tenant_id='tenant-a' AND factor_id=$1`, oldWriterFactor); err == nil {
+			t.Fatal("control characters persisted in public factor label")
+		}
+		testOTPFactorVerificationSourcePostgres(t, ctx, conn, dsn, name, string(proofID), oldWriterFactor)
+	})
 }

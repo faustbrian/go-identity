@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Independently select authenticated email-OTP action-proof issuance and factor
+  rename. Consume original signed proof atomically with optimistic metadata,
+  factor-authority advancement, required session revocation and audit/lifecycle
+  effects; recovery is metadata-only. Append the selected OTP proof/management
+  histories before use. Existing TOTP storage and framing remain unchanged;
+  OTP removal, disable, replacement and HTTP are not enabled by this profile.
+
 - Add an explicitly selected OTP/TOTP safe-inventory reader borrowing the
   actual OTP enrollment owner. It reports coherent pending/active/revoked
   metadata and unused recovery counts without reading secrets; corrupt,

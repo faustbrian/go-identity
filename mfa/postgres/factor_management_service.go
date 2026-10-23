@@ -41,7 +41,8 @@ type FactorRemovalRecoverySource interface {
 // Sessions borrow native owners; they cannot open transactions or retain Work.
 // Default selection supports TOTP rename; explicit email recovery selection
 // adds removal of the sole active TOTP. Explicit Replacement adds a pending
-// same-profile successor; other recovery paths and factor methods deny.
+// same-profile successor. NewOTPFactorUpdateService selects rename only for
+// confirmed email OTP and rejects removal/replacement configuration.
 type FactorUpdateConfig struct {
 	Primary           FactorUpdatePrimarySource
 	Sessions          RecoveryRegenerationSessionEffects
@@ -63,7 +64,7 @@ type TOTPReplacementConfig struct {
 	RecoveryCodes uint32
 }
 
-// FactorUpdateService owns keyed, optimistic native TOTP metadata management
+// FactorUpdateService owns keyed, optimistic native factor metadata management
 // with original proof consumption, session revocation and lifecycle/audit.
 // It borrows existing enrollment, step-up and coordinator owners and creates
 // no private transaction, journal, authority or goroutine. Explicit replacement
@@ -73,6 +74,7 @@ type FactorUpdateService struct{ state func() *factorUpdateState }
 type factorUpdateState struct {
 	shared         *totpEnrollmentState
 	stepup         *activeStepUpState
+	otp            *otpActiveState
 	config         FactorUpdateConfig
 	source         *FactorVerificationSource
 	validator      *auth.AuthorityAuthenticator
@@ -106,16 +108,26 @@ func newFactorMutationService(enrollment *TOTPEnrollmentService, stepup *TOTPAct
 	if s.shared == nil || s.stepup == nil || s.stepup.shared != s.shared || len(s.stepup.config.VerificationKeys) > 32 {
 		return nil, invalidAuthority()
 	}
+	return configureFactorMutation(s)
+}
+
+func configureFactorMutation(s *factorUpdateState) (*FactorUpdateService, error) {
+	c, operation := s.config, s.operation
+	profile := s.evidenceProfile()
 	var err error
-	s.source, err = NewFactorVerificationSource(s.shared.pool, s.shared.config.MaximumDuration)
+	if s.otp != nil {
+		s.source, err = NewOTPFactorVerificationSource(s.shared.pool, s.shared.config.MaximumDuration)
+	} else {
+		s.source, err = NewFactorVerificationSource(s.shared.pool, s.shared.config.MaximumDuration)
+	}
 	if err != nil {
 		return nil, err
 	}
-	keys := make([]auth.AuthorityKey, 0, len(s.stepup.config.VerificationKeys))
-	for id, key := range s.stepup.config.VerificationKeys {
+	keys := make([]auth.AuthorityKey, 0, len(profile.keys))
+	for id, key := range profile.keys {
 		keys = append(keys, auth.AuthorityKey{ID: id, PublicKey: key})
 	}
-	s.validator, err = auth.NewAuthorityAuthenticator(auth.AuthorityConfig{Issuer: s.stepup.config.Issuer, Environment: s.stepup.config.Environment, Audience: s.stepup.config.Audience, Algorithm: "EdDSA", Profile: "shared-issuer-v1", AccessKeys: keys, EvidenceKeys: keys, Source: factorReauthenticationOnlySource{s.source}, Clock: s.shared.config.Coordinator.QueryPolicy.Clock, ReadTimeout: s.shared.config.MaximumDuration, ClockUncertainty: time.Millisecond, MaximumDelegationDepth: 1})
+	s.validator, err = auth.NewAuthorityAuthenticator(auth.AuthorityConfig{Issuer: profile.issuer, Environment: profile.environment, Audience: profile.audience, Algorithm: "EdDSA", Profile: "shared-issuer-v1", AccessKeys: keys, EvidenceKeys: keys, Source: factorReauthenticationOnlySource{s.source}, Clock: s.shared.config.Coordinator.QueryPolicy.Clock, ReadTimeout: s.shared.config.MaximumDuration, ClockUncertainty: time.Millisecond, MaximumDelegationDepth: 1})
 	if err != nil {
 		return nil, invalidAuthority()
 	}
@@ -136,7 +148,7 @@ func newFactorMutationService(enrollment *TOTPEnrollmentService, stepup *TOTPAct
 		FactorAge, PrimaryAge time.Duration
 		Removal               *removalIdentity       `json:",omitempty"`
 		Replacement           *TOTPReplacementConfig `json:",omitempty"`
-	}{s.shared.identity, s.stepup.identity, c.MaximumAge, c.PrimaryMaximumAge, removal, s.config.Replacement})
+	}{s.shared.identity, profile.identity, c.MaximumAge, c.PrimaryMaximumAge, removal, s.config.Replacement})
 	if err != nil {
 		return nil, invalidAuthority()
 	}
@@ -218,7 +230,7 @@ func (s *FactorUpdateService) FactorUpdate(ctx context.Context, r mfa.FactorUpda
 func (s *FactorUpdateService) executeFactorMutation(ctx context.Context, p *factorUpdatePhase) (out mfa.FactorUpdateResult, err error) {
 	state, r := p.state, p.request
 	selected := state != nil && (r.Action == mfa.Rename || r.Action == mfa.Remove && state.config.RemovalRecoveryPath == auth.RecoveryPathEmail && !nilEnrollmentPrimary(state.config.RemovalRecovery) || r.Action == mfa.Replace && state.config.Replacement != nil)
-	if !selected || r.FactorProof.Method != "totp" || !slices.Contains(state.stepup.config.AllowedOrigins, r.Origin) {
+	if !selected || r.FactorProof.Method != state.method() || !slices.Contains(state.evidenceProfile().origins, r.Origin) {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, state.shared.config.MaximumDuration)
