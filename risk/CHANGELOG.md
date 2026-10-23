@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Apply the existing tenant/subject safe-read counters to authenticated passkey
+  inventory. This enables rate admission only, not public discovery or access
+  to another user's credentials; session and self-user authorization remain
+  the native inventory owner's requirements.
+
 - Classify anonymous upgrade as a protected credential mutation with original
   transaction-owned counters. This does not enable native upgrade or substitute
   for verified permanent-account authority and anonymous-session possession.

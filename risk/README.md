@@ -895,6 +895,11 @@ verification and unlisted aliases do not acquire this mutation admission.
 
 Regenerate from the selected current planning snapshot, then format the output:
 
+Authenticated `identity.passkey.list` explicitly uses the StateNeutralRead
+tenant/subject counter profile, matching API_OPERATIONS.md's safe/read contract.
+It is not public discovery: the passkey owner separately authenticates the
+session and authorizes the exact self-user before reading safe metadata.
+
 ```sh
 ruby ../scripts/generate-risk-catalog.rb PUBLIC_CONTRACTS.json REFERENCE_CONFIGURATION.md
 ```

@@ -10,5 +10,6 @@
   "identity.organization.invitation.expire": "privileged",
   "identity.organization.role.assign": "privileged",
   "identity.organization.role.revoke": "privileged",
+  "identity.passkey.list": "state_neutral_read",
   "identity.username.available": "state_neutral_read"
 }
