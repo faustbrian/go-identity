@@ -150,6 +150,9 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 		return err
 	}
 	if a.factor != nil {
+		if a.factor.Method == "otp" {
+			return mfapg.RequireOTPSessionFactor(ctx, w, owner, b.UserID, a.factor.FactorID, mfapg.OTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
+		}
 		return mfapg.RequireTOTPSessionFactor(ctx, w, owner, b.UserID, a.factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
 	}
 	return nil

@@ -1,5 +1,11 @@
 # PostgreSQL session storage
 
+Native password/OTP self-logout retains the sealed factor method and uses the
+MFA owner's `RequireOTPSessionFactor`, including current recipient verification
+and original enrollment/account versions. It does not fall back to TOTP or
+single-factor admission. Use the matching MFA adapter; existing session records
+and migration bytes are unchanged.
+
 ## Anonymous creation session effects
 
 `AnonymousSigninSessionFields` freezes the complete initial anonymous session

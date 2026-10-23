@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Revoke password/OTP sessions using their actual confirmed OTP factor and
+  verified recipient, rather than the TOTP factor table. Existing TOTP and
+  recovery-code revocation remains unchanged; use the matching MFA adapter.
+
 - Add source-free expired-guest session/family disposal after actual same-Work
   kernel disposal, including already-pruned or fully revoked sets. Append
   `AnonymousExpiryMigrationSource` after the selected anonymous history;
