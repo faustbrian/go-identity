@@ -1,5 +1,126 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 13:22 UTC: human_exchange_readiness first actual root selected
+GREEN0.248s and native genuine code-source journey GREEN10.398s, both terminal.
+Version7/epoch1 adoption, consumed-code ancestry, descendants, refresh-version
+compatibility, refresh-source denial, ordinary logout and parent withdrawal
+are exercised. Remaining frozen risk/recovery partitions are running. Source
+review, public adoption/main/CI/consumer remain open; no M33 delivery claimed.
+
+2026-10-23 13:21 UTC: finite M12 native/Reference OTP disable profile CLOSED.
+MFA5fd8f73dd722/native8fbebd6d61f1/OTP38648609fbb6/Referencee20c60641954 are
+main-pushed; exact Required39958329695/39958968365/39959176626/39959871742
+SUCCESS. Native independent reviewer otp_disable_final_review APPROVE covers
+all38 source paths901a9b21...b3f163 againstb0a95ca9; unchanged source reconstructed
+exactly after delivery, with only reviewed public dependency adoption added.
+Public-supplier six-journey PG/race181.707s/ordinaryrace9.055s/taggedvet0 and
+modules PASS. Actual downloaded Reference335files exactly matche20c606 source.
+Separate example.invalid consumer (GOWORKoff, no replacements) passes five
+PG/race journeys127.790s: OTP one/all, actual COMMIT recovery, retained TOTP
+one/all disable. Module verification PASS. Public Reference version
+v0.0.0-20261023131631-e20c60641954,
+sumh1:E9jyb2bGXuHfdDCsVJF3aSCSADNzVboxCXFPxaQzgSg=,
+modsumh1:Q4u7fK+/VhAmgJBPoBjvpLEVoe2SF/jSYW+ccdGvecE=.
+Consumers retain usable password signin and actual delivered email reset;
+original retry/recovery never redelivers proof or repeats erasure. Original
+184.025s cohort remains FAILED on unattributed prerequisite503, not a claimed
+fix. Full M12/67-unit qualification remain open; still11/39/~25% low confidence.
+All primary Go handles terminal. Heavy slot/owned PG18 loopback56427 handed
+to human_exchange_readiness for bounded root/native checks; primary will remove
+the borrowed cluster when worker signals completion. Primary supplier/build/
+consumer scratch is no longer needed and cleanup follows; no Tools work added.
+
+2026-10-23 13:16 UTC: Reference standalone public-supplier PostgreSQL/race
+six-journey cohort PASS181.707s (one/all OTP disable, true COMMIT recovery,
+competing commands, retained OTP/TOTP removal). Ordinaryrace PASS9.055s;
+taggedvet0 and modules verified. Complete reviewed38-path source still exactly
+901a9b21d5455a89bcc302b5b033567905100d877857a5ab71005ae622b3f163;
+only public dependency pins/checksums are additional. OTP3864860 exact
+Required39959176626 SUCCESS. Reference source commit/publication and actual
+downloaded consumer proof remain next; original failed184.025s cohort retained.
+
+2026-10-23 13:11 UTC: reviewed native MFA8fbebd6d61f1 is main-pushed, exact
+Required39958968365 SUCCESS. OTP public-only issuer adoption ordinaryrace1.761s,
+vet0 and module verification PASS; OTP38648609fbb6 is now main-pushed, CI pending.
+Changed module trees pass redacted current-content secret scan; ACK minor
+messages and hooks pass. Reference public-supplier adoption is next; no whole
+M12 or67-unit qualification closure is claimed.
+
+2026-10-23 13:09 UTC: OTP disable complete38-path source901a9b21...b3f163
+independently APPROVED by otp_disable_final_review. Session-history ordering
+regression was reproduced and fixed; installed replacement v4 remains unchanged.
+All-target OTP cap63 retained pending siblings (expired included) is explicit.
+Initial combined PG/race cohort FAILED184.025s on prerequisite login-send503;
+cause remains unknown. Exact failed one-target partition PASS35.962s; original
+cohort is not relabeled passing. Current affected ordinary race MFA1.295s,
+native1.330s, OTP1.775s, Reference8.891s; vet0; populated native race1.748s;
+OTP-record fuzz smoke9.292s, not full qualification. Public MFA5fd8f73dd722
+is main-pushed/exact CI39958329695 SUCCESS. Native public-only adoption now
+passes ordinaryrace1.352s, populated-PG/race1.525s and taggedvet0; only literal
+MFA pin/checksums changed after source approval. Native/OTP/Reference delivery
+and actual public consumer remain open; full M12 and all67-unit scope unchanged.
+
+2026-10-23 12:53 UTC: primary OTP disable is implemented locally; first complete
+Reference PostgreSQL one-target/email-recovery journey PASS33.266s. Core public
+purpose RED0.273s, codec RED0.237s and exact native factor-fence RED0.236s
+established missing behavior; selected core/codec greens0.217/0.264s and OTP
+issuer green0.293s. Four OTP disable variants plus retained OTP/TOTP removal
+are running under race (session51617); no source delivery is claimed. New
+pending-sibling fixture must confirm the newer enrollment because each Enable
+advances authority; native freshness was preserved. Review otp_disable_final_review
+owns frozen38-path e093b8b8...33fb74 againstb0a95ca9; complete source review pending.
+Its candidate mixed session-history ordering issue is being falsified; no
+source writes occur during that review. Full M12, public adoption and CI open.
+
+Parallel successor assigned to human_exchange_readiness (gpt-6.1-sol/high):
+finite M33 human code-issued opaque access-source exchange, separate explicit
+policy from unchanged workload default. Writable paths: go-oauth-server root
+protocol Go/tests/docs/changelog and postgres native Go/tests/docs/changelog/
+forward migrations only; no module pins, workspace/manifests, shared identity,
+HTTP/reference, tooling or Git operations. Baseline5c597f4650f9, public root9969c9d;
+consume committed identity/session2eafc2592af0, kernelc9d9dd761138,
+session-nativecf1f8c1d8e20, authenticationd9f5132, authorizationa55bbebb1060.
+Consumed proof: delivered genuine confidential code/consent/introspection owners
+and workload exchange public-native five-journey race44.086s, exact CI39952121519.
+Reader verified actual pinned owner code and existing behavior tests once.
+Outcome: owning confidential Basic webclient exchanges genuine password-session/
+code-S256 opaque access roots for reusable narrower children, preserving separate
+platform client-management owner/human user+actor/tenant/client/original source,
+root/parent, original validity and consent/current authority. Code/continuation
+issuance ancestry stays distinct from delegation ancestry; ordinary browser
+logout retains existing approved-grant meaning. No source refresh/device/session/
+API-key/org/JWT or HTTP profile. Full retained goal is unchanged.
+Acceptance: actual code/PKCE -> narrower child/introspection -> descendant;
+scope/resource/depth/foreign/corrupt lineage denials; root/parent/client/consent/
+credential/user/authorization withdrawal including post-preflight; original
+freshness across waits, intent retry/recovery, concurrency, rollback, actual
+before/after-COMMIT uncertainty; populated ordinary/silent/workload histories
+and retained confidential/workload consumers. Checks: affected root tests and
+native PostgreSQL/race, bounded changed parser fuzz, migration compatibility,
+independent final review and actual public consumer at primary integration.
+Worker may inspect/write focused tests now; production follows observed red.
+Primary owns dependency adoption, first public-boundary alignment and delivery.
+No Go/service run until primary hands over the serialized heavy slot.
+
+2026-10-23 12:39 UTC: M12 OTP disable profile frozen; primary owns MFA core,
+native MFA/OTP prerequisites and Reference composition/tests/docs. Consume
+delivered OTP rename/removal owners (MFA6bc1800/nativef67a836/sessionef49eb3/
+OTP8954d0d/Referencee4ae9ab), with their retained public PostgreSQL/race proof.
+Outcome: genuine enrolled OTP session -> distinct disable-purpose delivered OTP
+and signed one-use proof -> explicit one/all disable -> recipient erasure,
+recovery retirement, factor-authority/session/lifecycle effects in one Work ->
+password signin and actual email reset remain usable. One preserves unexpired
+pending siblings; all erases them. Explicit selection only; existing default
+factor-update identity and TOTP paths remain unchanged. No HTTP/replacement or
+other method profile is selected; these remain whole-goal work. Denials include
+wrong/stale purpose/custody/current recovery, fresh-key proof reuse, competing
+commands and rollback; actual lost-COMMIT recovery returns metadata only.
+Checks: focused MFA/OTP tests, real Reference PostgreSQL/race one/all/recovery
+journeys and retained OTP removal/TOTP disable, populated forward history,
+affected vet, independent complete-diff review, public-supplier/consumer and CI.
+No new evidence framework. OAuth readiness worker failed before a report or
+writes; no active parallel implementation assignment is claimed.
+
 2026-10-23 12:20 UTC: two finite consumer profiles CLOSED; whole M12/M33 and
 full-unit qualification remain open. Primary OTP removal: nativef67a8364fc5e
 and Referencee4ae9ab69358 are main-pushed, exact Required39951283337/39951836008
