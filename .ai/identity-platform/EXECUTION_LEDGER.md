@@ -1,5 +1,88 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 18:32 UTC: native M16 identifier-free resident signin profile CLOSED,
+not full M16. Reviewed main955b37004f50922edaa6c63f5fffb83dd68dda50 is pushed;
+Required40003861587 SUCCESS. Final independent native report
+/root/passkey_discoverable_native_recheck APPROVE/no findings covers complete
+13-path candidate6c7d7936...25d2d5a. Prior full review found one accepted callback
+serialization defect: a valid session callback expanded past the unchanged
+4096-byte admission column. Real PostgreSQL RED3.276s; bounded deployment digest
+preserves exact configuration binding and published SQL; GREEN4.491s, final
+public-only discovery PG/race101.698s, ordinary native race1.316s, taggedvet0,
+modverifyall and secrets0. The prior public-only new+retained cohort210.047s
+retains identified/capacity/privacy/remember/session-withdrawal proof; those
+runtime inputs did not change in the discovery-only correction. No broad rerun.
+Actual separate example.com/native-passkey-consumer uses authenticated public
+native v0.0.0-20261023183024-955b37004f50, GOWORK=off/no replacements. Genuine
+enrollment -> no-identifier browser initiation -> resident UV signin -> issued
+session/inventory/read/cookie-CSRF logout plus opt-out, both mode-switch
+directions, retained identified journey and five current-owner denials PASS
+PostgreSQL/race33.567s. All41 public archive files match source; all modules
+verify. Seed account/session and raw authenticator remain declared fixture
+seams; this is not signup provenance or new browser/hardware qualification.
+Native/profile workers finished; no active source writer. Next primary outcome
+is Reference adoption of these public methods/risk opt-in over the already real
+registration/verification/password/enrollment graph, including disabled/current
+authority and populated-upgrade checks. HTTP, signup, conditional UI, credential
+rename/delete and whole-unit/release qualification remain required.11/39/~25%
+low confidence unchanged; all67 units retained. No tag/release/deployment.
+
+2026-10-23 18:22 UTC: risk prerequisite delivered as main a13a682,
+Required40002354272 SUCCESS. Independent reviewer
+/root/passkey_discovery_risk_review APPROVE/no findings covers all six paths
+fd1e8454...92ee66b8. Initial missing-option RED .130s, complete risk race1.381s,
+vet0 and selected six-file secrets0; unrelated risk/valkey/README historical
+scanner finding is not represented as passing. Public risk
+v0.0.0-20261023181921-a13a6825051c authenticates; all98 archive files match source.
+Worker passkey_discoverable_signin completed/froze its 11 source/test/doc paths;
+primary inspected first public boundary and owns new risk pin in native mod/sum.
+Actual durable native discovery cohort passes PostgreSQL/race97.714s through a
+temporary development-only workspace. No private identifier/authority, SQL
+copies or new journal; real root verifier and owner epoch fences decide user.
+Final native public-only new+retained identified cohort is running with
+GOWORK=off, no replacements; source review passkey_discoverable_native_final
+covers exact13-path candidate29f7a0e9...91aadbb on main2912f67. Separate bounded
+worker passkey_public_consumer prepares scratch external consumer only; no
+project/pin/Git/heavy execution authority. No native discovery delivery/full-M16
+closure yet. Its Reference and HTTP adoption remain required.
+
+2026-10-23 18:15 UTC: concrete native discoverable dependency changes primary
+priority from HTTP to its owning risk prerequisite. Current Authentication
+requires an identifier digest; manufacturing one for anonymous discovery would
+misstate authority. Primary owns risk/** only plus shared notes/pins. Add trusted
+startup PolicyConfig.PasskeyDiscovery (default false): exact passkey signin
+options/verify with genuinely absent identifier use tenant/network/device and
+unchanged configured Authentication thresholds/signals/expiry/failure policy.
+Identified subjects keep all four counters; other operations and extra dimensions
+still deny. Retained custody fingerprints/configuration must distinguish profiles
+without changing disabled legacy custody bytes. Focused counted/audited custody,
+threshold/unknown/replay/cross-operation/expiry tests, ordinary risk race and vet,
+one independent complete diff then public main pin unlock native lane. This is
+required anonymous auth behavior, not safe-read classification or new authority.
+Worker native RED .807s fails exactly on absent additive API; no runtime claim.
+
+2026-10-23 18:10 UTC: dependency-ready parallel lane frozen for native M16
+identifier-free resident signin. Worker passkey_discoverable_signin owns only
+go-passkey/postgres/** implementation/tests/docs and any necessary additive
+root passkey API/docs; main starts2912f67. Consume delivered native97cb16c,
+rootccdec868, WebAuthn root ed89b24/native84664c3 and existing pinned public
+identity/session/risk owners; no changes to those supplier repositories.
+Outcome: original browser/remember flow -> genuinely anonymous account-independent
+resident options -> joint root-verified credential/handle -> actual authorized
+human/current-factor session -> safe inventory/read/logout, with no identifier
+input or disclosure. Preserve existing identified APIs and exact epoch/flow,
+tenant/RP/origin/UV, counted risk, atomic consume/effects, no-reveal recovery and
+current-owner withdrawal. No signup/conditional UI/management/HTTP/reference
+claim. Worker reads full applicable goals and traces actual consumed contracts
+once; concrete missing upstream behavior is reported, not replaced privately.
+Central heavy execution only: focused denial/replay/rollback/current-authority
+and real PostgreSQL/race journey, retained identified regression, tagged vet,
+public consumers and one independent full-diff review before main/CI delivery.
+Worker cannot change shared contracts/manifests/workspace/pins outside its owner,
+spawn children, run heavy checks, stage/commit/push, or edit primary reference
+and HTTP paths. Primary owns integration/pins and checks alignment at first
+public boundary and tested batch; no implementation is counted delivered early.
+
 2026-10-23 18:08 UTC: M16 existing-account reference-native profile CLOSED,
 not full M16. Primary delivered exact reviewed 16-path candidate ab031fc3...9b5ad8
 as main bacc2e6c27bf259cf4cd5a39859b808d2f81d978; Required40000721264 SUCCESS
