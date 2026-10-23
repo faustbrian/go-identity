@@ -72,6 +72,11 @@ func NewCookieRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, 
 		p := *c.MFAPassword
 		c.MFAPassword = &p
 	}
+	if c.Passkey != nil {
+		p := *c.Passkey
+		p.Profile = freezePasskeyProfile(p.Profile)
+		c.Passkey = &p
+	}
 	return &CookieRevokeOneExecutor{pool: pool, config: c, keys: append([]session.CSRFKey(nil), keys...), base: base}, nil
 }
 

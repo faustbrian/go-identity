@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicit prospective identified UV-passkey issuer with original
+  one-use bind/issue custody and commit-gated bearer/CSRF delivery. Other
+  authentication profiles cannot admit it. Genuine WebAuthn verification,
+  current native authority and atomic protocol/session persistence remain
+  mandatory; structural preparation never authenticates an identity.
+
 - Retain anonymous upgrade's original exclusive delivery deadline in fresh
   issuance results so transports cannot renew it after native commitment.
   Other profiles, historical results and failures expose no delivery lease.

@@ -36,6 +36,10 @@ type RevokeOneExecutorConfig struct {
 	// authority for both caller and target. Select the identical native reader
 	// profile; nil never downgrades an MFA session to single-factor admission.
 	MFAPassword *IdentifierAdmissionConfig
+	// Passkey selects the same trusted RP/current-authority port as the source
+	// session reader. Nil keeps passkey callers/targets disabled; it never
+	// converts their original factor/passkey dimensions into password authority.
+	Passkey *PasskeySessionAdmission
 }
 
 // RevokeOneExecutor owns kernel/native/audit/outbox composition. It accepts no
@@ -101,6 +105,13 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 		}
 		copied := *p
 		owned.native.revokeMFAPassword = &copied
+	}
+	if p := c.Passkey; p != nil {
+		base := c.Execution.Profile
+		if !p.Profile.valid() || nilIssueDependency(p.Authority) || p.Profile.GlobalAuthorityID != base.GlobalAuthorityID || p.Profile.PolicyNamespace != base.PolicyNamespace || p.Profile.Audience != base.Audience {
+			return nil, session.ErrInvalidInput
+		}
+		owned.native.revokePasskey = &passkeySessionSelection{freezePasskeyProfile(p.Profile), p.Authority}
 	}
 	return &RevokeOneExecutor{owned, c.Sessions}, nil
 }

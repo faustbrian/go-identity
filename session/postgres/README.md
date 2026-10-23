@@ -1,5 +1,38 @@
 # PostgreSQL session storage
 
+## Identified UV-passkey session composition
+
+`PasskeySigninSessionFields` and `PasskeySigninSession` retain the complete
+prospective session without bearer or assertion bytes. The native verification
+command's `RecordID` is the new session ID, not its separate WebAuthn ceremony
+ID, so required session lifecycle/audit effects identify their actual subject.
+`NewPasskeySigninEffect` stages that session/family and domain-separated retained
+issuance evidence in the passkey owner's existing Work. The owned passkey adapter
+must first verify the real opaque assertion and commit its protocol counter,
+mapping, risk and required effects atomically. Call `Check` after downstream
+effects and `Recover` only through original coordinator recovery.
+
+`NewPasskeySessionService` and `RevokeOneExecutorConfig.Passkey` explicitly select
+the same trusted RP namespace and owned `PasskeySessionAuthority`. The port
+verifies RP/credential mapping, passkey authority and the exact known-empty MFA
+generation. A present factor epoch in this profile is an original lifecycle
+fence, not completed secondary MFA; `MFAAuthentication` remains absent. Both
+epochs survive issuance, reads and logout. No password fallback or original
+epoch refresh is permitted. Positive evidence ends at the earliest contributing
+owner deadline, at most20s after its original authoritative read begins.
+
+Append `PasskeySigninMigrationSource` after the complete installed session history,
+with `PreviousConstraint` naming its actual issuance-purpose constraint and a
+new permanently allocated version. PostgreSQL preserves that existing validated
+purpose expression and adds only passkey assertion issuance. No other method,
+anonymous or device history is required. The transactional change takes an
+exclusive table lock and validates populated rows; use the migration runner's
+bounded statement/lock budgets. Unknown, missing, already-replaced or
+non-purpose constraints fail. Old migration SQL/checksums remain unchanged.
+Keep unaware readers out of passkey-serving routes before activation; older
+purpose suffixes cannot run afterward. These components alone are not a usable
+passkey workflow or permission to supply an application-written authority store.
+
 Native password/OTP self-logout retains the sealed factor method and uses the
 MFA owner's `RequireOTPSessionFactor`, including current recipient verification
 and original enrollment/account versions. It does not fall back to TOTP or

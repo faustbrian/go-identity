@@ -131,6 +131,9 @@ func (p PreparedIssuance) Session() (Session, bool) {
 	if p.state == nil {
 		return Session{}, false
 	}
+	if p.state.passkey != nil {
+		return p.state.passkey.record, true
+	}
 	if p.state.upgrade != nil {
 		return p.state.upgrade.record, true
 	}
@@ -192,6 +195,10 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	if r.state == nil {
 		return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
 	}
+	if r.state.passkey != nil {
+		p := r.state.passkey
+		return p.binding, passkeySigninOperation(), p.record, true
+	}
 	if r.state.upgrade != nil {
 		p := r.state.upgrade
 		return p.binding, anonymousUpgradeOperation(), p.record, true
@@ -232,6 +239,15 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 }
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
+	if s.passkey {
+		if r.state == nil || r.state.passkey == nil {
+			return ErrInvalidIssuance
+		}
+		return validatePasskeyIssuanceAt(r.state.passkey.record, now)
+	}
+	if r.state != nil && r.state.passkey != nil {
+		return ErrInvalidIssuance
+	}
 	if s.anonymousUpgrade {
 		if r.state == nil || r.state.upgrade == nil {
 			return ErrInvalidIssuance

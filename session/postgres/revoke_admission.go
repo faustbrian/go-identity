@@ -17,6 +17,7 @@ type revokeRecordAuthority struct {
 	identifier *kernel.VerifiedIdentifierAdmission
 	policy     kernel.UserAuthorizationAdmission
 	factor     *session.MFAAuthenticationSpec
+	passkey    bool
 }
 
 func copySingleFactorAdmission(c SingleFactorSessionAdmissionConfig) SingleFactorSessionAdmissionConfig {
@@ -45,6 +46,17 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 		return deny()
 	}
 	if s.Authentication.Kind == session.AuthenticationVerified {
+		vector, _ := s.Authority.Bindings()
+		if s.Authentication.Proof.Method == "passkey" || vector.Passkey.Present {
+			if r.revokePasskey == nil {
+				return deny()
+			}
+			directory, credential, policy, err := passkeySessionAdmission(r.revokePasskey.profile, record, b)
+			if err != nil {
+				return deny()
+			}
+			return revokeRecordAuthority{directory: directory, credential: &credential, policy: policy, passkey: true}, nil
+		}
 		if record.MFAAuthentication() != (session.MFAAuthentication{}) {
 			if r.revokeMFAPassword == nil {
 				return deny()
@@ -148,6 +160,9 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	}
 	if err := w.RequireActiveUserAuthorization(ctx, owner, a.policy); err != nil {
 		return err
+	}
+	if a.passkey {
+		return r.revokePasskey.authority.RequirePasskeySession(ctx, w, owner, r.revokePasskey.profile.RPNamespace, record)
 	}
 	if a.factor != nil {
 		if a.factor.Method == "otp" {

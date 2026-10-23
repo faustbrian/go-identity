@@ -101,6 +101,8 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		digest = anonymousIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == "identity.anonymous.upgrade" {
 		digest = anonymousUpgradeIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
+	} else if b.OperationID == "identity.passkey.signin-verify" {
+		digest = passkeyIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	}
 	if b.OperationID == "identity.email.verification-signin" {
 		if _, err := identity.ParseCommandID(b.RecordID); err != nil {

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Admit exact self-only passkey registration-options and registration-verify
+  action-primary custody. Their signed actions, native schemas and owners stay
+  distinct; signin and credential management are not selected. Install the
+  forward `PasskeyReauthenticationMigrationSource` after all selected password
+  proof histories before atomic consumption. Existing signed proof bytes and
+  one-use transaction ownership remain unchanged; no passkey workflow is enabled
+  by this prerequisite alone.
+
 - Add the closed anonymous-upgrade action to the existing permanent-account
   password-proof source and its forward-only consumption migration. Guest
   possession remains separate; this alone does not implement native upgrade.

@@ -94,3 +94,37 @@ func TestActionPrimaryFactorScopeRequiresOriginalVersionsAndClosedOwner(t *testi
 		t.Fatal("factor read escaped actual protected invocation")
 	}
 }
+
+func TestPasskeyEnrollmentFactorScopeKeepsExactNativeOwner(t *testing.T) {
+	for _, action := range []string{"identity.passkey.register-options", "identity.passkey.register-verify"} {
+		t.Run(action, func(t *testing.T) {
+			s, registration := actionFactorFixture(t, false)
+			s.Operation = identity.FeatureOperation{Owner: "passkey", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+			s.Binding.OperationID, s.Binding.SchemaID = action, s.Operation.SchemaID
+			registration = kernel.FeatureRegistration{Operation: s.Operation, Contributor: kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}}
+			subjects, err := actionPrimaryFactorSubjects(s, registration, 7, 7)
+			if err != nil || len(subjects) != 1 || subjects[0].user != s.Binding.UserID || subjects[0].version != 7 {
+				t.Fatal("native self-only passkey enrollment lost its original factor scope", err)
+			}
+			for _, mode := range []string{"foreign-subject", "foreign-owner", "wrong-schema", "missing-field", "changed-generation"} {
+				request, owner := s, registration
+				request.Fields = append([]identity.FeatureField(nil), s.Fields...)
+				switch mode {
+				case "foreign-subject":
+					request.Binding.UserID = "foreign"
+				case "foreign-owner":
+					owner.Contributor.Owner = "identity/username/postgres"
+				case "wrong-schema":
+					request.Operation.SchemaID = "mfa-enrollment"
+				case "missing-field":
+					request.Fields = request.Fields[:1]
+				case "changed-generation":
+					request.Fields[1].Value.Uint64++
+				}
+				if _, err := actionPrimaryFactorSubjects(request, owner, 7, 7); err == nil {
+					t.Fatal("passkey enrollment accepted substituted factor custody", mode)
+				}
+			}
+		})
+	}
+}

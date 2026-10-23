@@ -113,6 +113,7 @@ type primarySessionReader struct {
 	mfaOTPFactors     *mfapg.OTPSessionFactorReader
 	mfaPassword       bool
 	mfaPasswordReader *primarySessionReader
+	passkey           *passkeySessionSelection
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -166,10 +167,10 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	// even when both magic-link profiles are selected by the same graph.
 	if stored.Session.MFAAuthentication() != (session.MFAAuthentication{}) {
 		if spec.Authentication.Kind == session.AuthenticationVerified && r.mfaPasswordReader != nil {
-			return r.mfaPasswordReader.observePassword(bounded, stored, start)
+			return r.mfaPasswordReader.observeCredential(bounded, stored, start)
 		}
 		if spec.Authentication.Kind == session.AuthenticationVerified && r.mfaPassword && r.mfaFactors != nil {
-			return r.observePassword(bounded, stored, start)
+			return r.observeCredential(bounded, stored, start)
 		}
 		if spec.Authentication.Kind != session.AuthenticationMagicLink || r.mfaMagicLink == nil || r.mfaFactors == nil {
 			return session.SessionObservation{}, session.ErrUnauthenticated
@@ -182,16 +183,23 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	if r.magicLink != nil && spec.Authentication.Kind == session.AuthenticationMagicLink {
 		return r.observeMagicLink(bounded, stored, start)
 	}
+	vector, _ := spec.Authority.Bindings()
+	if spec.Authentication.Proof.Method == "passkey" || vector.Passkey.Present {
+		if r.passkey == nil {
+			return session.SessionObservation{}, session.ErrUnauthenticated
+		}
+		return r.observeCredential(bounded, stored, start)
+	}
 	if spec.Authentication.Kind != session.AuthenticationVerified || !r.profile.valid() {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
 	if r.mfaPassword {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
-	return r.observePassword(bounded, stored, start)
+	return r.observeCredential(bounded, stored, start)
 }
 
-func (r *primarySessionReader) observePassword(bounded context.Context, stored StoredSession, start time.Time) (session.SessionObservation, error) {
+func (r *primarySessionReader) observeCredential(bounded context.Context, stored StoredSession, start time.Time) (session.SessionObservation, error) {
 	spec, err := stored.Session.Bindings()
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnavailable
@@ -200,6 +208,9 @@ func (r *primarySessionReader) observePassword(bounded context.Context, stored S
 	directory, credential, policy, err := sessionAdmissionBindings(r.profile, stored.Session, binding, spec.SessionID, spec.Version)
 	if r.mfaPassword {
 		directory, credential, policy, err = passwordMFASessionAdmission(r.profile, stored.Session, binding, spec.SessionID, spec.Version)
+	}
+	if r.passkey != nil {
+		directory, credential, policy, err = passkeySessionAdmission(r.passkey.profile, stored.Session, binding)
 	}
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnauthenticated
@@ -227,6 +238,13 @@ func (r *primarySessionReader) observePassword(bounded context.Context, stored S
 		return session.SessionObservation{}, observationError(err)
 	}
 	var factorVersion uint64
+	var passkeyObserved PasskeySessionAuthorityObservation
+	if r.passkey != nil {
+		passkeyObserved, err = r.passkey.authority.ObservePasskeySession(bounded, r.passkey.profile.RPNamespace, stored.Session)
+		if err != nil {
+			return session.SessionObservation{}, observationError(err)
+		}
+	}
 	if r.mfaPassword {
 		if r.mfaFactors == nil {
 			return session.SessionObservation{}, session.ErrUnauthenticated
@@ -279,6 +297,19 @@ func (r *primarySessionReader) observePassword(bounded context.Context, stored S
 		return session.SessionObservation{}, session.ErrUnavailable
 	}
 	until := start.Add(20 * time.Second)
+	if r.passkey != nil {
+		var err error
+		start, until, err = passkeyObservationBounds(passkeyObserved, start, now)
+		if err != nil {
+			return session.SessionObservation{}, err
+		}
+		vector.Passkey.Binding.Version = passkeyObserved.PasskeyVersion
+		vector.Factor.Binding.Version = passkeyObserved.FactorVersion
+		current, err = session.NewAuthoritySnapshot(vector)
+		if err != nil {
+			return session.SessionObservation{}, session.ErrUnavailable
+		}
+	}
 	if !currentCredential.ExpiresAt.IsZero() && currentCredential.ExpiresAt.Before(until) {
 		until = currentCredential.ExpiresAt
 	}

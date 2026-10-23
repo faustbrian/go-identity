@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 14:21 UTC
+## TL;DR — updated 2026-10-23 14:58 UTC
 
 - **Whole goal: approximately 25% complete, low confidence; 11/39 consumer
   milestones closed.** All 67 units remain in scope. This is a whole-outcome
@@ -33,8 +33,12 @@
   including rollback and retained organization actions. WebAuthn same-Work
   assertion participation is independently source-approved, main-pushed as
   `b64dd7d` and exact-CI green (`39968403285`); protocol PostgreSQL/race and
-  retained standalone assertion checks pass. Full passkey identity/session
-  composition, usable session/read/logout and public journey remain unfinished.
+  retained standalone assertion checks pass. Root passkey issuance and native
+  session persistence/read/revocation now pass focused tests locally. Actual
+  logout preserves current-owner denials and atomically revokes the session;
+  a counterfactual missing owner check is caught. The shared prerequisite diff
+  is independently approved, with commit/push/CI pending. Genuine passkey
+  mapping/WebAuthn/MFA composition and the complete public journey remain open.
 - **Remaining:** OTP replacement and remaining management/method/composition
   profiles; the other open roadmap families; full-unit/release qualification.
   The earlier unexplained prerequisite 503 and failed full-history secret scan

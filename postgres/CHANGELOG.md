@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an exact native passkey enrollment Work seam for initial kernel credential
+  references, binding original user security epochs without changing them.
+  Existing or disabled references conflict rather than being replaced. WebAuthn
+  verification, fresh proof, mapping, admission and session orchestration remain
+  native passkey responsibilities in the same transaction.
+
 - Admit retained consuming OTP attachment for the exact authenticated native
   MFA step-up schema and factor-verification lifecycle. Preserve counted
   denials, original input/risk and one native OTP owner without enabling login,

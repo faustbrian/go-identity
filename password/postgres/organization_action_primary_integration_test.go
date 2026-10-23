@@ -19,6 +19,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	migrations "github.com/faustbrian/go-migrations/v3"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
@@ -35,8 +36,8 @@ type organizationPrimaryWorkFixture struct {
 	consumed bool
 }
 
-func (*organizationPrimaryWorkFixture) Descriptor() kernel.ContributorDescriptor {
-	return actionPrimaryDescriptor("identity.organization.archive")
+func (p *organizationPrimaryWorkFixture) Descriptor() kernel.ContributorDescriptor {
+	return actionPrimaryDescriptor(p.op.OperationID)
 }
 func (p *organizationPrimaryWorkFixture) FeatureOperations() []identity.FeatureOperation {
 	return []identity.FeatureOperation{p.op}
@@ -65,6 +66,22 @@ func (*organizationPrimaryWorkFixture) RecoverParticipant(context.Context, kerne
 }
 
 func TestNativeOrganizationLifecycleActionPrimary(t *testing.T) {
+	testNativeSelfActionPrimary(t, []string{"identity.organization.archive", "identity.organization.restore"}, nativeSelfActionProofHistory())
+}
+
+func nativeSelfActionProofHistory() migrations.Source {
+	base := PhoneReauthenticationMigrationSource{Base: ActionReauthenticationMigrationSource{Base: EmailReauthenticationMigrationSource{}, Version: 70}, Version: 71}
+	return OrganizationLifecycleReauthenticationMigrationSource{Base: base, Version: 120}
+}
+
+func TestNativePasskeyEnrollmentActionPrimary(t *testing.T) {
+	// Actual signed original proof and atomic use are independent of the
+	// protocol/mapping policies exercised by the eventual passkey consumer.
+	testNativeSelfActionPrimary(t, []string{"identity.passkey.register-options", "identity.passkey.register-verify"}, PasskeyReauthenticationMigrationSource{Base: nativeSelfActionProofHistory(), Version: 121})
+}
+
+func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory migrations.Source) {
+	t.Helper()
 	testNativeSigninPhaseIntegration(t, "organization lifecycle password owner", func(t *testing.T, ctx context.Context, pool *database.Pool, _ *SignupService, signup SignupConfig, keys *keyring.Provider, fresh func(string, byte) password.SignupRequest) {
 		testNativePhoneEnrollment(t, ctx, pool, nil, signup, keys, fresh, session.CredentialBearer, "normal", func(c SigninConfig, _ *phone.NumberPolicy, registration password.SignupRequest, user identity.UserID) {
 			signin, err := NewSigninService(pool, c)
@@ -105,15 +122,21 @@ func TestNativeOrganizationLifecycleActionPrimary(t *testing.T) {
 				t.Fatal(err)
 			}
 			keyID, public := signing.public()
-			base := PhoneReauthenticationMigrationSource{Base: ActionReauthenticationMigrationSource{Base: EmailReauthenticationMigrationSource{}, Version: 70}, Version: 71}
-			suffix, err := (OrganizationLifecycleReauthenticationMigrationSource{Base: base, Version: 120}).Load(ctx)
+			suffix, err := proofHistory.Load(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = pool.Raw().Exec(ctx, suffix[len(suffix)-1].UpSQL()); err != nil {
-				t.Fatal("lifecycle proof history", err)
+			// The enclosing phone fixture owns its earlier installed history.
+			// Apply both explicitly allocated later suffixes in order so passkey
+			// consumption upgrades the real organization-capable predecessor.
+			for _, step := range suffix {
+				if step.Version() >= 120 {
+					if _, err = pool.Raw().Exec(ctx, step.UpSQL()); err != nil {
+						t.Fatal("native action proof history", err)
+					}
+				}
 			}
-			for _, action := range []string{"identity.organization.archive", "identity.organization.restore"} {
+			for _, action := range actions {
 				t.Run(action, func(t *testing.T) {
 					target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: action, Audience: "organization-lifecycle"}
 					owner, err := NewReauthenticationService(pool, ReauthenticationConfig{Repository: c.Repository, Verifier: c.Verifier, Session: c.Session, Profile: c.Profile, LookupKeys: []session.DigestKey{c.Issuance.LookupKey}, Risk: c.Risk, Coordinator: c.Coordinator, SigningKey: signing, VerificationKeys: map[string]ed25519.PublicKey{keyID: public}, Issuer: c.Issuer, Environment: c.Environment, Targets: []ReauthenticationTarget{target}, TTL: time.Minute, IdentifierKey: bytes.Repeat([]byte{227}, 32)})
@@ -134,11 +157,15 @@ func TestNativeOrganizationLifecycleActionPrimary(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer clear(retained)
-					for _, rollback := range []bool{true, false} {
+					for _, step := range []string{"rollback", "commit", "replay"} {
+						rollback := step == "rollback"
 						id, _ := identity.NewCommandID()
 						request := ActionPrimaryRequest{TenantID: r.TenantID, CommandID: id, RecordID: "lifecycle-organization", Session: auth.NewBearerCredential(wire), Proof: proof.Proof, Caller: caller}
 						a, err := primary.Prepare(ctx, request)
 						if err != nil {
+							if step == "replay" {
+								continue
+							}
 							t.Fatal("actual lifecycle preparation", err)
 						}
 						op := actionPrimaryOperation(action)
@@ -195,7 +222,12 @@ func TestNativeOrganizationLifecycleActionPrimary(t *testing.T) {
 						} else {
 							result, err = coordinator.Commit(work, result)
 						}
-						if rollback {
+						if step == "replay" {
+							if p.consumed || err == nil || result.Outcome == identity.CommitOutcomeCommitted {
+								t.Fatal("one signed action proof admitted another consuming command")
+							}
+							continue
+						} else if rollback {
 							if !p.consumed {
 								t.Fatal("rollback test never reached successful protected consumption", err)
 							}

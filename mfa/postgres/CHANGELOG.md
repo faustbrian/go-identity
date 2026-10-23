@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the original known-empty factor generation for exact self-only native
+  passkey enrollment commands. Changed authority, foreign subjects and aliased
+  owners or schemas deny without initialization or password-only fallback.
+
 - Explicitly select sole-active email-OTP disable with a real email-reset
   recovery owner and distinct disable-purpose proof. One-target preserves pending
   OTP siblings; all-target erases them. Factor/proof/recovery/session effects

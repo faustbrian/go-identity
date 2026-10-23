@@ -190,6 +190,16 @@ func sessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Sessio
 }
 
 func passwordSessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Session, binding identity.CommandBinding, sessionID string, version uint64, factor session.OptionalAuthorityBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	if c.CredentialKind == identity.CredentialPasskey {
+		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+	}
+	return credentialSessionAdmissionBindings(c, record, binding, sessionID, version, factor, session.OptionalAuthorityBinding{}, authentication.AssuranceSingleFactor)
+}
+
+// Shared kernel/session key derivation does not select an authentication
+// method. The closed password and passkey wrappers supply exact dimensions and
+// assurance; their respective native owners must fence those dimensions.
+func credentialSessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Session, binding identity.CommandBinding, sessionID string, version uint64, factor, passkey session.OptionalAuthorityBinding, assurance authentication.Assurance) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 	deny := func() (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
 	}
@@ -201,7 +211,7 @@ func passwordSessionAdmissionBindings(c IdentifierAdmissionConfig, record sessio
 	if err != nil {
 		return deny()
 	}
-	if s.TenantID != binding.TenantID || s.UserID != binding.UserID || string(binding.ActorID) != string(s.UserID) || binding.ActorKind != authorization.SubjectUser || s.SessionID != sessionID || s.Version != version || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != c.AuthenticationMethod || s.Authentication.Proof.Assurance != authentication.AssuranceSingleFactor || c.CredentialKind == identity.CredentialPasskey || a.Organization.Present || a.Factor != factor || a.Passkey.Present {
+	if s.TenantID != binding.TenantID || s.UserID != binding.UserID || string(binding.ActorID) != string(s.UserID) || binding.ActorKind != authorization.SubjectUser || s.SessionID != sessionID || s.Version != version || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != c.AuthenticationMethod || s.Authentication.Proof.Assurance != assurance || a.Organization.Present || a.Factor != factor || a.Passkey != passkey {
 		return deny()
 	}
 	query := kernel.DirectoryAuthorityQuery{GlobalAuthorityID: c.GlobalAuthorityID, TenantID: s.TenantID}

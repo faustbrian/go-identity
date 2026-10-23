@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit identified passkey session staging, current-authority reads and
+  cookie logout composition. Preserve original RP/passkey and known-empty MFA
+  epochs through the owned passkey authority port; do not fall back to password
+  admission. Bearer/CSRF delivery still requires the native owner's atomic
+  WebAuthn verification and final session commit.
+
 - Derive authenticated OTP send/verify custody through the current password
   session owner. Preserve completed OTP factor provenance, CSRF and original
   validity, and fence actual OTP enrollment/recipient rather than TOTP storage

@@ -13,12 +13,13 @@ import (
 // without exposing account, credential or proof identifiers.
 var ErrInvalidIssueRequest = errors.New("session: invalid issue request")
 
-// IssueRequest retains one closed proof, consuming-OTP, password, magic-link or MFA
-// variant. Zero
+// IssueRequest retains one closed proof, consuming-OTP, password, magic-link,
+// passkey or MFA variant. Zero
 // is invalid; copies are immutable and concurrency safe. Proof requests require
 // Validate against the configured authority. OTP requests are created only by
 // BindOTP; signin requests by BindPassword, signup requests by BindSignup and
-// magic-link requests by BindMagicLink, and MFA requests by BindMFA.
+// magic-link requests by BindMagicLink, passkey requests by BindPasskey and
+// MFA requests by BindMFA.
 // Native owners must establish
 // successful authentication and all
 // effects atomically, not treat prospective metadata as a checked proof. This
@@ -34,6 +35,7 @@ type issueRequestState struct {
 	mfa       *mfaIssueRequestState
 	anonymous *anonymousIssueRequestState
 	upgrade   *anonymousUpgradeIssueRequestState
+	passkey   *passkeyIssueRequestState
 }
 
 // NewAuthenticatedIssueRequest preserves a command's complete authority vector,
@@ -69,7 +71,7 @@ func sameAuthenticationProof(a, b authentication.Proof) bool {
 // validity, one-time use or session authentication. Those checks and required
 // audit/outbox effects belong to the protected authoritative transaction.
 func (r IssueRequest) Validate(authority *authentication.AuthorityAuthenticator, now time.Time) error {
-	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil {
 		return ErrInvalidIssueRequest
 	}
 	issue, _ := r.state.command.Issue()
@@ -84,7 +86,7 @@ func (r IssueRequest) Validate(authority *authentication.AuthorityAuthenticator,
 // This projection intentionally loses proof admission; it cannot replace the
 // original request or grant execution authority to an adapter.
 func (r IssueRequest) Command() (SessionCommand, bool) {
-	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil {
 		return SessionCommand{}, false
 	}
 	return r.state.command, true
@@ -97,7 +99,7 @@ func (r IssueRequest) Command() (SessionCommand, bool) {
 // validate its private provenance and exact scope inside the authoritative
 // transaction. Bindings or Command projections cannot substitute this value.
 func (r IssueRequest) AuthenticatedProof() (authentication.AuthenticatedProof, bool) {
-	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil {
 		return authentication.AuthenticatedProof{}, false
 	}
 	return r.state.proof, true

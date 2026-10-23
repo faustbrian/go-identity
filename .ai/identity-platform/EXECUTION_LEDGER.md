@@ -1,5 +1,27 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 14:58 UTC: M16 shared-owner prerequisites now include root passkey
+issuance and native same-Work session persistence/current read/revocation.
+Still local, not a closed milestone: genuine passkey/WebAuthn/MFA composition
+and public enrollment/signin/read/logout remain unfinished. All five affected
+ordinary race packages pass; selected native PG/race session2.551s,
+kernel2.045s/password9.687s and tagged-vet exit0 (handle49687).
+Independent passkey_shared_review APPROVE37-path41c425c9...bfdf401 had one
+accepted action: exercise logout through the actual executor. New real-PG
+cases prove current passkey/factor and missing-selection denial preserve active
+session/no successful effects; valid logout commits revocation/success audit/
+outbox and denies later reads. PASS2.321s; source overlay omitting only the
+passkey owner guard fails at intended runtime assertion0.704s. Production
+source unchanged by overlay. Final unmodified PG/race1.593s and changed tagged-
+vet exit0 (61326). Earlier fixture setup errors (failure-audit counting and
+cluster-wide role cleanup) are not behavioral RED. Fixture now counts success
+audits and removes only its fresh-install reserved roles. Final complete source
+review passkey_shared_final APPROVE/no findings for37-path9181c012...1101dd6
+against5693296; staged changed-content secret scan passes121231bytes. Main
+delivery/hosted CI remain pending. Still11/39/~25% low confidence; no full-unit
+increment. Prior status-
+only goal turn was no progress; this turn adds actual logout evidence.
+
 2026-10-23 14:21 UTC: finite M33 human code-issued opaque access-exchange
 profile CLOSED. Root599225f6758a/native3b58e4c6d7dc main-pushed, independently
 source-approved; exact Required39967343443/39968402888 SUCCESS. External

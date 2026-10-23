@@ -60,7 +60,7 @@ type IssueExecution struct {
 
 // IssuerConfig freezes cookie issuance composition. Authority is the configured
 // private proof authority for NewSessionIssuer; it must be nil for the explicit
-// OTP and password profiles. MaximumDuration is 1ms..30s; dependencies must honor
+// OTP, password and passkey profiles. MaximumDuration is 1ms..30s; dependencies must honor
 // it. TokenSize is 32..64 bytes. LookupKey is independent session-lookup custody.
 // Cookie is the validated host-only transport profile. OTP pre-auth flows may
 // retain anonymous command scope while the native effect resolves the final
@@ -92,6 +92,7 @@ type SessionIssuer struct {
 	mfaVerification  bool
 	anonymous        bool
 	anonymousUpgrade bool
+	passkey          bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -159,6 +160,7 @@ type preparedIssuanceState struct {
 	mfa       *mfaPreparationState
 	anonymous *anonymousPreparationState
 	upgrade   *anonymousUpgradePreparationState
+	passkey   *passkeyPreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -174,7 +176,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -255,7 +257,7 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 // without bearer bytes. Zero, OTP and password preparations deny: secret-bearing
 // consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil || p.state.upgrade != nil {
+	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil || p.state.upgrade != nil || p.state.passkey != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -355,6 +357,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, err
 	}
 	now := s.config.Clock.Now()
+	if s.passkey {
+		if err := validatePasskeyIssuanceAt(out.Session, now); err != nil {
+			return out, err
+		}
+	}
 	if s.anonymousUpgrade {
 		if err := validateAnonymousUpgradeIssuanceAt(out.Session, p.state.upgrade.until, now); err != nil {
 			return out, err
@@ -427,7 +434,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()
