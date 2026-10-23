@@ -256,6 +256,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	mfaOTPActiveCase     string
 	mfaOTPManage         bool
+	mfaOTPRemoval        bool
+	mfaOTPRemovalRace    bool
 	mfaOTPActive         bool
 	mfaOTPEnrollment     bool
 	mfaOTPEnrollmentOnly bool
@@ -313,6 +315,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f := newLiveStoresProfile(t, ctx, false, extensions.postgresBaseline)
 	f.mfaOTPEnrollment = extensions.mfaOTPEnrollment
 	f.mfaOTPActiveCase = extensions.mfaOTPActiveCase
+	f.mfaOTPRemoval = extensions.mfaOTPRemoval
+	f.mfaOTPRemovalRace = extensions.mfaOTPRemovalRace
 	f.mfaOTPEnrollmentOnly = extensions.mfaOTPEnrollmentOnly
 	f.usernameTOTP = extensions.usernameTOTP
 	f.phoneTOTP = extensions.phoneTOTP
@@ -420,7 +424,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange || extensions.phonePasswordReset {
 		resetRiskVersion = 9
 	}
-	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "" && !extensions.phoneChange, extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange, extensions.factorRemovalReset || extensions.emailRemoval || extensions.phoneRemoval != "")
+	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.mfaOTPRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "" && !extensions.phoneChange, extensions.factorRemoval || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange, extensions.factorRemovalReset || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "")
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
@@ -469,7 +473,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Email.Addresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{MaximumDuration: time.Second}
 		c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true, AdministrativeTargets: true}
 	}
-	if extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange {
+	if extensions.factorRemoval || extensions.mfaOTPRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" || extensions.phoneChange {
 		c.PasswordReset = selectedReset
 		c.PasswordReset.Native.Coordinator.QueryPolicy = c.OTP.Signin.Coordinator.QueryPolicy
 		c.PasswordReset.Native.Coordinator.AdmissionPolicy = c.OTP.Signin.Coordinator.QueryPolicy
@@ -535,6 +539,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			if extensions.mfaOTPManage {
 				c.MFAOTPEnrollment.Listing = true
 				c.MFAOTPEnrollment.ActiveStepUp.FactorManagement = &mfapg.FactorUpdateConfig{MaximumAge: time.Minute, PrimaryMaximumAge: 5 * time.Minute}
+				if extensions.mfaOTPRemoval {
+					c.MFAOTPEnrollment.ActiveStepUp.FactorManagement.RemovalRecoveryPath = auth.RecoveryPathEmail
+				}
 			}
 		}
 		if extensions.mfaOTPListingHTTP {

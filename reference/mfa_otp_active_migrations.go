@@ -35,6 +35,15 @@ func (s StoreSet) otpActiveMigrationCatalog(ctx context.Context, catalog []migra
 			owners[18] = "identity/mfa/postgres"
 			catalog[i].history = steps
 			catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 18, schema: "identity_mfa", tables: []string{"otp_factor_update_effects"}, columns: []string{"otp_factors.label"}})
+			if s.state.features.mfaOTPEnrollment.manage.RemovalConfigured() {
+				steps, err = (mfapg.OTPFactorRemovalMigrationSource{Base: fixedMigrationSource(steps), Version: 19}).Load(ctx)
+				if err != nil {
+					return nil, err
+				}
+				owners[19] = "identity/mfa/postgres"
+				catalog[i].history = steps
+				catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 19, schema: "identity_mfa", columns: []string{"otp_factor_update_effects.action", "otp_factor_update_effects.recovery_identity"}})
+			}
 			// Reuse the existing session disposition history when TOTP management
 			// already selected it. OTP does not create another session-effect owner.
 			for j, existing := range catalog {

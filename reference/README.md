@@ -1475,7 +1475,7 @@ the verification input names the original send and returns one factor-update
 proof, not a session. Delivery uses the existing selected worker/sender.
 
 Set optional `ActiveStepUp.FactorManagement` with explicit proof/primary maximum
-ages, leaving owner overrides and removal/replacement selections absent.
+ages, leaving owner overrides and replacement selections absent.
 `FeatureSet.MFAOTPFactorManagement` then supports optimistic rename with atomic
 proof consumption and session revocation. Select `MFAOTPEnrollment.Listing` to
 read safe labels after a fresh password/OTP signin. Selected migrations append
@@ -1484,6 +1484,20 @@ before initialization. No new HTTP routes are enabled. Native acceptance lives
 in `TestReferencePostgresOTPAuthenticatedFactorRename` and
 `TestReferencePostgresOTPFactorRenameCommitRecovery`; these do not qualify the
 full MFA unit or remaining management variants.
+
+For sole-active email-OTP removal, additionally set
+`ActiveStepUp.FactorManagement.RemovalRecoveryPath` to
+`authentication.RecoveryPathEmail` and select the full native `PasswordReset`
+request/completion workflow. Leave `RemovalRecovery` absent: composition supplies
+that actual owner and rejects incomplete selection. Apply the appended OTP
+removal history before serving. An original fresh OTP action proof authorizes
+`FactorUpdate(Remove)` with an empty name and current version. Recipient-reference
+erasure, recovery-set retirement, proof consumption, factor generation, session
+revocation and events commit atomically. Native removal, competing commands and
+original COMMIT recovery are exercised by `TestReferencePostgresOTPFactorRemoval*`;
+the removed-factor session cannot continue, and delivered email reset remains
+usable. This selects no HTTP route, disable, replacement or weaker-factor
+fallback.
 
 Set `MFAEnrollmentConfiguration.ActiveStepUp`, then optional
 `FactorManagement` with explicit primary/factor maximum ages. The graph supplies

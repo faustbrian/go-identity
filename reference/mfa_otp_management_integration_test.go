@@ -19,7 +19,8 @@ func otpManagementState(t *testing.T, ctx context.Context, f liveStores) string 
 	var state string
 	err := f.pool.Raw().QueryRow(ctx, `SELECT jsonb_build_array(
  (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,version,active_factors) ORDER BY tenant_id,user_id) FROM identity_mfa.factor_authorities),
- (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,factor_id,label,state,row_version) ORDER BY tenant_id,user_id,factor_id) FROM identity_mfa.otp_factors),
+ (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,factor_id,label,state,row_version,identifier_id IS NULL,identifier_version IS NULL,verification_version IS NULL) ORDER BY tenant_id,user_id,factor_id) FROM identity_mfa.otp_factors),
+ (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,set_id,state,row_version) ORDER BY tenant_id,user_id,set_id) FROM identity_mfa.recovery_sets),
  (SELECT jsonb_agg(jsonb_build_array(proof_id,used_command_id IS NOT NULL) ORDER BY proof_id) FROM identity_mfa.otp_factor_verifications),
  (SELECT count(*) FROM identity_mfa.otp_factor_update_effects),
  (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,session_id,state,version) ORDER BY tenant_id,user_id,session_id) FROM session_store.sessions),

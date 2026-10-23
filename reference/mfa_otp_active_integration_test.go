@@ -201,12 +201,21 @@ func proveReferenceMFAOTPActive(t *testing.T, ctx context.Context, f liveStores,
 		caller.Request.Action = "identity.mfa.factor-update"
 		key, _ := identity.NewIdempotencyKey([]byte("reference-otp-factor-rename"))
 		request := mfa.FactorUpdateRequest{TenantID: otpTenant, FactorID: factor, Action: mfa.Rename, Name: "mail factor <work>", ExpectedVersion: version, FactorProof: proof.Proof, Session: auth.NewBearerCredential(bearer), CSRFToken: csrf, Caller: caller, Origin: origin, Network: "127.0.0.1", IdempotencyKey: key}
+		if f.mfaOTPRemoval {
+			request.Action, request.Name = mfa.Remove, ""
+			proveOTPRemovalRecoveryDenials(t, ctx, f, management, request)
+		}
 		proveOTPFactorRenameDenials(t, ctx, f, management, request)
 		proveOTPFactorRenameRollback(t, ctx, f, management, request)
 		if f.completionFault != nil {
 			f.completionFault.armed.Store(true)
 		}
-		updated, err := management.FactorUpdate(ctx, request)
+		var updated mfa.FactorUpdateResult
+		if f.mfaOTPRemovalRace {
+			updated, request.IdempotencyKey = proveOTPRemovalCompetingCommands(t, ctx, management, request)
+		} else {
+			updated, err = management.FactorUpdate(ctx, request)
+		}
 		if f.completionFault != nil {
 			if err == nil || updated.Outcome != identity.CommitOutcomeUnknown || updated.CommandID == "" || updated.Factor.ID != "" || !f.completionFault.hit.Load() {
 				t.Fatal("lost OTP rename acknowledgement lost uncertainty or disclosed metadata", updated.Outcome, err)
@@ -228,6 +237,16 @@ func proveReferenceMFAOTPActive(t *testing.T, ctx context.Context, f liveStores,
 		}
 		if got, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential}); err == nil && got.Authenticated {
 			t.Fatal("factor rename retained old source session")
+		}
+		if f.mfaOTPRemoval {
+			proveOTPRemovalState(t, ctx, f, factor, user, updated.CommandID)
+			before := otpManagementState(t, ctx, f)
+			fresh := request
+			fresh.CommandID = ""
+			fresh.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("otp-removed-factor-fresh-command"))
+			if out, e := management.FactorUpdate(ctx, fresh); e == nil || out.Outcome == identity.CommitOutcomeCommitted || out.Factor.ID != "" || otpManagementState(t, ctx, f) != before {
+				t.Fatal("fresh command reused removed-factor custody or changed protected state", e)
+			}
 		}
 		return request.Name
 	}

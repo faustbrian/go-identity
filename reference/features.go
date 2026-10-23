@@ -573,7 +573,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	mfaOTPEnrollmentOwner, err := composeMFAOTPEnrollment(c, d, passwordVerificationOwner, evaluator)
+	mfaOTPEnrollmentOwner, err := composeMFAOTPEnrollment(c, d, passwordVerificationOwner, evaluator, resetOwner)
 	if err != nil {
 		return err
 	}

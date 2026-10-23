@@ -38,6 +38,8 @@ import (
 )
 
 type liveStores struct {
+	mfaOTPRemoval                      bool
+	mfaOTPRemovalRace                  bool
 	mfaOTPActiveCase                   string
 	mfaOTPEnrollment                   bool
 	mfaOTPEnrollmentOnly               bool

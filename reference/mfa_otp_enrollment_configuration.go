@@ -56,7 +56,7 @@ type mfaOTPEnrollmentState struct {
 	manage       *mfapg.FactorUpdateService
 }
 
-func composeMFAOTPEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator) (*mfaOTPEnrollmentState, error) {
+func composeMFAOTPEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator, reset *passwordpg.ResetService) (*mfaOTPEnrollmentState, error) {
 	if c.MFAOTPEnrollment == nil {
 		return nil, nil
 	}
@@ -122,7 +122,7 @@ func composeMFAOTPEnrollment(c StoreConfiguration, d ReferenceDependencies, veri
 	}
 	state := &mfaOTPEnrollmentState{enable: enable, send: send, confirm: confirm, issuer: issuer}
 	if p.ActiveStepUp != nil {
-		if err := composeMFAOTPActiveStepUp(c, d, state, store, delivery); err != nil {
+		if err := composeMFAOTPActiveStepUp(c, d, state, store, delivery, reset); err != nil {
 			return nil, invalid
 		}
 	}

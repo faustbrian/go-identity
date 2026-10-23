@@ -79,11 +79,11 @@ func TestMFAOTPEnrollmentRetainsGraphLifetimeAndTenant(t *testing.T) {
 }
 
 func TestMFAOTPEnrollmentDoesNotInventMissingOwnersOrExposeKeys(t *testing.T) {
-	if owner, err := composeMFAOTPEnrollment(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}); err != nil || owner != nil {
+	if owner, err := composeMFAOTPEnrollment(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}, nil); err != nil || owner != nil {
 		t.Fatal("unselected graph invented OTP enrollment")
 	}
 	c := StoreConfiguration{MFAOTPEnrollment: &MFAOTPEnrollmentConfiguration{SessionKeys: map[uint32][]byte{1: []byte("private-fixture-material")}}}
-	if owner, err := composeMFAOTPEnrollment(c, ReferenceDependencies{}, nil, risk.Evaluator{}); err == nil || owner != nil {
+	if owner, err := composeMFAOTPEnrollment(c, ReferenceDependencies{}, nil, risk.Evaluator{}, nil); err == nil || owner != nil {
 		t.Fatal("absent native authority accepted")
 	}
 	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {

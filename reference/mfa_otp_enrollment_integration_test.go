@@ -359,7 +359,17 @@ func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStor
 		proveOTPInventoryCorruption(t, ctx, f, features, issued, binding.UserID)
 	}
 	if f.config.MFAOTPEnrollment.ActiveStepUp != nil {
-		if label := proveReferenceMFAOTPActive(t, ctx, f, features, workers, issued[0].Value, csrf, origin, factor, binding.UserID, messages, previous); label != "" {
+		label := proveReferenceMFAOTPActive(t, ctx, f, features, workers, issued[0].Value, csrf, origin, factor, binding.UserID, messages, previous)
+		if f.mfaOTPRemoval {
+			proveOTPInventoryLoggedOut(t, ctx, features, issued)
+			passwordSession := proveOTPRemovalPasswordSignin(t, ctx, f, features, client, base, origin, issued, factor)
+			proveReferenceEmailResetAfterRemoval(t, ctx, f, features, workers, client, base, origin, issued, messages, binding.UserID, "registered@example.invalid")
+			if got, e := reader.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: passwordSession}); e == nil && got.Authenticated {
+				t.Fatal("post-removal reset retained its earlier password-only session")
+			}
+			return
+		}
+		if label != "" {
 			proveOTPInventoryLoggedOut(t, ctx, features, issued)
 			var lastSent time.Time
 			if err := f.pool.Raw().QueryRow(ctx, `SELECT max(sent_at[cardinality(sent_at)]) FROM otp_store.send_families WHERE tenant_id=$1`, otpTenant).Scan(&lastSent); err != nil {

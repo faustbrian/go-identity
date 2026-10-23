@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently select sole-active email-OTP removal through native factor
+  management's explicit email-recovery policy. Require selected password-reset
+  request/completion owners, append OTP removal history and preserve atomic
+  erasure, session revocation and metadata-only recovery. No HTTP route, disable
+  or replacement is selected by this addition.
+
 - Independently compose native authenticated OTP step-up and optional OTP factor
   rename through `MFAOTPEnrollment.ActiveStepUp`. Supply actual session, risk,
   OTP/delivery and revocation owners, append selected forward histories and

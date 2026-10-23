@@ -25,7 +25,8 @@ func (f FeatureSet) MFAOTPActiveStepUp() (mfa.OTPCompletionService, error) {
 type composedMFAOTPActive struct{ state *storeState }
 
 // MFAOTPFactorManagement returns explicitly selected OTP factor rename. It
-// exposes no TOTP fallback, removal, disable, replacement or HTTP routes.
+// exposes no TOTP fallback, disable, replacement or HTTP routes. Explicit email
+// recovery additionally selects sole-active-OTP removal with session revocation.
 // Retained handles obey the graph's tenant, startup and shutdown lifetime.
 func (f FeatureSet) MFAOTPFactorManagement() (mfa.FactorManagementService, error) {
 	if err := f.mfaOTPEnrollmentSelected(); err != nil {

@@ -3,11 +3,13 @@ package reference
 import (
 	"fmt"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
+	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
 
@@ -19,11 +21,13 @@ type MFAOTPActiveStepUpConfiguration struct {
 	Native mfapg.OTPActiveStepUpConfig
 	Policy otp.AttemptPolicy
 	// FactorManagement explicitly selects native OTP rename and atomic session
-	// revocation. Primary/Sessions and removal/replacement overrides must be nil.
+	// revocation. Explicit email recovery also enables sole-active-OTP removal.
+	// Primary/Sessions/RemovalRecovery and replacement overrides must be nil;
+	// the graph supplies the actual selected password-reset recovery owner.
 	FactorManagement *mfapg.FactorUpdateConfig
 }
 
-func composeMFAOTPActiveStepUp(c StoreConfiguration, d ReferenceDependencies, state *mfaOTPEnrollmentState, store otppg.ContributorConfig, delivery *deliverypg.Contributor) error {
+func composeMFAOTPActiveStepUp(c StoreConfiguration, d ReferenceDependencies, state *mfaOTPEnrollmentState, store otppg.ContributorConfig, delivery *deliverypg.Contributor, reset *passwordpg.ResetService) error {
 	invalid := identity.InvalidInputError{Field: "reference_mfa_otp_active"}
 	p := c.MFAOTPEnrollment
 	if p == nil || p.ActiveStepUp == nil || c.PasswordSignin == nil || c.PasswordSignin.OTP == nil || c.Session == nil || c.PasswordVerification == nil {
@@ -50,7 +54,7 @@ func composeMFAOTPActiveStepUp(c StoreConfiguration, d ReferenceDependencies, st
 	}
 	state.activeIssuer = issuer
 	if selected := p.ActiveStepUp.FactorManagement; selected != nil {
-		if selected.Primary != nil || selected.Sessions != nil || selected.RemovalRecovery != nil || selected.RemovalRecoveryPath != 0 || selected.Replacement != nil {
+		if selected.Primary != nil || selected.Sessions != nil || selected.RemovalRecovery != nil || selected.RemovalRecoveryPath != 0 && selected.RemovalRecoveryPath != auth.RecoveryPathEmail || selected.Replacement != nil {
 			return invalid
 		}
 		effects, e := sessionpg.NewMFAFactorUpdateSessionEffect(c.PasswordVerification.Native.Session, c.PasswordVerification.Native.Profile)
@@ -59,6 +63,12 @@ func composeMFAOTPActiveStepUp(c StoreConfiguration, d ReferenceDependencies, st
 		}
 		management := *selected
 		management.Primary, management.Sessions = primary, effects
+		if management.RemovalRecoveryPath == auth.RecoveryPathEmail {
+			management.RemovalRecovery, err = passwordpg.NewFactorRemovalRecoverySource(reset)
+			if err != nil {
+				return err
+			}
+		}
 		state.manage, err = mfapg.NewOTPFactorUpdateService(state.enable, state.active, management)
 		if err != nil {
 			return err
