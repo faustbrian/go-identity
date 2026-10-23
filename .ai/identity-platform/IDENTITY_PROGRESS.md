@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-21 09:25 UTC
+## TL;DR — updated 2026-10-23 01:16 UTC
 
 **Estimated whole-goal completion: approximately 20–25%, with low confidence.**
 **Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
@@ -12,7 +12,26 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Latest delivered behavior:** native OIDC `prompt=none` reuses original bounded
+**Latest delivered outcome:** consumers can run real PostgreSQL guest signin,
+unprivileged read, self-deletion and upgrade into an existing verified password
+account, followed by permanent-session read/logout. Native initiation works
+without HTTP; browser routes remain explicitly opt-in. HTTPab3f4a2 and
+Referencebbda009 are independently approved, pushed to main and exact-CI green.
+The actual downloaded public Reference module passes all three native/HTTPS
+journeys under race (7.224s), with public sums verified and no replacements.
+The delivery auditor independently matches source/review/public-artifact/CI.
+Full M09 remains open specifically for abandoned-guest expiry cleanup and
+anonymization, including stored retention/legal holds, concurrent-upgrade fences,
+atomic owner effects and interrupted/unknown recovery. That is the next primary
+implementation, not another review of delivered signin/read/delete/upgrade.
+
+**Pending parallel delivery:** exact OIDC `prompt=consent` is implemented locally.
+Original root/child race, parser fuzz and the selected real-PostgreSQL native
+race cohort (271.629s) passed. Independent complete-diff review is active;
+public dependency adoption, consumer proof and main delivery remain outstanding.
+This is not counted as delivered. No additional code has landed since bbda009.
+
+**Retained delivered behavior:** native OIDC `prompt=none` reuses original bounded
 explicit consent without interaction or renewal, then issues a one-use code for
 S256 exchange and independently verified ID-token/UserInfo. Root `9f0f023`, OIDC
 child `284bf8e` and PostgreSQL `723fdfd` are on OAuth main; exact Required CI
@@ -24,21 +43,38 @@ this **finite native silent profile**, not full M30/M31 or release qualification
 Activation requires forward history and positive consent TTL on every accepting
 writer; mixed/zero-TTL writers after activation are unsupported.
 
-**Current implementation:** M09 anonymous HTTP/reference. Guest reads now keep
-unprivileged recognition separate from verified authentication, preserve permanent
-cookie precedence without guest fallback, and reject expired custody after hooks.
-Affected HTTP race/schema checks pass. Signin strict-key/original-flow/device
-decoding tests pass; the native authenticated flow-rate source passes real
-PostgreSQL/race, including consumed-flow retries without mutation. These changes
-are local, unreviewed and not delivered. Signin credential-delivery, deletion,
-upgrade, opt-in feature/catalog and reference journey remain unfinished.
-Upgrade HTTP requires exactly one Idempotency-Key; actual proof consumption
-remains one-use and replay/recovery metadata-only. No milestone increment.
+**Current implementation:** M09 anonymous HTTP/reference now passes a genuine
+PostgreSQL/HTTPS/race journey: guest signin/read/deletion; separate target signup
+→ captured verification → password signin → fresh action proof → guest upgrade
+→ permanent session read/logout. Required key/dual custody denial, consuming
+outbox rollback, one-use proof rejection, exact protected effects and original
+metadata-only HTTP retry/native recovery also pass (reference cohort6.922s).
+Guest recognition never becomes verified authentication; permanent-cookie
+presence never falls back to a guest. Upgrade requires one Idempotency-Key and
+both original synchronizers. HTTP and Reference are now delivered on main with
+exact-source CI and actual public-consumer proof as summarized above.
+No milestone increment.
+
+**New native OAuth/OIDC delivery:** opt-in verified-phone UserInfo is on main
+(child513df9f/native20d7c1b), both exact Required checks green. Real public-pin
+PostgreSQL verification/removal/replacement, public/pairwise RP and existing
+email fences pass74.437s; actual downloaded-native RP consumer passes16.565s.
+Independent correctness/adoption/delivery audits support this finite profile.
+ID tokens remain minimized; pending contacts are omitted and cascades remain
+pending, not acknowledged cleanup. Full M31 and release qualification remain.
+
+**Anonymous delivery correction:** original upgrade delivery expiry and alternate
+writer protection passed independent rechecks. Final correctness review found
+that forwarded201/403 responses still bypassed the GET expiry check. That
+remaining variant now has executable red/green proof, including a failing-clock
+control. Complete C2/C3 reviews are APPROVE and both sources are main/CI-green.
+Finite transport/reference delivery adds no unproved whole milestone count.
 
 **Retained delivery:** native guest upgrade `51b6de2`, supporting owners
 `a33b0df`/`2eafc25` and capability `183afe9` remain independently reviewed,
 main-pushed, public-consumer proven and applicable-CI green. The finite native
-upgrade profile is **CLOSED**, but HTTP/reference and full M09 remain open.
+upgrade and selected HTTP/reference profiles are **CLOSED**; full M09 scope
+and unit/release qualification remain separately assessed.
 
 **Retained M09 runtime evidence, source now native-main delivered:** the selected public
 guest-upgrade journey and its affected PostgreSQL/race acceptance pass92.978s.

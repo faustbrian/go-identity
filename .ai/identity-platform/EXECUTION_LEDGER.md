@@ -1,5 +1,175 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 01:16 UTC: resumed main at identitybbda009/OAuth20d7c1b; no source
+restart. Original OAuth consent worker terminal: root/child race1.488s/1.240s,
+parser fuzz10.799s and native race271.629s passed; original owned resources
+removed. Complete consent review round1 active with native raw-output handoff;
+no correctness/public-delivery claim yet. Full M09 concrete remaining behavior
+is abandoned expired-guest cleanup/anonymization. One bounded owner-contract
+map and one QA input are active before cleanup writes. Existing browser deletion
+is not service cleanup authority. Delivered anonymous/native/HTTP/reference
+evidence remains unchanged and is not rerun. Overall20–25% estimate,9/39 full
+milestones; all67 units remain in scope.
+
+2026-10-21 12:44 UTC: selected M09 C3 DELIVERED mainbbda009, exact Required
+39601263434SUCCESS. Final17file80db3545 independently correctness/regression/
+compatibility APPROVE and parent matched reviewed bytes before committing.
+Actual downloaded public Reference69489 passes all3PG/native/HTTPSjourneys
+race7.224s+modverify; GOWORKoff/publicsums/no replacement. Fresh delivery auditor
+directly matches committed C1D/C2/C3 native review bindings, public changedfiles,
+remote main and all4exact CI runs; local/public execution remains explicitly
+primary-attributed. PG stopped; owned caches/archive awaiting final cleanup.
+Native/HTTP/Reference finite profile CLOSED, not full M09/unitqualification.
+One bounded READ-ONLY remaining M09 behavior check assigned to existing mapper
+before selecting next primary outcome. OAuth consent worker has real native
+22.745scohortGREEN after fixture-only corrections and is doing affected race/
+fuzz controls; not reviewed/delivered yet. No Tools/source-history programme.
+
+2026-10-21 12:33 UTC: C3 full final review889ae059 found two actual promised
+composition gaps, not scope expansion. F1 RED13139 isolated HTTP deletion503
+(1.519s), owned PG proves missing rate_limit_atomic_commands. Existing shared
+atomic-history selection now includes httpAnonymous.secret; native v1 unchanged.
+Green60455 PASSrace3.633s. F2 API RED55957 absent AnonymousPreAuth getter; new
+guarded public port reuses composedPreAuth without another engine. Native-only
+fixture60924 initially selected absent rate-limit migration owner; corrected
+fixture only, then84244 PASSrace2.464s. Full83647 real3journeys race7.366s,
+ordinary Reference9.113s/cmd12.465s, taggedvet0 PASS. Native-only has no HTTP
+graph/server and proves Prepare/Issue/signin/read/delete/recovery + foreign,
+uninitialized/closed denial. Frozen17file80db3545c944ef60ba8c98cabbc36fa1251b72298ce681deedb179ccd71edc03;
+regression recheck active before full final rereview. No new QA plan or tooling.
+Heavy slot returned to OAuth worker for initial consent red/green; no primary
+Go/service commands may overlap. C3 public delivery/consumer remain open.
+
+2026-10-21 12:18 UTC: dependency-ready successor assigned to oidc_phone_userinfo,
+GPT-6.1 Sol/high/no children: finite OIDC prompt=consent in OAuth/main20d7c1b.
+Own root protocol/service authorization semantics and owning tests/docs, oidc/
+authorization/claim/discovery semantics and tests/docs, postgres actual consent
+composition/tests/docs, module-local public pins as necessary; no identity edits,
+shared Tools/CI changes, Git writes or release publication. Consume committed
+root9f0f023, native20d7c1b and actual existing current-session/consent/coordinator
+contracts, refreshing only necessary owning revisions. Acceptance: existing
+reusable consent cannot bypass fresh consent; genuine current-session inspect
+-> fresh approval/denial with original CSRF -> one-use code/S256 -> independently
+validated ID-token/UserInfo; denial emits no code/token, stale/foreign/replayed
+consent and authority withdrawal deny, original deadline/recovery unchanged.
+Preserve empty/login/none/max_age and phone/email profiles. Exclude prompt lists,
+select-account, new login/session/replay engines, device, HTTP/reference/UI and
+full M30/M31 qualification. Primary owns integration/final acceptance and serial
+heavy-run slot; worker does not run Go/services until allocated. Frozen after
+the bounded source readiness pass; no further planning unless concrete defect.
+
+2026-10-21 12:13 UTC: C2 complete25file snapshot2ec395b926adfa5db8599146b72786593bc520d40cc758e4e810d44d1c62f582
+independently regression/correctness APPROVE; parent matched source hashes.
+Committed/main-pushedab3f4a2, Required39597320994 SUCCESS. C3 selected17Reference
+files now consume actual published C2 and native predecessor pins. Standalone
+GOWORKoff69458 ordinary race8.676s/cmd6.669s, taggedvet0, actual PG18.6/HTTPS
+anonymous journeys6.565s and modverify PASS; support integration packages only
+compiled. Native compatibility APPROVE732be0877fd01e0166903220498da9c1da82963aaa69a62b0053f7ecdfe9d027;
+all76 requirements/checksums and both C2 archives match exact public source.
+Reference coverage audit active; final correctness/public delivery/consumer
+remain. OAuth worker performs one bounded READ-ONLY device-lane readiness pass,
+not speculative implementation. Still9/39; full M09/release remains open.
+
+2026-10-21 12:05 UTC: C1D native original session delivery deadline is pushed
+6d906da, exact Required39595209966 SUCCESS. C2 final review found remaining
+F3 status-rewrite escape: middleware forwards200 as201/403 at original read
+expiry. RED38018 proves all four guest/permanent cases expose stale metadata
+(exit1,0.138s). Clock-failure control11235 proves prior handler abort. Uniform
+first-final-status validation plus contained trusted-clock failure now passes
+all18 live/expiry/failure cases95314(0.253s). Standalone HTTP-session race34962
+PASS18.812s/vet0. Same finite acceptance, original QA preserved. Affected real
+Actual Reference PG cohort18613 now PASS7.539s; regression recheck active.
+Complete C2 final review, publication/public adoption and C3 review/delivery
+still pending. No M09 closure.
+
+2026-10-21 11:32 UTC: finite native OIDC phone profile DELIVERED on OAuth main:
+child513df9f/native20d7c1b, exact Required39589288670/39591178630 SUCCESS.
+Public-pin ordinary race1.266s/taggedvet0 and real PG phone/email/fence74.437s
+pass. Actual downloaded native public/pairwise RP16.565s/modverify pass;
+all84 native archive files match committed source, inheritedLICENSE accounted.
+Independent original regression, C1/C2 correctness, final adoption and fresh
+delivery audit inspected directly; native repo clean. Initial owned consumer
+fixture guessed New rather than real NewService; fixed fixture only, then passed.
+Native-owned PG stopped and disposable resources cleaned; only shared pinned
+scanner cache transfers into the still-active primary task. Full M31/M30,
+cascade completion and unit/release qualification remain open; still9/39.
+
+Primary M09 C1 precursors reviewed and published987fa2c, exact Required
+39591157413 SUCCESS. Public-pin HTTP-session race18.353s and anonymous5.308s,
+vet0, pass. Complete C2 review then identified three concrete response-boundary
+defects, not new feature scope: carry original native upgrade Until through
+delivery; protect optional/implicit/informational commits; recheck guest GET
+validity at actual commitment. Boundary map is complete, original QA retained.
+Focused RED19656 proves Flush/FlushError/ReadFrom/implicit protection escapes;
+RED52570 proves both guest/permanent GET emit200 at exclusive original expiry.
+Fix these together, run affected checks and complete final-diff rereview before
+C2/C3 publication. Stored native intents and one-use consumption stay unchanged.
+
+2026-10-21 10:53 UTC: primary genuine M09 Reference cohort74679 PASS race6.922s
+(cmd/integration support entries compile only). Actual signup/delivered email
+verification/password signin/action proof drive guest upgrade, permanent read
+and logout; companion guest signin/read/delete, same-key metadata-only retry,
+one-use denial, original public native recovery, foreign-tenant denial, graph
+close and consuming required-outbox rollback pass with exact protected effects.
+Signup setup used risk admission9 versus helper screening3; matching actual
+screening/collector9 cleared without native source changes. Native opaque CSRF
+denial can be503, not fabricated known rollback. The first rollback trigger
+looked for an outbox message before its binding owner had inserted it; moved
+the failure fixture to the actual message insert, then rollback oracle passes.
+No production owner semantics changed to satisfy either test. Scoped anonymous
+typed transport contracts, module registration, selected READMEs/changelogs are
+now local. Final focused checks, independent regression/correctness/compatibility,
+public pins/consumer and main/CI delivery remain open. No M09 closure/increment.
+
+Parallel OAuth phone producer reports actual public/pairwise RP and native
+phone verification/removal/replacement cohort PASS race83.763s plus child1.245s.
+Read-only regression/Go audits active against723fdfd dirty slice; later-primary
+selection oracle and stale unsupported-phone README text are being corrected
+before final review. Public child/native adoption and CI remain primary-owned.
+
+2026-10-21 10:24 UTC: primary M09 is actual implementation, local/unreviewed:
+opt-in signin/delete/upgrade handlers and selected feature/OpenAPI, shared real
+middleware binding, required keys, dual guest/target cookie/CSRF, original proof
+lookup, native-only transition and fresh-only delivery are implemented. Focused
+race passed4.742s; subsequent wire oracle exposed permissive fresh-bit schema,
+then selected wire positive/negative tests passed1.358s after real schema fix.
+Hostile upgrade parser fuzz111 executions passed6.269s; earlier race50.194s
+passed under host contention. Native rate sources retain genuine original
+possession; actual PG deletion baseline passed1.786s. Signin response-commit
+expiry and missing middleware were demonstrated RED then fixed. Upgrade retry
+test proved changing ingress time changes exact native intent; owning transport
+now leaves it absent as existing password-change does. An experimental native
+intent change was fully undone; delivered native upgrade bytes stay unchanged.
+Reference anonymous composition, named preauth, guest GET, routes and native
+migration suffixes are now coded. First real PG/reference run reached native
+reader construction; fixture repository2s now fits original validation2s (old
+3s/2s mismatch was setup failure, not journey proof). Real PG/race run11417
+passes the selected signin/read/delete journey3.594s; the old post-delete test
+oracle retained an omitted JSON pointer and was corrected by zeroing its output.
+New real upgrade journey74750/34530 reaches target registration but receives
+native unknown/unavailable before upgrade; graph/schema readiness remains green.
+Investigating original signup recovery without retrying an unknown mutation.
+Full reference upgrade/rollback/replay/public consumer,
+independent reviews, changelogs/manifests/pins and delivery remain unfinished.
+No M09 increment; whole-goal estimate20-25%,9/39 remains unchanged.
+
+2026-10-21 09:49 UTC: independent OAuth phone lane assigned to
+oidc_phone_userinfo (GPT-6.1 Sol/high, no children). Base OAuth main723fdfd;
+writable root/oidc/postgres source/tests and affected docs only, no shared
+identity/HTTP/reference, integration pins, manifests, CI or Git writes. Public
+identity phone387cc56/OTP387cc56/password-PGda005d5/native2eafc25 are adoption
+candidates; primary owns exact pin integration. One fresh map and bounded QA
+06e1f312...f992 found source-level readiness. Frozen outcome: genuine native
+phone enrollment/OTP verification, explicit phone consent/code/S256, independent
+RP ID-token verification and minimized UserInfo phone claims; pending contacts
+omitted, owner Primary preferred among verified contacts, stable ID order when
+none primary. No ID-token phone expansion, fake verification or new grant engine.
+Withdrawal/replacement/original <=20s fences, scope/tenant/consent isolation and
+existing openid/email controls remain mandatory. Focused child/native race/vet,
+real PG/RP and public consumer; serialize heavy commands with primary. Worker
+reports first public boundary and required published pins; primary owns review,
+integration and delivery. Full M31 and release qualification remain open.
+
 2026-10-21 09:25 UTC: finite native silent OIDC profile CLOSED. OAuth main
 9f0f023 ->284bf8e ->723fdfd; exact Required39576005546 SUCCESS. Original
 regression/compatibility/correctness and public-adoption reviews plus fresh
