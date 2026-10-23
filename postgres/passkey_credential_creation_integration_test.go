@@ -89,7 +89,7 @@ func passkeyReferenceFields(c identity.CredentialRef, a UserAuthorityAdmission) 
 
 func TestPasskeyCredentialCreationPostgres(t *testing.T) {
 	ctx, pool, repo := anonymousKernelDatabase(t)
-	for _, mode := range []string{"commit", "reconstructed-command", "changed-reference", "foreign-owner", "unknown-field", "duplicate", "existing-disabled", "stale-authority", "banned", "native-failure", "audit-failure", "outbox-failure", "final-check-failure"} {
+	for _, mode := range []string{"commit", "legacy-lifecycle", "foreign-lifecycle", "reconstructed-command", "changed-reference", "foreign-owner", "unknown-field", "duplicate", "existing-disabled", "stale-authority", "banned", "native-failure", "audit-failure", "outbox-failure", "final-check-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			p := &passkeyReferencePhase{mode: mode}
 			op := p.FeatureOperations()[0]
@@ -139,7 +139,13 @@ func TestPasskeyCredentialCreationPostgres(t *testing.T) {
 			}
 			_, _, plan := featurePlanFixture(t)
 			plan.Contributors, plan.Feature, plan.SubjectType = registry.Descriptors(), &FeatureRegistration{Contributor: p.Descriptor(), Operation: op}, "credential"
-			plan.Lifecycle = &LifecyclePlan{EventType: "passkey.registered.v1", AfterVersion: 1}
+			plan.Lifecycle = &LifecyclePlan{EventType: "identity.passkey.create_credential", AfterVersion: 1}
+			if mode == "legacy-lifecycle" {
+				plan.Lifecycle.EventType = "passkey.registered.v1"
+			}
+			if mode == "foreign-lifecycle" {
+				plan.Lifecycle.EventType = "identity.passkey.remove_credential"
+			}
 			plan.Audits[0].EventType, plan.Audits[0].RetentionClass = "identity.passkey.create_credential", "protected"
 			seed, err := securityMutationAudit(ctx, b, 0, 1, time.Now().UTC().Truncate(time.Microsecond), "committed", plan.Audits[0].EventType, plan.SubjectType, b.RecordID, "protected", true)
 			if err != nil {
@@ -167,7 +173,7 @@ func TestPasskeyCredentialCreationPostgres(t *testing.T) {
 			} else {
 				result, err = coordinator.Commit(work, result)
 			}
-			success := mode == "commit"
+			success := mode == "commit" || mode == "legacy-lifecycle"
 			if success && (err != nil || result.Outcome != identity.CommitOutcomeCommitted) {
 				t.Fatal("initial passkey reference did not commit through its owning Work", err, applyErr)
 			}

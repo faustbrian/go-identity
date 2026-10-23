@@ -1,5 +1,24 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 16:01 UTC: prior status-only turn was no progress. This turn proves
+genuine native password reauthentication -> WebAuthn options/UV registration ->
+atomic protocol credential/kernel reference/passkey mapping, locally in the
+unfinished go-passkey slice (0.784s). Fixture short IDs violated the audit
+profile; explicit canonical IDs correct setup, not security policy. Risk time
+now explicitly normalizes the real primary sample to UTC. An actual stale-
+mapping regression failed (1.374s), then passes with retained original options
+session/epochs (positive + denial 1.452s). Factor/context/origin/challenge/label
+denials and concurrent one-winner checks pass; actual required-audit failure
+rolls back protocol/reference/ceremony/proof, and a new command can use the
+unconsumed originals (0.861s). Full identified signin/read/logout still open.
+Canonical event composition exposed the kernel's legacy-only lifecycle guard.
+Three-path bounded fix preserves legacy, admits the required canonical name and
+rejects foreign lifecycle; focused actual-PG RED0.449s -> raceGREEN1.560s, vet0,
+independent passkey_canonical_event_review APPROVE/no findings against1d7a572
+and blobs a23d0fc8/4c986840/85d22eaa. Main delivery pending. MFA1d7a572 exact
+Required39977225392 SUCCESS. No M16 closure or full-unit qualification added;
+still11/39/~25% low confidence. Recovery/signin remain implementation work.
+
 2026-10-23 15:18 UTC:219499bdccd5 main-pushed with exact Required39974698193
 SUCCESS. Authenticated public root/session/kernel/password-native/MFA-native
 v0.0.0-20261023150127-219499bdccd5 resolve to that origin. The new passkey

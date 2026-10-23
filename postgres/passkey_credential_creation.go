@@ -65,8 +65,10 @@ func passkeyCredentialCreationMatches(s identity.FeatureCommandSpec, c identity.
 // during the exact registered native passkey enrollment Apply invocation. Bind
 // PasskeyCredentialCreationFields unchanged in the original command and install
 // CredentialMigrationSource first. The command's record is the new reference,
-// its actor is that same existing user and its lifecycle is passkey.registered.v1
-// at zero-to-one. No other operation, owner, reconstructed command or reference
+// its actor is that same existing user and its lifecycle is
+// identity.passkey.create_credential at zero-to-one. The previously supported
+// passkey.registered.v1 name remains admitted for existing composers. No other
+// operation, owner, reconstructed command or reference
 // replacement is admitted. Existing references, including disabled ones, conflict
 // without resurrection; no existing user or credential epoch is incremented.
 //
@@ -85,7 +87,7 @@ func (w Work) CreatePasskeyCredential(ctx context.Context, owner FeatureExecutio
 	s, ok := command.Feature()
 	op := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.register-verify", SchemaID: "identity.passkey.register-verify.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	descriptor := ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
-	if err != nil || !ok || s.Binding != b || s.Operation != op || feature.Operation != op || feature.Contributor != descriptor || lifecycle.EventType != "passkey.registered.v1" || lifecycle.BeforeVersion != 0 || lifecycle.AfterVersion != 1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || !passkeyCredentialCreationMatches(s, c, a) {
+	if err != nil || !ok || s.Binding != b || s.Operation != op || feature.Operation != op || feature.Contributor != descriptor || (lifecycle.EventType != "identity.passkey.create_credential" && lifecycle.EventType != "passkey.registered.v1") || lifecycle.BeforeVersion != 0 || lifecycle.AfterVersion != 1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || !passkeyCredentialCreationMatches(s, c, a) {
 		return w.fail(ctx, invalidPasskeyCredentialCreation())
 	}
 	if err := w.RequireActiveUserAuthority(ctx, owner, a); err != nil {

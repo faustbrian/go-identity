@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 15:18 UTC
+## TL;DR — updated 2026-10-23 16:01 UTC
 
 - **Whole goal: approximately 25% complete, low confidence; 11/39 consumer
   milestones closed.** All 67 units remain in scope. This is a whole-outcome
@@ -38,10 +38,13 @@
   logout preserves current-owner denials and atomically revokes the session;
   a counterfactual missing owner check is caught. The shared prerequisite diff
   is independently approved and main-pushed as `219499b`, exact CI green.
-  The remaining MFA owner fence is independently approved and being delivered.
-  `go-passkey` now has local handle/label contracts and real PostgreSQL mapping
-  tests against the public kernel. Genuine WebAuthn/MFA/session orchestration
-  and the complete public journey remain open; M16 is not closed.
+  MFA owner fence `1d7a572` is main-pushed and exact-CI green. `go-passkey`
+  now passes real password-proof -> WebAuthn UV enrollment -> atomic credential,
+  reference and mapping locally. Original ceremony authority cannot be refreshed;
+  denial, one-winner concurrency and required-effect rollback tests pass. The
+  canonical creation-event kernel correction is independently approved, with
+  delivery pending. Recovery, identified assertion/session/read/logout and the
+  complete public journey remain open; M16 is not closed.
 - **Remaining:** OTP replacement and remaining management/method/composition
   profiles; the other open roadmap families; full-unit/release qualification.
   The earlier unexplained prerequisite 503 and failed full-history secret scan

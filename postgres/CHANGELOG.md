@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit the canonical `identity.passkey.create_credential` lifecycle for initial
+  passkey references while retaining the earlier native lifecycle name.
+
 - Add an exact native passkey enrollment Work seam for initial kernel credential
   references, binding original user security epochs without changing them.
   Existing or disabled references conflict rather than being replaced. WebAuthn
