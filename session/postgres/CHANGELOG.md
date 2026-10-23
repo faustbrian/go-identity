@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Derive authenticated OTP send/verify custody through the current password
+  session owner. Preserve completed OTP factor provenance, CSRF and original
+  validity, and fence actual OTP enrollment/recipient rather than TOTP storage
+  for selected native MFA actions. Existing enrollment/TOTP inputs stay separate.
+
 - Derive the original password-session authority for the exact native device
   poll while retaining its client actor and anonymous flow. Credential
   continuation and original authentication times are preserved; the mapping

@@ -52,7 +52,7 @@ func NewPasswordMFAActionSessionGuard(c Config, p IdentifierAdmissionConfig) (*P
 }
 
 func nativeMFAActionBinding(b identity.CommandBinding) bool {
-	return b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable" || b.OperationID == "identity.mfa.totp-uri" && b.SchemaID == "mfa-totp-uri" || b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-enrollment-confirm")
+	return b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable" || b.OperationID == "identity.mfa.totp-uri" && b.SchemaID == "mfa-totp-uri" || b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-enrollment-confirm" || b.OperationID == "identity.mfa.otp-send" && b.SchemaID == "mfa-otp-step-up-send" || b.OperationID == "identity.mfa.otp-verify" && b.SchemaID == "mfa-otp-step-up")
 }
 
 func (g *PasswordMFAActionSessionGuard) admission(original session.Session, b identity.CommandBinding) (revokeRecordAuthority, error) {
@@ -136,7 +136,13 @@ func (g *PasswordMFAActionSessionGuard) checkObservation(ctx context.Context, w 
 		return err
 	}
 	if a.factor != nil {
-		if err := mfapg.RequireTOTPSessionFactor(bounded, w, owner, b.UserID, a.factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion}); err != nil {
+		var err error
+		if a.factor.Method == "otp" {
+			err = mfapg.RequireOTPSessionFactor(bounded, w, owner, b.UserID, a.factor.FactorID, mfapg.OTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
+		} else {
+			err = mfapg.RequireTOTPSessionFactor(bounded, w, owner, b.UserID, a.factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
+		}
+		if err != nil {
 			return err
 		}
 	}
