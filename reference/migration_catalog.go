@@ -76,7 +76,11 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if err != nil {
 		return nil, err
 	}
-	return s.anonymousMigrationCatalog(ctx, catalog)
+	catalog, err = s.anonymousMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	return s.passkeyMigrationCatalog(ctx, catalog)
 }
 
 func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory, error) {

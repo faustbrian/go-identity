@@ -139,7 +139,7 @@ func applyRequest(t *testing.T, ctx context.Context, s reference.StoreSet, ids [
 	t.Helper()
 	planned, err := s.ReferenceMigrationPlan(ctx, reference.ReferenceMigrationPlanRequest{Modules: ids})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("selected native migration plan", err)
 	}
 	key, err := identity.NewIdempotencyKey([]byte("apply-original-retry-key"))
 	if err != nil {

@@ -85,6 +85,7 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	passkey                      *passkeyState
 	anonymous                    *anonymousState
 	httpAnonymous                *anonymousHTTPState
 	migrations                   featureMigrationConfig
@@ -162,6 +163,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.Passkey != nil && (c.OTP == nil || c.Session == nil || c.PasswordSignin == nil || c.PasswordVerification == nil) {
+		return identity.InvalidInputError{Field: "reference_passkey"}
+	}
 	if c.Anonymous != nil && c.OTP == nil || c.HTTPAnonymous != nil && c.Anonymous == nil {
 		return identity.InvalidInputError{Field: "reference_anonymous"}
 	}
@@ -512,6 +516,13 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	passkeyOwner, err := composePasskey(c, d, passwordVerificationOwner, evaluator, &counters)
+	if err != nil {
+		return err
+	}
+	if passkeyOwner != nil {
+		migrationConfig.preauthIssue = true
+	}
 	anonymousOwner, err := composeAnonymous(c, d, evaluator, passwordVerificationOwner)
 	if err != nil {
 		return err
@@ -838,6 +849,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.passwordChange = passwordChangeOwner
 	s.features.mfaEnrollment = mfaEnrollmentOwner
 	s.features.mfaOTPEnrollment = mfaOTPEnrollmentOwner
+	s.features.passkey = passkeyOwner
 	s.features.mfaListing = mfaListingOwner
 	s.features.httpPasswordVerification = httpPasswordVerification
 	s.features.httpPasswordChange = httpPasswordChange

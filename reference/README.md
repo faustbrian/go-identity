@@ -1,5 +1,14 @@
 # Identity reference composition
 
+## Optional native passkey backend
+
+`StoreConfiguration.Passkey` composes the delivered existing-account native
+enrollment, identified signin, safe inventory and cookie-CSRF session/logout
+owners. `FeatureSet.Passkeys()` retains graph startup, tenant and shutdown
+guards. No passkey HTTP route, named HTTP method or UI is enabled implicitly.
+See [passkey configuration and consumer journey](PASSKEY.md) for exact scope,
+matching keys, selected migrations and the genuine registration-to-passkey test.
+
 ## Native secondary-OTP enrollment
 
 `StoreConfiguration.MFAOTPEnrollment` selects pending OTP enrollment separately

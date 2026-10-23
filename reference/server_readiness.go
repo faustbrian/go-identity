@@ -377,5 +377,22 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
+	if state.features != nil && state.features.passkey != nil {
+		p := state.features.passkey
+		for i := range guards {
+			if guards[i].schema != p.schema {
+				continue
+			}
+			guards[i].constraints = slices.Clone(guards[i].constraints)
+			for j, name := range guards[i].constraints {
+				// The native passkey suffix replaces this exact selected CHECK
+				// while preserving its predicate. Require the actual successor,
+				// not a removed name or a looser absence exception.
+				if name == "session_issuances."+p.predecessor {
+					guards[i].constraints[j] = "session_issuances.session_issuances_purpose_passkey_v1"
+				}
+			}
+		}
+	}
 	return guards
 }

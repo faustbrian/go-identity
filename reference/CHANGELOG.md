@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently compose existing-account native passkey enrollment, identified
+  signin, safe inventory, session reads and cookie-CSRF logout through selected
+  `Passkey` configuration and guarded `FeatureSet.Passkeys`. Apply the public
+  owner histories and retain the installed session CHECK lineage. Selection
+  enables no passkey HTTP route, signup or identifier-free login.
+
 - Separately compose native OTP disable through
   `MFAOTPEnrollment.ActiveStepUp.Disable` and `FeatureSet.MFAOTPDisable`.
   Supply real recovery/session owners and selected forward history; preserve

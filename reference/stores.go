@@ -38,6 +38,9 @@ type ReferenceDependencies struct {
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
+	// Passkey explicitly selects native existing-account passkey workflows.
+	// Nil exposes no passkey handle, route or method; HTTP stays independent.
+	Passkey  *PasskeyConfiguration
 	Velocity VelocityStoreConfiguration
 	// DurableAdmission selects durable PostgreSQL-only risk admission. It is
 	// mutually exclusive with Velocity and enables no HTTP feature by itself.

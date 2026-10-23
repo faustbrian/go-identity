@@ -56,6 +56,17 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	if err := ctx.Err(); err != nil {
 		return authorization.Decision{}, err
 	}
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 {
+		if c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && c.Request.Action == "identity.passkey.signin-options" {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
+		if c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
+			switch c.Request.Action {
+			case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.register-verify.recover", "identity.passkey.signin-verify", "identity.passkey.list":
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
+		}
+	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.phone.send-verification" || c.Request.Action == "identity.phone.verify" || c.Request.Action == "identity.phone.verify.recover" || c.Request.Action == "identity.phone.update" || c.Request.Action == "identity.phone.update.recover") {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
@@ -254,6 +265,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	passkey              bool
+	passkeyUpgrade       bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -527,6 +540,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
 		changeScreens = configureReferencePasswordProtection(t, &c, origin)
+	}
+	if extensions.passkey {
+		configureReferencePasskey(t, &c)
 	}
 	if extensions.mfaEnrollment {
 		configureReferenceMFAEnrollment(t, &c, origin)
@@ -893,6 +909,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		verificationHooks = configureReferenceVerificationHooks(t, &c, f, extensions.verificationHooks)
 	}
 	var phoneRemovalUpgrade *reference.StoreConfiguration
+	var passkeyUpgrade *reference.StoreConfiguration
+	if extensions.passkeyUpgrade {
+		selected := c
+		passkeyUpgrade, c.Passkey = &selected, nil
+	}
 	if extensions.phoneRemoval == "upgrade" {
 		selected := c
 		phoneRemovalUpgrade, c.PhoneRemoval = &selected, nil
@@ -946,6 +967,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Fatal(err)
 	}
 	modules := []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/password/postgres", "identity/mfa/postgres", "capability/postgres/identity"}
+	if c.Passkey != nil {
+		modules = append(modules, "passkey/postgres", "webauthn/postgres")
+	}
 	t.Cleanup(func() {
 		bounded, stop := context.WithTimeout(context.Background(), 3*time.Second)
 		defer stop()
@@ -1342,6 +1366,19 @@ END $$`); err != nil {
 			f.afterManagedChangeConfirmation = func(r email.ChangeConfirmRequest, token string) {
 				proveSelectedEmailChangeConfirmation(t, ctx, client, network.URL, origin, r, token)
 			}
+		}
+	}
+	if extensions.passkey {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			selected, selectedConfig := features, c
+			if passkeyUpgrade != nil {
+				if owner, err := features.Passkeys(); err == nil || owner != nil {
+					t.Fatal("baseline enabled unselected passkey")
+				}
+				selected = upgradeReferencePasskey(t, ctx, stores, *passkeyUpgrade, deps, workerConfigs, modules)
+				selectedConfig = *passkeyUpgrade
+			}
+			proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf)
 		}
 	}
 	if extensions.phoneEnrollment {
