@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,8 +12,83 @@ import (
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
+	passkey "github.com/faustbrian/go-passkey"
 	native "github.com/faustbrian/go-passkey/postgres"
 )
+
+func TestPasskeyPortableOperationsRetainGraphLifetime(t *testing.T) {
+	for name, owner := range map[string]*PasskeyService{
+		"nil":           nil,
+		"zero":          {},
+		"unselected":    {state: &storeState{features: &featureState{composed: true, ready: true}}},
+		"uninitialized": {state: &storeState{features: &featureState{composed: true, passkey: &passkeyState{tenant: "tenant"}}}},
+		"closed":        {state: &storeState{closed: true, features: &featureState{composed: true, ready: true, passkey: &passkeyState{tenant: "tenant"}}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if out, err := owner.KeyedRegistrationOptions(t.Context(), passkey.KeyedRegistrationOptionsRequest{}); err == nil || out.CommandID != "" {
+				t.Fatal("unadmitted keyed enrollment")
+			}
+			if out, err := owner.KeyedAuthenticationOptions(t.Context(), passkey.KeyedSigninOptionsRequest{}); err == nil || out.CommandID != "" {
+				t.Fatal("unadmitted keyed identified signin")
+			}
+			if out, err := owner.KeyedDiscoverableAuthenticationOptions(t.Context(), passkey.KeyedDiscoverableOptionsRequest{}); err == nil || out.CommandID != "" {
+				t.Fatal("unadmitted keyed discovery")
+			}
+			if out, err := owner.RegistrationRateSource(t.Context(), passkey.RegistrationCeremonyRateRequest{}); err == nil || out != (passkey.CeremonyRateSource{}) {
+				t.Fatal("unadmitted enrollment source")
+			}
+			if out, err := owner.SigninRateSource(t.Context(), passkey.SigninCeremonyRateRequest{}); err == nil || out != (passkey.CeremonyRateSource{}) {
+				t.Fatal("unadmitted identified source")
+			}
+			if out, err := owner.DiscoverableSigninRateSource(t.Context(), passkey.DiscoverableCeremonyRateRequest{}); err == nil || out != (passkey.CeremonyRateSource{}) {
+				t.Fatal("unadmitted discovery source")
+			}
+			if owner != nil && owner.state != nil && owner.state.active != 0 {
+				t.Fatal("denial leaked graph admission")
+			}
+		})
+	}
+}
+
+func TestPasskeyKeyedOptionsRetainOpaqueStartupKeys(t *testing.T) {
+	token, err := session.NewDigestKey(1, bytes.Repeat([]byte{229}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrf, err := session.NewCSRFKey(1, bytes.Repeat([]byte{230}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := NewPasskeyKeyedOptionsConfiguration("private-passkey-deployment", [32]byte{231, 232, 233}, token, csrf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := json.Marshal(c); err == nil {
+		t.Fatal("startup correlation keys serialized")
+	}
+	if got := fmt.Sprintf("%#v", c); got != "reference.PasskeyKeyedOptionsConfiguration(redacted)" {
+		t.Fatal("startup keys disclosed in ordinary diagnostics")
+	}
+	// fmt bypasses methods through an unexported caller field. Secret storage
+	// must itself remain opaque rather than relying only on a formatter.
+	if got := fmt.Sprintf("%#v", struct {
+		config PasskeyKeyedOptionsConfiguration
+	}{c}); strings.Contains(got, "LookupKey") || strings.Contains(got, "0xe7") {
+		t.Fatal("private caller field disclosed inline startup key material")
+	}
+	for _, input := range []passkeyKeyedOptionsInput{
+		{"", [32]byte{1}, token, csrf},
+		{strings.Repeat("x", 129), [32]byte{1}, token, csrf},
+		{"\xff", [32]byte{1}, token, csrf},
+		{"deployment", [32]byte{}, token, csrf},
+		{"deployment", [32]byte{1}, session.DigestKey{}, csrf},
+		{"deployment", [32]byte{1}, token, session.CSRFKey{}},
+	} {
+		if out, err := NewPasskeyKeyedOptionsConfiguration(input.namespace, input.lookupKey, input.tokenKey, input.csrfKey); err == nil || out.state != nil {
+			t.Fatal("invalid startup key configuration accepted")
+		}
+	}
+}
 
 func TestPasskeyDiscoveryRetainsGraphLifetime(t *testing.T) {
 	for name, owner := range map[string]*PasskeyService{

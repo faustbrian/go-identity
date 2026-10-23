@@ -57,6 +57,38 @@ age and transport. Leave their CSRF keys absent: cookie composition injects the
 actual selected password-verification keys. Freshness is genuine signed action
 custody, not a boolean or a session-age assertion.
 
+### Original-key options
+
+Leave `KeyedOptions` nil to preserve the existing keyless native profile.
+To select original-key options, call `NewPasskeyKeyedOptionsConfiguration` with
+the deployment namespace, a dedicated nonzero random 32-byte lookup key and
+dedicated native token-digest/CSRF-digest keys; assign the result to
+`Passkey.KeyedOptions`. These input-correlation keys must not be live session
+lookup or synchronizer keys. Keep them stable while mappings are retained.
+The opaque configuration hides key bytes even in nested diagnostics. The graph
+injects its existing current query-policy authorization, clock and revision;
+there is no application-provided journal, store or duplicate admission engine.
+
+Use `KeyedRegistrationOptions`, `KeyedAuthenticationOptions` or
+`KeyedDiscoverableAuthenticationOptions` with the same original request key and
+browser/proof custody on retries. Leave the request command ID empty so the
+native request-key owner allocates the original command. Enrollment additionally
+leaves `Primary.RecordID` empty. Only a fresh committed winner has options whose
+`TransferJSON` can reveal the challenge once. A matching replay retains its
+original command/outcome and has no options; it does not renew a proof, flow or
+ceremony. Current authorization must explicitly cover options request admission
+in addition to native execution and historical disclosure.
+
+`RegistrationRateSource`, `SigninRateSource` and
+`DiscoverableSigninRateSource` authenticate original ceremony custody and return
+its original rate ID, immutable policy lifetime and precisely one genuine user,
+canonical identifier or anonymous-flow rate dimension. A flow is not a user.
+These are sensitive metadata reads, not authentication or an unconsumed-validity
+lease: retained spent metadata cannot authorize a second mutation or reveal.
+The actual native completion independently checks current authority and consumes
+its original ceremony/proof/flow atomically. Startup, tenant and shutdown guards
+apply to all these entry points.
+
 `Protected` supplies native risk configuration with the graph's existing schema,
 the protected command's revision, retained keys, command counter policy and
 lockout enforcement. Protected command revision and anonymous authentication
@@ -98,7 +130,7 @@ From this module, with the authorized task-owned PostgreSQL fixture:
 
 ```sh
 go test -race -tags=integration -count=1 \
-  -run '^TestReferencePostgresPasskey(Native|PopulatedUpgrade|Discoverable|DiscoverablePopulatedUpgrade|CommonSessionHTTP)$' .
+  -run '^TestReferencePostgresPasskey(Native|PopulatedUpgrade|Discoverable|DiscoverablePopulatedUpgrade|CommonSessionHTTP|KeyedOptions)$' .
 ```
 
 Agent runs additionally set task-owned disposable Go caches. The fixture uses
@@ -113,6 +145,9 @@ and HTTP session routes do not implicitly adopt the new method. The common
 session HTTP tests cover identified and identifier-free signin, fresh install
 and populated upgrade, wrong-CSRF/foreign-origin denial, original cookie
 deletion and both native/HTTP post-logout rejection over real loopback TLS.
+The keyed-options journey additionally covers both modes on fresh and populated
+installations, matching metadata-only retries, authenticated original rate
+sources and genuine completion into that same usable session/read/logout path.
 Passkey enrollment/signin HTTP,
 signup, conditional signin, credential rename/delete, completed
 secondary MFA and organization profiles remain separate required work. This

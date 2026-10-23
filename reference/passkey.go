@@ -8,6 +8,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
+	passkey "github.com/faustbrian/go-passkey"
 	native "github.com/faustbrian/go-passkey/postgres"
 	webauthn "github.com/faustbrian/go-webauthn"
 )
@@ -63,6 +64,29 @@ func (f *PasskeyService) RegistrationOptions(ctx context.Context, r native.Regis
 	}
 	defer done()
 	return f.state.features.passkey.enrollment.RegistrationOptions(w, r)
+}
+
+// KeyedRegistrationOptions delegates original request custody to the selected
+// native request-key owner. Only its fresh committed winner can reveal options;
+// retained retries return metadata and never recreate a challenge or proof.
+func (f *PasskeyService) KeyedRegistrationOptions(ctx context.Context, r passkey.KeyedRegistrationOptionsRequest) (passkey.KeyedRegistrationOptionsResult, error) {
+	w, done, err := f.enter(ctx, r.Primary.TenantID)
+	if err != nil {
+		return passkey.KeyedRegistrationOptionsResult{}, err
+	}
+	defer done()
+	return f.state.features.passkey.enrollment.KeyedRegistrationOptions(w, r)
+}
+
+// RegistrationRateSource authenticates original enrollment custody for rate
+// metadata only. It grants no permission to consume a proof or ceremony.
+func (f *PasskeyService) RegistrationRateSource(ctx context.Context, r passkey.RegistrationCeremonyRateRequest) (passkey.CeremonyRateSource, error) {
+	w, done, err := f.enter(ctx, r.Primary.TenantID)
+	if err != nil {
+		return passkey.CeremonyRateSource{}, err
+	}
+	defer done()
+	return f.state.features.passkey.enrollment.RegistrationRateSource(w, r)
 }
 
 // Register verifies the raw authenticator response and commits all enrollment
@@ -128,6 +152,50 @@ func (f *PasskeyService) AuthenticationOptions(ctx context.Context, r native.Sig
 	}
 	defer done()
 	return f.state.features.passkey.signin.AuthenticationOptions(w, r)
+}
+
+// KeyedAuthenticationOptions retains the original identified browser command.
+// Matching retries cannot reveal another challenge or renew original custody.
+func (f *PasskeyService) KeyedAuthenticationOptions(ctx context.Context, r passkey.KeyedSigninOptionsRequest) (passkey.KeyedAssertionOptionsResult, error) {
+	w, done, err := f.enterFixed(ctx)
+	if err != nil {
+		return passkey.KeyedAssertionOptionsResult{}, err
+	}
+	defer done()
+	return f.state.features.passkey.signin.KeyedAuthenticationOptions(w, r)
+}
+
+// KeyedDiscoverableAuthenticationOptions selects identifier-free original-key
+// custody explicitly. It never tries identified signin after a denial.
+func (f *PasskeyService) KeyedDiscoverableAuthenticationOptions(ctx context.Context, r passkey.KeyedDiscoverableOptionsRequest) (passkey.KeyedAssertionOptionsResult, error) {
+	w, done, err := f.enterFixed(ctx)
+	if err != nil {
+		return passkey.KeyedAssertionOptionsResult{}, err
+	}
+	defer done()
+	return f.state.features.passkey.signin.KeyedDiscoverableAuthenticationOptions(w, r)
+}
+
+// SigninRateSource returns only the authenticated original identified rate
+// dimension, original ceremony and immutable duration; it authenticates no user.
+func (f *PasskeyService) SigninRateSource(ctx context.Context, r passkey.SigninCeremonyRateRequest) (passkey.CeremonyRateSource, error) {
+	w, done, err := f.enterFixed(ctx)
+	if err != nil {
+		return passkey.CeremonyRateSource{}, err
+	}
+	defer done()
+	return f.state.features.passkey.signin.SigninRateSource(w, r)
+}
+
+// DiscoverableSigninRateSource returns the genuine original anonymous-flow
+// rate dimension without turning a flow into a user or selecting an account.
+func (f *PasskeyService) DiscoverableSigninRateSource(ctx context.Context, r passkey.DiscoverableCeremonyRateRequest) (passkey.CeremonyRateSource, error) {
+	w, done, err := f.enterFixed(ctx)
+	if err != nil {
+		return passkey.CeremonyRateSource{}, err
+	}
+	defer done()
+	return f.state.features.passkey.signin.DiscoverableSigninRateSource(w, r)
 }
 
 // DiscoverableAuthenticationOptions starts identifier-free resident UV signin

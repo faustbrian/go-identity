@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"unicode/utf8"
 
 	identity "github.com/faustbrian/go-identity"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -30,6 +32,9 @@ import (
 // no caller store. Issuance keys/cookie must match Session read/logout policy.
 // All borrowed configuration must remain immutable during construction.
 type PasskeyConfiguration struct {
+	// KeyedOptions explicitly selects native original-key admission for both
+	// enrollment and signin options. Nil preserves existing keyless behavior.
+	KeyedOptions                        *PasskeyKeyedOptionsConfiguration
 	Protocol                            webauthn.Config
 	RPNamespace                         string
 	OptionsPrimary, RegistrationPrimary passwordpg.ActionPrimaryConfig
@@ -43,6 +48,51 @@ type PasskeyConfiguration struct {
 	// Retain it for this deployment; incompatible later feature histories deny
 	// instead of rewriting an already installed passkey migration checksum.
 	SessionPredecessor string
+}
+
+// PasskeyKeyedOptionsConfiguration selects the existing kernel request-key
+// owner once for passkey options. Its namespace and lookup key must remain stable
+// while original mappings are retained. Token and CSRF keys are dedicated
+// independent input-correlation keys, not live session/CSRF keys. The graph
+// injects its current command-query authorization/clock/revision; applications
+// supply no alternate store, journal or request-admission implementation.
+// Zero is invalid. Copies share immutable opaque startup-key custody.
+type PasskeyKeyedOptionsConfiguration struct {
+	state func() passkeyKeyedOptionsInput
+}
+
+type passkeyKeyedOptionsInput struct {
+	namespace string
+	lookupKey [32]byte
+	tokenKey  session.DigestKey
+	csrfKey   session.CSRFKey
+}
+
+// NewPasskeyKeyedOptionsConfiguration copies original-key configuration without
+// IO or policy callbacks. Keys must be dedicated nonzero native values. The
+// graph subsequently validates namespace/policy through the kernel owner. A
+// closure keeps lookup material opaque even when fmt bypasses methods through
+// an unexported caller field; configuration never grants execution authority.
+func NewPasskeyKeyedOptionsConfiguration(namespace string, lookupKey [32]byte, tokenKey session.DigestKey, csrfKey session.CSRFKey) (PasskeyKeyedOptionsConfiguration, error) {
+	if len(namespace) == 0 || len(namespace) > 128 || !utf8.ValidString(namespace) || lookupKey == ([32]byte{}) || tokenKey == (session.DigestKey{}) || csrfKey.Version() == 0 {
+		return PasskeyKeyedOptionsConfiguration{}, identity.InvalidInputError{Field: "reference_passkey_keyed_options"}
+	}
+	selected := passkeyKeyedOptionsInput{namespace, lookupKey, tokenKey, csrfKey}
+	return PasskeyKeyedOptionsConfiguration{state: func() passkeyKeyedOptionsInput { return selected }}, nil
+}
+
+func (PasskeyKeyedOptionsConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("reference.PasskeyKeyedOptionsConfiguration(redacted)"))
+}
+
+// MarshalJSON prohibits implicit startup-key export.
+func (PasskeyKeyedOptionsConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+
+// MarshalText prohibits implicit startup-key export.
+func (PasskeyKeyedOptionsConfiguration) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
 }
 
 func (PasskeyConfiguration) Format(s fmt.State, _ rune) {
@@ -120,13 +170,28 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_passkey_protected_risk"}
 	}
-	enrollment, err := native.NewEnrollmentService(d.PostgreSQL, native.EnrollmentConfig{Protocol: n.Protocol, RPNamespace: n.RPNamespace, Coordinator: e.Coordinator, Authorization: e.Authorization, OptionsSource: options, RegistrationSource: registration, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
+	var keyed native.OptionsRequestConfig
+	if n.KeyedOptions != nil {
+		if e.Coordinator.QueryPolicy == nil || n.KeyedOptions.state == nil {
+			return nil, invalid
+		}
+		selected := n.KeyedOptions.state()
+		keys, err := kernel.NewRequestKeyConfig(selected.namespace, selected.lookupKey, *e.Coordinator.QueryPolicy)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_keyed_options"}
+		}
+		keyed, err = native.NewOptionsRequestConfig(keys, selected.tokenKey, selected.csrfKey)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_keyed_options"}
+		}
+	}
+	enrollment, err := native.NewEnrollmentService(d.PostgreSQL, native.EnrollmentConfig{OptionsRequests: keyed, Protocol: n.Protocol, RPNamespace: n.RPNamespace, Coordinator: e.Coordinator, Authorization: e.Authorization, OptionsSource: options, RegistrationSource: registration, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_passkey_enrollment"}
 	}
 	n.Risk.Evaluation = evaluation
 	profile := sessionpg.PasskeyAdmissionConfig{GlobalAuthorityID: e.Profile.GlobalAuthorityID, PolicyNamespace: e.Profile.PolicyNamespace, Audience: e.Profile.Audience, RPNamespace: n.RPNamespace}
-	signin, err := native.NewSigninService(d.PostgreSQL, native.SigninConfig{Protocol: n.Protocol, Profile: profile, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Flow: n.Flow, Session: n.Issuer, CSRF: n.CSRF, Repository: e.Repository, Risk: n.Risk, IdentifierKey: n.IdentifierKey})
+	signin, err := native.NewSigninService(d.PostgreSQL, native.SigninConfig{OptionsRequests: keyed, Protocol: n.Protocol, Profile: profile, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Flow: n.Flow, Session: n.Issuer, CSRF: n.CSRF, Repository: e.Repository, Risk: n.Risk, IdentifierKey: n.IdentifierKey})
 	if err != nil {
 		return nil, fmt.Errorf("reference: passkey signin composition: %w", err)
 	}

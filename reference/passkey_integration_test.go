@@ -29,6 +29,7 @@ import (
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
+	passkey "github.com/faustbrian/go-passkey"
 	native "github.com/faustbrian/go-passkey/postgres"
 	primitive "github.com/faustbrian/go-password/v2"
 	webauthn "github.com/faustbrian/go-webauthn"
@@ -70,6 +71,42 @@ func TestReferencePostgresPasskeyCommonSessionHTTP(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestReferencePostgresPasskeyKeyedOptions(t *testing.T) {
+	for _, discoverable := range []bool{false, true} {
+		for _, upgrade := range []bool{false, true} {
+			name := "identified"
+			if discoverable {
+				name = "discoverable"
+			}
+			if upgrade {
+				name += "/populated-upgrade"
+			} else {
+				name += "/fresh"
+			}
+			t.Run(name, func(t *testing.T) {
+				proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyDiscovery: discoverable, passkeyUpgrade: upgrade, passkeySessionHTTP: true, passkeyKeyed: true}, true)
+			})
+		}
+	}
+}
+
+func configureReferencePasskeyKeyed(t *testing.T, c *reference.StoreConfiguration) {
+	t.Helper()
+	token, err := session.NewDigestKey(1, bytes.Repeat([]byte{221}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrf, err := session.NewCSRFKey(1, bytes.Repeat([]byte{222}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := reference.NewPasskeyKeyedOptionsConfiguration("reference-passkey-options", [32]byte{223}, token, csrf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Passkey.KeyedOptions = &selected
 }
 
 func upgradeReferencePasskey(t *testing.T, ctx context.Context, previous reference.StoreSet, c reference.StoreConfiguration, deps reference.ReferenceDependencies, configs []deliverypg.WorkerConfig, modules []reference.ModuleID) reference.FeatureSet {
@@ -198,7 +235,29 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	if _, err := owner.RegistrationOptions(ctx, missing); err == nil {
 		t.Fatal("missing proof enrolled")
 	}
-	options, err := owner.RegistrationOptions(ctx, request)
+	var options webauthn.RegistrationOptions
+	if c.Passkey.KeyedOptions != nil {
+		request.Primary.CommandID = ""
+		key, e := identity.NewIdempotencyKey([]byte("reference-registration-options"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		keyed := passkey.KeyedRegistrationOptionsRequest{RegistrationRequest: request, IdempotencyKey: key}
+		first, e := owner.KeyedRegistrationOptions(ctx, keyed)
+		if e != nil || first.CommandID == "" || first.Replayed || first.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("reference original keyed enrollment", e)
+		}
+		options = first.Options
+		replay, e := owner.KeyedRegistrationOptions(ctx, keyed)
+		if e != nil || !replay.Replayed || replay.CommandID != first.CommandID || replay.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("reference enrollment original-key recovery", e)
+		}
+		if _, present := replay.Options.Ceremony(); present || replay.Options.TransferJSON(ctx, func(context.Context, []byte) error { t.Fatal("replay exposed registration challenge"); return nil }) == nil {
+			t.Fatal("reference replay acquired registration options")
+		}
+	} else {
+		options, err = owner.RegistrationOptions(ctx, request)
+	}
 	if err != nil {
 		t.Fatal("native reference registration options", err)
 	}
@@ -215,6 +274,12 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 		t.Fatal(err)
 	}
 	completion := native.RegistrationCompletion{RegistrationRequest: registration("identity.passkey.register-verify"), CeremonyID: ceremony.ID, Label: "Reference key", Response: referencePasskeyRegistration(t, key, id, referencePasskeyChallenge(t, ctx, options.TransferJSON))}
+	if c.Passkey.KeyedOptions != nil {
+		source, e := owner.RegistrationRateSource(ctx, passkey.RegistrationCeremonyRateRequest{RegistrationRequest: completion.RegistrationRequest, CeremonyID: ceremony.ID})
+		if e != nil || source.Kind != passkey.RateSourceUser || source.UserID != user || source.CeremonyID != ceremony.ID || source.Lifetime != 5*time.Minute {
+			t.Fatal("reference genuine original registration source", e)
+		}
+	}
 	verified, err := owner.Register(ctx, completion)
 	if err != nil {
 		t.Fatal("reference-native passkey register", err)
@@ -250,7 +315,32 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	// resolve the verified resident credential, not reuse the email above.
 	discovery := native.DiscoverableSigninRequest{CommandID: optionsID, FlowID: flow.Binding.ID, Cookie: issuedFlow.Token, Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1", Device: "reference-passkey", CorrelationID: "reference-passkey"}
 	var assertionOptions webauthn.AssertionOptions
-	if discoverable {
+	if c.Passkey.KeyedOptions != nil {
+		key, e := identity.NewIdempotencyKey([]byte("reference-signin-options"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		input.CommandID, discovery.CommandID = "", ""
+		caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.Passkey.Flow.ActorID)}, Action: "identity.passkey.signin-options", Resource: authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(flow.Binding.ID)}}}
+		call := func() (passkey.KeyedAssertionOptionsResult, error) {
+			if discoverable {
+				return owner.KeyedDiscoverableAuthenticationOptions(ctx, passkey.KeyedDiscoverableOptionsRequest{DiscoverableSigninRequest: discovery, IdempotencyKey: key, Caller: caller})
+			}
+			return owner.KeyedAuthenticationOptions(ctx, passkey.KeyedSigninOptionsRequest{SigninRequest: input, IdempotencyKey: key, Caller: caller})
+		}
+		first, e := call()
+		if e != nil || first.CommandID == "" || first.Replayed || first.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("reference original keyed signin", e)
+		}
+		assertionOptions = first.Options
+		replay, e := call()
+		if e != nil || !replay.Replayed || replay.CommandID != first.CommandID || replay.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("reference signin original-key recovery", e)
+		}
+		if _, present := replay.Options.Ceremony(); present || replay.Options.TransferJSON(ctx, func(context.Context, []byte) error { t.Fatal("replay exposed assertion challenge"); return nil }) == nil {
+			t.Fatal("reference replay acquired assertion options")
+		}
+	} else if discoverable {
 		canceled, cancel := context.WithCancel(ctx)
 		cancel()
 		if _, err := owner.DiscoverableAuthenticationOptions(canceled, discovery); err == nil {
@@ -271,6 +361,24 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	signin := native.SigninCompletion{SigninRequest: input, CeremonyID: assertionCeremony.ID, Response: referencePasskeyAssertion(t, key, id, credential.UserHandle, referencePasskeyChallenge(t, ctx, assertionOptions.TransferJSON))}
 	discovery.CommandID = input.CommandID
 	discoveryCompletion := native.DiscoverableSigninCompletion{DiscoverableSigninRequest: discovery, CeremonyID: signin.CeremonyID, Response: signin.Response}
+	if c.Passkey.KeyedOptions != nil {
+		var source passkey.CeremonyRateSource
+		var e error
+		if discoverable {
+			source, e = owner.DiscoverableSigninRateSource(ctx, passkey.DiscoverableCeremonyRateRequest{DiscoverableSigninRequest: discovery, CeremonyID: signin.CeremonyID})
+			if source.Kind != passkey.RateSourceAnonymousFlow || source.AnonymousFlowID != discovery.FlowID || source.Identifier != "" {
+				t.Fatal("reference discovery source became an identifier")
+			}
+		} else {
+			source, e = owner.SigninRateSource(ctx, passkey.SigninCeremonyRateRequest{SigninRequest: input, CeremonyID: signin.CeremonyID})
+			if source.Kind != passkey.RateSourceIdentifier || source.Identifier != input.Identifier || source.AnonymousFlowID != "" {
+				t.Fatal("reference identified source changed original input")
+			}
+		}
+		if e != nil || source.UserID != "" || source.CeremonyID != signin.CeremonyID || source.Lifetime != 5*time.Minute {
+			t.Fatal("reference original assertion source", e)
+		}
+	}
 	foreignToken, err := session.NewToken(32)
 	if err != nil {
 		t.Fatal(err)

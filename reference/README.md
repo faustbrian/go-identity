@@ -11,6 +11,8 @@ matching keys, selected migrations and the genuine registration-to-passkey test.
 Identifier-free resident signin is separately enabled by the trusted
 authentication policy's `PasskeyDiscovery`; false retains identified-only
 signin. Both modes use the same guarded passkey session read/logout owner.
+`Passkey.KeyedOptions` separately enables native original-key options and
+metadata-only retry through that handle; it creates no HTTP routes.
 
 ## Native secondary-OTP enrollment
 

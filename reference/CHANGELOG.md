@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Explicitly select original-key passkey options with `Passkey.KeyedOptions`.
+  Guarded enrollment and identified/identifier-free options retain one native
+  command and reveal options only to its fresh committed winner. Matching
+  retries return metadata, not another challenge. Original ceremony rate-source
+  reads authenticate custody without granting execution or renewing expiry.
+
 - Explicitly set `Session.Passkey` to admit the configured native passkey
   issuer into common session reads and logout, including independently selected
   existing HTTP session routes. Reads and revocation retain the same native

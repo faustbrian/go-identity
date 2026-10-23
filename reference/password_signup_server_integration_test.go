@@ -57,6 +57,9 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		return authorization.Decision{}, err
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 {
+		if c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Action == "identity.passkey.register-options" && c.Request.Resource.Type == "identity.request-admission" && c.Request.Resource.ID == "identity.passkey.register-options" {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
 		if c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && c.Request.Action == "identity.passkey.signin-options" {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
@@ -273,6 +276,7 @@ type signupGraphExtensions struct {
 	passkeyUpgrade       bool
 	passkeyDiscovery     bool
 	passkeySessionHTTP   bool
+	passkeyKeyed         bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -549,6 +553,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passkey {
 		configureReferencePasskey(t, &c)
+		if extensions.passkeyKeyed {
+			configureReferencePasskeyKeyed(t, &c)
+		}
 		c.Session.Passkey = extensions.passkeySessionHTTP
 		if extensions.passkeyDiscovery {
 			policy := registrationRiskPolicyConfig(3, false)
