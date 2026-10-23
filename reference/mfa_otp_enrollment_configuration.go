@@ -27,6 +27,9 @@ import (
 // password-session owners. FreshnessLimit cannot renew original session custody.
 // Configuration and borrowed dependencies must remain immutable during use.
 type MFAOTPEnrollmentConfiguration struct {
+	// ActiveStepUp separately selects authenticated OTP factor-update evidence;
+	// it enables no HTTP route and requires selected password/OTP sessions.
+	ActiveStepUp *MFAOTPActiveStepUpConfiguration
 	// Listing independently selects safe native TOTP/OTP inventory. HTTP still
 	// requires HTTPMFAList; selecting inventory enables no factor mutation.
 	Listing           bool
@@ -44,10 +47,13 @@ type MFAOTPEnrollmentConfiguration struct {
 }
 
 type mfaOTPEnrollmentState struct {
-	enable  *mfapg.OTPEnrollmentService
-	send    *mfapg.OTPEnrollmentSendService
-	confirm *mfapg.OTPEnrollmentConfirmationService
-	issuer  *otppg.MFAEnrollmentIssuer
+	enable       *mfapg.OTPEnrollmentService
+	send         *mfapg.OTPEnrollmentSendService
+	confirm      *mfapg.OTPEnrollmentConfirmationService
+	issuer       *otppg.MFAEnrollmentIssuer
+	active       *mfapg.OTPActiveStepUpService
+	activeIssuer *otppg.MFAActiveIssuer
+	manage       *mfapg.FactorUpdateService
 }
 
 func composeMFAOTPEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator) (*mfaOTPEnrollmentState, error) {
@@ -114,7 +120,13 @@ func composeMFAOTPEnrollment(c StoreConfiguration, d ReferenceDependencies, veri
 	if err != nil {
 		return nil, invalid
 	}
-	return &mfaOTPEnrollmentState{enable: enable, send: send, confirm: confirm, issuer: issuer}, nil
+	state := &mfaOTPEnrollmentState{enable: enable, send: send, confirm: confirm, issuer: issuer}
+	if p.ActiveStepUp != nil {
+		if err := composeMFAOTPActiveStepUp(c, d, state, store, delivery); err != nil {
+			return nil, invalid
+		}
+	}
+	return state, nil
 }
 
 // Format hides native key, session and policy custody.

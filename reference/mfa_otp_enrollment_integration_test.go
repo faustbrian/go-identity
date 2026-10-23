@@ -220,10 +220,11 @@ func proveReferenceMFAOTPEnrollment(t *testing.T, ctx context.Context, f liveSto
 	case <-ctx.Done():
 		t.Fatal("original resend window exceeded journey budget")
 	}
-	proveReferencePasswordOTPHTTP(t, ctx, f, features, workers, client, base, origin, send.FactorID, messages)
+	previous := mfa.OTPAuthenticatedStepUp{Session: enable.Session, CSRFToken: csrf, Purpose: "identity.mfa.factor-update"}
+	proveReferencePasswordOTPHTTP(t, ctx, f, features, workers, client, base, origin, send.FactorID, messages, previous)
 }
 
-func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, factor mfa.FactorID, messages <-chan string) {
+func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, factor mfa.FactorID, messages <-chan string, previous mfa.OTPAuthenticatedStepUp, expectedLabel ...string) {
 	t.Helper()
 	invoke := func(path string, body any, key string, cookies []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()
@@ -268,7 +269,11 @@ func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStor
 	}
 	proof := response.Header.Get("X-MFA-Token")
 	sending := map[string]any{"preAuthID": flow.FlowID, "continuationID": primary.ChallengeID, "factorID": factor, "channel": "email", "token": proof, "callbackURL": origin + "/reset"}
-	response, data = invoke("/v1/mfa/otp-send", sending, "reference-mfa-otp-login-send", cookies)
+	sendKey := "reference-mfa-otp-login-send"
+	if len(expectedLabel) > 0 {
+		sendKey += "-after-rename"
+	}
+	response, data = invoke("/v1/mfa/otp-send", sending, sendKey, cookies)
 	var sent mfahttp.OTPSendResponse
 	decode := json.Unmarshal(data, &sent)
 	if response.StatusCode != http.StatusAccepted || decode != nil || !sent.Accepted || sent.DeliveryState != "queued" || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
@@ -289,23 +294,30 @@ func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStor
 	}
 	command, _ := identity.NewCommandID()
 	completion := map[string]any{"commandID": command, "preAuthID": flow.FlowID, "continuationID": primary.ChallengeID, "token": proof, "code": wrong, "callbackURL": origin + "/reset", "trustDevice": false}
-	var sessionsBefore int
-	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM session_store.sessions`).Scan(&sessionsBefore); err != nil {
-		t.Fatal(err)
-	}
-	response, data = invoke("/v1/mfa/otp-verify", completion, "", cookies)
-	var rejected mfahttp.OTPVerifyResponse
-	decode = json.Unmarshal(data, &rejected)
-	// The existing coordinator reports a counted first-attachment denial as
-	// ConflictError (executePreparedFeature/preparationAttachmentDenied). Its
-	// immutable not-committed outcome and exactly one debit distinguish this
-	// denial from an unrelated conflict, retry or uncharged comparison failure.
-	if (response.StatusCode != http.StatusForbidden && response.StatusCode != http.StatusConflict) || decode != nil || rejected.SignedIn || rejected.CommitOutcome != "not_committed" || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
-		t.Fatal("wrong secondary code did not return a closed denial", response.StatusCode, rejected.Error, rejected.CommitOutcome)
-	}
-	var remaining, uses, sessionsAfter int
-	if err := f.pool.Raw().QueryRow(ctx, `SELECT c.attempts_remaining,u.uses,(SELECT count(*) FROM session_store.sessions) FROM identity_mfa.continuations c JOIN public.capability_identity_one_use u ON u.tenant_id=c.tenant_id AND u.capability_id=c.continuation_id WHERE c.tenant_id=$1 AND c.continuation_id=$2`, otpTenant, string(primary.ChallengeID)).Scan(&remaining, &uses, &sessionsAfter); err != nil || remaining != 2 || uses != 0 || sessionsAfter != sessionsBefore {
-		t.Fatal("wrong secondary code lost shared budget or one-use isolation", err, remaining, uses)
+	// The independent login/active-proof journeys retain the wrong-login debit
+	// partition. Rename proves two successful logins plus action-proof denial;
+	// adding the same wrong-login probes twice would exhaust the unchanged
+	// five-attempt velocity policy before its final successful login.
+	activeProfile := f.config.MFAOTPEnrollment.ActiveStepUp
+	if f.mfaOTPActiveCase == "" && len(expectedLabel) == 0 && (activeProfile == nil || activeProfile.FactorManagement == nil) {
+		var sessionsBefore int
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM session_store.sessions`).Scan(&sessionsBefore); err != nil {
+			t.Fatal(err)
+		}
+		response, data = invoke("/v1/mfa/otp-verify", completion, "", cookies)
+		var rejected mfahttp.OTPVerifyResponse
+		decode = json.Unmarshal(data, &rejected)
+		// The existing coordinator reports a counted first-attachment denial as
+		// ConflictError (executePreparedFeature/preparationAttachmentDenied). Its
+		// immutable not-committed outcome and exactly one debit distinguish this
+		// denial from an unrelated conflict, retry or uncharged comparison failure.
+		if (response.StatusCode != http.StatusForbidden && response.StatusCode != http.StatusConflict) || decode != nil || rejected.SignedIn || rejected.CommitOutcome != "not_committed" || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
+			t.Fatal("wrong secondary code did not return a closed denial", response.StatusCode, rejected.Error, rejected.CommitOutcome)
+		}
+		var remaining, uses, sessionsAfter int
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT c.attempts_remaining,u.uses,(SELECT count(*) FROM session_store.sessions) FROM identity_mfa.continuations c JOIN public.capability_identity_one_use u ON u.tenant_id=c.tenant_id AND u.capability_id=c.continuation_id WHERE c.tenant_id=$1 AND c.continuation_id=$2`, otpTenant, string(primary.ChallengeID)).Scan(&remaining, &uses, &sessionsAfter); err != nil || remaining != 2 || uses != 0 || sessionsAfter != sessionsBefore {
+			t.Fatal("wrong secondary code lost shared budget or one-use isolation", err, remaining, uses)
+		}
 	}
 	command, _ = identity.NewCommandID()
 	completion["commandID"], completion["code"] = command, code
@@ -345,6 +357,49 @@ func proveReferencePasswordOTPHTTP(t *testing.T, ctx context.Context, f liveStor
 		proveOTPFactorInventory(t, ctx, f, features, client, base, issued, string(factor), mfa.FactorActive, 10)
 		proveOTPMixedFactorInventory(t, ctx, f, features, issued, binding.UserID, string(factor))
 		proveOTPInventoryCorruption(t, ctx, f, features, issued, binding.UserID)
+	}
+	if f.config.MFAOTPEnrollment.ActiveStepUp != nil {
+		if label := proveReferenceMFAOTPActive(t, ctx, f, features, workers, issued[0].Value, csrf, origin, factor, binding.UserID, messages, previous); label != "" {
+			proveOTPInventoryLoggedOut(t, ctx, features, issued)
+			var lastSent time.Time
+			if err := f.pool.Raw().QueryRow(ctx, `SELECT max(sent_at[cardinality(sent_at)]) FROM otp_store.send_families WHERE tenant_id=$1`, otpTenant).Scan(&lastSent); err != nil {
+				t.Fatal("original login resend observation", err)
+			}
+			profile, _, _ := f.config.MFAOTPEnrollment.Policy.Bindings()
+			timer := time.NewTimer(max(0, time.Until(lastSent.Add(profile.ResendInterval))))
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				t.Fatal("post-rename login resend window exceeded journey budget")
+			}
+			// The second genuine login proves the updated factor/session epoch.
+			// Skip only repeating the already completed mutation in this test helper.
+			selection := *f.config.MFAOTPEnrollment
+			selection.ActiveStepUp = nil
+			f.config.MFAOTPEnrollment = &selection
+			proveReferencePasswordOTPHTTP(t, ctx, f, features, workers, client, base, origin, factor, messages, previous, label)
+			return
+		}
+	}
+	if len(expectedLabel) > 0 {
+		owner, err := features.MFAListing()
+		if err != nil {
+			t.Fatal(err)
+		}
+		inventory, err := owner.List(ctx, otpInventoryRequest(t, issued))
+		if err != nil {
+			t.Fatal("post-rename authenticated inventory", err)
+		}
+		found := false
+		for _, item := range inventory.Factors {
+			if item.ID == factor {
+				found = item.Method == "otp" && item.Label == expectedLabel[0]
+			}
+		}
+		if !found {
+			t.Fatal("new OTP session did not read renamed factor")
+		}
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, issued, csrf, binding.SessionID, f, features)
 	if f.config.MFAOTPEnrollment.Listing {

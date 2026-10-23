@@ -38,6 +38,7 @@ import (
 )
 
 type liveStores struct {
+	mfaOTPActiveCase                   string
 	mfaOTPEnrollment                   bool
 	mfaOTPEnrollmentOnly               bool
 	phoneTOTP                          bool

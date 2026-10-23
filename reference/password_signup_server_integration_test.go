@@ -254,6 +254,9 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	mfaOTPActiveCase     string
+	mfaOTPManage         bool
+	mfaOTPActive         bool
 	mfaOTPEnrollment     bool
 	mfaOTPEnrollmentOnly bool
 	mfaOTPListing        bool
@@ -295,6 +298,11 @@ type signupGraphExtensions struct {
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
 	budget := 60 * time.Second
+	if extensions.mfaOTPManage {
+		// Two genuine OTP logins span two required resend intervals. This is
+		// a whole-journey budget, not a changed product or security timeout.
+		budget = 120 * time.Second
+	}
 	if extensions.factorReplacementPredecessorUse || extensions.replacementSourceMethod == "totp" || extensions.phonePasswordReset {
 		// The genuine predecessor replay counter needs a later TOTP step. Only
 		// the whole test budget changes; native deadlines remain unchanged.
@@ -304,6 +312,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, extensions.postgresBaseline)
 	f.mfaOTPEnrollment = extensions.mfaOTPEnrollment
+	f.mfaOTPActiveCase = extensions.mfaOTPActiveCase
 	f.mfaOTPEnrollmentOnly = extensions.mfaOTPEnrollmentOnly
 	f.usernameTOTP = extensions.usernameTOTP
 	f.phoneTOTP = extensions.phoneTOTP
@@ -355,11 +364,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		deps.PostgreSQL = traced
 	}
 	if extensions.completionCommitFault {
-		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
+		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable || extensions.mfaOTPManage, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.phoneRemoval = extensions.phoneRemoval != ""
 		f.completionFault.phonePasswordReset = extensions.phonePasswordReset
 		f.completionFault.beforeCommit = extensions.phoneRemoval == "before-commit"
-		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
+		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown" || extensions.mfaOTPActiveCase == "observation-expiry"
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
 		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown" || extensions.verificationHooks == "unknown"
 		f.completionFault.mfaChallenge = extensions.verificationSignin == "totp-child-unknown"
@@ -518,6 +527,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.mfaOTPEnrollment {
 		configureReferenceMFAOTPEnrollment(t, &c, origin, extensions.mfaOTPEnrollmentOnly)
 		c.MFAOTPEnrollment.Listing = extensions.mfaOTPListing
+		if extensions.mfaOTPActive {
+			configureReferenceMFAOTPActive(t, &c, origin)
+			if extensions.mfaOTPActiveCase == "challenge-expiry" {
+				c.MFAOTPEnrollment.ActiveStepUp.Native.TTL = 1500 * time.Millisecond
+			}
+			if extensions.mfaOTPManage {
+				c.MFAOTPEnrollment.Listing = true
+				c.MFAOTPEnrollment.ActiveStepUp.FactorManagement = &mfapg.FactorUpdateConfig{MaximumAge: time.Minute, PrimaryMaximumAge: 5 * time.Minute}
+			}
+		}
 		if extensions.mfaOTPListingHTTP {
 			c.HTTPMFAList = &reference.HTTPMFAListConfiguration{}
 		}

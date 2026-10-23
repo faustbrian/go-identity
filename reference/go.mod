@@ -29,20 +29,20 @@ require (
 	github.com/faustbrian/go-identity/http/session v0.0.0-20261021120851-ab3f4a286f93
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
-	github.com/faustbrian/go-identity/mfa v0.0.0-20261018013113-bb569ec9d44c
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023083556-855d87dfdcc5
-	github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6
-	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6
+	github.com/faustbrian/go-identity/mfa v0.0.0-20261023111815-6bc180019089
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023112246-cdca7c429bc0
+	github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089
+	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261023113327-8954d0d06cb5
 	github.com/faustbrian/go-identity/password v0.0.0-20261020120243-19670fe0ec13
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261021080757-a33b0dfc3840
 	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261023043948-50a36bd23473
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261023111815-6bc180019089
 	github.com/faustbrian/go-identity/risk v0.0.0-20261021074754-2eafc2592af0
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261018021354-75e10d9681e0
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261021080757-a33b0dfc3840
 	github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
 	github.com/faustbrian/go-identity/session v0.0.0-20261021115224-6d906da1fd80
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023075701-c4d031c89188
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023112942-ef49eb3e6984
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820

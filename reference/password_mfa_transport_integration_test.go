@@ -83,7 +83,7 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 		selected = bytes.Contains(p, []byte("INSERT INTO identity_mfa.recovery_sets("))
 	}
 	if c.fault.factorManagement {
-		selected = bytes.Contains(p, []byte("INSERT INTO identity_mfa.factor_update_effects("))
+		selected = bytes.Contains(p, []byte("INSERT INTO identity_mfa.factor_update_effects(")) || bytes.Contains(p, []byte("INSERT INTO identity_mfa.otp_factor_update_effects("))
 	}
 	if c.fault.replacementConfirmation {
 		selected = bytes.Contains(p, []byte("UPDATE identity_mfa.totp_factors SET state=2,confirmed_at="))

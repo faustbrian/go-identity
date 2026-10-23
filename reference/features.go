@@ -1044,6 +1044,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 		if err := enrollment.issuer.Initialize(w, s.pool); err != nil {
 			return err
 		}
+		if enrollment.activeIssuer != nil {
+			if err := enrollment.activeIssuer.Initialize(w, s.pool); err != nil {
+				return err
+			}
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

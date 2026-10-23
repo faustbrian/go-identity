@@ -1465,6 +1465,26 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## Selected factor management composition
 
+For email-OTP factors, independently select
+`MFAOTPEnrollmentConfiguration.ActiveStepUp`, with a consuming `PurposeStepUp`
+policy and native origins/signing configuration. Leave its native `Primary` and
+`Issuance` absent: the graph supplies actual current-session and OTP/delivery
+owners. Password/OTP login must also be selected. The native
+`FeatureSet.MFAOTPActiveStepUp` handle accepts action-bound `OtpSend`/`OtpVerify`;
+the verification input names the original send and returns one factor-update
+proof, not a session. Delivery uses the existing selected worker/sender.
+
+Set optional `ActiveStepUp.FactorManagement` with explicit proof/primary maximum
+ages, leaving owner overrides and removal/replacement selections absent.
+`FeatureSet.MFAOTPFactorManagement` then supports optimistic rename with atomic
+proof consumption and session revocation. Select `MFAOTPEnrollment.Listing` to
+read safe labels after a fresh password/OTP signin. Selected migrations append
+OTP proof/management and existing session-disposition histories; apply them
+before initialization. No new HTTP routes are enabled. Native acceptance lives
+in `TestReferencePostgresOTPAuthenticatedFactorRename` and
+`TestReferencePostgresOTPFactorRenameCommitRecovery`; these do not qualify the
+full MFA unit or remaining management variants.
+
 Set `MFAEnrollmentConfiguration.ActiveStepUp`, then optional
 `FactorManagement` with explicit primary/factor maximum ages. The graph supplies
 the actual native primary and session-effect owners; caller-written overrides

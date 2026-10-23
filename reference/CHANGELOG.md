@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently compose native authenticated OTP step-up and optional OTP factor
+  rename through `MFAOTPEnrollment.ActiveStepUp`. Supply actual session, risk,
+  OTP/delivery and revocation owners, append selected forward histories and
+  retain graph/tenant lifetime. Safe inventory reads selected OTP labels. No new
+  HTTP routes, removal, disable or replacement are selected implicitly.
+
 - Independently select authenticated native OTP/TOTP factor inventory through
   `MFAOTPEnrollmentConfiguration.Listing`, including pending/confirmed state
   and safe recovery counts. Existing opt-in MFA-list HTTP uses that same owner;

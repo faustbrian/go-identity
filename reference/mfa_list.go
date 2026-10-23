@@ -46,6 +46,13 @@ func composeMFAListing(c StoreConfiguration, owner *mfaEnrollmentState, otp *mfa
 		if owner != nil && owner.manage != nil {
 			reader, err = mfapg.NewOTPManagementListReader(otp.enable, owner.manage)
 		}
+		if otp.manage != nil {
+			var totp *mfapg.FactorUpdateService
+			if owner != nil {
+				totp = owner.manage
+			}
+			reader, err = mfapg.NewOTPFactorManagementListReader(otp.enable, otp.manage, totp)
+		}
 	} else {
 		reader, err = mfapg.NewTOTPListReader(owner.enable)
 		if owner.manage != nil {
