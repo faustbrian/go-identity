@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "profile": "native-service-expiry-v1",
+  "owner": "identity/anonymous/postgres",
+  "scope": "Explicit trusted maintenance only; no HTTP, scheduler, expired guest authentication or application-resource transfer.",
+  "operations": [
+    {"id":"identity.anonymous.cleanup","method":"CleanupService.CleanupExpired(context.Context, CleanupRequest) (CleanupResult, error)","transport":"native-only","atomicity":"Per subject, not per batch; repeated selection may select additional still-active expired guests."},
+    {"id":"identity.anonymous.expire","method":"CleanupService.CleanupSubject(context.Context, CleanupSubjectRequest) (CleanupItem, error)","transport":"native-only","atomicity":"Original random command from existing request-key owner; kernel/lifecycle/all guest sessions and families/required audit/outbox commit together."},
+    {"id":"identity.anonymous.cleanup.recover","method":"CleanupService.RecoverCleanup(context.Context, identity.RecoveryQuery) (CleanupItem, error)","transport":"native-only","atomicity":"Reconcile exact original command under current service query policy, without new admission, mutation replay or credential delivery."}
+  ],
+  "requests": {
+    "CleanupRequest": {"TenantID":"Trusted selected identity.TenantID.","RunID":"Canonical random identity.CommandID, preserved across retries.","Limit":"1..configured MaximumBatch; MaximumBatch is 1..1000.","After":"Optional exact exclusive expiry/user seek cursor; grants no eligibility or authority."},
+    "CleanupSubjectRequest": {"TenantID":"Exact selected tenant.","UserID":"Canonical exact anonymous subject; never a permanent target.","RunID":"Same original random run correlation for exact per-subject retry."},
+    "RecoveryQuery":"Exact original returned command/tenant/user/record/service actor/kind/operation scope; no anonymous-flow or link mode. Configured actor is never request-selectable."
+  },
+  "results": {
+    "CleanupItem": {"UserID":"Attempted subject.","Outcome":"Original identity.CommitOutcome; unknown/in-progress is not rollback.","Recovery":"Save every nonempty original query; empty after uncertain key admission requires same subject/run retry.","Replayed":"Historical metadata only.","RetryAfter":"Native original in-progress bound.","Error":"Batch-only redacted per-item error, without provider/SQL diagnostics."},
+    "CleanupResult": {"Items":"Completed/attempted prefix retained on failure.","Next":"Last attempted seek position; reconcile unknown work before advancing.","ObservedAt":"Authoritative database observation time.","LagKnown":"True only after successful tenant-wide backlog observation.","RemainingLag":"Oldest active expiry lag including held rows, saturating at 8760 hours; meaningful only with LagKnown."}
+  },
+  "invariants": [
+    "Configured service policy authorizes selection and each subject; current query policy authorizes recovery.",
+    "Selection uses authoritative database time and the existing tenant/expiry/user active partial index.",
+    "Retention callbacks run outside SQL; original generations and earliest positive-evidence deadline are checked in the final protected transaction.",
+    "Stored delete/anonymize/retain remain distinct. Legal holds and validated retention deferrals stay pending; unavailable policy stops the batch.",
+    "Missing lifecycle or partial/contradictory retained evidence never proves success or rollback.",
+    "Completed permanent upgrades are excluded; intervening cleanup prevents previously admitted upgrade from consuming protected proof or producing permanent credentials.",
+    "Reference selection enables no HTTP and retains tenant/initialization/shutdown guards."
+  ],
+  "errors": {"invalid":"anonymous.ErrInvalidInput","denied_or_deferred":"identity.ForbiddenError; batch may continue only after validated negative decision.","conflict":"identity.ConflictError","unknown":"identity.UnknownCommitError with original command metadata; reconcile rather than invent success or rollback.","unavailable":"identity.UnavailableError or context cancellation/deadline; stop and retain attempted results."}
+}

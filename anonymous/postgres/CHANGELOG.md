@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose service-owned abandoned-guest cleanup with bounded indexed database-
+  time selection, stored disposal/retention policy, current authority fences,
+  atomic session/audit/outbox effects and original-command recovery. Hold
+  deferrals retain backlog visibility; unknown outcomes never imply rollback.
+  Append selected expiry histories after existing disposal/upgrade histories.
+  No scheduler, expired-credential admission or HTTP route is enabled.
+
 - Add closed service-expiry lifecycle mapping, same-Work terminalization and
   retained original-command recovery after actual kernel disposal. Append
   `ExpiryMigrationSource` after disposal history: expired deletion is distinct

@@ -140,6 +140,48 @@ Retain original lookup/CSRF, request/envelope and capability verification keys f
 their respective recovery lifetimes. Keep `Guest.IntentKey` stable for retained
 requests; independent transport-key rotation does not change original intent.
 
+## Abandoned-guest maintenance
+
+`NewCleanupService(pool, CleanupConfig, keys)` composes actual kernel,
+anonymous, session, audit and outbox owners. The fixed configured service actor
+must be authorized for `identity.anonymous.expire`: selection uses resource
+`identity.anonymous/expired`, and each subject uses `identity.anonymous/<user>`.
+The coordinator's request-admission and query policies remain required.
+Expired guest cookies never provide maintenance authority.
+
+Supply installed repository/session schemas, global authority, bounded clock,
+current authorization/retention policy, original request/envelope keys,
+configuration identity and maximum batch (1..1000). Policy callbacks execute
+outside transactions. Current hold/directory/lifecycle/session generations and
+the original at-most-20-second evidence window are fenced before commit.
+Unavailable policy stops the batch; legal hold or validated retention deferral
+preserves the guest and allows explicit cursor progress. Stored delete,
+anonymize and retain remain distinct: retain keeps payload but withdraws guest
+authentication. No permanent upgrade target or application data is erased.
+
+Append kernel `AnonymousExpiryDisposalMigrationSource`, session
+`AnonymousExpiryMigrationSource` and anonymous `ExpiryMigrationSource` after
+their selected disposal histories. If upgrade is installed, append its histories
+first and set session `Upgrade: true`. Preserve predecessor versions/checksums;
+the expiry suffix accepts populated historical upgrade records.
+
+Generate one random `RunID` and call `CleanupExpired` with tenant, bounded Limit
+and optional exact returned `Next` cursor. Selection seeks over the existing
+active-expiry index using authoritative database time. `LagKnown` identifies a
+successful tenant-wide remaining-backlog observation, including held rows;
+`RemainingLag` saturates at 8760 hours. Selection holds no locks across callbacks.
+This is an explicit call, not a scheduler or HTTP API.
+
+Each attempted guest owns an independently atomic original random command:
+the batch is not an atomic/idempotent batch receipt. Save each nonempty
+`CleanupItem.Recovery`; unknown/in-progress stops selection and requires
+`RecoverCleanup` before advancing. Exact `CleanupSubject` input (tenant/user/
+RunID) retains original retry custody; retry it after uncertain request-key
+admission. Terminal retry/recovery performs no new disposal and cannot renew
+authority. A later run starts from zero to revisit held rows. See the
+[native maintenance contract](maintenance_contracts.json) and external-package
+`cleanup_service_integration_test.go` consumer examples.
+
 ### Expired-subject owner composition
 
 `ExpiryFields`/`ExpirySubject` preserve the exact stored lifecycle in the closed
