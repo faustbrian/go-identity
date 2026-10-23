@@ -1,5 +1,13 @@
 # PostgreSQL MFA authority (in development)
 
+`RequireOTPSessionFactor` is the OTP-specific same-Work authority fence for
+native session self-logout. It requires the actual session-revoke-one owner,
+original enrollment/account versions and a still-verified matching recipient.
+It reads neither a code nor an expired login continuation, grants no new MFA
+action and never checks an OTP identity against the TOTP table. The session
+owner must first fence directory, password credential and policy authority;
+propagate any fence error so the existing coordinator aborts the whole command.
+
 For explicitly selected verified-phone/password plus TOTP, the password owner
 retains its distinct original primary and browser. `RequirePasswordSigninFactors`
 and its method-bound variant admit only independent confirmed TOTP for that

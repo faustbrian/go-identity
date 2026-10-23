@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `RequireOTPSessionFactor` for exact native self-logout Work. Fence the
+  original confirmed enrollment, account factor generation and current verified
+  recipient without a TOTP fallback, code comparison or renewed freshness.
+
 - Fence one original known-empty permanent-target factor generation for the
   closed anonymous-upgrade preparation and consuming profiles. Guest identity,
   changed generations and schema aliases cannot bypass MFA; missing/enrolled
