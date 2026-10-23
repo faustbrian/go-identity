@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 11:49 UTC
+## TL;DR — updated 2026-10-23 12:20 UTC
 
 - **Whole goal: approximately 25% complete, low confidence.** Consumer
   milestones are **11/39 closed**; retained scope is **67 units**. These are
@@ -37,16 +37,24 @@
   a separate no-replacement consumer passes rename/recovery under PostgreSQL/race
   (131.047s), and module verification passes. Full M12 remains open for remaining
   OTP management and retained method profiles; no full-unit qualification added.
-- **Parallel implementation:** the dependency-ready restricted workload token-
-  exchange core has passing focused parser/service tests. Native PostgreSQL
-  implementation is underway after its missing-boundary red. It retains root/
-  parent lineage and separate workload/client authority through existing owners;
-  no HTTP/reference, human or API-key exchange is claimed. This lane is not yet
-  delivered. Independent review found migration compatibility, interrupted-
-  recovery and changed-intent retry defects in the unpublished implementation;
-  these are being corrected before another complete review. Ordinary reusable
-  parent-token exchange is required, not the proposed lifetime one-child cap.
-  Full M33 remains open.
+- **New M12 OTP removal profile delivered:** consumers can remove the sole
+  active OTP factor using a fresh action proof while preserving real email
+  recovery. Recipient references are erased, recovery codes retired and sessions
+  revoked atomically. Password signin works before reset; actual delivered reset
+  still works afterward. Native `f67a836` and Reference `e4ae9ab` are main-pushed,
+  independently approved and exact-CI green (`39951283337` / `39951836008`). Four
+  PostgreSQL/race journeys pass (136.429s), including competing commands, true
+  COMMIT recovery, fresh-key denial and retained TOTP removal. Public-supplier
+  checks pass (106.701s); the actual downloaded Reference consumer passes both
+  normal/recovery journeys (72.209s), with modules verified. Full M12 stays open.
+- **New native workload-exchange profile delivered:** an owning Basic workload
+  client can exchange reusable access tokens for independently narrower children,
+  retaining root/parent lineage, immutable admission deadlines and exact-intent
+  retry/recovery. Live client/ancestor withdrawal denies, including after
+  preflight. OAuth `9969c9d` / native `5c597f4` are main-pushed and independently
+  approved; final exact CI `39952121519` is green. The downloaded public native
+  consumer passes five PostgreSQL/race journeys (44.086s), modules verified.
+  HTTP/reference, human/API-key/organization sources and remaining M33 stay open.
 - **Qualification remains open:** scheduled full-history secrets run
   `39925320307` failed; the separate current-change push checks above passed.
   No whole-history clearance, new full-unit qualification or platform
@@ -78,7 +86,8 @@
   including changed-authority denial, rollback/recovery and separate enrollment
   selection. Canonical public-dependency TOTP compatibility also passes.
   Broader MFA variants and whole-unit qualification remain open.
-- **Next:** deliver safe sole-active-OTP removal with current email recovery
+- **Next:** continue M12 with explicitly selected OTP disable and its required
+  session/recovery effects, preserving the delivered removal and rename profiles
   without restarting delivered MFA behavior. No Tools, evidence framework,
   whole-repository verification or user decision is needed.
 
@@ -2174,7 +2183,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M09 | Anonymous session, self-deletion and collision-safe permanent upgrade: identity/anonymous, identity/anonymous/postgres | Closed selected native/opt-in HTTP/reference profile, including abandoned cleanup with stored policy/holds, upgrade fences, atomic owner effects and original recovery. Native `d2f004f`, reference `64cee17`, independent reviews, exact green CI and downloaded-public Reference five-journey PostgreSQL/race16.170s. Unsupported transfer/authentication profiles and full unit/release qualification remain separate; historical startup uncertainty remains disclosed. |
 | M10 | Confirmed TOTP enrollment and TOTP signin: identity/mfa, identity/mfa/postgres | Closed selected cookie/password-primary TOTP profile, including username-primary composition: genuine registration, fresh proof, pending enrollment, reveal-once URI, explicit confirmation, challenge-only primary, TOTP completion and usable session/read/logout. Reviewed/pushed reference `4315bbf` and `02c6195`, green CI and original canonical/downloaded consumers retained. Fresh source audit at `d65ed4c` found the closure row stale; current downloaded combined phone/username/TOTP consumer also passes (13.824s). Broader MFA profiles and unit/release qualification remain separate. |
 | M11 | Confirmed secondary-OTP enrollment, delivered-code signin and session: MFA/OTP/password/session owners | Closed selected email/password-primary profile: genuine pending enrollment, delivered explicit confirmation without a session, challenge-only primary, counted delivered-code completion, session read/logout and original recovery. Reviewed MFA `665a40f`, session `c4d031c` and Reference `f721a66` are main-pushed/exact-CI green; actual downloaded public Reference PostgreSQL/race37.995s. Enrollment without login and retained TOTP controls pass separately. Broader MFA variants and full-unit qualification remain open. |
-| M12 | Factor listing/update/removal/disable/replacement with fresh proof: MFA owners | Safe native/HTTP mixed OTP/TOTP inventory and TOTP management profiles delivered. Native action-bound OTP rename is now delivered through Reference `5235852`, independent review, exact green CI and actual downloaded-public PostgreSQL/race consumer (131.047s). OTP removal/disable/replacement and remaining method profiles keep the full row open. |
+| M12 | Factor listing/update/removal/disable/replacement with fresh proof: MFA owners | Safe native/HTTP mixed OTP/TOTP inventory and TOTP management profiles delivered. Native action-bound OTP rename (`5235852`) and sole-active OTP removal with usable email recovery (`e4ae9ab`) are delivered, independently approved, main-pushed and exact-CI green. Actual downloaded-public PostgreSQL/race consumers pass (131.047s / 72.209s). OTP disable/replacement and remaining method profiles keep the full row open. |
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
@@ -2195,7 +2204,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M30 | OAuth client/consent, authorization-code/S256 grants and refresh rotation: oauth-server, oauth-server/postgres | Selected native configured public/confidential code/S256, consent, refresh, revocation and owning-client introspection delivered. Dynamic client/consent management and complete HTTP/reference remain; full row not closed. |
 | M31 | OIDC discovery/JWKS/ID-token/userinfo consumers: oauth-server/oidc | Closure not reassessed |
 | M32 | Workload client-credentials issuance, introspection and revocation: OAuth server owners | Configured access-only native machine profile delivered as `28444ed`, green CI and downloaded-native PostgreSQL/race consumer. Full row qualification/composition not closed. |
-| M33 | Restricted token exchange with lineage/non-expanding authority and bounded cache validity: OAuth server, authentication, API-key and organization owners; SI-01 through SI-10 | Closure not reassessed |
+| M33 | Restricted token exchange with lineage/non-expanding authority and bounded cache validity: OAuth server, authentication, API-key and organization owners; SI-01 through SI-10 | Native Basic workload-only opaque exchange is delivered through OAuth `9969c9d` / native `5c597f4`, independently approved and final exact-CI green. Downloaded-public PostgreSQL/race consumer passes five journeys (44.086s), including reusable sources, original pending recovery and withdrawal after preflight. Human/API-key/organization sources, HTTP/reference and cached shared-issuer profiles keep the full row open. |
 | M34 | Device authorization to issuance/expiry/denial: oauth-server/device, optional native PostgreSQL composition | Closure not reassessed |
 | M35 | Action-bound risk/velocity/admission and every selected CAPTCHA provider: identity/risk, identity/risk/postgres, identity/risk/valkey, identity/risk/captcha, identity/risk/captcha/recaptcha, identity/risk/captcha/turnstile, identity/risk/captcha/hcaptcha, identity/risk/captcha/captchafox; HIBP remains required when setting passwords | Closure not reassessed |
 | M36 | Locale selection and localized public messages/delivery templates: identity/i18n | Closure not reassessed |

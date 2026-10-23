@@ -1,5 +1,92 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 12:20 UTC: two finite consumer profiles CLOSED; whole M12/M33 and
+full-unit qualification remain open. Primary OTP removal: nativef67a8364fc5e
+and Referencee4ae9ab69358 are main-pushed, exact Required39951283337/39951836008
+SUCCESS. Independent complete22path sourcec9d5fbd6...517f29 APPROVE/no findings;
+unchanged production review reused for literal public-pin adoption. Standalone
+public-only native78393 race1.390s/populated-PG1.682s/vet0/modules verified.
+Reference canonical92319 PG/race136.429s/ordinaryrace14.666s/vet0; public-supplier
+4287 PG/race106.701s/vet0/modules verified. Downloaded Reference334files and
+MFA adapter186files exactly match committed sources. Actual separate public
+consumer20461 normal/removal-COMMIT-recovery PG/race PASS72.209s, modules verified.
+Reference v0.0.0-20261023121418-e4ae9ab69358,
+sumh1:Eeq9ug755aYxqZMfa4ylDuJg8kNitik30jpXJY7/v30=,
+modsumh1:xfpWF8fatvlcW0WlC09I3Hu+6JtV+xuofNrrytcWeTk=.
+Consumers retain password signin before reset, safe revoked inventory, actual
+email recovery after removal and required reset session effects. Fresh-key reuse,
+unusable recovery, competing commands, rollback and actual unknown COMMIT deny
+or reconcile without repeating mutation. No HTTP removal/disable/replacement
+capability or whole-unit qualification is claimed.
+
+Parallel restricted workload exchange: root9969c9d68d0b/native5c597f4650f9 are
+main-pushed; final Required39952121519 SUCCESS. Root39951331289 remains FAILED
+on the word Preactivation; native delivery corrected only that wording, not a
+gate or runtime behavior. Source reviewer restricted_exchange_review_round2
+APPROVE/no findings at24pathf04016ed...aa053; final source reconstruction exactly
+matches apart from literal public-root pin and documentation spelling. Actual
+public root83/native100files match committed source. Standalone public-root
+66966 selected PG/race10.984s/ordinaryrace1.230s/vet0/modules verified. Earlier
+3318 failed only the omitted explicit fixture-directory environment guard and
+ran no runtime journeys; corrected66966 uses the exact borrowed owned PG18 path.
+Actual downloaded native v0.0.0-20261023121633-5c597f4650f9 publicconsumer2740
+five-journey PG/race PASS44.086s, modules verified: reusable narrower children,
+lineage/ancestor withdrawal, post-preflight withdrawal, original >20s pending
+pre-COMMIT recovery and populated silent/workload history plus later issuance.
+sumh1:U8zn0mt2EH0LovAbw5yZfb2OeJWFLIieqyimIUbl6hY=,
+modsumh1:f2AF81DdIe6Z1fgqPUgylKReoJzLamHT9+D5DXv1nh0=.
+Full M33 retains HTTP/reference, human/API-key/organization and cached profiles.
+Still11/39 closed milestone rows/~25% whole-goal estimate, low confidence; these
+are complete finite profiles, not new whole-row or67-unit qualification claims.
+All owned Go/service runs are terminal; final task-resource cleanup follows.
+
+2026-10-23 12:09 UTC: primary OTP removal is locally proven, not delivered.
+Source review otp_factor_removal_final_review APPROVE/no findings at22-path
+c9d5fbd6080c860e5d528559fefc3cb84cac124a4d554e558b4b6f7cd0517f29 againstea671096.
+Initial runtime53585 RED1.073s rejected missing removal composition. Initial
+three-journey42108 PASS111.912s/native9273 race1.361s, populated-PG1.908s/vet0.
+Review's two accepted missing acceptance assertions were added without changing
+production: fresh-key removed-factor reuse denies unchanged; public password
+signin/session/revoked inventory works before reset and that session is revoked
+by reset. Final92319 four-journey PG/race PASS136.429s includes those assertions,
+true COMMIT recovery, competing commands and retained PostgreSQL TOTP removal;
+Reference ordinary race PASS14.666s/integration vet0. Public-only native78393
+is live; native/Reference main delivery, actual public supplier/consumer and CI
+remain pending. No full M12/unit qualification or new milestone count.
+
+Parallel OAuth full24-path source f04016ed...aa053 now independently APPROVE/no
+findings after real late ancestor/client withdrawal and unchanged control. New
+test ordinary5.740s/race10.381s/vet0; disposable protected-check-removal overlay
+expected RED2.536s proves unsafe issuance/effects are detected. Original native
+race153.518s/rootrace1.708s/nativeordinary0.220s and unchanged-parser fuzz265544
+executions retained, not rerun. Earlier failures are not new security proof:
+94263/60053 failed overstrict recovery-fence oracles;91590 initially expected
+pgx tracing of kernel's direct PgConn Work calls. Those test assumptions were
+corrected, not product authority weakened. Original immutable preparation remains
+unchanged during metadata-only recovery fencing. OAuth public delivery pending.
+
+2026-10-23 11:51 UTC: primary next M12 profile frozen: native/reference removal
+of the sole active email-OTP factor with usable emailed-password-reset recovery.
+Consume delivered MFA/OTP/session/kernel owners6bc1800/cdca7c4/ef49eb3/8954d0d
+and Reference5235852 (six canonical journeys and public consumer131.047s).
+Primary owns mfa/postgres factor mutation/forward removal history and reference
+OTP management composition/tests/docs/pins. No other writer in go-identity.
+Outcome: genuine enrolled OTP session -> original action OTP proof -> optimistic
+self-removal -> erase recipient references/retire recovery set -> advance shared
+factor authority/revoke sessions/events atomically -> password signin and actual
+delivered email reset remain usable. Email recovery is explicitly selected and
+checked under the existing Work, not inferred from a verified-address flag.
+Denials: stale/wrong proof/version/custody, absent/currently unusable recovery,
+competing commands, rollback, original COMMIT recovery, removed-factor reuse.
+Preserve TOTP/rename history and append a populated-safe OTP suffix; missing
+selection fails closed. HTTP, disable, replacement, trusted devices and additional
+factor methods are not this finite profile; their full goal scope is retained.
+Checks: focused real PostgreSQL/race Reference journeys plus affected native
+tests/vet, populated migration test, independent complete final-diff review,
+public supplier adoption and actual public-consumer run at delivery. No new
+hostile parser is planned; reuse unchanged proof codec fuzz evidence. Primary
+may write now but waits for OAuth worker's heavy-slot handback before Go/services.
+
 2026-10-23 11:49 UTC: finite native/reference OTP factor-rename profile CLOSED;
 full M12 remains open. Reference52358522f1f45ca5997b8776911a7744f3d6f8dd is
 main-pushed; exact CI39947940239 SUCCESS. Supplier6bc1800/cdca7c4/ef49eb3/8954d0d
