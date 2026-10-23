@@ -101,6 +101,17 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// The device child owns RFC8628 semantics, while the existing OAuth native
+	// participant owns client, consent and token mutations in the same Work.
+	// Freeze each exact schema/subject mode; no cross-owner family wildcard.
+	switch op.OperationID {
+	case "identity.oauth-server.device-authorize", "identity.oauth-server.device-token", "identity.oauth-server.device-approve", "identity.oauth-server.device-deny":
+		expected := identity.FeatureOperation{Owner: "oauth-server/device", OperationID: op.OperationID, SchemaID: op.OperationID + ".native-device-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+		if op.OperationID == "identity.oauth-server.device-authorize" || op.OperationID == "identity.oauth-server.device-token" {
+			expected.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+		}
+		return op == expected && d == (ContributorDescriptor{Owner: "oauth-server/postgres", ContractID: "identity.oauth-server", Version: 1})
+	}
 	// The OIDC child owns logout protocol semantics; the existing OAuth native
 	// participant composes its session-owned effect. Admit only this closed
 	// tuple, not arbitrary child operations or a second native authority.

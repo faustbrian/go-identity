@@ -269,7 +269,8 @@ its actual tombstone, not invitation versions. No ignored recording failure can
 leave usable Work. Capability finalization, both events, audit and mutation must
 commit together; any failure rolls back. Metadata is not proof or a commit receipt.
 
-For the exact public-password OAuth continuation, `OAuthConsentContributor`
+For the exact public-password OAuth continuation or native device approval,
+`OAuthConsentContributor`
 records an independent `OAuthConsentMutation` after its actual successful SQL.
 The authenticated command freezes `oauth.consent-id`,
 `oauth.consent-before-version`, `oauth.consent-after-version` and
@@ -281,6 +282,14 @@ emits `consent.reconfirmed.v1` with its real positive predecessor. This does not
 invent a grant scope change, expose consent fields as permissions or acknowledge
 downstream consumption. Zero, foreign, wrong-phase or repeated mutation receipts
 deny; required secondary owners cannot be replaced by a single-event contributor.
+
+The optional device child declares only `identity.oauth-server.device-authorize`,
+`device-token`, `device-approve` and `device-deny` through the existing
+`oauth-server/postgres` contributor, using each exact `native-device-v1` schema.
+Authorize/token use anonymous-flow bindings; approve/deny use authenticated-user
+bindings. Only human approval with `grant.authorized.v1` selects the independent
+consent contribution. Registration alone authenticates neither client nor user
+and does not initialize device storage or expose a route.
 
 These are library prerequisites. Complete native invitation/OAuth consumers,
 their public dependency pins, real delivery/denial/replay/rollback acceptance and

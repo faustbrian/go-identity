@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 )
 
-// OAuthConsentContributor is the closed native public-password OAuth consent
+// OAuthConsentContributor is the closed native password/device OAuth consent
 // owner. Pure validation exhaustively matches original consent ID/version,
 // client and current command custody. Apply locks and writes the actual consent
 // in the sole Work, recording its successful provisional mutation; final commit
@@ -38,12 +39,39 @@ type OAuthConsentMutation struct {
 }
 
 func oauthConsentSelected(p CommandPlan) bool {
-	return p.Feature != nil && p.Feature.Operation.OperationID == "identity.oauth-server.continue" && p.Lifecycle != nil && (p.Lifecycle.EventType == "grant.authorized.v1" || p.Lifecycle.EventType == "grant.scope_changed.v1")
+	if p.Feature == nil {
+		return false
+	}
+	// Approval cannot fall back to generic feature admission by changing or
+	// omitting its lifecycle event; the exact consent profile must validate it.
+	if p.Feature.Operation.OperationID == "identity.oauth-server.device-approve" {
+		return true
+	}
+	if p.Lifecycle == nil {
+		return false
+	}
+	switch p.Feature.Operation.OperationID {
+	case "identity.oauth-server.continue":
+		return p.Lifecycle.EventType == "grant.authorized.v1" || p.Lifecycle.EventType == "grant.scope_changed.v1"
+	default:
+		return false
+	}
 }
 
 func validOAuthConsentProfile(b identity.CommandBinding, p CommandPlan) bool {
+	if !oauthConsentSelected(p) || p.Lifecycle == nil {
+		return false
+	}
 	op := identity.FeatureOperation{Owner: "oauth-server", OperationID: "identity.oauth-server.continue", SchemaID: "identity.oauth-server.continue.public-password-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
-	return oauthConsentSelected(p) && p.Feature.Operation == op && p.Feature.Contributor == (ContributorDescriptor{Owner: "oauth-server/postgres", ContractID: "identity.oauth-server", Version: 1}) && b.ValidateFor(op) == nil && string(b.ActorID) == string(b.UserID) && p.SubjectType == "oauth_grant" && p.Lifecycle.EventIndex == 0 && p.Lifecycle.BeforeVersion > 0 && p.Lifecycle.BeforeVersion < ^uint64(0) && p.Lifecycle.AfterVersion == p.Lifecycle.BeforeVersion+1 && p.CommandCounters != nil && p.Capability == nil && p.CapabilityIssuance == nil && p.OTP == nil && p.Delivery == nil
+	if p.Feature.Operation.OperationID == "identity.oauth-server.device-approve" {
+		// RFC8628 approval records the human's independent consent in the same
+		// Work as grant authorization; client polling is never a consent owner.
+		if b.ActorKind != authorization.SubjectUser || p.Lifecycle.EventType != "grant.authorized.v1" {
+			return false
+		}
+		op = identity.FeatureOperation{Owner: "oauth-server/device", OperationID: "identity.oauth-server.device-approve", SchemaID: "identity.oauth-server.device-approve.native-device-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	}
+	return p.Feature.Operation == op && p.Feature.Contributor == (ContributorDescriptor{Owner: "oauth-server/postgres", ContractID: "identity.oauth-server", Version: 1}) && b.ValidateFor(op) == nil && string(b.ActorID) == string(b.UserID) && p.SubjectType == "oauth_grant" && p.Lifecycle.EventIndex == 0 && p.Lifecycle.BeforeVersion > 0 && p.Lifecycle.BeforeVersion < ^uint64(0) && p.Lifecycle.AfterVersion == p.Lifecycle.BeforeVersion+1 && p.CommandCounters != nil && p.Capability == nil && p.CapabilityIssuance == nil && p.OTP == nil && p.Delivery == nil
 }
 
 // RecordOAuthConsent retains one mutation only during the exact native owner's

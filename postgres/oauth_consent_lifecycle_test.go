@@ -137,48 +137,55 @@ func TestOAuthConsentReceiptCannotSubstituteOwnerIDOrVersion(t *testing.T) {
 }
 
 func TestOAuthConsentLifecycleUsesIndependentActualMutation(t *testing.T) {
-	for _, before := range []uint64{0, 2} {
-		w, owner, mutation := oauthConsentInvocationFixture(t, before)
-		if err := w.RecordOAuthConsent(owner, mutation); err != nil {
-			t.Fatal("exact native consent receipt denied", err)
-		}
-		if _, err := w.StagedOAuthConsent(); err == nil {
-			t.Fatal("missing primary audit yielded secondary success")
-		}
-		p := w.state.execution.reservation.plan
-		now := time.Now().UTC().Truncate(time.Microsecond)
-		record, err := securityMutationAudit(t.Context(), w.state.binding, 1, 2, now, "committed", p.audits[0].EventType, p.subjectType, w.state.binding.RecordID, "protected", true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		p.audits[0].BindingDigest, err = FeatureAuditBindingDigest(w.state.binding, p.feature.Operation, p.subjectType, record)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = bindAuditPlans(w, p.audits); err != nil {
-			t.Fatal(err)
-		}
-		if err = w.StageAudit(0, record); err != nil {
-			t.Fatal(err)
-		}
-		if err = w.StageLifecycle(0, now); err != nil {
-			t.Fatal(err)
-		}
-		w.state.featureReceipt = &identity.FeatureReceipt{Operation: p.feature.Operation, BeforeVersion: 1, AfterVersion: 2}
-		got, err := w.StagedOAuthConsent()
-		event := "consent.reconfirmed.v1"
-		if before == 0 {
-			event = "consent.created.v1"
-		}
-		if err != nil || got.SubjectType != "oauth_consent" || got.SubjectID != mutation.ID || got.SubjectID == w.state.binding.RecordID || got.BeforeVersion != before || got.AfterVersion != before+1 || got.EventType != event || got.EventIndex != 1 || got.OccurredAt != now {
-			t.Fatal("secondary consent substituted grant/versions", got, err)
-		}
-		primary, _ := w.StagedLifecycle()
-		if got.ID == primary[0].ID {
-			t.Fatal("consent event collides with grant event")
-		}
-		if err = w.RecordOAuthConsent(owner, mutation); err == nil || w.usable() == nil {
-			t.Fatal("repeated mutation receipt not terminally denied")
-		}
+	for name, fixture := range map[string]func(*testing.T, uint64) (Work, *oauthConsentProbe, OAuthConsentMutation){
+		"password": oauthConsentInvocationFixture,
+		"device":   deviceConsentInvocation,
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, before := range []uint64{0, 2} {
+				w, owner, mutation := fixture(t, before)
+				if err := w.RecordOAuthConsent(owner, mutation); err != nil {
+					t.Fatal("exact native consent receipt denied", err)
+				}
+				if _, err := w.StagedOAuthConsent(); err == nil {
+					t.Fatal("missing primary audit yielded secondary success")
+				}
+				p := w.state.execution.reservation.plan
+				now := time.Now().UTC().Truncate(time.Microsecond)
+				record, err := securityMutationAudit(t.Context(), w.state.binding, 1, 2, now, "committed", p.audits[0].EventType, p.subjectType, w.state.binding.RecordID, "protected", true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p.audits[0].BindingDigest, err = FeatureAuditBindingDigest(w.state.binding, p.feature.Operation, p.subjectType, record)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = bindAuditPlans(w, p.audits); err != nil {
+					t.Fatal(err)
+				}
+				if err = w.StageAudit(0, record); err != nil {
+					t.Fatal(err)
+				}
+				if err = w.StageLifecycle(0, now); err != nil {
+					t.Fatal(err)
+				}
+				w.state.featureReceipt = &identity.FeatureReceipt{Operation: p.feature.Operation, BeforeVersion: 1, AfterVersion: 2}
+				got, err := w.StagedOAuthConsent()
+				event := "consent.reconfirmed.v1"
+				if before == 0 {
+					event = "consent.created.v1"
+				}
+				if err != nil || got.SubjectType != "oauth_consent" || got.SubjectID != mutation.ID || got.SubjectID == w.state.binding.RecordID || got.BeforeVersion != before || got.AfterVersion != before+1 || got.EventType != event || got.EventIndex != 1 || got.OccurredAt != now {
+					t.Fatal("secondary consent substituted grant/versions", got, err)
+				}
+				primary, _ := w.StagedLifecycle()
+				if got.ID == primary[0].ID {
+					t.Fatal("consent event collides with grant event")
+				}
+				if err = w.RecordOAuthConsent(owner, mutation); err == nil || w.usable() == nil {
+					t.Fatal("repeated mutation receipt not terminally denied")
+				}
+			}
+		})
 	}
 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit four exact device-authorization schemas through the existing OAuth
+  native contributor. Authenticated device approval records its independent
+  consent mutation and lifecycle event in the same protected transaction;
+  polling and denial cannot record consent. These optional owner contracts
+  alone do not enable device authorization or change base bootstrap.
+
 - Add a distinct service-authorized expired-guest disposal profile, preserving
   original kernel/hold generations and retained recovery evidence. Append
   `AnonymousExpiryDisposalMigrationSource` after selected disposal/upgrade
