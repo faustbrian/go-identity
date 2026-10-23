@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Explicitly set `Session.Passkey` to admit the configured native passkey
+  issuer into common session reads and logout, including independently selected
+  existing HTTP session routes. Reads and revocation retain the same native
+  RP/current-authority owner without method fallback. The default remains off;
+  this does not enable passkey enrollment or signin HTTP routes.
+
 - Select identifier-free resident passkey signin through guarded
   `DiscoverableAuthenticationOptions` and `DiscoverableSignin`. Enable
   `PasskeyDiscovery` explicitly in the graph's authentication risk policy;

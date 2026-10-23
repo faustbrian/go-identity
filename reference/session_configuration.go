@@ -27,6 +27,9 @@ import (
 type SessionConfiguration struct {
 	Native   sessionpg.SignOutServiceConfig
 	CSRFKeys []session.CSRFKey
+	// Passkey admits the explicitly configured native passkey issuer into common
+	// reads and signout. False retains the separate Passkeys handle only.
+	Passkey bool
 }
 
 type sessionState struct {
@@ -38,7 +41,7 @@ type sessionState struct {
 	readerAudience string
 }
 
-func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionState, error) {
+func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthority sessionpg.PasskeySessionAuthority) (*sessionState, error) {
 	if c.Session == nil {
 		return nil, nil
 	}
@@ -59,6 +62,13 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 	validation.Clock = e.Clock
 	var mfa *sessionpg.MagicLinkAdmissionConfig
 	var passwordMFA *sessionpg.IdentifierAdmissionConfig
+	var passkey *sessionpg.PasskeySessionAdmission
+	if c.Session.Passkey {
+		if c.Passkey == nil || passkeyAuthority == nil || !sessionIssuanceMatches(*c.Session, c.Passkey.Issuer, c.Passkey.CSRF) {
+			return nil, invalid
+		}
+		passkey = &sessionpg.PasskeySessionAdmission{Profile: sessionpg.PasskeyAdmissionConfig{GlobalAuthorityID: e.Profile.GlobalAuthorityID, PolicyNamespace: e.Profile.PolicyNamespace, Audience: e.Profile.Audience, RPNamespace: c.Passkey.RPNamespace}, Authority: passkeyAuthority}
+	}
 	if c.MagicLink != nil && c.MagicLink.TOTP != nil {
 		if selection.MagicLink == nil || c.MagicLink.Consume == nil || c.MagicLink.Consume.MFA == nil || !c.MagicLink.Request.MFAContinuation {
 			return nil, invalid
@@ -113,11 +123,11 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 		}
 		passwordMFA = &profile
 	}
-	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA}, Validation: validation})
+	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey}, Validation: validation})
 	if err != nil {
 		return nil, invalid
 	}
-	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa, MFAPassword: passwordMFA}
+	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey}
 	revoke, err := sessionpg.NewRevokeOneExecutor(d.PostgreSQL, execution)
 	if err != nil {
 		return nil, invalid

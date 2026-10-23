@@ -67,12 +67,26 @@ type passkeyState struct {
 	predecessor string
 }
 
-func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passwordVerificationState, evaluation risk.Evaluator, counters *risk.CounterCoordinator) (*passkeyState, error) {
+// Construct one authority for both the separate native handle and the explicitly
+// selected common session paths. Reading never falls back between these owners.
+func composePasskeySessionAuthority(c StoreConfiguration, d ReferenceDependencies) (*native.SessionAuthority, error) {
+	if c.Passkey == nil {
+		return nil, nil
+	}
+	n := c.Passkey
+	authority, err := native.NewSessionAuthority(d.PostgreSQL, native.SessionAuthorityConfig{TenantID: n.Protocol.TenantID, RPNamespace: n.RPNamespace, RPID: n.Protocol.RelyingParty.ID, MaximumDuration: n.Protocol.MaximumDuration})
+	if err != nil {
+		return nil, identity.InvalidInputError{Field: "reference_passkey"}
+	}
+	return authority, nil
+}
+
+func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passwordVerificationState, evaluation risk.Evaluator, counters *risk.CounterCoordinator, authority *native.SessionAuthority) (*passkeyState, error) {
 	if c.Passkey == nil {
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_passkey"}
-	if c.OTP == nil || c.Session == nil || c.PasswordVerification == nil || c.PasswordSignin == nil || d.PostgreSQL == nil || proofs == nil || proofs.native == nil || counters == nil {
+	if c.OTP == nil || c.Session == nil || c.PasswordVerification == nil || c.PasswordSignin == nil || d.PostgreSQL == nil || proofs == nil || proofs.native == nil || counters == nil || authority == nil {
 		return nil, invalid
 	}
 	n, e := *c.Passkey, c.Session.Native.Execution
@@ -115,10 +129,6 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	signin, err := native.NewSigninService(d.PostgreSQL, native.SigninConfig{Protocol: n.Protocol, Profile: profile, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Flow: n.Flow, Session: n.Issuer, CSRF: n.CSRF, Repository: e.Repository, Risk: n.Risk, IdentifierKey: n.IdentifierKey})
 	if err != nil {
 		return nil, fmt.Errorf("reference: passkey signin composition: %w", err)
-	}
-	authority, err := native.NewSessionAuthority(d.PostgreSQL, native.SessionAuthorityConfig{TenantID: n.Protocol.TenantID, RPNamespace: n.RPNamespace, RPID: n.Protocol.RelyingParty.ID, MaximumDuration: n.Protocol.MaximumDuration})
-	if err != nil {
-		return nil, invalid
 	}
 	validation := c.Session.Native.Validation
 	validation.Clock = e.Clock

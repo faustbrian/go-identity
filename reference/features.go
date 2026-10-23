@@ -507,7 +507,11 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	sessionOwner, err := composeSession(c, d)
+	passkeyAuthority, err := composePasskeySessionAuthority(c, d)
+	if err != nil {
+		return err
+	}
+	sessionOwner, err := composeSession(c, d, passkeyAuthority)
 	if err != nil {
 		return err
 	}
@@ -516,7 +520,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	passkeyOwner, err := composePasskey(c, d, passwordVerificationOwner, evaluator, &counters)
+	passkeyOwner, err := composePasskey(c, d, passwordVerificationOwner, evaluator, &counters, passkeyAuthority)
 	if err != nil {
 		return err
 	}

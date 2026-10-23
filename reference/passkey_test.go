@@ -87,11 +87,11 @@ func TestPasskeyHandleRetainsStartupTenantAndClose(t *testing.T) {
 }
 
 func TestPasskeyCompositionDoesNotInventOwnersOrDiscloseKeys(t *testing.T) {
-	if owner, err := composePasskey(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}, nil); err != nil || owner != nil {
+	if owner, err := composePasskey(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}, nil, nil); err != nil || owner != nil {
 		t.Fatal("unselected owner invented")
 	}
 	c := StoreConfiguration{Passkey: &PasskeyConfiguration{IdentifierKey: []byte("private-fixture-material")}}
-	if owner, err := composePasskey(c, ReferenceDependencies{}, nil, risk.Evaluator{}, nil); err == nil || owner != nil {
+	if owner, err := composePasskey(c, ReferenceDependencies{}, nil, risk.Evaluator{}, nil, nil); err == nil || owner != nil {
 		t.Fatal("missing actual owners accepted")
 	}
 	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {

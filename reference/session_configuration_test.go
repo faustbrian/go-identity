@@ -15,11 +15,11 @@ import (
 )
 
 func TestSessionSelectionRequiresNativeOwners(t *testing.T) {
-	if owner, err := composeSession(StoreConfiguration{}, ReferenceDependencies{}); err != nil || owner != nil {
+	if owner, err := composeSession(StoreConfiguration{}, ReferenceDependencies{}, nil); err != nil || owner != nil {
 		t.Fatal("unselected sessions acquired dependencies", err)
 	}
 	c := StoreConfiguration{Session: &SessionConfiguration{}}
-	if owner, err := composeSession(c, ReferenceDependencies{}); err == nil || owner != nil {
+	if owner, err := composeSession(c, ReferenceDependencies{}, nil); err == nil || owner != nil {
 		t.Fatal("selected sessions accepted absent native authority")
 	}
 	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {

@@ -22,6 +22,14 @@ The selected path is:
    requires the newly issued synchronizer; a password synchronizer is not a
    substitute. Original recovery returns metadata, never another credential.
 
+Set `Session.Passkey = true` to additionally admit this issuer through
+`FeatureSet.Sessions()` and independently selected `HTTPSession` read/logout
+routes. This opt-in uses the same native RP/current-authority owner as the
+separate passkey handle; it does not try a password reader after denial.
+The existing session HTTP origin policy remains authoritative for logout;
+the authenticator origin is not an implicit trusted HTTP origin. False retains
+native-only reads/logout and does not silently extend common session admission.
+
 For identifier-free signin, explicitly set `risk.PolicyConfig.PasskeyDiscovery`
 when constructing the graph's authentication policy (`DurableAdmission.Policy`
 in the PostgreSQL-only profile). After the same `PrepareFlow`/`IssueFlow`, call
@@ -90,7 +98,7 @@ From this module, with the authorized task-owned PostgreSQL fixture:
 
 ```sh
 go test -race -tags=integration -count=1 \
-  -run '^TestReferencePostgresPasskey(Native|PopulatedUpgrade|Discoverable|DiscoverablePopulatedUpgrade)$' .
+  -run '^TestReferencePostgresPasskey(Native|PopulatedUpgrade|Discoverable|DiscoverablePopulatedUpgrade|CommonSessionHTTP)$' .
 ```
 
 Agent runs additionally set task-owned disposable Go caches. The fixture uses
@@ -99,9 +107,13 @@ delivery and password signin precede fresh reauthentication and the passkey
 journey; none of those domain records or proofs are fabricated. Only HIBP/email
 external IO and raw none/ES256 authenticator responses are controlled seams.
 
-This is native reference composition, not passkey HTTP transport. Existing
-`Sessions()` and HTTP session routes do not implicitly adopt the new method;
-use the selected passkey handle for its read/logout profile. Passkey HTTP,
+This is native passkey reference composition with opt-in common session HTTP
+read/logout, not passkey enrollment/signin HTTP transport. Existing `Sessions()`
+and HTTP session routes do not implicitly adopt the new method. The common
+session HTTP tests cover identified and identifier-free signin, fresh install
+and populated upgrade, wrong-CSRF/foreign-origin denial, original cookie
+deletion and both native/HTTP post-logout rejection over real loopback TLS.
+Passkey enrollment/signin HTTP,
 signup, conditional signin, credential rename/delete, completed
 secondary MFA and organization profiles remain separate required work. This
 profile is not complete M16, full release qualification, deployment or a UI.

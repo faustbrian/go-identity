@@ -272,6 +272,7 @@ type signupGraphExtensions struct {
 	passkey              bool
 	passkeyUpgrade       bool
 	passkeyDiscovery     bool
+	passkeySessionHTTP   bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -548,6 +549,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passkey {
 		configureReferencePasskey(t, &c)
+		c.Session.Passkey = extensions.passkeySessionHTTP
 		if extensions.passkeyDiscovery {
 			policy := registrationRiskPolicyConfig(3, false)
 			policy.PasskeyDiscovery = true
@@ -927,6 +929,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.passkeyUpgrade {
 		selected := c
 		passkeyUpgrade, c.Passkey = &selected, nil
+		baselineSession := *c.Session
+		baselineSession.Passkey = false
+		c.Session = &baselineSession
 	}
 	if extensions.phoneRemoval == "upgrade" {
 		selected := c
@@ -939,6 +944,24 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.phonePasswordReset && !extensions.phoneResetRollback && !extensions.completionCommitFault {
 		proveReferencePhoneResetMixedSchemaRejected(t, c, deps, selectedReset)
+	}
+	if extensions.passkeySessionHTTP {
+		invalid := c
+		if passkeyUpgrade != nil {
+			invalid = *passkeyUpgrade
+		}
+		invalid.Passkey = nil
+		graph, err := reference.ComposeStores(invalid, deps)
+		if err == nil {
+			bounded, stop := context.WithTimeout(context.Background(), time.Second)
+			_ = graph.Close(bounded)
+			stop()
+			t.Fatal("common passkey selection invented an unconfigured native issuer")
+		}
+		var input identity.InvalidInputError
+		if !errors.As(err, &input) || input.Field != "reference_session" {
+			t.Fatal("missing common passkey owner did not reach its selection guard")
+		}
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
@@ -1392,7 +1415,15 @@ END $$`); err != nil {
 				selected = upgradeReferencePasskey(t, ctx, stores, *passkeyUpgrade, deps, workerConfigs, modules)
 				selectedConfig = *passkeyUpgrade
 			}
-			proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery)
+			var sessionHandler http.Handler
+			if extensions.passkeySessionHTTP {
+				selectedServer, err := reference.NewServer(config, deps, selected)
+				if err != nil {
+					t.Fatal("selected passkey session HTTP server", err)
+				}
+				sessionHandler = selectedServer.Handler()
+			}
+			proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)
 		}
 	}
 	if extensions.phoneEnrollment {

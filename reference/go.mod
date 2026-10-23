@@ -42,7 +42,7 @@ require (
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261023150127-219499bdccd5
 	github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
 	github.com/faustbrian/go-identity/session v0.0.0-20261023150127-219499bdccd5
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023150127-219499bdccd5
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023190445-ba5034f67bc4
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820

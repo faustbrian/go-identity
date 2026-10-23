@@ -12,7 +12,10 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +23,7 @@ import (
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
+	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/reference"
@@ -47,6 +51,25 @@ func TestReferencePostgresPasskeyDiscoverable(t *testing.T) {
 
 func TestReferencePostgresPasskeyDiscoverablePopulatedUpgrade(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyDiscovery: true, passkeyUpgrade: true}, true)
+}
+
+func TestReferencePostgresPasskeyCommonSessionHTTP(t *testing.T) {
+	for _, discoverable := range []bool{false, true} {
+		for _, upgrade := range []bool{false, true} {
+			name := "identified"
+			if discoverable {
+				name = "discoverable"
+			}
+			if upgrade {
+				name += "/populated-upgrade"
+			} else {
+				name += "/fresh"
+			}
+			t.Run(name, func(t *testing.T) {
+				proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyDiscovery: discoverable, passkeyUpgrade: upgrade, passkeySessionHTTP: true}, true)
+			})
+		}
+	}
 }
 
 func upgradeReferencePasskey(t *testing.T, ctx context.Context, previous reference.StoreSet, c reference.StoreConfiguration, deps reference.ReferenceDependencies, configs []deliverypg.WorkerConfig, modules []reference.ModuleID) reference.FeatureSet {
@@ -134,7 +157,7 @@ func configureReferencePasskey(t *testing.T, c *reference.StoreConfiguration) {
 	}
 }
 
-func proveReferencePasskey(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, cookies []*http.Cookie, csrfWire string, discoverable bool) {
+func proveReferencePasskey(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, cookies []*http.Cookie, csrfWire string, discoverable bool, sessionHandler http.Handler) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -300,6 +323,17 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	if got, err := owner.Get(ctx, read); err != nil || !got.Authenticated {
 		t.Fatal("issued passkey session unusable", err)
 	}
+	common, err := features.Sessions()
+	if err != nil {
+		t.Fatal("common session handle", err)
+	}
+	if got, err := common.Get(ctx, read); c.Session.Passkey {
+		if err != nil || !got.Authenticated {
+			t.Fatal("explicitly selected common passkey session unusable", err)
+		}
+	} else if err == nil && got.Authenticated {
+		t.Fatal("native passkey selection implicitly enabled common sessions")
+	}
 	foreign := read
 	foreign.TenantID = "foreign-tenant"
 	if got, err := owner.Get(ctx, foreign); err == nil || got.Authenticated {
@@ -329,12 +363,108 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := owner.SignOut(ctx, logout, csrfToken); err != nil || !result.SignedOut || !result.ClearCookie {
-		t.Fatal("real reference passkey logout", err)
+	if sessionHandler != nil {
+		proveReferencePasskeySessionHTTP(t, ctx, sessionHandler, c, user, wire, csrfOut, func() bool {
+			got, err := common.Get(ctx, read)
+			return err == nil && got.Authenticated
+		})
+	} else {
+		if result, err := owner.SignOut(ctx, logout, csrfToken); err != nil || !result.SignedOut || !result.ClearCookie {
+			t.Fatal("real reference passkey logout", err)
+		}
 	}
 	if got, err := owner.Get(ctx, read); err != nil || got.Authenticated {
 		t.Fatal("logged-out passkey authenticated", err)
 	}
+}
+
+func proveReferencePasskeySessionHTTP(t *testing.T, ctx context.Context, handler http.Handler, c reference.StoreConfiguration, user identity.UserID, token, csrf string, nativeRead func() bool) {
+	t.Helper()
+	server := httptest.NewTLSServer(handler)
+	defer server.Close()
+	client := server.Client()
+	client.Timeout = 5 * time.Second
+	cookie, err := c.Session.Native.Cookie.DeletionAttributes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	type response struct {
+		code    int
+		header  http.Header
+		body    []byte
+		cookies []*http.Cookie
+	}
+	request := func(method, path, origin, csrf string) response {
+		t.Helper()
+		var body io.Reader
+		if method == http.MethodPost {
+			body = strings.NewReader("{}")
+		}
+		r, err := http.NewRequestWithContext(ctx, method, server.URL+path, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The successor uses a separate local listener but retains the original
+		// deployment's public authority and frozen same-origin HTTP policy.
+		r.Host = strings.TrimPrefix(string(c.HTTPSession.TrustedOrigins[0]), "https://")
+		r.AddCookie(&http.Cookie{Name: cookie.Name, Value: token})
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		if method == http.MethodPost {
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("X-CSRF-Token", csrf)
+		}
+		got, err := client.Do(r)
+		if err != nil {
+			t.Fatal("passkey HTTPS request failed")
+		}
+		defer got.Body.Close()
+		wire, err := io.ReadAll(io.LimitReader(got.Body, 16385))
+		if err != nil || len(wire) > 16384 {
+			t.Fatal("passkey HTTPS response exceeded its bound")
+		}
+		return response{got.StatusCode, got.Header, wire, got.Cookies()}
+	}
+	read := func(want bool) {
+		t.Helper()
+		w := request(http.MethodGet, "/v1/session/get", "", "")
+		var out sessionhttp.GetResponse
+		if w.code != http.StatusOK || json.Unmarshal(w.body, &out) != nil || out.Authenticated != want || w.header.Get("Cache-Control") != "no-store" || len(w.cookies) != 0 {
+			t.Fatal("HTTP passkey session read", w.code, "authenticated", out.Authenticated)
+		}
+		if want && (out.Principal == nil || out.Principal.UserID != user || out.Principal.TenantID != otpTenant) {
+			t.Fatal("HTTP passkey read selected another principal")
+		}
+	}
+	read(true)
+	wrong, _ := session.NewCSRFToken()
+	wrongWire, err := wrong.Reveal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustedOrigin := string(c.HTTPSession.TrustedOrigins[0])
+	for _, denied := range []struct{ origin, csrf string }{{trustedOrigin, wrongWire}, {"https://foreign.example", csrf}} {
+		w := request(http.MethodPost, "/v1/session/signout", denied.origin, denied.csrf)
+		if w.code != http.StatusForbidden || len(w.cookies) != 0 || !nativeRead() {
+			t.Fatal("denied HTTP logout changed passkey session", w.code)
+		}
+		read(true)
+	}
+	w := request(http.MethodPost, "/v1/session/signout", trustedOrigin, csrf)
+	var out sessionhttp.SignOutResponse
+	decodeErr := json.Unmarshal(w.body, &out)
+	if w.code != http.StatusOK || decodeErr != nil || !out.SignedOut || out.CommitOutcome != "committed" || w.header.Get("Cache-Control") != "no-store" {
+		t.Fatal("HTTP passkey logout", w.code, out.CommitOutcome, out.Error, "response bytes", len(w.body), "decode", decodeErr)
+	}
+	cleared := w.cookies
+	if len(cleared) != 1 || cleared[0].Name != cookie.Name || cleared[0].Value != "" || cleared[0].MaxAge >= 0 || !cleared[0].Secure || !cleared[0].HttpOnly || cleared[0].Path != cookie.Path || cleared[0].Domain != cookie.Domain || cleared[0].SameSite != cookie.SameSite {
+		t.Fatal("HTTP logout did not clear the original cookie tuple")
+	}
+	if nativeRead() {
+		t.Fatal("HTTP logout left common native passkey session active")
+	}
+	read(false)
 }
 
 func referencePasskeyChallenge(t *testing.T, ctx context.Context, transfer func(context.Context, func(context.Context, []byte) error) error) string {

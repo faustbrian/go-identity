@@ -910,7 +910,10 @@ Nonempty `CSRFKeys` selects strict cookie logout and must include each selected
 consuming issuer's exact current CSRF key;
 an empty slice disables cookie logout rather than enabling a legacy bypass.
 Request-only magic-link selection grants no session authority. This composition
-does not enable anonymous, organization, MFA or passkey session authority.
+does not enable anonymous or organization session authority. MFA requires its
+explicit consuming issuer selection. `Session.Passkey` additionally opts the
+configured native passkey issuer into the same common read/logout owner,
+including independently selected HTTP session routes; it defaults to false.
 
 `MagicLink` selects native request and optional explicit consumption. Supply
 versioned issuer/custody keys, address normalization, exact trusted origins and
