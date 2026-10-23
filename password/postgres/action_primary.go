@@ -19,7 +19,7 @@ import (
 
 // ActionPrimaryConfig selects username update, phone enrollment/change/removal, or
 // organization ownership transfer/archive/restore, anonymous upgrade or passkey
-// enrollment and its
+// enrollment or credential-label update and its
 // signed-proof audience. For upgrade, the original bearer/proof belongs to the
 // permanent target; the anonymous owner separately proves guest possession.
 // MaximumAge is positive and at most
@@ -89,7 +89,7 @@ func actionPrimaryOperation(action string) identity.FeatureOperation {
 		return identity.FeatureOperation{Owner: "identity/username", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	case "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove":
 		return identity.FeatureOperation{Owner: "identity/phone", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
-	case "identity.passkey.register-options", "identity.passkey.register-verify":
+	case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update":
 		return identity.FeatureOperation{Owner: "passkey", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	case "identity.organization.owner-transfer":
 		return identity.FeatureOperation{Owner: "organization", OperationID: action, SchemaID: "organization-membership", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
@@ -108,7 +108,7 @@ func actionPrimaryDescriptor(action string) kernel.ContributorDescriptor {
 		return kernel.ContributorDescriptor{Owner: "identity/username/postgres", ContractID: "identity.username", Version: 1}
 	case "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove":
 		return kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}
-	case "identity.passkey.register-options", "identity.passkey.register-verify":
+	case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update":
 		return kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 	case "identity.organization.owner-transfer", "identity.organization.archive", "identity.organization.restore":
 		return kernel.ContributorDescriptor{Owner: "organization/postgres", ContractID: "organization.membership", Version: 1}

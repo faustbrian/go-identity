@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Admit exact self-only `identity.passkey.update` action-primary custody for
+  credential-label changes. Append
+  `PasskeyManagementReauthenticationMigrationSource` after the complete installed
+  passkey enrollment proof history before consumption. Original signed rows,
+  consumed markers and migration checksums remain unchanged; deletion/signin
+  actions are not selected and no management workflow is enabled implicitly.
+
 - Accept the password core's adapter-neutral action request through the
   compatible `ActionPrimaryRequest` alias. Existing native source calls,
   fields, proof custody, diagnostic marker and serialization errors remain

@@ -44,3 +44,37 @@ func TestPasskeyProofMigrationPreservesInstalledHistory(t *testing.T) {
 		}
 	}
 }
+
+func TestPasskeyManagementProofMigrationPreservesInstalledHistory(t *testing.T) {
+	base := PasskeyReauthenticationMigrationSource{Base: ActionReauthenticationMigrationSource{Base: EmailReauthenticationMigrationSource{}, Version: 70}, Version: 74}
+	before, err := base.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := PasskeyManagementReauthenticationMigrationSource{Base: base, Version: 75}
+	history, err := source.Load(t.Context())
+	if err != nil || len(history) != len(before)+1 {
+		t.Fatal("forward credential-update proof history unavailable", err)
+	}
+	for n := range before {
+		if history[n] != before[n] {
+			t.Fatal("installed enrollment proof history was rewritten")
+		}
+	}
+	if history[len(before)].DownSQL() != "" {
+		t.Fatal("destructive proof-use rollback offered")
+	}
+	if rows, err := source.Load(nil); err == nil || rows != nil {
+		t.Fatal("nil migration context admitted")
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if rows, err := source.Load(canceled); !errors.Is(err, context.Canceled) || rows != nil {
+		t.Fatal("migration cancellation lost", err)
+	}
+	for _, invalid := range []PasskeyManagementReauthenticationMigrationSource{{}, {Base: base}, {Base: base, Version: 74}, {Base: base, Version: ^migrations.Version(0)}, {Base: EmailReauthenticationMigrationSource{}, Version: 75}, {Base: base.Base, Version: 75}} {
+		if rows, err := invalid.Load(t.Context()); !errors.Is(err, password.ErrPasswordWork) || rows != nil {
+			t.Fatal("invalid management history returned partial migrations", err)
+		}
+	}
+}

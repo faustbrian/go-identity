@@ -80,7 +80,14 @@ func TestNativePasskeyEnrollmentActionPrimary(t *testing.T) {
 	testNativeSelfActionPrimary(t, []string{"identity.passkey.register-options", "identity.passkey.register-verify"}, PasskeyReauthenticationMigrationSource{Base: nativeSelfActionProofHistory(), Version: 121})
 }
 
-func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory migrations.Source) {
+func TestNativePasskeyUpdateActionPrimary(t *testing.T) {
+	// Upgrade only after both enrollment proofs are genuinely consumed, retaining
+	// their complete original rows before exercising the update proof owner.
+	base := PasskeyReauthenticationMigrationSource{Base: nativeSelfActionProofHistory(), Version: 121}
+	testNativeSelfActionPrimary(t, []string{"identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.update"}, base, PasskeyManagementReauthenticationMigrationSource{Base: base, Version: 122})
+}
+
+func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory migrations.Source, upgrades ...migrations.Source) {
 	t.Helper()
 	testNativeSigninPhaseIntegration(t, "organization lifecycle password owner", func(t *testing.T, ctx context.Context, pool *database.Pool, _ *SignupService, signup SignupConfig, keys *keyring.Provider, fresh func(string, byte) password.SignupRequest) {
 		testNativePhoneEnrollment(t, ctx, pool, nil, signup, keys, fresh, session.CredentialBearer, "normal", func(c SigninConfig, _ *phone.NumberPolicy, registration password.SignupRequest, user identity.UserID) {
@@ -138,6 +145,31 @@ func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory mi
 			}
 			for _, action := range actions {
 				t.Run(action, func(t *testing.T) {
+					if action == "identity.passkey.update" && len(upgrades) != 0 {
+						var before, after []byte
+						const snapshot = `SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY proof_id),'[]'::jsonb) FROM identity_password.reauthentication_records r`
+						if err := pool.Raw().QueryRow(ctx, snapshot).Scan(&before); err != nil || bytes.Equal(before, []byte("[]")) {
+							t.Fatal("populated proof predecessor unavailable", err)
+						}
+						for _, upgrade := range upgrades {
+							history, err := upgrade.Load(ctx)
+							if err != nil {
+								t.Fatal("management proof history", err)
+							}
+							for _, step := range history {
+								if step.Version() > suffix[len(suffix)-1].Version() {
+									if _, err = pool.Raw().Exec(ctx, step.UpSQL()); err != nil {
+										t.Fatal("management proof suffix", err)
+									}
+								}
+							}
+						}
+						if err := pool.Raw().QueryRow(ctx, snapshot).Scan(&after); err != nil || !bytes.Equal(before, after) {
+							t.Fatal("proof migration changed retained signed or consumed rows", err)
+						}
+						clear(before)
+						clear(after)
+					}
 					target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: action, Audience: "organization-lifecycle"}
 					owner, err := NewReauthenticationService(pool, ReauthenticationConfig{Repository: c.Repository, Verifier: c.Verifier, Session: c.Session, Profile: c.Profile, LookupKeys: []session.DigestKey{c.Issuance.LookupKey}, Risk: c.Risk, Coordinator: c.Coordinator, SigningKey: signing, VerificationKeys: map[string]ed25519.PublicKey{keyID: public}, Issuer: c.Issuer, Environment: c.Environment, Targets: []ReauthenticationTarget{target}, TTL: time.Minute, IdentifierKey: bytes.Repeat([]byte{227}, 32)})
 					if err != nil {
@@ -203,6 +235,9 @@ func testNativeSelfActionPrimary(t *testing.T, actions []string, proofHistory mi
 						plan.Lifecycle.EventType = "organization.archived.v1"
 						if action == "identity.organization.restore" {
 							plan.Lifecycle.EventType = "organization.restored.v1"
+						}
+						if action == "identity.passkey.update" {
+							plan.Lifecycle.EventType = "identity.passkey.rename_credential"
 						}
 						plan, err = coordinator.PrepareCommandPlan(binding, command, plan)
 						if err != nil {

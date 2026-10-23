@@ -9,7 +9,16 @@ import (
 // not live authentication or protected proof consumption. The complete native
 // passkey journey must exercise those owners against the real primary database.
 func TestPasskeyEnrollmentActionPrimaryRetainsExactSelfCustody(t *testing.T) {
-	for _, action := range []string{"identity.passkey.register-options", "identity.passkey.register-verify"} {
+	testPasskeyActionPrimarySelfCustody(t, []string{"identity.passkey.register-options", "identity.passkey.register-verify"})
+}
+
+func TestPasskeyUpdateActionPrimaryRetainsExactSelfCustody(t *testing.T) {
+	testPasskeyActionPrimarySelfCustody(t, []string{"identity.passkey.update"})
+}
+
+func testPasskeyActionPrimarySelfCustody(t *testing.T, actions []string) {
+	t.Helper()
+	for _, action := range actions {
 		t.Run(action, func(t *testing.T) {
 			source, request, fields, binding := phonePrimaryFixture(t, action)
 			admission, err := source.Restore(context.Background(), request, fields)
@@ -59,7 +68,7 @@ func TestPasskeyEnrollmentActionPrimaryRetainsExactSelfCustody(t *testing.T) {
 }
 
 func TestPasskeyActionPrimaryDoesNotSelectOtherOperations(t *testing.T) {
-	for _, action := range []string{"identity.passkey.signin-options", "identity.passkey.signin-verify", "identity.passkey.update", "identity.passkey.delete"} {
+	for _, action := range []string{"identity.passkey.signin-options", "identity.passkey.signin-verify", "identity.passkey.update-other", "identity.passkey.delete"} {
 		source, request, fields, _ := phonePrimaryFixture(t, action)
 		if _, err := source.Restore(context.Background(), request, fields); err == nil {
 			t.Fatal("enrollment selection admitted an unrelated passkey operation")

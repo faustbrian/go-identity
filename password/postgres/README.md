@@ -307,6 +307,20 @@ in development.
 reauthentication owner. Phone update requires a distinct update-bound proof;
 the SMS-request proof cannot authorize replacement. Phone operations are
 self-only and reject a supplied target-subject override.
+
+Passkey selection admits distinct `identity.passkey.register-options`,
+`identity.passkey.register-verify` and `identity.passkey.update` proofs, all
+self-only. The update action uses the `passkey` native owner and
+`identity.passkey.update.native-v1` schema; an enrollment proof cannot rename a
+credential. Append `PasskeyReauthenticationMigrationSource` after the selected
+action history for enrollment. Before update consumption, additionally append
+`PasskeyManagementReauthenticationMigrationSource` after that complete installed
+history, using its next version in the same password migration namespace.
+Neither suffix rewrites installed migrations or original signed/consumed rows.
+Delete and signin are not selected. The passkey owner still owns current
+credential/factor/policy checks, metadata effects and protected transaction;
+this proof source alone does not implement credential management.
+
 Organization archive/restore are also self-only, use the exact
 `organization-lifecycle` schema and retain separate action-bound proofs; a
 transfer proof or administrative target cannot substitute. Append
