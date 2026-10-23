@@ -1,5 +1,80 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 08:44 UTC: finite M12 native/Reference OTP inventory profile CLOSED.
+C1 MFA855d87dfdcc57a7ad4c279064728b984ac2c7a2f and C2 Reference
+f822677440e029c23cb481b33c4ad8c019416b29 are independently approved,
+main-pushed and Required39925806306/39926332305 SUCCESS. Original15-path
+source08e96f3c...781d16eb and C2 thirteen-pathdc61c858...58cef78 reviews
+remain original-attributed. Actual public MFA169 files and Reference326 files
+match committed source, including inherited licenses. Public-only readonly
+Reference PG/race13681 passes40.289s for native/HTTP OTP inventory plus genuine
+TOTP compatibility; supplier adoption6676 passed40.344s. Public Reference
+v0.0.0-20261023084027-f822677440e0 sumh1:pnkvXKsFeXc5LaDwjMiZ3Ld4hA3RqDdacu53JZPsIck=,
+go.modsumh1:W6Qcl1KUsTTH14CiyM+HKTSWBgOshzDBeMJPFREdygU=.
+Full M12 and whole-unit qualification remain open; still11/39 and ~25%.
+Scheduled full-history secrets39925320307 FAILED, distinct from green push
+checks; no full-history clearance. Pathless go.sum stdin scan reported2
+findings; path-aware built-in lockfile classification scans no lockfile bytes.
+No scanner setting changed; actual committed changed-path CI passed.
+Next primary-owned M34 prerequisite: retain client actor/anonymous device poll
+scope while deriving/fencing its approved original human source through the
+existing session/kernel owners. Current APIs reject it intentionally. Group
+the necessary source derivation and same-Work checks into one reviewed batch;
+do not relabel command custody or copy credential/session SQL. Worker root/
+child protocol checks and native fingerprint/compile pass, no real device
+journey or new milestone claim. Inventory-owned fixture cleanup follows.
+
+2026-10-23 08:33 UTC: M12 inventory source is local and in independent review,
+not a closed consumer milestone. Real public Reference enrollment/OTP login/
+native and HTTP inventory/logout cohort47415 passes under PostgreSQL/race
+38.390s. Mixed active-OTP/revoked-TOTP metadata and retained genuine TOTP
+journey66538 pass39.064s; the injected revoked row is an explicit reader-only
+fixture, not fabricated authentication authority. Ordinary native race17119
+passes1.311s, Reference88652 passes9.054s; both tagged vets and selected scans
+pass. Public supplier adoption and downloaded Reference proof remain pending.
+M34 kernel prerequisite02338b29bbadd63a5ec13a382756d9f1d89cf426 is main-pushed,
+independently approved after exact non-approval coverage, Required39925235259
+SUCCESS. Actual public postgres v0.0.0-20261023083107-02338b29bbad matches506
+source files; public-only readonly race81079 passes3.397s. No device-flow or
+M34 completion claim. Worker retains native implementation; primary owns pins.
+
+2026-10-23 08:07 UTC: previous turn is progress: M11 delivered; final reporting
+commit9a9e31b exact Required39921805319 SUCCESS and all owned OTP phase resources
+removed. M12 primary first complete successor profile is authenticated native/
+opt-in HTTP OTP factor inventory, not another enrollment engine. Existing TOTP
+rename/remove/disable/replacement stays adopted; full M12 remains open until its
+retained lifecycle scope is delivered. Current TOTP-only reader cannot represent
+OTP factors; do not hide them or infer an authoritative empty inventory.
+Primary owns mfa/postgres/list*.go and new OTP list reader/tests, reference/
+listing selection/HTTP wiring, affected tests/docs/changelogs and public pins.
+Consume M11665a40f/c4d031c/f721a66: real pending and confirmed OTP, session reader,
+existing ListService's authorization/original-validity recheck and safe GET owner.
+Acceptance: real registration/enrollment -> pending safe list -> delivered
+confirmation -> active list and recovery count -> OTP signin -> authenticated
+HTTP/native list -> logout denies disclosure; unknown/unselected/foreign/closed,
+corrupt/oversized or authority-changed state returns no partial result. Include
+coexisting native TOTP/OTP inventory; preserve existing TOTP-only SQL/profile
+when OTP is unselected. No new proof/transaction/replay state, SMS UI, mutations
+or trusted-device empty-state claim. Focused unit selection and real PostgreSQL/
+race inventory journeys, retained TOTP listing, tagged vet, secrets, one complete
+independent review and public supplier/consumer delivery; no repository-wide gate.
+
+Independent lane M34 assigned to device_flow_worker in separate repository
+/Users/brian/Developer/golib/go-oauth-server main03b57e375a0146ba1108ffa201b207327893dfa6.
+Own finite native RFC8628 issue -> inspected user-code/explicit authenticated
+approve or deny -> bounded pending/slow_down -> exactly-one token issuance/
+expiry/revocation and original recovery, plus child device public library.
+Consumed public core5da178d/child8f25462/native03b57e3 have actual public native
+PostgreSQL/race and independent RP proof, exact CI green; core Service already
+owns client/session/consent/token authority. Worker owns new device/ module and
+necessary OAuth root/postgres source/tests/docs/changelogs only; module-local
+go.mod allowed. Primary owns root manifests/workspace/CI, identity prerequisites,
+integration pins, all Git delivery and final acceptance. Worker must first report
+its exact public boundary and any actually missing upstream behavior, not invent
+a private authority or add base device dependency. Base OAuth must stay device-
+free; HTTP/reference composition is later. No local Go/service work until primary
+grants the serialized heavy slot. One coherent source review before delivery.
+
 2026-10-23 08:01 UTC: M11 selected email/password-primary secondary-OTP
 consumer milestone CLOSED,11/39. C3 f721a66850a0c70f81c61f7e6e25a7036a7a31bf
 is independently approved, main-pushed, remote exact and Required39921529145

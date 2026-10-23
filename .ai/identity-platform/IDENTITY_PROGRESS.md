@@ -1,10 +1,28 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 08:01 UTC
+## TL;DR — updated 2026-10-23 08:44 UTC
 
 - **Whole goal: approximately 25% complete, low confidence.** Consumer
   milestones are **11/39 closed**; retained scope is **67 units**. These are
   delivered consumer profiles, not full-unit/release qualification.
+- **New M12 inventory profile delivered:** consumers can list safe pending,
+  confirmed and revoked native OTP/TOTP metadata and unused recovery counts,
+  through native composition or independently selected HTTP. MFA `855d87d`
+  and Reference `f822677` are independently approved, main-pushed and exact
+  current-change CI green (`39925806306` / `39926332305`). The downloaded
+  public Reference module passes all three PostgreSQL/race native/HTTP/TOTP
+  journeys (40.289s). Mixed-method metadata, corruption and logout denial are
+  covered; this does not close M12's remaining factor-management scope.
+- **Parallel device flow:** protocol/core permission checks and native compile
+  pass in the worker lane; actual device journeys remain unexecuted. Kernel
+  registration/consent prerequisite `02338b2` is reviewed/main-pushed/green.
+  Next shared prerequisite is human grant-source admission during genuine
+  client-actor polling; existing actor APIs intentionally reject that scope.
+  No synthetic human binding or duplicate credential/session engine is used.
+- **Qualification remains open:** scheduled full-history secrets run
+  `39925320307` failed; the separate current-change push checks above passed.
+  No whole-history clearance, new full-unit qualification or platform
+  completion is claimed.
 - **Newly delivered:** trusted abandoned-guest cleanup/anonymization in native
   `anonymous/postgres`, main `d2f004f`, exact Required CI `39908869694` green.
   Current standalone PostgreSQL/race coverage includes stored policy, holds,
@@ -32,8 +50,8 @@
   including changed-authority denial, rollback/recovery and separate enrollment
   selection. Canonical public-dependency TOTP compatibility also passes.
   Broader MFA variants and whole-unit qualification remain open.
-- **Next:** finish the retained M12 factor-management consumer outcome, adopting
-  its existing implementation and proof rather than restarting MFA. No new Tools,
+- **Next:** finish the shared device grant-source prerequisite, then continue
+  retained M12 factor management without restarting MFA. No new Tools,
   evidence framework, whole-repository verification or user decision is needed.
 
 ## Earlier checkpoint detail — preserved 2026-10-23 05:29 UTC
