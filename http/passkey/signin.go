@@ -1,0 +1,336 @@
+package passkeyhttp
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	identity "github.com/faustbrian/go-identity"
+	email "github.com/faustbrian/go-identity/email"
+	identityhttp "github.com/faustbrian/go-identity/http"
+	"github.com/faustbrian/go-identity/session"
+	passkey "github.com/faustbrian/go-passkey"
+)
+
+// SigninState is immutable request-local browser custody, not authentication.
+// Hooks may observe its phase but cannot select a user, alter private requests,
+// replace a rate source, retain secrets or renew delivery validity.
+type SigninState struct{ *signinState }
+type signinState struct {
+	facts      identityhttp.NetworkFacts
+	body       requestBody
+	key        identity.IdempotencyKey
+	request    passkey.SigninRequest
+	deviceWire string
+	device     session.BrowserDevice
+	started    time.Time
+	source     passkey.CeremonyRateSource
+}
+
+func (SigninState) Format(f fmt.State, _ rune) {
+	_, _ = f.Write([]byte("passkeyhttp.SigninState(redacted)"))
+}
+
+// MarshalJSON denies implicit original browser-custody export.
+func (SigninState) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// MarshalText denies implicit original browser-custody export.
+func (SigninState) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// NewSigninOptionsHandler selects only POST /v1/passkey/signin-options.
+// Exact keyed admission belongs to native ownership. Matching retries return
+// metadata only, never another challenge. No route is globally registered.
+func NewSigninOptionsHandler(c SigninConfig) (http.Handler, error) {
+	return NewSigninOptionsHandlerWithMiddleware(c, nil)
+}
+
+// NewSigninOptionsHandlerWithMiddleware exposes bounded real owner phases;
+// middleware cannot replace frozen browser input or reveal-once response bytes.
+func NewSigninOptionsHandlerWithMiddleware(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSigninHandler(c, m, false)
+}
+
+// NewSigninVerifyHandler selects only POST /v1/passkey/signin-verify. A genuine
+// native original source precedes rate.verify and one native completion call.
+// Only fresh acknowledged commitment can deliver the owned cookie and CSRF.
+func NewSigninVerifyHandler(c SigninConfig) (http.Handler, error) {
+	return NewSigninVerifyHandlerWithMiddleware(c, nil)
+}
+
+// NewSigninVerifyHandlerWithMiddleware preserves original flow/mode/remember,
+// native one-use semantics and conservative response-custody validity.
+func NewSigninVerifyHandlerWithMiddleware(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSigninHandler(c, m, true)
+}
+
+func newSigninHandler(c SigninConfig, m []identityhttp.MiddlewareDescriptor, complete bool) (http.Handler, error) {
+	if absent(c.Service) || !complete && !c.OptionsRate.Configured() || complete && !c.VerificationRate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || !visible(c.Audience, 256) {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	i, err := newIngress(c.Network, c.Origin)
+	if err != nil {
+		return nil, err
+	}
+	flowCookie, err := c.FlowCookie.DeletionAttributes()
+	if err != nil || flowCookie.Name != "__Host-identity_flow" {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	cookie, err := c.SessionCookie.DeletionAttributes()
+	if err != nil || cookie.Name == flowCookie.Name || cookie.Name == "__Host-identity_device" {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	devices, err := session.NewBrowserDeviceCodec(c.Device)
+	if err != nil {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	if _, err := c.Address.Parse(email.AddressInput("configuration@example.invalid")); err != nil {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	operation := "signin-options"
+	if complete {
+		operation = "signin-verify"
+	}
+	action := "identity.passkey." + operation
+	caller := func(tenant identity.TenantID, flow identity.PreAuthTransactionID) authorization.DecisionContext {
+		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: authorization.Action(action), Resource: authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(flow)}}}
+	}
+	if caller("configuration", "configuration").Validate() != nil {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	h, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SigninState]{MaximumDuration: c.MaximumDuration, Middleware: m, Reject: reject,
+		Decode: func(r *http.Request) (SigninState, error) {
+			var s SigninState
+			facts, body, key, err := i.decode(r, operation, false)
+			if err != nil {
+				return s, err
+			}
+			if body.discoverable && !c.Discoverable {
+				return s, identityhttp.ErrInvalidInput
+			}
+			flow, present, err := i.decoder.CookieBearer(r, flowCookie.Name, identityhttp.HeaderRequired)
+			if err != nil || !present {
+				return s, identityhttp.ErrInvalidInput
+			}
+			device, present, err := i.decoder.CookieBearer(r, "__Host-identity_device", identityhttp.HeaderRequired)
+			if err != nil || !present {
+				return s, identityhttp.ErrInvalidInput
+			}
+			token, err := session.ParseToken(flow.Token())
+			if err != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s = SigninState{&signinState{facts: facts, body: body, key: key, deviceWire: device.Token(), request: passkey.SigninRequest{FlowID: identity.PreAuthTransactionID(body.flowID), Cookie: token, Identifier: body.identifier, Origin: string(c.Origin), Network: facts.ClientIP().String()}}}
+			if complete {
+				s.request.CommandID = identity.CommandID(body.commandID)
+				s.request.CorrelationID = body.commandID
+			}
+			return s, nil
+		},
+		Authenticate: func(r *http.Request, s SigninState) (SigninState, error) {
+			s.started = c.Now()
+			if s.started.IsZero() {
+				return s, identityhttp.ErrUnavailable
+			}
+			var admitted identityhttp.AuthRateResult
+			var err error
+			if complete {
+				admitted, err = c.VerificationRate.AdmitIP(r.Context(), s.facts)
+			} else {
+				admitted, err = c.OptionsRate.AdmitPasskeyOptionsIP(r.Context(), s.facts, action)
+			}
+			if err := rateFailure(admitted, err); err != nil {
+				return s, err
+			}
+			s.device, err = devices.Resolve(r.Context(), c.Now(), s.facts.TenantID(), s.facts.Origin(), s.deviceWire)
+			if err != nil {
+				return s, failure{status: 403, code: "denied"}
+			}
+			s.deviceWire = ""
+			s.request.Device = s.device.DeviceID()
+			if !s.body.discoverable {
+				// Email owns local-part folding and independent nontransitional
+				// domain IDNA. Whole-mailbox folding changes DNS destinations.
+				address, err := c.Address.Parse(email.AddressInput(s.body.identifier))
+				if err != nil || !identifierText(address.Canonical().Record().Value) {
+					return s, identityhttp.ErrInvalidInput
+				}
+				s.request.Identifier = address.Canonical().Record().Value
+			}
+			if complete {
+				var source passkey.CeremonyRateSource
+				if s.body.discoverable {
+					source, err = c.Service.DiscoverableSigninRateSource(r.Context(), passkey.DiscoverableCeremonyRateRequest{DiscoverableSigninRequest: discoveryRequest(s.request), CeremonyID: s.body.ceremonyID})
+				} else {
+					source, err = c.Service.SigninRateSource(r.Context(), passkey.SigninCeremonyRateRequest{SigninRequest: s.request, CeremonyID: s.body.ceremonyID})
+				}
+				if err != nil {
+					return s, domainFailure(err)
+				}
+				if !validSigninSource(source, s) {
+					return s, identityhttp.ErrUnavailable
+				}
+				s.source = source
+			}
+			requestDelivery(r).valid = func() bool { return signinFresh(c, s) }
+			return s, nil
+		},
+		Admit: func(r *http.Request, s SigninState) error {
+			if !signinFresh(c, s) {
+				return identityhttp.ErrUnavailable
+			}
+			if !complete {
+				if s.body.discoverable {
+					return nil
+				}
+				return rateFailure(c.OptionsRate.AdmitPasskeyOptionsIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: action, Identifier: s.request.Identifier}))
+			}
+			rate := identityhttp.PasskeyVerificationRateRequest{ChallengeID: s.source.CeremonyID, ChallengeLifetime: s.source.Lifetime}
+			if s.body.discoverable {
+				rate.AnonymousFlowID = s.source.AnonymousFlowID
+			} else {
+				rate.Identifier = s.source.Identifier
+			}
+			return rateFailure(c.VerificationRate.AdmitPasskeyChallenge(r.Context(), s.facts, rate))
+		},
+		Handle: func(w http.ResponseWriter, r *http.Request, s SigninState) {
+			if !signinFresh(c, s) {
+				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
+			if complete {
+				signinComplete(c, w, r, s)
+				return
+			}
+			var out passkey.KeyedAssertionOptionsResult
+			var err error
+			if s.body.discoverable {
+				out, err = c.Service.KeyedDiscoverableAuthenticationOptions(r.Context(), passkey.KeyedDiscoverableOptionsRequest{DiscoverableSigninRequest: discoveryRequest(s.request), IdempotencyKey: s.key, Caller: caller(s.facts.TenantID(), s.request.FlowID)})
+			} else {
+				out, err = c.Service.KeyedAuthenticationOptions(r.Context(), passkey.KeyedSigninOptionsRequest{SigninRequest: s.request, IdempotencyKey: s.key, Caller: caller(s.facts.TenantID(), s.request.FlowID)})
+			}
+			if err != nil {
+				rejectNative(w, r, err)
+				return
+			}
+			if out.Receipt.Validate() != nil || out.Receipt.Outcome != identity.CommitOutcomeCommitted || out.CommandID != out.Receipt.Binding.CommandID || out.Receipt.Binding.TenantID != s.facts.TenantID() || out.Receipt.Binding.AnonymousFlowID != string(s.request.FlowID) || out.Receipt.Binding.ActorID != c.ActorID || out.Receipt.Binding.ActorKind != authorization.SubjectServiceAccount || out.Receipt.Binding.OperationID != action {
+				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
+			response := optionsResponse{CommandID: out.CommandID, CommitOutcome: "committed", Replayed: out.Replayed}
+			requestDelivery(r).observeCommitted(out.CommandID)
+			valid := func() bool { return signinFresh(c, s) }
+			if !out.Replayed {
+				ceremony, ok := out.Options.Ceremony()
+				if !ok || ceremony.ID != string(out.CommandID) || ceremony.Intent.Context.TenantID != s.facts.TenantID() || ceremony.Intent.Context.AnonymousFlowID != string(s.request.FlowID) || ceremony.Intent.Context.UserID != "" || ceremony.Intent.Origin != string(c.Origin) {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				valid = func() bool { return signinFresh(c, s) && c.Now().Before(ceremony.ExpiresAt) }
+				if err := out.Options.TransferJSON(r.Context(), func(_ context.Context, wire []byte) error {
+					if len(wire) == 0 || len(wire) > 262144 {
+						return identityhttp.ErrUnavailable
+					}
+					response.Options = append([]byte(nil), wire...)
+					return nil
+				}); err != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+			}
+			requestDelivery(r).render(w, r, response, valid)
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &protectedPipeline{pipeline: h, maximum: c.MaximumDuration}, nil
+}
+
+func discoveryRequest(r passkey.SigninRequest) passkey.DiscoverableSigninRequest {
+	return passkey.DiscoverableSigninRequest{CommandID: r.CommandID, FlowID: r.FlowID, Cookie: r.Cookie, Origin: r.Origin, Network: r.Network, Device: r.Device, CorrelationID: r.CorrelationID}
+}
+func validSigninSource(source passkey.CeremonyRateSource, s SigninState) bool {
+	if source.CeremonyID != s.body.ceremonyID || source.Lifetime != 5*time.Minute || source.UserID != "" {
+		return false
+	}
+	if s.body.discoverable {
+		return source.Kind == passkey.RateSourceAnonymousFlow && source.AnonymousFlowID == s.request.FlowID && source.Identifier == ""
+	}
+	return source.Kind == passkey.RateSourceIdentifier && source.Identifier == s.request.Identifier && source.AnonymousFlowID == ""
+}
+func signinFresh(c SigninConfig, s SigninState) bool {
+	now := c.Now()
+	return !now.IsZero() && !now.Before(s.started) && now.Before(s.started.Add(min(c.MaximumDuration, 20*time.Second))) && now.Before(s.device.ExpiresAt())
+}
+
+func signinComplete(c SigninConfig, w http.ResponseWriter, r *http.Request, s SigninState) {
+	var out passkey.SigninResult
+	var err error
+	if s.body.discoverable {
+		out, err = c.Service.DiscoverableSignin(r.Context(), passkey.DiscoverableSigninCompletion{DiscoverableSigninRequest: discoveryRequest(s.request), CeremonyID: s.body.ceremonyID, Response: s.body.response})
+	} else {
+		out, err = c.Service.Signin(r.Context(), passkey.SigninCompletion{SigninRequest: s.request, CeremonyID: s.body.ceremonyID, Response: s.body.response})
+	}
+	if err != nil {
+		rejectNative(w, r, err)
+		return
+	}
+	if out.Session.CommitOutcome != identity.CommitOutcomeCommitted || out.Session.Replayed || out.Session.CommandID != s.request.CommandID {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	spec, err := out.Session.Session.Bindings()
+	now := c.Now()
+	if err != nil || spec.TenantID != s.facts.TenantID() || spec.Audience != c.Audience || spec.Authentication.Proof.Method != "passkey" || spec.Authentication.Proof.ID != auth.ProofID(s.request.CommandID) || spec.Authentication.Proof.Tenant != string(spec.TenantID) || spec.Authentication.Proof.Subject != string(spec.UserID) || spec.Authentication.Proof.Purpose != "session-issue" || spec.Authentication.Proof.Audience != c.Audience {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	requestDelivery(r).observeCommitted(out.Session.CommandID)
+	if spec.IssuedAt.After(now) || spec.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(s.facts.TenantID()), Subject: string(spec.UserID), Purpose: "session-issue", Audience: c.Audience, Now: now}) != nil {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	csrfState, err := out.Session.Session.CSRFState().Bindings()
+	if err != nil || csrfState.Binding != (session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	if _, err := spec.Remember.Evaluate(now, spec.IssuedAt, spec.LastActivityAt, spec.Authentication.Proof.IssuedAt); err != nil {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	attributes, err := c.SessionCookie.Attributes(spec.Remember, now, spec.IssuedAt.Add(spec.Remember.AbsoluteTTL()))
+	issued := out.Session.Cookie
+	if err != nil || issued.Name != attributes.Name || issued.Path != attributes.Path || issued.Domain != "" || !issued.Secure || !issued.HttpOnly || issued.SameSite != attributes.SameSite || issued.Partitioned || issued.Quoted || issued.RawExpires != "" || (attributes.MaxAge == 0 && (issued.MaxAge != 0 || !issued.Expires.IsZero())) || (attributes.MaxAge > 0 && (issued.MaxAge <= 0 || issued.Expires.IsZero() || issued.Expires.After(spec.IssuedAt.Add(spec.Remember.AbsoluteTTL())))) {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	csrf, err := out.CSRF.Reveal()
+	if err != nil {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	token, err := out.Session.Token.Reveal()
+	if err != nil {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	if _, err := session.ParseToken(token); err != nil {
+		reject(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	attributes.Value = token
+	d := requestDelivery(r)
+	d.cookie, d.csrf = attributes.String(), csrf
+	d.render(w, r, map[string]any{"signedIn": true, "commandID": s.request.CommandID, "commitOutcome": "committed", "sessionID": spec.SessionID, "counterRisk": out.CounterRisk}, func() bool {
+		now := c.Now()
+		if !signinFresh(c, s) || spec.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: "session-issue", Audience: c.Audience, Now: now}) != nil {
+			return false
+		}
+		_, err := spec.Remember.Evaluate(now, spec.IssuedAt, spec.LastActivityAt, spec.Authentication.Proof.IssuedAt)
+		return err == nil
+	})
+}

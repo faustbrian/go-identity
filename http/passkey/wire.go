@@ -1,0 +1,164 @@
+package passkeyhttp
+
+import (
+	"encoding/json"
+	"strings"
+
+	identityhttp "github.com/faustbrian/go-identity/http"
+)
+
+func wireObject(required []string, properties map[string]any) map[string]any {
+	if required == nil {
+		required = []string{}
+	}
+	return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
+}
+func wireText(maximum int) map[string]any {
+	return map[string]any{"type": "string", "minLength": 1, "maxLength": maximum}
+}
+func wireID() map[string]any {
+	return map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$", "not": map[string]any{"const": "AAAAAAAAAAAAAAAAAAAAAA"}}
+}
+func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
+	registration := strings.HasPrefix(name, "register-")
+	options := strings.HasSuffix(name, "-options")
+	list := name == "list"
+	parameters := []any{}
+	if !list {
+		parameters = append(parameters, map[string]any{"name": "Origin", "in": "header", "required": true, "schema": wireText(2048)})
+	}
+	if registration {
+		parameters = append(parameters, map[string]any{"name": "X-CSRF-Token", "in": "header", "required": true, "schema": map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$", "writeOnly": true}})
+	}
+	if options {
+		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}$"}})
+	}
+	if list {
+		parameters = append(parameters,
+			map[string]any{"name": "after", "in": "query", "required": false, "schema": wireID()},
+			map[string]any{"name": "limit", "in": "query", "required": false, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 100}})
+	}
+	var request any
+	if registration {
+		fields, required := map[string]any{"proofID": wireID()}, []string{"proofID"}
+		if !options {
+			fields["commandID"], fields["ceremonyID"], fields["response"], fields["label"] = wireID(), wireID(), browserResponseWire(true), map[string]any{"type": "string", "maxLength": 128}
+			required = append(required, "commandID", "ceremonyID", "response")
+		}
+		request = wireObject(required, fields)
+	} else if !list {
+		variant := func(discovery bool) any {
+			fields := map[string]any{"mode": map[string]any{"const": "identified"}, "flowID": wireID()}
+			required := []string{"mode", "flowID"}
+			if discovery {
+				fields["mode"] = map[string]any{"const": "discoverable"}
+			} else {
+				fields["identifier"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 320, "pattern": `^[^\s\x00-\x1f\x7f-\x9f]+$`, "writeOnly": true, "description": "Exact mailbox parsed by the configured email owner; local comparison and fixed nontransitional domain IDNA are separate. Never an account lookup."}
+				required = append(required, "identifier")
+			}
+			if !options {
+				fields["commandID"], fields["ceremonyID"], fields["response"] = wireID(), wireID(), browserResponseWire(false)
+				required = append(required, "commandID", "ceremonyID", "response")
+			}
+			return wireObject(required, fields)
+		}
+		request = variant(false)
+		if c.Signin.Discoverable {
+			request = map[string]any{"oneOf": []any{request, variant(true)}}
+		}
+	}
+	var success any
+	switch {
+	case options:
+		fresh := wireObject([]string{"commandID", "commitOutcome", "replayed", "options"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "options": protocolOptionsWire(registration)})
+		replay := wireObject([]string{"commandID", "commitOutcome", "replayed"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": true}})
+		success = map[string]any{"oneOf": []any{fresh, replay}}
+	case registration:
+		success = wireObject([]string{"registered", "commandID", "commitOutcome"}, map[string]any{"registered": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}})
+	case list:
+		stamp := map[string]any{"type": "string", "format": "date-time"}
+		metadata := wireObject([]string{"referenceID", "version", "state", "label", "aaguid", "backupEligible", "backupState", "createdAt"}, map[string]any{
+			"referenceID": wireID(), "version": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}, "state": wireText(64), "label": map[string]any{"type": "string", "maxLength": 128}, "aaguid": map[string]any{"type": "array", "minItems": 16, "maxItems": 16, "items": map[string]any{"type": "integer", "minimum": 0, "maximum": 255}}, "backupEligible": map[string]any{"type": "boolean"}, "backupState": map[string]any{"type": "boolean"}, "createdAt": stamp, "lastUsedAt": stamp,
+		})
+		success = wireObject([]string{"credentials"}, map[string]any{"credentials": map[string]any{"type": "array", "maxItems": 100, "items": metadata}, "next": wireID()})
+	default:
+		success = wireObject([]string{"signedIn", "commandID", "commitOutcome", "sessionID", "counterRisk"}, map[string]any{"signedIn": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "sessionID": wireText(128), "counterRisk": map[string]any{"type": "boolean"}})
+	}
+	failure := wireObject([]string{"error"}, map[string]any{"error": wireText(64), "commandID": wireID(), "commitOutcome": map[string]any{"type": "string", "enum": []string{"committed", "not_committed", "unknown", "conflict", "in_progress"}}})
+	response := func(schema any) map[string]any {
+		return map[string]any{"description": "No-store/nosniff JSON. Challenges occur only for the fresh options winner; session cookie and synchronizer occur only for fresh committed signin. Metadata is not an execution lease or renewed expiry.", "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
+	}
+	responses := map[string]any{"200": response(success)}
+	for _, status := range []string{"400", "401", "403", "404", "405", "408", "409", "421", "429", "503"} {
+		responses[status] = response(failure)
+	}
+	for _, status := range []string{"403", "408"} {
+		responses[status].(map[string]any)["content"].(map[string]any)["text/plain"] = map[string]any{"schema": wireText(128)}
+	}
+	if name == "signin-verify" {
+		responses["200"].(map[string]any)["headers"] = map[string]any{"Set-Cookie": map[string]any{"description": "Owned secure HttpOnly session cookie; never replayed.", "schema": wireText(4096)}, "X-CSRF-Token": map[string]any{"description": "Original session synchronizer, never replayed.", "schema": wireText(43)}}
+	}
+	operation := map[string]any{"operationId": "identity.passkey." + name, "description": "Explicit existing-account cookie-only passkey profile. Trusted HTTPS tenant/origin/device and original session/proof or original flow/mode custody are mandatory. Header-only keys apply only to options; completion forbids keys and is one-use. No body identity/remember/cookie/CSRF override, signup, conditional UI, management or fallback. Native authorization, risk and atomic consumption remain authoritative. Responses are synchronously bounded; hooks cannot acquire credential custody.", "parameters": parameters, "responses": responses}
+	if !list {
+		operation["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}}
+	}
+	prefix := "Passkey" + strings.ReplaceAll(name, "-", "")
+	var schemes []identityhttp.WireComponent
+	security := map[string]any{}
+	cookie := func(suffix, cookieName string) {
+		definition, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": cookieName})
+		schemes = append(schemes, identityhttp.WireComponent{Name: prefix + suffix, Definition: definition})
+		security[prefix+suffix] = []any{}
+	}
+	switch {
+	case registration:
+		policy, _ := c.Registration.SessionCookie.DeletionAttributes()
+		cookie("Session", policy.Name)
+	case list:
+		policy, _ := c.Inventory.SessionCookie.DeletionAttributes()
+		cookie("Session", policy.Name)
+	default:
+		policy, _ := c.Signin.FlowCookie.DeletionAttributes()
+		cookie("Flow", policy.Name)
+	}
+	if !list {
+		cookie("Device", "__Host-identity_device")
+	}
+	operation["security"] = []any{security}
+	definition, _ := json.Marshal(operation)
+	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: schemes}
+}
+
+func browserResponseWire(registration bool) any {
+	encoded := map[string]any{"type": "string", "minLength": 1, "maxLength": 262144, "pattern": "^[A-Za-z0-9_-]+$", "writeOnly": true}
+	fields := map[string]any{"clientDataJSON": encoded}
+	required := []string{"clientDataJSON"}
+	if registration {
+		fields["attestationObject"] = encoded
+		required = append(required, "attestationObject")
+	} else {
+		fields["authenticatorData"], fields["signature"], fields["userHandle"] = encoded, encoded, map[string]any{"type": []string{"string", "null"}, "maxLength": 1366, "writeOnly": true}
+		required = append(required, "authenticatorData", "signature")
+	}
+	return wireObject([]string{"id", "rawId", "type", "response"}, map[string]any{"id": encoded, "rawId": encoded, "type": map[string]any{"const": "public-key"}, "response": wireObject(required, fields), "clientExtensionResults": map[string]any{"type": "object", "maxProperties": 16}})
+}
+
+func protocolOptionsWire(registration bool) any {
+	challenge := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"}
+	fields := map[string]any{"challenge": challenge, "timeout": map[string]any{"const": 300000}, "userVerification": map[string]any{"const": "required"}}
+	required := []string{"challenge", "timeout", "userVerification"}
+	if registration {
+		fields["rp"] = wireObject([]string{"id", "name"}, map[string]any{"id": wireText(253), "name": wireText(256)})
+		fields["user"] = wireObject([]string{"id", "name", "displayName"}, map[string]any{"id": challenge, "name": challenge, "displayName": challenge})
+		fields["pubKeyCredParams"] = map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "items": wireObject([]string{"type", "alg"}, map[string]any{"type": map[string]any{"const": "public-key"}, "alg": map[string]any{"const": -7}})}
+		fields["attestation"] = map[string]any{"const": "none"}
+		fields["authenticatorSelection"] = wireObject([]string{"userVerification", "residentKey", "requireResidentKey"}, map[string]any{"userVerification": map[string]any{"const": "required"}, "residentKey": map[string]any{"const": "required"}, "requireResidentKey": map[string]any{"const": true}})
+		fields["excludeCredentials"] = map[string]any{"type": "array", "maxItems": 100, "items": wireObject([]string{"type", "id"}, map[string]any{"type": map[string]any{"const": "public-key"}, "id": map[string]any{"type": "string", "minLength": 1, "maxLength": 1366, "pattern": "^[A-Za-z0-9_-]+$"}})}
+		fields["extensions"] = wireObject(nil, map[string]any{"credProps": map[string]any{"const": true}, "credentialProtectionPolicy": map[string]any{"type": "string", "enum": []string{"userVerificationOptional", "userVerificationOptionalWithCredentialIDList", "userVerificationRequired"}}, "enforceCredentialProtectionPolicy": map[string]any{"type": "boolean"}})
+		required = append(required, "rp", "user", "pubKeyCredParams", "attestation", "authenticatorSelection")
+	} else {
+		fields["rpId"] = wireText(253)
+		required = append(required, "rpId")
+	}
+	return wireObject([]string{"publicKey"}, map[string]any{"publicKey": wireObject(required, fields)})
+}

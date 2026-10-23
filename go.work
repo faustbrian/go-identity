@@ -14,6 +14,7 @@ use (
 	./http/mfa
 	./http/otp
 	./http/password
+	./http/passkey
 	./http/phone
 	./http/session
 	./i18n

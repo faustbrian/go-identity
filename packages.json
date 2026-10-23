@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"http/passkey","directory":".","name":"passkeyhttp","import_path":"github.com/faustbrian/go-identity/http/passkey","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"http/anonymous","directory":".","name":"anonymoushttp","import_path":"github.com/faustbrian/go-identity/http/anonymous","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"anonymous/postgres","directory":".","name":"anonymouspostgres","import_path":"github.com/faustbrian/go-identity/anonymous/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"anonymous","directory":".","name":"anonymous","import_path":"github.com/faustbrian/go-identity/anonymous","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
