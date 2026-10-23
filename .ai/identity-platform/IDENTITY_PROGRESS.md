@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 10:00 UTC
+## TL;DR — updated 2026-10-23 11:49 UTC
 
 - **Whole goal: approximately 25% complete, low confidence.** Consumer
   milestones are **11/39 closed**; retained scope is **67 units**. These are
@@ -25,11 +25,28 @@
   journeys pass (30.396s). Base OAuth needs no device tables or selected factory.
   Full M34 remains open for retained variants and HTTP/reference composition;
   no UI, full-unit qualification or platform completion is claimed.
-- **Current primary implementation:** OTP-authenticated factor rename. New
-  current-session custody and original signed-OTP evidence storage checks pass,
-  including populated migrations and preserved TOTP/enrollment contracts.
-  The complete send/delivery/verify/rename/session-effects/Reference journey is
-  unfinished. These local changes are not delivered or counted as a milestone.
+- **New M12 OTP rename profile delivered:** a genuine password/OTP session can
+  request and receive an action-bound OTP, obtain its original one-use proof,
+  rename the factor, invalidate old sessions and sign in again with the renamed
+  inventory. Attempt exhaustion, mismatched custody/current recipient, expiry,
+  required-effect rollback and actual lost-COMMIT recovery are covered. Complete
+  source review APPROVES. Suppliers `6bc1800`, `cdca7c4`, `ef49eb3`, `8954d0d`
+  and Reference `5235852` are main-pushed with exact Required CI green (final
+  `39947940239`). Six public-supplier PostgreSQL/race journeys pass (295.782s).
+  The actual downloaded public Reference archive matches all 333 committed files;
+  a separate no-replacement consumer passes rename/recovery under PostgreSQL/race
+  (131.047s), and module verification passes. Full M12 remains open for remaining
+  OTP management and retained method profiles; no full-unit qualification added.
+- **Parallel implementation:** the dependency-ready restricted workload token-
+  exchange core has passing focused parser/service tests. Native PostgreSQL
+  implementation is underway after its missing-boundary red. It retains root/
+  parent lineage and separate workload/client authority through existing owners;
+  no HTTP/reference, human or API-key exchange is claimed. This lane is not yet
+  delivered. Independent review found migration compatibility, interrupted-
+  recovery and changed-intent retry defects in the unpublished implementation;
+  these are being corrected before another complete review. Ordinary reusable
+  parent-token exchange is required, not the proposed lifetime one-child cap.
+  Full M33 remains open.
 - **Qualification remains open:** scheduled full-history secrets run
   `39925320307` failed; the separate current-change push checks above passed.
   No whole-history clearance, new full-unit qualification or platform
@@ -61,7 +78,7 @@
   including changed-authority denial, rollback/recovery and separate enrollment
   selection. Canonical public-dependency TOTP compatibility also passes.
   Broader MFA variants and whole-unit qualification remain open.
-- **Next:** finish the retained M12 OTP factor-management consumer journey
+- **Next:** deliver safe sole-active-OTP removal with current email recovery
   without restarting delivered MFA behavior. No Tools, evidence framework,
   whole-repository verification or user decision is needed.
 
@@ -2157,7 +2174,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M09 | Anonymous session, self-deletion and collision-safe permanent upgrade: identity/anonymous, identity/anonymous/postgres | Closed selected native/opt-in HTTP/reference profile, including abandoned cleanup with stored policy/holds, upgrade fences, atomic owner effects and original recovery. Native `d2f004f`, reference `64cee17`, independent reviews, exact green CI and downloaded-public Reference five-journey PostgreSQL/race16.170s. Unsupported transfer/authentication profiles and full unit/release qualification remain separate; historical startup uncertainty remains disclosed. |
 | M10 | Confirmed TOTP enrollment and TOTP signin: identity/mfa, identity/mfa/postgres | Closed selected cookie/password-primary TOTP profile, including username-primary composition: genuine registration, fresh proof, pending enrollment, reveal-once URI, explicit confirmation, challenge-only primary, TOTP completion and usable session/read/logout. Reviewed/pushed reference `4315bbf` and `02c6195`, green CI and original canonical/downloaded consumers retained. Fresh source audit at `d65ed4c` found the closure row stale; current downloaded combined phone/username/TOTP consumer also passes (13.824s). Broader MFA profiles and unit/release qualification remain separate. |
 | M11 | Confirmed secondary-OTP enrollment, delivered-code signin and session: MFA/OTP/password/session owners | Closed selected email/password-primary profile: genuine pending enrollment, delivered explicit confirmation without a session, challenge-only primary, counted delivered-code completion, session read/logout and original recovery. Reviewed MFA `665a40f`, session `c4d031c` and Reference `f721a66` are main-pushed/exact-CI green; actual downloaded public Reference PostgreSQL/race37.995s. Enrollment without login and retained TOTP controls pass separately. Broader MFA variants and full-unit qualification remain open. |
-| M12 | Factor listing/update/removal/disable/replacement with fresh proof: MFA owners | Closure not reassessed |
+| M12 | Factor listing/update/removal/disable/replacement with fresh proof: MFA owners | Safe native/HTTP mixed OTP/TOTP inventory and TOTP management profiles delivered. Native action-bound OTP rename is now delivered through Reference `5235852`, independent review, exact green CI and actual downloaded-public PostgreSQL/race consumer (131.047s). OTP removal/disable/replacement and remaining method profiles keep the full row open. |
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |

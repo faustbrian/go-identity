@@ -1,5 +1,78 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 11:49 UTC: finite native/reference OTP factor-rename profile CLOSED;
+full M12 remains open. Reference52358522f1f45ca5997b8776911a7744f3d6f8dd is
+main-pushed; exact CI39947940239 SUCCESS. Supplier6bc1800/cdca7c4/ef49eb3/8954d0d
+remain exact-CI green. Source review otp_factor_rename_review_round2 APPROVE at
+75-path a6581ada...81e5 remains applicable to unchanged source. Canonical
+public-supplier six-journey PG/race96238 PASS295.782s; vet exit0/modules verified.
+Actual public Reference v0.0.0-20261023114205-52358522f1f4 archive333files matches
+commit; sumh1:YbsAVx+cnp+p566Jl5NoVB7/5txSz/34cGJGNqVULNI=,
+modsumh1:HlWRq2///ePXP73+DcYdqJ0TM2deYDshzsQhWXxTHhw=.
+Independent no-replacement consumer72484 using downloaded external tests and
+public module passes both real rename/COMMIT-recovery journeys under PG/race
+131.047s, modules verified. This closes actual OTP delivery/proof/rename/session
+revocation/fresh-signin behavior, not OTP removal/disable/replacement or full-unit
+qualification. Still11/39 consumer milestones/~25% whole goal, low confidence.
+OAuth worker owns heavy slot for concrete review-fix greens; primary will not
+start concurrent Go/service checks. No Tools changes or historical scan claim.
+
+2026-10-23 11:39 UTC: OTP factor-rename supplier delivery has advanced, not
+whole M12 closure. Independent complete-source review APPROVE at 75-path
+a6581ada05b8021a0c9bafd1e86e5ee1a8d480d3753d2b465e76f23b2bfa81e5;
+the Go/docs source remains unchanged. Contract6bc1800, MFA-nativecdca7c4,
+sessionef49eb3 and OTP-native8954d0d are main-pushed. Their exact Required runs
+39945177913/39945673118/39946474019/39946927680 all succeed. Standalone public-
+dependency race/vet/module checks pass; populated MFA migration passes1.873s.
+Public archives match committed source: MFA47, kernel510, OTP62, MFA-native185,
+session-native274, OTP-native155 files. OTP-native active custody fuzz passes
+4.361s/4804 executions. Source adoption reviews retain native reports; new pins
+are public-only and no replacements or external dependency upgrades were added.
+Reference now selects these actual public suppliers. Its six-journey native
+PostgreSQL/race run96238 is live (test process34453 last observed), followed by
+vet/module verification. Reference19-path candidate419fcf11...f4d08 is still
+local; final clean-public-consumer, Reference commit/push/CI and profile closure
+remain pending. Still11/39 milestones/~25% whole goal, low confidence.
+
+Parallel OAuth round1 REQUEST_CHANGES at20-path1c1af738...6f902: forward history
+must preserve supported silent-code roots; pre-COMMIT recovery omitted the new
+exchange lifecycle; terminal replay bypasses changed-intent matching. The
+unrequested one-child-per-parent limit is rejected: ordinary sources remain
+reusable, with original command identity owning exact retry/recovery. Assigned
+worker is fixing these concrete behaviors plus retained-observation expiry;
+no OAuth publication or M33 closure is claimed. Primary holds the heavy test
+slot while Reference96238 is live; worker may code but not start Go/services.
+
+2026-10-23 10:52 UTC: next independent OAuth lane assigned for M33's finite
+workload-only restricted token exchange profile. Owner restricted_exchange_worker;
+writable paths are go-oauth-server root protocol Go/tests/docs/changelog and
+postgres native Go/tests/docs/changelog/forward migrations only. Main baseline
+c1d476a8e61fbcdc27526dca6187fc7ee91c6a02 is clean; existing workload issuance,
+introspection and native current directory/client/workload authority are the
+consumed owners (selected main Required39935662993 and prior native workload
+consumer). Retain public authenticationd9f5132, kernelc9d9dd7 and sessioncf1f8c1
+pins; inspect actual consumed workload behavior once before writing. No worker
+changes to shared identity owners, HTTP/reference, module pins, workspace/root
+manifests, tooling, Git or other OAuth profiles. Ask the primary for a genuinely
+missing owner contract rather than inventing authority.
+Outcome: explicit Basic-authenticated owning workload client exchanges its
+own original or delegated access token for one bounded narrower token through
+the Golib protocol/native transaction; exact RFC8693 standard grant only, distinct
+from private session exchange. Preserve root/parent/client/tenant/service-account,
+separate owner/actor/workload and non-expanding scopes/resources/audiences; depth
+at most four and child expiry no later than parent/five minutes. Current source,
+client/directory/workload withdrawal denies descendants; retained 20s validity
+cannot renew on exchange, satisfying the 30s revocation bound. No refresh token,
+actor override, human/API-key/organization source or HTTP/reference is selected.
+Acceptance: real native issuance -> narrowing -> introspection -> ancestor
+revocation denial, attempted expansion/foreign client/cycle/depth/expiry denial,
+populated forward migration, atomic rollback/unknown metadata-only recovery and
+unchanged base construction. Focused root/native tests, real PostgreSQL/race,
+bounded new hostile parsing fuzz and actual clean public consumer at integration.
+Primary retains contract alignment, independent review, pin adoption and delivery.
+Worker may inspect/code now; local Go/service checks require serialized handoff.
+This is a profile assignment, not M33 or whole-unit closure.
+
 2026-10-23 10:00 UTC: finite unbound native device profile CLOSED, full M34 open.
 Rootdba31679feeadbc77cfda9cb1020ae37412ce303 / childca7b0b8a9b26e64b698ab93cabc1d3ba2f807735 /
 workspacef0d0a8897f73bef7ab4bb8968fbe445eba5ba05d / nativec1d476a8e61fbcdc27526dca6187fc7ee91c6a02
