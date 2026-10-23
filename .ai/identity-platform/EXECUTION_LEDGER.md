@@ -1,5 +1,64 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 04:52 UTC: shared-owner source batches are main-pushed: kernel/core
+50a36bd, sessionpg24a0cbb, anonymouspg71baace; exact Required39901527647/
+39901906215/39902437216 SUCCESS. Complete original35path correctness and
+regression APPROVE bind da11606; C2/C3 actual-public-adoption correctness and
+compatibility APPROVE bind fe896aecd/f32c8a233. Actual GOWORKoff session race
+1.797s and PG/race5.447s; anonymous ordinary1.275s, full13expiry6.220s,
+selfdelete7.199s and separately exact-name upgrade3.017s; taggedvet and
+moduleverify pass. Candidate installed8.30.0 scans pass; no whole-history
+qualification inferred. Public kernel/anonymous C1 and sessionpg C2 hashes
+match authenticated downloaded source. Native OAuth worker consumed real pins,
+observed actual missing-API RED38926 and is implementing frozen logout; no
+additional shared seam requested. Primary next: public cleanup selector/service
+and reference, not another owner-review programme. No M09/M31 closure or
+milestone increment; overall20–25%,9/39. Primary test cluster stopped; bounded
+owner-run scratch/cache cleanup follows. Source delivery is not a complete
+public maintenance or OAuth protocol workflow.
+
+2026-10-23 04:20 UTC: cleanup/OIDC shared-owner prerequisites remain local.
+Actual expiry kernel/lifecycle/session composition has PostgreSQL/race commit,
+rollback, future/hold denial, zero/pruned sets and retained receipt proof;
+expired pending reservations now invoke owner recovery, and valid/mismatched
+partial retained rows cannot prove whole-command rollback. Actual registered
+OAuth-token Work covers exact RP source denial, pruning, sibling/ordinary-signout
+allowance and foreign scope rejection. Independent source review then found a
+missing actual-kernel-disposal commit guard for expiry: real receipt-only/no-final-
+callback RED99953 falsely committed; the existing guard now includes exact
+expiry and GREEN17781 passes1.429s. Final35-path review pending; no publication,
+public pin or milestone closure claimed. Primary next: finish this owning source
+delivery, then public cleanup selection/service/reference. OAuth worker's finite
+root/child checks are terminal; native workflow awaits these public owner pins.
+No new QA plan, transaction/recovery journal, Tools work or qualification claim.
+
+M31 native RP-initiated logout — frozen 2026-10-23 02:03 UTC: worker
+oidc_phone_userinfo owns necessary OAuth root protocol/client/signing contracts,
+oidc/ validation and postgres/ implementation, tests, documentation and local
+module manifests in go-oauth-server/mainf84d721. Primary owns all identity/session
+contracts, public-pin adoption, Git, root workspace/CI and reference/HTTP. Consumer
+outcome: genuine currently authenticated source session plus verified issued
+ID-token hint terminates that exact session through the existing session owner;
+return exact independently registered post-logout URI/original state, or local
+only without URI. Hint association must distinguish same-user sibling sessions;
+subject/auth_time alone is not authority. Accept a cryptographically and durably
+bound expired hint only while its original session remains currently valid;
+retired retained keys may verify historical hints, compromised keys deny.
+Original command recovery does not require a revoked credential to authenticate
+again. Require coordinated current-client/key/hint admission, actual session
+revocation and required OIDC audit/lifecycle effects, without a new replay engine
+or OAuth revocation journal. Root/native prerequisites belong to this outcome;
+request the smallest missing session-owner seam from primary before using it.
+Exclude front/back-channel notifications, device/private exchange, HTTP/reference
+and managed-pairwise metadata variants; retain them in eventual full scope.
+Mapper oidc_logout_map and one QA oidc_logout_qa pass at f84d721 are complete
+(QA d369b94f2df312614aea49bef91d7f7bcf12c99cef3e278bc1e1a2f6f96efe92).
+Prove L01-L10 with focused root/child checks, real PostgreSQL/race, genuine
+independent-RP hints, sibling isolation, exact redirects, authority/key changes,
+required-effect rollback and proven pre/post-COMMIT recovery; then independent
+complete review and public-consumer delivery. Primary serializes heavy checks.
+No implementation delivery or milestone increment is claimed by this assignment.
+
 2026-10-23 01:42 UTC: finite exact OIDC consent profile CLOSED. Rootdff2a90,
 childcab1968, nativef84d721 are main-pushed with exact Required39883163583/
 39883822972/39884942037 SUCCESS. Native independent correctness/regression/

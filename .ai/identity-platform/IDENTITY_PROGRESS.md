@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 01:42 UTC
+## TL;DR — updated 2026-10-23 04:52 UTC
 
 **Estimated whole-goal completion: approximately 20–25%, with low confidence.**
 **Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
@@ -43,10 +43,24 @@ atomic owner effects and interrupted/unknown recovery. That is the next primary
 implementation, not another review of delivered signin/read/delete/upgrade.
 
 **Current implementation:** abandoned-guest cleanup, using trusted maintenance
-authority rather than expired guest credentials. The exact original-expiry
-boundary has a local tested core implementation; durable selection, protected
-kernel/session effects, recovery, migrations and reference composition remain
-unfinished. No M09 increment or cleanup delivery is claimed.
+authority rather than expired guest credentials. Local PostgreSQL/race proof now
+covers the protected kernel/lifecycle/session owners, disposal policies, pruned
+sets, required-effect rollback and actual pending/retained-evidence recovery.
+Review found a receipt-only expiry could falsely commit without kernel disposal;
+the regression reproduced it and the existing actual-mutation guard now rejects
+it. Shared kernel, session and anonymous owner batches are now independently
+approved, main-pushed as `50a36bd`, `24a0cbb` and `71baace`, and exact-CI green.
+Standalone public-dependency PostgreSQL/race checks cover expiry owner effects
+and retained browser deletion/upgrade. Indexed batch selection, the public
+maintenance service and reference composition remain unfinished. No M09
+increment or complete cleanup delivery is claimed.
+
+**Parallel implementation:** OIDC logout core/transport checks pass under race.
+Published identity/session owners have unblocked the native worker: actual
+missing-API RED was observed, and native hint/source association and coordinated
+logout are now being implemented. Native checks, independent review and public
+consumer proof remain pending. Neither active lane closes another consumer
+milestone. The 20–25% estimate and 9/39 count are unchanged.
 
 **Retained delivered behavior:** native OIDC `prompt=none` reuses original bounded
 explicit consent without interaction or renewal, then issues a one-use code for
