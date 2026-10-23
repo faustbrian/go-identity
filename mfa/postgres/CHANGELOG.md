@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicitly selected OTP/TOTP safe-inventory reader borrowing the
+  actual OTP enrollment owner. It reports coherent pending/active/revoked
+  metadata and unused recovery counts without reading secrets; corrupt,
+  unsupported or oversized inventories fail without partial output. Existing
+  TOTP-only readers and their schema requirements remain unchanged.
+
 - Add `RequireOTPSessionFactor` for exact native self-logout Work. Fence the
   original confirmed enrollment, account factor generation and current verified
   recipient without a TOTP fallback, code comparison or renewed freshness.

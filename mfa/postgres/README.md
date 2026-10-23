@@ -335,6 +335,16 @@ overflow fail without a partial result. Labels and usage times not stored by thi
 profile remain absent. Full trusted-device/security-key support and release
 qualification remain required by the complete MFA goal.
 
+`NewOTPListReader(otpEnrollment)` selects both native OTP and TOTP metadata
+from the OTP owner's installed shared histories, retaining the same complete-
+snapshot bounds and aggregate checks. It includes unexpired pending and
+retained revoked factors and counts only unused codes in active sets belonging
+to confirmed factors of the matching method. No OTP destination or secret is
+selected. `NewOTPManagementListReader(otpEnrollment, totpManagement)` additionally
+reads the selected TOTP manager's stored labels; both owners must borrow the
+same primary pool. This does not add OTP rename/removal, trusted-device or
+security-key support. The existing TOTP-only selection remains unchanged.
+
 ## Native authenticated step-up and recovery replacement
 
 Compose `NewTOTPActiveStepUpService` over the actual selected enrollment graph
