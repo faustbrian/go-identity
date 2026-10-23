@@ -1,10 +1,44 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 16:01 UTC
+## TL;DR — updated 2026-10-23 17:52 UTC
+
+- **Whole goal: approximately 25% complete (low-confidence estimate),
+  11/39 consumer milestones closed; all 67 units remain required.** Milestone
+  profiles are not full-unit/release qualification.
+- **New passkey backend:** existing-account fresh password reauthentication ->
+  real resident/UV enrollment -> identified assertion -> issued session -> safe
+  inventory -> read -> cookie-CSRF logout passes locally against public
+  suppliers. Independent review approves; native `97cb16c` is main-pushed.
+  The separate downloaded-public-module consumer also passes the whole journey
+  and five current-owner withdrawal cases under PostgreSQL/race (19.116s).
+- **Security corrections:** options no longer disclose account eligibility;
+  genuine enrollment of key 101 no longer disables signin with existing/new
+  keys. Original browser, identifier and authority cannot be refreshed.
+- **Delivered finite native profile:** public archive authenticates and matches
+  all 37 source files; all 144 consumer modules verify without replacements.
+  Workspace correction `2912f67` is main-pushed with exact Required CI green.
+  This is selected native behavior, not a release or full passkey milestone.
+- **Next:** integrate that backend into the opt-in reference composition.
+  Full M16 still needs signup, identifier-free/conditional signin and management;
+  remaining roadmap families and whole-unit/release qualification stay open.
+  No user decision needed. This is a backend library, not a UI.
+
+## Retained checkpoint — 2026-10-23 17:23 UTC
 
 - **Whole goal: approximately 25% complete, low confidence; 11/39 consumer
   milestones closed.** All 67 units remain in scope. This is a whole-outcome
   estimate, not a claim that the full units or release gates are qualified.
+- **Current passkey delivery hold:** independent native review confirmed that
+  identified options exposed account/passkey eligibility. The real PostgreSQL
+  regression reproduces all four partitions (eligible/absent/unverified/no-key,
+  0.812s). Correction uses account-independent resident discovery while keeping
+  original private identifier/authority snapshots; no dummy principal or reset
+  of account/factor epochs. Native source compiles against the local supplier
+  correction (0.307s), not yet public-module proof. Supplier review then found
+  the exact missing forward schema allowance; its PostgreSQL/race cohort fails
+  (0.731s), so downstream cases are not passing evidence. A narrow migration 3
+  and original-expiry regression are being added. No passkey delivery or M16
+  closure is claimed. Earlier local/browser journeys describe the prior tree.
 - **Newly delivered: native and Reference OTP disable.** A genuine OTP session
   obtains a delivered disable-specific proof, disables one/all factors and
   atomically erases recipient references, retires recovery codes and revokes
@@ -42,9 +76,21 @@
   now passes real password-proof -> WebAuthn UV enrollment -> atomic credential,
   reference and mapping locally. Original ceremony authority cannot be refreshed;
   denial, one-winner concurrency and required-effect rollback tests pass. The
-  canonical creation-event kernel correction is independently approved, with
-  delivery pending. Recovery, identified assertion/session/read/logout and the
-  complete public journey remain open; M16 is not closed.
+  canonical creation-event correction `9a09aa4` is independently approved,
+  main-pushed and exact-CI green. Real before/after-COMMIT disconnect recovery
+  now also passes locally, without reconstructed verification or a second
+  journal. Later enrollment cohort passes PostgreSQL/race (39.320s).
+  Native identified assertion now issues a real persisted session with the
+  original browser remember choice. Authenticated safe inventory, current
+  session read and actual cookie/CSRF logout pass together locally under
+  PostgreSQL/race (4.345s). Five current-owner withdrawal cases pass; inventory
+  keyset/cancellation/foreign-scope tests pass (13.058s). WebAuthn preauth actor
+  prerequisite `693d54b` and exact safe-read risk classification `9b97d1d` are
+  independently approved, main-pushed and exact-CI green. The native signin
+  denial/race/rollback cohort passes (53.254s); original-flow final-expiry fix
+  and transport/remember extensions are undergoing affected checks. Go-passkey
+  remains local/unreviewed; public adoption, interoperability and final review
+  remain open. M16 is not closed and no fully qualified unit is added.
 - **Remaining:** OTP replacement and remaining management/method/composition
   profiles; the other open roadmap families; full-unit/release qualification.
   The earlier unexplained prerequisite 503 and failed full-history secret scan
@@ -2237,7 +2283,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Closure not reassessed |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account native profile delivered: fresh password proof -> real resident/UV enrollment -> identified assertion -> session/inventory/read/cookie-CSRF logout. Reviewed main `97cb16c`, workspace `2912f67`, exact green CI and actual downloaded-public consumer PostgreSQL/race19.116s, including five current-owner denials. Signup, usernameless/conditional signin, management and HTTP/reference composition remain required; full row stays open. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |

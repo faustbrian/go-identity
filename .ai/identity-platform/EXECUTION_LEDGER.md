@@ -1,5 +1,184 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 17:52 UTC: M16 existing-account native profile CLOSED, not full M16.
+Actual separate example.com/native-passkey-consumer, GOWORK=off, downloaded
+native97cb16c and no replacements: both complete enrollment/signin/inventory/
+read/cookie-CSRF logout and five current-owner withdrawal cases PASS under
+PostgreSQL/race19.116s. All144 resolved modules verify; native origin and all37
+archive files match source. Test-only holders retain original caller configs;
+all domain orchestration/verification/session effects are public native owners.
+Existing account/password/session plus verified email and controlled raw
+authenticator remain explicit fixture seams, not claimed baseline provenance.
+Main2912f67 exact Required39997594540 SUCCESS (structure/current-range secrets,
+not hosted runtime); postgres and root runtime source/mod/checksums unchanged
+from reviewed97cb16c. Earlier failed39997403603 is not relabeled passing.
+No release/tag/HTTP/reference/full-M16/full-unit claim. Next primary profile is
+incremental actual reference composition over this committed native backend;
+signup, identifier-free/conditional and rename/delete remain retained work.
+Still11/39/~25% low-confidence whole-goal estimate; all67 units remain required.
+
+2026-10-23 17:48 UTC: prior status-only turn was no progress; this turn delivers
+the independently approved native passkey candidate as main97cb16c25a7f.
+Final native review passkey_native_privacy_final APPROVE/no findings covers
+complete candidate8c7d0e6c...ef80788; genuine credential101 enrollment plus
+original/new signin and privacy/original-authority partitions pass public-
+supplier PostgreSQL/race54.264s. Final journey enrollment -> identified
+assertion -> real session -> safe inventory -> read -> cookie-CSRF logout
+passes4.286s, taggedvet0 and pathname-aware secrets0. Earlier unchanged-parser
+fuzz and Chrome156 resident/UV browser proof remain retained, not rerun claims.
+WebAuthn discovery supplier84664c3 is main-pushed, exact Required39995381907
+SUCCESS, authenticated publicnative and all27 archive files matched. Migration3
+admits only exact native anonymous-options purpose; migrations1/2 unchanged.
+Native public version v0.0.0-20261023174113-97cb16c25a7f authenticates to97cb16c;
+all37 archive files match (including Go-inherited rootLICENSE). Its initial
+Required39997403603 failed only workspace Go1.27.0 vs pinned1.27.2 before
+runtime/secret checks; exact one-line structural fix main2912f67 is pushed,
+Required39997594540 currently running. No Tools edits or bypass.
+Bounded worker passkey_public_consumer owns ONLY disposable external consumer
+under /private/tmp/identity-passkey.nmMbnw/public-consumer, consumes publicnative
+97cb16c and committed suppliers, performs the same actual journey plus current-
+owner withdrawal. Explicit existing password/session seed and raw authenticator
+are test input, never fabricated workflow/store/verification. Only exported
+native calls; test holders may retain original caller configuration. Worker
+has no project/Git/heavy-run authority or children. Primary owns central Go/PG
+run, CI, source inspection and integration. Full M16 and public-native consumer
+remain open;11/39/~25% low-confidence whole-goal estimate, all67 retained.
+
+2026-10-23 17:23 UTC: actual public-boundary privacy RED0.812s demonstrates
+eligible credential descriptors vs absent/unverified/no-key denial. Native
+correction locally compiles with unchanged public suppliers plus temporary
+task-only workspace for unpublished protocol participant (selector test0.307s).
+This is development proof only, not public-pin or final journey acceptance.
+New supplier same-Work discovery RED0.382s; invalid-custody unitGREEN0.229s.
+First focused PG/race failed only stale own auditrole setup0.286s; exact own
+roles removed after verifying no clients; rerun actualruntime FAIL0.731s.
+Independent passkey_discovery_participant_review REQUEST_CHANGES covers all9
+paths at693d54b+5bac3ad8...59fec: F1 effects_subject_namespace rejects exact
+anonymous nativepurpose; F2 affected downstreamcases consequently unexercised;
+F3 requested final absolute-expiry rollback regression. Accept all against
+actualsource. Worker now owns additive migration3 and affected migration/expiry
+tests/docs in same supplier outcome; migrations1&2 remain immutable. No
+substitute purpose/subject/store. Main remote still693d54b. Current new supplier
+source is not reviewed/pushed; native adapter remains undelivered.11/39/~25%.
+
+2026-10-23 17:12 UTC: previous status-only turn was no progress; resumed actual
+source review. Native independent passkey_native_final_review REQUEST_CHANGES
+for exactly F1: unauthenticated identified options distinguish eligible passkey
+accounts from absent/unverified/no-mapping accounts and disclose real credential
+descriptors. Frozen candidate ebb89c1f...cee02b is not approved or delivered.
+Repair the original privacy requirement, not error wording or a rate-limit
+exception: account-independent resident assertion options, original identifier/
+browser-flow custody, then real root-verified credential-to-identifier matching
+and current authority before atomic session effects. No dummy principal/store,
+private protocol verifier or fresh password prerequisite. Existing discoverable
+root/durable contracts own this protocol. Full usernameless product profile stays
+required; this correction is necessary to the current identified outcome.
+Primary owns go-passkey, shared manifests/pins, regression/public consumer and
+delivery. Bounded worker passkey_ingress_actor owns only go-webauthn's new
+discoverable assertion participation source/tests, smallest store seam, affected
+docs/changelog; no root protocol weakening, children, Git or heavy commands.
+Consume main693d54b and existing real standalone discoverable behavior; inspect
+the first proposed public seam before writes. Acceptance includes indistinguishable
+options for eligible/absent/unverified/no-passkey, genuine wrong-target denial,
+same-Work consume/counter/session/rollback/recovery, retained actor/flow binding.
+Use focused PG regressions then affected race/browser/public consumer; reuse
+unchanged enrollment proof. 11/39/~25% low confidence; all67 remain required.
+
+2026-10-23 16:51 UTC: actual native existing-account enrollment -> identified
+ES256 assertion -> issued session -> safe inventory -> current read -> cookie/
+CSRF logout now passes PostgreSQL/race locally4.345s. Direct cookie dispatch
+correctly rejects legacy execution; the explicit WithCSRF path commits actual
+revocation/audit/lifecycle and later read/list deny. No substitute session or
+protocol engine is used. Five real mapping/MFA/credential/user/policy withdrawal
+cases pass; safe inventory keyset/cancellation and foreign-scope checks pass
+13.058s. Native signin denial/concurrency/rollback cohort53.254s precedes latest
+final-expiry patch. New final-effect-delay regression reproduced a real defect:
+original browser flow expired during later effects but committed session
+(2.883s). Worker fixes original flow.Check at primary precommit time; no epoch
+or lifetime reset. Actual before/after-COMMIT tests retain unsuccessful recovery
+audits without counting them as successful mutation effects. Root protocol
+already denies nonbackup nonincreasing counters; CounterRisk means a synced
+backup warning, so no blanket denial or false compromise event was added.
+
+Risk inventory owner9b97d1d main-pushed, exact Required39988662234 SUCCESS;
+native consumes authenticated publicrisk v0.0.0-20261023163947-9b97d1d4cb68.
+Five-path independent passkey_inventory_risk_review APPROVE/no findings;
+classification/counter RED0.259s -> raceGREEN1.259s, tagged-independent vet0,
+full risk race1.259s and deterministic generator compare0. Selected-source
+secrets scans clean; existing whole-risk-tree scan still finds1 and is not
+whole-tree clearance. Remaining: complete changed-final-source review,
+root-first public-module pin delivery, actual external consumer and browser
+interoperability. Go-passkey still local/uncommitted; no M16 closure,11/39/~25%.
+
+2026-10-23 16:35 UTC: previous status-only turn was no progress. Current turn
+delivers the exact reviewed WebAuthn six-path candidate as main693d54b;
+Required39987180303 SUCCESS. Downloaded native
+v0.0.0-20261023162901-693d54b34eda authenticates to that origin. Independent
+passkey_ingress_final_review APPROVE/no findings, reviewed diff32e90bbf...
+e587693; actual preauth/self-user/registration PG/race proof retained. Current
+go-passkey enrollment PG/race39.320s and tagged vet0 include the policy-reader
+deadlock regression and exact original proof/caller/action denials. No M16
+closure; 11/39/~25% low confidence. All67 retained.
+
+Dependency-ready parallel split inside the same frozen M16 outcome:
+passkey_identified_signin owns only new go-passkey/postgres/signin*.go (source,
+integration/unit tests and optional versioned signin-only migration source).
+Consume committed public WebAuthn693d54b, kernel9a09, session219499 and
+MFA1d7a572. Outcome: original issued browser flow/remember -> counted risk ->
+real identified ES256 assertion -> sole-Work ceremony/counter/mapping/session/
+audit effects -> usable issued session. Preserve exact service protocol actor
+until genuine verification; final parent self-human. Real native owners only,
+no application domain-store callback, private session/proof engine or new journal.
+Include origin/flow/actor/tenant/current-state denials, one-use/concurrency,
+rollback and metadata-only recovery tests. Worker no children/Git/manifests/
+existing-file edits; first implemented API alignment checkpoint required.
+Primary owns safe authenticated credential inventory (new inventory*.go),
+enrollment fixes, manifests/pins, current notes, read/logout integration,
+independent final review and delivery. No shared fixture writes by worker;
+new signin fixture may compose existing enrollment helpers. Heavy Go/service
+runs primary-serialized; worker requests slot. Full signup/discoverable and
+management remain required later profiles, not part of this finite split.
+
+2026-10-23 16:14 UTC: concrete M16 source contradiction supersedes the earlier
+no-gap signin source assessment: AssertionCreation reuses registration's self-
+user actor constraint, so public options cannot preserve their actual service
+actor. Root verification correctly preserves the original protocol actor;
+final native session command uses the now-verified target human. Assign bounded
+worker passkey_ingress_actor to go-webauthn/postgres/assertion_participant*.go,
+postgres/store.go (only the necessary exact native retained-snapshot actor
+relation), directly affected tests, docs/assertion-participation.md and
+postgres/CHANGELOG.md only, from committed
+b64dd7d/rooted89b24. Add explicit preauth identified assertion participation:
+service-attributed options -> unchanged service-context root verification ->
+opaque verified-target/self-human final parent. Preserve existing self-user
+constructors, all registration behavior, original protocol actor in intent and
+digest, exact parent/tenant/target checks and original-command recovery. No root
+protocol, identity/session, manifests or other repository/Git writes. Real
+protocol/native-PG positive, actor/target/parent substitution denial, rollback/
+recovery and retained self-user tests required. Worker codes first, requests
+serialized heavy slot; primary owns integration, final review and delivery.
+This is necessary within the current signin slice, not another preflight.
+
+2026-10-23 16:12 UTC: kernel9a09aa4 main-pushed, exact Required39983383059
+SUCCESS; public native v0.0.0-20261023160159-9a09aa4a9171 authenticates to
+that source (sumh1:VYRv2r6GDHQzethIjluopTdLZGjBkvNWuIZfWa/6m3c=).
+Go-passkey consumes it without a replacement. Actual canonical creation audit
+and lifecycle now both persist exactly identity.passkey.create_credential.
+Current enrollment cohort passes PostgreSQL/race33.546s, including genuine
+reauthentication, UV registration, original options context, factor/mapping
+withdrawal, browser-origin/challenge denial, one-winner concurrency, required-
+audit rollback and actual before/after-COMMIT disconnect with fresh-service
+original-command recovery. Root race1.213s; integration vet0. Earlier transport
+fixture selected the parsed base DSN instead of its configured per-test database;
+fixed the explicit database override, with an equality assertion retained.
+No production authority was relaxed. Go-passkey remains local/unreviewed;
+identified assertion/session/read/logout and public consumer proof still open.
+One bounded read-only passkey_signin_consumed_contract source pass confirms
+existing preauth issuer/Require/Reserve/Finalize, per-operation counted risk,
+opaque WebAuthn assertion and session issue/read/revoke APIs can compose the
+selected login; no missing shared seam demonstrated. No new preflight or Tools
+work. This turn is progress, not a closed M16; still11/39/~25%, all67 retained.
+
 2026-10-23 16:01 UTC: prior status-only turn was no progress. This turn proves
 genuine native password reauthentication -> WebAuthn options/UV registration ->
 atomic protocol credential/kernel reference/passkey mapping, locally in the
