@@ -277,6 +277,7 @@ type signupGraphExtensions struct {
 	passkeyDiscovery     bool
 	passkeySessionHTTP   bool
 	passkeyKeyed         bool
+	passkeyHTTP          bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -436,6 +437,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	network := httptest.NewUnstartedServer(nil)
 	t.Cleanup(network.Close)
 	origin := "https://" + network.Listener.Addr().String()
+	if extensions.passkeyHTTP {
+		// The authenticator's RP/origin is a real DNS deployment authority;
+		// only the TLS listener is local. Requests below retain this Host.
+		origin = "https://identity.example"
+	}
 	c.OTP.PreAuth.Origin = origin
 	c.Velocity.LeaseDuration = 10 * time.Second
 	// These account graphs apply many selected histories as one operator run.
@@ -555,6 +561,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferencePasskey(t, &c)
 		if extensions.passkeyKeyed {
 			configureReferencePasskeyKeyed(t, &c)
+		}
+		if extensions.passkeyHTTP {
+			c.Passkey.Flow.FlowTTL = 5 * time.Minute
+			c.HTTPPasskey = &reference.HTTPPasskeyConfiguration{Registration: true, Signin: true, Inventory: true, Discoverable: extensions.passkeyDiscovery}
 		}
 		c.Session.Passkey = extensions.passkeySessionHTTP
 		if extensions.passkeyDiscovery {
@@ -936,6 +946,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.passkeyUpgrade {
 		selected := c
 		passkeyUpgrade, c.Passkey = &selected, nil
+		// HTTP transport is enabled with the real successor owner, not on the
+		// baseline graph used to create and verify the existing account.
+		c.HTTPPasskey = nil
 		baselineSession := *c.Session
 		baselineSession.Passkey = false
 		c.Session = &baselineSession
@@ -958,6 +971,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			invalid = *passkeyUpgrade
 		}
 		invalid.Passkey = nil
+		// Isolate common-session selection rather than the separately selected
+		// HTTP owner's earlier prerequisite validation.
+		invalid.HTTPPasskey = nil
 		graph, err := reference.ComposeStores(invalid, deps)
 		if err == nil {
 			bounded, stop := context.WithTimeout(context.Background(), time.Second)
@@ -969,6 +985,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if !errors.As(err, &input) || input.Field != "reference_session" {
 			t.Fatal("missing common passkey owner did not reach its selection guard")
 		}
+	}
+	if extensions.passkeyHTTP {
+		selected := c
+		if passkeyUpgrade != nil {
+			selected = *passkeyUpgrade
+		}
+		proveReferencePasskeyHTTPPrimarySelection(t, selected, deps)
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
@@ -1059,6 +1082,9 @@ END $$`); err != nil {
 	if extensions.postgresBaseline {
 		config.Profile = reference.PostgresOnly
 	}
+	if extensions.passkeyHTTP {
+		config.HTTP.Network.TenantHosts = []identityhttp.TenantHost{{Host: "identity.example", TenantID: otpTenant}}
+	}
 	server, err := reference.NewServer(config, deps, features)
 	if err != nil {
 		if invalid, ok := err.(identity.InvalidInputError); ok {
@@ -1071,6 +1097,23 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPPasskey != nil {
+		wantOperations += 5
+		for _, operation := range []string{"register-options", "register-verify", "signin-options", "signin-verify", "list"} {
+			if !seen["identity.passkey."+operation] {
+				t.Fatal("selected passkey operation missing", operation)
+			}
+		}
+		if seen["identity.passkey.update"] || seen["identity.passkey.delete"] {
+			t.Fatal("unselected passkey management advertised")
+		}
+	} else {
+		for operation := range seen {
+			if strings.HasPrefix(operation, "identity.passkey.") {
+				t.Fatal("unselected passkey HTTP advertised")
+			}
+		}
+	}
 	if c.HTTPPhoneOTPSignin != nil {
 		wantOperations += 3
 		for _, id := range []string{"identity.phone.send-signin", "identity.phone.signin", "identity.phone.signin.recover"} {
@@ -1299,6 +1342,9 @@ END $$`); err != nil {
 	}
 	network.StartTLS()
 	client := network.Client()
+	if extensions.passkeyHTTP {
+		client.Transport = passkeyFixtureHostTransport{next: client.Transport}
+	}
 	client.Timeout = 5 * time.Second
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal(err)
@@ -1423,14 +1469,20 @@ END $$`); err != nil {
 				selectedConfig = *passkeyUpgrade
 			}
 			var sessionHandler http.Handler
+			var passkeyDocument []byte
 			if extensions.passkeySessionHTTP {
 				selectedServer, err := reference.NewServer(config, deps, selected)
 				if err != nil {
 					t.Fatal("selected passkey session HTTP server", err)
 				}
 				sessionHandler = selectedServer.Handler()
+				passkeyDocument = selectedServer.OpenAPI().JSON()
 			}
-			proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)
+			if extensions.passkeyHTTP {
+				proveReferencePasskeyHTTP(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler, passkeyDocument)
+			} else {
+				proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)
+			}
 		}
 	}
 	if extensions.phoneEnrollment {

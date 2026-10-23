@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Select existing-account cookie passkey enrollment, identified or explicitly
+  identifier-free signin and safe inventory with `HTTPPasskey`. The reference
+  server composes real shared browser, session, proof and rate owners; options
+  retries return original metadata rather than another challenge. HTTP remains
+  off unless selected. Signup, conditional UI and credential management are not
+  enabled by this profile.
+
 - Explicitly select original-key passkey options with `Passkey.KeyedOptions`.
   Guarded enrollment and identified/identifier-free options retain one native
   command and reveal options only to its fresh committed winner. Matching

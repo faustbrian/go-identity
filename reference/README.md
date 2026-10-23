@@ -14,6 +14,14 @@ signin. Both modes use the same guarded passkey session read/logout owner.
 `Passkey.KeyedOptions` separately enables native original-key options and
 metadata-only retry through that handle; it creates no HTTP routes.
 
+Select `HTTPPasskey` separately for cookie enrollment options/verification,
+original-flow signin options/verification and safe inventory. Each group is
+explicit; identifier-free mode additionally requires both HTTP and native risk
+opt-ins. Common session read/logout remains independently selected. The graph
+supplies actual native owners, signed device custody, shared rates and exact
+email comparison policy, not application-written handlers. Signup, conditional
+UI and credential management remain outside this selected HTTP profile.
+
 ## Native secondary-OTP enrollment
 
 `StoreConfiguration.MFAOTPEnrollment` selects pending OTP enrollment separately

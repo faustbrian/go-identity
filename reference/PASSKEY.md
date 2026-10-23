@@ -44,6 +44,57 @@ PostgreSQL risk owner; it is not qualified for the four-target Valkey profile.
 
 ## Configuration
 
+### Selected HTTP profile
+
+`StoreConfiguration.HTTPPasskey` independently selects `Registration`, `Signin`
+and `Inventory`. `Discoverable` additionally opts signin into identifier-free
+input; the native authentication risk policy must also permit discovery. Nil
+exposes no passkey routes or metadata. This is backend transport, not a UI.
+
+For enrollment/signin select `Passkey.KeyedOptions` and the existing
+`HTTPPreAuth` signed device profile. HTTP enrollment requires both native action
+primaries to select cookie transport; direct native bearer selection remains
+available when HTTP enrollment is off. Both enrollment and signin must retain
+the same exact trusted origin as HTTP device initiation. Signin additionally
+retains its flow-cookie tuple and canonical five-minute flow lifetime.
+The RP must match the effective
+HTTPS deployment origin, not a socket address hidden behind a proxy. Select
+`Session.Passkey` for signin/inventory; `HTTPSession` separately enables common
+read/logout. The graph reuses the configured password-signin email parser,
+including its local-part rules and fixed nontransitional domain IDNA.
+
+The finite public journey is:
+
+1. Obtain a fresh action-specific proof through `POST /v1/password/verify`.
+   `POST /v1/passkey/register-options` takes closed JSON `proofID`, the session
+   cookie, signed device cookie, exact Origin/CSRF and one `Idempotency-Key`.
+2. Retain `commandID` as the original ceremony ID and send `options.publicKey`
+   to the authenticator. A matching retry returns only original command/outcome
+   metadata, with no `options` field.
+3. Obtain the distinct register-verify proof. `POST /v1/passkey/register-verify`
+   accepts `proofID`, a fresh `commandID`, original `ceremonyID`, raw browser
+   `response` and optional `label`. It rejects `Idempotency-Key`.
+4. Initiate `POST /v1/session/preauth-issue` with `method:"passkey"` and optional
+   boolean `remember` (`false` explicitly selects a browser session). Retain
+   the original flow cookie, `flowID` and signed device cookie.
+5. `POST /v1/passkey/signin-options` takes one `Idempotency-Key`, that original
+   browser custody and `mode:"identified"` plus `identifier`, or the explicitly
+   selected `mode:"discoverable"` without any identifier. Its retry semantics
+   are the same as enrollment options.
+6. `POST /v1/passkey/signin-verify` adds a fresh `commandID`, original
+   `ceremonyID` and raw browser `response`; no retry-key/remember/tenant/user/RP
+   override is accepted. Only a fresh known commit delivers the owned session
+   cookie and `X-CSRF-Token`.
+7. `GET /v1/passkey/list` returns bounded safe self metadata. Use the common
+   session read/logout routes when separately selected.
+
+Inventory shares an already selected session/MFA/email safe limiter. If none is
+selected, configure its explicit inventory rate namespace, emergency bound and
+bounded degradation recorder; competing ownership is rejected. Mutation routes
+share auth and verification rate identities. All native risk, original expiry,
+current authority and atomic-consumption checks remain mandatory. No HTTP signup,
+conditional UI, rename/delete, MFA fallback or browser interoperability is claimed.
+
 `PasskeyConfiguration.Protocol` fixes tenant, RP, origins, challenge key and
 bounded duration before any browser input. `RPNamespace` is a deployment scope,
 not a caller-selected field. This profile supports resident-required UV/none/

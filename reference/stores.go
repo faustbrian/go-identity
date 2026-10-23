@@ -40,8 +40,10 @@ type ReferenceDependencies struct {
 type StoreConfiguration struct {
 	// Passkey explicitly selects native existing-account passkey workflows.
 	// Nil exposes no passkey handle, route or method; HTTP stays independent.
-	Passkey  *PasskeyConfiguration
-	Velocity VelocityStoreConfiguration
+	Passkey *PasskeyConfiguration
+	// HTTPPasskey opts into selected existing-account passkey HTTP operations.
+	HTTPPasskey *HTTPPasskeyConfiguration
+	Velocity    VelocityStoreConfiguration
 	// DurableAdmission selects durable PostgreSQL-only risk admission. It is
 	// mutually exclusive with Velocity and enables no HTTP feature by itself.
 	DurableAdmission *DurableAdmissionConfiguration
@@ -523,6 +525,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpUsername != nil {
 		state.features.httpUsername.close()
+	}
+	if state.features != nil && state.features.httpPasskey != nil {
+		state.features.httpPasskey.close()
 	}
 	if state.features != nil && state.features.httpMagicLink != nil && state.features.httpMagicLink.rate != nil {
 		state.features.httpMagicLink.rate.Close()

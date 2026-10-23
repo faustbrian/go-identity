@@ -127,6 +127,7 @@ type featureState struct {
 	httpPhoneOTPSignin           *phoneOTPSigninHTTPState
 	httpPhoneSignin              *passwordSigninHTTPState
 	httpUsername                 *usernameHTTPState
+	httpPasskey                  *passkeyHTTPState
 	registrationConfirmation     *passwordpg.EmailVerificationRouter
 	verificationSignin           *passwordpg.VerificationSigninService
 	verificationSigninMFA        bool
@@ -163,6 +164,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPPasskey != nil && c.Passkey == nil {
+		return identity.InvalidInputError{Field: "reference_http_passkey"}
+	}
 	if c.Passkey != nil && (c.OTP == nil || c.Session == nil || c.PasswordSignin == nil || c.PasswordVerification == nil) {
 		return identity.InvalidInputError{Field: "reference_passkey"}
 	}
@@ -740,6 +744,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpEmailAddresses.rate.Close()
 		}
 	}()
+	httpPasskey, err := composePasskeyHTTP(c, passkeyOwner, sessionOwner, passwordVerificationOwner, httpPreAuth, s.httpRate, httpSession, httpMFAList, httpEmailAddresses)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			httpPasskey.close()
+		}
+	}()
 	httpEmailRequests, err := composeEmailRequestsHTTP(c, emailOwner, passwordVerificationOwner, s.httpRate, httpPasswordChange, httpRegistrationVerification)
 	if err != nil {
 		return err
@@ -838,6 +851,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpPhoneOTPSignin = httpPhoneOTPSignin
 	s.features.httpPhoneSignin = httpPhoneSignin
 	s.features.httpUsername = httpUsername
+	s.features.httpPasskey = httpPasskey
 	s.features.registrationConfirmation = registrationConfirmation
 	s.features.verificationSignin = verificationSigninOwner
 	s.features.verificationTOTP = verificationTOTP
