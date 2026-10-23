@@ -1,6 +1,25 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 19:22 UTC
+## TL;DR — updated 2026-10-23 20:53 UTC
+
+- **Overall: approximately 25% complete, low confidence; 11/39 milestones closed.**
+  This estimates delivered outcomes plus remaining scope/qualification, not file
+  counts. All 67 units remain required; no new full-unit qualification is closed.
+- **Newly delivered:** existing-account passkey enrollment -> identified or
+  identifier-free HTTP signin -> safe inventory -> session read/CSRF logout.
+  Keyed options retries retain original metadata without another challenge.
+- **Delivery:** independently reviewed Reference `c1f9342` and HTTP `abfee651`
+  are on main with green Required CI. A separate clean public-module consumer
+  passes all four fresh/upgrade x signin-mode PostgreSQL/race journeys (33.602s),
+  without replacements; dependencies verify and changed archive files match.
+- **Current:** native credential rename is implemented and public-only compiled;
+  genuine PostgreSQL acceptance is underway. Proof prerequisites are delivered;
+  the additive MFA guard is also main-pushed with green CI. Rename is not delivered.
+- **Next/remaining:** finish rename and Reference/HTTP integration. Passkey-first
+  signup, conditional signin, deletion, other roadmap families and full-unit/
+  release qualification remain open. No user decision is needed. Full M16 stays open.
+
+## Retained checkpoint — 2026-10-23 19:22 UTC
 
 - **Whole goal: approximately 25%, low confidence; 11/39 complete milestones.**
   All 67 units remain required. Finite delivered profiles are not full-unit

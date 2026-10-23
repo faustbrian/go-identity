@@ -1,5 +1,226 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 20:53 UTC: exact update MFA selector DELIVERED as main14c2b7df99f1e6a8
+ba34f590a9627e4a1741a5f6, remote confirmed, Required40022467514 SUCCESS.
+Independent /root/passkey_management_prerequisite_final APPROVE complete4paths
+67ea7a69...bbc6d. Expected guard RED, focused0.241s/fullordinary0.138s,
+taggedvet/moduleverify0, changed-content27394bytes/noleaks. No new SQL/proof/
+factor owner. Native worker authenticated public14c2 with Sumh1:E6c3Hc4NC+x3MFC3
+ObcuYZ8e16jJKhA8JTx916W/TQU=, compiled new actual service/participant against
+public owners (unit0.356s/taggedcompile0.271s). First real PG path reached genuine
+rename and protocol-preservation assertions, then failed its test-only version
+text scan; worker corrects that oracle under retained bounded slot. No runtime
+cohort, native rename delivery or consumer closure is claimed from that attempt.
+Primary heavy slot remains worker-owned; no concurrent Go/service run.
+
+2026-10-23 20:50 UTC: existing-account passkey HTTP Reference profile CLOSED.
+Reviewed/main-pushed c1f934228116a801252671ca6c20d77b0cd07de4; exact Required
+40021950187 SUCCESS. Authenticated public Referencev0.0.0-20261023204727-c1f934228116
+Origin.Hash exactc1f9342, sumh1:nUB9gigvQa50Sh562+ew/R3PJUhr/exS+m2jOukvJa4=.
+All14changed archive files byte-match delivered source. Separate clean external
+module compiles actual HTTP selection and runs allfour public Reference journeys
+PG/race33.602s, moduleverifyall, no replaced modules/GOWORK binding. Its fixture
+is now disposable; result is public consumer behavior, not release/browser/
+hardware/fullM16/unit qualification. ~25%/11of39/67scope unchanged. Native worker
+has implemented code-only rename service/participant against actual owners;
+expected missing-service RED/public adoption retained, runtime tests still next.
+
+2026-10-23 20:48 UTC: Reference HTTP composition independently APPROVE by
+/root/reference_passkey_http_final3, exact15path e8a482cd...3ee5e. Main-pushed
+c1f934228116a801252671ca6c20d77b0cd07de4; Required40021950187 pending. Public
+Referencev0.0.0-20261023204727-c1f934228116 authenticates with exact Origin.Hash
+and sum h1:nUB9gigvQa50Sh562+ew/R3PJUhr/exS+m2jOukvJa4=. Clean external consumer
+journey remains next; no deployment, fullM16/unit or historical-gate closure.
+Native rename writer first actual public ManagementService boundary aligns with
+existing actual proof/session/risk/request/coordinator owners. Parent identified
+reader-clock/frozen-policy alignment corrections; worker applies before tests.
+Native also needs exact update scope in MFA's existing factor guard (pinned1d7a
+currently only admits enrollment). Primary owns a minimal additive selector and
+its self/version/owner/schema-denial regressions; no factor/state/proof bypass,
+new SQL owner or migration is needed. Worker continues code-only; heavy slot is
+primary-owned for public Reference consumer and the small guard regression.
+
+2026-10-23 20:43 UTC: rename upstream prerequisites DELIVERED. Independent
+/root/passkey_management_prerequisite_final APPROVE exact native8path759bf278
+and neutralroot4path038478c7. Main identityd618c1a3d5e7e334f43cd0192974e29dc1ce2a79
+Required40021219015 SUCCESS; passkey43285aca38b3e2f0dda41709ba7e2ccc69e13f26
+Required40021262391 SUCCESS; both remote heads confirmed. Real consuming proof
+rollback/commit/replay/populated migration PG/race4.726s, native ordinary0.317s,
+vet/moduleverify0; carrier missing-API RED then focused0.194s/root0.094s, root
+vet/moduleverify0; changed-content86494bytes/noleaks. Separate wholefile scan
+only flagged2 unchanged go.sum checksums, not cleared history qualification.
+Public pins password/postgres v0.0.0-20261023204138-d618c1a3d5e7 and rootpasskey
+v0.0.0-20261023204144-43285aca38b3 assigned to worker for authenticated download,
+native pin adoption and bounded actual missing-service RED, then code-only
+implementation. Required original CommandID comes from existing keyed owner;
+incoming command/record overrides deny. Independent metadata_version never
+changes protocol/credential authority. No native rename delivery claimed yet.
+Reference complete15path final review3 now covers e8a482cd...3ee5e, after actual
+cookie-primary and registration-only origin REDs. Corrected four-path HTTP
+PG/race33.518s obtains actual issuer device+flow; ordinary1.069s/command3.191s,
+taggedvet/moduleverify0. No new full milestone/unit count or scope changes.
+
+2026-10-23 20:33 UTC: primary prerequisite for the frozen rename consumer:
+ONLY password/postgres action-primary/consumption allowlists, new forward-only
+PasskeyManagementReauthenticationMigrationSource and focused tests/docs.
+Actual public358f excludes update. Add exact self-only identity.passkey.update
+under passkey/identity.passkey.update.native-v1 and passkey/postgres contributor;
+retain signed proof/session/audience/current-owner/freshness, one-use rollback,
+record bytes and all installed migration bytes. Delete/signin stay unselected.
+Prove original signed custody/substitution denial, genuine password-issued
+update proof consumption/rollback/replay over PostgreSQL and populated suffix
+preservation. Focused password/postgres tests, affected PG/race, taggedvet,
+moduleverify and scoped secrets, then one independent review/main delivery.
+No Reference migration/config change in this prerequisite; native rename and
+later explicit Reference management composition must select its public suffix.
+
+2026-10-23 20:31 UTC: public-pinned Reference passkey HTTP composition frozen
+for complete independent final-diff review. Baseabfee6519bce, exact15paths
+modules.json plus14Reference paths, sortedpath/NUL/bytes/NUL SHA256
+b5f462c1d527aca14aa5442c624ef302df2108d103cdfb1e0a5e7875e0c9081b.
+No replaces/GOWORK bindings; authenticated leaf public pinabfee. Four genuine
+identified/discovery x fresh/upgrade HTTP PG/race journeys23.380s. Ordinary
+Reference1.278s/baselinecommand3.254s, taggedvet0, moduleverifyall. Actual native
+rename worker found password/postgres closed ActionPrimary mapping lacks exact
+identity.passkey.update; primary owns that additive prerequisite, worker has
+made no writes/runs and will not substitute proof authority. No user decision.
+FullM16/11of39/~25%/67unit scope unchanged; Reference delivery still pending.
+
+2026-10-23 20:28 UTC: leaf HTTP batch independently APPROVE by
+/root/passkey_http_leaf_recheck and main-pushed as abfee6519bcecff80a341e425613235db1c2df72.
+Exact Required40019241094 SUCCESS; canonical public module
+v0.0.0-20261023202618-abfee6519bce resolves with exact Origin.Hash. Primary
+adopts that public pin and owns current Reference final proof/review/delivery;
+the temporary development workspace is not publication evidence.
+
+Dependency-ready worker successor: passkey_options_idempotency owns ONLY
+go-passkey/postgres/** and, if neutral public records are necessary, new root
+management.go/management_test.go plus module-local README/CHANGELOG/go.mod/sum.
+No other repository, root manifests/workspace/CI, aggregate notes or Git writes.
+Consume nativec3579c8/root8c3a703 with real PG enrollment/signin/inventory and
+original ceremony/current-owner proof already delivered; password324d/native358f,
+kernel9a09aa, session219499b, protocol84664c3/risk existing native pins. Finite
+outcome: fresh signed action proof -> keyed self credential-label rename at
+expected safe reference/version -> safe inventory changed once -> same real
+passkey still signs in/reads/logs out. Required current tenant/user/RP/factor/
+authorization, proof consumption, counters, metadata version, exact canonical
+identity.passkey.rename_credential audit/outbox and command outcome share sole
+Work; no foreign protocol SQL, second proof/replay/credential owner or callback.
+Prove wrong/stale/cross-scope proof/version denial, exact-key replay/mismatch,
+one winner, rollback and genuine ambiguous commit metadata-only recovery.
+Exclude delete/last-recovery changes, signup/conditional UI, protocol changes and
+HTTP/Reference integration (primary-owned). Worker first reports actual consumed
+contract/public boundary alignment; missing upstream behavior is requested from
+its owner, not substituted. Serial focused Go/PG checks require primary slot;
+one complete independent final review before delivery. Full M16/67 unchanged.
+
+2026-10-23 20:25 UTC: actual existing-account passkey HTTP/Reference profile now
+works locally across identified/discovery x fresh/populated installations.
+Real HTTP password proofs, keyed options metadata retries, native UV enrollment,
+signed assertion, owned session, safe inventory and common read/CSRF logout pass
+PG/race23.704s. Successful requests and actual responses validate against the
+selected exported OpenAPI. Wrong proof phase, browser/mode, CSRF/origin, foreign
+inventory scope and replay deny without fresh authentication. Development uses
+only a disposable two-module workspace, not releasable replacements/public proof.
+Leaf review1 REQUEST_CHANGES found original outcome loss at expiry and challenge
+bytes traversing middleware writers. Both observed REDs are corrected in leaf
+ac159f24...dbc1fb; focused race2.796s, ordinary0.260s and vet pass. Unchanged
+hostile-parser fuzz89713exec/6.254s reused. Complete final re-review is pending;
+leaf17+root3 main delivery must precede public Reference pin/qualification.
+No new M16/unit closure, no user decision, no Tools work. Primary owns pending
+Reference source/default-off/graph lifetime and public consumer delivery.
+
+2026-10-23 20:05 UTC: Reference original-key native profile DELIVERED as
+d2791533566e83ed5deed08601187123e3e3e975, remote main confirmed and exact Required
+40015998528 SUCCESS. Independent /root/reference_keyed_passkey_final APPROVE
+complete10pathdiff26b4f971...7ed05. Six guarded portable entry points and opaque
+KeyedOptions configuration reuse native request/ceremony owners. Compiler REDs
+for missing entry/config APIs observed; private-field fmt key-leak RED then
+opaque-constructor correction. Actual journey exposed missing fixture-specific
+request-admission permission, corrected only for the exact enrollment resource.
+Final focused units0.390s, four identified/discovery fresh/upgrade PG-race18.767s,
+ordinary Reference0.948s/command2.887s, taggedvet/moduleverify/diffcheck pass,
+scopedsecrets46118bytes/no leaks. Public Reference
+v0.0.0-20261023200124-d2791533566e authenticates with Origin.Hash exactd279153
+and sum h1:UrAuJSafRk+qcXD1N4Ta/BR+6PtP00YMEa1wrXA8x4Y=; a separate clean
+module runs allfour downloaded-public journeys PG/race18.993s with no replacements
+and all modules verified. Nativec3579c8 Required40014822855 SUCCESS. FullM16/
+~25%/11of39/67unit scope unchanged; HTTP enrollment/signin is not delivered.
+Leaf worker owns http/passkey/**; signin ingress/source-denial tests green0.226s,
+registration/list missing-constructor RED observed, implementations underway.
+Primary owns pending Reference actualHTTP composition and module registration.
+
+2026-10-23 19:53 UTC: native original-source prerequisite independently approved
+and main-pushed as go-passkey c3579c8; Required pending. Root8c3a703 Required
+40013925814 SUCCESS; baseHTTPfaf3471 Required40013646384 SUCCESS. Source reads,
+retained enrollment/identified/discovery/keyed-session journeys pass real PG
+6.765s and race36.917s; direct global/tenant generation withdrawal race12.493s,
+ordinary0.156s, final taggedvet/moduleverify and scopedsecrets72393bytes pass.
+Reviewer /root/passkey_original_source_final APPROVE final14paths, sole coverage
+request applied without a production change. Full M16 remains open.
+Resume existing passkey_options_idempotency worker's leaf HTTP assignment:
+ONLY go-identity/http/passkey/** (including existing primary parser/tests),
+module-local go.mod/sum/docs, no sharedHTTP/Reference/manifests/workspace/CI/
+aggregate notes/Git. Consume public root8c3a/nativec3579c8/baseHTTPfaf3471,
+session219499b and password324d/native358f; actual native source/one-use and
+retained keyed behavior above unlock transport development. Finish five
+explicitly selected cookie-only operations from19:07 profile: enrollment
+options/verify, identified/discoverable signin options/verify, safe inventory.
+Primary retains Reference/keyed-owner configuration, direct migration wiring,
+root module registration and real HTTP end-to-end journey. Existing body tests
+observed undefineddecodeBody RED then green0.245s; new signin transport tests
+currently compiler RED for absent SigninConfig/constructors. Complete ingress,
+original rate metadata, response secret custody, wire/OpenAPI and hook behavior;
+no private auth/retry/validity engine or per-helper delivery. Local heavy checks
+remain serialized by explicit primary grant; no child agents or unrelated APIs.
+
+2026-10-23 19:44 UTC: shared HTTP passkey rate/CSRF prerequisite independently
+approved by /root/passkey_http_rate_final and main-pushed as faf3471; exact
+Required40013646384 running. Focused race2.402s, complete HTTP ordinary2.511s,
+bounded fuzz1937 executions/8.369s, vet/moduleverify/diffcheck pass; scoped
+secrets31696bytes/no leaks. No handlers or full M16 closure claimed. Native
+alias358f9c9 Required40012302739 is now SUCCESS. Worker original-ceremony reads
+are sensitive rate metadata, not an unconsumed-validity lease: matching retained
+consumed history may remain readable under original custody/time; native
+completion still revalidates and atomically consumes without repeat secrets.
+Do not add a second validity API or foreign-owner SQL for rate-only metadata.
+Worker root records are frozen for independent review while native source
+implementation continues; primary retains actual HTTP/Reference integration.
+
+2026-10-23 19:34 UTC: portable password input prerequisite is independently
+approved and main-pushed as core324d7ae (Required40011578996 SUCCESS) and native
+alias358f9c9 (Required40012302739 pending). Original missingAPI and aliasassignment
+REDs observed; core/native complete module tests and vet/moduleverify pass.
+Exact fields, method sets, diagnostic marker and sentinel remain; reflected
+package identity deliberately moves to core, disclosed in native README/changelog.
+The passkey worker's next lane is go-passkey root/PostgreSQL records and genuine
+original-ceremony rate-source reads, consuming publiccore324d/native358f and its
+own committed2f4d913 runtime. Own go-passkey root/*.go and postgres/** plus module
+local go.mod/sum and docs/changelogs; no root manifests/workspace/CI, other repos,
+Reference/HTTP, aggregate notes or Git. No children or heavy runs until granted.
+Finite outcome: optional transport consumes neutral records; native source
+authenticates original session/proof or browser/ceremony and returns only exact
+rate dimensions/original lifetime, no eligibility, credential, challenge or
+user handle. Keep old names as aliases; preserve session/crypto/risk/replay
+owners, including mode separation and metadata-only keyed retry. Parent owns
+HTTP/source integration and checks first public boundary before further work.
+
+2026-10-23 19:24 UTC: continue frozen M16 existing-account HTTP profile through
+its demonstrated upstream contracts, not another milestone or preflight. Primary
+owns password/** and HTTP/shared composition. First extract the unchanged
+ActionPrimaryRequest data carrier into adapter-neutral identity/password;
+retain password/postgres's public name as an exact alias after its public pin.
+No new proof, validator, consumer callback, store or workflow; original signed
+proof/session/CSRF, field types, diagnostics and serialization errors stay exact.
+Consume existing authv2/authorizationv3/identity/session public values. Prove
+missing public API RED, credential diagnostic/JSON/text denial and untouched
+borrowed custody, actual source alias consumers and retained action-primary
+behavior. A bounded portable-contract batch gets one independent final review,
+then coherent main delivery/public pins before native passkey extraction starts.
+No package gate/milestone count changes for these prerequisites. The subsequent
+native worker may own only go-passkey transport records/aliases; primary retains
+missing original-ceremony rate and baseHTTP rate/CSRF contracts plus integration.
+
 2026-10-23 19:22 UTC: common Reference session profile DELIVERED as
 1d2fcbd13ddfd5726822643d01e4355f761437e3, origin/main confirmed, exact Required
 40010533635 SUCCESS. Independent /root/reference_common_passkey_final APPROVE
