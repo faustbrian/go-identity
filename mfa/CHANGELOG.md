@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an explicit authenticated OTP step-up request arm for factor update,
+  disjoint from pending enrollment and partial login. Verification binds the
+  original send and session; parsing neither authenticates nor consumes proof.
+
 - Bind verification-origin continuations to their separately committed
   confirmation without changing existing password/magic-link scope bytes.
 

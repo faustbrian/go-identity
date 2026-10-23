@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit retained consuming OTP attachment for the exact authenticated native
+  MFA step-up schema and factor-verification lifecycle. Preserve counted
+  denials, original input/risk and one native OTP owner without enabling login,
+  enrollment substitution or generic consuming preparation.
+
 - Fence an approved human device-grant source during client-authenticated
   polling without relabeling its client actor or anonymous command. The exact
   native profile locks current credential and authorization epochs, denies

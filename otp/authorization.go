@@ -174,6 +174,8 @@ type continuationState struct {
 // tenant/subject must match the original verified record. Original session policy,
 // lookup digest, full authority and authentication timeline are committed without
 // renewal; this remains structural custody, not authenticated admission.
+// Completed password/MFA sessions use v7 (tokenless) or v8 (CSRF-bound), also
+// committing exact historical factor/child provenance without renewing it.
 // Explicit NewMFAFlowAuthorization uses a disjoint v5 consumed-primary frame,
 // accepts only PurposeMFA and binds the exact subject/child target and original
 // remember policy. It neither exposes nor renews an ordinary pending flow.
@@ -222,6 +224,12 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 		b = []byte("identity-otp-authorization-v3\x00")
 		if _, err := record.CSRFState().Bindings(); err == nil {
 			b = []byte("identity-otp-authorization-v4\x00")
+		}
+		if _, err := record.MFAAuthentication().Bindings(); err == nil {
+			b = []byte("identity-otp-authorization-v7\x00")
+			if _, err := record.CSRFState().Bindings(); err == nil {
+				b = []byte("identity-otp-authorization-v8\x00")
+			}
 		}
 	}
 	if record, binding, bound := a.MFAContinuation(); bound {

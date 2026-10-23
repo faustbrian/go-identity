@@ -11,3 +11,16 @@ func otpEnrollmentPreparation(p CommandPlan) bool {
 		p.SubjectType == "factor" && p.CommandCounters != nil && p.Lifecycle != nil && p.Lifecycle.EventType == "factor.enrolled.v1" && p.Lifecycle.BeforeVersion > 0 && p.Lifecycle.BeforeVersion != ^uint64(0) && p.Lifecycle.AfterVersion == p.Lifecycle.BeforeVersion+1 &&
 		p.Capability == nil && p.CapabilityIssuance == nil && p.MFACompletion == nil && p.MFAContinuation == nil && p.Delivery == nil && (p.OTP == nil || p.OTP.Mode == OTPConsume && validateOTPPlan(p) == nil)
 }
+
+// Active factor proof issuance has its own closed action/lifecycle. It shares
+// retained consuming-OTP attachment, not enrollment or login authority.
+func otpActivePreparation(p CommandPlan) bool {
+	return p.Feature != nil && p.Feature.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-verify", SchemaID: "mfa-otp-step-up", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) &&
+		p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) &&
+		p.SubjectType == "factor" && p.CommandCounters != nil && p.Lifecycle != nil && p.Lifecycle.EventType == "factor.verified.v1" && p.Lifecycle.BeforeVersion > 0 && p.Lifecycle.BeforeVersion != ^uint64(0) && p.Lifecycle.AfterVersion == p.Lifecycle.BeforeVersion+1 &&
+		p.Capability == nil && p.CapabilityIssuance == nil && p.MFACompletion == nil && p.MFAContinuation == nil && p.Delivery == nil && (p.OTP == nil || p.OTP.Mode == OTPConsume && validateOTPPlan(p) == nil)
+}
+
+func otpFactorPreparation(p CommandPlan) bool {
+	return otpEnrollmentPreparation(p) || otpActivePreparation(p)
+}

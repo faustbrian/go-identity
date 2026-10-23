@@ -296,7 +296,7 @@ func (c *Coordinator) prepareRestoredFeature(b identity.CommandBinding, generate
 	// Only this closed retained-preparation route may restore consuming OTP.
 	// Ordinary command preparation remains closed to opaque code custody.
 	if final.OTP != nil {
-		if !(final.MFACompletion != nil && validMFACompletionPlan(b, final)) && !otpEnrollmentPreparation(final) && !phoneResetConsumptionPlan(final) {
+		if !(final.MFACompletion != nil && validMFACompletionPlan(b, final)) && !otpFactorPreparation(final) && !phoneResetConsumptionPlan(final) {
 			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
 		}
 		return c.prepareOTPReservation(b, generated, final)
@@ -393,7 +393,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 
 func preparationProtected(p CommandPlan) bool {
 	phone := phoneResetConsumptionPlan(p)
-	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil && !otpEnrollmentPreparation(p) && !phone || p.RiskEvidence != nil && !phone && !phoneResetRequestPreparation(p) || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil && !otpFactorPreparation(p) && !phone || p.RiskEvidence != nil && !phone && !phoneResetRequestPreparation(p) || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
 // Only the original closed reset consumption plan may precede hash generation.
@@ -470,7 +470,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if (original.MFACompletion == nil) != (final.MFACompletion == nil) || original.MFACompletion != nil && (*original.MFACompletion != *final.MFACompletion || !validMFACompletionPlan(b, original) || !validMFACompletionPlan(b, final)) {
 		return false
 	}
-	addedEnrollmentOTP := original.OTP == nil && final.OTP != nil && otpEnrollmentPreparation(original) && otpEnrollmentPreparation(final)
+	addedEnrollmentOTP := original.OTP == nil && final.OTP != nil && otpFactorPreparation(original) && otpFactorPreparation(final)
 	if !addedEnrollmentOTP && ((original.OTP == nil) != (final.OTP == nil) || original.OTP != nil && *original.OTP != *final.OTP) {
 		return false
 	}
@@ -672,7 +672,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 		return Reservation{}, err
 	}
 	if admitted.otp != nil {
-		if admitted.mfaCompletion == nil && !otpEnrollmentPreparation(admitted.snapshot()) && !phoneResetConsumptionPlan(admitted.snapshot()) || generated.source == nil {
+		if admitted.mfaCompletion == nil && !otpFactorPreparation(admitted.snapshot()) && !phoneResetConsumptionPlan(admitted.snapshot()) || generated.source == nil {
 			return Reservation{}, invalidPreparation()
 		}
 		otpJournal := r.journal
@@ -682,7 +682,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 		if plan == nil {
 			otpJournal.previousGeneration = 0
 		}
-		if plan == nil && (otpEnrollmentPreparation(admitted.snapshot()) || validMFACompletionPlan(admitted.binding, admitted.snapshot()) || phoneResetConsumptionPlan(admitted.snapshot())) {
+		if plan == nil && (otpFactorPreparation(admitted.snapshot()) || validMFACompletionPlan(admitted.binding, admitted.snapshot()) || phoneResetConsumptionPlan(admitted.snapshot())) {
 			// Reuse the native counted-denial phase in this same attachment
 			// transaction before any consuming participant is reserved. A correct
 			// precheck rolls back; a wrong submission retains debit/audit/terminal

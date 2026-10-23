@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind completed password/MFA session provenance in distinct v7/v8 OTP
+  authorization domains, preserving existing v3/v4 single-factor bytes and
+  original authentication times. No proof or freshness is created by custody.
+
 - Preserve explicit sessionless phone-recovery pre-auth custody without a
   remember policy, in a distinct v6 authorization-binding domain. Add the
   closed phone-recovery conjunction denial transition against the existing

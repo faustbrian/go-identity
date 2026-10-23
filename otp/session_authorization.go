@@ -80,6 +80,24 @@ func appendSessionAuthorization(out []byte, record session.Session) []byte {
 		out = binary.BigEndian.AppendUint32(out, state.KeyVersion)
 		out = append(out, state.Digest[:]...)
 	}
+	if factor, err := record.MFAAuthentication().Bindings(); err == nil {
+		// The v7/v8 domains bind the original completed factor as well as its
+		// account epoch. Omitting it would let different historical completions
+		// share one OTP authorization digest. Remember is already bound above.
+		for _, value := range []string{string(factor.CommandID), string(factor.PrimaryCommandID), string(factor.ContinuationID), factor.Method, factor.FactorID, string(factor.RecoverySetID)} {
+			out = binary.BigEndian.AppendUint16(out, uint16(len(value)))
+			out = append(out, value...)
+		}
+		out = append(out, factor.ContinuationScopeDigest[:]...)
+		for _, value := range []uint64{factor.EnrollmentVersion, factor.FactorAuthorityVersion, factor.ContinuationVersion, factor.RecoverySetVersion} {
+			out = binary.BigEndian.AppendUint64(out, value)
+		}
+		for _, at := range []time.Time{factor.VerifiedAt, factor.ValidUntil} {
+			text := at.UTC().Format(time.RFC3339Nano)
+			out = binary.BigEndian.AppendUint16(out, uint16(len(text)))
+			out = append(out, text...)
+		}
+	}
 	return out
 }
 

@@ -118,6 +118,12 @@ the GET check endpoint; this direct-platform API does not install any route.
 
 ## Original-session synchronizer binding
 
+Completed password/MFA sessions also retain their historical factor/continuation
+provenance. Authorization domains v7 (tokenless) and v8 (CSRF-bound) commit that
+metadata, including method, enrollment, original primary/child and verification
+times. They create no authentication or renewed validity. Existing single-factor
+v3/v4 frames remain unchanged; native current-factor admission is still required.
+
 `NewBoundSessionAuthorization` retains both immutable session projections:
 the base record and separate digest-only `CSRFState`. `NewContinuation` commits
 the latter's presence, named key version and digest under

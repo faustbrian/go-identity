@@ -39,6 +39,9 @@ type OtpSendRequest struct {
 	// enrollment instead of a login child. All login-child fields must be absent.
 	// The native owner restores original enable provenance, not a new primary.
 	Enrollment *OTPEnrollmentContext
+	// StepUp explicitly selects authenticated active-factor verification for
+	// one protected action. It is disjoint from login and pending enrollment.
+	StepUp *OTPAuthenticatedStepUp
 }
 
 // Validate checks bounded structure only, without IO, authentication, policy,
@@ -46,7 +49,15 @@ type OtpSendRequest struct {
 // not evidence of enrollment, ownership or delivery availability.
 func (r OtpSendRequest) Validate() error {
 	bad := identity.InvalidInputError{Field: "mfa_otp_send"}
-	if r.Enrollment != nil {
+	if r.StepUp != nil {
+		if r.Enrollment != nil || r.ContinuationID != "" || r.PreAuthID != "" ||
+			r.Proof != (capability.Proof{}) || r.Cookie.Token() != "" ||
+			r.Callback != "" || r.Device != "" ||
+			!validOTPStepUpInput(r.TenantID, "", r.FactorID, r.Caller,
+				r.Origin, r.Network, *r.StepUp, "identity.mfa.otp-send", true) {
+			return bad
+		}
+	} else if r.Enrollment != nil {
 		if r.ContinuationID != "" || r.PreAuthID != "" || r.Proof != (capability.Proof{}) ||
 			r.Cookie.Token() != "" || r.Callback != "" || r.Device != "" ||
 			!validOTPEnrollmentInput(r.TenantID, "", r.FactorID, r.Caller,
@@ -103,6 +114,9 @@ type OtpVerifyRequest struct {
 	// factor; it cannot use this field to select a different factor or recipient.
 	FactorID   FactorID
 	Enrollment *OTPEnrollmentContext
+	// StepUp selects an original authenticated send, not a login child or
+	// enrollment. Native verification creates no session or trusted device.
+	StepUp *OTPAuthenticatedStepUp
 }
 
 // Validate checks bounded original structure, not factor or flow authority.
@@ -110,7 +124,15 @@ type OtpVerifyRequest struct {
 // produced by this structural check is retained or used to authenticate a code.
 func (r OtpVerifyRequest) Validate() error {
 	bad := identity.InvalidInputError{Field: "mfa_otp_verify"}
-	if r.Enrollment != nil {
+	if r.StepUp != nil {
+		if r.Enrollment != nil || r.TrustDevice || r.ContinuationID != "" ||
+			r.PreAuthID != "" || r.Proof != (capability.Proof{}) ||
+			r.Cookie.Token() != "" || r.Callback != "" || r.Device != "" ||
+			!validOTPStepUpInput(r.TenantID, r.CommandID, r.FactorID, r.Caller,
+				r.Origin, r.Network, *r.StepUp, "identity.mfa.otp-verify", false) {
+			return bad
+		}
+	} else if r.Enrollment != nil {
 		if r.ContinuationID != "" || r.PreAuthID != "" || r.Proof != (capability.Proof{}) ||
 			r.Cookie.Token() != "" || r.Callback != "" || r.Device != "" ||
 			!validOTPEnrollmentInput(r.TenantID, r.CommandID, r.FactorID, r.Caller,
