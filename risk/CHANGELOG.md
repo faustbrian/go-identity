@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Explicit startup `PolicyConfig.PasskeyDiscovery` admits genuine identifier-free
+  passkey signin with the existing authentication limits, required signals and
+  tenant/network/device buckets. Identified logins retain their identifier
+  counter; other operations and malformed/extra dimensions still deny. Retained
+  admission binds the selected policy and cannot renew original freshness.
+
 - Apply the existing tenant/subject safe-read counters to authenticated passkey
   inventory. This enables rate admission only, not public discovery or access
   to another user's credentials; session and self-user authorization remain

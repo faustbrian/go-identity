@@ -9,6 +9,28 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Identifier-free passkey admission
+
+`PolicyConfig.PasskeyDiscovery` is an explicit trusted startup selection for
+the passkey goal's identifier-free resident signin. Default false preserves
+existing policy and retained Authentication custody bytes. With it enabled,
+only exact `identity.passkey.signin-options` and `identity.passkey.signin-verify`
+may omit `Subject.IdentifierDigest`. Those commands count their actual tenant,
+canonical network and device, retaining the configured Authentication limits,
+required signals, unknown/threshold outcomes and exclusive evidence lifetime.
+They neither fabricate identifier facts nor use safe-read admission.
+
+Identified requests still count all four dimensions. Shared tenant/network/device
+keys remain identical across both profiles, while their complete command
+fingerprints and retained configuration custody stay distinct. A missing device,
+extra subject/session field or malformed supplied digest still denies. The
+native workflow must bind its selected mode to original browser custody and
+perform genuine joint credential/handle verification plus current-owner and
+factor checks; risk admission is not authentication. The existing PostgreSQL
+durable adapter accepts opaque variable-target commands. The retained Valkey
+layout is not qualified for this new profile and fails closed; no Valkey
+discovery support or whole-unit qualification is claimed here.
+
 ### Anonymous upgrade counters
 
 `identity.anonymous.upgrade` selects protected CredentialMutation counters,

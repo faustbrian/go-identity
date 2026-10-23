@@ -307,6 +307,11 @@ func (s *authenticationCustody) configuration(k EvidenceKey) [32]byte {
 	}{policy.version, policy.limits, policy.profiles, policy.hibpTTL, policy.hibpOperations})
 	defer clear(shape)
 	fields := []string{s.identity, string(shape), strconv.FormatInt(int64(e.timeout), 10)}
+	if policy.passkeyDiscovery {
+		// Off retains original configuration bytes for existing journals. The
+		// explicit new profile cannot restore under an otherwise equal old policy.
+		fields = append(fields, "identifier-free-passkey-authentication-v1")
+	}
 	if s.protectedProviders {
 		// The same native custody codec binds a distinct provider-only profile.
 		// No nontransactional counter/audit owner participates in this lane.

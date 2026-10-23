@@ -128,17 +128,23 @@ type PolicyConfig struct {
 	Limits   VelocityLimits
 	Profiles []Profile
 	HIBP     HIBPPolicy
+	// PasskeyDiscovery explicitly permits identifier-free resident signin for
+	// the two canonical passkey signin operations only. Missing identifiers
+	// remove just that counter; all Authentication limits/signals remain.
+	// This is trusted startup policy, never a browser-selected override.
+	PasskeyDiscovery bool
 }
 
 // Policy is immutable, resource-free and safe for concurrent reads. Zero is
 // invalid. It owns no store, clock or provider and never issues evidence.
 type Policy struct{ state *policyState }
 type policyState struct {
-	version        uint64
-	limits         VelocityLimits
-	profiles       map[ProfileClass]Profile
-	hibpTTL        time.Duration
-	hibpOperations map[Action]bool
+	version          uint64
+	limits           VelocityLimits
+	profiles         map[ProfileClass]Profile
+	hibpTTL          time.Duration
+	hibpOperations   map[Action]bool
+	passkeyDiscovery bool
 }
 
 type profileBounds struct {
@@ -157,7 +163,7 @@ func NewPolicy(c PolicyConfig) (Policy, error) {
 	if c.Version == 0 || len(c.Profiles) != 4 || l.MaxDimensions < 1 || l.MaxDimensions > 4 || l.MaxCounters < 1 || l.MaxCounters > 16 || l.MaxWindow <= 0 || l.MaxWindow > time.Hour || l.MaxLimit == 0 || l.MaxLimit > 120 || l.KeyBytes != 64 || l.RetryAfterMax <= 0 || l.RetryAfterMax > time.Hour {
 		return Policy{}, ErrInvalidPolicy
 	}
-	s := &policyState{version: c.Version, limits: l, profiles: make(map[ProfileClass]Profile, 4)}
+	s := &policyState{version: c.Version, limits: l, profiles: make(map[ProfileClass]Profile, 4), passkeyDiscovery: c.PasskeyDiscovery}
 	for _, p := range c.Profiles {
 		if _, duplicate := s.profiles[p.Class]; duplicate || !validProfile(p, l) {
 			return Policy{}, ErrInvalidPolicy

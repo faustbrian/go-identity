@@ -358,6 +358,14 @@ func (c CounterCoordinator) admitScope(scope Context, phase Phase) (Admission, e
 }
 
 func (c CounterCoordinator) prepareAdmitted(scope Context, subject Subject, phase Phase, a Admission, now time.Time) (CounterCommand, error) {
+	if c.state.policy.state.passkeyDiscovery && phase == BeforeCredential && a.Profile.Class == Authentication && subject.IdentifierDigest == "" && (scope.Operation == "identity.passkey.signin-options" || scope.Operation == "identity.passkey.signin-verify") {
+		// The passkey goal requires usernameless discovery before verified joint
+		// credential/handle resolution. No canonical identifier exists yet:
+		// retain the configured authentication policy and actual shared buckets,
+		// rather than inventing an identifier or falling back to safe-read policy.
+		a.Profile.Dimensions = []Dimension{TenantDimension, NetworkDimension, DeviceDimension}
+		a.Profile.MaxCounters = len(a.Profile.Dimensions)
+	}
 	command, err := prepareCounter(scope, subject, phase, a, now, c.state.keys, false)
 	if err != nil {
 		return CounterCommand{}, err
