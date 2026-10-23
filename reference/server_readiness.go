@@ -172,7 +172,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
-	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.verificationSignin != nil) {
+	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP || state.features.verificationSignin != nil) {
 		schema := state.features.migrations.magicSessionSchema
 		if schema == "" {
 			schema = state.features.migrations.passwordSigninSchema
@@ -193,7 +193,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 				case "sessions.session_credential_continuation_v1":
 					guards[i].constraints[j] = "sessions.session_credential_continuation_v2"
 				}
-				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.verificationTOTP != nil {
+				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP || state.features.verificationTOTP != nil {
 					switch guards[i].constraints[j] {
 					case "session_issuances.session_issuances_purpose_v5":
 						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_v6"
@@ -203,7 +203,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 						guards[i].constraints[j] = "sessions.session_record_binding_v6"
 					}
 				}
-				if state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery {
+				if state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP {
 					switch guards[i].constraints[j] {
 					case "sessions.session_record_binding_v6":
 						guards[i].constraints[j] = "sessions.session_record_binding_v7"
@@ -211,12 +211,22 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 						guards[i].constraints[j] = "sessions.session_credential_continuation_v4"
 					}
 				}
-				if state.features.migrations.passwordRecovery {
+				if state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP {
 					switch guards[i].constraints[j] {
 					case "sessions.session_record_binding_v7":
 						guards[i].constraints[j] = "sessions.session_record_binding_v8"
 					case "sessions.session_credential_continuation_v4":
 						guards[i].constraints[j] = "sessions.session_credential_continuation_v5"
+					}
+				}
+				if state.features.migrations.passwordOTP {
+					// MFAOTPRecordMigrationSource replaces these recovery-profile
+					// constraints; require its installed successors, not removed names.
+					switch guards[i].constraints[j] {
+					case "sessions.session_record_binding_v8":
+						guards[i].constraints[j] = "sessions.session_record_binding_v9"
+					case "sessions.session_credential_continuation_v5":
+						guards[i].constraints[j] = "sessions.session_credential_continuation_v6"
 					}
 				}
 				if state.features.verificationSignin != nil {

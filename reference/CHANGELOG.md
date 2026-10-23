@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently compose native secondary-OTP enrollment, delivery, confirmation
+  and original recovery with graph/tenant/lifetime guards. Password-origin OTP
+  login and HTTP remain separate selections. Follow selected OTP session
+  constraint successors for readiness; apply the actual owned migrations before
+  initialization and use matching MFA/session adapters for usable self-logout.
+
 - Independently select native abandoned-guest maintenance without browser
   deletion or HTTP. Guard cleanup/recovery by initialized tenant and graph
   lifetime; append actual expiry histories and follow selected successor

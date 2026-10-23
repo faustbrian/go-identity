@@ -116,6 +116,8 @@ type StoreConfiguration struct {
 	HTTPEmailRequests *HTTPEmailRequestsConfiguration
 	// MFAEnrollment selects native first-factor enrollment management, not HTTP.
 	MFAEnrollment *MFAEnrollmentConfiguration
+	// MFAOTPEnrollment independently selects native OTP enrollment, not HTTP or login.
+	MFAOTPEnrollment *MFAOTPEnrollmentConfiguration
 	// HTTPMFAEnrollment independently selects native cookie enrollment HTTP.
 	HTTPMFAEnrollment *HTTPMFAEnrollmentConfiguration
 	// HTTPMFAActiveStepUp independently selects authenticated TOTP proof HTTP.

@@ -61,6 +61,8 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
 		switch c.Request.Action {
+		case "identity.mfa.otp-send", "identity.mfa.otp-verify", "identity.mfa.otp-send.recover", "identity.mfa.otp-verify.recover":
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.email.verification-signin", "identity.email.change-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover", "identity.mfa.recovery-use", "identity.mfa.recovery-use.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
@@ -70,11 +72,16 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
+		case "identity.mfa.otp-send", "identity.mfa.otp-verify":
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.email.address-remove.recover", "identity.email.address-get", "identity.email.address-list", "identity.otp.send", "identity.otp.email-verify", "identity.otp.email-verify.recover", "identity.otp.email-change-request", "identity.otp.email-change-confirm", "identity.otp.email-change-confirm.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable" || c.Request.Action == "identity.email.verification-send" || c.Request.Action == "identity.email.change-request" || c.Request.Action == "identity.email.address-remove" || c.Request.Action == "identity.otp.send") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+	}
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Action == "identity.mfa.otp-send" && c.Request.Resource.Type == "identity.request-admission" && c.Request.Resource.ID == "identity.mfa.otp-send" {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -247,16 +254,18 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
-	phoneEnrollment    bool
-	phonePassword      bool
-	phoneTOTP          bool
-	phoneTOTPOnly      bool
-	phonePasswordReset bool
-	phoneResetRollback bool
-	phoneTOTPRollback  bool
-	phoneOTP           string
-	phoneRemoval       string
-	phoneChange        bool
+	mfaOTPEnrollment     bool
+	mfaOTPEnrollmentOnly bool
+	phoneEnrollment      bool
+	phonePassword        bool
+	phoneTOTP            bool
+	phoneTOTPOnly        bool
+	phonePasswordReset   bool
+	phoneResetRollback   bool
+	phoneTOTPRollback    bool
+	phoneOTP             string
+	phoneRemoval         string
+	phoneChange          bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -292,6 +301,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, extensions.postgresBaseline)
+	f.mfaOTPEnrollment = extensions.mfaOTPEnrollment
+	f.mfaOTPEnrollmentOnly = extensions.mfaOTPEnrollmentOnly
 	f.usernameTOTP = extensions.usernameTOTP
 	f.phoneTOTP = extensions.phoneTOTP
 	f.phoneTOTPOnly = extensions.phoneTOTPOnly
@@ -501,6 +512,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.mfaEnrollment {
 		configureReferenceMFAEnrollment(t, &c, origin)
+	}
+	if extensions.mfaOTPEnrollment {
+		configureReferenceMFAOTPEnrollment(t, &c, origin, extensions.mfaOTPEnrollmentOnly)
 	}
 	if extensions.mfaListing {
 		c.MFAEnrollment.Listing = true
@@ -1067,13 +1081,27 @@ END $$`); err != nil {
 	} else if seen["identity.mfa.enable"] {
 		t.Fatal("unselected enrollment route advertised")
 	}
-	if c.HTTPMFA != nil || c.HTTPMFAEnrollment != nil && c.HTTPMFAEnrollment.Confirmation || c.HTTPMFAActiveStepUp != nil {
+	if c.HTTPMFA != nil && (c.HTTPMFA.TOTPVerify || c.HTTPMFA.PasswordTOTPVerify || c.HTTPMFA.UsernameTOTPVerify || c.HTTPMFA.VerificationTOTPVerify) || c.HTTPMFAEnrollment != nil && c.HTTPMFAEnrollment.Confirmation || c.HTTPMFAActiveStepUp != nil {
 		wantOperations++
 		if !seen["identity.mfa.totp-verify"] {
 			t.Fatal("selected TOTP route missing")
 		}
 	} else if seen["identity.mfa.totp-verify"] {
 		t.Fatal("unselected TOTP route advertised")
+	}
+	for _, selected := range []struct {
+		enabled   bool
+		operation string
+	}{
+		{c.HTTPMFA != nil && c.HTTPMFA.PasswordOTPSend, "identity.mfa.otp-send"},
+		{c.HTTPMFA != nil && c.HTTPMFA.PasswordOTPVerify, "identity.mfa.otp-verify"},
+	} {
+		if selected.enabled {
+			wantOperations++
+		}
+		if seen[selected.operation] != selected.enabled {
+			t.Fatal("secondary OTP route selection mismatch", selected.operation)
+		}
 	}
 	if c.HTTPMFARecoveryRegeneration != nil {
 		wantOperations++
@@ -1492,7 +1520,7 @@ END $$`); err != nil {
 		proveReferenceUsername(t, ctx, f, features, workers, client, network.URL, origin, messages)
 		return
 	}
-	if extensions.phoneTOTP {
+	if extensions.phoneTOTP || extensions.mfaOTPEnrollment {
 		f.config = c
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
@@ -1733,6 +1761,10 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 			return response.StatusCode == http.StatusOK && current.Authenticated && current.Session != nil
 		}
 		f.afterEmailSignin(ctx, correlation.UserID, r.Cookies(), r.Header.Get("X-CSRF-Token"), freshLogin, readSession)
+		return
+	}
+	if f.mfaOTPEnrollment {
+		proveReferenceMFAOTPEnrollment(t, ctx, f, features, workers, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), messages, identity.IdentifierID(correlation.RecordID))
 		return
 	}
 	if enrollment {

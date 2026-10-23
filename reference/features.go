@@ -134,6 +134,7 @@ type featureState struct {
 	passwordVerification         *passwordVerificationState
 	email                        *emailState
 	mfaEnrollment                *mfaEnrollmentState
+	mfaOTPEnrollment             *mfaOTPEnrollmentState
 	passwordChange               *passwordChangeState
 	httpPasswordVerification     *passwordVerificationHTTPState
 	httpPasswordChange           *passwordChangeHTTPState
@@ -197,6 +198,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.MFAEnrollment != nil && c.PasswordVerification == nil {
 		return identity.InvalidInputError{Field: "reference_mfa_enrollment"}
+	}
+	if c.MFAOTPEnrollment != nil && c.PasswordVerification == nil {
+		return identity.InvalidInputError{Field: "reference_mfa_otp_enrollment"}
 	}
 	if c.HTTPMFA != nil && ((c.HTTPMFA.TOTPVerify && (c.MagicLink == nil || c.MagicLink.TOTP == nil)) || (c.HTTPMFA.PasswordTOTPVerify && (c.PasswordSignin == nil || c.PasswordSignin.TOTP == nil)) || (c.HTTPMFA.PasswordRecoveryUse && (c.PasswordSignin == nil || c.PasswordSignin.Recovery == nil)) || ((c.HTTPMFA.PasswordOTPVerify || c.HTTPMFA.PasswordOTPSend) && (c.PasswordSignin == nil || c.PasswordSignin.OTP == nil))) {
 		return identity.InvalidInputError{Field: "reference_http_mfa"}
@@ -567,6 +571,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	mfaOTPEnrollmentOwner, err := composeMFAOTPEnrollment(c, d, passwordVerificationOwner, evaluator)
+	if err != nil {
+		return err
+	}
 	emailOwner, err := composeEmail(c, d, evaluator, passwordVerificationOwner, passwordSigninOwner, resetOwner, mfaEnrollmentOwner)
 	if err != nil {
 		return err
@@ -826,6 +834,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.email = emailOwner
 	s.features.passwordChange = passwordChangeOwner
 	s.features.mfaEnrollment = mfaEnrollmentOwner
+	s.features.mfaOTPEnrollment = mfaOTPEnrollmentOwner
 	s.features.httpPasswordVerification = httpPasswordVerification
 	s.features.httpPasswordChange = httpPasswordChange
 	s.features.httpSession = httpSession
@@ -1024,6 +1033,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 			return invalidPasswordOTPCompletion()
 		}
 		if err := otp.state().sender.config.Issuance.Initialize(w, s.pool); err != nil {
+			return err
+		}
+	}
+	if enrollment := s.features.mfaOTPEnrollment; enrollment != nil {
+		if err := enrollment.issuer.Initialize(w, s.pool); err != nil {
 			return err
 		}
 	}

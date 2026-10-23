@@ -1,5 +1,32 @@
 # Identity reference composition
 
+## Native secondary-OTP enrollment
+
+`StoreConfiguration.MFAOTPEnrollment` selects pending OTP enrollment separately
+from TOTP enrollment, password-origin OTP login and HTTP. Supply configuration,
+keys, a consuming MFA OTP policy, templates and the existing external sender;
+the graph composes its actual password-proof, session, risk, OTP, delivery and
+coordinator owners. `Native.Primary` and `Native.Risk.Evaluation` must be absent.
+Session lookup and CSRF keys must match this graph's genuine current sessions.
+
+After applying the selected owned histories and calling `FeatureSet.Initialize`,
+use `MFAOTPEnrollment().Enable` with fresh purpose-bound primary proof, original
+session/CSRF and an exact existing verified identifier. The result is pending;
+only its fresh committed response reveals recovery codes. Destroy that material
+after explicit delivery. Use `MFAOTPEnrollmentConfirmation().OtpSend`, run the
+selected delivery worker, then call `OtpVerify` with the captured code and
+original enrollment custody. Confirmation activates the factor but issues no
+login session. Original recovery returns no replacement codes or new authority.
+
+Password-origin secondary login separately selects `PasswordSignin.OTP` and
+`HTTPMFA.PasswordOTPSend`/`PasswordOTPVerify`. Its primary returns only a child
+continuation; final OTP completion issues the usable session. Enrollment and
+login share OTP's configured resend family: retain its original cooldown rather
+than resetting it. The graph exposes no enrollment HTTP route implicitly.
+Retained handles deny before initialization, outside the selected tenant and
+after `Close`, including historical recovery. No domain stores, migration SQL
+or replacement authentication engine are supplied by the application.
+
 ## Optional anonymous browser workflows
 
 `StoreConfiguration.Anonymous` composes actual native guest signin/read and

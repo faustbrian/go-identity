@@ -325,6 +325,12 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 			if err != nil {
 				return nil, err
 			}
+		} else if s.state.features.mfaOTPEnrollment != nil {
+			factors, err := mfaOTPFactorHistory(ctx, catalog, false)
+			if err != nil {
+				return nil, err
+			}
+			catalog = append(catalog, factors)
 		}
 		catalog, err = s.activeStepUpMigrationCatalog(ctx, catalog)
 		if err != nil {
@@ -332,10 +338,17 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 		}
 		return s.verificationSigninMigrationCatalog(ctx, catalog)
 	}
-	if s.state.features.mfaEnrollment != nil {
+	if s.state.features.mfaEnrollment != nil || s.state.features.mfaOTPEnrollment != nil {
 		catalog, err = mfaEnrollmentMigrationCatalog(ctx, catalog, s.state.config.Schema)
 		if err != nil {
 			return nil, err
+		}
+		if s.state.features.mfaOTPEnrollment != nil {
+			factors, err := mfaOTPFactorHistory(ctx, catalog, false)
+			if err != nil {
+				return nil, err
+			}
+			catalog = append(catalog, factors)
 		}
 		catalog, err = s.activeStepUpMigrationCatalog(ctx, catalog)
 		if err != nil {

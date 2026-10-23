@@ -103,6 +103,8 @@ github.com/faustbrian/go-identity/mfa v0.0.0-20261018013113-bb569ec9d44c h1:k5RJ
 github.com/faustbrian/go-identity/mfa v0.0.0-20261018013113-bb569ec9d44c/go.mod h1:mHmrn9LRl/lICJbM1cpafYTMVJkwX5bz9dOhFxpJq/M=
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261021080757-a33b0dfc3840 h1:fkc+TRggvW2vJQmbdNtyEJE0CCA7JAH206hxzqBalFI=
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261021080757-a33b0dfc3840/go.mod h1:+yM7FTZeO69grsc0TC07tr2Ttp9+FYMDsRZS4m9R26s=
+github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023075430-665a40ff4c1a h1:GLUXnEqI924mkiz/q+112oSqXlNU3Oh3cGndJhaY14U=
+github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261023075430-665a40ff4c1a/go.mod h1:+yM7FTZeO69grsc0TC07tr2Ttp9+FYMDsRZS4m9R26s=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6 h1:ohdM4yyDKIaMf3iZbwR8irICYZhzvx2LnuhOCswXiNE=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6/go.mod h1:qxYVoKX0qfE9ZwMxL773dOwGxhixbKprZGgIg619Ekg=
 github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6 h1:8vtFdLM7k55fznPVEGZkgnJ+o1wrfZTHN/PJFWQJHeo=
@@ -131,6 +133,8 @@ github.com/faustbrian/go-identity/session/postgres v0.0.0-20261021080757-a33b0df
 github.com/faustbrian/go-identity/session/postgres v0.0.0-20261021080757-a33b0dfc3840/go.mod h1:XdQuHkWGCTjMKncW3Bz6JFFvUeSeGcVSLCaVOgL0RnM=
 github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023044403-24a0cbbe1ae5 h1:ACtQ9zDM+01XDJZOZ2BtOiGVEiJX814Zn35ygxIEvRo=
 github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023044403-24a0cbbe1ae5/go.mod h1:efy2PddzVOj5srunU6ejRx4zOg3rsTu14wvgpg/i9+s=
+github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023075701-c4d031c89188 h1:6I4vaCd5i9byY731DT23YDelqyhrJER+/y4ldPLqRHU=
+github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023075701-c4d031c89188/go.mod h1:0hYVmXIgzdsRNbIlqJidOQoZbE3eK0ZsDTanR6b2Zo8=
 github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94 h1:vval5r7iVaOPdh/JhzjfpBrZ4AnNJJP1SltC5/810Qk=
 github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94/go.mod h1:D5k1liTpGNaELsq7gEuXeSZNJRaaApGBrwxAh4B+FjU=
 github.com/faustbrian/go-json-schema/v2 v2.0.0 h1:88kzwDCcP8Xo3SaDyUzc6oWtl83id9P6uY/gjgyQ/74=
