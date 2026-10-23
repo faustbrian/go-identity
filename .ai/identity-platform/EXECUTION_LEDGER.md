@@ -1,5 +1,46 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 01:42 UTC: finite exact OIDC consent profile CLOSED. Rootdff2a90,
+childcab1968, nativef84d721 are main-pushed with exact Required39883163583/
+39883822972/39884942037 SUCCESS. Native independent correctness/regression/
+compatibility and C2/C3 adoption reports received directly; fresh delivery
+auditor matches reviewed bytes, all85 native public files and final remote/CI.
+Current GOWORKoff native five-consent/retained controls have observed passes,
+but original329.352s aggregate FAILED one initial password-signin503; its exact
+unchanged invalidredirect partition passed6.742s. Downloaded public consumer
+28453 FAILED30.788s on pairwise-control second registration503; public12.08s and
+denial5.74s passed, exact unchanged pairwise41840 passed14.618s. Both original
+failures/causeunknown are retained qualification debt, NOT combined-command
+passes. Nativeordinaryrace1.458s/taggedvet0/scanner0/modverify0 and downloaded
+consumer modverify0; original workspace271.629s evidence retains its producer.
+Publicnativev0.0.0-20261023013611-f84d721f72a0 Sum
+h1:QQsnoxJGfdPpDP5tGtyqN8gkIs370ob4lgfnoVBYz7c=.
+No fullM30/M31/unit/release claim. Primary cleanup expiry API first RED62516
+proves absent RequireExpired; focused race29066 GREEN1.224s. This is only a
+local precursor; full frozen durable cleanup below remains unfinished. No new
+QA pass or review cycle for that helper. Still20–25% estimate,9/39 milestones.
+
+M09 abandoned cleanup — frozen 2026-10-23: primary owns anonymous core/native,
+kernel disposal/recovery, session disposal/recovery and explicit reference
+composition. Consume delivered mainbbda009 runtime contracts (current86dda62
+adds only documentation). Outcome: trusted service selects tenant-scoped,
+indexed DB-time-expired active guests under a finite budget, applies stored
+cleanup/current retention and legal-hold policy, atomically disposes kernel
+and anonymous state, revokes all guest sessions/families with required audit/
+outbox, and recovers each original attributable command. Batch-wide atomicity
+is not promised; partial/interrupted progress must remain attributable. Fence
+concurrent upgrade/deletion and preserve permanent targets. Report DB-time lag
+and unresolved work. No guest impersonation, bearer issuance, cleanup HTTP
+route, private transaction engine, scheduler or application-resource transfer.
+Fresh source map anonymous_cleanup_map and one QA input anonymous_cleanup_qa
+(103b2bd1a989a1210b0a5540f6e57ed06dce03bfb36cee503e1f27f90319beec)
+identify concrete owner seams; no pre-write contradiction. Prove deterministic
+exclusive expiry, service/tenant/hold denial, complete revocation, bounded
+selection/lag, upgrade races, late required-effect rollback and original unknown
+recovery using real owned PostgreSQL, forward populated histories and one native
+reference journey. Keep delivered browser behavior unchanged; focused checks
+while coding, complete final-diff review and public-pin delivery before closure.
+
 2026-10-23 01:16 UTC: resumed main at identitybbda009/OAuth20d7c1b; no source
 restart. Original OAuth consent worker terminal: root/child race1.488s/1.240s,
 parser fuzz10.799s and native race271.629s passed; original owned resources

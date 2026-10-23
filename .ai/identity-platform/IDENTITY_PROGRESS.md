@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-23 01:16 UTC
+## TL;DR — updated 2026-10-23 01:42 UTC
 
 **Estimated whole-goal completion: approximately 20–25%, with low confidence.**
 **Consumer milestones: 9/39 closed** (23.1% unweighted); full scope remains
@@ -12,7 +12,24 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Latest delivered outcome:** consumers can run real PostgreSQL guest signin,
+**Latest delivered outcome:** exact OIDC `prompt=consent` requires protected
+approval even when prior approval is reusable. Genuine approval produces a
+one-use S256 code and independently verified ID token/UserInfo; denial produces
+neither. OAuth root `dff2a90`, OIDC `cab1968` and native `f84d721` are independently
+reviewed, main-pushed and exact-CI green. Actual downloaded-native public,
+pairwise and denial partitions have observed race passes; all 85 native archive
+files match Git and consumer checksums verify. This finite profile is CLOSED,
+not full M30/M31 or unit/release qualification.
+
+**Qualification caveat:** the initial native cohort failed on a prerequisite
+password-signin 503; its exact unchanged partition then passed (6.742s). The
+initial downloaded consumer failed on second-user registration 503; its exact
+unchanged pairwise partition then passed (14.618s). Both causes remain unknown;
+neither initial combined command is represented as passed. Other selected
+partitions passed, including all five new native consent cases. No code,
+configuration, timeout or security limit was relaxed to obtain those passes.
+
+**Retained anonymous outcome:** consumers can run real PostgreSQL guest signin,
 unprivileged read, self-deletion and upgrade into an existing verified password
 account, followed by permanent-session read/logout. Native initiation works
 without HTTP; browser routes remain explicitly opt-in. HTTPab3f4a2 and
@@ -25,11 +42,11 @@ anonymization, including stored retention/legal holds, concurrent-upgrade fences
 atomic owner effects and interrupted/unknown recovery. That is the next primary
 implementation, not another review of delivered signin/read/delete/upgrade.
 
-**Pending parallel delivery:** exact OIDC `prompt=consent` is implemented locally.
-Original root/child race, parser fuzz and the selected real-PostgreSQL native
-race cohort (271.629s) passed. Independent complete-diff review is active;
-public dependency adoption, consumer proof and main delivery remain outstanding.
-This is not counted as delivered. No additional code has landed since bbda009.
+**Current implementation:** abandoned-guest cleanup, using trusted maintenance
+authority rather than expired guest credentials. The exact original-expiry
+boundary has a local tested core implementation; durable selection, protected
+kernel/session effects, recovery, migrations and reference composition remain
+unfinished. No M09 increment or cleanup delivery is claimed.
 
 **Retained delivered behavior:** native OIDC `prompt=none` reuses original bounded
 explicit consent without interaction or renewal, then issues a one-use code for
