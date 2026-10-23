@@ -40,6 +40,26 @@ later profiles. Readiness checks the selected successor constraints as well as
 the original migration ledgers. Closing the graph cancels/drains active native
 and HTTP work and permanently denies retained handles.
 
+### Explicit abandoned-guest maintenance
+
+Select `Anonymous.Cleanup` independently of `Anonymous.Deletion` and HTTP.
+Supply native `anonymouspostgres.CleanupConfig` with this graph's exact
+repository/session/global authority and authorization revision/engine, a fixed
+trusted service actor, retention evaluator, original keys and bounded batch.
+Leave `Cleanup.Clock` nil: the graph supplies its system clock. Construction
+does not perform cleanup, install history or create a scheduler/HTTP route.
+
+Apply selected forward expiry histories, then initialize and call
+`features.Anonymous()` → `CleanupExpired`. Preserve the random run ID, returned
+seek cursor and each original recovery query; `RecoverCleanup` reconciles
+unknown outcomes without guest credentials or reexecution. Individual subjects,
+not the batch, are atomic/idempotent commands. Held/deferred subjects remain in
+observable backlog and are revisited by a later run from zero. Disabled,
+uninitialized, foreign-tenant and closed-graph handles deny maintenance.
+`TestReferencePostgresAnonymousCleanupWithoutDeletionOrHTTP` demonstrates
+genuine guest issuance, expired/pruned history, cleanup and original recovery.
+The upgrade-with-cleanup journey also exercises selected successor readiness.
+
 The external-package integration journey is
 `TestReferencePostgresAnonymousUpgradeHTTP`: real PostgreSQL bootstrap → target
 registration/delivered verification/password signin → guest signin/read → fresh

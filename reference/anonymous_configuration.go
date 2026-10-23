@@ -17,7 +17,9 @@ import (
 )
 
 // AnonymousConfiguration selects native guest creation/read and optionally
-// self-deletion and upgrade. It enables no HTTP. Signin.Risk.Evaluation must be
+// self-deletion, upgrade and trusted abandoned-guest maintenance. It enables no
+// HTTP or scheduler. Cleanup is independent of Deletion; its Clock must be nil
+// for this graph's system-clock injection. Signin.Risk.Evaluation must be
 // zero for injection of this graph's counted owner. PreAuth selects its exact
 // original-flow initiation; lookup key comes from Signin.FlowKeys. Deletion
 // uses the same repository/session/profile/CSRF policy as issuance and its real
@@ -28,6 +30,7 @@ type AnonymousConfiguration struct {
 	PreAuth    PasswordPreAuthConfiguration
 	Deletion   *anonymouspg.DeletionConfig
 	Upgrade    *AnonymousUpgradeConfiguration
+	Cleanup    *anonymouspg.CleanupConfig
 }
 
 // AnonymousUpgradeConfiguration selects the finite existing-password target
@@ -71,6 +74,7 @@ type anonymousState struct {
 	reader        *session.AnonymousSessionService
 	deletion      *anonymouspg.DeletionService
 	upgrade       *anonymouspg.UpgradeService
+	cleanup       *anonymouspg.CleanupService
 	subjects      *anonymouspg.Repository
 	preauth       *session.PreAuthIssuer
 	repository    anonymouspg.Config
@@ -137,6 +141,17 @@ func composeAnonymous(c StoreConfiguration, d ReferenceDependencies, evaluation 
 		return nil, err
 	}
 	a := &anonymousState{signin: signin, reader: reader, subjects: repository, repository: s.Repository, sessions: s.Sessions, profile: s.Profile, cookie: s.Issuer.Cookie, preauthConfig: p, policy: s.PolicyID, version: s.Coordinator.AdmissionPolicy.PolicyVersion}
+	if n.Cleanup != nil {
+		cleanup := *n.Cleanup
+		if cleanup.Clock != nil || cleanup.Repository != s.Repository || cleanup.Sessions != s.Sessions || cleanup.GlobalAuthorityID != s.Profile.GlobalAuthorityID || cleanup.Coordinator.MaximumDuration > c.OTP.Timeout || cleanup.RequestKeys.Policy.PolicyVersion != a.version || cleanup.Coordinator.AdmissionPolicy == nil || cleanup.Coordinator.QueryPolicy == nil || cleanup.Coordinator.AdmissionPolicy.PolicyVersion != a.version || cleanup.Coordinator.QueryPolicy.PolicyVersion != a.version || !sameServerAuthorization(cleanup.RequestKeys.Policy.Authorization, c.OTP.RequestKeys.Policy.Authorization) || !sameServerAuthorization(cleanup.Coordinator.AdmissionPolicy.Authorization, c.OTP.RequestKeys.Policy.Authorization) || !sameServerAuthorization(cleanup.Coordinator.QueryPolicy.Authorization, c.OTP.RequestKeys.Policy.Authorization) {
+			return nil, invalid
+		}
+		cleanup.Clock = clock.System{}
+		a.cleanup, err = anonymouspg.NewCleanupService(d.PostgreSQL, cleanup, keys)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_anonymous_cleanup"}
+		}
+	}
 	executor, err := sessionpg.NewPreAuthIssueExecutor(d.PostgreSQL, sessionpg.PreAuthIssueExecutorConfig{Repository: s.Sessions, Coordinator: s.Coordinator, Authorization: s.Coordinator.QueryPolicy.Authorization, Clock: clock.System{}, ActorID: p.ActorID, Action: "identity.anonymous.signin", Origin: p.Origin, CallbackURL: p.CallbackURL, PolicyID: s.PolicyID, PolicyVersion: a.version, AuditRetentionVersion: p.AuditRetentionVersion})
 	if err != nil {
 		return nil, err

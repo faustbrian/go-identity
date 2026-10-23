@@ -7,6 +7,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/anonymous"
+	anonymouspg "github.com/faustbrian/go-identity/anonymous/postgres"
 	"github.com/faustbrian/go-identity/session"
 )
 
@@ -156,6 +157,35 @@ func (f *AnonymousService) RecoverUpgrade(ctx context.Context, r anonymous.Upgra
 		return anonymous.UpgradeResult{}, identity.UnavailableError{}
 	}
 	return a.upgrade.RecoverUpgrade(w, r)
+}
+
+// CleanupExpired executes explicitly selected, tenant-bound maintenance under
+// its configured service actor. It enables no HTTP route or background job.
+// Individual items retain the native original-command recovery contract.
+func (f *AnonymousService) CleanupExpired(ctx context.Context, r anonymouspg.CleanupRequest) (anonymouspg.CleanupResult, error) {
+	w, done, a, err := f.enter(ctx, r.TenantID)
+	if err != nil {
+		return anonymouspg.CleanupResult{}, err
+	}
+	defer done()
+	if a.cleanup == nil {
+		return anonymouspg.CleanupResult{}, identity.UnavailableError{}
+	}
+	return a.cleanup.CleanupExpired(w, r)
+}
+
+// RecoverCleanup reconciles an original service-owned cleanup command without
+// requiring an expired guest credential or repeating its disposal.
+func (f *AnonymousService) RecoverCleanup(ctx context.Context, q identity.RecoveryQuery) (anonymouspg.CleanupItem, error) {
+	w, done, a, err := f.enter(ctx, q.TenantID)
+	if err != nil {
+		return anonymouspg.CleanupItem{}, err
+	}
+	defer done()
+	if a.cleanup == nil {
+		return anonymouspg.CleanupItem{}, identity.UnavailableError{}
+	}
+	return a.cleanup.RecoverCleanup(w, q)
 }
 
 // Format hides retained graph resources and custody for every formatting verb.

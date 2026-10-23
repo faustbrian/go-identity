@@ -13,8 +13,8 @@ require (
 	github.com/faustbrian/go-http-client/v2 v2.1.0
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
 	github.com/faustbrian/go-identity v0.0.0-20261021021214-46ae60703809
-	github.com/faustbrian/go-identity/anonymous v0.0.0-20261021111947-987fa2c0de56
-	github.com/faustbrian/go-identity/anonymous/postgres v0.0.0-20261021111947-987fa2c0de56
+	github.com/faustbrian/go-identity/anonymous v0.0.0-20261023043948-50a36bd23473
+	github.com/faustbrian/go-identity/anonymous/postgres v0.0.0-20261023055944-d2f004fd7b32
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
@@ -36,13 +36,13 @@ require (
 	github.com/faustbrian/go-identity/password v0.0.0-20261020120243-19670fe0ec13
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261021080757-a33b0dfc3840
 	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261021074754-2eafc2592af0
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261023043948-50a36bd23473
 	github.com/faustbrian/go-identity/risk v0.0.0-20261021074754-2eafc2592af0
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261018021354-75e10d9681e0
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261021080757-a33b0dfc3840
 	github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
 	github.com/faustbrian/go-identity/session v0.0.0-20261021115224-6d906da1fd80
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261021080757-a33b0dfc3840
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261023044403-24a0cbbe1ae5
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820

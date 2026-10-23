@@ -87,7 +87,7 @@ func (s StoreSet) anonymousMigrationCatalog(ctx context.Context, catalog []migra
 	if err := appendSource("identity_anonymous_session", "identity/session/postgres", issue, migrationGuard{version: 1, schema: a.sessions.Schema, constraints: []string{"session_issuances.session_issuances_purpose_anonymous_v1"}}); err != nil {
 		return nil, err
 	}
-	if a.deletion != nil {
+	if a.deletion != nil || a.cleanup != nil {
 		if err := appendSource("identity_anonymous_disposal_kernel", "identity/postgres", kernel.AnonymousDisposalMigrationSource{Base: fixedMigrationSource(owned("identity/postgres")), Version: 2001}, migrationGuard{version: 2001, schema: "identity", tables: []string{"anonymous_disposals"}}); err != nil {
 			return nil, err
 		}
@@ -117,6 +117,17 @@ func (s StoreSet) anonymousMigrationCatalog(ctx context.Context, catalog []migra
 			return nil, err
 		}
 		if err := appendSource("identity_anonymous_upgrade", "identity/anonymous/postgres", anonymouspg.UpgradeMigrationSource{Schema: a.repository.Schema, Version: 1}, migrationGuard{version: 1, schema: a.repository.Schema, tables: []string{"upgrades"}}); err != nil {
+			return nil, err
+		}
+	}
+	if a.cleanup != nil {
+		if err := appendSource("identity_anonymous_expiry_kernel", "identity/postgres", kernel.AnonymousExpiryDisposalMigrationSource{Base: fixedMigrationSource(owned("identity/postgres")), Version: 2003}, migrationGuard{version: 2003, schema: "identity", constraints: []string{"anonymous_disposals.anonymous_disposals_purpose_check"}, constraintValue: "identity.anonymous.expire"}); err != nil {
+			return nil, err
+		}
+		if err := appendSource("identity_anonymous_expiry_session", "identity/session/postgres", sessionpg.AnonymousExpiryMigrationSource{Schema: a.sessions.Schema, Version: 1, Upgrade: a.upgrade != nil}, migrationGuard{version: 1, schema: a.sessions.Schema, constraints: []string{"anonymous_disposals.anonymous_disposals_purpose_expiry_v1"}, constraintValue: "identity.anonymous.expire"}); err != nil {
+			return nil, err
+		}
+		if err := appendSource("identity_anonymous_expiry", "identity/anonymous/postgres", anonymouspg.ExpiryMigrationSource{Schema: a.repository.Schema, Version: 1}, migrationGuard{version: 1, schema: a.repository.Schema, constraints: []string{"disposals.disposals_purpose_expiry_v1", "disposals.disposals_terminal_expiry_v1"}}); err != nil {
 			return nil, err
 		}
 	}

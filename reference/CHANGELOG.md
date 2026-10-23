@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Independently select native abandoned-guest maintenance without browser
+  deletion or HTTP. Guard cleanup/recovery by initialized tenant and graph
+  lifetime; append actual expiry histories and follow selected successor
+  constraints for readiness without changing installed migration bytes.
+
 - Independently compose native anonymous signin/read, self-deletion and the
   existing-password, no-resource-transfer upgrade profile, with opt-in HTTPS
   routes and metadata-only native recovery handles. Selected native forward

@@ -356,6 +356,13 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 					if a.upgrade != nil {
 						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_anonymous_upgrade_v1"
 					}
+				case "anonymous_disposals.anonymous_disposals_purpose_check", "anonymous_disposals.anonymous_disposals_purpose_upgrade_v1":
+					// The selected expiry suffix retains older purposes but replaces
+					// their constraint identity. Keep installed migration bytes and
+					// collision guards intact; runtime readiness follows the suffix.
+					if a.cleanup != nil {
+						guards[i].constraints[j] = "anonymous_disposals.anonymous_disposals_purpose_expiry_v1"
+					}
 				}
 			}
 		}

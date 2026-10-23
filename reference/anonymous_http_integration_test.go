@@ -32,6 +32,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	database "github.com/faustbrian/go-postgres"
 )
 
 // This is the application's declared policy, not credential/session authority.
@@ -114,8 +115,17 @@ func TestReferencePostgresAnonymousNativeWithoutHTTP(t *testing.T) {
 	proveReferenceAnonymousHTTP(t, false, true)
 }
 
-func proveReferenceAnonymousHTTP(t *testing.T, upgrade, nativeOnly bool) {
+func TestReferencePostgresAnonymousCleanupWithoutDeletionOrHTTP(t *testing.T) {
+	proveReferenceAnonymousHTTP(t, false, true, true)
+}
+
+func TestReferencePostgresAnonymousUpgradeWithCleanupSelected(t *testing.T) {
+	proveReferenceAnonymousHTTP(t, true, false, true)
+}
+
+func proveReferenceAnonymousHTTP(t *testing.T, upgrade, nativeOnly bool, cleanupSelected ...bool) {
 	t.Helper()
+	cleanup := len(cleanupSelected) == 1 && cleanupSelected[0]
 	ctx, stop := context.WithTimeout(t.Context(), 60*time.Second)
 	defer stop()
 	f := newLiveStoresProfile(t, ctx, false, true)
@@ -145,6 +155,13 @@ func proveReferenceAnonymousHTTP(t *testing.T, upgrade, nativeOnly bool) {
 		return nil
 	}}
 	configureReferenceAnonymous(t, &c, origin)
+	if cleanup {
+		a := c.Anonymous
+		a.Cleanup = &anonymouspg.CleanupConfig{Repository: a.Signin.Repository, Sessions: a.Signin.Sessions, GlobalAuthorityID: a.Signin.Profile.GlobalAuthorityID, ActorID: "guest-maintenance", ConfigurationID: "reference-guest-cleanup-v1", PolicyID: "guest-maintenance", MaximumBatch: 2, Retention: a.Deletion.Retention, RetentionPolicyVersion: 9, RequestKeys: a.Signin.RequestKeys, Coordinator: a.Signin.Coordinator, IntentKey: [32]byte{211}, ActiveEnvelopeKeyID: a.Signin.ActiveEnvelopeKeyID}
+		if !upgrade {
+			a.Deletion = nil
+		}
+	}
 	messages := make(chan string, 4)
 	deps.DeliverySender = nativeBrowserCodeSender{codes: messages}
 	if upgrade {
@@ -251,7 +268,16 @@ func proveReferenceAnonymousHTTP(t *testing.T, upgrade, nativeOnly bool) {
 	t.Cleanup(func() {
 		bounded, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		if _, err := f.pool.Raw().Exec(bounded, `DROP OWNED BY audit_writer,audit_reader,audit_retention;DROP ROLE audit_writer,audit_reader,audit_retention`); err != nil {
+		if _, err := f.pool.Raw().Exec(bounded, `DO $$
+DECLARE owned_role text;
+BEGIN
+  FOREACH owned_role IN ARRAY ARRAY['audit_writer','audit_reader','audit_retention'] LOOP
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = owned_role) THEN
+      EXECUTE format('DROP OWNED BY %I', owned_role);
+      EXECUTE format('DROP ROLE %I', owned_role);
+    END IF;
+  END LOOP;
+END $$`); err != nil {
 			t.Error("audit role cleanup", err)
 		}
 	})
@@ -259,12 +285,34 @@ func proveReferenceAnonymousHTTP(t *testing.T, upgrade, nativeOnly bool) {
 	if c.HTTPRate != nil {
 		modules = append(modules, "rate-limit/postgres")
 	}
-	apply := applyRequest(t, ctx, stores, modules)
-	if out, err := stores.ReferenceMigrationApply(ctx, apply); err != nil || out.Result.State() != reference.MigrationApplied {
+	// PrimaryTimeout bounds the entire operator plan/apply, not one SQL call
+	// (beginMigrationOperation). Bootstrap this full graph separately so its
+	// schema work has a finite budget without widening the live admission or
+	// native authentication/read limits used by the journey below.
+	bootstrap := c
+	bootstrapAdmission := *c.DurableAdmission
+	bootstrapAdmission.Timeout = 10 * time.Second
+	bootstrap.DurableAdmission = &bootstrapAdmission
+	operator, err := reference.ComposeStores(bootstrap, deps)
+	if err != nil {
+		t.Fatal("anonymous migration composition", err)
+	}
+	t.Cleanup(func() {
+		bounded, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := operator.Close(bounded); err != nil {
+			t.Error("anonymous migration composition cleanup", err)
+		}
+	})
+	apply := applyRequest(t, ctx, operator, modules)
+	if out, err := operator.ReferenceMigrationApply(ctx, apply); err != nil || out.Result.State() != reference.MigrationApplied {
 		t.Fatal("selected anonymous native histories", err, out.Result.State())
 	}
+	if err := operator.Close(ctx); err != nil {
+		t.Fatal("anonymous migration composition close", err)
+	}
 	if nativeOnly {
-		proveReferenceAnonymousNative(t, ctx, stores, features, c.Anonymous.PreAuth.ActorID, origin)
+		proveReferenceAnonymousNative(t, ctx, stores, features, c.Anonymous.PreAuth.ActorID, origin, f.pool, cleanup)
 		return
 	}
 	policies := identity.PolicySet{Authorize: c.OTP.RequestKeys.Policy.Authorization, AssessRisk: func(context.Context, identity.RiskPolicyInput) (identity.RiskPolicyDecision, error) {
@@ -276,9 +324,15 @@ func proveReferenceAnonymousHTTP(t *testing.T, upgrade, nativeOnly bool) {
 	}, Redact: func(context.Context, identity.RedactionPolicyInput) (identity.RedactionPolicyDecision, error) {
 		return identity.RedactionPolicyDecision{}, identity.ForbiddenError{}
 	}}
-	server, err := reference.NewServer(reference.ReferenceConfig{Profile: reference.PostgresOnly, Policies: policies, HTTP: identityhttp.TransportPolicy{Network: identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 4096, MaximumBodyBytes: 16384, MaximumDecodedBytes: 16384, MaximumFields: 64, MaximumDepth: 8}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: "127.0.0.1", TenantID: otpTenant}}}, HandlerTimeout: 4 * time.Second, Document: identityhttp.DocumentConfig{Title: "Anonymous reference", Version: "1"}}, Migration: reference.MigrationPolicy{LockTimeout: time.Second, CommandRetention: time.Hour}, Workers: reference.WorkerPolicy{MaxConcurrency: 1, LeaseDuration: time.Minute, DrainTimeout: time.Second}, Tenant: reference.TenantPolicy{Resolver: &nativeServerTenant{}}}, deps, features)
+	serverConfig := reference.ReferenceConfig{Profile: reference.PostgresOnly, Policies: policies, HTTP: identityhttp.TransportPolicy{Network: identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 4096, MaximumBodyBytes: 16384, MaximumDecodedBytes: 16384, MaximumFields: 64, MaximumDepth: 8}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: "127.0.0.1", TenantID: otpTenant}}}, HandlerTimeout: 4 * time.Second, Document: identityhttp.DocumentConfig{Title: "Anonymous reference", Version: "1"}}, Migration: reference.MigrationPolicy{LockTimeout: time.Second, CommandRetention: time.Hour}, Workers: reference.WorkerPolicy{MaxConcurrency: 1, LeaseDuration: time.Minute, DrainTimeout: time.Second}, Tenant: reference.TenantPolicy{Resolver: &nativeServerTenant{}}}
+	started := time.Now()
+	server, err := reference.NewServer(serverConfig, deps, features)
 	if err != nil {
-		t.Fatal("anonymous server", err)
+		var invalid identity.InvalidInputError
+		if errors.As(err, &invalid) {
+			t.Fatal("anonymous server configuration", invalid.Field, "elapsed", time.Since(started))
+		}
+		t.Fatal("anonymous server", err, "elapsed", time.Since(started))
 	}
 	network.Config.Handler = server.Handler()
 	network.StartTLS()
@@ -641,7 +695,7 @@ CREATE TRIGGER anonymous_upgrade_fixture_fail BEFORE INSERT ON public.outbox_mes
 	}
 }
 
-func proveReferenceAnonymousNative(t *testing.T, ctx context.Context, stores reference.StoreSet, features reference.FeatureSet, actor identity.ActorID, origin string) {
+func proveReferenceAnonymousNative(t *testing.T, ctx context.Context, stores reference.StoreSet, features reference.FeatureSet, actor identity.ActorID, origin string, pool *database.Pool, cleanup bool) {
 	t.Helper()
 	preauth, err := features.AnonymousPreAuth()
 	if err != nil {
@@ -660,6 +714,11 @@ func proveReferenceAnonymousNative(t *testing.T, ctx context.Context, stores ref
 		t.Fatal(err)
 	}
 	input := session.PreAuthPrepareInput{CommandID: id, TenantID: otpTenant, CorrelationID: string(id), Remember: remember}
+	run, _ := identity.NewCommandID()
+	maintenance := anonymouspg.CleanupRequest{TenantID: otpTenant, RunID: run, Limit: 1}
+	if _, err := owner.CleanupExpired(ctx, maintenance); err == nil {
+		t.Fatal("uninitialized graph performed maintenance")
+	}
 	if _, err := preauth.Prepare(ctx, input); err == nil {
 		t.Fatal("uninitialized native graph prepared anonymous flow")
 	}
@@ -708,6 +767,13 @@ func proveReferenceAnonymousNative(t *testing.T, ctx context.Context, stores ref
 	if err != nil || !read.Recognized {
 		t.Fatal("native anonymous recognition", err)
 	}
+	if cleanup {
+		proveReferenceAnonymousCleanup(t, ctx, stores, owner, signed, credential, pool, maintenance)
+		return
+	}
+	if _, err := owner.CleanupExpired(ctx, maintenance); err == nil {
+		t.Fatal("unselected maintenance became available")
+	}
 	key, err = identity.NewIdempotencyKey([]byte("native-only-anonymous-delete"))
 	if err != nil {
 		t.Fatal(err)
@@ -732,5 +798,55 @@ func proveReferenceAnonymousNative(t *testing.T, ctx context.Context, stores ref
 	}
 	if _, err := features.AnonymousPreAuth(); err == nil {
 		t.Fatal("closed graph exported anonymous initiator")
+	}
+}
+
+func proveReferenceAnonymousCleanup(t *testing.T, ctx context.Context, stores reference.StoreSet, owner *reference.AnonymousService, signed anonymous.SigninResult, credential session.Credential, pool *database.Pool, request anonymouspg.CleanupRequest) {
+	t.Helper()
+	if _, err := owner.Delete(ctx, anonymous.DeletionRequest{TenantID: otpTenant}); err == nil {
+		t.Fatal("cleanup implicitly selected browser self-deletion")
+	}
+	foreign := request
+	foreign.TenantID = "foreign"
+	if _, err := owner.CleanupExpired(ctx, foreign); err == nil {
+		t.Fatal("graph maintenance crossed tenant selection")
+	}
+	b, err := signed.Session.Session.Bindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Historical fixture aging follows genuine native issuance. Maintenance
+	// never authenticates using this now-expired/pruned guest credential.
+	for _, sql := range []string{
+		`DELETE FROM session_store.sessions WHERE tenant_id=$1 AND user_id=$2`,
+		`UPDATE session_store.families SET state='revoked',issued_at=to_char((issued_at::timestamptz-interval '48 hours') AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US')||'000Z' WHERE tenant_id=$1 AND user_id=$2`,
+		`UPDATE anonymous_store.subjects SET created_at=created_at-interval '48 hours',expires_at=expires_at-interval '48 hours' WHERE tenant_id=$1 AND user_id=$2`,
+	} {
+		if _, err := pool.Raw().Exec(ctx, sql, string(b.TenantID), string(b.UserID)); err != nil {
+			t.Fatal("age actual guest history", err)
+		}
+	}
+	out, err := owner.CleanupExpired(ctx, request)
+	if err != nil || len(out.Items) != 1 || out.Items[0].UserID != b.UserID || out.Items[0].Outcome != identity.CommitOutcomeCommitted || !out.LagKnown || out.RemainingLag != 0 {
+		t.Fatal("selected maintenance did not dispose guest", err)
+	}
+	recovered, err := owner.RecoverCleanup(ctx, out.Items[0].Recovery)
+	if err != nil || recovered.Outcome != identity.CommitOutcomeCommitted || recovered.Recovery != out.Items[0].Recovery {
+		t.Fatal("reference lost original cleanup recovery", err)
+	}
+	var status string
+	var state int16
+	if err := pool.Raw().QueryRow(ctx, `SELECT u.status,a.state FROM identity.users u JOIN anonymous_store.subjects a USING(tenant_id,user_id) WHERE tenant_id=$1 AND user_id=$2`, string(b.TenantID), string(b.UserID)).Scan(&status, &state); err != nil || status != "anonymized" || state != int16(anonymous.StateAnonymized) {
+		t.Fatal("reference maintenance did not reach actual owners", err, status, state)
+	}
+	read, err := owner.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential})
+	if err != nil || read.Recognized {
+		t.Fatal("disposed reference guest retained authority", err)
+	}
+	if err := stores.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := owner.CleanupExpired(ctx, request); err == nil {
+		t.Fatal("retained maintenance survived graph close")
 	}
 }
