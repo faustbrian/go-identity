@@ -130,6 +130,30 @@ func (f *PasskeyService) AuthenticationOptions(ctx context.Context, r native.Sig
 	return f.state.features.passkey.signin.AuthenticationOptions(w, r)
 }
 
+// DiscoverableAuthenticationOptions starts identifier-free resident UV signin
+// only when the graph's trusted authentication risk policy enables discovery.
+// Tenant, RP and browser-flow authority remain fixed by the selected owners.
+func (f *PasskeyService) DiscoverableAuthenticationOptions(ctx context.Context, r native.DiscoverableSigninRequest) (webauthn.AssertionOptions, error) {
+	w, done, err := f.enterFixed(ctx)
+	if err != nil {
+		return webauthn.AssertionOptions{}, err
+	}
+	defer done()
+	return f.state.features.passkey.signin.DiscoverableAuthenticationOptions(w, r)
+}
+
+// DiscoverableSignin resolves identity only through the genuine verified
+// credential/handle pair and atomically finalizes the original browser flow
+// and session. It never falls back to identified or another method's signin.
+func (f *PasskeyService) DiscoverableSignin(ctx context.Context, r native.DiscoverableSigninCompletion) (native.SigninResult, error) {
+	w, done, err := f.enterFixed(ctx)
+	if err != nil {
+		return native.SigninResult{}, err
+	}
+	defer done()
+	return f.state.features.passkey.signin.DiscoverableSignin(w, r)
+}
+
 // Signin returns a usable credential only after genuine protocol verification
 // and atomic native ceremony/flow/mapping/session finalization.
 func (f *PasskeyService) Signin(ctx context.Context, r native.SigninCompletion) (native.SigninResult, error) {

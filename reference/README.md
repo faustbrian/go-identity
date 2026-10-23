@@ -8,6 +8,9 @@ owners. `FeatureSet.Passkeys()` retains graph startup, tenant and shutdown
 guards. No passkey HTTP route, named HTTP method or UI is enabled implicitly.
 See [passkey configuration and consumer journey](PASSKEY.md) for exact scope,
 matching keys, selected migrations and the genuine registration-to-passkey test.
+Identifier-free resident signin is separately enabled by the trusted
+authentication policy's `PasskeyDiscovery`; false retains identified-only
+signin. Both modes use the same guarded passkey session read/logout owner.
 
 ## Native secondary-OTP enrollment
 

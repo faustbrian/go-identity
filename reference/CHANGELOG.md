@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Select identifier-free resident passkey signin through guarded
+  `DiscoverableAuthenticationOptions` and `DiscoverableSignin`. Enable
+  `PasskeyDiscovery` explicitly in the graph's authentication risk policy;
+  retain original browser-flow custody, atomic sessions and selected native
+  read/logout behavior. No HTTP route or signup capability is enabled.
+
 - Independently compose existing-account native passkey enrollment, identified
   signin, safe inventory, session reads and cookie-CSRF logout through selected
   `Passkey` configuration and guarded `FeatureSet.Passkeys`. Apply the public

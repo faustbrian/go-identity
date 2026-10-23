@@ -17,7 +17,9 @@ import (
 )
 
 // PasskeyConfiguration explicitly selects existing-account resident UV/ES256
-// enrollment and identified signin, not HTTP, signup or identifier-free login.
+// enrollment and identified signin. Identifier-free signin additionally requires
+// the authentication risk policy's PasskeyDiscovery opt-in; no HTTP or signup
+// capability is selected.
 // The graph supplies its actual password proof, authorization, coordinator,
 // counted risk, session reader and cookie-CSRF logout owners. Both primary
 // selections need distinct exact enrollment actions and signed proof targets

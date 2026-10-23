@@ -41,6 +41,14 @@ func TestReferencePostgresPasskeyPopulatedUpgrade(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyUpgrade: true}, true)
 }
 
+func TestReferencePostgresPasskeyDiscoverable(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyDiscovery: true}, true)
+}
+
+func TestReferencePostgresPasskeyDiscoverablePopulatedUpgrade(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyDiscovery: true, passkeyUpgrade: true}, true)
+}
+
 func upgradeReferencePasskey(t *testing.T, ctx context.Context, previous reference.StoreSet, c reference.StoreConfiguration, deps reference.ReferenceDependencies, configs []deliverypg.WorkerConfig, modules []reference.ModuleID) reference.FeatureSet {
 	t.Helper()
 	if err := previous.Close(ctx); err != nil {
@@ -126,7 +134,7 @@ func configureReferencePasskey(t *testing.T, c *reference.StoreConfiguration) {
 	}
 }
 
-func proveReferencePasskey(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, cookies []*http.Cookie, csrfWire string) {
+func proveReferencePasskey(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, cookies []*http.Cookie, csrfWire string, discoverable bool) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -215,22 +223,64 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	}
 	optionsID, _ := identity.NewCommandID()
 	input := native.SigninRequest{CommandID: optionsID, FlowID: flow.Binding.ID, Cookie: issuedFlow.Token, Identifier: "registered@example.invalid", Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1", Device: "reference-passkey", CorrelationID: "reference-passkey"}
-	assertionOptions, err := owner.AuthenticationOptions(ctx, input)
+	// This type has no identifier, user, tenant or RP input. Discovery must
+	// resolve the verified resident credential, not reuse the email above.
+	discovery := native.DiscoverableSigninRequest{CommandID: optionsID, FlowID: flow.Binding.ID, Cookie: issuedFlow.Token, Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1", Device: "reference-passkey", CorrelationID: "reference-passkey"}
+	var assertionOptions webauthn.AssertionOptions
+	if discoverable {
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		if _, err := owner.DiscoverableAuthenticationOptions(canceled, discovery); err == nil {
+			t.Fatal("canceled graph admitted discovery")
+		}
+		assertionOptions, err = owner.DiscoverableAuthenticationOptions(ctx, discovery)
+	} else {
+		if _, err := owner.DiscoverableAuthenticationOptions(ctx, discovery); err == nil {
+			t.Fatal("disabled discovery policy admitted options")
+		}
+		assertionOptions, err = owner.AuthenticationOptions(ctx, input)
+	}
 	if err != nil {
 		t.Fatal("reference-native assertion options", err)
 	}
 	assertionCeremony, _ := assertionOptions.Ceremony()
 	input.CommandID, _ = identity.NewCommandID()
 	signin := native.SigninCompletion{SigninRequest: input, CeremonyID: assertionCeremony.ID, Response: referencePasskeyAssertion(t, key, id, credential.UserHandle, referencePasskeyChallenge(t, ctx, assertionOptions.TransferJSON))}
-	foreignBrowser := signin
-	foreignBrowser.Cookie, err = session.NewToken(32)
+	discovery.CommandID = input.CommandID
+	discoveryCompletion := native.DiscoverableSigninCompletion{DiscoverableSigninRequest: discovery, CeremonyID: signin.CeremonyID, Response: signin.Response}
+	foreignToken, err := session.NewToken(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := owner.Signin(ctx, foreignBrowser); err == nil || result.Session.Token != (session.Token{}) {
-		t.Fatal("foreign browser received a session")
+	var issued native.SigninResult
+	if discoverable {
+		foreignBrowser := discoveryCompletion
+		foreignBrowser.Cookie = foreignToken
+		if result, err := owner.DiscoverableSignin(ctx, foreignBrowser); err == nil || result.Session.Token != (session.Token{}) {
+			t.Fatal("foreign browser received a discovery session")
+		}
+		wrongMode := signin
+		// A different request mode needs its own command identity: native risk
+		// custody deliberately rejects changed-input reuse of the same attempt.
+		wrongMode.CommandID, _ = identity.NewCommandID()
+		if result, err := owner.Signin(ctx, wrongMode); err == nil || result.Session.Token != (session.Token{}) {
+			t.Fatal("identified completion accepted discovery ceremony")
+		}
+		issued, err = owner.DiscoverableSignin(ctx, discoveryCompletion)
+	} else {
+		foreignBrowser := signin
+		foreignBrowser.Cookie = foreignToken
+		if result, err := owner.Signin(ctx, foreignBrowser); err == nil || result.Session.Token != (session.Token{}) {
+			t.Fatal("foreign browser received a session")
+		}
+		wrongMode := discoveryCompletion
+		// Preserve the actual completion's immutable risk attempt identity.
+		wrongMode.CommandID, _ = identity.NewCommandID()
+		if result, err := owner.DiscoverableSignin(ctx, wrongMode); err == nil || result.Session.Token != (session.Token{}) {
+			t.Fatal("discovery completion accepted identified ceremony")
+		}
+		issued, err = owner.Signin(ctx, signin)
 	}
-	issued, err := owner.Signin(ctx, signin)
 	if err != nil {
 		t.Fatal("reference-native actual passkey signin", err)
 	}

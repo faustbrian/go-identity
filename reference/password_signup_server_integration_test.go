@@ -100,6 +100,14 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 
 func registrationRiskPolicy(t *testing.T, version uint64, screening bool, username ...bool) risk.Policy {
 	t.Helper()
+	p, err := risk.NewPolicy(registrationRiskPolicyConfig(version, screening, username...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func registrationRiskPolicyConfig(version uint64, screening bool, username ...bool) risk.PolicyConfig {
 	c := risk.PolicyConfig{Version: version, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
 		{Class: risk.CredentialMutation, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectDimension, risk.SessionDimension, risk.NetworkDimension}, Window: 15 * time.Minute, Limit: 5, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
@@ -112,11 +120,7 @@ func registrationRiskPolicy(t *testing.T, version uint64, screening bool, userna
 			c.HIBP.Operations = append(c.HIBP.Operations, "identity.username.signup")
 		}
 	}
-	p, err := risk.NewPolicy(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p
+	return c
 }
 
 // Only provider IO is synthetic. The owned client derives padded SHA-1-prefix
@@ -267,6 +271,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	passkey              bool
 	passkeyUpgrade       bool
+	passkeyDiscovery     bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -543,6 +548,15 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passkey {
 		configureReferencePasskey(t, &c)
+		if extensions.passkeyDiscovery {
+			policy := registrationRiskPolicyConfig(3, false)
+			policy.PasskeyDiscovery = true
+			discoveryPolicy, err := risk.NewPolicy(policy)
+			if err != nil {
+				t.Fatal("explicit reference passkey discovery policy", err)
+			}
+			c.Velocity.Native.Policy = discoveryPolicy
+		}
 	}
 	if extensions.mfaEnrollment {
 		configureReferenceMFAEnrollment(t, &c, origin)
@@ -1378,7 +1392,7 @@ END $$`); err != nil {
 				selected = upgradeReferencePasskey(t, ctx, stores, *passkeyUpgrade, deps, workerConfigs, modules)
 				selectedConfig = *passkeyUpgrade
 			}
-			proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf)
+			proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery)
 		}
 	}
 	if extensions.phoneEnrollment {

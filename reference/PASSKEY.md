@@ -22,6 +22,18 @@ The selected path is:
    requires the newly issued synchronizer; a password synchronizer is not a
    substitute. Original recovery returns metadata, never another credential.
 
+For identifier-free signin, explicitly set `risk.PolicyConfig.PasskeyDiscovery`
+when constructing the graph's authentication policy (`DurableAdmission.Policy`
+in the PostgreSQL-only profile). After the same `PrepareFlow`/`IssueFlow`, call
+`DiscoverableAuthenticationOptions` with `native.DiscoverableSigninRequest`,
+then `DiscoverableSignin` with `native.DiscoverableSigninCompletion`. Neither
+input accepts an email, user, tenant or RP selector. Only the genuinely verified
+resident credential and user handle resolve identity. Options and completions
+cannot switch between identified and identifier-free modes. The default false
+policy denies identifier-free calls without disabling identified signin.
+The three-target discovery admission profile currently requires the durable
+PostgreSQL risk owner; it is not qualified for the four-target Valkey profile.
+
 ## Configuration
 
 `PasskeyConfiguration.Protocol` fixes tenant, RP, origins, challenge key and
@@ -78,7 +90,7 @@ From this module, with the authorized task-owned PostgreSQL fixture:
 
 ```sh
 go test -race -tags=integration -count=1 \
-  -run '^TestReferencePostgresPasskey(Native|PopulatedUpgrade)$' .
+  -run '^TestReferencePostgresPasskey(Native|PopulatedUpgrade|Discoverable|DiscoverablePopulatedUpgrade)$' .
 ```
 
 Agent runs additionally set task-owned disposable Go caches. The fixture uses
@@ -90,6 +102,6 @@ external IO and raw none/ES256 authenticator responses are controlled seams.
 This is native reference composition, not passkey HTTP transport. Existing
 `Sessions()` and HTTP session routes do not implicitly adopt the new method;
 use the selected passkey handle for its read/logout profile. Passkey HTTP,
-signup, identifier-free/conditional signin, credential rename/delete, completed
+signup, conditional signin, credential rename/delete, completed
 secondary MFA and organization profiles remain separate required work. This
 profile is not complete M16, full release qualification, deployment or a UI.

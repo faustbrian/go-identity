@@ -11,7 +11,30 @@ import (
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
+	native "github.com/faustbrian/go-passkey/postgres"
 )
+
+func TestPasskeyDiscoveryRetainsGraphLifetime(t *testing.T) {
+	for name, owner := range map[string]*PasskeyService{
+		"nil":           nil,
+		"zero":          {},
+		"unselected":    {state: &storeState{features: &featureState{composed: true, ready: true}}},
+		"uninitialized": {state: &storeState{features: &featureState{composed: true, passkey: &passkeyState{tenant: "tenant"}}}},
+		"closed":        {state: &storeState{closed: true, features: &featureState{composed: true, ready: true, passkey: &passkeyState{tenant: "tenant"}}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := owner.DiscoverableAuthenticationOptions(t.Context(), native.DiscoverableSigninRequest{}); err == nil {
+				t.Fatal("unadmitted discovery options")
+			}
+			if out, err := owner.DiscoverableSignin(t.Context(), native.DiscoverableSigninCompletion{}); err == nil || out.Session.Token != (session.Token{}) {
+				t.Fatal("unadmitted discovery returned a session")
+			}
+			if owner != nil && owner.state != nil && owner.state.active != 0 {
+				t.Fatal("denial leaked graph lifetime")
+			}
+		})
+	}
+}
 
 func TestPasskeysRequireExplicitLiveSelection(t *testing.T) {
 	for name, graph := range map[string]FeatureSet{

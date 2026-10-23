@@ -1,5 +1,58 @@
 # Identity Implementation — Current Milestone
 
+2026-10-23 18:45 UTC: Reference discovery final source candidate
+98d170503baf437c7f35a06123083cc315c812f2ff8b991d35f9b6be4b043866
+independently APPROVED/no remaining findings by /root/reference_discovery_final.
+Actual four passkey fresh/upgrade/mode journeys plus retained PostgreSQL baseline
+and TOTP inventory pass race19.017s; ordinary Reference race8.723s, baseline
+command7.256s; taggedvet0, authenticated modules verified, diffsecrets0. Initial
+missing-API RED confirmed both methods absent. A fixture used one risk attempt
+for different modes; distinct-command mode denials preserve original completion.
+The separately Valkey-selected retained TOTP test lacked its service input and
+is not passing evidence; the selected PostgreSQL TOTP journey is proven. GoDoc
+contradiction corrected during final review; no runtime requalification needed
+for that prose. Main/Required/publicconsumer delivery still pending below.
+
+2026-10-23 18:44 UTC: next native prerequisite lane assigned to
+passkey_options_idempotency, GPT6.1Sol/high, no children. Own go-passkey/postgres/**
+only (no primary Reference/HTTP paths, root manifests, shared contracts or Git
+delivery). Consume committed native955b370, existing public identity command/
+idempotency and WebAuthn reveal-once participants. Complete keyed native register
+and identified/discoverable signin options with canonical original-command
+metadata replay/reconciliation, tenant/actor/operation/request binding and
+contention/mismatch/expiry/unknown denial. Preserve existing keyless native APIs
+and single-use completion; no new challenge on matching replay, transport
+journal, duplicate authority or silent HTTP retry reclassification. First public
+boundary inspected by parent; TDD, focused native PostgreSQL/race then retained
+profiles, local static/secrets and independent full review before main delivery.
+No heavy runs until parent releases shared test resource; report dependency
+contradictions instead of editing owners. HTTP composition remains primary-owned.
+
+2026-10-23 18:42 UTC: bounded read-only passkey_http_mapping agent investigates
+the next actual HTTP/Reference consumer boundary against native955b370 and
+identity fe79cde. No writable project paths, Git mutations, heavy checks or
+children; parent owns HTTP/reference integration. Expected result: exact route,
+request, custody and composition seams plus demonstrated missing dependencies.
+It does not alter the current Reference acceptance or authorize implementation.
+
+2026-10-23 18:36 UTC: primary Reference identifier-free M16 profile frozen.
+Own reference/** and live notes only; no active worker shares these paths.
+Consume authenticated native955b370/risk a13a682, exact-CI green and actual
+public-native consumer33.567s. Add guarded public discoverable options/completion
+on the already selected Passkeys handle, using existing native session/risk/
+protocol owners. Genuine baseline registration/delivery/verification/password
+signin -> fresh-proof enrollment -> no-identifier assertion -> session/inventory/
+read/logout must pass fresh and populated-upgrade Reference journeys. Risk opt-in
+is trusted startup policy; false, unselected/uninitialized/closed graph and
+foreign browser/tenant deny without fallback. Preserve identified paths and
+original flow/remember/authority/expiry, recovery and immutable migration history.
+No HTTP, signup, conditional UI or management implied. Focused Reference unit
+and new/retained PostgreSQL/race journeys, taggedvet/module verification, changed
+secrets, complete independent final-diff review, main/CI delivery and a separate
+downloaded-public Reference consumer close this profile. No prerequisite rerun
+or new evidence machinery. Previous turn made authoritative delivery progress;
+its task caches/consumer fixtures and PostgreSQL cluster were fully removed.
+
 2026-10-23 18:32 UTC: native M16 identifier-free resident signin profile CLOSED,
 not full M16. Reviewed main955b37004f50922edaa6c63f5fffb83dd68dda50 is pushed;
 Required40003861587 SUCCESS. Final independent native report
