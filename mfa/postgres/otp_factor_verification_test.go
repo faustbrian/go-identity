@@ -59,8 +59,8 @@ func TestOTPFactorVerificationKeepsOriginalSignedActionAndDistinctProfile(t *tes
 		func(r *factorVerificationRecord) { r.Original.Proof.Proof.Method = "password" },
 		func(r *factorVerificationRecord) { r.Original.Proof.Proof.Assurance = auth.AssuranceSingleFactor },
 		func(r *factorVerificationRecord) {
-			r.Original.Proof.Proof.Purpose = "identity.mfa.disable"
-			r.Original.Proof.Action = "identity.mfa.disable"
+			r.Original.Proof.Proof.Purpose = "identity.mfa.recovery-regenerate"
+			r.Original.Proof.Action = "identity.mfa.recovery-regenerate"
 		},
 	} {
 		bad := r
@@ -71,6 +71,20 @@ func TestOTPFactorVerificationKeepsOriginalSignedActionAndDistinctProfile(t *tes
 	}
 }
 
+func TestOTPFactorVerificationRetainsDistinctDisablePurpose(t *testing.T) {
+	r := otpFactorVerificationFixture(t)
+	r.Original.Proof.Proof.Purpose = "identity.mfa.disable"
+	r.Original.Proof.Action = "identity.mfa.disable"
+	wire, err := encodeOTPFactorVerificationRecord(r)
+	if err != nil {
+		t.Fatal("disable-purpose OTP evidence cannot be retained", err)
+	}
+	got, err := decodeOTPFactorVerificationRecord(r.Original.Proof.Proof.ID, "tenant-a", "user-a", wire)
+	if err != nil || got.Original.Proof != r.Original.Proof {
+		t.Fatal("disable-purpose OTP evidence changed action", err)
+	}
+}
+
 func FuzzOTPFactorVerificationRecord(f *testing.F) {
 	r := otpFactorVerificationFixture(f)
 	wire, err := encodeOTPFactorVerificationRecord(r)
@@ -78,6 +92,14 @@ func FuzzOTPFactorVerificationRecord(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(wire)
+	disable := r
+	disable.Original.Proof.Proof.Purpose = "identity.mfa.disable"
+	disable.Original.Proof.Action = "identity.mfa.disable"
+	disableWire, err := encodeOTPFactorVerificationRecord(disable)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(disableWire)
 	f.Add([]byte(`{}`))
 	f.Add([]byte(`{"Schema":2,"Schema":2}`))
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -86,7 +108,7 @@ func FuzzOTPFactorVerificationRecord(f *testing.F) {
 			return
 		}
 		canonical, err := encodeOTPFactorVerificationRecord(got)
-		if err != nil || !bytes.Equal(canonical, data) || got.Schema != 2 || got.Original.Proof.Proof.Method != "otp" || got.Original.Proof.Action != "identity.mfa.factor-update" || len(data) > maximumFactorVerificationRecordBytes {
+		if err != nil || !bytes.Equal(canonical, data) || got.Schema != 2 || got.Original.Proof.Proof.Method != "otp" || got.Original.Proof.Action != "identity.mfa.factor-update" && got.Original.Proof.Action != "identity.mfa.disable" || len(data) > maximumFactorVerificationRecordBytes {
 			t.Fatal("OTP decoder accepted noncanonical or foreign-profile evidence")
 		}
 	})

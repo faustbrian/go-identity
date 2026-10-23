@@ -40,7 +40,8 @@ func NewFactorVerificationSource(pool *database.Pool, maximumDuration time.Durat
 }
 
 // NewOTPFactorVerificationSource selects only committed native active-OTP
-// factor-update evidence in its distinct method-owned storage. Install
+// action evidence (factor-update or explicitly selected disable) in its distinct
+// method-owned storage. Install
 // OTPFactorVerificationMigrationSource first. It otherwise retains the existing
 // source's bounded reads, errors, immutable signed history and borrowed pool
 // lifetime. It grants no current authentication, permission or one-time use.

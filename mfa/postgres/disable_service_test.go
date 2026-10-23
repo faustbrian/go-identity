@@ -13,6 +13,9 @@ func TestDisableRequiresNativeOwnersAndExplicitRecovery(t *testing.T) {
 	if owner, err := NewDisableService(nil, nil, DisableConfig{}); err == nil || owner != nil {
 		t.Fatal("unconfigured disable fabricated native authority")
 	}
+	if owner, err := NewOTPDisableService(nil, nil, DisableConfig{}); err == nil || owner != nil {
+		t.Fatal("unconfigured OTP disable fabricated native authority")
+	}
 	for _, owner := range []*DisableService{nil, {}} {
 		for _, ctx := range []context.Context{nil, t.Context()} {
 			out, err := owner.Disable(ctx, mfa.DisableRequest{})

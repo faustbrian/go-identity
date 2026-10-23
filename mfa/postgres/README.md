@@ -1,5 +1,28 @@
 # PostgreSQL MFA authority (in development)
 
+## Selected email-OTP disable
+
+`NewOTPDisableService` reuses the existing native factor mutation coordinator
+with explicit email-reset recovery and disable-purpose signed evidence. Select
+`OTPActiveStepUpConfig.AllowedPurposes` to include `identity.mfa.disable` and
+compose an OTP issuance owner with the same selected purposes. Empty purposes
+preserve the original factor-update-only identity. Install
+`OTPDisableMigrationSource` after OTP proof/management/removal history and the
+existing session-disable effect history before accepting disable. No installed
+migration bytes or TOTP profile are changed.
+
+The supported profile has one active email-OTP factor. `OneFactor` preserves
+unconfirmed OTP siblings and returns only their safe metadata; `AllFactors`
+erases them. Both erase selected recipient references, retire selected recovery
+sets, consume the original proof, advance factor authority and revoke sessions
+with required events in the same Work. Recovery is original-command metadata,
+not renewed proof, another recovery-policy decision or repeat erasure. No HTTP,
+replacement, mixed-method active set or trusted-device profile is enabled.
+All-target supports at most 63 retained pending siblings beside the active OTP
+factor. Expired rows still in pending state count toward that bound. Overflow
+rolls back all effects; it does not partially erase the selected set or skip old
+rows. One-target retains untargeted pending history and recovery sets.
+
 `RequireOTPSessionFactor` is the OTP-specific same-Work authority fence for
 native session self-logout. It requires the actual session-revoke-one owner,
 original enrollment/account versions and a still-verified matching recipient.

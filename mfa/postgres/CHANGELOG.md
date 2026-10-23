@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Explicitly select sole-active email-OTP disable with a real email-reset
+  recovery owner and distinct disable-purpose proof. One-target preserves pending
+  OTP siblings; all-target erases them. Factor/proof/recovery/session effects
+  commit atomically and recovery returns metadata only. Install the forward
+  `OTPDisableMigrationSource` and session disable history before use. Empty
+  step-up purpose selection preserves the original factor-update-only profile.
+
 - Explicitly select sole-active email-OTP removal with a real emailed-password-
   reset recovery owner. Erase recipient references, retire recovery sets, consume
   the original action proof and revoke sessions atomically. Install the additive

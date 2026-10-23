@@ -434,6 +434,26 @@ func (p *factorUpdatePhase) admit(ctx context.Context, w kernel.Work, c identity
 			return err
 		}
 	}
+	if p.disable != nil && p.state.otp != nil {
+		// This selected profile owns OTP pending erasure only. Reject a mixed
+		// live TOTP inventory rather than silently dropping it from one-target
+		// projections or claiming all-target completion while retaining it.
+		// Native factor writers share this Work's tenant serialization.
+		b := p.input.Binding
+		rows, err := w.Query(ctx, `SELECT NOT EXISTS(SELECT 1 FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND state<>3)`, string(b.TenantID), string(b.UserID))
+		if err != nil {
+			return err
+		}
+		var supported bool
+		ok := rows.Next() && rows.Scan(&supported) == nil && !rows.Next() && rows.Err() == nil
+		rows.Close()
+		if !ok {
+			return identity.UnavailableError{}
+		}
+		if !supported {
+			return identity.ForbiddenError{}
+		}
+	}
 	r := p.input.Record
 	if err := p.state.requireFactor(ctx, w, p, p.input.Binding.UserID, r, false); err != nil {
 		return err
@@ -695,7 +715,7 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	l := p.lifecycle()
 	if p.disable != nil {
 		recovery := p.state.config.RemovalRecovery.FactorRemovalRecoveryIdentity()
-		n, err = w.Exec(ctx, `INSERT INTO identity_mfa.factor_update_effects(tenant_id,user_id,command_id,purpose,factor_id,before_version,after_version,before_authority,after_authority,proof_id,action,recovery_identity,disable_target) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10,2,$11,$12)`, string(b.TenantID), string(b.UserID), id, b.OperationID, string(r.FactorID), version, strconv.FormatUint(r.ExpectedVersion+1, 10), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), string(p.input.Record.Original.Proof.Proof.ID), recovery[:], int16(p.disable.Target))
+		n, err = w.Exec(ctx, `INSERT INTO `+p.state.effectsTable()+`(tenant_id,user_id,command_id,purpose,factor_id,before_version,after_version,before_authority,after_authority,proof_id,action,recovery_identity,disable_target) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10,2,$11,$12)`, string(b.TenantID), string(b.UserID), id, b.OperationID, string(r.FactorID), version, strconv.FormatUint(r.ExpectedVersion+1, 10), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), string(p.input.Record.Original.Proof.Proof.ID), recovery[:], int16(p.disable.Target))
 	} else {
 		n, err = w.Exec(ctx, `INSERT INTO `+p.state.effectsTable()+`(tenant_id,user_id,command_id,purpose,factor_id,before_version,after_version,before_authority,after_authority,proof_id) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8::numeric,$9::numeric,$10)`, string(b.TenantID), string(b.UserID), id, b.OperationID, string(r.FactorID), version, strconv.FormatUint(r.ExpectedVersion+1, 10), strconv.FormatUint(l.BeforeVersion, 10), strconv.FormatUint(l.AfterVersion, 10), string(p.input.Record.Original.Proof.Proof.ID))
 	}
@@ -884,7 +904,7 @@ func (p *factorUpdatePhase) checkRemoval(ctx context.Context, w kernel.Work) err
 	}
 	if p.disable != nil && p.disable.Target == mfa.AllFactors {
 		rows.Close()
-		all, err := w.Query(ctx, `SELECT NOT EXISTS(SELECT 1 FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND state<>3) AND NOT EXISTS(SELECT 1 FROM identity_mfa.recovery_sets WHERE tenant_id=$1 AND user_id=$2 AND state<>3)`, string(b.TenantID), string(b.UserID))
+		all, err := w.Query(ctx, `SELECT NOT EXISTS(SELECT 1 FROM `+p.state.factorTable()+` WHERE tenant_id=$1 AND user_id=$2 AND state<>3) AND NOT EXISTS(SELECT 1 FROM identity_mfa.recovery_sets WHERE tenant_id=$1 AND user_id=$2 AND state<>3)`, string(b.TenantID), string(b.UserID))
 		if err != nil {
 			return err
 		}
@@ -907,7 +927,7 @@ func (p *factorUpdatePhase) checkRemoval(ctx context.Context, w kernel.Work) err
 // order in the same Work and no callback or external IO occurs under these locks.
 func (p *factorUpdatePhase) revokePendingForDisable(ctx context.Context, w kernel.Work) error {
 	b := p.input.Binding
-	rows, err := w.Query(ctx, `SELECT factor_id,row_version::text FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND state=1 ORDER BY factor_id LIMIT 64 FOR UPDATE`, string(b.TenantID), string(b.UserID))
+	rows, err := w.Query(ctx, `SELECT factor_id,row_version::text FROM `+p.state.factorTable()+` WHERE tenant_id=$1 AND user_id=$2 AND state=1 ORDER BY factor_id LIMIT 64 FOR UPDATE`, string(b.TenantID), string(b.UserID))
 	if err != nil {
 		return err
 	}
@@ -935,7 +955,11 @@ func (p *factorUpdatePhase) revokePendingForDisable(ctx context.Context, w kerne
 		return identity.ConflictError{}
 	}
 	for _, item := range selected {
-		n, err := w.Exec(ctx, `UPDATE identity_mfa.totp_factors SET state=3,label='',encrypted_secret=NULL,last_step=NULL,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND row_version=$4::numeric`, string(b.TenantID), string(b.UserID), item.id, item.version)
+		erasure := "encrypted_secret=NULL,last_step=NULL"
+		if p.state.otp != nil {
+			erasure = "identifier_id=NULL,identifier_version=NULL,verification_version=NULL"
+		}
+		n, err := w.Exec(ctx, `UPDATE `+p.state.factorTable()+` SET state=3,label='',`+erasure+`,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND row_version=$4::numeric`, string(b.TenantID), string(b.UserID), item.id, item.version)
 		if err != nil {
 			return err
 		}

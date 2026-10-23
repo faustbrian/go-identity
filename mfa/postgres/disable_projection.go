@@ -20,7 +20,7 @@ func (p *factorUpdatePhase) readDisableRemaining(ctx context.Context, w kernel.W
 	if err != nil {
 		return err
 	}
-	rows, err := w.Query(ctx, `SELECT factor_id,state,label,created_at,row_version::text FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND state<>3 AND (state<>1 OR enrollment_expires_at>$3) ORDER BY factor_id LIMIT 101`, string(b.TenantID), string(b.UserID), now)
+	rows, err := w.Query(ctx, `SELECT factor_id,state,label,created_at,row_version::text FROM `+p.state.factorTable()+` WHERE tenant_id=$1 AND user_id=$2 AND state<>3 AND (state<>1 OR enrollment_expires_at>$3) ORDER BY factor_id LIMIT 101`, string(b.TenantID), string(b.UserID), now)
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func (p *factorUpdatePhase) readDisableRemaining(ctx context.Context, w kernel.W
 		if err != nil || version != strconv.FormatUint(v, 10) || state != int16(mfa.FactorPending) || id == string(p.targetID()) || len(factors) == 100 {
 			return identity.UnavailableError{}
 		}
-		factor.ID, factor.Method, factor.State, factor.Version = mfa.FactorID(id), "totp", mfa.FactorPending, v
+		factor.ID, factor.Method, factor.State, factor.Version = mfa.FactorID(id), p.state.method(), mfa.FactorPending, v
 		factors = append(factors, factor)
 	}
 	if err := rows.Err(); err != nil {

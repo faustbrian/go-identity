@@ -51,7 +51,7 @@ func encodeNativeFactorVerificationRecord(r factorVerificationRecord, schema uin
 	profile := schema == 1 && method == "totp" || schema == 2 && method == "otp"
 	purpose := nativeFactorEvidencePurpose(p.Proof.Purpose)
 	if method == "otp" {
-		purpose = p.Proof.Purpose == "identity.mfa.factor-update"
+		purpose = p.Proof.Purpose == "identity.mfa.factor-update" || p.Proof.Purpose == "identity.mfa.disable"
 	}
 	if !profile || r.Schema != schema || r.FactorAuthorityVersion == 0 || p.Proof.Method != method || p.Proof.Assurance != auth.AssuranceMultiFactor || !purpose || p.Action != string(p.Proof.Purpose) || p.Proof.ExpiresAt.Sub(p.Proof.IssuedAt) > 5*time.Minute || r.Original.ProofVersion != 1 || len(r.Original.Signature) != ed25519.SignatureSize {
 		return bad()

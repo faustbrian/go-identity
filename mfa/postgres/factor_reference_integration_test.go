@@ -296,5 +296,20 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','factor-owner',1,0
 		if err := conn.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(f) ORDER BY factor_id)::text FROM identity_mfa.otp_factors f`).Scan(&after); err != nil || after != populated {
 			t.Fatal("OTP removal migration changed populated factor/recipient metadata", err)
 		}
+		disabled, err := (OTPDisableMigrationSource{Base: OTPFactorRemovalMigrationSource{Base: OTPFactorManagementMigrationSource{Base: proofs, Version: 17}, Version: 18}, Version: 19}).Load(ctx)
+		if err != nil || len(disabled) != len(removed)+1 {
+			t.Fatal("OTP disable suffix did not append", err)
+		}
+		for i := range removed {
+			if disabled[i] != removed[i] {
+				t.Fatal("OTP disable changed installed migration bytes")
+			}
+		}
+		if _, err := conn.Exec(ctx, disabled[len(disabled)-1].UpSQL()); err != nil {
+			t.Fatal("populated OTP disable suffix failed", err)
+		}
+		if err := conn.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(f) ORDER BY factor_id)::text FROM identity_mfa.otp_factors f`).Scan(&after); err != nil || after != populated {
+			t.Fatal("OTP disable changed installed factor metadata", err)
+		}
 	})
 }

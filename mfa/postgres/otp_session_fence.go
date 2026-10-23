@@ -73,6 +73,6 @@ FOR UPDATE OF f FOR SHARE OF i`, string(b.TenantID), string(user), factorID)
 
 func nativeOTPSessionFactorConsumer(b identity.CommandBinding, f kernel.FeatureRegistration) bool {
 	sessionOwner := b.OperationID == "identity.session.revoke-one" && f.Operation.Owner == "identity/session" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1})
-	mfaOwner := b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.otp-send" && b.SchemaID == "mfa-otp-step-up-send" || b.OperationID == "identity.mfa.otp-verify" && b.SchemaID == "mfa-otp-step-up" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update") && f.Operation.Owner == "identity/mfa" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1})
+	mfaOwner := b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.otp-send" && b.SchemaID == "mfa-otp-step-up-send" || b.OperationID == "identity.mfa.otp-verify" && b.SchemaID == "mfa-otp-step-up" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable") && f.Operation.Owner == "identity/mfa" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1})
 	return sessionOwner || mfaOwner
 }

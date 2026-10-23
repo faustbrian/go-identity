@@ -21,7 +21,8 @@ type DisablePrimarySource interface {
 	RestoreDisable(context.Context, mfa.DisableRequest, identity.CommandID, []byte) (TOTPActivePrimary, error)
 }
 
-// DisableConfig selects the current native sole-TOTP/email-reset profile.
+// DisableConfig selects a native sole-active-factor/email-reset profile through
+// the method-specific constructor (TOTP or email OTP).
 // One/all scopes are distinct immutable intents. Additional active factor
 // methods/counts deny rather than silently being skipped. RecoveryPath must be
 // Email and Recovery must borrow the actual selected reset request/completion
@@ -55,6 +56,28 @@ func NewDisableService(enrollment *TOTPEnrollmentService, stepup *TOTPActiveStep
 	return &DisableService{mutation: s}, nil
 }
 
+// NewOTPDisableService selects sole-active email-OTP disable with distinct
+// one/all intent and a real selected email-reset recovery path. The step-up
+// owner must explicitly allow disable-purpose evidence. Install forward OTP
+// disable and session-effect histories; existing TOTP/default profiles are not
+// changed. Owners are borrowed and construction performs no IO.
+// All-target supports at most 63 retained pending siblings, including expired
+// pending rows; overflow rolls back rather than partially erasing the set.
+func NewOTPDisableService(enrollment *OTPEnrollmentService, stepup *OTPActiveStepUpService, c DisableConfig) (*DisableService, error) {
+	if enrollment == nil || enrollment.engine == nil || enrollment.engine.state == nil || stepup == nil || stepup.state == nil || !stepup.state.allows("identity.mfa.disable") || nilEnrollmentPrimary(c.Primary) || nilEnrollmentPrimary(c.Sessions) || c.RecoveryPath != auth.RecoveryPathEmail || nilEnrollmentPrimary(c.Recovery) || c.Recovery.FactorRemovalRecoveryIdentity() == ([32]byte{}) || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute || c.PrimaryMaximumAge <= 0 || c.PrimaryMaximumAge > 5*time.Minute {
+		return nil, invalidAuthority()
+	}
+	shared := enrollment.engine.state()
+	if shared == nil || shared.method != "otp" || stepup.state.shared != shared || len(stepup.state.config.VerificationKeys) > 32 {
+		return nil, invalidAuthority()
+	}
+	s, err := configureFactorMutation(&factorUpdateState{shared: shared, otp: stepup.state, config: FactorUpdateConfig{Sessions: c.Sessions, MaximumAge: c.MaximumAge, PrimaryMaximumAge: c.PrimaryMaximumAge, RemovalRecoveryPath: c.RecoveryPath, RemovalRecovery: c.Recovery}, operation: disableOperation(), disablePrimary: c.Primary})
+	if err != nil {
+		return nil, err
+	}
+	return &DisableService{mutation: s}, nil
+}
+
 func disableOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.disable", SchemaID: "mfa-disable", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
@@ -62,7 +85,7 @@ func disableOperation() identity.FeatureOperation {
 // Disable requires original signed disable proof and recent primary custody.
 // A fresh committed result exposes safe remaining unexpired pending factors;
 // all-target returns an empty set after erasing pending siblings. The profile
-// supports only one active TOTP. Errors/unknown/replay expose no projections or
+// supports only one active factor of its selected method. Errors/unknown/replay expose no projections or
 // new credentials.
 func (s *DisableService) Disable(ctx context.Context, r mfa.DisableRequest) (out mfa.DisableResult, err error) {
 	if ctx == nil || s == nil || s.mutation == nil || s.mutation.state == nil || r.Validate() != nil {

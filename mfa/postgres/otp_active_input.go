@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
@@ -111,7 +112,7 @@ func (p *otpActivePhase) PrepareRequestKey(ctx context.Context, k kernel.Request
 
 func (p *otpActivePhase) validInput(i otpActiveInput, verify bool) bool {
 	b, m := i.Binding, i.Factor
-	return i.Schema == 1 && b.ValidateFor(otpActiveOperation(verify)) == nil && b.ActorKind == authorization.SubjectUser && b.ActorID == identity.ActorID(b.UserID) && b.RecordID == m.FactorID && b.TenantID == m.TenantID && b.UserID == m.UserID && b.PolicyID == p.state.shared.config.PolicyID && b.PolicyVersion == p.state.shared.config.Coordinator.AdmissionPolicy.PolicyVersion && b.CorrelationID == string(b.CommandID) && i.Action == "identity.mfa.factor-update" && slices.Contains(p.state.config.AllowedOrigins, i.Origin) && m.EnrollmentVersion > 0 && m.RowVersion > 0 && m.RowVersion < math.MaxUint64-1 && m.FactorAuthorityVersion > 0 && m.IdentifierID != "" && m.IdentifierVersion > 0 && m.VerificationVersion > 0 && m.Channel == delivery.ChannelEmail && m.ContinuationID == "" && m.ContinuationVersion == 0 && m.ScopeDigest == ([32]byte{}) && len(i.Primary) > 0 && len(i.Primary) <= 32768 && len(i.NativeInput) > 0 && len(i.NativeInput) <= 32768 && i.SessionID != "" && i.SessionVersion > 0 && !i.CreatedAt.IsZero() && i.CreatedAt.Nanosecond()%1000 == 0 && !i.Until.IsZero() && i.ExpiresAt.After(i.CreatedAt) && i.ExpiresAt.Sub(i.CreatedAt) <= p.state.config.TTL && i.Intent != ([32]byte{}) && (i.Root == nil || i.Root.Binding == b && i.Root.Operation == otpActiveOperation(verify))
+	return i.Schema == 1 && b.ValidateFor(otpActiveOperation(verify)) == nil && b.ActorKind == authorization.SubjectUser && b.ActorID == identity.ActorID(b.UserID) && b.RecordID == m.FactorID && b.TenantID == m.TenantID && b.UserID == m.UserID && b.PolicyID == p.state.shared.config.PolicyID && b.PolicyVersion == p.state.shared.config.Coordinator.AdmissionPolicy.PolicyVersion && b.CorrelationID == string(b.CommandID) && p.state.allows(auth.Purpose(i.Action)) && slices.Contains(p.state.config.AllowedOrigins, i.Origin) && m.EnrollmentVersion > 0 && m.RowVersion > 0 && m.RowVersion < math.MaxUint64-1 && m.FactorAuthorityVersion > 0 && m.IdentifierID != "" && m.IdentifierVersion > 0 && m.VerificationVersion > 0 && m.Channel == delivery.ChannelEmail && m.ContinuationID == "" && m.ContinuationVersion == 0 && m.ScopeDigest == ([32]byte{}) && len(i.Primary) > 0 && len(i.Primary) <= 32768 && len(i.NativeInput) > 0 && len(i.NativeInput) <= 32768 && i.SessionID != "" && i.SessionVersion > 0 && !i.CreatedAt.IsZero() && i.CreatedAt.Nanosecond()%1000 == 0 && !i.Until.IsZero() && i.ExpiresAt.After(i.CreatedAt) && i.ExpiresAt.Sub(i.CreatedAt) <= p.state.config.TTL && i.Intent != ([32]byte{}) && (i.Root == nil || i.Root.Binding == b && i.Root.Operation == otpActiveOperation(verify))
 }
 func (p *otpActivePhase) restoreSend(ctx context.Context, k kernel.RequestKeyPreparationBinding, wire []byte) error {
 	aad, err := p.sendInputAAD(k)

@@ -33,6 +33,7 @@ func TestOTPSessionFactorActionRequiresExactNativeProfile(t *testing.T) {
 		{"identity.mfa.otp-send", "mfa-otp-step-up-send"},
 		{"identity.mfa.otp-verify", "mfa-otp-step-up"},
 		{"identity.mfa.factor-update", "mfa-factor-update"},
+		{"identity.mfa.disable", "mfa-disable"},
 	} {
 		binding := identity.CommandBinding{OperationID: profile.operation, SchemaID: profile.schema, SchemaVersion: 1}
 		if !nativeOTPSessionFactorConsumer(binding, owner) {

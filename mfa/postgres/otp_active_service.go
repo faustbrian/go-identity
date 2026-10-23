@@ -13,6 +13,7 @@ import (
 	"slices"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
@@ -28,6 +29,10 @@ import (
 // lifetime at 1s..5min; the OTP policy and original session may impose earlier
 // limits. Origins are exact HTTPS origins. Owners are borrowed and immutable.
 type OTPActiveStepUpConfig struct {
+	// AllowedPurposes is a closed explicit selection of factor-update and/or
+	// disable. Empty preserves the original factor-update-only profile and its
+	// configuration identity. Selection grants no proof or recovery authority.
+	AllowedPurposes               []auth.Purpose
 	Primary                       OTPActivePrimarySource
 	Issuance                      OTPActiveIssuanceOwner
 	AllowedOrigins                []string
@@ -65,6 +70,16 @@ func otpActiveOperation(verify bool) identity.FeatureOperation {
 func NewOTPActiveStepUpService(enrollment *OTPEnrollmentService, c OTPActiveStepUpConfig) (*OTPActiveStepUpService, error) {
 	if enrollment == nil || enrollment.engine == nil || enrollment.engine.state == nil || nilEnrollmentPrimary(c.Primary) || nilEnrollmentPrimary(c.Issuance) || c.AttemptKeyVersion == 0 || c.SigningKey.sign == nil || c.SigningKey.public == nil || c.TTL < time.Second || c.TTL > 5*time.Minute || c.TTL%time.Microsecond != 0 || len(c.AllowedOrigins) < 1 || len(c.AllowedOrigins) > 16 || len(c.VerificationKeys) < 1 || len(c.VerificationKeys) > 64 {
 		return nil, invalidAuthority()
+	}
+	if len(c.AllowedPurposes) > 2 {
+		return nil, invalidAuthority()
+	}
+	c.AllowedPurposes = slices.Clone(c.AllowedPurposes)
+	slices.Sort(c.AllowedPurposes)
+	for i, purpose := range c.AllowedPurposes {
+		if purpose != "identity.mfa.factor-update" && purpose != "identity.mfa.disable" || i > 0 && purpose == c.AllowedPurposes[i-1] {
+			return nil, invalidAuthority()
+		}
 	}
 	for _, text := range []string{c.Issuer, c.Environment, c.Audience} {
 		if !enrollmentText(text, 128) {
@@ -116,13 +131,21 @@ func NewOTPActiveStepUpService(enrollment *OTPEnrollmentService, c OTPActiveStep
 		Public                             ed25519.PublicKey
 		Version                            uint32
 		TTL                                time.Duration
-	}{"mfa-otp-active-v1", s.shared.identity, configuration, c.AllowedOrigins, id, c.Issuer, c.Environment, c.Audience, public, c.AttemptKeyVersion, c.TTL})
+		Purposes                           []auth.Purpose `json:",omitempty"`
+	}{"mfa-otp-active-v1", s.shared.identity, configuration, c.AllowedOrigins, id, c.Issuer, c.Environment, c.Audience, public, c.AttemptKeyVersion, c.TTL, c.AllowedPurposes})
 	if err != nil {
 		return nil, invalidAuthority()
 	}
 	s.identity = sha256.Sum256(frame)
 	clear(frame)
 	return &OTPActiveStepUpService{state: s}, nil
+}
+
+func (s *otpActiveState) allows(p auth.Purpose) bool {
+	if len(s.config.AllowedPurposes) == 0 {
+		return p == "identity.mfa.factor-update"
+	}
+	return slices.Contains(s.config.AllowedPurposes, p)
 }
 
 func (s *otpActiveState) sendIntent(r mfa.OtpSendRequest) (identity.RequestIntent, error) {
@@ -158,7 +181,7 @@ func (s *OTPActiveStepUpService) OtpSend(ctx context.Context, r mfa.OtpSendReque
 	if ctx == nil || s == nil || s.state == nil || r.StepUp == nil || r.Validate() != nil {
 		return out, invalidAuthority()
 	}
-	if r.Channel != delivery.ChannelEmail || !slices.Contains(s.state.config.AllowedOrigins, r.Origin) {
+	if r.Channel != delivery.ChannelEmail || !s.state.allows(r.StepUp.Purpose) || !slices.Contains(s.state.config.AllowedOrigins, r.Origin) {
 		return out, identity.ForbiddenError{}
 	}
 	state := s.state
@@ -219,7 +242,7 @@ func (s *OTPActiveStepUpService) OtpVerify(ctx context.Context, r mfa.OtpVerifyR
 	if ctx == nil || s == nil || s.state == nil || r.StepUp == nil || r.Validate() != nil {
 		return out, invalidAuthority()
 	}
-	if !slices.Contains(s.state.config.AllowedOrigins, r.Origin) {
+	if !s.state.allows(r.StepUp.Purpose) || !slices.Contains(s.state.config.AllowedOrigins, r.Origin) {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, s.state.shared.config.MaximumDuration)
