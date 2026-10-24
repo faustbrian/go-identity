@@ -14,6 +14,9 @@ func passwordMFAOperation(p CommandPlan) bool {
 }
 
 func encodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, p CommandPlan, allowUngenerated bool) ([]byte, error) {
+	if passkeyMFAOperation(p) {
+		return encodePrimaryMFAPlanMode(b, fp, p, "passkey", allowUngenerated)
+	}
 	if emailVerificationMFAOperation(p) {
 		return encodePrimaryMFAPlanMode(b, fp, p, "email-verification", allowUngenerated)
 	}
@@ -24,6 +27,9 @@ func encodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, p Com
 }
 
 func decodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, data []byte, allowUngenerated bool) (CommandPlan, error) {
+	if b.OperationID == passkeyMFAPrimaryOperation().OperationID {
+		return decodePrimaryMFAPlanMode(b, fp, data, "passkey", allowUngenerated)
+	}
 	if b.OperationID == "identity.email.verification-signin" {
 		return decodePrimaryMFAPlanMode(b, fp, data, "email-verification", allowUngenerated)
 	}
@@ -34,6 +40,9 @@ func decodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, data 
 }
 
 func validMFAContinuationPlanMode(b identity.CommandBinding, p CommandPlan, allowUngenerated bool) bool {
+	if passkeyMFAOperation(p) {
+		return validPasskeyMFAPlanMode(b, p, allowUngenerated)
+	}
 	if emailVerificationMFAOperation(p) {
 		return validEmailVerificationMFAPlanMode(b, p, allowUngenerated)
 	}

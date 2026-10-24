@@ -1,5 +1,46 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 14:18 UTC: kernel passkey-MFA prerequisite frozen at e952895 plus
+18 reviewed postgres paths. Independent passkey_mfa_kernel_final APPROVE,
+ordered manifest b3f3964278db57c8426ad0aaf58af2afc9c3ec7de66ca764bdf8bdc218440ad9.
+Recovery getter wording corrected: it returns a historical declaration, not
+proof of commitment. No runtime edit followed final68552 exit0: complete native
+unit0.498s, bounded parser fuzz11.297s, vet0/modverifyall. Earlier plan/child/
+browser-custody regressions retained above/below. Changed/new secret scans and
+diffcheck clean. This is original journal/custody/codec/query support, NOT
+genuine passkey/TOTP/session success or full M16 closure.
+
+HTTP exact bearer-policy prerequisite frozen across5paths, independent
+organization_bearer_base_final APPROVE, tracked diff18a47cdb5245264b0983c58a2d8c8ec2efb5cfb06292216bfa568a212b9e9150.
+Constructor RED10262/0.307s -> final17652 focused0.383s/full2.431s/vet0/
+modverifyall; changed4.85KB/new2.87KB secrets clean. It admits only explicitly
+selected create/member-add/member-remove None metadata; canonical cookie
+protection and all other IDs are unchanged. It supplies no actual handler or
+bearer authentication. Primary delivers these two coherent module prerequisites
+separately; workers never stage, commit or push.
+
+2026-10-24 14:05 UTC: session prerequisite e9528953435b436e567cf3ca0045f2d4398587c3
+is exact origin/main; Required40099674170 SUCCESS. Kernel passkey challenge
+RED91527/0.246s -> closed envelope GREEN4358/0.313s; protected child staging
+RED69685/0.388s then browser-substitution regression5765/0.327s exposed the
+missing dispatch branch. Both are being corrected in the same local kernel
+consumer prerequisite; no native MFA success claimed. Existing old envelopes
+remain unchanged. Primary owns heavy token until the next bounded result.
+
+Organization neutral request prerequisite delivered as8811f018f38dcfa4da01baab3f04e710aa3a5db7
+to origin/main, Required40100432186 SUCCESS. Independent complete4path review
+organization_operation_contract_final APPROVE after its one bounded-fuzz gap;
+source55c4af08bee7ef813a6eba6496f17b0c2ba7da438b0bb137ea617877d283467d,
+test2f5745e19d22e31b59d4d94fed072964f62cc57a14dbe9a67b4d09d0a95921a1.
+Worker original RED9149 absent API; removed-key-check sensitivity82722 fails;
+restored root58523 unit0.211s/vet0/diffcheck0; focused fuzz15777 10.288s and
+changed21.11KB secret scan clean. Authenticated public root
+v0.0.0-20261024135818-8811f018f38d Sumh1:0enk7naWTXcMeFZk4fiznoS/L9BE4aZA/R+OYqfONcs=
+matches all4 files. Primary updates only native module's root pin; worker keeps
+ownership of native operation tests/facade/HTTP. No HTTP or durable facade result
+is claimed. Mapping-before-journal recovery and exact bearer HTTP overrides
+are named primary-owned shared seams, not authority for private replacements.
+
 2026-10-24 13:47 UTC: M16 session-root prerequisite is independently reviewed,
 not a completed MFA login. Explicit prospective passkey-primary/TOTP issuer and
 trusted reconstruction retain original credential/proof/remember/factor and

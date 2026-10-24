@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Admit an explicitly owned passkey-primary MFA challenge profile through the
+  existing journal, original-output preparation and child issuance. Require
+  original browser custody, exact self-user assertion ownership and a
+  challenge-only lifecycle; native assertion/factor/session composition remains
+  mandatory. Historical queries disclose child scope only for a committed
+  exact original primary and never renew authentication or repeat verification.
+
 - Admit exact current-session passkey assertion removal in the original Work,
   preserving disabled-reference reservations and independent user epochs.
   Options and aliased schemas cannot remove credentials; canonical removal

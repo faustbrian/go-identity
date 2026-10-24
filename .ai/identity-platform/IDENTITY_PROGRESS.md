@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 13:47 UTC
+## Current TL;DR — 2026-10-24 14:18 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -29,6 +29,11 @@
   complete root race checks and encrypted-cache restart cases, with independent
   review. Native challenge issuance/completion, reading and HTTP composition
   remain unfinished; this does not close the passkey milestone.
+- **Current code delta:** the kernel's original challenge/child declaration,
+  protected-owner custody and historical-query support pass their tests and
+  bounded parser fuzzing, with independent review. The separate organization
+  worker has delivered neutral requests on main/CI and is implementing the
+  actual native keyed/repeat operation facade; its HTTP consumer remains open.
 - **Next:** implement passkey primary -> enrolled TOTP challenge -> completion
   -> authenticated session/read/logout. No session is allowed before the
   independent factor completes. A bounded organization HTTP lane is assigned

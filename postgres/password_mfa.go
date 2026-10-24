@@ -19,6 +19,9 @@ type PasswordMFAChallengeContributor interface {
 }
 
 func validateMFAContinuation(owner FeatureExecutionContributor, command identity.Command, p CommandPlan) error {
+	if passkeyMFAOperation(p) {
+		return validatePasskeyMFAChallenge(owner, command, p)
+	}
 	if emailVerificationMFAOperation(p) {
 		return validateEmailVerificationMFAChallenge(owner, command, p)
 	}

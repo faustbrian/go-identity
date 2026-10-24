@@ -1,5 +1,28 @@
 # Identity PostgreSQL
 
+## Challenge-only MFA after an original UV passkey
+
+The exact registered `PasskeyMFAChallengeContributor` can prepare a
+challenge-only `identity.passkey.signin-verify.native-v1` command through the
+existing original-output journal. It retains the verified self-user assertion's
+command, original browser custody, current factor/policy versions and frozen
+continuation. Its only lifecycle is `mfa.challenge.created.v1`, version 0 to 1;
+ordinary known-empty-factor signin retains its historical representation.
+
+`Work.PasskeyMFAChallenge` exposes that declaration only during the original
+owner's protected Apply. The owner must consume the genuine protocol assertion
+and persist its original primary, continuation and exact single-use child in
+that same Work, without a session. Apply and final checks must fence original
+expiry and current directory/credential/passkey/factor/policy/risk authority.
+The native flow must bound the child by the actual original primary; a scalar
+declaration or implementation of this interface authenticates nothing.
+
+`QueryPasskeyMFAChallenge` observes the original profile under current query
+authorization. Only committed history discloses frozen child scope. Pending,
+aborted or foreign history cannot create a session or renew proof/expiry;
+recovery never repeats assertion verification or reveals another credential.
+These kernel APIs are not a complete native passkey/TOTP login or HTTP endpoint.
+
 ## Additional passkey under an existing session
 
 `Work.CreatePasskeyCredential` also admits exactly

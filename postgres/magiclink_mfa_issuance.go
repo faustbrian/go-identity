@@ -10,7 +10,8 @@ import (
 // A signed child cannot select a customer merely from a command or target
 // declaration. Only the currently invoked native challenge owner can borrow
 // its original primary scope. Verification's parent committed separately;
-// password comparison and magic-link consumption retain their distinct owners.
+// password comparison, UV assertion and magic-link consumption retain their
+// distinct owners.
 // The scope digest fixes methods, browser, remember and original primary expiry.
 func magicLinkMFAIssuanceSubject(w Work, payload capability.Payload) (identity.UserID, error) {
 	if w.state == nil || w.state.issuance == nil || w.state.issuance.plan == nil {
@@ -18,7 +19,12 @@ func magicLinkMFAIssuanceSubject(w Work, payload capability.Payload) (identity.U
 	}
 	var m MFAContinuationPlan
 	var err error
-	if owner, ok := w.state.featureInvocation.(EmailVerificationMFAChallengeContributor); ok && w.state.execution != nil && w.state.execution.reservation != nil && emailVerificationMFAOperation(w.state.execution.reservation.plan.snapshot()) {
+	if owner, ok := w.state.featureInvocation.(PasskeyMFAChallengeContributor); ok && w.state.execution != nil && w.state.execution.reservation != nil && passkeyMFAOperation(w.state.execution.reservation.plan.snapshot()) {
+		if payload.CorrelationID != string(w.state.binding.CommandID) {
+			return "", invalidWork()
+		}
+		m, err = w.PasskeyMFAChallenge(owner)
+	} else if owner, ok := w.state.featureInvocation.(EmailVerificationMFAChallengeContributor); ok && w.state.execution != nil && w.state.execution.reservation != nil && emailVerificationMFAOperation(w.state.execution.reservation.plan.snapshot()) {
 		if payload.CorrelationID != w.state.binding.RecordID {
 			return "", invalidWork()
 		}

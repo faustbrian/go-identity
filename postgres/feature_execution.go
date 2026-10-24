@@ -148,7 +148,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		_, _, err := phoneVerificationCommand(p, command, plan)
 		return err
 	}
-	if plan.MFAContinuation != nil && (passwordMFAOperation(plan) || emailVerificationMFAOperation(plan)) {
+	if plan.MFAContinuation != nil && (passwordMFAOperation(plan) || emailVerificationMFAOperation(plan) || passkeyMFAOperation(plan)) {
 		return validateMFAContinuation(phase, command, plan)
 	}
 	if plan.Capability != nil {
@@ -300,7 +300,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		}
 	}
 	if p.MFAContinuation != nil {
-		if emailVerificationMFAOperation(p) {
+		if passkeyMFAOperation(p) {
+			if _, ok := feature.contributor.(PasskeyMFAChallengeContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else if emailVerificationMFAOperation(p) {
 			if _, ok := feature.contributor.(EmailVerificationMFAChallengeContributor); !ok {
 				return nil, invalidPlan()
 			}

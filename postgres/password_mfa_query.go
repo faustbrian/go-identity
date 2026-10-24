@@ -19,10 +19,10 @@ func (c *Coordinator) QueryPasswordMFAChallenge(ctx context.Context, q identity.
 	if passwordMFAOrigin(q.OperationID) == "" || q.UserID != "" || q.AnonymousFlowID == "" || q.RecordID != "" {
 		return MFAContinuationPlan{}, CommandRecord{}, false, identity.InvalidInputError{Field: "password_mfa_query"}
 	}
-	return c.queryPrimaryMFAChallenge(ctx, q, caller, false)
+	return c.queryPrimaryMFAChallenge(ctx, q, caller, passwordMFAOperation)
 }
 
-func (c *Coordinator) queryPrimaryMFAChallenge(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, verification bool) (MFAContinuationPlan, CommandRecord, bool, error) {
+func (c *Coordinator) queryPrimaryMFAChallenge(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, matches func(CommandPlan) bool) (MFAContinuationPlan, CommandRecord, bool, error) {
 	var original MFAContinuationPlan
 	var present bool
 	receipt, err := c.queryCommandReceiptChecked(ctx, q, caller, func(observed commandObservation) error {
@@ -37,11 +37,7 @@ func (c *Coordinator) queryPrimaryMFAChallenge(ctx context.Context, q identity.R
 		if plan.MFAContinuation == nil {
 			return nil
 		}
-		matched := passwordMFAOperation(plan)
-		if verification {
-			matched = emailVerificationMFAOperation(plan)
-		}
-		if !matched || plan.CapabilityIssuance == nil {
+		if !matches(plan) || plan.CapabilityIssuance == nil {
 			return identity.UnavailableError{}
 		}
 		present = true

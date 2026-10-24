@@ -20,5 +20,5 @@ func (c *Coordinator) QueryEmailVerificationMFAChallenge(ctx context.Context, q 
 	if q.OperationID != "identity.email.verification-signin" || q.UserID == "" || q.AnonymousFlowID != "" || parentErr != nil || q.RecordID == string(q.CommandID) {
 		return MFAContinuationPlan{}, CommandRecord{}, false, identity.InvalidInputError{Field: "verification_mfa_query"}
 	}
-	return c.queryPrimaryMFAChallenge(ctx, q, caller, true)
+	return c.queryPrimaryMFAChallenge(ctx, q, caller, emailVerificationMFAOperation)
 }
