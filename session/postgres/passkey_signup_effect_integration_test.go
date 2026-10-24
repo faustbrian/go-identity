@@ -113,6 +113,21 @@ func (*signupSessionAuthority) RequirePasskeySignupSession(ctx context.Context, 
 
 type signupSessionOutbox struct{ revokeOutbox }
 
+func (p *signupSessionOutbox) PersistPasskeySignupSession(ctx context.Context, w kernel.Work) error {
+	if err := p.PersistPasskeyRegistration(ctx, w); err != nil {
+		return err
+	}
+	event, present, err := w.StagedPasskeyRegistrationSessionLifecycle()
+	if err != nil {
+		return err
+	}
+	if !present || event.EventType != "session.created.v1" || event.EventIndex != 2 || event.SubjectType != "session" {
+		return identity.ForbiddenError{}
+	}
+	_, err = w.Exec(ctx, `INSERT INTO revoke_outbox(event_id,command_id,event_type,subject_type,subject_id,before_version,after_version) VALUES($1,$2,$3,$4,$5,'0','1')`, event.ID, string(event.CommandID), event.EventType, event.SubjectType, event.SubjectID)
+	return err
+}
+
 func (p *signupSessionOutbox) PersistPasskeyRegistration(ctx context.Context, w kernel.Work) error {
 	if err := p.PersistLifecycle(ctx, w); err != nil {
 		return err
@@ -267,8 +282,12 @@ func TestPasskeySignupSessionAtomicPersistence(t *testing.T) {
 			if success {
 				want = 1
 			}
-			if users != want || refs != want || factors != want || policies != want || sessions != want || families != want || issuances != want || audits != want || events != 2*want {
+			if users != want || refs != want || factors != want || policies != want || sessions != want || families != want || issuances != want || audits != want || events != 3*want {
 				t.Fatal("signup account/session/effects split", users, refs, factors, policies, sessions, families, issuances, audits, events)
+			}
+			var sessionEvents int
+			if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM revoke_outbox WHERE command_id=$1 AND event_type='session.created.v1' AND subject_type='session' AND subject_id=$2 AND before_version='0' AND after_version='1'`, string(b.CommandID), s.SessionID).Scan(&sessionEvents); err != nil || sessionEvents != want {
+				t.Fatal("signup session event missing or detached from actual session", err, sessionEvents)
 			}
 			if success {
 				reader, err := NewRepository(pool, Config{Schema: "session_store", MaximumDuration: time.Second})

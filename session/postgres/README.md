@@ -14,8 +14,12 @@ the kernel actually creates that prospective account. The owned native adapter
 supplies `PasskeySignupSessionAuthority` to lock the current RP/key mapping and
 the known-empty factor generation initialized by this same signup. The effect
 fences actual kernel and authorization authority, writes the initial session,
-family and domain-separated issuance evidence, and repeats admission in `Check`
-after downstream effects. It does not verify WebAuthn, authenticate a pre-auth
+family and domain-separated issuance evidence, then stages that exact session's
+creation in the original kernel Work. The selected outbox must implement
+`PasskeySignupSessionLifecycleContributor` and persist account, credential and
+session events atomically; an older account-only adapter denies this profile.
+The effect repeats admission in `Check` after downstream effects.
+It does not verify WebAuthn, authenticate a pre-auth
 cookie, issue a bearer, own pre-auth consumption or replace required lifecycle
 persistence. Those remain atomic obligations of the native signup composition.
 This storage seam alone does not expose a usable public signup endpoint.

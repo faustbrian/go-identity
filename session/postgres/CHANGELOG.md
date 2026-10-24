@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Enlist the exact newly persisted passkey-signup session lifecycle in its
+  original transaction. Successful signup requires a three-event-capable
+  outbox adapter; an old account-only adapter fails closed. Account, credential,
+  session and required lifecycle effects roll back together on late failure.
+
 - Stage an initial passkey-only signup session only for the account actually
   created by the original anonymous native Work. Preserve known-empty MFA/RP
   generations, current authorization and original proof expiry through final

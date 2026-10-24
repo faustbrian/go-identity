@@ -1,5 +1,28 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 01:03 UTC: kernel b3bfb73 is main-pushed/Required40047823872SUCCESS.
+Actual session effect now stages its exact original persisted session only after
+session/family/issuance and freshness checks. Real session fixture first failed
+with two events instead of three (0.493s), then full selected PG/race1.735s,
+ordinary module/race2.420s, taggedvet/modverify/scopedsecrets/diff pass Go1.27.3.
+Final independent passkey_first_session_final APPROVE/no findings, six-path
+contentmanifestbd64a95b762af232369ce5c38225c3707377d866ad77910afcdc3646453ee86a
+atb3bfb73 (binarydiff35d42be53fdffb0de9c48c012d664e17c132cce1ceae9c39a6b99c5972d1304f).
+Actual production outbox worker continues the bounded three-event consumption;
+it owns the heavy slot next. Native full journey remains unproven, M16 open.
+
+Dependency-ready continuation: passkey_first_outbox owns only
+postgres/identity/passkey.go, passkey_test.go, passkey_integration_test.go,
+go.mod/go.sum/README.md/CHANGELOG.md in the existing isolated outbox-main at
+4279fe5. Consume authenticated public kernel b3bfb734f205 (focused actual kernel
+PG/race1.900s; final independent review2365e84d approved; main-pushed).
+Implement the required typed PasskeySignupSessionLifecycleContributor using
+existing same-Work writer/bindings for all three staged events; retain old two-
+event behavior and test full rollback after third-event insertion. No generic
+event engine, migration or journal. Primary owns actual session effect/native
+integration, Git, final review and CI; worker no Git/children/shared paths.
+Heavy slot remains primary-owned; worker codes only until granted the slot.
+
 2026-10-24 01:01 UTC: risk PostgreSQL5910465 is main-pushed with exact Required
 40047612425SUCCESS and authenticated public module
 v0.0.0-20261024005826-5910465e0e2e. Kernel third-session lifecycle final review

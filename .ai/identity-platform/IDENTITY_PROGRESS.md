@@ -21,8 +21,9 @@
   main with Required `40047612425` green. Real PostgreSQL/race proves options
   charging, sixth-attempt denial, unchanged replay and preserved migration state.
 - **Current actual Go work:** primary owns native signup composition and its
-  real journey test. Kernel third-event staging has completed focused tests and
-  independent review; actual session/outbox consumption is next.
+  real journey test. Kernel third-event staging `b3bfb73` is main-pushed/CI-green.
+  Actual session staging passes PostgreSQL/race and independent review; the
+  production outbox worker is connecting three-event consumption.
   Local native source is not yet passing
   or delivered. Its first test must prove no pre-verification account/handle,
   genuine registration, readable session and all three lifecycle events.

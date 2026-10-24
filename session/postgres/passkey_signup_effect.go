@@ -96,6 +96,9 @@ func (e *PasskeySignupEffect) Apply(ctx context.Context, w kernel.Work, owner ke
 	if err := requirePasswordIssueTime(bounded, w, record); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	if err := w.StagePasskeyRegistrationSession(bounded, owner, command, s.SessionID); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
 	return identity.FeatureReceipt{Operation: passkeySignupSessionOperation(), AfterVersion: 1}, nil
 }
 
