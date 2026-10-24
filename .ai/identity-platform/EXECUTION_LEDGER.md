@@ -1,5 +1,45 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 11:35 UTC: complete HTTPReference session-removal slice delivered as
+9a1af93206b5e43fccf7b3e89afbdb3885974d9b, exact origin/main;
+Required40090406076 SUCCESS. Independent session_removal_http_reference_final
+APPROVE all11 paths; ordered source21cc0ab1c3a94843a4514fc6473289336b458c8806ea46115dbea1989377aa3b.
+Final78452 exit0: new/retained PG/race103.326s, Reference/cmd race10.122/6.587s,
+taggedvet0/modverifyall; staged30.38KB secrets clean and diffcheck0. API RED39384
+and first actual HTTPS28375 PG/race18.521s retained. Public Reference
+v0.0.0-20261024113343-9a1af93206b5 authenticated Sum
+h1:v7xMykoKmPXa+47mkY1DO95yQhjP3IK5tXrJA4uxiVM= matches all11 changed paths.
+Untouched public63853 exit0: fresh/populated actual HTTPS signup -> second key ->
+genuine UV removal -> source-session denial -> surviving-key signin -> original
+metadata recovery -> last-key denial/read/logout PG/race19.145s, modverifyall.
+Recovery's header key is rate admission only, not a new native command. Session-
+only HTTP selection needs no preauth/device owner; password Delete stays separate.
+This closes the frozen removal consumer outcome before any successor expansion,
+not full M16/unit release qualification. Whole estimate~25%,11/39. One bounded
+read-only remaining-M16 pass now distinguishes concrete runtime/interoperability
+gaps from unit qualification; no broad gate or historical evidence rerun.
+
+2026-10-24 11:25 UTC: native Reference23bcc59ecc77d6a3a63f9644eb033dd962b2a825
+is main/Required40089149772 green; session_removal_reference_final APPROVE all13
+paths. API RED44898, readiness RED73605, new cookie/bearer fresh/populated
+PG/race25.610s, final new/retained47916 PG/race121.406s + Reference/cmd race
+8.846/6.455s, taggedvet0/modverifyall. Public Reference
+v0.0.0-20261024111456-23bcc59ecc77 matches all13 paths; untouched74584 PG/race
+26.226s and modverifyall pass. No password/OTP/delivery fallback was introduced.
+HTTP leaf e0cc14fbfe52f6a65443b95c1e5c4c59c171e91b main/Required40089651345
+green; session_removal_http_final APPROVE all13 paths. Worker focused1.040s,
+full module race26.190s, vet0/modverifyall, bounded parser fuzz5.505s/72,472execs,
+fullleaf406.73KB and primary63.01KB scoped secrets clean. Public leaf
+v0.0.0-20261024112224-e0cc14fbfe52 matches all13 paths; primary adopts this normal
+public pin, not sibling source. Worker finished; heavy token PRIMARY only.
+Primary HTTPReference missing-selection API RED39384 captured. Actual HTTPS
+signup -> HTTP second-key -> current UV removal -> old-session denial -> genuine
+surviving-key HTTP signin -> original HTTP recovery -> last-key denial/read/logout
+passes28375 PG/race18.521s, fresh/populated; final review/retained/static and
+delivery remain pending, so no HTTPReference delivery claim yet.
+No whole M16/unit qualification closed; whole estimate~25%,11/39. Prior failed
+fixture's one idle task-owned database was removed after exact ownership check.
+
 2026-10-24 10:58 UTC: native removal16ac977d610f1c72111661d2f54fbd437b787850
 is exact origin/main, Required40087749915 SUCCESS. Complete12path successor
 review session_removal_native_final APPROVE, both original expiry/cancellation
