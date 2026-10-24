@@ -47,7 +47,7 @@ PostgreSQL risk owner; it is not qualified for the four-target Valkey profile.
 ### Selected HTTP profile
 
 `StoreConfiguration.HTTPPasskey` independently selects `Registration`, `Signin`,
-`Inventory`, `Update` and `Delete`. `Discoverable` additionally opts signin into identifier-free
+`Inventory`, `Update`, `Delete` and explicit `Signup`. `Discoverable` additionally opts signin into identifier-free
 input; the native authentication risk policy must also permit discovery. Nil
 exposes no passkey routes or metadata. This is backend transport, not a UI.
 
@@ -92,8 +92,9 @@ Inventory shares an already selected session/MFA/email safe limiter. If none is
 selected, configure its explicit inventory rate namespace, emergency bound and
 bounded degradation recorder; competing ownership is rejected. Mutation routes
 share auth and verification rate identities. All native risk, original expiry,
-current authority and atomic-consumption checks remain mandatory. No HTTP signup,
-conditional UI, MFA fallback or browser interoperability is claimed.
+current authority and atomic-consumption checks remain mandatory. HTTP signup is
+a separate explicit profile below; conditional UI, MFA fallback and browser
+interoperability are not claimed by the enrollment/signin profile.
 
 ### Label management
 
@@ -282,7 +283,7 @@ go test -race -tags=integration -count=1 \
 These exercise actual fresh and populated-upgrade registration/verification,
 enrollment/assertion, signed rename/delete proofs and original-key retry. Removal
 also proves passkey-session denial and retained password-session read/logout;
-native removal runs without label management too. HTTP signup, conditional signin,
+native removal runs without label management too. Conditional signin,
 completed secondary MFA and organization profiles remain required work. This
 profile is not complete M16, full release qualification, deployment or a UI.
 
@@ -324,10 +325,53 @@ native mapping history with context4 and passkey session history with purpose2,
 plus separate forward kernel-registration, factor-provenance and counter
 histories. Existing checksums/rows stay unchanged. Readiness requires the actual
 successor constraints; deleting or renaming them fails closed. This selects
-native account creation within the existing deployment, not a password-free
-deployment configuration or HTTP signup.
+native account creation within the existing deployment, not a standalone
+password-free deployment configuration. HTTP signup requires the separate
+selection below.
 
 `TestReferencePostgresPasskeySignup` exercises fresh and populated upgrades,
 genuine signup/read/logout/new discoverable signin, three lifecycle events,
 absence of fabricated identifiers/passwords, retries/recovery and missing-schema
 readiness. It is a Reference profile, not full M16 or release qualification.
+
+## Explicit HTTP passkey-first signup
+
+Select `HTTPPasskey.Signup` alongside native `Passkey.Signup`,
+`Passkey.KeyedOptions`, `Session.Passkey`, shared `HTTPRate` and `HTTPPreAuth`
+with its signed browser-device profile. Signup's flow must use the canonical
+five-minute lifetime and the exact existing HTTP initiation Origin/cookie tuple.
+The current graph still requires its existing native deployment configuration;
+the new account itself needs neither email nor password.
+
+1. `POST /v1/session/preauth-issue` with
+   `{"method":"passkey-signup","remember":false}`. Retain original `flowID`,
+   flow cookie and signed device cookie. Remember is resolved here once.
+2. `POST /v1/passkey/register-options` with
+   `{"mode":"signup","flowID":"<original-flow>"}`, both cookies, exact Origin
+   and one `Idempotency-Key`. A fresh winner alone returns the creation options;
+   matching retries return original command metadata without another challenge.
+3. Give `options.publicKey` to the authenticator. Post to
+   `/v1/passkey/register-verify` with `mode:"signup"`, the original `flowID`,
+   original options command as `ceremonyID`, a distinct original `commandID`,
+   genuine raw WebAuthn `response` and optional display `label`. Retain both
+   browser cookies and Origin; completion forbids `Idempotency-Key`.
+4. Fresh acknowledged commitment alone returns `registered:true`, `signedIn:true`,
+   command/session metadata, the secure session cookie and `X-CSRF-Token`.
+   Use independently selected common session read/logout. The same credential
+   can subsequently use the distinct `passkey` pre-auth method and discoverable
+   signin; neither step invents an identifier or a password fallback.
+
+Signup rejects ambient session cookies, session CSRF, proof IDs, email/password,
+user/tenant/RP and remember overrides. If enrollment is also enabled, its closed
+proof-ID/session/synchronizer request stays unchanged and has no `mode` field.
+One descriptor/handler pair dispatches the explicit disjoint variants, never a
+fallback after denial. OpenAPI describes both request/security alternatives and
+conditional synchronizer use. `SignupRateSource` reads only original anonymous
+flow/create-ceremony metadata; native completion still revalidates and consumes.
+Historical/unknown outcomes disclose no challenge or authentication.
+
+`TestReferencePostgresPasskeyHTTPSignup` covers fresh and populated upgrade
+composition with genuine HTTP initiation/registration, schema-checked wire,
+metadata-only retry, atomic account/credential/session events, session read/logout
+and fresh discoverable signin. These profiles do not close all M16 variants or
+whole-unit release qualification.

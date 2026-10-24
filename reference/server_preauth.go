@@ -102,6 +102,14 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 		n := selected.native.Flow
 		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "passkey", Service: passkeyPreAuthHTTP{owner: owner}, Action: n.Action, CallbackURL: n.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.PolicyVersion})
 	}
+	if selected := s.state.features.httpPasskey; selected != nil && selected.config.Signup {
+		owner, err := f.Passkeys()
+		if err != nil {
+			return nil, err
+		}
+		n := selected.native.Signup.Flow
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "passkey-signup", Service: passkeySignupPreAuthHTTP{owner: owner}, Action: n.Action, CallbackURL: n.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.PolicyVersion})
+	}
 	var feature identityhttp.Feature
 	if selected := s.state.features.httpAnonymous; selected != nil && selected.config.Signin {
 		native := s.state.features.anonymous

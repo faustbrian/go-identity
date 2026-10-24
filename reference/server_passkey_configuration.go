@@ -22,7 +22,8 @@ import (
 // attempted. Update requires explicit native Management with a cookie primary
 // and actual signed proof reader, but no browser-device ceremony. Delete requires
 // native Deletion with a cookie primary and its actual configured reset recovery
-// owner. No signup, conditional UI or MFA fallback is enabled.
+// owner. Signup is a separate explicit selection requiring native signup and
+// original pre-auth/device custody. No conditional UI or MFA fallback is enabled.
 //
 // Inventory reuses an existing session/MFA/email safe limiter. Only when none
 // exists must its three explicit inventory rate settings select that owner;
@@ -31,10 +32,14 @@ import (
 // verification identities; no consumer store or alternative workflow is accepted.
 type HTTPPasskeyConfiguration struct {
 	Registration, Signin, Inventory, Discoverable bool
-	Update, Delete                                bool
-	InventoryRateNamespace                        string
-	InventoryEmergencyMaximumKeys                 int
-	InventoryDegraded                             func(context.Context, identityhttp.SafeRateEvent) error
+	// Signup selects original-flow passkey-first registration and a distinct
+	// passkey-signup initiation method. It requires native Passkey.Signup and
+	// Session.Passkey; it never substitutes an enrollment proof or password.
+	Signup                        bool
+	Update, Delete                bool
+	InventoryRateNamespace        string
+	InventoryEmergencyMaximumKeys int
+	InventoryDegraded             func(context.Context, identityhttp.SafeRateEvent) error
 }
 
 func (HTTPPasskeyConfiguration) Format(f fmt.State, _ rune) {
@@ -85,7 +90,7 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_passkey"}
 	h := *c.HTTPPasskey
-	if !h.Registration && !h.Signin && !h.Inventory && !h.Update && !h.Delete || h.Discoverable && !h.Signin || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil || c.PasswordSignin == nil {
+	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete || h.Discoverable && !h.Signin || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil || c.PasswordSignin == nil {
 		return nil, invalid
 	}
 	n := *c.Passkey
@@ -101,8 +106,8 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 			out.close()
 		}
 	}()
-	if h.Registration || h.Signin {
-		if n.KeyedOptions == nil || original == nil || original.device == nil || n.Flow.Origin != original.deployment.Origin || owner.enrollment == nil || owner.signin == nil {
+	if h.Registration || h.Signin || h.Signup {
+		if n.KeyedOptions == nil || original == nil || original.device == nil || n.Flow.Origin != original.deployment.Origin || h.Registration && owner.enrollment == nil || h.Signin && owner.signin == nil || h.Signup && owner.signup == nil {
 			return nil, invalid
 		}
 		out.device = *original.device
@@ -114,6 +119,11 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 		}
 		out.verification, err = identityhttp.NewChallengeVerificationRateLimiter(identityhttp.ChallengeVerificationRateConfig{Shared: shared.backend, Namespace: namespace, Key: key, Now: out.now, MaximumDuration: c.HTTPRate.MaximumDuration})
 		if err != nil {
+			return nil, invalid
+		}
+	}
+	if h.Signup {
+		if n.Signup == nil || n.Signup.Flow.FlowTTL != 5*time.Minute || n.Signup.Flow.Origin != original.deployment.Origin || n.Signup.Flow.Cookie != original.deployment.Cookie || n.Signup.Flow.Action != "identity.passkey.register-verify" {
 			return nil, invalid
 		}
 	}

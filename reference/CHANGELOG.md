@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Explicitly compose `HTTPPasskey.Signup` with a distinct `passkey-signup`
+  browser initiation method and the canonical registration route pair. Original
+  flow/device custody, shared anonymous verification rates and native atomic
+  account/session issuance remain authoritative. Enrollment keeps its original
+  session/proof wire shape; no failure fallback or email/password is invented.
+  Common session read/logout requires `Session.Passkey` and selected session
+  HTTP. The existing deployment prerequisites remain explicit.
+
 - Select native passkey-first signup with `Passkey.Signup`. The graph composes
   original browser/remember custody, protected risk, actual account/credential
   creation and session issuance without requiring an email or password for the

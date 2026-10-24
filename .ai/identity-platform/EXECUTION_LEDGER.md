@@ -1,5 +1,28 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 03:19 UTC: M16 HTTP signup runs end to end through actual Reference
+on fresh/populated PostgreSQL, including schema-checked wire, original options
+retry, one-use completion, account/credential/session+3events, shared read/logout
+and new discoverable signin. Final standalone GOWORK=off public-pin race27.985s,
+taggedvet0/modverify; preceding two-module composed race23.833s and ordinary
+Reference/cmd race11.165s/10.564s. No fake domain stores/source replacements.
+Suppliers delivered: baseHTTP0fb1aaa Required40055963620; passkeyroot375ceaf
+Required40055991457; native4c4a2de Required40056400092; leafb286e89
+Required40057702049, allSUCCESS. Native source positive public race3.149s and
+full new/retained source nonrace14.081s pass. Earlier broad native race cohort
+failed before source calls on existing proof/fixture deadlines; not a pass and
+no limits weakened. Independent supplier reviews approve source; leaf final
+signup_http_reference_final APPROVE/no actions, 14-path700dee04f manifest at0fb.
+Final leafrace6.390s/vet0/modverify and changedsecrets pass. Dispatcher whitespace
+regression RED1.008s/GREEN2.005s proves exact bounded-byte replay; unchanged
+body parser retains bounded fuzz74507execs/PASS. Public leafv0.0.0-
+20261024031704-b286e8950cbc authenticates and all14changed archivefiles match.
+Reference consumes that normal pin plus native4c4a2de/root375ceaf/baseHTTP0fb.
+Final12-path336ca3ba7 candidate atb286 has independent final
+signup_http_reference_final APPROVE/no findings; main delivery and downloaded-
+public Reference acceptance remain pending. Existing deployment only;
+standalone password-free selection/conditional signin and fullM16 remain open.
+
 2026-10-24 02:31 UTC: Reference36193ccec5add547cbcb05b8e2549f2c6cf84690 is
 on exact origin/main with Required40053620969SUCCESS. Public Reference
 v0.0.0-20261024021816-36193ccec5ad authenticates via proxy/SumDB, all15changed

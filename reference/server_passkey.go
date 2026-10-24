@@ -35,6 +35,10 @@ func (s *Server) passkeyFeature(network identityhttp.NetworkConfig, f FeatureSet
 		// the same graph session keys here rather than the empty caller inputs.
 		config.Registration = &passkeyhttp.RegistrationConfig{Network: network, Sessions: state.session.reader, Proofs: state.passwordVerification.proofs, Service: owner, OptionsRate: s.state.httpRate.limiter, VerificationRate: h.verification, Origin: identityhttp.Origin(n.Flow.Origin), SessionCookie: n.Issuer.Cookie, CSRFKeys: h.csrf, Device: h.device, PolicyRevision: revision, Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
 	}
+	if h.config.Signup {
+		flow := n.Signup.Flow
+		config.Signup = &passkeyhttp.SignupConfig{Network: network, Service: owner, OptionsRate: s.state.httpRate.limiter, VerificationRate: h.verification, Origin: identityhttp.Origin(flow.Origin), FlowCookie: flow.Cookie, SessionCookie: n.Issuer.Cookie, Device: h.device, ActorID: flow.ActorID, PolicyRevision: authorization.Revision(flow.PolicyVersion), Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
+	}
 	if h.config.Signin {
 		config.Signin = &passkeyhttp.SigninConfig{Network: network, Service: owner, OptionsRate: s.state.httpRate.limiter, VerificationRate: h.verification, Origin: identityhttp.Origin(n.Flow.Origin), FlowCookie: n.Flow.Cookie, SessionCookie: n.Issuer.Cookie, Device: h.device, Address: h.address, Discoverable: h.config.Discoverable, ActorID: n.Flow.ActorID, PolicyRevision: revision, Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
 	}
@@ -104,6 +108,15 @@ func (h *passkeyLifetimeHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // This adapter changes only the shared initiation method names. Native passkey
 // owns the original intent, entropy, remember custody, transaction and recovery.
 type passkeyPreAuthHTTP struct{ owner *PasskeyService }
+
+type passkeySignupPreAuthHTTP struct{ owner *PasskeyService }
+
+func (p passkeySignupPreAuthHTTP) Prepare(ctx context.Context, r session.PreAuthPrepareInput) (session.PreparedPreAuthIssuance, error) {
+	return p.owner.PrepareSignupFlow(ctx, r)
+}
+func (p passkeySignupPreAuthHTTP) Issue(ctx context.Context, r session.PreparedPreAuthIssuance) (session.PreAuthIssueResult, error) {
+	return p.owner.IssueSignupFlow(ctx, r)
+}
 
 func (p passkeyPreAuthHTTP) Prepare(ctx context.Context, r session.PreAuthPrepareInput) (session.PreparedPreAuthIssuance, error) {
 	return p.owner.PrepareFlow(ctx, r)

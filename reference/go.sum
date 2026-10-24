@@ -75,6 +75,8 @@ github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8 h1:N9
 github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8/go.mod h1:uCySwd4DeG3xbJ6Ldmlmi7XTgBNSBF1OxPT2aMYmQm0=
 github.com/faustbrian/go-identity/http v0.0.0-20261023215809-5ea9c7d4e69c h1:x7gqsQs8NWwSqeHb0D+rxI3FhuFxK/7J2kLAzTLpk3k=
 github.com/faustbrian/go-identity/http v0.0.0-20261023215809-5ea9c7d4e69c/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261024025153-0fb1aaad3cb8 h1:u58RCX+Gz4yK4c3lOCkAPjOvQOtnBY6ttrbVF/SO5zU=
+github.com/faustbrian/go-identity/http v0.0.0-20261024025153-0fb1aaad3cb8/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93 h1:dpdUKRvijZJuj07LkI9KalMMJ17jfk11i8Rn/mgkS0I=
 github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93/go.mod h1:51jhqgFaUrnr5iU26z1P5JjfufpUXrQyjshXg67QIRk=
 github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231 h1:4mrjcDbA+2yU7/5L68/5SULzOQNGq6ODaekGuZFbmlg=
@@ -87,6 +89,8 @@ github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f h1
 github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f/go.mod h1:DysCHQGJ9ixiJw8LQJAFs2mij5Ys7uK18L0iXeMVKbY=
 github.com/faustbrian/go-identity/http/passkey v0.0.0-20261023220657-5bb695cf2da0 h1:0SfeChDQoMC3Q2TlSzZ5JTW5MAkvFt/fQRk49pum8YQ=
 github.com/faustbrian/go-identity/http/passkey v0.0.0-20261023220657-5bb695cf2da0/go.mod h1:MROEd+7Q6oOT24SODdzZ5CDd2rb6p8FncfiftLf2E2k=
+github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024031704-b286e8950cbc h1:zGxelDtgdM64KpB4zaK0bzEBx/NSxpArWRaTFbZudng=
+github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024031704-b286e8950cbc/go.mod h1:PxjQ3q5MDL0fftD6x+xrTXMaqRtOHfB91+XUl7hqhaQ=
 github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b h1:/pRsdYZJU1RlGP61opkK4WMmtJBr7yOxREpSAFuq/Pg=
 github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b/go.mod h1:6GgiAaUSsZ/G75FWMc/tD7gxZhuGtY9xr3t/giirZkE=
 github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806 h1:qb9igHzxzFt2mv8awhYHw81jEr+QiWiaVLtqRaLYWIY=
@@ -153,10 +157,14 @@ github.com/faustbrian/go-passkey v0.0.0-20261023213208-ac3373f55928 h1:rQVG7DeQj
 github.com/faustbrian/go-passkey v0.0.0-20261023213208-ac3373f55928/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
 github.com/faustbrian/go-passkey v0.0.0-20261023225924-f56904498d5a h1:gjjzrJsmUCiqc5EM2S8UMPAdLakWOX441pmuBOEgAmM=
 github.com/faustbrian/go-passkey v0.0.0-20261023225924-f56904498d5a/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
+github.com/faustbrian/go-passkey v0.0.0-20261024025217-375ceafc4cb3 h1:EF4+EuTMqRMQd+TP0UsDSODpOHnfMWERNWI4PWfjfMU=
+github.com/faustbrian/go-passkey v0.0.0-20261024025217-375ceafc4cb3/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
 github.com/faustbrian/go-passkey/postgres v0.0.0-20261023221207-e175ffe1ffb5 h1:3BKRwquqTFsS6qdSaqtqnnGgfYFlc8cJQxPq21ZKsgA=
 github.com/faustbrian/go-passkey/postgres v0.0.0-20261023221207-e175ffe1ffb5/go.mod h1:dFSSsfWHjj+eH8HnPTWTlojY0GLzAIyDaDcjqaeVKG0=
 github.com/faustbrian/go-passkey/postgres v0.0.0-20261024014419-04cf7740130a h1:ZywqmPnkyaPOObpGsP+TbQflyYZbDVKqML76PNr2k4M=
 github.com/faustbrian/go-passkey/postgres v0.0.0-20261024014419-04cf7740130a/go.mod h1:u8IegB3i4IxRTBEdu5JqCqYrWKa3OzpHexAUvWyVBN4=
+github.com/faustbrian/go-passkey/postgres v0.0.0-20261024025658-4c4a2de1d36c h1:qsAB55iIB81qXMobcSyLe03B6Ir7twajYxbolvmfjxE=
+github.com/faustbrian/go-passkey/postgres v0.0.0-20261024025658-4c4a2de1d36c/go.mod h1:JJyOmakCJes1yGIwruXZY6FmrXGNr/v8HXTeQFhsxnM=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff h1:8BIB469appqyn79T6j/sJQAS3dN6+budadfpPLwtqIg=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff/go.mod h1:Tqc83xc8RVAsi6JAW3dkKM1OFVos7cfayeNHBbWstsA=
 github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7 h1:yYXsPBwz+mm8JMdWfl+DcTdeD52C/zlBW2H4Tb40gKk=

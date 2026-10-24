@@ -109,6 +109,18 @@ func (f *PasskeyService) KeyedSignupOptions(ctx context.Context, r passkey.Keyed
 	return owner.KeyedRegistrationOptions(w, r)
 }
 
+// SignupRateSource reads genuine original-flow/create-ceremony rate metadata
+// through current graph admission. It authenticates no user and creates,
+// consumes or renews no authority. Signup independently revalidates and commits.
+func (f *PasskeyService) SignupRateSource(ctx context.Context, r passkey.SignupCeremonyRateRequest) (passkey.CeremonyRateSource, error) {
+	w, done, owner, err := f.enterSignup(ctx)
+	if err != nil {
+		return passkey.CeremonyRateSource{}, err
+	}
+	defer done()
+	return owner.SignupRateSource(w, r)
+}
+
 // Signup verifies the actual authenticator response and atomically creates the
 // account, credential, initial authorities, session and required lifecycle events.
 // Only fresh acknowledged commitment permits bearer/CSRF delivery.

@@ -30,8 +30,14 @@ original-flow signin options/verification and safe inventory. Each group is
 explicit; identifier-free mode additionally requires both HTTP and native risk
 opt-ins. Common session read/logout remains independently selected. The graph
 supplies actual native owners, signed device custody, shared rates and exact
-email comparison policy, not application-written handlers. Signup, conditional
-UI remain outside this selected HTTP profile.
+email comparison policy, not application-written handlers. `HTTPPasskey.Signup`
+separately selects passkey-first HTTP signup when native `Passkey.Signup`,
+`Passkey.KeyedOptions`, `HTTPPreAuth` device custody and `Session.Passkey` are
+configured. Begin with `POST /v1/session/preauth-issue` method `passkey-signup`,
+then use the canonical registration pair with explicit `mode:"signup"` and
+the original flow/cookies. Enrollment retains its unchanged proof/session
+variant; failure never selects another branch. See [the passkey guide](PASSKEY.md)
+for the closed payloads. Conditional UI remains outside this HTTP profile.
 Independently select `Passkey.Management` for signed-proof label rename, and
 `HTTPPasskey.Update` for its cookie endpoint. Retain original retry custody;
 the graph appends forward metadata/proof histories without changing signin

@@ -287,6 +287,7 @@ type signupGraphExtensions struct {
 	passkeyManagement    bool
 	passkeyDeletion      bool
 	passkeySignup        bool
+	passkeySignupHTTP    bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -587,6 +588,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if extensions.passkeyHTTP {
 			c.Passkey.Flow.FlowTTL = 5 * time.Minute
 			c.HTTPPasskey = &reference.HTTPPasskeyConfiguration{Registration: true, Signin: true, Inventory: true, Discoverable: extensions.passkeyDiscovery, Update: extensions.passkeyManagement, Delete: extensions.passkeyDeletion}
+			if extensions.passkeySignupHTTP {
+				c.HTTPPasskey.Signup = true
+				c.Passkey.Signup.Flow.FlowTTL = 5 * time.Minute
+			}
 		}
 		c.Session.Passkey = extensions.passkeySessionHTTP
 		if extensions.passkeyDiscovery {
@@ -1522,7 +1527,11 @@ END $$`); err != nil {
 				proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)
 			}
 			if extensions.passkeySignup {
-				proveReferencePasskeySignup(t, ctx, selected, selectedConfig, deps.PostgreSQL)
+				if extensions.passkeySignupHTTP {
+					proveReferencePasskeySignupHTTP(t, ctx, selected, selectedConfig, sessionHandler, passkeyDocument, deps.PostgreSQL)
+				} else {
+					proveReferencePasskeySignup(t, ctx, selected, selectedConfig, deps.PostgreSQL)
+				}
 			}
 		}
 	}

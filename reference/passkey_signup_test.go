@@ -34,6 +34,9 @@ func TestPasskeySignupRequiresSelectedLiveGraph(t *testing.T) {
 			if out, err := owner.Signup(t.Context(), passkey.SignupCompletion{}); err == nil || out.Session.Token != (session.Token{}) {
 				t.Fatal("unadmitted signup completion")
 			}
+			if out, err := owner.SignupRateSource(t.Context(), passkey.SignupCeremonyRateRequest{}); err == nil || out != (passkey.CeremonyRateSource{}) {
+				t.Fatal("unadmitted signup rate source")
+			}
 			if _, err := owner.RecoverSignupOptions(t.Context(), passkey.SignupRequest{}, authorization.DecisionContext{}); err == nil {
 				t.Fatal("unadmitted signup options recovery")
 			}
