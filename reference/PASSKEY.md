@@ -73,11 +73,40 @@ including historical recovery. Cookie transport requires the actual original
 synchronizer, not another session's token. Session, target/version/name, RP,
 origin and network substitution deny. Native selection advertises no new HTTP
 route or metadata; `HTTPPasskey.Update` remains the existing password-proof
-endpoint. Browser UI, passkey-only deletion/recovery and additional enrollment
+endpoint. Explicit `HTTPPasskey.SessionUpdate` selects the alternative
+password-free cookie profile below. Browser UI, passkey-only deletion/recovery and additional enrollment
 are separate profiles. `TestReferencePostgresPasskeySessionManagement` proves
 the public graph from real HTTP signup through native rename and HTTP
 read/logout/fresh signin on fresh and populated-upgrade PostgreSQL without
 password, OTP or delivery configuration.
+
+### Opt-in HTTP session rename
+
+Set `HTTPPasskey.SessionUpdate=true` alongside the native cookie-mode
+`Passkey.SessionManagement`, `Passkey.KeyedOptions` and `Session.Passkey`.
+The graph uses its actual session reader, CSRF keys, guarded management handle
+and shared `rate.secret` limiter. Selecting both `HTTPPasskey.Update` and
+`SessionUpdate`, a bearer native owner, or missing native/CSRF ownership fails
+construction. No browser-device cookie or password verifier is required.
+
+POST `/v1/passkey/update` with the current session cookie, exact Origin,
+stored `X-CSRF-Token` and one original `Idempotency-Key` header. The options
+body is `{"phase":"options","referenceID":"<inventory reference>","expectedVersion":1,"name":"Personal key"}`.
+Deserialize `options.publicKey` and obtain a genuine UV assertion. Complete
+at the same endpoint with the same reference/version/name, `phase:"complete"`,
+`ceremonyID` equal to the options response's `commandID`, and WebAuthn
+`response`. Use a **distinct** original completion header key. Both phases
+retain the same protected update action; body proofID/command/tenant/RP and
+credential overrides are forbidden. Changing the bound session, Origin or
+trusted client network is not a supported continuation.
+
+Only fresh options disclose the challenge; only fresh committed completion
+returns safe updated metadata. Replays disclose original command metadata
+without renewing authority or issuing authentication. Retain original inputs
+and keys to recover unknown outcomes. The selected OpenAPI describes these
+closed variants. `TestReferencePostgresPasskeyHTTPSessionManagement` traverses
+real HTTPS signup, action-bound UV rename, inventory/read/logout and fresh
+signin on fresh/populated PostgreSQL; it does not certify browser interoperability.
 
 ## Retained existing-account deployment
 

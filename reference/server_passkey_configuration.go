@@ -41,8 +41,12 @@ type HTTPPasskeyConfiguration struct {
 	// Signup selects original-flow passkey-first registration and a distinct
 	// passkey-signup initiation method. It requires native Passkey.Signup and
 	// Session.Passkey; it never substitutes an enrollment proof or password.
-	Signup                        bool
-	Update, Delete                bool
+	Signup         bool
+	Update, Delete bool
+	// SessionUpdate explicitly selects the current-session UV rename profile
+	// instead of password-proof Update. It requires native SessionManagement in
+	// cookie mode and the graph's original CSRF keys; no device/proof owner.
+	SessionUpdate                 bool
 	InventoryRateNamespace        string
 	InventoryEmergencyMaximumKeys int
 	InventoryDegraded             func(context.Context, identityhttp.SafeRateEvent) error
@@ -96,7 +100,7 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_passkey"}
 	h := *c.HTTPPasskey
-	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete || h.Discoverable && !h.Signin || (h.DiscoverableOnly || h.Conditional) && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
+	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete && !h.SessionUpdate || h.Update && h.SessionUpdate || h.Discoverable && !h.Signin || (h.DiscoverableOnly || h.Conditional) && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory || h.SessionUpdate) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
 		return nil, invalid
 	}
 	n := *c.Passkey
@@ -144,7 +148,10 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	if h.Delete && (n.Deletion == nil || owner.deletion == nil || n.Deletion.Primary.Transport != session.CredentialCookie || proofs == nil || proofs.proofs == nil || len(c.Session.CSRFKeys) == 0) {
 		return nil, invalid
 	}
-	if h.Update || h.Delete {
+	if h.SessionUpdate && (n.SessionManagement == nil || owner.sessionManagement == nil || n.SessionManagement.Transport != session.CredentialCookie || n.KeyedOptions == nil || len(c.Session.CSRFKeys) == 0) {
+		return nil, invalid
+	}
+	if h.Update || h.Delete || h.SessionUpdate {
 		out.secret, err = identityhttp.NewKeyedSecretRateLimiter(identityhttp.KeyedSecretRateConfig{Shared: shared.backend, Namespace: c.HTTPRate.Namespace, Key: c.HTTPRate.IdentifierKey, Now: out.now, MaximumDuration: c.HTTPRate.MaximumDuration})
 		if err != nil {
 			return nil, invalid

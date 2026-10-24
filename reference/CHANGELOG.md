@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Select `HTTPPasskey.SessionUpdate` for password-free current-session UV
+  rename through the native graph. The existing update endpoint accepts closed
+  options/completion phases with distinct original header-only keys and stored
+  session CSRF. Password-proof `Update` remains unchanged and mutually exclusive;
+  disabled HTTP selection exposes neither this route nor its metadata.
+
 - Explicitly compose current-passkey-session UV label management through
   `Passkey.SessionManagement` and the guarded `Passkeys().SessionManagement()`
   handle. The same native owner binds original keyed intent and atomically

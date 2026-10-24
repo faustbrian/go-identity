@@ -30,7 +30,7 @@ import (
 func TestReferencePostgresPasskeyStandalone(t *testing.T) {
 	for _, upgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-			proveReferencePasskeyStandalone(t, upgrade, false, false, false)
+			proveReferencePasskeyStandalone(t, upgrade, false, false, false, false)
 		})
 	}
 }
@@ -39,7 +39,7 @@ func TestReferencePostgresPasskeyConditional(t *testing.T) {
 	for _, persistent := range []bool{false, true} {
 		for _, upgrade := range []bool{false, true} {
 			t.Run(map[bool]string{false: "browser", true: "persistent"}[persistent]+"/"+map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-				proveReferencePasskeyStandalone(t, upgrade, true, persistent, false)
+				proveReferencePasskeyStandalone(t, upgrade, true, persistent, false, false)
 			})
 		}
 	}
@@ -48,18 +48,27 @@ func TestReferencePostgresPasskeyConditional(t *testing.T) {
 func TestReferencePostgresPasskeySessionManagement(t *testing.T) {
 	for _, upgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-			proveReferencePasskeyStandalone(t, upgrade, false, false, true)
+			proveReferencePasskeyStandalone(t, upgrade, false, false, true, false)
 		})
 	}
 }
 
-func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persistent, management bool) {
+func TestReferencePostgresPasskeyHTTPSessionManagement(t *testing.T) {
+	for _, upgrade := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
+			proveReferencePasskeyStandalone(t, upgrade, false, false, true, true)
+		})
+	}
+}
+
+func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persistent, management, httpManagement bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, true)
 	c := standalonePasskeyConfiguration(t, f.config)
 	c.HTTPPasskey.Conditional = conditional
+	c.HTTPPasskey.SessionUpdate = httpManagement
 	if management {
 		c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie}
 	}
@@ -78,6 +87,28 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persist
 			if graph, err := reference.ComposeStores(selected, deps); err == nil {
 				_ = graph.Close(ctx)
 				t.Fatal("incomplete native session management composed", mode)
+			}
+		}
+	}
+	if httpManagement && !upgrade {
+		for _, mode := range []string{"native-disabled", "bearer-native", "competing-password-profile", "no-csrf"} {
+			selected := c
+			p, m, h, s := *c.Passkey, *c.Passkey.SessionManagement, *c.HTTPPasskey, *c.Session
+			p.SessionManagement = &m
+			selected.Passkey, selected.HTTPPasskey, selected.Session = &p, &h, &s
+			switch mode {
+			case "native-disabled":
+				p.SessionManagement = nil
+			case "bearer-native":
+				m.Transport = session.CredentialBearer
+			case "competing-password-profile":
+				h.Update = true
+			case "no-csrf":
+				s.CSRFKeys = nil
+			}
+			if graph, err := reference.ComposeStores(selected, deps); err == nil {
+				_ = graph.Close(ctx)
+				t.Fatal("unsupported HTTP update composed", mode)
 			}
 		}
 	}
@@ -252,11 +283,16 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persist
 	if err != nil {
 		t.Fatal("passkey-only HTTP composition", err)
 	}
+	selectedUpdate := false
 	for _, op := range server.OpenAPI().Operations() {
 		id := op.Record.OperationID
+		selectedUpdate = selectedUpdate || id == "identity.passkey.update"
 		if strings.HasPrefix(id, "identity.password.") || strings.HasPrefix(id, "identity.otp.") || strings.HasPrefix(id, "identity.delivery.") {
 			t.Fatal("unselected authentication workflow advertised", id)
 		}
+	}
+	if selectedUpdate != httpManagement {
+		t.Fatal("native selection enabled unselected HTTP update")
 	}
 	if status := server.Readiness(ctx); !status.Ready {
 		t.Fatal("passkey-only readiness", status.Failures)

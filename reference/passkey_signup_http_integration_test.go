@@ -293,6 +293,7 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 			t.Fatal("HTTP signup invented password fallback", err, passwords)
 		}
 	}
+	var managedCredential passkeyhttp.CredentialMetadata
 	if c.HTTPPasskey.Inventory {
 		r, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/v1/passkey/list", nil)
 		if err != nil {
@@ -313,11 +314,90 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 		if bytes.Contains(wire, []byte(base64.RawURLEncoding.EncodeToString(id))) || bytes.Contains(wire, []byte(protocol.PublicKey.User.ID)) {
 			t.Fatal("safe signup inventory exposed protocol credential or user handle")
 		}
+		managedCredential = listed.Credentials[0]
 	}
-	if c.Passkey.SessionManagement != nil {
+	var checkUpdateAfterLogout func()
+	if c.HTTPPasskey.SessionUpdate {
+		intent := map[string]any{"phase": "options", "referenceID": managedCredential.ReferenceID, "expectedVersion": managedCredential.Version, "name": "HTTP passkey-only renamed key"}
+		for _, mode := range []string{"wrong-csrf", "foreign-origin"} {
+			csrf, selectedOrigin := issued.header.Get("X-CSRF-Token"), origin
+			if mode == "wrong-csrf" {
+				csrf = strings.Repeat("A", 43)
+			} else {
+				selectedOrigin = "https://foreign.example"
+			}
+			denied := call("/v1/passkey/update", intent, "denied-rename-options-"+mode, issued.cookies, csrf, selectedOrigin)
+			if denied.code != 403 {
+				t.Fatal("HTTP update ignored original cookie/Origin/CSRF", mode, denied.code)
+			}
+		}
+		options := call("/v1/passkey/update", intent, "http-session-rename-options", issued.cookies, issued.header.Get("X-CSRF-Token"), origin)
+		var projected struct {
+			CommandID identity.CommandID `json:"commandID"`
+			Replayed  bool               `json:"replayed"`
+			Options   json.RawMessage    `json:"options"`
+		}
+		if options.code != 200 || json.Unmarshal(options.body, &projected) != nil || projected.CommandID == "" || len(projected.Options) == 0 || len(options.cookies) != 0 || options.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("HTTP genuine action-bound UV options", options.code)
+		}
+		challenge := referencePasskeyChallenge(t, ctx, func(ctx context.Context, fn func(context.Context, []byte) error) error {
+			return fn(ctx, projected.Options)
+		})
+		retried := call("/v1/passkey/update", intent, "http-session-rename-options", issued.cookies, issued.header.Get("X-CSRF-Token"), origin)
+		var historical struct {
+			CommandID identity.CommandID `json:"commandID"`
+			Replayed  bool               `json:"replayed"`
+			Options   json.RawMessage    `json:"options"`
+		}
+		if retried.code != 200 || json.Unmarshal(retried.body, &historical) != nil || !historical.Replayed || historical.CommandID != projected.CommandID || len(historical.Options) != 0 {
+			t.Fatal("HTTP options retry disclosed renewed challenge", retried.code)
+		}
+		intent["phase"], intent["ceremonyID"], intent["response"] = "complete", string(projected.CommandID), json.RawMessage(referencePasskeyAssertion(t, private, id, handle, challenge))
+		intent["name"] = "Changed original intent"
+		denied := call("/v1/passkey/update", intent, "http-session-rename-tampered", issued.cookies, issued.header.Get("X-CSRF-Token"), origin)
+		if denied.code != 403 {
+			t.Fatal("HTTP completion changed original protected intent", denied.code)
+		}
+		intent["name"] = "HTTP passkey-only renamed key"
+		completed := call("/v1/passkey/update", intent, "http-session-rename-completion", issued.cookies, issued.header.Get("X-CSRF-Token"), origin)
+		var renamed passkeyhttp.UpdateResponse
+		if completed.code != 200 || json.Unmarshal(completed.body, &renamed) != nil || renamed.Replayed || renamed.Credential == nil || renamed.Credential.Version != managedCredential.Version+1 || renamed.Credential.Label != intent["name"] || len(completed.cookies) != 0 || completed.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("HTTP atomic session rename", completed.code)
+		}
+		retried = call("/v1/passkey/update", intent, "http-session-rename-completion", issued.cookies, issued.header.Get("X-CSRF-Token"), origin)
+		var replay passkeyhttp.UpdateResponse
+		if retried.code != 200 || json.Unmarshal(retried.body, &replay) != nil || !replay.Replayed || replay.CommandID != renamed.CommandID || replay.Credential != nil {
+			t.Fatal("HTTP completion retry disclosed new projection", retried.code)
+		}
+		r, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/v1/passkey/list", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Host = strings.TrimPrefix(origin, "https://")
+		r.AddCookie(issued.cookies[0])
+		got, err := client.Do(r)
+		if err != nil {
+			t.Fatal("renamed inventory request")
+		}
+		wire, readErr := io.ReadAll(io.LimitReader(got.Body, 16385))
+		closeErr := got.Body.Close()
+		var listed passkeyhttp.InventoryResponse
+		if readErr != nil || closeErr != nil || got.StatusCode != 200 || len(wire) > 16384 || json.Unmarshal(wire, &listed) != nil || len(listed.Credentials) != 1 || listed.Credentials[0].Label != intent["name"] || listed.Credentials[0].Version != managedCredential.Version+1 {
+			t.Fatal("HTTP rename was not durable in inventory", got.StatusCode)
+		}
+		checkUpdateAfterLogout = func() {
+			denied := call("/v1/passkey/update", intent, "http-session-rename-completion", issued.cookies, issued.header.Get("X-CSRF-Token"), origin)
+			if denied.code != 401 || len(denied.cookies) != 0 || denied.header.Get("X-CSRF-Token") != "" {
+				t.Fatal("revoked session recovered update authority", denied.code)
+			}
+		}
+	} else if c.Passkey.SessionManagement != nil {
 		proveReferenceSessionRename(t, ctx, features, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle)
 	}
 	proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), func() bool { return read(issued).Authenticated })
+	if checkUpdateAfterLogout != nil {
+		checkUpdateAfterLogout()
+	}
 	flowID, cookies = flow("passkey")
 	assertionOptions := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, "reference-http-signup-signin", cookies, "", origin)
 	var assertionProtocol struct {

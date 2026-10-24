@@ -24,7 +24,7 @@ require (
 	github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261018191516-3b0fd6bc90e5
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f
-	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024042650-60bf9b753c91
+	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024061010-b9fbdcfac2f8
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b
 	github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806
 	github.com/faustbrian/go-identity/http/session v0.0.0-20261021120851-ab3f4a286f93

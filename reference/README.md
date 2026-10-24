@@ -60,7 +60,9 @@ authority. See the linked passkey guide for the exact configuration and rollout.
 For current-passkey-session UV rename without a password proof, separately
 select `Passkey.SessionManagement` and `Passkey.KeyedOptions`, then obtain the
 guarded `Passkeys().SessionManagement()` handle. It also works with
-`Passkey.Standalone`; its native selection exposes no HTTP routes. See the
+`Passkey.Standalone`; its native selection exposes no HTTP routes. Explicitly
+select `HTTPPasskey.SessionUpdate` for its two-phase cookie endpoint; it is
+mutually exclusive with password-proof `HTTPPasskey.Update`. See the
 [passkey guide](PASSKEY.md#current-passkey-session-rename) for the two-phase API.
 Select `Passkey.Deletion` independently for fresh-proof credential removal;
 it requires this graph's actual configured email/password reset recovery owner,
