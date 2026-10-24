@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Explicitly select conditional presentation of discoverable signin options
+  with `SigninConfig.Conditional`. The same native service supplies the optional
+  capability; existing implementations remain compatible when disabled.
+  Options add outer `mediation:"conditional"`, while request mode, one-use
+  completion, original-key recovery and expiry remain unchanged. OpenAPI
+  describes only selected presentation variants; no browser UI is implemented.
+
 - Select `SigninConfig.DiscoverableOnly` to expose identifier-free signin
   without an email comparison parser. Identified requests and identifier fields
   remain rejected, including by the selected OpenAPI schema. Discovery policy,

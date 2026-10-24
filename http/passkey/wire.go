@@ -106,7 +106,18 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		replay := wireObject([]string{"commandID", "commitOutcome", "replayed"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": true}})
 		success = map[string]any{"oneOf": []any{fresh, replay}}
 	case options:
-		fresh := wireObject([]string{"commandID", "commitOutcome", "replayed", "options"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "options": protocolOptionsWire(registration)})
+		var browserOptions any = protocolOptionsWire(registration)
+		if !registration && c.Signin.Conditional {
+			conditional := protocolOptionsWire(false)
+			conditional["required"] = []string{"publicKey", "mediation"}
+			conditional["properties"].(map[string]any)["mediation"] = map[string]any{"const": "conditional"}
+			if c.Signin.DiscoverableOnly {
+				browserOptions = conditional
+			} else {
+				browserOptions = map[string]any{"oneOf": []any{browserOptions, conditional}}
+			}
+		}
+		fresh := wireObject([]string{"commandID", "commitOutcome", "replayed", "options"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "options": browserOptions})
 		replay := wireObject([]string{"commandID", "commitOutcome", "replayed"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": true}})
 		success = map[string]any{"oneOf": []any{fresh, replay}}
 	case registration:
@@ -141,6 +152,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	operation := map[string]any{"operationId": "identity.passkey." + name, "description": "Explicit existing-account cookie-only passkey profile. Trusted HTTPS tenant/origin and original session/proof or original flow/mode custody are mandatory; ceremonies additionally require original device custody. Header-only keys apply to options, label update and deletion; ceremony completion forbids keys and is one-use. No body identity/remember/cookie/CSRF/command-allocation override, signup, conditional UI or fallback. Native authorization, recovery, risk and atomic consumption remain authoritative. Responses are synchronously bounded; hooks cannot acquire credential custody.", "parameters": parameters, "responses": responses}
 	if !registration && !management && !list && c.Signin.DiscoverableOnly {
 		operation["description"] = "Explicit identifier-free-only resident passkey signin. Identified mode and identifier input are not selected. Original flow/device/origin, UV, risk, current native authority, one-use completion and original remember policy remain mandatory. Header-only original keys apply to options; completion forbids keys. Historical responses expose no challenge or session. No email/password comparison owner, fallback or browser UI is enabled."
+	}
+	if name == "signin-options" && c.Signin.Conditional {
+		operation["description"] = operation["description"].(string) + " Explicitly selected discoverable options carry mediation=conditional outside publicKey. This is presentation of the same original discoverable ceremony, not a third mode, extended expiry or browser-support assertion. Complete through unchanged mode=discoverable verification; retries return metadata only. Applications check browser support and deserialize publicKey before navigator.credentials.get()."
 	}
 	if registration && c.Signup != nil {
 		operation["description"] = "Explicit passkey registration variants. Signup requires mode=signup, original flow/device cookies and exact Origin; session cookies, session CSRF and proofID are forbidden. Enrollment, when selected, retains its unchanged proofID/session/synchronizer contract with no mode field. Neither branch falls back after failure. Options require the original header-only Idempotency-Key; completion forbids it. Only fresh committed signup issues a session cookie and synchronizer. Native risk, protocol, account/session transaction and metadata-only recovery remain authoritative. No browser identity, RP or remember override is accepted."
@@ -216,7 +230,7 @@ func browserResponseWire(registration bool) any {
 	return wireObject([]string{"id", "rawId", "type", "response"}, map[string]any{"id": encoded, "rawId": encoded, "type": map[string]any{"const": "public-key"}, "response": wireObject(required, fields), "clientExtensionResults": map[string]any{"type": "object", "maxProperties": 16}})
 }
 
-func protocolOptionsWire(registration bool) any {
+func protocolOptionsWire(registration bool) map[string]any {
 	challenge := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"}
 	fields := map[string]any{"challenge": challenge, "timeout": map[string]any{"const": 300000}, "userVerification": map[string]any{"const": "required"}}
 	required := []string{"challenge", "timeout", "userVerification"}

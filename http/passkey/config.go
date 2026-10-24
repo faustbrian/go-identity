@@ -31,6 +31,15 @@ type SigninService interface {
 	DiscoverableSignin(context.Context, passkey.DiscoverableSigninCompletion) (passkey.SigninResult, error)
 }
 
+// ConditionalSigninService is the optional capability of the same borrowed
+// SigninService selected by SigninConfig.Conditional. It must project the
+// existing keyed discoverable command, not allocate a new ceremony or retry
+// namespace. The native owner retains risk, original expiry and reveal custody.
+// Existing SigninService implementations need not implement it when disabled.
+type ConditionalSigninService interface {
+	KeyedConditionalAuthenticationOptions(context.Context, passkey.KeyedDiscoverableOptionsRequest) (passkey.KeyedConditionalOptionsResult, error)
+}
+
 // EnrollmentService borrows existing-account keyed options, authenticated
 // original rate metadata and one-use native registration. Distinct genuine
 // action proofs remain native-owned; this interface authenticates no data.
@@ -184,11 +193,16 @@ type SigninConfig struct {
 	// DiscoverableOnly requires Discoverable and rejects identified requests.
 	// Address is unused; no email/password comparison owner is required.
 	DiscoverableOnly bool
-	ActorID          identity.ActorID
-	PolicyRevision   authorization.Revision
-	Audience         string
-	Now              func() time.Time
-	MaximumDuration  time.Duration
+	// Conditional explicitly selects outer conditional browser presentation for
+	// discoverable options. It requires Discoverable and Service must implement
+	// ConditionalSigninService. Identified requests and completion stay unchanged;
+	// no third durable mode, browser capability claim or denial fallback is added.
+	Conditional     bool
+	ActorID         identity.ActorID
+	PolicyRevision  authorization.Revision
+	Audience        string
+	Now             func() time.Time
+	MaximumDuration time.Duration
 }
 
 // RegistrationConfig selects existing-account cookie-only enrollment. Sessions

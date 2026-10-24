@@ -68,6 +68,19 @@ identifier field. Original flow/device/origin, native discovery policy, UV,
 rates and one-use completion remain required. The default combined profile
 still requires the configured email parser; there is no failure fallback.
 
+`SigninConfig.Conditional:true` explicitly selects conditional presentation for
+discoverable options. It requires `Discoverable:true` and the same borrowed
+`Service` must implement `ConditionalSigninService`; old implementations gain
+no new requirement when this flag is false. Keep the request's existing
+`mode:"discoverable"`: fresh options add `mediation:"conditional"` beside
+`publicKey`, not inside it. Identified options and discoverable completion are
+unchanged. Original keys, commands, flow/device/origin, remember choice, UV,
+risk and server expiry retain their native owner. Retries disclose no options.
+Applications check browser support and deserialize `publicKey` before calling
+`navigator.credentials.get()`; this backend does not implement browser UI or
+prove which mediation the browser actually used. No separate ceremony mode,
+fallback or longer expiry is introduced.
+
 There is no account lookup in normalization. `Discoverable:true` explicitly
 permits `mode:"discoverable"`; no identifier or fabricated user accompanies it.
 Omitting that selection denies discovery, never falling back from identified

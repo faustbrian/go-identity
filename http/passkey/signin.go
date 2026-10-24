@@ -13,6 +13,7 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/session"
 	passkey "github.com/faustbrian/go-passkey"
+	webauthn "github.com/faustbrian/go-webauthn"
 )
 
 // SigninState is immutable request-local browser custody, not authentication.
@@ -88,6 +89,14 @@ func newSigninHandler(c SigninConfig, m []identityhttp.MiddlewareDescriptor, com
 	}
 	if c.DiscoverableOnly && !c.Discoverable {
 		return nil, identityhttp.ErrInvalidInput
+	}
+	var conditional ConditionalSigninService
+	if c.Conditional {
+		var ok bool
+		conditional, ok = c.Service.(ConditionalSigninService)
+		if !c.Discoverable || !ok || absent(conditional) {
+			return nil, identityhttp.ErrInvalidInput
+		}
 	}
 	if !c.DiscoverableOnly {
 		if _, err := c.Address.Parse(email.AddressInput("configuration@example.invalid")); err != nil {
@@ -210,11 +219,21 @@ func newSigninHandler(c SigninConfig, m []identityhttp.MiddlewareDescriptor, com
 				return
 			}
 			var out passkey.KeyedAssertionOptionsResult
+			var options interface {
+				Ceremony() (webauthn.CeremonyRecord, bool)
+				TransferJSON(context.Context, func(context.Context, []byte) error) error
+			}
 			var err error
-			if s.body.discoverable {
+			if s.body.discoverable && c.Conditional {
+				selected, callErr := conditional.KeyedConditionalAuthenticationOptions(r.Context(), passkey.KeyedDiscoverableOptionsRequest{DiscoverableSigninRequest: discoveryRequest(s.request), IdempotencyKey: s.key, Caller: caller(s.facts.TenantID(), s.request.FlowID)})
+				out.CommandID, out.Receipt, out.Replayed = selected.CommandID, selected.Receipt, selected.Replayed
+				options, err = selected.Options, callErr
+			} else if s.body.discoverable {
 				out, err = c.Service.KeyedDiscoverableAuthenticationOptions(r.Context(), passkey.KeyedDiscoverableOptionsRequest{DiscoverableSigninRequest: discoveryRequest(s.request), IdempotencyKey: s.key, Caller: caller(s.facts.TenantID(), s.request.FlowID)})
+				options = out.Options
 			} else {
 				out, err = c.Service.KeyedAuthenticationOptions(r.Context(), passkey.KeyedSigninOptionsRequest{SigninRequest: s.request, IdempotencyKey: s.key, Caller: caller(s.facts.TenantID(), s.request.FlowID)})
+				options = out.Options
 			}
 			if err != nil {
 				rejectNative(w, r, err)
@@ -228,13 +247,13 @@ func newSigninHandler(c SigninConfig, m []identityhttp.MiddlewareDescriptor, com
 			requestDelivery(r).observeCommitted(out.CommandID)
 			valid := func() bool { return signinFresh(c, s) }
 			if !out.Replayed {
-				ceremony, ok := out.Options.Ceremony()
+				ceremony, ok := options.Ceremony()
 				if !ok || ceremony.ID != string(out.CommandID) || ceremony.Intent.Context.TenantID != s.facts.TenantID() || ceremony.Intent.Context.AnonymousFlowID != string(s.request.FlowID) || ceremony.Intent.Context.UserID != "" || ceremony.Intent.Origin != string(c.Origin) {
 					reject(w, r, identityhttp.ErrUnavailable)
 					return
 				}
 				valid = func() bool { return signinFresh(c, s) && c.Now().Before(ceremony.ExpiresAt) }
-				if err := out.Options.TransferJSON(r.Context(), func(_ context.Context, wire []byte) error {
+				if err := options.TransferJSON(r.Context(), func(_ context.Context, wire []byte) error {
 					if len(wire) == 0 || len(wire) > 262144 {
 						return identityhttp.ErrUnavailable
 					}

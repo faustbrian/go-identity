@@ -12,7 +12,7 @@ require (
 	github.com/faustbrian/go-identity/password v0.0.0-20261023192729-324d7aeea43e
 	github.com/faustbrian/go-identity/session v0.0.0-20261023150127-219499bdccd5
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
-	github.com/faustbrian/go-passkey v0.0.0-20261024025217-375ceafc4cb3
+	github.com/faustbrian/go-passkey v0.0.0-20261024033855-c0819f95259f
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/faustbrian/go-webauthn v0.0.0-20261020074004-ed89b240ab20
 )
