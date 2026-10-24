@@ -175,7 +175,12 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 	if err != nil {
 		return nil, err
 	}
-	if err := appendOwned("webauthn", "webauthn/postgres", fixedMigrationSource(protocol), migrationGuard{version: 1, schema: "webauthn"}, migrationGuard{version: 2, schema: "webauthn", constraints: []string{"effects.effects_subject_namespace"}, constraintValue: "webauthn.begin-get-discoverable"}, migrationGuard{version: 3, schema: "webauthn", constraints: []string{"effects.effects_subject_namespace"}, constraintValue: "identity.passkey.signin-options"}); err != nil {
+	if err := appendOwned("webauthn", "webauthn/postgres", fixedMigrationSource(protocol),
+		migrationGuard{version: 1, schema: "webauthn"},
+		migrationGuard{version: 2, schema: "webauthn", constraints: []string{"effects.effects_subject_namespace"}, constraintValue: "webauthn.begin-get-discoverable"},
+		migrationGuard{version: 3, schema: "webauthn", constraints: []string{"effects.effects_subject_namespace"}, constraintValue: "identity.passkey.signin-options"},
+		migrationGuard{version: 5, schema: "webauthn", columns: []string{"ceremonies.authorization_expires_at", "ceremonies.authorization_ceremony_id", "effects.enrollment_stage", "effects.enrollment_source"}, constraints: []string{"ceremonies.ceremonies_enrollment_authority", "effects.effects_enrollment_profile"}},
+	); err != nil {
 		return nil, err
 	}
 	mapping, err := (native.MigrationSource{}).Load(ctx)

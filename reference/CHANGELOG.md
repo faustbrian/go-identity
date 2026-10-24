@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Select `Passkey.SessionEnrollment` and the guarded
+  `Passkeys().SessionEnrollment()` handle for additional resident credentials
+  under genuine current-passkey-session UV, without password proofs. The graph
+  supplies native owners, original keyed A/B custody, CSRF and migration history;
+  C retains its original command without a retry key. Both credentials and the
+  original session remain usable, while retries reveal metadata only. Install
+  the selected WebAuthn history through migration 5. Native selection enables
+  no enrollment HTTP route or browser UI; password-proof enrollment is unchanged.
+
 - Select `HTTPPasskey.SessionUpdate` for password-free current-session UV
   rename through the native graph. The existing update endpoint accepts closed
   options/completion phases with distinct original header-only keys and stored

@@ -64,6 +64,12 @@ guarded `Passkeys().SessionManagement()` handle. It also works with
 select `HTTPPasskey.SessionUpdate` for its two-phase cookie endpoint; it is
 mutually exclusive with password-proof `HTTPPasskey.Update`. See the
 [passkey guide](PASSKEY.md#current-passkey-session-rename) for the two-phase API.
+For additional resident keys without password proofs, explicitly select
+`Passkey.SessionEnrollment` with `Passkey.KeyedOptions` and obtain the guarded
+`Passkeys().SessionEnrollment()` handle. The graph delegates genuine UV options,
+compound authorization/registration options and finalization to native owners;
+it supports the passkey-only deployment and enables no HTTP enrollment profile.
+See [additional enrollment](PASSKEY.md#current-session-additional-enrollment).
 Select `Passkey.Deletion` independently for fresh-proof credential removal;
 it requires this graph's actual configured email/password reset recovery owner,
 not label management. `HTTPPasskey.Delete` separately enables its cookie-only

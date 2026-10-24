@@ -30,7 +30,7 @@ import (
 func TestReferencePostgresPasskeyStandalone(t *testing.T) {
 	for _, upgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-			proveReferencePasskeyStandalone(t, upgrade, false, false, false, false)
+			proveReferencePasskeyStandalone(t, upgrade, standalonePasskeyJourney{})
 		})
 	}
 }
@@ -39,7 +39,7 @@ func TestReferencePostgresPasskeyConditional(t *testing.T) {
 	for _, persistent := range []bool{false, true} {
 		for _, upgrade := range []bool{false, true} {
 			t.Run(map[bool]string{false: "browser", true: "persistent"}[persistent]+"/"+map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-				proveReferencePasskeyStandalone(t, upgrade, true, persistent, false, false)
+				proveReferencePasskeyStandalone(t, upgrade, standalonePasskeyJourney{conditional: true, persistent: persistent})
 			})
 		}
 	}
@@ -48,7 +48,7 @@ func TestReferencePostgresPasskeyConditional(t *testing.T) {
 func TestReferencePostgresPasskeySessionManagement(t *testing.T) {
 	for _, upgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-			proveReferencePasskeyStandalone(t, upgrade, false, false, true, false)
+			proveReferencePasskeyStandalone(t, upgrade, standalonePasskeyJourney{management: true})
 		})
 	}
 }
@@ -56,13 +56,34 @@ func TestReferencePostgresPasskeySessionManagement(t *testing.T) {
 func TestReferencePostgresPasskeyHTTPSessionManagement(t *testing.T) {
 	for _, upgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-			proveReferencePasskeyStandalone(t, upgrade, false, false, true, true)
+			proveReferencePasskeyStandalone(t, upgrade, standalonePasskeyJourney{management: true, httpManagement: true})
 		})
 	}
 }
 
-func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persistent, management, httpManagement bool) {
+func TestReferencePostgresPasskeySessionEnrollment(t *testing.T) {
+	for _, transport := range []struct {
+		name string
+		kind session.CredentialKind
+	}{{"cookie", session.CredentialCookie}, {"bearer", session.CredentialBearer}} {
+		t.Run(transport.name, func(t *testing.T) {
+			for _, upgrade := range []bool{false, true} {
+				t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
+					proveReferencePasskeyStandalone(t, upgrade, standalonePasskeyJourney{enrollment: true, enrollmentTransport: transport.kind})
+				})
+			}
+		})
+	}
+}
+
+type standalonePasskeyJourney struct {
+	conditional, persistent, management, httpManagement, enrollment bool
+	enrollmentTransport                                             session.CredentialKind
+}
+
+func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standalonePasskeyJourney) {
 	t.Helper()
+	conditional, persistent, management, httpManagement := selected.conditional, selected.persistent, selected.management, selected.httpManagement
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, true)
@@ -72,7 +93,29 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persist
 	if management {
 		c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie}
 	}
+	if selected.enrollment {
+		c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: selected.enrollmentTransport}
+	}
 	deps := reference.ReferenceDependencies{PostgreSQL: f.pool}
+	if selected.enrollment && !upgrade {
+		for _, mode := range []string{"missing-keyed-owner", "invalid-transport", "missing-csrf"} {
+			changed := c
+			p, enrollment, sessions := *c.Passkey, *c.Passkey.SessionEnrollment, *c.Session
+			changed.Passkey, changed.Session, p.SessionEnrollment = &p, &sessions, &enrollment
+			switch mode {
+			case "missing-keyed-owner":
+				p.KeyedOptions = nil
+			case "invalid-transport":
+				enrollment.Transport = 0
+			case "missing-csrf":
+				sessions.CSRFKeys = nil
+			}
+			if graph, err := reference.ComposeStores(changed, deps); err == nil {
+				_ = graph.Close(ctx)
+				t.Fatal("incomplete native session enrollment composed", mode)
+			}
+		}
+	}
 	if management && !upgrade {
 		for _, mode := range []string{"missing-keyed-owner", "invalid-transport"} {
 			selected := c
@@ -296,6 +339,21 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persist
 	}
 	if status := server.Readiness(ctx); !status.Ready {
 		t.Fatal("passkey-only readiness", status.Failures)
+	}
+	if selected.enrollment && !upgrade {
+		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE webauthn.ceremonies RENAME COLUMN authorization_expires_at TO enrollment_expiry_missing`); err != nil {
+			t.Fatal(err)
+		}
+		status := server.Readiness(ctx)
+		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE webauthn.ceremonies RENAME COLUMN enrollment_expiry_missing TO authorization_expires_at`); err != nil {
+			t.Fatal("restore owned enrollment expiry column", err)
+		}
+		if status.Ready {
+			t.Fatal("enrollment readiness ignored missing original authorization storage")
+		}
+		if status := server.Readiness(ctx); !status.Ready {
+			t.Fatal("restored enrollment readiness", status.Failures)
+		}
 	}
 	if !upgrade {
 		// A selected verification limiter is a real startup prerequisite even

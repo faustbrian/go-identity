@@ -511,3 +511,50 @@ composition with genuine HTTP initiation/registration, schema-checked wire,
 metadata-only retry, atomic account/credential/session events, session read/logout
 and fresh discoverable signin. These profiles do not close all M16 variants or
 whole-unit release qualification.
+
+## Current-session additional enrollment
+
+Select `Passkey.SessionEnrollment` with
+`PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie}`
+or the explicitly selected bearer transport. `Passkey.KeyedOptions` is required;
+the graph supplies actual owners and retained cookie CSRF keys. This works with
+`Passkey.Standalone` without password, OTP or delivery configuration. Apply the
+selected native histories, including WebAuthn migration 5, before initialization.
+No new coordinator, application proof, migration SQL or domain store is supplied.
+
+Obtain `FeatureSet.Passkeys()` then `SessionEnrollment()`. The guarded handle
+keeps fixed tenant, initialized startup, cancellation and graph shutdown lifetime.
+Its native profile is separate from password-proof enrollment and exposes no
+new HTTP selection or browser UI:
+
+1. Build `passkey.NewSessionEnrollmentRequest` from actual session credential,
+   original CSRF for cookies, self-user `identity.passkey.register-options`
+   caller, intended optional label and trusted origin/network.
+2. `EnrollmentAssertionOptions` uses the original A idempotency key. Transfer
+   genuine UV options once and obtain an assertion from the current session's
+   authenticator.
+3. `RegistrationOptions` accepts the opaque authorization with unchanged intent,
+   A ceremony/assertion and a distinct B key. Native assertion consumption and
+   resident-registration creation commit together. Transfer options once.
+   A buffering consumer uses `RegistrationOptionsForDelivery` for the same B
+   operation plus A's immutable absolute expiry. Check that nonzero ceiling
+   after hooks alongside session, request and B validity; B's later TTL cannot
+   replace it. Retry/error returns no options and zero expiry.
+4. Change only caller action to `identity.passkey.register-verify`. `Register`
+   accepts opaque completion with original B ceremony, actual registration
+   response and one stable original C command ID, **without** an idempotency key.
+   Protocol, kernel reference, mapping/label and required effects commit together.
+5. Read safe inventory and use either key for discoverable signin/read/logout.
+   Adding the key does not issue a session or invalidate the original session.
+
+`SessionRegistrationRateSource` reads authenticated original C ceremony/user
+dimensions for challenge-rate admission without creating commands, charging
+native risk, consuming proof or renewing expiry. Metadata is not a validity lease;
+completion still revalidates all current owners and the original A expiry.
+
+Preserve exact A/B keys and C command/ceremony/intent after uncertainty. Matching
+committed retries disclose durability metadata only, not replacement options or
+credentials. Current session/CSRF remains necessary, including historical reads.
+Specs/`Bindings` are deliberate unredacted projections: do not log them. The
+profile requires known-empty MFA, resident UV/none/ES256 and self-user authority;
+enrolled-MFA, organization and other protocol profiles remain separate work.

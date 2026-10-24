@@ -394,6 +394,13 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	} else if c.Passkey.SessionManagement != nil {
 		proveReferenceSessionRename(t, ctx, features, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle)
 	}
+	if c.Passkey.SessionEnrollment != nil {
+		counter := uint32(1)
+		if c.Passkey.SessionManagement != nil {
+			counter++
+		}
+		proveReferenceSessionEnrollment(t, ctx, features, c, handler, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle, counter)
+	}
 	proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), func() bool { return read(issued).Authenticated })
 	if checkUpdateAfterLogout != nil {
 		checkUpdateAfterLogout()
@@ -425,6 +432,11 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	count := uint32(1)
 	if c.Passkey.SessionManagement != nil {
 		count = 2
+	}
+	if c.Passkey.SessionEnrollment != nil {
+		// Enrollment consumes one original-key UV and its helper proves a fresh
+		// original-key signin before returning to this original HTTP session.
+		count += 2
 	}
 	signinBody := map[string]any{"mode": "discoverable", "flowID": flowID, "commandID": command, "ceremonyID": created.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, private, id, handle, assertionProtocol.PublicKey.Challenge, count))}
 	signin := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
