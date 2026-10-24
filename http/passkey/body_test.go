@@ -26,6 +26,8 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		wire string
 	}{
 		{0, `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ"}`},
+		{0, `{"mode":"signup","flowID":"AAAAAAAAAAAAAAAAAAAAAQ"}`},
+		{1, `{"mode":"signup","flowID":"AAAAAAAAAAAAAAAAAAAAAQ","commandID":"AAAAAAAAAAAAAAAAAAAAAg","ceremonyID":"AAAAAAAAAAAAAAAAAAAAAw","response":{}}`},
 		{1, `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","commandID":"AAAAAAAAAAAAAAAAAAAAAg","ceremonyID":"AAAAAAAAAAAAAAAAAAAAAw","response":{}}`},
 		{2, `{"mode":"identified","flowID":"AAAAAAAAAAAAAAAAAAAAAQ","identifier":"Straße@faß.de"}`},
 		{3, `{"mode":"discoverable","flowID":"AAAAAAAAAAAAAAAAAAAAAQ","commandID":"AAAAAAAAAAAAAAAAAAAAAg","ceremonyID":"AAAAAAAAAAAAAAAAAAAAAw","response":{}}`},
@@ -53,7 +55,7 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		}
 		operations := []string{"register-options", "register-verify", "signin-options", "signin-verify", "update", "delete"}
 		out, err := decodeBody(operations[int(mode)%len(operations)], fields)
-		if err == nil && (out.discoverable && out.identifier != "" || len(out.response) > 262144 || len(out.label) > 128 || len(out.identifier) > 320) {
+		if err == nil && (out.discoverable && out.identifier != "" || out.signup && (out.proofID != "" || out.flowID == "" || out.discoverable) || len(out.response) > 262144 || len(out.label) > 128 || len(out.identifier) > 320) {
 			t.Fatal("admitted body escaped fixed bounds/mode")
 		}
 	})
@@ -138,6 +140,39 @@ func TestPasskeyBodyRejectsAmbiguousMissingAndOversizedInputs(t *testing.T) {
 		}
 		if _, err := decodeBody("register-verify", fields); !errors.Is(err, identityhttp.ErrInvalidInput) {
 			t.Fatal("oversized input accepted", field)
+		}
+	}
+}
+
+func TestSignupBodiesRemainDisjointFromEnrollment(t *testing.T) {
+	const id = "AAAAAAAAAAAAAAAAAAAAAQ"
+	for _, operation := range []string{"register-options", "register-verify"} {
+		wire := `{"mode":"signup","flowID":"` + id + `"}`
+		if operation == "register-verify" {
+			wire = `{"mode":"signup","flowID":"` + id + `","commandID":"` + id + `","ceremonyID":"` + id + `","response":{},"label":"New key"}`
+		}
+		fields := bodyFields(t, wire)
+		out, err := decodeBody(operation, fields)
+		if err != nil || !out.signup || out.flowID != id || out.proofID != "" {
+			t.Fatal("explicit original-flow signup rejected or changed mode", operation, err)
+		}
+		for _, name := range []string{"proofID", "identifier", "userID", "email", "password", "remember", "csrfToken", "rpID", "tenantID"} {
+			changed := bodyFields(t, wire)
+			changed[name] = json.RawMessage(`"untrusted"`)
+			if _, err := decodeBody(operation, changed); !errors.Is(err, identityhttp.ErrInvalidInput) {
+				t.Fatal("signup accepted enrollment or authority override", name)
+			}
+		}
+		for _, mode := range []json.RawMessage{json.RawMessage(`null`), json.RawMessage(`"enrollment"`), json.RawMessage(`"discoverable"`), json.RawMessage(`true`)} {
+			changed := bodyFields(t, wire)
+			changed["mode"] = mode
+			if _, err := decodeBody(operation, changed); !errors.Is(err, identityhttp.ErrInvalidInput) {
+				t.Fatal("invalid signup mode acquired a fallback")
+			}
+		}
+		delete(fields, "mode")
+		if _, err := decodeBody(operation, fields); !errors.Is(err, identityhttp.ErrInvalidInput) {
+			t.Fatal("missing signup discriminator acquired enrollment")
 		}
 	}
 }

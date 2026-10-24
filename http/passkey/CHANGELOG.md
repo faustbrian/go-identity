@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Explicitly select passkey-first signup on the canonical registration pair
+  with `Signup`. Original flow/device cookies and exact Origin remain required;
+  signup rejects session/proof/CSRF and identity overrides. Shared original-flow
+  verification rates precede native completion. Fresh committed signup alone
+  delivers a session; retries never repeat options or authentication. Combined
+  enrollment retains its existing wire shape and has no failure fallback.
+
 - Add explicitly selected cookie-only passkey self-deletion with exact signed
   delete-proof/session custody, stored CSRF and header-only original retry key.
   Native owns current recovery and atomic removal/session effects. Fresh and

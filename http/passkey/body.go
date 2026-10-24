@@ -17,6 +17,7 @@ type requestBody struct {
 	flowID, commandID, ceremonyID, proofID string
 	identifier, label                      string
 	discoverable                           bool
+	signup                                 bool
 	response                               json.RawMessage
 	referenceID, name                      string
 	expectedVersion                        uint64
@@ -66,9 +67,21 @@ func decodeBody(operation string, fields map[string]json.RawMessage) (requestBod
 			return invalid()
 		}
 	case "register-options", "register-verify":
-		allowed["proofID"] = true
-		if !command("proofID", &out.proofID) {
-			return invalid()
+		if _, selected := fields["mode"]; selected {
+			allowed["mode"], allowed["flowID"] = true, true
+			var mode string
+			if !text("mode", &mode) || mode != "signup" || !text("flowID", &out.flowID) {
+				return invalid()
+			}
+			if _, err := identity.ParsePreAuthTransactionID(out.flowID); err != nil {
+				return invalid()
+			}
+			out.signup = true
+		} else {
+			allowed["proofID"] = true
+			if !command("proofID", &out.proofID) {
+				return invalid()
+			}
 		}
 		if completion {
 			allowed["label"] = true

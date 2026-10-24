@@ -27,7 +27,15 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 		}
 		csrf := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}
 		switch name {
-		case "register-options", "register-verify", "update", "delete":
+		case "register-options", "register-verify":
+			if c.Registration != nil {
+				mode := identityhttp.CSRFSessionState
+				if c.Signup != nil {
+					mode = identityhttp.CSRFVariantOriginSessionState
+				}
+				csrf = identityhttp.CSRFPolicy{Mode: mode, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
+			}
+		case "update", "delete":
 			csrf = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
 		case "list":
 			csrf = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}
@@ -40,14 +48,16 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 		ops = append(ops, op)
 		return nil
 	}
-	if c.Registration != nil {
-		h, err := NewRegistrationOptionsHandlerWithMiddleware(*c.Registration, middleware)
-		if err := add("register-options", h, err); err != nil {
-			return identityhttp.Feature{}, err
-		}
-		h, err = NewRegistrationVerifyHandlerWithMiddleware(*c.Registration, middleware)
-		if err := add("register-verify", h, err); err != nil {
-			return identityhttp.Feature{}, err
+	if c.Registration != nil || c.Signup != nil {
+		for _, complete := range []bool{false, true} {
+			name := "register-options"
+			if complete {
+				name = "register-verify"
+			}
+			h, err := selectedRegistrationHandler(c, middleware, complete)
+			if err := add(name, h, err); err != nil {
+				return identityhttp.Feature{}, err
+			}
 		}
 	}
 	if c.Signin != nil {

@@ -26,6 +26,8 @@ github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8 h1:N9
 github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8/go.mod h1:uCySwd4DeG3xbJ6Ldmlmi7XTgBNSBF1OxPT2aMYmQm0=
 github.com/faustbrian/go-identity/http v0.0.0-20261023215809-5ea9c7d4e69c h1:x7gqsQs8NWwSqeHb0D+rxI3FhuFxK/7J2kLAzTLpk3k=
 github.com/faustbrian/go-identity/http v0.0.0-20261023215809-5ea9c7d4e69c/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261024025153-0fb1aaad3cb8 h1:u58RCX+Gz4yK4c3lOCkAPjOvQOtnBY6ttrbVF/SO5zU=
+github.com/faustbrian/go-identity/http v0.0.0-20261024025153-0fb1aaad3cb8/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/password v0.0.0-20261023192729-324d7aeea43e h1:E05Gp3f5rGvpaO87PrFGuTtsLEnvQPV0FPKvYe7asFM=
 github.com/faustbrian/go-identity/password v0.0.0-20261023192729-324d7aeea43e/go.mod h1:j2E1OXLjdE0zkhbtuoxXOpEihsm7ufgvLxq6iA91w68=
 github.com/faustbrian/go-identity/risk v0.0.0-20261020133538-6d5c539268df h1:gJJSdnBsuGHYeYfDol/rjKgX5RNAWBFkluFLTUQ3Ipk=
@@ -40,6 +42,8 @@ github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820 h1:/5nv
 github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820/go.mod h1:BpEy2DPz/YR5C9gcBcKAxkG4fO+jo6WLwjNDy075MYY=
 github.com/faustbrian/go-passkey v0.0.0-20261023213208-ac3373f55928 h1:rQVG7DeQjqncNg27PH4EeowpBxmun4Z2rTiG133ERLQ=
 github.com/faustbrian/go-passkey v0.0.0-20261023213208-ac3373f55928/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
+github.com/faustbrian/go-passkey v0.0.0-20261024025217-375ceafc4cb3 h1:EF4+EuTMqRMQd+TP0UsDSODpOHnfMWERNWI4PWfjfMU=
+github.com/faustbrian/go-passkey v0.0.0-20261024025217-375ceafc4cb3/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff h1:8BIB469appqyn79T6j/sJQAS3dN6+budadfpPLwtqIg=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff/go.mod h1:Tqc83xc8RVAsi6JAW3dkKM1OFVos7cfayeNHBbWstsA=
 github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1 h1:wClLzW8mUPmV7ilNALEIP0wJZ8LFWjb0nmGKh7LmDGw=

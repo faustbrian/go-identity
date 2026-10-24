@@ -1,8 +1,28 @@
 # Optional passkey HTTP
 
-This nested module contributes only explicitly selected existing-account
-cookie-only operations. The base HTTP module imports neither this package nor a
+This nested module contributes only explicitly selected cookie-only passkey
+operations. The base HTTP module imports neither this package nor a
 PostgreSQL adapter. Omitting the feature exposes no passkey routes or metadata.
+
+`FeatureConfig.Signup` explicitly selects the `mode: "signup"` registration
+variant. Options accepts only `mode` and original `flowID`, with one header-only
+`Idempotency-Key`; completion adds original `commandID`, `ceremonyID`, raw
+WebAuthn `response` and optional `label`, and forbids that header. Original
+`__Host-identity_flow` and signed device cookies plus exact Origin are required.
+Session cookies, session CSRF, proof IDs, email/password and remember overrides
+are rejected. Native `SignupService` owns account creation and actual session
+issuance, not this transport. Obtain the original flow from that owner or a
+selected `http/session` pre-auth method; do not fabricate authority.
+
+When `Registration` is also selected, the same two routes dispatch disjoint
+closed schemas: signup requires its explicit mode; enrollment retains its
+original proof-ID/session/synchronizer shape without a mode. Both configurations
+must use identical ingress limits/host/proxy lists, Origin, session cookie and
+shared rate-owner pointers. No failed branch falls back to another method.
+Fresh signup alone returns `registered`, `signedIn`, committed command/session
+metadata, the owned secure session cookie and synchronizer. Historical and
+unknown outcomes return no credential. Selection is off by default and does
+not enable conditional UI, other methods or a standalone deployment graph.
 
 Construct `NewFeature(FeatureConfig{Registration: registration, Signin: signin,
 Inventory: inventory, Update: update, Delete: deletion})`, where each pointer is optional and at least one is
@@ -14,8 +34,8 @@ requests and outlive the handlers.
 
 | Path | Body/query | Idempotency-Key |
 | --- | --- | --- |
-| POST `/v1/passkey/register-options` | `proofID` | Required |
-| POST `/v1/passkey/register-verify` | `proofID`, `commandID`, `ceremonyID`, `response`, optional `label` | Forbidden |
+| POST `/v1/passkey/register-options` | Enrollment: `proofID`; signup: `mode:"signup"`, `flowID` | Required |
+| POST `/v1/passkey/register-verify` | Same selected registration variant plus `commandID`, `ceremonyID`, `response`, optional `label` | Forbidden |
 | POST `/v1/passkey/signin-options` | `mode`, `flowID`, identified `identifier` | Required |
 | POST `/v1/passkey/signin-verify` | Same original mode/flow/identifier plus `commandID`, `ceremonyID`, `response` | Forbidden |
 | GET `/v1/passkey/list` | Optional `after`, `limit` (1..100, default100) | Forbidden |
@@ -109,8 +129,8 @@ A matching options retry returns only the original command metadata and
 `replayed:true`, with no `options`. Changed key scope/input denies. Never use
 a new key to recover an ambiguous original admission.
 
-Registration success returns `registered:true` and committed command metadata,
-not authentication. Fresh committed signin alone returns `signedIn:true`,
+Enrollment success returns `registered:true` and committed command metadata,
+not authentication. Fresh committed signin or explicitly selected signup returns `signedIn:true`,
 command/session metadata and the owned secure HttpOnly session cookie plus
 `X-CSRF-Token`. Tokens are absent from JSON and never redelivered on replay.
 Typed unknown outcomes preserve their original command ID without challenge or
@@ -138,6 +158,7 @@ OpenAPI comes from the same real handlers, not the direct Go contract catalog.
 Browser/WebAuthn cryptographic validity and one-use atomic effects remain the
 native owners' responsibility; HTTP admission is not substitute authority.
 
-This feature does not select signup, conditional UI, credential rename/delete,
-MFA fallback, recovery endpoints, cookie-to-bearer exchange or default routes.
+Signup, label update and deletion are explicit selections, never defaults.
+This feature does not select conditional UI, MFA fallback, recovery endpoints,
+cookie-to-bearer exchange or default routes.
 Choosing cookie delivery is explicit and cannot be changed by middleware.

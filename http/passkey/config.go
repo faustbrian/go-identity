@@ -40,6 +40,50 @@ type EnrollmentService interface {
 	Register(context.Context, passkey.RegistrationCompletion) (webauthn.VerifiedRegistration, error)
 }
 
+// SignupService borrows the actual passkey-first native owner. Original flow
+// custody, prospective identity, protected admission, protocol verification,
+// account creation and session issuance remain native-owned. Rate metadata is
+// not authenticated user authority. Calls must be bounded and concurrency-safe.
+type SignupService interface {
+	KeyedSignupOptions(context.Context, passkey.KeyedSignupOptionsRequest) (passkey.KeyedRegistrationOptionsResult, error)
+	SignupRateSource(context.Context, passkey.SignupCeremonyRateRequest) (passkey.CeremonyRateSource, error)
+	Signup(context.Context, passkey.SignupCompletion) (passkey.SignupResult, error)
+}
+
+// SignupConfig explicitly selects pre-auth passkey-first registration without
+// email/password. Original FlowCookie must be __Host-identity_flow; session and
+// device cookie names are distinct. Shared rates, device codec and native owner
+// are borrowed and must outlive requests. ActorID/revision/audience are trusted
+// deployment policy, never browser fields. Now is prompt and concurrency-safe;
+// MaximumDuration is 1ms..30s and cannot extend an earlier caller deadline.
+// Selection never enables enrollment or accepts ambient session/CSRF authority.
+// Device is signed, non-authenticating tenant/origin correlation; the original
+// flow cookie, not a device identifier, proves possession of the browser intent.
+type SignupConfig struct {
+	Network                   identityhttp.NetworkConfig
+	Service                   SignupService
+	OptionsRate               *identityhttp.AuthRateLimiter
+	VerificationRate          *identityhttp.ChallengeVerificationRateLimiter
+	Origin                    identityhttp.Origin
+	FlowCookie, SessionCookie session.CookiePolicy
+	Device                    session.BrowserDeviceConfig
+	ActorID                   identity.ActorID
+	PolicyRevision            authorization.Revision
+	Audience                  string
+	Now                       func() time.Time
+	MaximumDuration           time.Duration
+}
+
+func (SignupConfig) Format(f fmt.State, _ rune) {
+	_, _ = f.Write([]byte("passkeyhttp.SignupConfig(redacted)"))
+}
+
+// MarshalJSON rejects implicit runtime-owner and key export.
+func (SignupConfig) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// MarshalText rejects implicit deployment-custody export.
+func (SignupConfig) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
 // InventoryService is the native session-authorized safe metadata projection.
 // It independently authenticates self-user scope and native read-risk policy;
 // transport admission does not replace either owner.
@@ -190,10 +234,15 @@ type InventoryConfig struct {
 // FeatureConfig explicitly selects operation groups; nil exposes neither
 // routes nor metadata. Registration selects options+verify, Signin selects
 // options+verify, Inventory selects list, Update selects label rename and
-// Delete selects self-removal. At least one group is required. No signup,
-// conditional UI or MFA fallback is selected.
+// Delete selects self-removal. Signup explicitly selects the pre-auth variant
+// of the same canonical registration pair. Combined Registration+Signup must
+// share ingress limits/host/proxy mapping, Origin, session cookie and actual
+// rate-owner pointers. The closed mode discriminator never falls back between
+// branches. At least one group is required; no conditional UI or MFA fallback
+// is selected.
 type FeatureConfig struct {
 	Registration *RegistrationConfig
+	Signup       *SignupConfig
 	Signin       *SigninConfig
 	Inventory    *InventoryConfig
 	Update       *UpdateConfig

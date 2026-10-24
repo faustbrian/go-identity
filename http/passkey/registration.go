@@ -124,6 +124,9 @@ func newRegistrationHandler(c RegistrationConfig, m []identityhttp.MiddlewareDes
 			if err != nil {
 				return s, err
 			}
+			if body.signup {
+				return s, identityhttp.ErrInvalidInput
+			}
 			s.facts, s.body, s.key = facts, body, key
 			bearer, present, err := i.decoder.CookieBearer(r, cookie.Name, identityhttp.HeaderRequired)
 			if err != nil || !present {

@@ -278,22 +278,38 @@ func signinComplete(c SigninConfig, w http.ResponseWriter, r *http.Request, s Si
 		rejectNative(w, r, err)
 		return
 	}
-	if out.Session.CommitOutcome != identity.CommitOutcomeCommitted || out.Session.Replayed || out.Session.CommandID != s.request.CommandID {
+	deliverPasskeySession(w, r, authenticationDelivery{tenant: s.facts.TenantID(), command: s.request.CommandID, audience: c.Audience, cookie: c.SessionCookie, now: c.Now, fresh: func() bool { return signinFresh(c, s) }}, out.Session, out.CSRF, out.CounterRisk, false)
+}
+
+// Both native signup and signin issue through the same session owner. Preserve
+// a single transport serializer and custody check rather than giving signup a
+// weaker cookie, proof, remember or post-middleware delivery path.
+type authenticationDelivery struct {
+	tenant   identity.TenantID
+	command  identity.CommandID
+	audience string
+	cookie   session.CookiePolicy
+	now      func() time.Time
+	fresh    func() bool
+}
+
+func deliverPasskeySession(w http.ResponseWriter, r *http.Request, c authenticationDelivery, issued session.IssueResult, csrfToken session.CSRFToken, counterRisk, signup bool) {
+	if issued.CommitOutcome != identity.CommitOutcomeCommitted || issued.Replayed || issued.CommandID != c.command {
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
 	}
-	spec, err := out.Session.Session.Bindings()
-	now := c.Now()
-	if err != nil || spec.TenantID != s.facts.TenantID() || spec.Audience != c.Audience || spec.Authentication.Proof.Method != "passkey" || spec.Authentication.Proof.ID != auth.ProofID(s.request.CommandID) || spec.Authentication.Proof.Tenant != string(spec.TenantID) || spec.Authentication.Proof.Subject != string(spec.UserID) || spec.Authentication.Proof.Purpose != "session-issue" || spec.Authentication.Proof.Audience != c.Audience {
+	spec, err := issued.Session.Bindings()
+	now := c.now()
+	if err != nil || spec.TenantID != c.tenant || spec.Audience != c.audience || spec.Authentication.Proof.Method != "passkey" || spec.Authentication.Proof.ID != auth.ProofID(c.command) || spec.Authentication.Proof.Tenant != string(spec.TenantID) || spec.Authentication.Proof.Subject != string(spec.UserID) || spec.Authentication.Proof.Purpose != "session-issue" || spec.Authentication.Proof.Audience != c.audience {
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
 	}
-	requestDelivery(r).observeCommitted(out.Session.CommandID)
-	if spec.IssuedAt.After(now) || spec.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(s.facts.TenantID()), Subject: string(spec.UserID), Purpose: "session-issue", Audience: c.Audience, Now: now}) != nil {
+	requestDelivery(r).observeCommitted(issued.CommandID)
+	if spec.IssuedAt.After(now) || spec.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(c.tenant), Subject: string(spec.UserID), Purpose: "session-issue", Audience: c.audience, Now: now}) != nil {
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
 	}
-	csrfState, err := out.Session.Session.CSRFState().Bindings()
+	csrfState, err := issued.Session.CSRFState().Bindings()
 	if err != nil || csrfState.Binding != (session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
@@ -302,18 +318,18 @@ func signinComplete(c SigninConfig, w http.ResponseWriter, r *http.Request, s Si
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
 	}
-	attributes, err := c.SessionCookie.Attributes(spec.Remember, now, spec.IssuedAt.Add(spec.Remember.AbsoluteTTL()))
-	issued := out.Session.Cookie
-	if err != nil || issued.Name != attributes.Name || issued.Path != attributes.Path || issued.Domain != "" || !issued.Secure || !issued.HttpOnly || issued.SameSite != attributes.SameSite || issued.Partitioned || issued.Quoted || issued.RawExpires != "" || (attributes.MaxAge == 0 && (issued.MaxAge != 0 || !issued.Expires.IsZero())) || (attributes.MaxAge > 0 && (issued.MaxAge <= 0 || issued.Expires.IsZero() || issued.Expires.After(spec.IssuedAt.Add(spec.Remember.AbsoluteTTL())))) {
+	attributes, err := c.cookie.Attributes(spec.Remember, now, spec.IssuedAt.Add(spec.Remember.AbsoluteTTL()))
+	observed := issued.Cookie
+	if err != nil || observed.Name != attributes.Name || observed.Path != attributes.Path || observed.Domain != "" || !observed.Secure || !observed.HttpOnly || observed.SameSite != attributes.SameSite || observed.Partitioned || observed.Quoted || observed.RawExpires != "" || (attributes.MaxAge == 0 && (observed.MaxAge != 0 || !observed.Expires.IsZero())) || (attributes.MaxAge > 0 && (observed.MaxAge <= 0 || observed.Expires.IsZero() || observed.Expires.After(spec.IssuedAt.Add(spec.Remember.AbsoluteTTL())))) {
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
 	}
-	csrf, err := out.CSRF.Reveal()
+	csrf, err := csrfToken.Reveal()
 	if err != nil {
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
 	}
-	token, err := out.Session.Token.Reveal()
+	token, err := issued.Token.Reveal()
 	if err != nil {
 		reject(w, r, identityhttp.ErrUnavailable)
 		return
@@ -325,9 +341,13 @@ func signinComplete(c SigninConfig, w http.ResponseWriter, r *http.Request, s Si
 	attributes.Value = token
 	d := requestDelivery(r)
 	d.cookie, d.csrf = attributes.String(), csrf
-	d.render(w, r, map[string]any{"signedIn": true, "commandID": s.request.CommandID, "commitOutcome": "committed", "sessionID": spec.SessionID, "counterRisk": out.CounterRisk}, func() bool {
-		now := c.Now()
-		if !signinFresh(c, s) || spec.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: "session-issue", Audience: c.Audience, Now: now}) != nil {
+	response := map[string]any{"signedIn": true, "commandID": c.command, "commitOutcome": "committed", "sessionID": spec.SessionID, "counterRisk": counterRisk}
+	if signup {
+		response["registered"] = true
+	}
+	d.render(w, r, response, func() bool {
+		now := c.now()
+		if !c.fresh() || spec.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: "session-issue", Audience: c.audience, Now: now}) != nil {
 			return false
 		}
 		_, err := spec.Remember.Evaluate(now, spec.IssuedAt, spec.LastActivityAt, spec.Authentication.Proof.IssuedAt)
