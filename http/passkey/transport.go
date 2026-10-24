@@ -193,7 +193,11 @@ func (i *ingress) decode(r *http.Request, operation string, csrf bool) (identity
 	var facts identityhttp.NetworkFacts
 	var body requestBody
 	var key identity.IdempotencyKey
-	if r.URL.Path != "/v1/passkey/"+operation || r.URL.EscapedPath() != r.URL.Path {
+	pathOperation := operation
+	if operation == "session-update" {
+		pathOperation = "update"
+	}
+	if r.URL.Path != "/v1/passkey/"+pathOperation || r.URL.EscapedPath() != r.URL.Path {
 		return facts, body, key, failure{status: 404, code: "not_found"}
 	}
 	if r.Method != http.MethodPost {
@@ -203,7 +207,7 @@ func (i *ingress) decode(r *http.Request, operation string, csrf bool) (identity
 		return facts, body, key, identityhttp.ErrInvalidInput
 	}
 	mode := identityhttp.HeaderForbidden
-	if strings.HasSuffix(operation, "options") || operation == "update" || operation == "delete" {
+	if strings.HasSuffix(operation, "options") || pathOperation == "update" || operation == "delete" {
 		mode = identityhttp.HeaderRequired
 	}
 	var err error

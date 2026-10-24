@@ -18,6 +18,7 @@ type requestBody struct {
 	identifier, label                      string
 	discoverable                           bool
 	signup                                 bool
+	sessionOptions                         bool
 	response                               json.RawMessage
 	referenceID, name                      string
 	expectedVersion                        uint64
@@ -43,17 +44,39 @@ func decodeBody(operation string, fields map[string]json.RawMessage) (requestBod
 	allowed := map[string]bool{}
 	completion := operation == "register-verify" || operation == "signin-verify"
 	switch operation {
-	case "update", "delete":
+	case "update", "delete", "session-update":
 		for _, name := range []string{"proofID", "referenceID", "expectedVersion"} {
 			allowed[name] = true
 		}
-		if !command("proofID", &out.proofID) || !text("referenceID", &out.referenceID) {
+		if operation == "session-update" {
+			delete(allowed, "proofID")
+			allowed["phase"] = true
+			var phase string
+			if !text("phase", &phase) || (phase != "options" && phase != "complete") {
+				return invalid()
+			}
+			out.sessionOptions = phase == "options"
+			if !out.sessionOptions {
+				allowed["ceremonyID"], allowed["response"] = true, true
+				if !command("ceremonyID", &out.ceremonyID) {
+					return invalid()
+				}
+				raw := bytes.TrimSpace(fields["response"])
+				if len(raw) < 2 || len(raw) > 262144 || raw[0] != '{' || !json.Valid(raw) || !utf8.Valid(raw) {
+					return invalid()
+				}
+				out.response = fields["response"]
+			}
+		} else if !command("proofID", &out.proofID) {
+			return invalid()
+		}
+		if !text("referenceID", &out.referenceID) {
 			return invalid()
 		}
 		if _, err := identity.ParseIdentifierID(out.referenceID); err != nil {
 			return invalid()
 		}
-		if operation == "update" {
+		if operation == "update" || operation == "session-update" {
 			allowed["name"] = true
 			if !text("name", &out.name) {
 				return invalid()

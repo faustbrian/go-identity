@@ -35,6 +35,8 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		{2, `{"mode":"discoverable","userID":"untrusted"}`},
 		{4, `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","referenceID":"AAAAAAAAAAAAAAAAAAAAAg","expectedVersion":1,"name":"Personal key"}`},
 		{5, deleteWire},
+		{6, sessionUpdateOptionsWire},
+		{6, sessionUpdateCompleteWire},
 		{5, `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","referenceID":"AAAAAAAAAAAAAAAAAAAAAg","expectedVersion":18446744073709551615}`},
 	} {
 		f.Add(seed.mode, seed.wire)
@@ -53,7 +55,7 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		if err != nil {
 			return
 		}
-		operations := []string{"register-options", "register-verify", "signin-options", "signin-verify", "update", "delete"}
+		operations := []string{"register-options", "register-verify", "signin-options", "signin-verify", "update", "delete", "session-update"}
 		out, err := decodeBody(operations[int(mode)%len(operations)], fields)
 		if err == nil && (out.discoverable && out.identifier != "" || out.signup && (out.proofID != "" || out.flowID == "" || out.discoverable) || len(out.response) > 262144 || len(out.label) > 128 || len(out.identifier) > 320) {
 			t.Fatal("admitted body escaped fixed bounds/mode")

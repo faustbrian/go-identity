@@ -4,6 +4,37 @@ This nested module contributes only explicitly selected cookie-only passkey
 operations. The base HTTP module imports neither this package nor a
 PostgreSQL adapter. Omitting the feature exposes no passkey routes or metadata.
 
+## Password-free session-bound rename
+
+Select `FeatureConfig.SessionUpdate` with a `SessionUpdateConfig` borrowing the
+actual native `UpdateOptions`/`Update` owner, current session reader, retained
+session CSRF keys and shared keyed-secret limiter. This is an alternative to
+the password-proof `Update` profile; selecting both fails construction.
+Neither profile enables the other or falls back after denial.
+
+POST `/v1/passkey/update` with the current secure session cookie, exact trusted
+Origin, stored `X-CSRF-Token` and an original `Idempotency-Key`:
+
+```json
+{"phase":"options","referenceID":"<inventory reference>","expectedVersion":1,"name":"Personal key"}
+```
+
+The fresh response contains `commandID` and browser `options.publicKey`, including
+required UV and the allowed credential. Deserialize base64url fields and obtain
+the genuine browser assertion. Send the same intent with `phase:"complete"`,
+`ceremonyID` equal to that returned `commandID`, and `response` containing the
+WebAuthn assertion. Use a **different** original completion header key. Both
+phases use the same protected `identity.passkey.update` action and `rate.secret`.
+The native owner binds the original session, reference/version/name, RP, Origin
+and trusted client network; changing that intent is denied. Neither `proofID`
+nor a caller command, user, tenant, RP or credential override is accepted.
+
+Fresh completion returns safe credential metadata. Matching retries return the
+original command outcome only, never another challenge, session or synchronizer.
+Unknown commitment stays unknown. No browser device cookie, password verifier,
+private proof store, UI or session timestamp is substituted for genuine UV.
+Existing password-proof callers retain their unchanged selected contract.
+
 `FeatureConfig.Signup` explicitly selects the `mode: "signup"` registration
 variant. Options accepts only `mode` and original `flowID`, with one header-only
 `Idempotency-Key`; completion adds original `commandID`, `ceremonyID`, raw

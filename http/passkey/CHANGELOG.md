@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Explicitly select password-free credential renaming with `SessionUpdate`.
+  The update route accepts closed options/completion phases using the current
+  session, stored CSRF and genuine action-bound UV assertion. Each phase keeps
+  a distinct original header-only key; retries disclose metadata only. The
+  password-proof `Update` profile is unchanged and cannot be selected alongside it.
+
 - Explicitly select conditional presentation of discoverable signin options
   with `SigninConfig.Conditional`. The same native service supplies the optional
   capability; existing implementations remain compatible when disabled.

@@ -263,7 +263,10 @@ type FeatureConfig struct {
 	Signin       *SigninConfig
 	Inventory    *InventoryConfig
 	Update       *UpdateConfig
-	Delete       *DeleteConfig
+	// SessionUpdate explicitly selects current-session UV options/completion
+	// at the update route. It is mutually exclusive with the password profile.
+	SessionUpdate *SessionUpdateConfig
+	Delete        *DeleteConfig
 }
 
 func (UpdateConfig) Format(f fmt.State, _ rune) {
