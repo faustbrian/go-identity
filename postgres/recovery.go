@@ -67,6 +67,10 @@ func (c *Coordinator) RecoverFeatureCommand(ctx context.Context, q identity.Reco
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
 	defer cancel()
 	r, err := c.queryCommandReceipt(bounded, q, caller)
+	return c.reconcileFeatureReceipt(bounded, q, r, err, nil)
+}
+
+func (c *Coordinator) reconcileFeatureReceipt(ctx context.Context, q identity.RecoveryQuery, r identity.CommandResult, err error, check func(commandObservation) error) (identity.CommandResult, error) {
 	if r.Feature == nil {
 		if err != nil {
 			return identity.CommandResult{}, err
@@ -75,7 +79,7 @@ func (c *Coordinator) RecoverFeatureCommand(ctx context.Context, q identity.Reco
 	}
 	if err == nil && r.Outcome == identity.CommitOutcomeInProgress {
 		observed := r
-		r, err = c.recoverCommandReceipt(bounded, q)
+		r, err = c.recoverCommandReceiptChecked(ctx, q, check)
 		if r.Outcome == identity.CommitOutcomeInvalid || r.Outcome == identity.CommitOutcomeUnknown {
 			// A failed reconciliation cannot erase already observed history or
 			// prove rollback. Preserve the exact feature branch even when primary

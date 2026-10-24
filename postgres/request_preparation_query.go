@@ -82,8 +82,14 @@ func (c *Coordinator) readRequestPreparation(ctx context.Context, q identity.Rec
 	var keyVersion int64
 	var profile int16
 	var method string
+	// Missing claims and fully attached plans need no generated-output schema.
+	// Ordinary request-key consumers need not install that optional profile.
+	profileSQL := "0::smallint"
+	if !missing && len(observed.plan) == 0 {
+		profileSQL = "coalesce(j.preparation_profile,0)"
+	}
 	err := c.pool.Raw().QueryRow(ctx, `SELECT r.safe_fields,r.fingerprint,r.fingerprint_key_version,r.request_preparation_identity,n.key_identity,r.method,
-CASE WHEN octet_length(r.request_preparation_ciphertext) BETWEEN 1 AND 1048576 THEN r.request_preparation_ciphertext END,coalesce(j.preparation_profile,0)
+CASE WHEN octet_length(r.request_preparation_ciphertext) BETWEEN 1 AND 1048576 THEN r.request_preparation_ciphertext END,`+profileSQL+`
 FROM identity.request_key_mappings r JOIN identity.request_key_namespaces n USING(namespace)
 LEFT JOIN identity.identity_command_id_claims c ON c.command_id=r.command_id
 LEFT JOIN identity.commands j ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose

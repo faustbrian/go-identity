@@ -1,5 +1,33 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 14:51 UTC: mapped-original recovery frozen at ceef6bc plus12postgres
+paths; independent mapped_original_recovery_final APPROVE. Existing mapping
+and exact native authenticated decoder/current policy retain Unknown for an
+absent claim, no execution/NotCommitted grant. Generic privacy is unchanged;
+ordinary attached/no-claim input reads need no optional output-preparation
+schema. RED81301 missing API; real mapping/restart GREEN8333/0.536s. Frozen58678
+complete module0.730s and selected full PostgreSQL/race28.643s, taggedvet0,
+modverifyall. One review coverage action added three original-vs-journal
+binding mismatches omitted by RecoveryQuery: sensitivity60759 fails0.401s
+when comparison is weakened, restored final71606 PG/race1.522s and taggedvet0.
+Changed/new secret scans14.32/4.79/2.14/4.79KB plus final3.08KB testdiff clean.
+No source changed after final review; native organization adoption remains open.
+MFA native consumes public kernel13afd08/sessione952895 with authenticated pins;
+new guard integration test is local, not executed yet. Worker has heavy token.
+
+2026-10-24 14:35 UTC: bounded primary-owned recovery correction for the current
+organization consumer: real mapping-only retry reproduces Invalid/Forbidden
+instead of an explicit unresolved original outcome (worker15094). Add opt-in
+RecoverPreparedFeatureCommand using the existing current query policy, immutable
+mapping and exact registered native authenticated-input decoder. Only a proven
+original mapping plus full decoded scope may yield Unknown for an absent claim;
+absence never proves rollback or permits execution. Ordinary queries/recovery
+retain missing/denied privacy. No extra store, journal, crypto or replay owner.
+Focused owner/scope/error regression, actual PostgreSQL mapping/restart and
+retained receipt/recovery checks, native organization consumer, one complete
+independent final review and ordinary main delivery before consumer adoption.
+Primary retains local heavy token; organization worker is light-writing only.
+
 2026-10-24 14:18 UTC: kernel passkey-MFA prerequisite frozen at e952895 plus
 18 reviewed postgres paths. Independent passkey_mfa_kernel_final APPROVE,
 ordered manifest b3f3964278db57c8426ad0aaf58af2afc9c3ec7de66ca764bdf8bdc218440ad9.

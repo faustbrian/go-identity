@@ -23,13 +23,14 @@ import (
 // A trusted test participant exercises the kernel's transaction/identity seam,
 // not production OTP encryption or session admission interoperability.
 type preparedFeaturePhase struct {
-	owner          FeaturePreparationContributor
-	generated      atomic.Int64
-	restored       atomic.Int64
-	deny, fail     bool
-	declaration    CommandPlan
-	beforeGenerate func(context.Context, identity.Command, uint64) error
-	afterApply     func()
+	owner           FeaturePreparationContributor
+	generated       atomic.Int64
+	restored        atomic.Int64
+	deny, fail      bool
+	declaration     CommandPlan
+	beforeGenerate  func(context.Context, identity.Command, uint64) error
+	afterApply      func()
+	requestOriginal identity.CommandBinding
 }
 
 func (p *preparedFeaturePhase) preparationOwner() FeaturePreparationContributor {

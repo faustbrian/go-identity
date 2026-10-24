@@ -42,6 +42,11 @@ func TestRequestKeyPreparationMigrationPreservesHistory(t *testing.T) {
 type requestPreparationParticipant struct {
 	scopeFeatureParticipant
 	prepare func(context.Context, RequestKeyPreparationBinding, identity.RequestIntent) ([]byte, error)
+	restore func(context.Context, RequestKeyPreparationBinding, []byte) (identity.CommandBinding, error)
+}
+
+func (p *requestPreparationParticipant) RestoreRequestKey(ctx context.Context, b RequestKeyPreparationBinding, wire []byte) (identity.CommandBinding, error) {
+	return p.restore(ctx, b, wire)
 }
 
 func (p *requestPreparationParticipant) PrepareRequestKey(ctx context.Context, b RequestKeyPreparationBinding, intent identity.RequestIntent) ([]byte, error) {

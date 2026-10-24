@@ -1,5 +1,18 @@
 # Identity PostgreSQL
 
+## Recovery when an original request precedes its journal
+
+An opted-in native `RequestKeyRecoveryContributor` authenticates its original
+prepared-request ciphertext and returns its complete original command binding.
+`RecoverPreparedFeatureCommand` checks current query policy, actual immutable
+mapping, exact registered owner and every query field before outcome disclosure.
+A mapping with no claim returns `CommitOutcomeUnknown` and `UnknownCommitError`
+for that original command. It never proves rollback or permits another execution;
+the first invocation may still be starting. Existing journals use the same sole
+recovery owner. Generic outcome queries keep uniform missing/denied responses.
+The decoder performs no preparation or effects; native session/domain disclosure
+checks remain required. Retain the original envelope configuration and keys.
+
 ## Challenge-only MFA after an original UV passkey
 
 The exact registered `PasskeyMFAChallengeContributor` can prepare a

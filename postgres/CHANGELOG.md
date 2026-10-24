@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit original prepared-request recovery through its exact registered
+  authenticated native decoder. A real mapping before its command claim retains
+  the original unknown outcome; it never proves rollback or permits another
+  execution. Existing journals retain current authorization and sole recovery
+  ownership; generic missing/denied query behavior is unchanged.
+
 - Admit an explicitly owned passkey-primary MFA challenge profile through the
   existing journal, original-output preparation and child issuance. Require
   original browser custody, exact self-user assertion ownership and a

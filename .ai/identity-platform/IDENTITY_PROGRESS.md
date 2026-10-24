@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 14:18 UTC
+## Current TL;DR — 2026-10-24 14:51 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -34,6 +34,11 @@
   bounded parser fuzzing, with independent review. The separate organization
   worker has delivered neutral requests on main/CI and is implementing the
   actual native keyed/repeat operation facade; its HTTP consumer remains open.
+- **Organization recovery correction:** independent review approves the kernel's
+  explicit authenticated original-mapping path. Actual mapping-only retries now
+  retain Unknown without executing again; generic missing/denied privacy stays
+  unchanged. Complete selected PostgreSQL/race and new binding-mismatch cases
+  pass. Native-envelope adoption and the HTTP journey are still unfinished.
 - **Next:** implement passkey primary -> enrolled TOTP challenge -> completion
   -> authenticated session/read/logout. No session is allowed before the
   independent factor completes. A bounded organization HTTP lane is assigned

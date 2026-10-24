@@ -22,6 +22,13 @@ func (*preparedFeaturePhase) PrepareRequestKey(context.Context, RequestKeyPrepar
 	return nil, identity.UnavailableError{}
 }
 
+func (p *preparedFeaturePhase) RestoreRequestKey(_ context.Context, b RequestKeyPreparationBinding, wire []byte) (identity.CommandBinding, error) {
+	if b.Admission.CommandID != p.requestOriginal.CommandID || !bytes.Equal(wire, []byte{0x91, 0x82, 0x73}) {
+		return identity.CommandBinding{}, identity.ForbiddenError{}
+	}
+	return p.requestOriginal, nil
+}
+
 func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan, installed ...bool) {
 	t.Helper()
 	if len(installed) == 0 || !installed[0] {
@@ -78,6 +85,26 @@ func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator,
 		return value
 	}
 	before := snapshot()
+	phase.requestOriginal = s.Binding
+	recovered, err := c.RecoverPreparedFeatureCommand(ctx, q, caller, *plan.Feature, phase)
+	if err != nil || recovered.Binding != result.Binding || recovered.Outcome != result.Outcome || recovered.AuditEventID != result.AuditEventID || recovered.Feature == nil || *recovered.Feature != *result.Feature {
+		t.Fatal("mapped recovery lost actual committed receipt", err)
+	}
+	// RecoveryQuery omits these immutable fields. The new native full-binding
+	// comparison, not the ordinary query scope check, must fence substitution.
+	for _, alter := range []func(*identity.CommandBinding){
+		func(b *identity.CommandBinding) { b.PolicyID = "another-policy" },
+		func(b *identity.CommandBinding) { b.PolicyVersion++ },
+		func(b *identity.CommandBinding) { b.CorrelationID = "another-correlation" },
+	} {
+		phase.requestOriginal = s.Binding
+		alter(&phase.requestOriginal)
+		got, err := c.RecoverPreparedFeatureCommand(ctx, q, caller, *plan.Feature, phase)
+		if err == nil || got.Binding.CommandID != "" {
+			t.Fatal("native original with differing immutable journal binding disclosed")
+		}
+	}
+	phase.requestOriginal = s.Binding
 	got, err := c.QueryPreparedFeature(ctx, q, caller, *plan.Feature, phase)
 	if err != nil || got.InputBinding.PolicyVersion != 7 || got.InputBinding.IntentDigest != digest || got.InputBinding.Admission.CommandID != q.CommandID || got.InputBinding.Scope != scope || got.OutputGeneration != 1 || !bytes.Equal(got.InputCiphertext, input) || len(got.OutputCiphertext) != 17000 {
 		t.Fatal("original custody/provenance lost", err)

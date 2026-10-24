@@ -453,7 +453,9 @@ func TestRequestKeyIntegration(t *testing.T) {
 		}
 		feature := *plan.Feature
 		feature.Contributor = owner.Descriptor()
-		prepared, err := NewCoordinatorWithRequestKeys(pool, registry, conf, requestKeys)
+		preparedConfig := conf
+		preparedConfig.QueryPolicy = &policy
+		prepared, err := NewCoordinatorWithRequestKeys(pool, registry, preparedConfig, requestKeys)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -471,7 +473,7 @@ func TestRequestKeyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		restarted, err := NewCoordinatorWithRequestKeys(pool, freshRegistry, conf, requestKeys)
+		restarted, err := NewCoordinatorWithRequestKeys(pool, freshRegistry, preparedConfig, requestKeys)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -479,6 +481,7 @@ func TestRequestKeyIntegration(t *testing.T) {
 		if err != nil || again != binding || !bytes.Equal(stored, original) {
 			t.Fatal("restart lost original provenance", err)
 		}
+		testMappedFeatureRecovery(t, ctx, restarted, freshOwner, binding, original, spec.Binding)
 		// Read-only source discovery cannot allocate correlation or invoke native
 		// preparation; only its exact historical ciphertext may be observed.
 		var beforeMappings, afterMappings int

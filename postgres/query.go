@@ -183,6 +183,12 @@ func (c *Coordinator) queryCommandReceipt(ctx context.Context, q identity.Recove
 // The optional owned check narrows disclosure after the shared authorization,
 // primary read and complete historical validation. It never grants authority.
 func (c *Coordinator) queryCommandReceiptChecked(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, check func(commandObservation) error) (identity.CommandResult, error) {
+	return c.queryCommandReceiptMapped(ctx, q, caller, check, nil)
+}
+
+// Only the authenticated native request-preparation path may supply an absent
+// claim's original correlation. Generic queries preserve uniform non-disclosure.
+func (c *Coordinator) queryCommandReceiptMapped(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, check func(commandObservation) error, absent *identity.CommandResult) (identity.CommandResult, error) {
 	if ctx == nil || c == nil || c.commandRead == nil || c.queryPolicy == nil || c.maximumDuration <= 0 || c.maximumDuration > time.Minute {
 		return identity.CommandResult{}, coordinatorError()
 	}
@@ -217,6 +223,9 @@ func (c *Coordinator) queryCommandReceiptChecked(ctx context.Context, q identity
 	}
 	if !allowed {
 		return identity.CommandResult{}, identity.ForbiddenError{}
+	}
+	if errors.Is(err, pgx.ErrNoRows) && absent != nil {
+		return *absent, identity.UnknownCommitError{CommandID: q.CommandID}
 	}
 	result, receiptErr := commandReceipt(q, observed, err)
 	if result.Outcome != identity.CommitOutcomeInvalid && check != nil {
