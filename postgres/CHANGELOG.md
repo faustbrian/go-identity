@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit initial credential creation in the exact current-session additional-
+  passkey enrollment profile. Preserve original user security epochs and require
+  the canonical creation lifecycle; the historical lifecycle alias remains
+  confined to the existing password-proof profile. Session, UV and intent
+  validation remain native-owned in the same transaction.
+
 - Stage original passkey-signup session creation beside account and credential
   lifecycles in the same Work, using the command-bound session ID and existing
   deterministic event indexes. Duplicate or substituted staging aborts; account-

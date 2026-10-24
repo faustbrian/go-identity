@@ -1,5 +1,22 @@
 # Identity PostgreSQL
 
+## Additional passkey under an existing session
+
+`Work.CreatePasskeyCredential` also admits exactly
+`identity.passkey.register-verify.session-registration-v1` from the registered
+`passkey/postgres` owner. Bind the original `PasskeyCredentialCreationFields`
+and positive user/identifier/credential authority epochs. Its only lifecycle is
+`identity.passkey.create_credential`, event index zero and version 0 to 1.
+The historical `passkey.registered.v1` alias remains limited to `.native-v1`.
+
+This writer does not authenticate a session, assertion or registration. Native
+passkey orchestration must verify genuine action-bound UV and retain original
+session/CSRF, intent/expiry, current factor/directory/policy and mapping checks
+inside the same Work. Existing or disabled references conflict rather than
+being replaced; creation does not advance user security epochs. Complete native
+enrollment and reference composition are required before reporting that journey
+usable. No new migration, transaction, proof or replay owner is introduced.
+
 ## Passkey-only prospective creation
 
 After actual initial session persistence and its full current-owner checks,

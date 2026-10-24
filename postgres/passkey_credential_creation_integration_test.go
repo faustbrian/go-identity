@@ -23,13 +23,21 @@ type passkeyReferencePhase struct {
 	authority  UserAuthorityAdmission
 	mode       string
 	created    bool
+	session    bool
 }
 
 func (*passkeyReferencePhase) Descriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 }
-func (*passkeyReferencePhase) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{{Owner: "passkey", OperationID: "identity.passkey.register-verify", SchemaID: "identity.passkey.register-verify.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
+func (p *passkeyReferencePhase) FeatureOperations() []identity.FeatureOperation {
+	schema := "identity.passkey.register-verify.native-v1"
+	if p.session {
+		schema = "identity.passkey.register-verify.session-registration-v1"
+	}
+	if p.mode == "foreign-schema" {
+		schema = "identity.passkey.register-verify.session-registration-v2"
+	}
+	return []identity.FeatureOperation{{Owner: "passkey", OperationID: "identity.passkey.register-verify", SchemaID: schema, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
 }
 func (p *passkeyReferencePhase) ValidateFeatureCommand(c identity.Command, _ CommandPlan) error {
 	if c != p.command {
@@ -88,10 +96,23 @@ func passkeyReferenceFields(c identity.CredentialRef, a UserAuthorityAdmission) 
 }
 
 func TestPasskeyCredentialCreationPostgres(t *testing.T) {
+	testPasskeyCredentialCreationPostgres(t, false)
+}
+
+func TestPasskeySessionCredentialCreationPostgres(t *testing.T) {
+	testPasskeyCredentialCreationPostgres(t, true)
+}
+
+func testPasskeyCredentialCreationPostgres(t *testing.T, sessionProfile bool) {
+	t.Helper()
 	ctx, pool, repo := anonymousKernelDatabase(t)
-	for _, mode := range []string{"commit", "legacy-lifecycle", "foreign-lifecycle", "reconstructed-command", "changed-reference", "foreign-owner", "unknown-field", "duplicate", "existing-disabled", "stale-authority", "banned", "native-failure", "audit-failure", "outbox-failure", "final-check-failure"} {
+	modes := []string{"commit", "legacy-lifecycle", "foreign-lifecycle", "reconstructed-command", "changed-reference", "foreign-owner", "unknown-field", "duplicate", "existing-disabled", "stale-authority", "banned", "native-failure", "audit-failure", "outbox-failure", "final-check-failure"}
+	if sessionProfile {
+		modes = append(modes, "foreign-schema", "foreign-event-index")
+	}
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
-			p := &passkeyReferencePhase{mode: mode}
+			p := &passkeyReferencePhase{mode: mode, session: sessionProfile}
 			op := p.FeatureOperations()[0]
 			b := codecBinding()
 			var err error
@@ -146,6 +167,9 @@ func TestPasskeyCredentialCreationPostgres(t *testing.T) {
 			if mode == "foreign-lifecycle" {
 				plan.Lifecycle.EventType = "identity.passkey.remove_credential"
 			}
+			if mode == "foreign-event-index" {
+				plan.Lifecycle.EventIndex = 1
+			}
 			plan.Audits[0].EventType, plan.Audits[0].RetentionClass = "identity.passkey.create_credential", "protected"
 			seed, err := securityMutationAudit(ctx, b, 0, 1, time.Now().UTC().Truncate(time.Microsecond), "committed", plan.Audits[0].EventType, plan.SubjectType, b.RecordID, "protected", true)
 			if err != nil {
@@ -173,7 +197,7 @@ func TestPasskeyCredentialCreationPostgres(t *testing.T) {
 			} else {
 				result, err = coordinator.Commit(work, result)
 			}
-			success := mode == "commit" || mode == "legacy-lifecycle"
+			success := mode == "commit" || mode == "legacy-lifecycle" && !sessionProfile
 			if success && (err != nil || result.Outcome != identity.CommitOutcomeCommitted) {
 				t.Fatal("initial passkey reference did not commit through its owning Work", err, applyErr)
 			}

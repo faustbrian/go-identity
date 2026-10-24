@@ -66,8 +66,10 @@ func passkeyCredentialCreationMatches(s identity.FeatureCommandSpec, c identity.
 // PasskeyCredentialCreationFields unchanged in the original command and install
 // CredentialMigrationSource first. The command's record is the new reference,
 // its actor is that same existing user and its lifecycle is
-// identity.passkey.create_credential at zero-to-one. The previously supported
-// passkey.registered.v1 name remains admitted for existing composers. No other
+// identity.passkey.create_credential at zero-to-one. Session-bound additional
+// enrollment selects the exact .session-registration-v1 schema and event index
+// zero. The previously supported passkey.registered.v1 name remains admitted
+// only for existing .native-v1 composers. No other
 // operation, owner, reconstructed command or reference
 // replacement is admitted. Existing references, including disabled ones, conflict
 // without resurrection; no existing user or credential epoch is incremented.
@@ -86,8 +88,18 @@ func (w Work) CreatePasskeyCredential(ctx context.Context, owner FeatureExecutio
 	b, feature, lifecycle, err := w.FeatureScope(owner)
 	s, ok := command.Feature()
 	op := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.register-verify", SchemaID: "identity.passkey.register-verify.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	sessionOperation := op
+	sessionOperation.SchemaID = "identity.passkey.register-verify.session-registration-v1"
+	if s.Operation == sessionOperation {
+		op = sessionOperation
+	}
 	descriptor := ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 	if err != nil || !ok || s.Binding != b || s.Operation != op || feature.Operation != op || feature.Contributor != descriptor || (lifecycle.EventType != "identity.passkey.create_credential" && lifecycle.EventType != "passkey.registered.v1") || lifecycle.BeforeVersion != 0 || lifecycle.AfterVersion != 1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || !passkeyCredentialCreationMatches(s, c, a) {
+		return w.fail(ctx, invalidPasskeyCredentialCreation())
+	}
+	// The new UV-authorized session profile has one canonical lifecycle. Keep
+	// the historical alias confined to the existing password-proof profile.
+	if op == sessionOperation && lifecycle != (LifecyclePlan{EventType: "identity.passkey.create_credential", AfterVersion: 1}) {
 		return w.fail(ctx, invalidPasskeyCredentialCreation())
 	}
 	if err := w.RequireActiveUserAuthority(ctx, owner, a); err != nil {
