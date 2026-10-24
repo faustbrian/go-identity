@@ -39,6 +39,13 @@ func (s *Server) passkeyFeature(network identityhttp.NetworkConfig, f FeatureSet
 		flow := n.Signup.Flow
 		config.Signup = &passkeyhttp.SignupConfig{Network: network, Service: owner, OptionsRate: s.state.httpRate.limiter, VerificationRate: h.verification, Origin: identityhttp.Origin(flow.Origin), FlowCookie: flow.Cookie, SessionCookie: n.Issuer.Cookie, Device: h.device, ActorID: flow.ActorID, PolicyRevision: authorization.Revision(flow.PolicyVersion), Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
 	}
+	if h.config.SessionEnrollment {
+		enrollment, err := owner.SessionEnrollment()
+		if err != nil {
+			return nil, err
+		}
+		config.SessionEnrollment = &passkeyhttp.SessionEnrollmentConfig{Network: network, Sessions: state.session.reader, Service: enrollment, OptionsRate: s.state.httpRate.limiter, VerificationRate: h.verification, Origin: identityhttp.Origin(n.Flow.Origin), SessionCookie: n.Issuer.Cookie, CSRFKeys: h.csrf, PolicyRevision: revision, Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
+	}
 	if h.config.Signin {
 		config.Signin = &passkeyhttp.SigninConfig{Network: network, Service: owner, OptionsRate: s.state.httpRate.limiter, VerificationRate: h.verification, Origin: identityhttp.Origin(n.Flow.Origin), FlowCookie: n.Flow.Cookie, SessionCookie: n.Issuer.Cookie, Device: h.device, Address: h.address, Discoverable: h.config.Discoverable, DiscoverableOnly: h.config.DiscoverableOnly, Conditional: h.config.Conditional, ActorID: n.Flow.ActorID, PolicyRevision: revision, Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
 	}

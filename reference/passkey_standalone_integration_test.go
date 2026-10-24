@@ -76,9 +76,18 @@ func TestReferencePostgresPasskeySessionEnrollment(t *testing.T) {
 	}
 }
 
+func TestReferencePostgresPasskeyHTTPSessionEnrollment(t *testing.T) {
+	for _, upgrade := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
+			proveReferencePasskeyStandalone(t, upgrade, standalonePasskeyJourney{enrollment: true, enrollmentTransport: session.CredentialCookie, httpEnrollment: true})
+		})
+	}
+}
+
 type standalonePasskeyJourney struct {
 	conditional, persistent, management, httpManagement, enrollment bool
 	enrollmentTransport                                             session.CredentialKind
+	httpEnrollment                                                  bool
 }
 
 func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standalonePasskeyJourney) {
@@ -90,6 +99,7 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 	c := standalonePasskeyConfiguration(t, f.config)
 	c.HTTPPasskey.Conditional = conditional
 	c.HTTPPasskey.SessionUpdate = httpManagement
+	c.HTTPPasskey.SessionEnrollment = selected.httpEnrollment
 	if management {
 		c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie}
 	}
@@ -97,6 +107,40 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 		c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: selected.enrollmentTransport}
 	}
 	deps := reference.ReferenceDependencies{PostgreSQL: f.pool}
+	if selected.httpEnrollment && !upgrade {
+		for _, mode := range []string{"native-disabled", "bearer-native", "competing-password-profile", "no-csrf"} {
+			changed := c
+			p, e, h, s := *c.Passkey, *c.Passkey.SessionEnrollment, *c.HTTPPasskey, *c.Session
+			p.SessionEnrollment = &e
+			changed.Passkey, changed.HTTPPasskey, changed.Session = &p, &h, &s
+			switch mode {
+			case "native-disabled":
+				p.SessionEnrollment = nil
+			case "bearer-native":
+				e.Transport = session.CredentialBearer
+			case "competing-password-profile":
+				h.Registration = true
+			case "no-csrf":
+				s.CSRFKeys = nil
+			}
+			if graph, err := reference.ComposeStores(changed, deps); err == nil {
+				_ = graph.Close(ctx)
+				t.Fatal("unsupported HTTP session enrollment composed", mode)
+			}
+		}
+		// This selected branch borrows current session authority, not signup's
+		// anonymous browser admission or signed device cookie.
+		sessionOnly := c
+		sessionOnly.HTTPPreAuth = nil
+		sessionOnly.HTTPPasskey = &reference.HTTPPasskeyConfiguration{SessionEnrollment: true}
+		graph, err := reference.ComposeStores(sessionOnly, deps)
+		if err != nil {
+			t.Fatal("session-only enrollment acquired a browser/pre-auth dependency", err)
+		}
+		if err := graph.Close(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if selected.enrollment && !upgrade {
 		for _, mode := range []string{"missing-keyed-owner", "invalid-transport", "missing-csrf"} {
 			changed := c

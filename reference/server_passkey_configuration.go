@@ -46,7 +46,11 @@ type HTTPPasskeyConfiguration struct {
 	// SessionUpdate explicitly selects the current-session UV rename profile
 	// instead of password-proof Update. It requires native SessionManagement in
 	// cookie mode and the graph's original CSRF keys; no device/proof owner.
-	SessionUpdate                 bool
+	SessionUpdate bool
+	// SessionEnrollment selects genuine current-session UV enrollment instead
+	// of password-proof Registration. It requires native cookie SessionEnrollment,
+	// original CSRF and keyed/rate owners, not HTTP pre-auth or a device cookie.
+	SessionEnrollment             bool
 	InventoryRateNamespace        string
 	InventoryEmergencyMaximumKeys int
 	InventoryDegraded             func(context.Context, identityhttp.SafeRateEvent) error
@@ -100,7 +104,7 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_passkey"}
 	h := *c.HTTPPasskey
-	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete && !h.SessionUpdate || h.Update && h.SessionUpdate || h.Discoverable && !h.Signin || (h.DiscoverableOnly || h.Conditional) && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory || h.SessionUpdate) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
+	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete && !h.SessionUpdate && !h.SessionEnrollment || h.Update && h.SessionUpdate || h.Registration && h.SessionEnrollment || h.Discoverable && !h.Signin || (h.DiscoverableOnly || h.Conditional) && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory || h.SessionUpdate || h.SessionEnrollment) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
 		return nil, invalid
 	}
 	n := *c.Passkey
@@ -121,6 +125,8 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 			return nil, invalid
 		}
 		out.device = *original.device
+	}
+	if h.Registration || h.Signin || h.Signup || h.SessionEnrollment {
 		// These are the same fixed rate.verify identities as password verification
 		// when selected, so switching workflows does not mint another IP budget.
 		namespace, key := c.HTTPRate.Namespace, c.HTTPRate.IdentifierKey
@@ -149,6 +155,9 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 		return nil, invalid
 	}
 	if h.SessionUpdate && (n.SessionManagement == nil || owner.sessionManagement == nil || n.SessionManagement.Transport != session.CredentialCookie || n.KeyedOptions == nil || len(c.Session.CSRFKeys) == 0) {
+		return nil, invalid
+	}
+	if h.SessionEnrollment && (n.SessionEnrollment == nil || owner.sessionEnrollment == nil || n.SessionEnrollment.Transport != session.CredentialCookie || n.KeyedOptions == nil || len(c.Session.CSRFKeys) == 0) {
 		return nil, invalid
 	}
 	if h.Update || h.Delete || h.SessionUpdate {

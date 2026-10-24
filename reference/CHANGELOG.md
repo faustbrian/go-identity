@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Select `HTTPPasskey.SessionEnrollment` for password-free additional-key
+  enrollment through the native graph and existing registration routes. Current
+  cookie/CSRF custody authorizes genuine UV before registration; original intent,
+  expiry, shared rates and metadata-only recovery remain native-owned. Signup
+  retains its separate browser-flow profile. Password-proof Registration is
+  mutually exclusive; native-only selection enables no HTTP behavior.
+
 - Select `Passkey.SessionEnrollment` and the guarded
   `Passkeys().SessionEnrollment()` handle for additional resident credentials
   under genuine current-passkey-session UV, without password proofs. The graph

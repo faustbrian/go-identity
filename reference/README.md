@@ -70,6 +70,10 @@ For additional resident keys without password proofs, explicitly select
 compound authorization/registration options and finalization to native owners;
 it supports the passkey-only deployment and enables no HTTP enrollment profile.
 See [additional enrollment](PASSKEY.md#current-session-additional-enrollment).
+Select `HTTPPasskey.SessionEnrollment` independently for the cookie-only
+three-request registration profile. The graph supplies actual session/CSRF and
+shared rate owners; no password proof or device cookie supplies enrollment
+authority. Signup may share the route pair without sharing its flow authority.
 Select `Passkey.Deletion` independently for fresh-proof credential removal;
 it requires this graph's actual configured email/password reset recovery owner,
 not label management. `HTTPPasskey.Delete` separately enables its cookie-only

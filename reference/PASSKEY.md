@@ -558,3 +558,34 @@ credentials. Current session/CSRF remains necessary, including historical reads.
 Specs/`Bindings` are deliberate unredacted projections: do not log them. The
 profile requires known-empty MFA, resident UV/none/ES256 and self-user authority;
 enrolled-MFA, organization and other protocol profiles remain separate work.
+
+### Opt-in HTTP additional enrollment
+
+Set `HTTPPasskey.SessionEnrollment=true` alongside native cookie-mode
+`Passkey.SessionEnrollment`, `Passkey.KeyedOptions` and `Session.Passkey`.
+Missing native/CSRF ownership, bearer native mode and simultaneous password-proof
+`HTTPPasskey.Registration` fail construction. This branch needs no HTTP pre-auth,
+browser-device cookie or password verifier; selecting Signup/Signin separately
+retains their original browser requirements. The same shared options and
+verification rate owners serve all selected registration variants.
+
+With the current secure cookie, exact Origin and stored `X-CSRF-Token`:
+
+1. POST `/v1/passkey/register-options` with an original header-only key and
+   `{"mode":"session","phase":"assertion","label":"Additional key"}`.
+   Obtain a genuine UV assertion from the session's authenticating key.
+2. POST the same endpoint with a **distinct** original header key, unchanged
+   label, `mode:"session"`, `phase:"registration"`, the original A command as
+   `ceremonyID` and the assertion as `response`. Obtain resident registration
+   from the fresh returned creation options. B retains A's original expiry.
+3. POST `/v1/passkey/register-verify` with unchanged `mode`/label, one original
+   canonical C `commandID`, B command as `ceremonyID` and registration `response`.
+   This phase forbids `phase`, `proofID` and `Idempotency-Key`.
+
+Retries retain original metadata without new challenges, credentials, cookies
+or synchronizers. Current session/CSRF and unchanged native intent remain
+mandatory. Native-only selection advertises no session-enrollment wire variant.
+`TestReferencePostgresPasskeyHTTPSessionEnrollment` exercises genuine HTTPS
+signup, all three phases/retries, two-key inventory, either-key signin/read/logout
+and revoked original-session retry denial on fresh/populated PostgreSQL. It is
+not browser/authenticator interoperability or full M16 qualification.

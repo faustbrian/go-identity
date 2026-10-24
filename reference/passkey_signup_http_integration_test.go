@@ -394,7 +394,115 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	} else if c.Passkey.SessionManagement != nil {
 		proveReferenceSessionRename(t, ctx, features, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle)
 	}
-	if c.Passkey.SessionEnrollment != nil {
+	var additionalKey *ecdsa.PrivateKey
+	var additionalID []byte
+	var checkEnrollmentAfterLogout func()
+	if c.HTTPPasskey.SessionEnrollment {
+		label := "HTTP additional passkey"
+		intent := map[string]any{"mode": "session", "phase": "assertion", "label": label}
+		csrf := issued.header.Get("X-CSRF-Token")
+		for _, denied := range []struct{ csrf, origin string }{{strings.Repeat("A", 43), origin}, {csrf, "https://foreign.example"}} {
+			got := call("/v1/passkey/register-options", intent, "denied-enrollment-options", issued.cookies, denied.csrf, denied.origin)
+			if got.code != 403 {
+				t.Fatal("HTTP enrollment ignored original session CSRF/Origin", got.code)
+			}
+		}
+		options := call("/v1/passkey/register-options", intent, "http-enrollment-A", issued.cookies, csrf, origin)
+		var assertion struct {
+			CommandID string          `json:"commandID"`
+			Replayed  bool            `json:"replayed"`
+			Options   json.RawMessage `json:"options"`
+		}
+		if options.code != 200 || json.Unmarshal(options.body, &assertion) != nil || assertion.CommandID == "" || assertion.Replayed || len(assertion.Options) == 0 || len(options.cookies) != 0 || options.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("HTTP enrollment genuine UV options", options.code)
+		}
+		retry := call("/v1/passkey/register-options", intent, "http-enrollment-A", issued.cookies, csrf, origin)
+		var replay = assertion
+		replay.Options = nil
+		if retry.code != 200 || json.Unmarshal(retry.body, &replay) != nil || !replay.Replayed || replay.CommandID != assertion.CommandID || len(replay.Options) != 0 {
+			t.Fatal("HTTP enrollment A retry renewed challenge", retry.code)
+		}
+		challenge := referencePasskeyChallenge(t, ctx, func(ctx context.Context, transfer func(context.Context, []byte) error) error {
+			return transfer(ctx, assertion.Options)
+		})
+		counter := uint32(1)
+		if c.Passkey.SessionManagement != nil {
+			counter++
+		}
+		intent["phase"], intent["ceremonyID"], intent["response"] = "registration", assertion.CommandID, json.RawMessage(referencePasskeyAssertion(t, private, id, handle, challenge, counter))
+		intent["label"] = "Changed original enrollment"
+		denied := call("/v1/passkey/register-options", intent, "http-enrollment-B-tampered", issued.cookies, csrf, origin)
+		if denied.code != 403 {
+			t.Fatal("HTTP enrollment changed original intended label", denied.code)
+		}
+		intent["label"] = label
+		authorized := call("/v1/passkey/register-options", intent, "http-enrollment-B", issued.cookies, csrf, origin)
+		var registration = assertion
+		if authorized.code != 200 || json.Unmarshal(authorized.body, &registration) != nil || registration.CommandID == assertion.CommandID || registration.Replayed || len(registration.Options) == 0 || len(authorized.cookies) != 0 || authorized.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("HTTP enrollment genuine registration options", authorized.code)
+		}
+		replay.Options = nil
+		retry = call("/v1/passkey/register-options", intent, "http-enrollment-B", issued.cookies, csrf, origin)
+		if retry.code != 200 || json.Unmarshal(retry.body, &replay) != nil || !replay.Replayed || replay.CommandID != registration.CommandID || len(replay.Options) != 0 {
+			t.Fatal("HTTP enrollment B retry renewed registration", retry.code)
+		}
+		challenge = referencePasskeyChallenge(t, ctx, func(ctx context.Context, transfer func(context.Context, []byte) error) error {
+			return transfer(ctx, registration.Options)
+		})
+		additionalKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		additionalID = make([]byte, 32)
+		if _, err := rand.Read(additionalID); err != nil {
+			t.Fatal(err)
+		}
+		command, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		completion := map[string]any{"mode": "session", "label": label, "commandID": command, "ceremonyID": registration.CommandID, "response": json.RawMessage(referencePasskeyRegistration(t, additionalKey, additionalID, challenge))}
+		if denied := call("/v1/passkey/register-verify", completion, "", issued.cookies, strings.Repeat("A", 43), origin); denied.code != 403 {
+			t.Fatal("HTTP enrollment completion ignored original CSRF", denied.code)
+		}
+		completed := call("/v1/passkey/register-verify", completion, "", issued.cookies, csrf, origin)
+		var result struct {
+			Registered bool                            `json:"registered"`
+			CommandID  identity.CommandID              `json:"commandID"`
+			Replayed   bool                            `json:"replayed"`
+			Credential *passkeyhttp.CredentialMetadata `json:"credential"`
+		}
+		if completed.code != 200 || json.Unmarshal(completed.body, &result) != nil || !result.Registered || result.CommandID != command || result.Replayed || result.Credential == nil || result.Credential.Label != label || result.Credential.Version != 1 || len(completed.cookies) != 0 || completed.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("HTTP enrollment atomic second credential", completed.code)
+		}
+		retry = call("/v1/passkey/register-verify", completion, "", issued.cookies, csrf, origin)
+		result.Credential = nil
+		if retry.code != 200 || json.Unmarshal(retry.body, &result) != nil || !result.Replayed || result.CommandID != command || result.Credential != nil {
+			t.Fatal("HTTP enrollment C retry disclosed fresh credential", retry.code)
+		}
+		r, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/v1/passkey/list", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Host = strings.TrimPrefix(origin, "https://")
+		r.AddCookie(issued.cookies[0])
+		got, err := client.Do(r)
+		if err != nil {
+			t.Fatal("HTTP second-key inventory request")
+		}
+		wire, readErr := io.ReadAll(io.LimitReader(got.Body, 16385))
+		closeErr := got.Body.Close()
+		var listed passkeyhttp.InventoryResponse
+		if readErr != nil || closeErr != nil || len(wire) > 16384 || got.StatusCode != 200 || json.Unmarshal(wire, &listed) != nil || len(listed.Credentials) != 2 {
+			t.Fatal("HTTP second credential was not durably listed", got.StatusCode)
+		}
+		checkEnrollmentAfterLogout = func() {
+			denied := call("/v1/passkey/register-verify", completion, "", issued.cookies, csrf, origin)
+			if denied.code != 401 || len(denied.cookies) != 0 || denied.header.Get("X-CSRF-Token") != "" {
+				t.Fatal("revoked original session recovered enrollment", denied.code)
+			}
+		}
+	} else if c.Passkey.SessionEnrollment != nil {
 		counter := uint32(1)
 		if c.Passkey.SessionManagement != nil {
 			counter++
@@ -405,58 +513,69 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	if checkUpdateAfterLogout != nil {
 		checkUpdateAfterLogout()
 	}
-	flowID, cookies = flow("passkey")
-	assertionOptions := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, "reference-http-signup-signin", cookies, "", origin)
-	var assertionProtocol struct {
-		Mediation string `json:"mediation"`
-		PublicKey struct {
-			Challenge string `json:"challenge"`
-		} `json:"publicKey"`
+	if checkEnrollmentAfterLogout != nil {
+		checkEnrollmentAfterLogout()
 	}
-	if assertionOptions.code != 200 || json.Unmarshal(assertionOptions.body, &created) != nil || json.Unmarshal(created.Options, &assertionProtocol) != nil {
-		t.Fatal("fresh HTTP signup-key signin options", assertionOptions.code)
+	signinKey := func(private *ecdsa.PrivateKey, id []byte, count uint32) {
+		t.Helper()
+		flowID, cookies = flow("passkey")
+		key := "reference-http-signup-signin-" + flowID
+		assertionOptions := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, key, cookies, "", origin)
+		var assertionProtocol struct {
+			Mediation string `json:"mediation"`
+			PublicKey struct {
+				Challenge string `json:"challenge"`
+			} `json:"publicKey"`
+		}
+		if assertionOptions.code != 200 || json.Unmarshal(assertionOptions.body, &created) != nil || json.Unmarshal(created.Options, &assertionProtocol) != nil {
+			t.Fatal("fresh HTTP signup-key signin options", assertionOptions.code)
+		}
+		if c.HTTPPasskey.Conditional && assertionProtocol.Mediation != "conditional" || !c.HTTPPasskey.Conditional && assertionProtocol.Mediation != "" {
+			t.Fatal("signin options disagree with selected presentation")
+		}
+		optionsRetry := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, key, cookies, "", origin)
+		var original struct {
+			CommandID string          `json:"commandID"`
+			Replayed  bool            `json:"replayed"`
+			Options   json.RawMessage `json:"options"`
+		}
+		if optionsRetry.code != 200 || json.Unmarshal(optionsRetry.body, &original) != nil || !original.Replayed || original.CommandID != created.CommandID || len(original.Options) != 0 || len(optionsRetry.cookies) != 0 {
+			t.Fatal("signin options retry disclosed a new challenge or authentication", optionsRetry.code)
+		}
+		command, _ = identity.NewCommandID()
+		signinBody := map[string]any{"mode": "discoverable", "flowID": flowID, "commandID": command, "ceremonyID": created.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, private, id, handle, assertionProtocol.PublicKey.Challenge, count))}
+		signin := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
+		if signin.code != 200 || len(signin.cookies) != 1 || signin.header.Get("X-CSRF-Token") == "" {
+			t.Fatal("signup key fresh HTTP signin", signin.code)
+		}
+		signinReplay := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
+		if signinReplay.code < 400 || len(signinReplay.cookies) != 0 || signinReplay.header.Get("X-CSRF-Token") != "" {
+			t.Fatal("signin replay redelivered authentication", signinReplay.code)
+		}
+		again := read(signin)
+		if !again.Authenticated {
+			t.Fatal("new HTTP passkey session inactive")
+		}
+		spec, err := again.Session.Bindings()
+		if err != nil || spec.UserID != record.UserID {
+			t.Fatal("signup key resolved different identity")
+		}
+		if spec.Remember.Choice() != choice || (signin.cookies[0].MaxAge > 0) != persistent || !persistent && !signin.cookies[0].Expires.IsZero() || spec.Remember.AbsoluteTTL() > c.HTTPPreAuth.Lifetime.AbsoluteTTL {
+			t.Fatal("signin presentation changed original remember choice or expiry")
+		}
+		proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, signin.cookies[0].Value, signin.header.Get("X-CSRF-Token"), func() bool { return read(signin).Authenticated })
 	}
-	if c.HTTPPasskey.Conditional && assertionProtocol.Mediation != "conditional" || !c.HTTPPasskey.Conditional && assertionProtocol.Mediation != "" {
-		t.Fatal("signin options disagree with selected presentation")
-	}
-	optionsRetry := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, "reference-http-signup-signin", cookies, "", origin)
-	var original struct {
-		CommandID string          `json:"commandID"`
-		Replayed  bool            `json:"replayed"`
-		Options   json.RawMessage `json:"options"`
-	}
-	if optionsRetry.code != 200 || json.Unmarshal(optionsRetry.body, &original) != nil || !original.Replayed || original.CommandID != created.CommandID || len(original.Options) != 0 || len(optionsRetry.cookies) != 0 {
-		t.Fatal("signin options retry disclosed a new challenge or authentication", optionsRetry.code)
-	}
-	command, _ = identity.NewCommandID()
 	count := uint32(1)
 	if c.Passkey.SessionManagement != nil {
-		count = 2
+		count++
 	}
-	if c.Passkey.SessionEnrollment != nil {
-		// Enrollment consumes one original-key UV and its helper proves a fresh
-		// original-key signin before returning to this original HTTP session.
+	if c.HTTPPasskey.SessionEnrollment {
+		count++
+	} else if c.Passkey.SessionEnrollment != nil {
 		count += 2
 	}
-	signinBody := map[string]any{"mode": "discoverable", "flowID": flowID, "commandID": command, "ceremonyID": created.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, private, id, handle, assertionProtocol.PublicKey.Challenge, count))}
-	signin := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
-	if signin.code != 200 || len(signin.cookies) != 1 || signin.header.Get("X-CSRF-Token") == "" {
-		t.Fatal("signup key fresh HTTP signin", signin.code)
+	signinKey(private, id, count)
+	if additionalKey != nil {
+		signinKey(additionalKey, additionalID, 1)
 	}
-	signinReplay := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
-	if signinReplay.code < 400 || len(signinReplay.cookies) != 0 || signinReplay.header.Get("X-CSRF-Token") != "" {
-		t.Fatal("signin replay redelivered authentication", signinReplay.code)
-	}
-	again := read(signin)
-	if !again.Authenticated {
-		t.Fatal("new HTTP passkey session inactive")
-	}
-	spec, err := again.Session.Bindings()
-	if err != nil || spec.UserID != record.UserID {
-		t.Fatal("signup key resolved different identity")
-	}
-	if spec.Remember.Choice() != choice || (signin.cookies[0].MaxAge > 0) != persistent || !persistent && !signin.cookies[0].Expires.IsZero() || spec.Remember.AbsoluteTTL() > c.HTTPPreAuth.Lifetime.AbsoluteTTL {
-		t.Fatal("signin presentation changed original remember choice or expiry")
-	}
-	proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, signin.cookies[0].Value, signin.header.Get("X-CSRF-Token"), func() bool { return read(signin).Authenticated })
 }
