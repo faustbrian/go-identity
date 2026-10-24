@@ -1,6 +1,30 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 04:36 UTC
+## Current TL;DR — 2026-10-24 05:34 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  All 67 units remain required; no additional full-unit qualification is claimed.
+- **New native behavior delivered:** a current passkey session obtains an
+  action-bound genuine UV assertion and renames a credential without a password
+  proof. Updated inventory, original-session read/logout and a new passkey
+  signin/read/logout work. Consumption, metadata, current authority, protected
+  risk and required audit/lifecycle commit together; retries reveal metadata only.
+- **Delivery:** independently approved `go-passkey@9840ecf` is on main with
+  green Required CI `40066627732`. Normal-public-dependency PostgreSQL/race
+  acceptance and retained signin/password-proof management pass (132.182s);
+  module race (1.372s), tagged vet and dependency verification pass. Its
+  authenticated downloaded public module matches all ten changed files and
+  passes the complete native journey, cookie CSRF and both phases' before/after
+  COMMIT recovery under PostgreSQL/race (24.403s), without replacements.
+- **Already delivered:** passkey-first HTTP signup, standalone password-free
+  Reference startup and ordinary/conditional discoverable signin (below).
+- **Next/remaining:** opt-in HTTP/Reference composition for the new native
+  session-assertion rename profile. Passkey-only deletion/recovery, additional
+  enrollment and other required variants remain; full M16, other milestones and
+  unit/release qualification are open. This is backend behavior, not browser UI
+  or browser/authenticator interoperability certification. No user decision is needed.
+
+## Retained checkpoint — 2026-10-24 04:36 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional full-unit qualification is claimed.

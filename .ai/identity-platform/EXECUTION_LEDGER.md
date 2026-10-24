@@ -1,5 +1,96 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 05:34 UTC: native passkey-session assertion rename DELIVERED as a
+coherent prerequisite to selected HTTP/Reference integration, not full M16.
+go-passkey9840ecf94acdfd479d9361e6187717e5906bf0c0 is origin/main, exact
+Required40066627732 SUCCESS. Independent passkey_session_management_final
+APPROVE/no findings at b9b8df7 plus ten-path candidate1d9ee8863e7e7022466f6235bfd74eaefa1b57250b9a19be757d7b5447e63c3d.
+Actual current passkey session -> keyed original action-bound UV options ->
+genuine assertion/atomic rename -> inventory -> original read/logout -> new
+signin/read/logout works without a password proof. Normal public-pin PG/race
+cohort132.182s includes changed intent/custody, current-owner/expiry/UV/counter,
+cookie synchronizer, genuine sibling session, metadata-only retry, all four
+options/completion before/after COMMIT cuts, rollback/race and retained old
+password-proof management/signin. Module race1.372s, tagged vet exit0, modverify
+and changed-file secret/diff checks pass. A network-intent regression was
+captured before binding network into the original commitment; missing text
+privacy was RED before its explicit sentinel methods. Earlier expanded runs
+also exposed fixture-only double migration/global logout-count errors and
+different-body/same-key test conflicts; these were corrected, not hidden or
+treated as passing product evidence.
+Authenticated public adapterv0.0.0-20261024053155-9840ecf94acd,
+Sumh1:ukSOWlyhYtp9HYbEseMsy9BxuBmfeVdABcR83QqJUDk=, Origin9840ecf,
+matches all ten changed archive files. Its untouched downloaded module passes
+native full journey/cookie/all four COMMIT-cut PG/race24.403s and modverify,
+without replacements. Consumed prerequisites: independently approved public
+rootb9b8df7/Required40065676972; protocol05c2d39/Required40064404017; identity
+session/MFA37d8da3/Required40064602320 (preceding original admissioncfaa444,
+Required40064031877). Source-compatible exact changed public files matched.
+Current delivered HTTP/Reference521583c still exposes the previous selected
+profiles; it does not expose this new session-assertion rename yet. Next primary
+work is its explicit native/reference/HTTP selection and genuine fresh/upgraded
+consumer path, preserving existing password-proof APIs. Deletion/recovery,
+additional enrollment, MFA/org variants and release qualification remain open.
+Whole goal~25%,11/39 closed; all67 remain required. No implementation worker active.
+
+2026-10-24 04:55 UTC: concrete native risk integration correction: canonical
+signin-options is Authentication/BeforeCredential, while current-session update
+preparation needs existing CredentialMutation/ReserveWithCommand counters.
+Use identity.passkey.update / identity.passkey.update.options-v1 for the new
+options phase; completion remains identity.passkey.update.assertion-v1. Same
+exact self-human/lifecycle/opaque assertion rules. This supersedes only the new
+options operation chosen at04:42/cfaa444 prerequisite, before native adoption;
+no released signin/profile changes or invented identifier/device/risk authority.
+Protocol worker updates expectation first, capturing new schema RED; primary
+does likewise for MFA, then rechecks affected boundaries/final review. The
+previous independently reviewed cfaa444 remains traceable, not misrepresented
+as final amended-profile proof. Root session-update privacy RED missing carriers,
+then focused Green0.284s; native workflow still unfinished.
+
+2026-10-24 04:46 UTC: native update prerequisites under implementation.
+Session public derivation RED missing OriginalPasskeySessionAdmission, then
+focused Green0.233s. MFA genuine Work RED new profiles admitted=false/want=true;
+after exact profile/lifecycle guards, complete retained/new scope PG/race1.564s,
+invalid/cancelled invocation race1.272s and tagged vet pass. Two initial negative
+cases failed fixture setup, not product behavior; corrected to structurally valid
+0->1 wrong rename lifecycle and an unregistered contributor instance. No scope
+or security check relaxed. Session final race/vet/modverify pending. Protocol
+worker has its genuine missing-profile RED; current implementation unverified.
+Neither prerequisite nor the full management journey is delivered yet.
+
+2026-10-24 04:42 UTC: frozen next M16 profile: current passkey session -> keyed
+action-bound UV assertion options -> genuine assertion and atomic label rename
+-> updated inventory -> same session/new signin/read/logout. Keep password-proof
+APIs unchanged. Reuse the opaque WebAuthn AssertionTransition directly as fresh
+proof in protected Work; no separately issued signed-proof/replay store is needed
+for this inline action. This refines the earlier mapping recommendation, not
+its requirement for cryptographic freshness and current authority. Options bind
+the original session/version, target reference/metadata version/name, RP/origin,
+policy and request key; completion cannot alter that intent. Browser cookies
+add original CSRF custody. Same-transaction protocol consumption/counter update,
+metadata, current directory/session/factor/passkey/policy fences, risk, audit and
+rename lifecycle; rollback/replay/expiry/ambiguity reveal no renewed authority.
+Selected native profiles: options identity.passkey.signin-options with schema
+identity.passkey.signin-options.update-v1; completion identity.passkey.update
+with schema identity.passkey.update.assertion-v1 (schema version1, passkey owner,
+required record). Options lifecycle0->1; completion metadata versionN->N+1 emits
+identity.passkey.rename_credential. Unselected legacy protocol profiles unchanged.
+Primary owns identity session/MFA admission, native go-passkey management/root
+contracts, HTTP/Reference and all pins/Git/progress. Separate worker
+passkey_update_assertion owns only go-webauthn/postgres assertion participant
+profile/tests/docs/changelog, consuming committed rooted89b24, kernel46d7a68,
+current adapterbdbb114. No root protocol/crypto/schema/authority/transaction change.
+Native proof baseline go-passkeyea2adfd, identityf75bb72 includes public standalone
+and conditional journeys; upstream real assertion participation is already proven.
+Focused checks: genuine PG assertion options/finish/rollback/commit-failure,
+foreign parent/profile/target/context denial, unchanged signin; native fresh and
+upgrade rename under current passkey session, bad/stale/foreign/changed-input/UV/
+expired/consumed proof, current-owner withdrawal, keyed metadata-only retry,
+ambiguous commit recovery, inventory/read/logout; affected module race/vet,
+public consumers, independent final diff and exact main Required CI.
+Deletion/recovery, extra enrollment and completed-MFA/org variants stay separate
+required successors; this profile does not close full M16 or any unit qualification.
+
 2026-10-24 04:36 UTC: finite conditional HTTP/Reference consumer profile CLOSED.
 Reference521583cd0b7599b9fcaacb22fe42b60afe531885 is origin/main with exact
 Required40062775128 SUCCESS; reviewed HTTP60bf9b7/Required40062390163 also green.
