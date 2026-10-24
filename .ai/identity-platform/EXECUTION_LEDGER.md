@@ -1,5 +1,102 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 12:08 UTC: next dependency-ready native lane passkey_ed25519_native
+owns go-passkey/postgres/** on16ac977 main; primary owns root docs, Reference/
+HTTP integration/pins and Git. Consume committed/proven public protocol4801d79
+at v0.0.0-20261024120438-4801d794c5dc (original native + downloaded-public
+registration/enrollment/removal PG/race evidence above). Finite native outcome:
+real prospective Ed25519 signup/session -> discovery -> genuine current-key UV
+second-key enrollment/rename/removal -> old-session denial -> surviving selected
+key signin/original removal recovery/read/logout; protect last usable selected
+key. Nil/default ES stays compatible; explicit unique ordered ES/Ed lists only.
+Require RED actual constructor/workflow, original selected profile binding,
+mixed algorithm remaining-key eligibility, unsupported/unselected denial and
+affected atomic/replay/recovery regression; known-empty MFA and all authority/
+UV/backup/counter/remember policies unchanged. No private verifier, weaker proof,
+schema/history or root API rewrite. One complete independent final-diff review
+before commit/public pin adoption. Worker may borrow this bounded primary Go
+cache runner without deleting it; owns its isolated PG, never existing services.
+Heavy token transfers to worker on dispatch; primary does light progress/docs
+only until terminal return. Root/Reference consumer composition follows delivery.
+
+2026-10-24 12:07 UTC: browser slice22462f7557c43cee0d2163743373b6171d27e489
+is exact main/Required40092060526 SUCCESS; independent passkey_browser_final
+APPROVE complete4path source. Public Reference
+v0.0.0-20261024115859-22462f7557c4 Sumh1:eYrB7t1TKxEURTebeP1lw2MsXlaTrqh9tCy6ode0Nc8=
+matches all4 changed archive files. Untouched public19564 passes actual internal
+and USB fresh HTTPS/PG/race40.237s plus modverifyall. Local all4 fresh/upgrade
+52.546s, retained standalone/HTTPremoval26.773s, taggedvet0 retained. Virtual
+device proof is delivered; physical hardware/conditional-autofill not claimed.
+
+Protocol prerequisite4801d794c5dc182f8efcec8157997024294f4f7c is exact
+go-webauthn origin/main/Required40092451675 SUCCESS; independent
+passkey_ed25519_protocol_final APPROVE all19 paths. Worker original RED75854,
+GREEN18099, new-profile66787, final63046 and race83483 outputs retained in its
+native report; no default API/schema/history/root/pin changed. Final same-Work
+enrollment/removal race9.303/9.547s, default/new native PG, unit/vet/modverify pass.
+Public protocol v0.0.0-20261024120438-4801d794c5dc Sum
+h1:Zi/s2nNxfD+uQf0vI6X2Jmm78EDM4glQqM00hqjnYvc= matches all17 changed nested files.
+Untouched public6187 exit0: genuine Ed registration PG/race1.987s, mixed
+enrollment9.264s/removal9.845s and modverifyall; owned public DB/roles removed.
+Native go-passkey still rejects selected Ed profiles; protocol delivery is not
+its adoption or M16 closure. Heavy token PRIMARY; all worker resources removed.
+
+2026-10-24 11:57 UTC: final5612 all four amended-source browser partitions
+PASS PG/race52.546s (internal/USB x fresh/populated). Retained standalone/removal,
+taggedvet/modverify continue in the same live set-e handle. No source finding
+from independent passkey_browser_final; final evidence disposition is pending.
+
+2026-10-24 11:54 UTC: browser Reference95319 terminal PASS, internal/fresh
+actual HTTPS/PG/race20.706s. Chrome156.0.8078.48@d0c02bfad08ec92a6ffcf989e53cd995e6381a4c,
+Node26.10.0; private credential keys remain inside CTAP devices. Initial57081
+setup failed before signup. Diagnostic43629 exposed fixture stderr-buffer race;
+60759 isolated Chromium's one-internal-device restriction. Final driver uses a
+USB recovery device, discarded stderr and bounded setup-stage reporting; no
+production/crypto/origin/security relaxation. Remaining three browser partitions,
+retained tests/vet, final independent passkey_browser_final review and delivery
+remain pending. Scoped6.60KB+20.95KB secrets/diffcheck pass. Heavy token belongs
+to passkey_ed25519_protocol for its native RED/GREEN; PRIMARY runs no Go meanwhile.
+Worker meaningful RED captured against unchanged authenticated public root:
+RegistrationCreation rejects genuine Ed25519 creation. Primary inspected the
+shared profile/member guard and passkey-only retained replay changes; ownership
+fits, no root/verifier/schema/pin change. Unit/full M16 remains open; whole~25%.
+
+2026-10-24 11:46 UTC: independent dependency-ready protocol lane: worker
+passkey_ed25519_protocol owns go-webauthn/postgres/** only on ac9b461 main;
+no root/shared/Reference edits or Git operations. Consume committed public
+WebAuthn verifier's existing ES256/Ed25519 transitions and kernel participant
+contracts. Required protocol baseline616-617 names both algorithms. Finite
+outcome: generic compound passkey registration/signup/assertion/enrollment/
+removal participants preserve and finalize genuinely verified Ed25519 state,
+including mixed supported allowlists, without reinterpreting crypto, widening
+unselected profiles or changing histories. Keep nil/default ES256 behavior and
+RS256 exclusion. Root has Ed25519; actual adapter guards currently deny it.
+Require meaningful pre-fix RED, real root-verified Ed25519 PostgreSQL participant
+proof, wrong/unselected algorithm denial and affected atomic/recovery regression.
+No private verifier/store or caller-assembled proof. Primary reviews boundary,
+tests, public-contract alignment and integrates committed/proven protocol before
+native passkey algorithm adoption. Worker codes/reads only until PRIMARY releases
+the serialized heavy token. One complete final-diff review before owner delivery.
+
+2026-10-24 11:44 UTC: freeze next M16 consumer proof: primary owns
+reference/passkey_browser_integration_test.go, the standalone fixture's explicit
+origin/consumer seam, affected Reference docs/changelog and live notes. Use
+committed Reference9a1af93, native16ac977, protocolac9b461 and existing public pins.
+One actual isolated Chromium origin, HTTPS/cookies/CSRF, CTAP2.1 resident UV keys
+in internal and USB transport profiles: signup -> add second key -> rename ->
+remove original -> old-session denial -> surviving-key discovery signin ->
+original removal recovery -> last-key denial -> read/logout. Original response
+JSON comes from navigator.credentials and browser conversion, not Go signing;
+all HTTP/domain/persistence owners stay real. Use fresh/populated PostgreSQL,
+owned TLS certificate/SPKI trust, isolated browser profile and loopback DNS only.
+No UI/physical-hardware/conditional-autofill claim, Ed25519 or enrolled MFA in this
+slice; those requirements remain open. Existing native browser harness supplies
+bounded process/pipe cleanup; browser driver changes need their own bounded
+failure cleanup. Focus selected browser journey + retained standalone/HTTP
+removal tests, tagged vet, scoped secrets and one complete independent review;
+deliver main/Required CI and normal published-consumer proof. Test additions
+characterize delivered behavior; no invented TDD-red claim. Heavy token PRIMARY.
+
 2026-10-24 11:35 UTC: complete HTTPReference session-removal slice delivered as
 9a1af93206b5e43fccf7b3e89afbdb3885974d9b, exact origin/main;
 Required40090406076 SUCCESS. Independent session_removal_http_reference_final

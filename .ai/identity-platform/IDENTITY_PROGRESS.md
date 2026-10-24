@@ -1,6 +1,32 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 11:35 UTC
+## Current TL;DR — 2026-10-24 12:10 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  The selected ES256 passkey backend lifecycle is delivered. Full M16 still
+  requires its other assigned profiles; all 67 units retain final qualification.
+- **New browser proof delivered:** isolated Chromium drives actual HTTPS,
+  secure cookies, Origin and native WebAuthn JSON through signup -> second key
+  -> rename -> removal -> invalidated-session denial -> surviving-key signin
+  -> original recovery -> last-key denial -> read/logout. No application signer
+  or domain-store double supplies this consumer path.
+- **On main:** independently approved Reference `22462f7`, Required CI
+  `40092060526` green. Internal/USB virtual CTAP2.1 x fresh/populated-upgrade
+  PostgreSQL/race passes (52.546s), retained journeys (26.773s) and tagged vet pass.
+  The authenticated public module matches all four changed files and passes both
+  fresh browser transports (40.237s), with dependencies verified. Physical-device
+  certification and conditional-autofill interaction are not claimed.
+- **Ed25519 prerequisite delivered:** reviewed protocol `go-webauthn@4801d79`
+  is main/Required-CI green. Its genuine Ed/mixed participant tests, binding
+  denials, defaults and same-Work race checks pass. Downloaded-public registration,
+  enrollment and removal also pass PostgreSQL/race (1.987s/9.264s/9.845s).
+- **Current/next:** a dependency-ready worker implements the native Ed25519
+  passkey lifecycle against that committed/proven protocol. Reference/HTTP
+  adoption follows native delivery. Enrolled-MFA compatibility, remaining
+  interoperability and other platform milestones remain open. No user decision
+  is needed; hosted Required does not substitute for runtime/release qualification.
+
+## Retained checkpoint — 2026-10-24 11:35 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required. The passkey milestone has gained complete
@@ -2595,7 +2621,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account enrollment, identified/identifier-free signin, inventory and password-proof management are delivered. Standalone passkey-only signup/discovery, conditional presentation, current-passkey-session UV rename, additional-key enrollment and safe removal/recovery are native/HTTP/Reference integrated. Latest removal native `16ac977`, Reference `23bcc59`, HTTP `e0cc14f` and HTTPReference `9a1af93` are reviewed/main/CI green. Actual downloaded-public fresh/populated HTTPS/PostgreSQL/race19.145s proves signup/add/remove, source-session denial, surviving-key signin/recovery, last-key protection/read/logout. The earlier rename public-run signin-options503 remains unexplained; later unchanged probes are not a claimed fix. Remaining assigned profiles/interoperability and full qualification keep the row open, pending a bounded closure assessment. |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Selected ES256/known-empty-MFA lifecycle delivered: existing-account and standalone signup, identified/discoverable signin, conditional options, inventory, additional enrollment, rename, safe removal and original recovery. Native/HTTP/Reference latest `16ac977`/`e0cc14f`/`9a1af93` reviewed/main/CI green. Browser consumer `22462f7` adds actual HTTPS/secure-cookie/native-JSON journeys with internal/USB virtual CTAP2.1 on fresh/populated PG/race52.546s; downloaded-public both-transports40.237s. Protocol Ed25519 prerequisite `4801d79` is reviewed/main/CI/public-PG proven; native adoption is active, not delivered yet. Enrolled-MFA, remaining algorithm/interoperability profiles and unit qualification keep full M16 open. Physical hardware/conditional-autofill are unproved; earlier rename signin-options503 remains unexplained, not claimed fixed. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
