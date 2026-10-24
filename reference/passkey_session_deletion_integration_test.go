@@ -4,7 +4,7 @@ package reference_test
 
 import (
 	"context"
-	"crypto/ecdsa"
+	"crypto"
 	"net/http"
 	"testing"
 
@@ -50,7 +50,7 @@ func referenceRemovalCredential(t *testing.T, kind session.CredentialKind, token
 	return credential, synchronizer
 }
 
-func referenceRemovalSignin(t *testing.T, ctx context.Context, owner *reference.PasskeyService, c reference.StoreConfiguration, key *ecdsa.PrivateKey, id, handle []byte, count uint32) passkey.SigninResult {
+func referenceRemovalSignin(t *testing.T, ctx context.Context, owner *reference.PasskeyService, c reference.StoreConfiguration, key crypto.Signer, id, handle []byte, count uint32) passkey.SigninResult {
 	t.Helper()
 	command, err := identity.NewCommandID()
 	if err != nil {
@@ -99,7 +99,7 @@ func referenceRemovalSignin(t *testing.T, ctx context.Context, owner *reference.
 
 // Signup and both resident keys are created by their actual public owners.
 // The controlled external authenticator supplies only genuine protocol crypto.
-func proveReferenceSessionDeletion(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey *ecdsa.PrivateKey, firstID, handle []byte, firstCounter uint32, secondKey *ecdsa.PrivateKey, secondID []byte, second passkey.CredentialMetadata) {
+func proveReferenceSessionDeletion(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey crypto.Signer, firstID, handle []byte, firstCounter uint32, secondKey crypto.Signer, secondID []byte, second passkey.CredentialMetadata) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {

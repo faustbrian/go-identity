@@ -37,6 +37,27 @@ Conditional browser presentation is separately selected below; no UI is provided
 The actual public construction/configuration and fresh/populated-kernel-upgrade
 journeys are executable in `TestReferencePostgresPasskeyStandalone`.
 
+### Selected protocol algorithms
+
+`Passkey.Protocol.Algorithms` accepts Ed25519-only
+`[]webauthn.Algorithm{webauthn.EdDSA}` or either ordered unique combination
+with `webauthn.ES256`. Nil retains ES256; empty, repeated, unknown and RS256
+profiles deny construction. Keep the exact selection unchanged through an
+original ceremony. No new HTTP request field selects or overrides algorithms.
+
+The graph uses that profile for signup, signin, current-key UV enrollment,
+rename and removal. Removal counts only another usable resident key admitted
+by the current selected profile. Protocol verification and original credential
+provenance remain WebAuthn-owned; the graph does not copy key authority.
+
+`TestReferencePostgresPasskeySelectedAlgorithmsHTTP` exercises Ed25519 and
+both mixed orders through actual HTTPS/OpenAPI with fresh and populated-upgrade
+PostgreSQL: signup -> rename -> add a second key -> remove the original ->
+old-session and removed-key denial -> surviving-key signin -> original removal
+metadata recovery -> last-key denial -> read/logout. Only external signed
+authenticators are controlled. This is backend consumer proof, not Ed25519
+browser/physical-device certification or enrolled-MFA qualification.
+
 ### Browser interoperability journey
 
 `TestBrowserReferencePasskeySignupManagementRecovery` selects the same public

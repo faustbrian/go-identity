@@ -5,7 +5,9 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
@@ -790,8 +792,8 @@ func referencePasskeyChallenge(t *testing.T, ctx context.Context, transfer func(
 	return out.PublicKey.Challenge
 }
 
-// Controlled none/ES256 raw authenticator, not a protocol or proof substitute.
-func referencePasskeyRegistration(t *testing.T, key *ecdsa.PrivateKey, id []byte, challenge string) []byte {
+// Controlled none-attestation raw authenticator, not a protocol or proof substitute.
+func referencePasskeyRegistration(t *testing.T, key crypto.Signer, id []byte, challenge string) []byte {
 	t.Helper()
 	bstr := func(value []byte) []byte {
 		if len(value) < 24 {
@@ -802,10 +804,18 @@ func referencePasskeyRegistration(t *testing.T, key *ecdsa.PrivateKey, id []byte
 		}
 		return append(binary.BigEndian.AppendUint16([]byte{0x59}, uint16(len(value))), value...)
 	}
-	cose := []byte{0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21}
-	cose = append(cose, bstr(key.X.FillBytes(make([]byte, 32)))...)
-	cose = append(cose, 0x22)
-	cose = append(cose, bstr(key.Y.FillBytes(make([]byte, 32)))...)
+	var cose []byte
+	switch public := key.Public().(type) {
+	case *ecdsa.PublicKey:
+		cose = []byte{0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21}
+		cose = append(cose, bstr(public.X.FillBytes(make([]byte, 32)))...)
+		cose = append(cose, 0x22)
+		cose = append(cose, bstr(public.Y.FillBytes(make([]byte, 32)))...)
+	case ed25519.PublicKey:
+		cose = append([]byte{0xa4, 1, 1, 3, 0x27, 0x20, 6, 0x21}, bstr(public)...)
+	default:
+		t.Fatal("unsupported test authenticator key")
+	}
 	rp := sha256.Sum256([]byte("identity.example"))
 	data := append([]byte{}, rp[:]...)
 	data = binary.BigEndian.AppendUint32(append(data, 0x45), 0)
@@ -826,7 +836,7 @@ func referencePasskeyRegistration(t *testing.T, key *ecdsa.PrivateKey, id []byte
 	return wire
 }
 
-func referencePasskeyAssertion(t *testing.T, key *ecdsa.PrivateKey, id, handle []byte, challenge string, counters ...uint32) []byte {
+func referencePasskeyAssertion(t *testing.T, key crypto.Signer, id, handle []byte, challenge string, counters ...uint32) []byte {
 	t.Helper()
 	counter := uint32(1)
 	if len(counters) > 1 {
@@ -842,8 +852,13 @@ func referencePasskeyAssertion(t *testing.T, key *ecdsa.PrivateKey, id, handle [
 	rp := sha256.Sum256([]byte("identity.example"))
 	data := binary.BigEndian.AppendUint32(append(append([]byte{}, rp[:]...), 0x05), counter)
 	hash := sha256.Sum256(client)
-	message := sha256.Sum256(append(bytes.Clone(data), hash[:]...))
-	signature, err := ecdsa.SignASN1(rand.Reader, key, message[:])
+	message := append(bytes.Clone(data), hash[:]...)
+	digest, options := message, crypto.Hash(0)
+	if _, es := key.Public().(*ecdsa.PublicKey); es {
+		hashed := sha256.Sum256(message)
+		digest, options = hashed[:], crypto.SHA256
+	}
+	signature, err := key.Sign(rand.Reader, digest, options)
 	if err != nil {
 		t.Fatal(err)
 	}

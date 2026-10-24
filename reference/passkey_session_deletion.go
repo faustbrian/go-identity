@@ -10,7 +10,8 @@ import (
 )
 
 // PasskeySessionDeletionConfiguration selects genuine current-session UV removal
-// while an independently usable resident ES256 key remains. Transport must be
+// while an independently usable resident key in the selected algorithm profile
+// remains. Transport must be
 // bearer or cookie; the graph injects original CSRF keys for cookies. KeyedOptions
 // is required. Selection enables no HTTP or password/OTP recovery fallback.
 type PasskeySessionDeletionConfiguration struct{ Transport session.CredentialKind }

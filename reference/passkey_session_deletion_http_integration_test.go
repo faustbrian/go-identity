@@ -4,7 +4,7 @@ package reference_test
 
 import (
 	"context"
-	"crypto/ecdsa"
+	"crypto"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -34,7 +34,7 @@ func TestReferencePostgresPasskeyHTTPSessionDeletion(t *testing.T) {
 // call/flow are the parent's actual TLS client plus OpenAPI request/result
 // validation, not domain doubles. All registration, UV, policy, effects,
 // recovery, session reads and logout cross their real graph owners.
-func proveReferenceHTTPSessionDeletion(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, original []*http.Cookie, csrf string, key *ecdsa.PrivateKey, id, handle []byte, counter uint32, first, second passkeyhttp.CredentialMetadata, remainingKey *ecdsa.PrivateKey, remainingID []byte, call func(string, any, string, []*http.Cookie, string, string) passkeyDeletionHTTPObservation, flow func(string) (string, []*http.Cookie)) {
+func proveReferenceHTTPSessionDeletion(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, original []*http.Cookie, csrf string, key crypto.Signer, id, handle []byte, counter uint32, first, second passkeyhttp.CredentialMetadata, remainingKey crypto.Signer, remainingID []byte, call func(string, any, string, []*http.Cookie, string, string) passkeyDeletionHTTPObservation, flow func(string) (string, []*http.Cookie)) {
 	t.Helper()
 	origin := c.Passkey.Signup.Flow.Origin
 	intent := map[string]any{"phase": "options", "referenceID": first.ReferenceID, "expectedVersion": first.Version}
@@ -87,6 +87,24 @@ func proveReferenceHTTPSessionDeletion(t *testing.T, ctx context.Context, featur
 	recovery := map[string]any{"phase": "recover", "referenceID": first.ReferenceID, "expectedVersion": first.Version, "commandID": result.CommandID}
 	if denied := call("/v1/passkey/delete", recovery, "http-removal-B", original, csrf, origin); denied.code != 401 {
 		t.Fatal("invalidated HTTP source regained recovery authority", denied.code)
+	}
+	removedFlow, removedCookies := flow("passkey")
+	removedOptions := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": removedFlow}, "http-removal-revoked-options", removedCookies, "", origin)
+	var removedAssertion = assertion
+	removedAssertion.Options = nil
+	if removedOptions.code != 200 || json.Unmarshal(removedOptions.body, &removedAssertion) != nil || len(removedAssertion.Options) == 0 {
+		t.Fatal("removed-key discovery exposed account existence", removedOptions.code)
+	}
+	removedChallenge := referencePasskeyChallenge(t, ctx, func(ctx context.Context, transfer func(context.Context, []byte) error) error {
+		return transfer(ctx, removedAssertion.Options)
+	})
+	removedCommand, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	removedSignin := call("/v1/passkey/signin-verify", map[string]any{"mode": "discoverable", "flowID": removedFlow, "commandID": removedCommand, "ceremonyID": removedAssertion.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, key, id, handle, removedChallenge, counter+2))}, "", removedCookies, "", origin)
+	if removedSignin.code < 400 || len(removedSignin.cookies) != 0 || removedSignin.header.Get("X-CSRF-Token") != "" {
+		t.Fatal("removed authenticator issued fresh HTTP authentication", removedSignin.code)
 	}
 	flowID, flowCookies := flow("passkey")
 	options = call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, "http-removal-survivor-options", flowCookies, "", origin)

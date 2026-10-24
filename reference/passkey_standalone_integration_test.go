@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +86,7 @@ func TestReferencePostgresPasskeyHTTPSessionEnrollment(t *testing.T) {
 }
 
 type standalonePasskeyJourney struct {
+	algorithms []webauthn.Algorithm
 	// A browser consumer retains the same public graph while owning its actual
 	// HTTPS origin, cookies and authenticator. Existing signer journeys are default.
 	origin                                                          string
@@ -103,6 +105,7 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, true)
 	c := standalonePasskeyConfiguration(t, f.config)
+	c.Passkey.Protocol.Algorithms = slices.Clone(selected.algorithms)
 	if selected.origin != "" {
 		c.Passkey.Protocol.RelyingParty.Origins = []string{selected.origin}
 		c.Passkey.Flow.Origin = selected.origin

@@ -5,8 +5,7 @@ package reference_test
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"crypto"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -192,10 +191,8 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	if err != nil || len(handle) != 32 {
 		t.Fatal("opaque signup handle invalid")
 	}
-	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	referencePasskeyAlgorithmParameters(t, created.Options, c.Passkey.Protocol.Algorithms)
+	private := referencePasskeyTestSigner(t, c.Passkey.Protocol.Algorithms, 0)
 	id := make([]byte, 32)
 	if _, err := rand.Read(id); err != nil {
 		t.Fatal(err)
@@ -381,6 +378,7 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 		if readErr != nil || closeErr != nil || got.StatusCode != 200 || len(wire) > 16384 || json.Unmarshal(wire, &listed) != nil || len(listed.Credentials) != 1 || listed.Credentials[0].Label != intent["name"] || listed.Credentials[0].Version != managedCredential.Version+1 {
 			t.Fatal("HTTP rename was not durable in inventory", got.StatusCode)
 		}
+		managedCredential = *renamed.Credential
 		checkUpdateAfterLogout = func() {
 			denied := call("/v1/passkey/update", intent, "http-session-rename-completion", issued.cookies, issued.header.Get("X-CSRF-Token"), origin)
 			if denied.code != 401 || len(denied.cookies) != 0 || denied.header.Get("X-CSRF-Token") != "" {
@@ -390,7 +388,7 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	} else if c.Passkey.SessionManagement != nil {
 		proveReferenceSessionRename(t, ctx, features, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle)
 	}
-	var additionalKey *ecdsa.PrivateKey
+	var additionalKey crypto.Signer
 	var additionalID []byte
 	var checkEnrollmentAfterLogout func()
 	if c.HTTPPasskey.SessionEnrollment {
@@ -445,10 +443,8 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 		challenge = referencePasskeyChallenge(t, ctx, func(ctx context.Context, transfer func(context.Context, []byte) error) error {
 			return transfer(ctx, registration.Options)
 		})
-		additionalKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			t.Fatal(err)
-		}
+		referencePasskeyAlgorithmParameters(t, registration.Options, c.Passkey.Protocol.Algorithms)
+		additionalKey = referencePasskeyTestSigner(t, c.Passkey.Protocol.Algorithms, 1)
 		additionalID = make([]byte, 32)
 		if _, err := rand.Read(additionalID); err != nil {
 			t.Fatal(err)
@@ -517,7 +513,7 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 			counter++
 		}
 		if c.Passkey.SessionDeletion != nil {
-			proveReferenceSessionEnrollment(t, ctx, features, c, handler, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle, counter, func(secondKey *ecdsa.PrivateKey, secondID []byte, metadata passkey.CredentialMetadata) {
+			proveReferenceSessionEnrollment(t, ctx, features, c, handler, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle, counter, func(secondKey crypto.Signer, secondID []byte, metadata passkey.CredentialMetadata) {
 				proveReferenceSessionDeletion(t, ctx, features, c, handler, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle, counter, secondKey, secondID, metadata)
 			})
 			return
@@ -531,7 +527,7 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	if checkEnrollmentAfterLogout != nil {
 		checkEnrollmentAfterLogout()
 	}
-	signinKey := func(private *ecdsa.PrivateKey, id []byte, count uint32) {
+	signinKey := func(private crypto.Signer, id []byte, count uint32) {
 		t.Helper()
 		flowID, cookies = flow("passkey")
 		key := "reference-http-signup-signin-" + flowID

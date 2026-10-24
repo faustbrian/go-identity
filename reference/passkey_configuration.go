@@ -18,8 +18,10 @@ import (
 	webauthnpg "github.com/faustbrian/go-webauthn/postgres"
 )
 
-// PasskeyConfiguration explicitly selects existing-account resident UV/ES256
-// enrollment and identified signin. Identifier-free signin additionally requires
+// PasskeyConfiguration explicitly selects existing-account resident UV
+// enrollment and identified signin with Protocol's ES256/Ed25519 profile.
+// Nil algorithms retain ES256; explicit selections preserve order.
+// Identifier-free signin additionally requires
 // the authentication risk policy's PasskeyDiscovery opt-in; no HTTP or signup
 // capability is selected.
 // With Standalone nil the graph supplies its actual password proof, authorization, coordinator,

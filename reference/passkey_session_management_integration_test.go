@@ -4,7 +4,7 @@ package reference_test
 
 import (
 	"context"
-	"crypto/ecdsa"
+	"crypto"
 	"testing"
 
 	"github.com/faustbrian/go-authorization/v3"
@@ -16,7 +16,7 @@ import (
 
 // Use only the public graph and original HTTP-issued custody. The controlled
 // authenticator signs the actual challenge; no account/proof/store is seeded.
-func proveReferenceSessionRename(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, bearer, csrf string, key *ecdsa.PrivateKey, id, handle []byte) {
+func proveReferenceSessionRename(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, bearer, csrf string, key crypto.Signer, id, handle []byte) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {

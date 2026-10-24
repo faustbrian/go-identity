@@ -4,6 +4,7 @@ package reference_test
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -20,7 +21,7 @@ import (
 // The original account and cookie come from genuine HTTP passkey-only signup.
 // Only the external authenticator is controlled; all graph/domain owners and
 // discovery/session/logout operations remain real and public.
-func proveReferenceSessionEnrollment(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey *ecdsa.PrivateKey, firstID, handle []byte, firstCounter uint32, after ...func(*ecdsa.PrivateKey, []byte, passkey.CredentialMetadata)) {
+func proveReferenceSessionEnrollment(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey crypto.Signer, firstID, handle []byte, firstCounter uint32, after ...func(crypto.Signer, []byte, passkey.CredentialMetadata)) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -153,7 +154,7 @@ func proveReferenceSessionEnrollment(t *testing.T, ctx context.Context, features
 		return
 	}
 	for _, authenticator := range []struct {
-		key     *ecdsa.PrivateKey
+		key     crypto.Signer
 		id      []byte
 		counter uint32
 	}{{firstKey, firstID, firstCounter + 1}, {secondKey, secondID, 1}} {

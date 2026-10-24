@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Adopt native Ed25519 and ordered mixed-algorithm passkey profiles across
+  signup, signin, additional enrollment, rename and safe removal/recovery.
+  Nil keeps ES256; selected algorithms remain configuration-owned, never an
+  HTTP request override. Add complete signed-authenticator HTTPS/OpenAPI
+  journeys on fresh and populated-upgrade PostgreSQL; browser Ed25519 and
+  enrolled-MFA qualification remain separate.
+
 - Add an executable isolated-Chromium adoption journey for the selected
   passkey-only HTTP profile: browser-owned HTTPS/cookies and native WebAuthn
   JSON cover signup, second-key enrollment, rename, removal, surviving-key
