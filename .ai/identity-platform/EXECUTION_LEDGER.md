@@ -1,5 +1,34 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 01:46 UTC: native signup is reviewed/main-pushed as
+go-passkey04cf7740130a2040d87c4cb059e4f73ed03f3485 with Required40051166075SUCCESS.
+Final independent passkey_signup_native_final APPROVE/no remaining actions at
+the19-path7b605f7 candidate below; committed tree matches. Public proxy/SumDB
+postgresv0.0.0-20261024014419-04cf7740130a Origin04cf774,
+Sumh1:ZywqmPnkyaPOObpGsP+TbQflyYZbDVKqML76PNr2k4M=;
+all19changed archivefiles match. Downloaded-public realPG/race20.220s proves
+signup/read/logout/fresh signin and options+completion COMMIT cuts, no replaces.
+Final taggedvet/modverify/secrets/diff pass; no native dirty work remains.
+Next primary owns Reference/HTTP signup against this actual public contract;
+no missing domain stores/handlers/migrations may be supplied by consumers.
+FullM16 remains open. No release/tag/deployment or full-unit claim.
+
+2026-10-24 01:43 UTC: primary's actual native passkey-first signup/read/logout/
+fresh discoverable-signin journey passes on real PostgreSQL. Selected new and
+retained cohort/race119.463s; final options+completion before/after-COMMIT
+disconnect/race12.452s. Keyed original-cookie metadata recovery, immutable expiry,
+single challenge/session delivery, protected5/15m quota, failures/rollback and
+contention are covered. A failed initial recovery assertion expected attempt
+refund; existing kernel reservation/risk policy intentionally retains one charge
+even if later domain COMMIT rolls back. Correct oracle requires one charge and
+four snapshots across retries; domain context/ceremony count is0/1 by outcome.
+Native19-path candidate7b605f788c922a791c5147ab754e385fc5f51846cf06f75df57c371086024d2c
+against go-passkeyf569044 is in final independent review; sole first-pass action
+was the now-tested options COMMIT cuts. No production changes since broad cohort.
+Sessionbc68dda and actual outboxe45fa70 are main-pushed/Requiredgreen; outbox worker
+is complete with finalAPPROVE. Next native main delivery/public consumer, then
+primary-owned Reference/HTTP composition. M16/full qualification remain open.
+
 2026-10-24 01:03 UTC: kernel b3bfb73 is main-pushed/Required40047823872SUCCESS.
 Actual session effect now stages its exact original persisted session only after
 session/family/issuance and freshness checks. Real session fixture first failed

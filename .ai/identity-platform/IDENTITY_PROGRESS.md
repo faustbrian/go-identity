@@ -1,36 +1,32 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 01:01 UTC
+## Current TL;DR — 2026-10-24 01:46 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional fully qualified unit is claimed.
 - **Working/delivered:** the baseline authentication journeys and retained
   passkey enrollment/signin/read/logout/inventory/rename/removal profiles below.
-- **Current M16:** passkey-first, no-email/no-password signup. Protocol support,
-  actual kernel account creation, request types and known-empty MFA initialization
-  are main-pushed with Required CI green (latest identity `808999e`).
-- **Latest delivered components:** session persistence `94e5a95`, explicit
-  signup issuer `1d7f872` and protected risk projection `b030e8e` are main-pushed
-  with Required CI green. PostgreSQL/race, copied-request single delivery and
-  original scope/expiry checks cover their respective boundaries.
-- **Outbox delivered:** reviewed `4279fe5` is on main with exact push-triggered
-  Required `40045947903` green. Earlier manual-dispatch green did not satisfy
-  GitHub rulesets; the minimal carrier trigger preserves the identical gates.
-  No PR, Tools programme or protection bypass was used.
-- **Protected counters delivered:** reviewed risk PostgreSQL `5910465` is on
-  main with Required `40047612425` green. Real PostgreSQL/race proves options
-  charging, sixth-attempt denial, unchanged replay and preserved migration state.
-- **Current actual Go work:** primary owns native signup composition and its
-  real journey test. Kernel third-event staging `b3bfb73` is main-pushed/CI-green.
-  Actual session staging passes PostgreSQL/race and independent review; the
-  production outbox worker is connecting three-event consumption.
-  Local native source is not yet passing
-  or delivered. Its first test must prove no pre-verification account/handle,
-  genuine registration, readable session and all three lifecycle events.
-- **Next:** finish native counters, prove signup/session/read/logout/new signin,
-  rollback/replay/recovery and Reference/HTTP composition. M16 remains open;
-  no user decision is needed. The rejected unpublished Authentication-class
-  shortcut was replaced with the original 5/15m protected deny policy.
+- **New local working journey:** no-email/no-password passkey signup ->
+  authenticated session read -> CSRF logout -> fresh identifier-free passkey
+  signin/read. Actual PostgreSQL owners persist account, credential, session and
+  all three lifecycle events atomically; no account/handle exists before proof.
+- **Security/recovery:** local race tests cover protected sixth-attempt denial,
+  foreign browser/origin and withdrawn authority, rollback, concurrent completion,
+  keyed retry/expiry, and real before/after-COMMIT disconnects. Recovery returns
+  original metadata, never a replacement challenge, bearer or CSRF credential.
+  The new options+completion COMMIT-cut cohort passes in 12.452s; the earlier
+  selected native/retained-signin cohort passed in 119.463s on unchanged source.
+- **Delivered prerequisites:** reviewed kernel `b3bfb73`, session `bc68dda`,
+  protected risk PostgreSQL `5910465`, and outbox `e45fa70` are on main with green
+  Required CI. Native composition consumes authenticated public module pins.
+- **Native delivered:** final independently approved `go-passkey@04cf774` is on
+  main; Required `40051166075` is green. Its authenticated public PostgreSQL
+  module passes signup/read/logout/fresh signin and both options/completion
+  COMMIT-cut journeys under race (20.220s), without replacements. All 19 changed
+  archive files match the reviewed commit; no further review actions remain.
+- **Next:** connect actual Reference/HTTP signup. M16 remains open; the native
+  delivery does not close the complete milestone or another unit's release
+  qualification. No user decision is needed.
 - **Remaining:** conditional passkey signin, other open milestone profiles and
   the platform's full-unit, journey/shared-issuer and release qualification.
 
