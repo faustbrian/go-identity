@@ -409,6 +409,14 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 			return false
 		}
 		csrfMatches := r.CSRFOrigin.Mode == want.CSRFOrigin.Mode
+		// These selected organization mutations also admit strict bearer-only
+		// handlers (identity/http's bearer profile), which must ignore ambient
+		// cookies. Only their explicit None profile is admitted; cookie handlers
+		// retain the canonical synchronizer requirement and no other operation
+		// gains an exemption. The feature factory owns actual authentication.
+		if (r.OperationID == "identity.organization.create" || r.OperationID == "identity.organization.member.add" || r.OperationID == "identity.organization.member.remove") && r.CSRFOrigin.Mode == CSRFNone {
+			csrfMatches = true
+		}
 		// A selected pre-auth-only integration may narrow the canonical union.
 		// It must reject authenticated-session/MFA variants rather than treating
 		// their ambient credentials as pre-auth authority. Never downgrade a

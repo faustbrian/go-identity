@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Permit an explicitly selected strict-bearer policy for organization creation,
+  member admission and member removal. Existing cookie-CSRF requirements and
+  all other organization operations are unchanged. Feature handlers must still
+  acquire exactly one bearer header and reject ambient-cookie fallback; this
+  constructor selection alone does not authenticate or enable any route.
+
 - Support original anonymous passkey-signup verification rate admission without
   inventing a user or identifier. Share existing IP/anonymous-flow budgets and
   retain the operation-bound original ceremony lifetime. Permit explicitly

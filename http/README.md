@@ -1,5 +1,14 @@
 # Identity HTTP transport
 
+Organization creation, member admission and member removal may explicitly
+select `CSRFNone` only for strict-bearer feature handlers that ignore ambient
+cookies. This is not a cookie fallback or a general organization exemption:
+the canonical cookie profile and all other operation policies remain unchanged.
+`NewCanonicalOperation` validates metadata, not handler authentication. The
+selected organization integration must enforce trusted ingress, one strict
+bearer header, current native authority and original idempotency/recovery.
+No handler or route is enabled by this base constructor alone.
+
 Explicit `identity.mfa.disable` selection accepts only original stored-session
 CSRF (`X-CSRF-Token`, exact Origin, no Referer fallback). It grants no general
 mutation exemption, bearer fallback or renewable freshness. The optional
