@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Stage an initial passkey-only signup session only for the account actually
+  created by the original anonymous native Work. Preserve known-empty MFA/RP
+  generations, current authorization and original proof expiry through final
+  checks, and retain issuance identity without reconstructing a pruned bearer.
+  Install the selected additive `PasskeySignupMigrationSource` before use;
+  native WebAuthn/pre-auth/risk and required lifecycle composition remain
+  mandatory. Existing-account passkey signin remains a distinct profile.
+
 - Explicitly select passkey authority alongside existing single-factor and MFA
   profiles in `SelectedSessionAdmissionConfig`. One primary lookup dispatches
   from stored provenance, without method fallback or renewed freshness. Bind

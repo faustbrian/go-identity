@@ -1,5 +1,28 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 00:24 UTC: signup session persistence is source-reviewed locally,
+not a usable public signup journey. Actual kernel/MFA/policy/session owners in
+one Work commit initial account/reference/factors/policy/session/family/issuance;
+missing prerequisites, reconstructed commands, expired proof, late account/
+factor withdrawal and required audit/outbox failures abort. Retained original
+issuance identity survives payload pruning without bearer reconstruction.
+Go1.27.3 new+retained session/migration PG/race3.736s; complete module/race2.297s;
+tagged vet, modverify, changed-content secrets and diff checks pass. Complete
+14-file final review by passkey_first_session_final APPROVE/no findings at
+base808999e; candidate22eb88f6ce7f55e4be52b18de3c8111e41310aa6b5b7f03e19a46079343caac3.
+MFA808999e is on main with Required40043359399SUCCESS; authenticated public
+MFAv0.0.0-20261024000703-808999e7721d is consumed directly by that real session
+test. Protocol/kernel/carriers retain their delivered checkpoints below.
+Outbox8fa708e and narrow metadata correction f79f448 are only on a CI carrier,
+not main: origin requires Required before acceptance. Corrected Required run
+40044607836 is pending. Complete selected local Tools gate and source review
+pass; cohesion correction independently reviewed and native cohesion passes.
+The Go1.27.2 test runner's x509 vulnerability was corrected by using installed
+Go1.27.3; retain earlier results at their actual toolchain, not relabelled.
+Next: genuine native signup options/verification/pre-auth/risk/RP mapping plus
+this session effect, all required lifecycle events, read/logout and fresh
+discoverable signin, then Reference/HTTP. Full M16 remains open (~25%,11/39).
+
 2026-10-24: passkey-first signup remains the active M16 outcome, not complete.
 Protocol bdbb114, kernel afca324 and root carriers f569044 are main-pushed with
 Required CI green. MFA prospective-account initialization passed real PG/race

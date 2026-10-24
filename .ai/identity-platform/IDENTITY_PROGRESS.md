@@ -1,5 +1,25 @@
 # Identity Platform Progress
 
+## Current TL;DR — 2026-10-24 00:24 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  All 67 units remain required; no additional fully qualified unit is claimed.
+- **Working/delivered:** the baseline authentication journeys and retained
+  passkey enrollment/signin/read/logout/inventory/rename/removal profiles below.
+- **Current M16:** passkey-first, no-email/no-password signup. Protocol support,
+  actual kernel account creation, request types and known-empty MFA initialization
+  are main-pushed with Required CI green (latest identity `808999e`).
+- **Latest component:** reviewed signup session persistence passes real
+  PostgreSQL/race commit/rollback, retained identity after pruning and populated
+  migration tests. Native WebAuthn/pre-auth/RP composition is still missing, so
+  this is not working end-to-end signup and M16 remains open.
+- **Delivery pending:** outbox is reviewed/tested on a CI carrier; its main
+  requires hosted Required first. No PR, Tools change or protection bypass.
+- **Next:** connect original signup to session issuance, prove the complete
+  native/Reference journey and required lifecycle effects. No user decision needed.
+- **Remaining:** conditional passkey signin, other open milestone profiles and
+  the platform's full-unit, journey/shared-issuer and release qualification.
+
 ## TL;DR — updated 2026-10-23 22:28 UTC
 
 - **Overall: approximately 25% complete, low confidence; 11/39 milestones closed.**

@@ -1,5 +1,38 @@
 # PostgreSQL session storage
 
+## Prospective passkey-only signup
+
+`PasskeySignupSessionFields` retains a complete initial UV-passkey session in
+the original anonymous signup command. `PasskeySignupSession` binds its user
+to kernel-owned `registration.user` and its authenticating credential to the
+command's credential subject. Initial user/credential/policy/factor/passkey
+epochs must be one; deployment epochs remain their original observed values.
+No email, password, factor enrollment or recovery assurance is invented.
+
+`NewPasskeySignupEffect` participates only in the exact native signup Work after
+the kernel actually creates that prospective account. The owned native adapter
+supplies `PasskeySignupSessionAuthority` to lock the current RP/key mapping and
+the known-empty factor generation initialized by this same signup. The effect
+fences actual kernel and authorization authority, writes the initial session,
+family and domain-separated issuance evidence, and repeats admission in `Check`
+after downstream effects. It does not verify WebAuthn, authenticate a pre-auth
+cookie, issue a bearer, own pre-auth consumption or replace required lifecycle
+persistence. Those remain atomic obligations of the native signup composition.
+This storage seam alone does not expose a usable public signup endpoint.
+
+Append `PasskeySignupMigrationSource` to the selected installed session history,
+naming its actual issuance-purpose `PreviousConstraint`; it may follow the
+passkey-signin suffix or another supported selected predecessor. The validated
+old purpose expression and live rows are preserved. The migration runner owns
+transactional DDL and bounded lock/statement budgets; install before enabling
+the new purpose. Retire readers that cannot decode passkey sessions first.
+
+`Recover` is original coordinator participation, not disclosure permission.
+`ReadPasskeySignupIdentity` retains the original user/session/family tuple even
+after payload pruning, but returns no bearer, live authority or complete command
+outcome. Native recovery must establish the original commit and disclosure
+custody; neither method renews freshness or permits reveal-again retries.
+
 ## Identified UV-passkey session composition
 
 `PasskeySigninSessionFields` and `PasskeySigninSession` retain the complete
