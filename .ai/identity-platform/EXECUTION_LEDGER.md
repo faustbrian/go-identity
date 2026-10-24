@@ -1,5 +1,76 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 06:24 UTC: frozen M16 HTTP session-assertion rename profile delivered.
+HTTPb9fbdcfac2f81bd00abba81f8e3b277f58fe31e9 / Required40069135904 SUCCESS;
+Referencec62f1ac4a141f938467bc9f22349a7fbd616c34c / Required40069571943 SUCCESS.
+Both exact origin/main commits verified. HTTP final session_update_http_final
+APPROVE at3654090 plus twelve-path db0f8ba95d2aecd5585b6c87b09bb3c0997048538c23d44497207b4bf5bf1669;
+two coverage actions resolved (valid native error receipts and post-hook delivery),
+no production fix requested. Leaf full race9.567s, final changed-test race3.949s,
+vet/modverify and bounded parser fuzz11.683s/100686 executions; changed secrets0.
+Reference http_session_reference_final APPROVE atb9fbdcf plus ten-path
+cb129671d747d5f721969febdab34fd2a75c5b05a65ac2fd71f8107e238023b3, no actions.
+Missing-selector API RED captured before composition. Genuine fresh/populated
+HTTPS session-rename race12.740s; new/retained standalone/conditional/native
+session/password-proof management cohort52.669s; module/cmd race8.833s/6.801s;
+tagged vet0, modverify and changed-secret scan pass. Public HTTP leaf
+v0.0.0-20261024061010-b9fbdcfac2f8/Sumh1:bw9gkqd5Or8PCVh8D/SIe/F3CDu9uZi8Un5GOKNE3cQ=
+matches all12 changed files. Public Referencev0.0.0-20261024061636-c62f1ac4a141,
+Sumh1:F++f0roUNm8OWuQrgV0Lrk2uv2E0NGg7q9oPWOJ05Zk=, matches all10 changed files;
+untouched downloaded public fresh+populated HTTPS/PG/race39.193s and modverify pass.
+Initial public combined run47.664s failed fresh signin-options503 after successful
+rename/logout; cause UNESTABLISHED. Unchanged fresh-only13.269s and disposable
+sanitized timing copy20.933s pass; no failing request reproduced, source/security/
+timeout inputs unchanged. Retain transient as qualification risk, not a fixed
+defect or hidden passing run. No UI/interoperability/fullM16/unit closure claimed.
+Next primary consumer: password-free additional passkey enrollment, then safe
+removal/recovery. Bounded social_oauth_native_readiness mapping found actual
+missing kernel provider-account authority and callback capability/session
+composition; do not dispatch an OAuth implementation worker behind stubs.
+No implementation worker active. Whole goal~25%,11/39 closed, all67 retained.
+
+2026-10-24 06:04 UTC: Reference session rename3654090f72d2 is remote main,
+Required40067832686 SUCCESS. Independent reference_session_management_final
+APPROVE at3c32cfa plus candidate8db6cd3e6814; normal public-pin PG/race42.574s,
+Reference/cmd race8.954s/7.771s and vet/modverify pass. Authenticated public
+Referencev0.0.0-20261024055020-3654090f72d2 matches all11 changed files and
+passes fresh/populated new journey PG/race10.842s; dependencies verify.
+Frozen HTTP successor (Tier C): explicit FeatureConfig.SessionUpdate and
+HTTPPasskey.SessionUpdate select the same canonical POST /v1/passkey/update,
+with closed phase=options|complete and distinct header-only keys. Old Update
+is unchanged and mutually exclusive. Both phases retain canonical rate.secret,
+current actual cookie/CSRF, exact Origin/trusted IP, self caller and native
+identity.passkey.update authority. No new canonical operation, transaction,
+proof source, device cookie, session issuance or fallback. Options binds exact
+reference/version/name; completion adds genuine ceremony/assertion. Retries
+return original metadata only. Primary owns leaf parser/pipeline/wire and
+Reference composition/pins. Native9840ecf/rootb9b8df7 evidence is unchanged.
+Prove missing API RED; strict phase/body/header/admission/expiry/hook/receipt
+denial and native forwarding; bounded parser fuzz; real standalone fresh/
+populated HTTP signup -> UV rename -> inventory/read/logout -> new signin,
+retained password-proof update; leaf race/vet, Reference PG/race, public pins,
+one final review per coherent owner batch, main Required and public consumer.
+No full M16 or67-unit qualification closure is implied.
+
+2026-10-24 05:40 UTC: continue frozen M16 session-assertion rename through the
+actual Reference graph. Primary owns reference/passkey_session_management.go,
+configuration/tests/docs/pins and the existing standalone/signup consumer seams.
+Consume native9840ecf/publicv0.0.0-20261024053155-9840ecf94acd and its reviewed
+132.182s/24.403s native/public evidence; no substitute proof or transaction owner.
+Explicit Passkey.SessionManagement selects transport only, using the graph's
+actual session/protocol/request-key/risk/CSRF owners; nil stays disabled. A guarded
+nested public handle preserves the native UpdateOptions/Update signatures and
+denies before initialization, wrong tenant/current ownership, and after Close.
+Prove fresh/populated standalone signup -> current real cookie/CSRF -> genuine
+action-bound assertion/rename -> metadata-only retry -> inventory/read/logout ->
+fresh signin/read/logout, with no password/OTP/delivery configuration. All existing
+mapping1/signin2/metadata3 histories are already present; do not rewrite/add SQL.
+Checks: real missing-API RED; selected fresh/upgrade plus retained standalone/
+conditional/password-management PG/race; module/cmd race, tagged vet, public pins,
+one final-diff review, main Required CI and downloaded-public Reference journeys.
+This adds no HTTP routes by itself; separate opt-in HTTP presentation follows
+the same delivered owner. Full M16 and all previously open qualification remain.
+
 2026-10-24 05:34 UTC: native passkey-session assertion rename DELIVERED as a
 coherent prerequisite to selected HTTP/Reference integration, not full M16.
 go-passkey9840ecf94acdfd479d9361e6187717e5906bf0c0 is origin/main, exact

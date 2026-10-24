@@ -1,6 +1,31 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 05:34 UTC
+## Current TL;DR — 2026-10-24 06:24 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  All 67 units remain required; no additional full-unit qualification is closed.
+- **Newly usable through HTTP:** passkey-only signup -> current-session genuine
+  action-bound UV -> credential rename -> updated inventory -> session read/
+  logout -> fresh discoverable signin/read/logout. No password, OTP or delivery
+  configuration supplies the management proof. Native-only selection enables
+  no HTTP; explicit `HTTPPasskey.SessionUpdate` selects the two-phase endpoint.
+  Existing password-proof update is unchanged and mutually exclusive.
+- **Delivered:** independently approved HTTP `b9fbdcf` and Reference `c62f1ac`
+  are on main with green Required CI (`40069135904` / `40069571943`). Normal
+  public-pin new/retained PostgreSQL/race journeys pass (52.669s); Reference/cmd
+  race (8.833s/6.801s), tagged vet and module verification pass. Authenticated
+  downloaded-public Reference matches all ten changed files and passes both
+  fresh/populated HTTP journeys under race (39.193s), with dependencies verified.
+- **Qualification caveat:** the first downloaded-public combined run returned
+  503 at fresh signin-options after successful rename/logout. Its cause is not
+  established. Unchanged fresh-only, timing-diagnostic and final combined runs
+  pass; no timeout or security rule was relaxed. This is not a claim that the
+  transient is fixed, or that browser interoperability/full M16 is qualified.
+- **Next:** additional-passkey enrollment without a password proof, followed
+  by safe passkey-only removal/recovery. Other M16 profiles, remaining milestones
+  and whole-unit/release qualification remain open. No user decision is needed.
+
+## Retained checkpoint — 2026-10-24 05:34 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional full-unit qualification is claimed.
@@ -2501,7 +2526,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account enrollment, identified/identifier-free signin, safe inventory, rename, signed-proof deletion and session read/logout are delivered through native/Reference/HTTP; original-key retries expose only retained metadata. Passkey-first HTTP signup/read/logout/fresh signin is delivered through Reference `321563e` (public PostgreSQL/race22.616s). Standalone passkey-only Reference `fdf8f86` adds the complete journey and inventory without password/OTP/delivery configuration; reviewed/main/CI green, actual public fresh/populated-kernel PostgreSQL/race8.101s. Native conditional options root `c0819f9` / adapter `ea2adfd` are delivered and public-consumer proven (17.600s); HTTP/Reference conditional integration is pending. Remaining profiles/interoperability and qualification keep the full row open. |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account enrollment, identified/identifier-free signin, inventory, password-proof rename/removal and session read/logout are delivered. Standalone passkey-only signup/discovery and conditional presentation are native/HTTP/Reference integrated (`521583c`, public PostgreSQL/race16.955s). Genuine current-passkey-session UV rename is native (`9840ecf`) and HTTP/Reference (`b9fbdcf` / `c62f1ac`) delivered; actual downloaded-public fresh/populated HTTPS/PostgreSQL/race39.193s, reviewed/main/CI green. The initial public-run signin-options503 remains unexplained; later unchanged probes pass without relaxed controls. Additional passkey-only enrollment/removal/recovery, remaining profiles/interoperability and full qualification keep the row open. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
