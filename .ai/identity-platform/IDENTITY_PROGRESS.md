@@ -1,12 +1,12 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 02:18 UTC
+## Current TL;DR — 2026-10-24 02:31 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional fully qualified unit is claimed.
 - **Working/delivered:** the baseline authentication journeys and retained
   passkey enrollment/signin/read/logout/inventory/rename/removal profiles below.
-- **New local working journey:** no-email/no-password passkey signup ->
+- **New working journey:** no-email/no-password passkey signup ->
   authenticated session read -> CSRF logout -> fresh identifier-free passkey
   signin/read. Actual PostgreSQL owners persist account, credential, session and
   all three lifecycle events atomically; no account/handle exists before proof.
@@ -24,7 +24,15 @@
   module passes signup/read/logout/fresh signin and both options/completion
   COMMIT-cut journeys under race (20.220s), without replacements. All 19 changed
   archive files match the reviewed commit; no further review actions remain.
-- **Reference local progress:** explicit `Passkey.Signup` now completes the
+- **Reference delivered:** reviewed `36193cc` is on main with Required
+  `40053620969` green. Authenticated public Reference
+  `v0.0.0-20261024021816-36193ccec5ad` matches all 15 changed archive files and
+  verifies dependencies. Its actual fresh and populated-upgrade signup/read/
+  logout/fresh-discoverable-signin journeys pass under race (30.858s/27.869s).
+  An initial combined public run failed during HTTP server construction before
+  signup; unchanged-source individual reruns pass. Cause is not established;
+  no timeout, security policy or verification control was relaxed.
+  Explicit `Passkey.Signup` completes the
   actual public graph's signup/read/logout/new-discoverable-signin journey on
   fresh and populated PostgreSQL. Retained enrollment/signin and missing-schema
   readiness counterfactuals pass under race (18.890s selected cohort). Ordinary
@@ -32,9 +40,10 @@
   verification pass. Review exposed a missing disposition-readiness guard; its
   real rename regression failed before the fix. Final fresh/upgrade race passes
   (29.155s), focused passkey unit/race passes (2.081s), and independent final-tree
-  review approves with no remaining actions. Main/public delivery is next.
-- **Next:** finish Reference review/main/public-consumer delivery, then HTTP
-  signup composition. The current Reference profile uses the existing selected
+  review approves with no remaining actions.
+- **Next:** HTTP signup composition. Primary owns transport/Reference; one
+  bounded go-passkey worker prepares the genuine original-signup rate source.
+  The current Reference profile uses the existing selected
   deployment; standalone signup-only deployment, HTTP signup, conditional signin
   and passkey-session management remain required. Full M16 and whole-unit release
   qualification remain open. No user decision is needed.

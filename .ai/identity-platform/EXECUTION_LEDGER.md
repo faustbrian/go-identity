@@ -1,5 +1,39 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 02:31 UTC: Reference36193ccec5add547cbcb05b8e2549f2c6cf84690 is
+on exact origin/main with Required40053620969SUCCESS. Public Reference
+v0.0.0-20261024021816-36193ccec5ad authenticates via proxy/SumDB, all15changed
+archive files match; modverify allmodulesverified. Downloaded-public actual
+fresh and populated-upgrade signup/read/logout/freshdiscovery journeys pass
+race30.858s/27.869s unchanged source. Initial combined public run failed before
+signup at HTTP server construction; isolated identical-profile reruns pass,
+cause unproven (no production fix/budget relaxation). Native signup profile is
+delivered; existing-deployment configuration limitation remains explicit.
+Continue actual HTTP signup. M16/full-unit counts remain open/unchanged.
+
+2026-10-24 02:25 UTC: continue M16 HTTP signup profile (Tier C/D). Primary owns
+identity/http and its passkey leaf, Reference composition, integration pins and
+live notes. Canonical register-options/register-verify remain one route pair:
+explicit disjoint signup mode must not fall back from failed enrollment. Require
+original cookie/device/origin/flow, bounded strict input, shared IP plus genuine
+anonymous-flow/challenge rates, one-use native signup/session delivery, metadata-
+only retries/recovery, unchanged enrollment, and fresh/populated public Reference
+signup -> read -> logout -> discoverable signin. Native04cf774 and Reference
+36193cc (Required40053620969 green) are consumed committed contracts. Public
+Reference acceptance is running; no unit or M16 closure is implied.
+Dependency-ready lane signup_rate_source owns only go-passkey root ceremony-rate
+carriers/docs and postgres ceremony_rate.go/tests/docs/local module pins on main
+at04cf774. Deliver authenticated SignupRateSource for the original create ceremony:
+original flow is the anonymous rate dimension, never prospective user authority;
+no challenge/secret creation, consumption, new lookup engine or validity lease.
+Preserve enrollment/signin behavior and exact five-minute lifetime. Primary owns
+integration/Git/acceptance; worker codes without heavy tests until slot granted.
+Checks: focused root rate-carrier tests and real native signup source success,
+foreign/expired/mode/context rejection plus retained sources under race, relevant
+vet/modverify/secrets, one independent final diff, exact main CI/public consumption.
+HTTP parsing/rates/selection tests and real Reference HTTP journey close the
+consumer outcome after native prerequisite delivery; no fake stores or user IDs.
+
 2026-10-24 02:18 UTC: final Reference15-path review
 passkey_signup_reference_final APPROVE/no findings at candidate
 c618978dfb2927df8ed2b59e63349f3972af0b53f03a0d2ebd31ce5607e859ea againstbc99151.
