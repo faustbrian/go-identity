@@ -15,6 +15,11 @@ import (
 // must never be accepted by a single-factor or AuthenticatedProof issuer.
 const PasswordMFAPrimaryPurpose auth.Purpose = "identity.password.mfa-primary"
 
+// PasskeyMFAPrimaryPurpose identifies an original verified UV assertion that
+// still requires the configured independent enrolled factor. It is not a final
+// session-issue proof, and a passkey signin is not itself a TOTP/OTP enrollment.
+const PasskeyMFAPrimaryPurpose auth.Purpose = "identity.passkey.mfa-primary"
+
 // MFAAuthenticationSpec is historical, secret-free second-factor provenance.
 // CommandID names completion, PrimaryCommandID the original primary admission,
 // and ContinuationID/ScopeDigest the unchanged one-use child. ContinuationVersion
@@ -122,7 +127,7 @@ func NewSessionWithMagicLinkMFAAndCSRF(s SessionSpec, primary MagicLinkAuthentic
 // current credential, browser, child and factor in the protected transaction.
 // Organization and passkey variants fail closed. No IO or issuance occurs.
 func NewSessionWithPasswordMFA(s SessionSpec, factor MFAAuthentication) (Session, error) {
-	if factor.state == nil || s.Authentication.Kind != AuthenticationVerified {
+	if factor.state == nil || s.Authentication.Kind != AuthenticationVerified || s.Authentication.Proof.Method != "password" {
 		return Session{}, ErrInvalidSession
 	}
 	return newSessionWithMFA(s, OTPAuthentication{}, MagicLinkAuthentication{}, factor)
@@ -132,6 +137,29 @@ func NewSessionWithPasswordMFA(s SessionSpec, factor MFAAuthentication) (Session
 // bound to this tenant/session/version. It creates no token or authority lease.
 func NewSessionWithPasswordMFAAndCSRF(s SessionSpec, factor MFAAuthentication, csrf CSRFState) (Session, error) {
 	r, err := NewSessionWithPasswordMFA(s, factor)
+	if err != nil {
+		return Session{}, err
+	}
+	return attachCSRF(r, csrf)
+}
+
+// NewSessionWithPasskeyMFA reconstructs trusted historical UV-passkey and
+// independently completed factor metadata. It preserves the original credential,
+// primary time/expiry, passkey/factor epochs and resolved remember policy. The
+// non-final primary purpose must be PasskeyMFAPrimaryPurpose. No proof, factor
+// verification, current authority, token or persistence is created here. The
+// native completion must authenticate both original owners in its sole Work.
+func NewSessionWithPasskeyMFA(s SessionSpec, factor MFAAuthentication) (Session, error) {
+	if factor.state == nil || s.Authentication.Kind != AuthenticationVerified || s.Authentication.Proof.Method != "passkey" {
+		return Session{}, ErrInvalidSession
+	}
+	return newSessionWithMFA(s, OTPAuthentication{}, MagicLinkAuthentication{}, factor)
+}
+
+// NewSessionWithPasskeyMFAAndCSRF also retains the exact synchronizer state
+// bound to this tenant/session/version. Reconstruction creates no credential.
+func NewSessionWithPasskeyMFAAndCSRF(s SessionSpec, factor MFAAuthentication, csrf CSRFState) (Session, error) {
+	r, err := NewSessionWithPasskeyMFA(s, factor)
 	if err != nil {
 		return Session{}, err
 	}

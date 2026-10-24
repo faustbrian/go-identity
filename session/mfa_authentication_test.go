@@ -221,29 +221,42 @@ func TestMFASessionRotationRejectsChangedFactorProvenance(t *testing.T) {
 }
 
 func TestMFASessionEncryptedRestartRetainsCompleteProvenanceAndDeadline(t *testing.T) {
-	for _, mode := range []struct{ password, csrf bool }{{false, false}, {false, true}, {true, false}, {true, true}} {
-		t.Run(fmt.Sprintf("password=%t/csrf=%t", mode.password, mode.csrf), func(t *testing.T) {
+	for _, mode := range []struct{ password, csrf, passkey bool }{{false, false, false}, {false, true, false}, {true, false, false}, {true, true, false}, {false, false, true}, {false, true, true}} {
+		t.Run(fmt.Sprintf("password=%t/passkey=%t/csrf=%t", mode.password, mode.passkey, mode.csrf), func(t *testing.T) {
 			service, request, clock, observed, config, _ := validationFixture(t)
 			s, primary, p := mfaMagicLinkSession(t)
 			base, _ := observed.Session.Bindings()
 			s.Lookup = base.Lookup
 			m, _ := session.NewMFAAuthentication(p)
 			var err error
-			if mode.password {
+			if mode.password || mode.passkey {
 				s.Authentication = sessionSpec(t).Authentication
 				s.Authentication.Proof.Purpose = "identity.password.mfa-primary"
 				s.Authentication.Proof.ID = auth.ProofID(p.PrimaryCommandID)
 				original, _ := primary.Bindings()
 				s.Authentication.Proof.IssuedAt = original.AuthenticatedAt
 				s.Authentication.Proof.ExpiresAt = original.ValidUntil
-				observed.Session, err = session.NewSessionWithPasswordMFA(s, m)
+				if mode.passkey {
+					s.Authentication.CredentialID = "original-passkey"
+					s.Authentication.Proof.Method = "passkey"
+					s.Authentication.Proof.Purpose = session.PasskeyMFAPrimaryPurpose
+					s.Authentication.Proof.Assurance = auth.AssurancePhishingResistant
+					vector, _ := s.Authority.Bindings()
+					vector.Passkey = session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: "passkey", Version: 3}}
+					s.Authority, _ = session.NewAuthoritySnapshot(vector)
+					observed.Session, err = session.NewSessionWithPasskeyMFA(s, m)
+				} else {
+					observed.Session, err = session.NewSessionWithPasswordMFA(s, m)
+				}
 			} else {
 				observed.Session, err = session.NewSessionWithMagicLinkMFA(s, primary, m)
 			}
 			observed.Current = s.Authority
 			if mode.csrf {
 				state, _ := session.NewCSRFState(session.CSRFStateSpec{Binding: session.CSRFBinding{TenantID: s.TenantID, SessionID: s.SessionID, SessionVersion: s.Version}, KeyVersion: 1, Digest: [32]byte{7}})
-				if mode.password {
+				if mode.passkey {
+					observed.Session, err = session.NewSessionWithPasskeyMFAAndCSRF(s, m, state)
+				} else if mode.password {
 					observed.Session, err = session.NewSessionWithPasswordMFAAndCSRF(s, m, state)
 				} else {
 					observed.Session, err = session.NewSessionWithMagicLinkMFAAndCSRF(s, primary, m, state)
@@ -276,10 +289,10 @@ func TestMFASessionEncryptedRestartRetainsCompleteProvenanceAndDeadline(t *testi
 			}
 			before, _ := original.Session.CSRFState().Bindings()
 			after, _ := warm.Session.CSRFState().Bindings()
-			if before != after || !mode.password && warm.Session.MagicLinkAuthentication() == (session.MagicLinkAuthentication{}) {
+			if before != after || !mode.password && !mode.passkey && warm.Session.MagicLinkAuthentication() == (session.MagicLinkAuthentication{}) {
 				t.Fatal("restart dropped primary or synchronizer")
 			}
-			if mode.password {
+			if mode.password || mode.passkey {
 				retained, _ := warm.Session.Bindings()
 				if retained.Authentication != s.Authentication || warm.Session.MagicLinkAuthentication() != (session.MagicLinkAuthentication{}) {
 					t.Fatal("restart substituted password primary")

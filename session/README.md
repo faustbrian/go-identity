@@ -1,5 +1,24 @@
 # Session
 
+## Passkey primary with a separate enrolled factor
+
+`NewMFAPasskeySessionIssuer` and its `WithCSRF` variant explicitly select
+`PrepareMFAPasskey` followed by the existing one-use `BindMFA`/`Issue` path.
+The current selection completes TOTP, not OTP/recovery or an implicit
+"UV means all configured MFA is satisfied" policy. Password and magic-link
+issuers do not admit this origin; the ordinary passkey issuer cannot skip
+the factor. Only an exact acknowledged new commit can reveal the original
+bearer/synchronizer; replay, ambiguity, failure or expired delivery reveal none.
+
+`NewSessionWithPasskeyMFA` and its CSRF variant reconstruct trusted historical
+projections without authenticating them. Preserve the original credential,
+`PasskeyMFAPrimaryPurpose`, phishing-resistant assertion, passkey/factor epochs,
+independent factor and resolved remember choice. Factor completion cannot renew
+primary freshness or extend original expiry. The native completion must prove
+the retained assertion, browser, child, current account/credential/policy and
+actual factor and commit all effects in one transaction. These structural APIs
+alone do not enable a login endpoint or native passkey-MFA session reader.
+
 ## Explicit prospective passkey-only signup
 
 `NewPasskeySignupSessionIssuer` and its `WithCSRF` variant select anonymous

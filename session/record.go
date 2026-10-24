@@ -123,6 +123,11 @@ func newSessionWithMFA(s SessionSpec, otp OTPAuthentication, magicLink MagicLink
 	if s.Authentication.Kind != AuthenticationMagicLink && magicLink.state != nil {
 		return Session{}, ErrInvalidSession
 	}
+	if s.Authentication.Proof.Purpose == PasskeyMFAPrimaryPurpose && factor.state == nil {
+		// This newly selected primary is deliberately non-final. Losing its
+		// independently completed factor must not reconstruct a usable session.
+		return Session{}, ErrInvalidSession
+	}
 	if factor.state != nil {
 		p := factor.state
 		remember, err := s.Remember.Bindings()
@@ -136,7 +141,9 @@ func newSessionWithMFA(s SessionSpec, otp OTPAuthentication, magicLink MagicLink
 			}
 		case AuthenticationVerified:
 			primary := s.Authentication.Proof
-			if primary.Method != "password" || primary.Assurance != authentication.AssuranceSingleFactor || primary.Purpose != PasswordMFAPrimaryPurpose || string(p.PrimaryCommandID) != string(primary.ID) || p.VerifiedAt.Before(primary.IssuedAt) || p.ValidUntil.After(primary.ExpiresAt) || a.Organization.Present || a.Passkey.Present {
+			password := primary.Method == "password" && primary.Assurance == authentication.AssuranceSingleFactor && primary.Purpose == PasswordMFAPrimaryPurpose && !a.Passkey.Present
+			passkey := primary.Method == "passkey" && primary.Assurance == authentication.AssurancePhishingResistant && primary.Purpose == PasskeyMFAPrimaryPurpose && a.Passkey.Present
+			if (!password && !passkey) || string(p.PrimaryCommandID) != string(primary.ID) || p.VerifiedAt.Before(primary.IssuedAt) || p.ValidUntil.After(primary.ExpiresAt) || a.Organization.Present {
 				return Session{}, ErrInvalidSession
 			}
 		default:

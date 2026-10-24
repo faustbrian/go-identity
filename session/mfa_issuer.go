@@ -39,6 +39,35 @@ func NewMFAPasswordSessionIssuer(executor IssueExecutor, c IssuerConfig) (*Sessi
 	return newMFASessionIssuer(executor, c, true)
 }
 
+// NewMFAPasskeySessionIssuer selects completion of an original committed UV
+// passkey primary with an independent enrolled factor. Authority must be nil.
+// The native executor must authenticate the original assertion, credential,
+// browser, child and actual factor, committing replay/continuation/session
+// effects together. Construction and structural preparation grant no authority.
+func NewMFAPasskeySessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionIssuer, error) {
+	s, err := newMFASessionIssuer(executor, c, false)
+	if err != nil {
+		return nil, err
+	}
+	s.mfaPasskey = true
+	return s, nil
+}
+
+// NewMFAPasskeySessionIssuerWithCSRF retains the original synchronizer until
+// an exact fresh acknowledged commit. Replay, recovery, ambiguity and failure
+// disclose neither it nor the prepared bearer.
+func NewMFAPasskeySessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, key CSRFKey) (*SessionIssuer, error) {
+	if key.key.state == nil {
+		return nil, ErrInvalidIssuer
+	}
+	s, err := NewMFAPasskeySessionIssuer(executor, c)
+	if err != nil {
+		return nil, err
+	}
+	s.csrfKey = key
+	return s, nil
+}
+
 // NewMFAVerificationSessionIssuer selects TOTP completion of a separately
 // committed registration-verification primary. This is not magic-link consume
 // or password comparison. The native executor must authenticate the original
@@ -119,7 +148,7 @@ func NewMFAMagicLinkSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig
 // original remember policy and continuation expiry are never renewed. BindMFA
 // must freeze the same final opaque command before any reservation/execution.
 func (s *SessionIssuer) PrepareMFAMagicLink(b identity.CommandBinding, spec SessionSpec, primary MagicLinkAuthentication, metadata MFAAuthentication) (out PreparedIssuance, err error) {
-	if s == nil || s.mfaPassword || s.mfaVerification {
+	if s == nil || s.mfaPassword || s.mfaVerification || s.mfaPasskey {
 		return out, ErrInvalidIssuance
 	}
 	return s.prepareMFA(b, spec, primary, metadata)
@@ -153,6 +182,21 @@ func (s *SessionIssuer) PrepareMFAPassword(b identity.CommandBinding, spec Sessi
 	return s.prepareMFA(b, spec, MagicLinkAuthentication{}, metadata)
 }
 
+// PrepareMFAPasskey freezes original UV-primary and independent TOTP provenance
+// before token allocation. Only the explicit passkey-MFA issuer admits it; no
+// ordinary passkey/password/magic-link route is enabled. Native execution must
+// prove the retained primary and actual factor; this is only prospective intent.
+func (s *SessionIssuer) PrepareMFAPasskey(b identity.CommandBinding, spec SessionSpec, metadata MFAAuthentication) (PreparedIssuance, error) {
+	if s == nil || !s.mfaPasskey {
+		return PreparedIssuance{}, ErrInvalidIssuance
+	}
+	m, err := metadata.Bindings()
+	if err != nil || m.Method != "totp" {
+		return PreparedIssuance{}, ErrInvalidIssuance
+	}
+	return s.prepareMFA(b, spec, MagicLinkAuthentication{}, metadata)
+}
+
 func (s *SessionIssuer) prepareMFA(b identity.CommandBinding, spec SessionSpec, primary MagicLinkAuthentication, metadata MFAAuthentication) (out PreparedIssuance, err error) {
 	defer func() {
 		if recover() != nil {
@@ -181,7 +225,9 @@ func (s *SessionIssuer) prepareMFA(b identity.CommandBinding, spec SessionSpec, 
 	}
 	spec.Lookup = TokenDigest{KeyVersion: s.config.LookupKey.state.version, Sum: [32]byte{1}}
 	var record Session
-	if s.mfaPassword {
+	if s.mfaPasskey {
+		record, e = NewSessionWithPasskeyMFA(spec, metadata)
+	} else if s.mfaPassword {
 		record, e = NewSessionWithPasswordMFA(spec, metadata)
 	} else {
 		record, e = NewSessionWithMagicLinkMFA(spec, primary, metadata)
@@ -272,7 +318,13 @@ func validateMFAIssuanceAt(record Session, now time.Time) error {
 	}
 	if spec.Authentication.Kind == AuthenticationVerified {
 		primary := spec.Authentication.Proof
-		if primary.Method != "password" || primary.Assurance != auth.AssuranceSingleFactor || now.Before(spec.IssuedAt) || primary.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: PasswordMFAPrimaryPurpose, Audience: spec.Audience, Now: now}) != nil {
+		purpose := PasswordMFAPrimaryPurpose
+		valid := primary.Method == "password" && primary.Assurance == auth.AssuranceSingleFactor
+		if primary.Method == "passkey" {
+			purpose = PasskeyMFAPrimaryPurpose
+			valid = primary.Assurance == auth.AssurancePhishingResistant
+		}
+		if !valid || now.Before(spec.IssuedAt) || primary.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: purpose, Audience: spec.Audience, Now: now}) != nil {
 			return ErrInvalidIssuance
 		}
 		life, err := record.Lifetime(now)

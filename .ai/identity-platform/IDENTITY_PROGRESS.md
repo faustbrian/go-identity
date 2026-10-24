@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 12:59 UTC
+## Current TL;DR — 2026-10-24 13:47 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -19,14 +19,22 @@
   All six Ed/mixed HTTPS/OpenAPI fresh/upgrade profiles plus retained ES256
   journeys pass locally on PostgreSQL/race (150.269s); Reference/command race,
   tagged vet and dependency verification pass. Existing browser proof is retained.
-- **Public reproof pending:** the authenticated public Reference matches all
-  fourteen changed files, but its three fresh journeys failed on context
-  deadlines during severe host pressure (load109, about47GB swap). That is not
-  a pass; no source defect is established, and deadlines were not weakened.
-  The isolated database is stopped; cleanup precedes another bounded run.
-- **Next:** retry unchanged public inputs once the host is usable; meanwhile
-  trace remaining enrolled-MFA ownership without heavy checks. No user decision
-  is needed. Ed25519 browser/physical-device and full M16 qualification stay open.
+- **Public consumer proof now passes:** the same authenticated downloaded
+  Reference passes all three fresh Ed/mixed PostgreSQL/race journeys
+  (20.990s/20.840s/20.902s), with dependencies verified. Source and deadlines
+  were unchanged; the earlier host-pressure timeout failures remain recorded.
+  The disposable database is stopped and its owned root moved to macOS Trash.
+- **MFA implementation started:** the explicit session-root passkey/TOTP
+  provenance and commit-gated issuance prerequisite passes its regression,
+  complete root race checks and encrypted-cache restart cases, with independent
+  review. Native challenge issuance/completion, reading and HTTP composition
+  remain unfinished; this does not close the passkey milestone.
+- **Next:** implement passkey primary -> enrolled TOTP challenge -> completion
+  -> authenticated session/read/logout. No session is allowed before the
+  independent factor completes. A bounded organization HTTP lane is assigned
+  separately; its real Reference integration remains primary-owned. No user
+  decision is needed. Ed25519 browser/physical-device and full M16 qualification
+  stay open.
 
 ## Retained checkpoint — 2026-10-24 12:10 UTC
 

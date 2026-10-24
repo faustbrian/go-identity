@@ -90,6 +90,7 @@ type SessionIssuer struct {
 	mfa              bool
 	mfaPassword      bool
 	mfaVerification  bool
+	mfaPasskey       bool
 	anonymous        bool
 	anonymousUpgrade bool
 	passkey          bool

@@ -1,5 +1,77 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 13:47 UTC: M16 session-root prerequisite is independently reviewed,
+not a completed MFA login. Explicit prospective passkey-primary/TOTP issuer and
+trusted reconstruction retain original credential/proof/remember/factor and
+passkey epochs; no factor bypass or freshness renewal. RED2203/0.260s rejected
+the completed structural record; GREEN53298/0.245s and43987/0.240s. Frozen root
+race79013/1.599s, vet0/modverifyall; later cache-test-only extension passes
+race56429/1.234s plus vet/diffcheck0. Independent
+passkey_mfa_session_contract_final APPROVE complete9path candidate atf38ce29,
+ordered manifest e738a10920184e389edf3166371778ed8cf2e0f028e7fb6607699ebaf86389cd.
+Changed19.32KB+new5.28/7.01KB secret scans clean. No native signin, continuation,
+MFA session reader, HTTP or full-M16 success is claimed by these root APIs.
+Organization worker now also owns narrowly additive neutral root operation
+request/result files/tests/docs; existing API shapes remain unchanged. Heavy
+token ORGANIZATION for its bounded root contract checks, then returned before
+primary's next kernel run. Primary continues kernel/native consumer work.
+
+2026-10-24 13:40 UTC: unchanged downloaded-public Reference reproof COMPLETE.
+Same v0.0.0-20261024125033-14ea79c697e8 and authenticated Sum recorded below;
+serialized PostgreSQL/race fresh Ed25519 (44386,20.990s), mixed-Ed-first
+(79077,20.840s), mixed-ES-first (46227,20.902s) all exit0; final modverify all.
+Original context deadlines and source unchanged; earlier84123 failure remains
+recorded, not overwritten. Public bounded-run PG58918 stopped; exact owned
+identity-ed25519-public.8WPuNX cache/database root moved to macOS Trash. Full
+M16/67-unit qualification remains open, whole~25%,11/39.
+
+M16 next finite primary profile: genuine pre-enrolled passkey on a real
+password account, then actual TOTP activation, passkey signin -> bound partial
+MFA challenge with NO session/token/CSRF -> actual TOTP completion -> native
+session/read/logout. Preserve default known-empty behavior; enrolled selection
+is explicit and fails closed. Primary owns identity kernel/MFA/session,
+go-passkey native integration and Reference/HTTP composition. Consume delivered
+identity f38ce29, native passkey0b8b646 and WebAuthn4801d79; extend their owning
+public contracts rather than relabel password proofs or mint a private engine.
+UV passkey is a primary here, not automatically an enrolled second factor.
+Required denial/atomicity: wrong/replayed TOTP, changed factor/key/policy,
+expiry, cross-flow/tenant, rollback and unknown outcome never grant a session.
+Focused new PostgreSQL consumer red/green, affected primary/continuation/session
+tests and race/authority/recovery tests; one independent complete final review,
+normal public pins and Reference consumer proof before profile delivery.
+
+Parallel lane organization HTTP (Tier C): worker owns new http/organization/**
+in go-identity, necessary additive neutral core operation request/result types,
+and direct-operation facade/tests/docs under go-organization/postgres; no identity
+shared contracts, root
+manifests/pins, Reference, other HTTP leaves, Git mutations or children. Consume
+organization4eac678 (rootf7d9a1a), its recorded genuine native membership/domain
+consumer proof and identityf38ce29 session/HTTP/risk owners. Finite bearer-only
+opt-in create/get/member-list/add/remove -> real native durable effects and
+last-owner denial, with strict bearer grammar, no cookie fallback, trusted
+network/rate, bounded parsing, exact canonical routes/OpenAPI, original keyed
+request custody and explicit unknown recovery. No invitation/team/browser/
+active-selection expansion. First inspect canonical transport/idempotency
+contracts: a concrete upstream mismatch must be returned, not silently adapted.
+Worker proves transport with native seam doubles only where appropriate;
+primary owns actual Reference/native composition and final acceptance. Narrow
+leaf unit/parser/fuzz/vet, genuine native facade integration, one final review;
+all local heavy checks require primary's token. Default token PRIMARY.
+
+2026-10-24 13:07 UTC: bounded remaining-M16 investigation, no heavy run or
+implementation yet. Native signin.go311 and discoverable_signin.go149 deny
+enrolled factors; MFA's passkey_session_authority.go requires known-empty state
+and no MFAAuthentication, while its password-first continuation authenticates
+password-specific retained provenance. Do not relabel that proof or just remove
+the guard. Primary owns the code/consumer trace. Read-only helper
+passkey_mfa_requirements owns only the selected original goal/catalog policy
+question: required enrolled-MFA behavior and whether UV passkeys can satisfy it;
+no writable paths, tests, Git mutations or children. Authority is the canonical
+goal and preserved passkey/MFA/session protocol/acceptance requirements, not
+historical procedural gates. Return a bounded source-cited answer, not a new
+plan or approval chain. Host load125 on16CPUs still prevents a sensible repeat
+of unchanged public Reference runtime inputs; previous342.334s failure retained.
+
 2026-10-24 12:59 UTC: Reference14ea79c697e8c2f4ea38d8d789854bd5a41163c1 is exact
 origin/main/Required40095616027 SUCCESS. Independent
 passkey_algorithms_reference_final APPROVE complete14path source; tracked diff

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicitly selected passkey-primary/TOTP completion issuer and trusted
+  historical session reconstruction. Preserve original UV credential, factor
+  provenance, security epochs, remember choice and primary freshness; ordinary
+  passkey and password profiles remain separate. This is prospective intent,
+  not a native MFA workflow: original assertion, child and actual factor must
+  still be authenticated and committed together before any session is usable.
+
 - Add an explicit anonymous prospective passkey-signup issuer without changing
   existing assertion or password profiles. Share original one-bind/one-issue
   custody and commit-gated bearer/CSRF delivery; replay, unknown and late results
