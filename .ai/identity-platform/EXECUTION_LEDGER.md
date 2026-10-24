@@ -1,5 +1,33 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 03:24 UTC: finite M16 HTTP signup profile delivered as reviewed
+Reference321563e82a7d5f737431669e6714f07cf9979d74, exactmain/Required40057908311
+SUCCESS. Authenticated publicReferencev0.0.0-20261024032016-321563e82a7d
+Origin321563e/Sumh1:XbUl0fxuHChDiDMxzMOw90FYT6hn33vqrmYoFZYOa18=;
+all12changed archivefiles match; downloaded-public actual fresh+upgrade HTTP
+signup/read/logout/freshdiscovery race22.616s, modverify allmodulesverified.
+No replacements or security/budget changes; fullM16/unit counts unchanged.
+Next primary TierC/D profile: selected passkey-only Reference bootstrap/signup/
+discovery/read/logout without configured password/OTP/delivery workflows or
+their advertised capabilities. Reuse real native4c4a2de, publicleafb286 and
+Reference321563; preserve selected legacy deployment and failclosed missing
+owners. Own Reference/session/HTTP composition, pins, lifecycle/migration
+selection and genuine fresh/populated consumer proof. No new domain engines.
+Focused checks: graph-selection rejection before fix; real PG signup/discovery/
+read/logout and absent password/OTP metadata, retained existing profile, relevant
+race/vet/modverify/secrets, one independent final diff and mainCI/public proof.
+Independent conditional-signin lane: worker conditional_signin_native owns
+go-passkey root/postgres conditional signin APIs, implementation, tests/docs and
+local manifests only at committed4c4a2de; no shared owner/source edits. Consume
+existing genuine discoverable/native issuer/risk/original-key contracts (public
+PG/race source3.149s and Reference HTTPjourney22.616s). Deliver explicit backend
+conditional options -> genuine same-mode completion -> session/read/logout;
+preserve UV/RP/tenant/remember/original expiry, denial/replay/recovery and unchanged
+identified/discoverable modes, no browser UI/protocol/authority duplicate. Primary
+owns Git, integration and acceptance. Worker first reports boundary alignment;
+no heavy Go/service runs until primary grants serialized slot. Final reviewed
+public native pin unlocks primary HTTP/Reference conditional integration.
+
 2026-10-24 03:19 UTC: M16 HTTP signup runs end to end through actual Reference
 on fresh/populated PostgreSQL, including schema-checked wire, original options
 retry, one-use completion, account/credential/session+3events, shared read/logout

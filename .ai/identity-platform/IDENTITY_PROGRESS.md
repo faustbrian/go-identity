@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 03:19 UTC
+## Current TL;DR — 2026-10-24 03:24 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional full-unit qualification is claimed.
@@ -11,15 +11,17 @@
 - **Delivered:** native original-signup rate source `go-passkey@4c4a2de` and
   reviewed HTTP signup leaf `go-identity@b286e89` are main-pushed with green
   Required CI. The downloaded leaf's 14 changed files match committed source.
-- **Current:** Reference composition passes standalone PostgreSQL/race (27.985s),
+- **Reference delivered:** independently approved `321563e` is main-pushed with
+  green Required CI `40057908311`. Its authenticated downloaded-public module
+  passes the complete fresh/upgrade HTTP journey under PostgreSQL/race (22.616s),
+  with dependencies verified and all 12 changed archive files matching source.
+  Reference also passes standalone PostgreSQL/race (27.985s),
   module/cmd race (11.165s/10.564s), tagged vet and dependency verification.
-  Independent final review approves with no remaining findings. Main delivery
-  and downloaded-public acceptance remain pending.
-- **Next:** commit/push reviewed Reference, prove its downloaded-public journey,
-  then continue standalone passkey-only selection and conditional signin.
+- **Next:** primary tackles standalone passkey-only deployment selection; a
+  separate bounded worker owns native conditional-signin backend support.
   Full M16, other open milestones and final release qualification remain open.
-  No user decision is needed. Existing-deployment prerequisites remain explicit;
-  this profile is not a standalone password-free deployment or a UI.
+  No user decision is needed. The delivered profile's existing-deployment
+  prerequisites remain explicit; it is not yet standalone password-free or a UI.
 
 ## Retained checkpoint — 2026-10-24 02:31 UTC
 
