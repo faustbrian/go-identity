@@ -29,17 +29,28 @@ import (
 func TestReferencePostgresPasskeyStandalone(t *testing.T) {
 	for _, upgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-			proveReferencePasskeyStandalone(t, upgrade)
+			proveReferencePasskeyStandalone(t, upgrade, false, false)
 		})
 	}
 }
 
-func proveReferencePasskeyStandalone(t *testing.T, upgrade bool) {
+func TestReferencePostgresPasskeyConditional(t *testing.T) {
+	for _, persistent := range []bool{false, true} {
+		for _, upgrade := range []bool{false, true} {
+			t.Run(map[bool]string{false: "browser", true: "persistent"}[persistent]+"/"+map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
+				proveReferencePasskeyStandalone(t, upgrade, true, persistent)
+			})
+		}
+	}
+}
+
+func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persistent bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, true)
 	c := standalonePasskeyConfiguration(t, f.config)
+	c.HTTPPasskey.Conditional = conditional
 	deps := reference.ReferenceDependencies{PostgreSQL: f.pool}
 	if !upgrade {
 		for name, edit := range map[string]func(*reference.StoreConfiguration){
@@ -51,9 +62,12 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool) {
 			"password HTTP": func(c *reference.StoreConfiguration) {
 				c.HTTPPasswordSignin = &reference.HTTPPasswordSigninConfiguration{}
 			},
-			"enrollment HTTP":    func(c *reference.StoreConfiguration) { c.HTTPPasskey.Registration = true },
-			"identified HTTP":    func(c *reference.StoreConfiguration) { c.HTTPPasskey.DiscoverableOnly = false },
-			"discovery off":      func(c *reference.StoreConfiguration) { c.HTTPPasskey.Discoverable = false },
+			"enrollment HTTP": func(c *reference.StoreConfiguration) { c.HTTPPasskey.Registration = true },
+			"identified HTTP": func(c *reference.StoreConfiguration) { c.HTTPPasskey.DiscoverableOnly = false },
+			"discovery off":   func(c *reference.StoreConfiguration) { c.HTTPPasskey.Discoverable = false },
+			"conditional without discovery": func(c *reference.StoreConfiguration) {
+				c.HTTPPasskey.Conditional, c.HTTPPasskey.Discoverable, c.HTTPPasskey.DiscoverableOnly = true, false, false
+			},
 			"audit exceeds risk": func(c *reference.StoreConfiguration) { c.Passkey.Standalone.AuditTimeout = 3 * time.Second },
 			"session-risk-schema-overlap": func(c *reference.StoreConfiguration) {
 				c.Session.Native.Execution.Repository.Schema = c.DurableAdmission.Schema
@@ -222,7 +236,7 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool) {
 			t.Fatal("restored standalone readiness", status.Failures)
 		}
 	}
-	proveReferencePasskeySignupHTTP(t, ctx, features, c, server.Handler(), server.OpenAPI().JSON(), f.pool)
+	proveReferencePasskeySignupHTTPRemember(t, ctx, features, c, server.Handler(), server.OpenAPI().JSON(), f.pool, persistent)
 }
 
 func standalonePasskeyConfiguration(t *testing.T, c reference.StoreConfiguration) reference.StoreConfiguration {

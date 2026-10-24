@@ -23,7 +23,7 @@ import (
 // and actual signed proof reader, but no browser-device ceremony. Delete requires
 // native Deletion with a cookie primary and its actual configured reset recovery
 // owner. Signup is a separate explicit selection requiring native signup and
-// original pre-auth/device custody. No conditional UI or MFA fallback is enabled.
+// original pre-auth/device custody. No browser UI or MFA fallback is enabled.
 //
 // Inventory reuses an existing session/MFA/email safe limiter. Only when none
 // exists must its three explicit inventory rate settings select that owner;
@@ -35,6 +35,9 @@ type HTTPPasskeyConfiguration struct {
 	// DiscoverableOnly explicitly rejects identifier-based signin and requires
 	// Discoverable. It needs no email/password comparison configuration.
 	DiscoverableOnly bool
+	// Conditional selects native outer conditional presentation for discoverable
+	// options. It requires Discoverable; no third ceremony mode or UI is enabled.
+	Conditional bool
 	// Signup selects original-flow passkey-first registration and a distinct
 	// passkey-signup initiation method. It requires native Passkey.Signup and
 	// Session.Passkey; it never substitutes an enrollment proof or password.
@@ -93,7 +96,7 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_passkey"}
 	h := *c.HTTPPasskey
-	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete || h.Discoverable && !h.Signin || h.DiscoverableOnly && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
+	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete || h.Discoverable && !h.Signin || (h.DiscoverableOnly || h.Conditional) && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
 		return nil, invalid
 	}
 	n := *c.Passkey

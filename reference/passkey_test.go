@@ -37,6 +37,15 @@ func TestPasskeyPortableOperationsRetainGraphLifetime(t *testing.T) {
 			if out, err := owner.KeyedDiscoverableAuthenticationOptions(t.Context(), passkey.KeyedDiscoverableOptionsRequest{}); err == nil || out.CommandID != "" {
 				t.Fatal("unadmitted keyed discovery")
 			}
+			if out, err := owner.KeyedConditionalAuthenticationOptions(t.Context(), passkey.KeyedDiscoverableOptionsRequest{}); err == nil || out.CommandID != "" {
+				t.Fatal("unadmitted keyed conditional discovery")
+			}
+			if out, err := owner.ConditionalAuthenticationOptions(t.Context(), native.DiscoverableSigninRequest{}); err == nil {
+				if _, ok := out.Ceremony(); ok {
+					t.Fatal("unadmitted conditional options")
+				}
+				t.Fatal("unadmitted conditional discovery")
+			}
 			if out, err := owner.RegistrationRateSource(t.Context(), passkey.RegistrationCeremonyRateRequest{}); err == nil || out != (passkey.CeremonyRateSource{}) {
 				t.Fatal("unadmitted enrollment source")
 			}

@@ -38,6 +38,11 @@ func TestReferencePostgresPasskeyHTTPSignup(t *testing.T) {
 
 func proveReferencePasskeySignupHTTP(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, document []byte, pool *database.Pool) {
 	t.Helper()
+	proveReferencePasskeySignupHTTPRemember(t, ctx, features, c, handler, document, pool, false)
+}
+
+func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, document []byte, pool *database.Pool, persistent bool) {
+	t.Helper()
 	server := httptest.NewTLSServer(handler)
 	defer server.Close()
 	client := server.Client()
@@ -126,7 +131,7 @@ func proveReferencePasskeySignupHTTP(t *testing.T, ctx context.Context, features
 		if device != nil {
 			retained = []*http.Cookie{device}
 		}
-		got := call("/v1/session/preauth-issue", map[string]any{"method": method, "remember": false}, "", retained, "", origin)
+		got := call("/v1/session/preauth-issue", map[string]any{"method": method, "remember": persistent}, "", retained, "", origin)
 		var out struct {
 			Issued bool   `json:"issued"`
 			FlowID string `json:"flowID"`
@@ -266,6 +271,13 @@ func proveReferencePasskeySignupHTTP(t *testing.T, ctx context.Context, features
 	if err != nil {
 		t.Fatal(err)
 	}
+	choice := session.BrowserSession
+	if persistent {
+		choice = session.PersistentSession
+	}
+	if record.Remember.Choice() != choice || (issued.cookies[0].MaxAge > 0) != persistent || !persistent && !issued.cookies[0].Expires.IsZero() {
+		t.Fatal("signup changed original browser remember choice")
+	}
 	var events, identifiers int
 	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic IN ('identity.passkey.create_credential','user.created.v1','session.created.v1')),(SELECT count(*) FROM identity.identifiers WHERE user_id=$2)`, string(command), string(record.UserID)).Scan(&events, &identifiers); err != nil || events != 3 || identifiers != 0 {
 		t.Fatal("HTTP signup lost atomic effects or invented identifier", err, events, identifiers)
@@ -305,13 +317,36 @@ func proveReferencePasskeySignupHTTP(t *testing.T, ctx context.Context, features
 	proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), func() bool { return read(issued).Authenticated })
 	flowID, cookies = flow("passkey")
 	assertionOptions := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, "reference-http-signup-signin", cookies, "", origin)
-	if assertionOptions.code != 200 || json.Unmarshal(assertionOptions.body, &created) != nil || json.Unmarshal(created.Options, &protocol) != nil {
+	var assertionProtocol struct {
+		Mediation string `json:"mediation"`
+		PublicKey struct {
+			Challenge string `json:"challenge"`
+		} `json:"publicKey"`
+	}
+	if assertionOptions.code != 200 || json.Unmarshal(assertionOptions.body, &created) != nil || json.Unmarshal(created.Options, &assertionProtocol) != nil {
 		t.Fatal("fresh HTTP signup-key signin options", assertionOptions.code)
 	}
+	if c.HTTPPasskey.Conditional && assertionProtocol.Mediation != "conditional" || !c.HTTPPasskey.Conditional && assertionProtocol.Mediation != "" {
+		t.Fatal("signin options disagree with selected presentation")
+	}
+	optionsRetry := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, "reference-http-signup-signin", cookies, "", origin)
+	var original struct {
+		CommandID string          `json:"commandID"`
+		Replayed  bool            `json:"replayed"`
+		Options   json.RawMessage `json:"options"`
+	}
+	if optionsRetry.code != 200 || json.Unmarshal(optionsRetry.body, &original) != nil || !original.Replayed || original.CommandID != created.CommandID || len(original.Options) != 0 || len(optionsRetry.cookies) != 0 {
+		t.Fatal("signin options retry disclosed a new challenge or authentication", optionsRetry.code)
+	}
 	command, _ = identity.NewCommandID()
-	signin := call("/v1/passkey/signin-verify", map[string]any{"mode": "discoverable", "flowID": flowID, "commandID": command, "ceremonyID": created.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, private, id, handle, protocol.PublicKey.Challenge))}, "", cookies, "", origin)
+	signinBody := map[string]any{"mode": "discoverable", "flowID": flowID, "commandID": command, "ceremonyID": created.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, private, id, handle, assertionProtocol.PublicKey.Challenge))}
+	signin := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
 	if signin.code != 200 || len(signin.cookies) != 1 || signin.header.Get("X-CSRF-Token") == "" {
 		t.Fatal("signup key fresh HTTP signin", signin.code)
+	}
+	signinReplay := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
+	if signinReplay.code < 400 || len(signinReplay.cookies) != 0 || signinReplay.header.Get("X-CSRF-Token") != "" {
+		t.Fatal("signin replay redelivered authentication", signinReplay.code)
 	}
 	again := read(signin)
 	if !again.Authenticated {
@@ -320,6 +355,9 @@ func proveReferencePasskeySignupHTTP(t *testing.T, ctx context.Context, features
 	spec, err := again.Session.Bindings()
 	if err != nil || spec.UserID != record.UserID {
 		t.Fatal("signup key resolved different identity")
+	}
+	if spec.Remember.Choice() != choice || (signin.cookies[0].MaxAge > 0) != persistent || !persistent && !signin.cookies[0].Expires.IsZero() || spec.Remember.AbsoluteTTL() > c.HTTPPreAuth.Lifetime.AbsoluteTTL {
+		t.Fatal("signin presentation changed original remember choice or expiry")
 	}
 	proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, signin.cookies[0].Value, signin.header.Get("X-CSRF-Token"), func() bool { return read(signin).Authenticated })
 }

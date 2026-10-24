@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expose guarded native conditional options and opt-in
+  `HTTPPasskey.Conditional` for discoverable signin, including passkey-only
+  deployments. Presentation shares the original command, flow, remember choice
+  and expiry; retries return metadata only and completion retains ordinary
+  discoverable validation. Existing identified/default profiles stay unchanged.
+  No extra migrations or browser UI are introduced.
+
 - Select a PostgreSQL-only passkey deployment with `Passkey.Standalone`:
   signup, discoverable signin, inventory and common session read/logout need
   no password, OTP, delivery or email-parser configuration. Bootstrap scope,

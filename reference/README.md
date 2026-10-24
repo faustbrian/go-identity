@@ -11,6 +11,12 @@ compose the genuine registration -> read/logout -> fresh signin journey;
 email parser. See [the standalone deployment profile](PASSKEY.md#passkey-only-deployment)
 for exact configuration, owner migrations and excluded mixed/management modes.
 
+`HTTPPasskey.Conditional` separately selects conditional presentation of
+discoverable options, including in that standalone graph. The native facade
+also exposes explicit conditional option methods. Request/ceremony mode,
+remember choice, expiry and consuming verification remain unchanged; this is
+backend option generation, not browser UI. See [the conditional profile](PASSKEY.md#conditional-presentation).
+
 `StoreConfiguration.Passkey` composes the delivered existing-account native
 enrollment, identified signin, safe inventory and cookie-CSRF session/logout
 owners. `FeatureSet.Passkeys()` retains graph startup, tenant and shutdown
@@ -46,7 +52,7 @@ configured. Begin with `POST /v1/session/preauth-issue` method `passkey-signup`,
 then use the canonical registration pair with explicit `mode:"signup"` and
 the original flow/cookies. Enrollment retains its unchanged proof/session
 variant; failure never selects another branch. See [the passkey guide](PASSKEY.md)
-for the closed payloads. Conditional UI remains outside this HTTP profile.
+for the closed payloads. Browser UI remains outside this HTTP profile.
 Independently select `Passkey.Management` for signed-proof label rename, and
 `HTTPPasskey.Update` for its cookie endpoint. Retain original retry custody;
 the graph appends forward metadata/proof histories without changing signin

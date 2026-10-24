@@ -32,7 +32,7 @@ This finite standalone profile requires signup and supports discovery, safe
 inventory and session read/logout. Password-proof enrollment, label management,
 deletion and mixed password/OTP/delivery selections fail construction rather
 than being silently ignored. Passkey-proof management remains a later profile.
-Conditional browser presentation is not selected here, and no UI is provided.
+Conditional browser presentation is separately selected below; no UI is provided.
 The actual public construction/configuration and fresh/populated-kernel-upgrade
 journeys are executable in `TestReferencePostgresPasskeyStandalone`.
 
@@ -79,6 +79,32 @@ cannot switch between identified and identifier-free modes. The default false
 policy denies identifier-free calls without disabling identified signin.
 The three-target discovery admission profile currently requires the durable
 PostgreSQL risk owner; it is not qualified for the four-target Valkey profile.
+
+### Conditional presentation
+
+The guarded `Passkeys()` facade exposes `ConditionalAuthenticationOptions` and
+`KeyedConditionalAuthenticationOptions` over the same native discoverable owner.
+Enable its existing `PasskeyDiscovery` policy. No additional ceremony mode,
+schema, authority, lifetime or request-key namespace is introduced. Ordinary
+and conditional native presentations of an original key share one command;
+retries/recovery never reconstruct the challenge or authentication.
+
+Set `HTTPPasskey.Conditional = true` together with `Discoverable` and `Signin`
+for the opt-in HTTP projection. It also works with `Passkey.Standalone` and
+`DiscoverableOnly` without password/OTP/delivery configuration. Continue to send
+`mode:"discoverable"` to the same signin pair. Fresh options add
+`options.mediation:"conditional"` beside `options.publicKey`; completion still
+verifies the ordinary discoverable assertion. Identified options are unchanged
+when selected, and disabling conditional selection retains the prior wire.
+
+Use the original flow/device cookies, Origin and remember choice, plus the
+original header-only options key. Replays expose command metadata, not another
+challenge or session. Applications must check browser support and deserialize
+`publicKey` before `navigator.credentials.get()`. The server cannot prove the
+browser's actual mediation and does not implement UI. Native expiry, UV,
+current authority, shared risk, CSRF and cookie/logout semantics are unchanged.
+`TestReferencePostgresPasskeyConditional` exercises fresh/populated PostgreSQL
+with both browser and persistent sessions through the actual HTTPS graph.
 
 ## Configuration
 
@@ -321,7 +347,7 @@ go test -race -tags=integration -count=1 \
 These exercise actual fresh and populated-upgrade registration/verification,
 enrollment/assertion, signed rename/delete proofs and original-key retry. Removal
 also proves passkey-session denial and retained password-session read/logout;
-native removal runs without label management too. Conditional signin,
+native removal runs without label management too. Passkey-session management,
 completed secondary MFA and organization profiles remain required work. This
 profile is not complete M16, full release qualification, deployment or a UI.
 
