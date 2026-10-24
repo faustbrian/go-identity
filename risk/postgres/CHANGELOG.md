@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add exact anonymous passkey signup counter preparation using the original
+  bound browser flow and trusted network/device without inventing an account
+  or session. Registration retains its protected five-attempt/fifteen-minute
+  budget and transaction-owned denial. Install the optional forward
+  `PasskeySignupCounterMigrationSource` after selected histories; it preserves
+  installed optional profiles, existing allowances and original evidence.
+  Native browser/protocol and account/session authority remain mandatory.
+
 - Keep protected anonymous-upgrade mutation counters bound to the original
   guest record and guest session while command user/actor identify the distinct
   permanent target. Only the exact native upgrade profile accepts this mapping;

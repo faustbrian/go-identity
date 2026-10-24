@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 00:24 UTC
+## Current TL;DR — 2026-10-24 00:49 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional fully qualified unit is claimed.
@@ -9,14 +9,23 @@
 - **Current M16:** passkey-first, no-email/no-password signup. Protocol support,
   actual kernel account creation, request types and known-empty MFA initialization
   are main-pushed with Required CI green (latest identity `808999e`).
-- **Latest component:** reviewed signup session persistence passes real
-  PostgreSQL/race commit/rollback, retained identity after pruning and populated
-  migration tests. Native WebAuthn/pre-auth/RP composition is still missing, so
-  this is not working end-to-end signup and M16 remains open.
-- **Delivery pending:** outbox is reviewed/tested on a CI carrier; its main
-  requires hosted Required first. No PR, Tools change or protection bypass.
-- **Next:** connect original signup to session issuance, prove the complete
-  native/Reference journey and required lifecycle effects. No user decision needed.
+- **Latest delivered components:** session persistence `94e5a95`, explicit
+  signup issuer `1d7f872` and protected risk projection `b030e8e` are main-pushed
+  with Required CI green. PostgreSQL/race, copied-request single delivery and
+  original scope/expiry checks cover their respective boundaries.
+- **Outbox delivered:** reviewed `4279fe5` is on main with exact push-triggered
+  Required `40045947903` green. Earlier manual-dispatch green did not satisfy
+  GitHub rulesets; the minimal carrier trigger preserves the identical gates.
+  No PR, Tools programme or protection bypass was used.
+- **Current actual Go work:** primary owns native signup composition and its
+  real journey test; an independent leaf worker owns PostgreSQL consumption of
+  the committed protected risk contract. Local native source is not yet passing
+  or delivered. Its first test must prove no pre-verification account/handle,
+  genuine registration, readable session and all three lifecycle events.
+- **Next:** finish native counters, prove signup/session/read/logout/new signin,
+  rollback/replay/recovery and Reference/HTTP composition. M16 remains open;
+  no user decision is needed. The rejected unpublished Authentication-class
+  shortcut was replaced with the original 5/15m protected deny policy.
 - **Remaining:** conditional passkey signin, other open milestone profiles and
   the platform's full-unit, journey/shared-issuer and release qualification.
 

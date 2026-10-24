@@ -1,5 +1,43 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 01:00 UTC: protected signup risk PostgreSQL leaf is reviewed locally,
+not yet main-delivered. Final nine-path review passkey_signup_risk_pg_final
+APPROVE/no findings at b030e8e; candidate
+91c89d92153ff80257dce6626488cf99ad216d75566089457236c13ccffb5c44.
+Missing API and wrong-column migration regressions failed before implementation;
+ordinary race1.369s, real retained/signup counter PG/race4.677s, final tagged
+vet, modverify, scoped secrets and diff checks pass on Go1.27.3. Options attempt
+six denies after five successful commands; replay adds no charge. Actual
+verification charging and atomic account/session composition remain native work.
+Outbox4279fe5 is now on main with eligible Required40045947903SUCCESS.
+Kernel third-session-event review requests bounded index/overflow and late
+outbox-failure cases; those are current work, not a new milestone or planning pass.
+
+Third signup lifecycle gap is explicit in the native consumer test: existing
+kernel/outbox stage credential+user only, while successful signup also creates a
+session. Primary will add same-Work original-command session staging against the
+closed session.result.session.id field, then let existing outbox persist its
+deterministic next event index. Preserve old two-event kernel profiles, original
+plan bytes and existing event IDs; no extra journal or generic event writer.
+The real kernel PG test is extended for stage/duplicate/mismatched-original ID
+and atomic event persistence. It is kernel evidence, not session/crypto proof;
+actual native/Reference test still owes all three events and failure partitions.
+
+Dependency-ready lane: passkey_signup_risk_pg owns only risk/postgres counter
+mapping/execution-compatible additions, new signup counter migration/tests and
+module-local go.mod/go.sum/README/CHANGELOG. Root risk b030e8e is main-pushed;
+its actual pure projection tests preserve canonical policy and pass full race
+1.379s/velocity1.241s. Consume that committed public root plus retained public
+kernelafca324 (no new kernel authority assumed). Finite outcome: exact anonymous
+register-options/verify.signup-v1 service owner reconstructs original flow and
+actual network/device counters, reserves/replays through existing coordinator,
+sixth attempt denies at5/15m; populated additive migration preserves all other
+dimensions/purposes/rows. No private counter engine, new journal or policy class.
+Primary owns native browser/protocol/account/session integration, root manifests,
+all Git and final review. Worker waits for shared heavy slot before Go/services,
+does not stage/commit/push/spawn or modify any other directory. If an actually
+missing kernel admission port blocks source custody, report it; do not invent it.
+
 2026-10-24 00:45 UTC: corrected risk root PreparePasskeySignup/Validate preserves
 registration's canonical CredentialMutation 5/15m deny/ReserveWithCommand policy;
 only actual tenant/browser/network/device dimensions replace impossible existing

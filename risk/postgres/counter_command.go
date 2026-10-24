@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
@@ -21,6 +22,31 @@ import (
 // including these reserved fields. Zero/disabled repository fails redacted.
 func (r *Repository) PrepareCommandCounters(c identity.Command, subject risk.Subject, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
 	return r.prepareCommandCounters(c, subject, "", "", primaryTime)
+}
+
+// PreparePasskeySignupCommandCounters selects only the two anonymous native
+// passkey signup schemas. The browser target comes from the original binding,
+// never a caller-selected counter field. Subject contains only trusted Network
+// and Device. Canonical CredentialMutation limits, denial and reservation phase
+// are unchanged. The native passkey owner must authenticate original browser
+// custody and protocol facts before reservation and commit account/credential/
+// session effects atomically. Pure preparation grants none of that authority.
+// Install PasskeySignupCounterMigrationSource before reserving this profile.
+func (r *Repository) PreparePasskeySignupCommandCounters(c identity.Command, subject risk.Subject, at time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
+	s, ok := c.Feature()
+	if !ok || !anonymousPasskeySignupCounter(s) {
+		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
+	}
+	return r.prepareCommandCounterProfile(c, subject, "", "", at, true)
+}
+
+func nativePasskeySignupCounterAction(action risk.Action) bool {
+	return action == "identity.passkey.register-options" || action == "identity.passkey.register-verify"
+}
+
+func anonymousPasskeySignupCounter(s identity.FeatureCommandSpec) bool {
+	op := identity.FeatureOperation{Owner: "passkey", OperationID: s.Operation.OperationID, SchemaID: s.Operation.OperationID + ".signup-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+	return nativePasskeySignupCounterAction(risk.Action(s.Operation.OperationID)) && s.Operation == op && s.Binding.ValidateFor(op) == nil && s.Binding.ActorKind == authorization.SubjectServiceAccount
 }
 
 // PrepareVerificationCommandCounters selects only the core's sessionless
@@ -120,6 +146,10 @@ func anonymousUpgradeCounter(s identity.FeatureCommandSpec) bool {
 }
 
 func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Subject, capabilityID string, resolvedUser identity.UserID, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
+	return r.prepareCommandCounterProfile(c, subject, capabilityID, resolvedUser, primaryTime, false)
+}
+
+func (r *Repository) prepareCommandCounterProfile(c identity.Command, subject risk.Subject, capabilityID string, resolvedUser identity.UserID, primaryTime time.Time, passkeySignup bool) (identity.Command, identitypostgres.CommandCounterPlan, error) {
 	fail := func() (identity.Command, identitypostgres.CommandCounterPlan, error) {
 		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
 	}
@@ -151,6 +181,9 @@ func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Sub
 	if resolvedUser != "" && anonymousMFASendCounter(s) {
 		boundID = s.Binding.AnonymousFlowID
 	}
+	if passkeySignup {
+		boundID = s.Binding.AnonymousFlowID
+	}
 	native, e := prepareNativeCounter(r.counterPolicy, scope, subject, boundID, primaryTime)
 	if e != nil {
 		return fail()
@@ -164,6 +197,9 @@ func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Sub
 		binary.BigEndian.PutUint32(versions[i*4:], k.Version)
 	}
 	s.Fields = append(s.Fields, textField("counter.network", subject.Network), textField("counter.session", subject.Session), identity.FeatureField{Name: "counter.prepared-at", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: primaryTime}}, identity.FeatureField{Name: "counter.key-versions", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: versions}})
+	if passkeySignup {
+		s.Fields = append(s.Fields, textField("counter.device", subject.Device))
+	}
 	if capabilityID != "" {
 		s.Fields = append(s.Fields, textField("counter.capability", capabilityID))
 	}
@@ -234,6 +270,9 @@ type restoredCounter struct {
 
 func prepareNativeCounter(p risk.CommandCounterPolicy, scope risk.Context, subject risk.Subject, capabilityID string, at time.Time) (risk.CounterCommand, error) {
 	if capabilityID != "" {
+		if nativePasskeySignupCounterAction(scope.Operation) {
+			return p.PreparePasskeySignup(scope, subject, capabilityID, at)
+		}
 		if scope.Operation == "identity.email.change-confirm" {
 			return p.PrepareEmailChange(scope, subject, capabilityID, at)
 		}
@@ -250,6 +289,9 @@ func prepareNativeCounter(p risk.CommandCounterPolicy, scope risk.Context, subje
 
 func (n restoredCounter) validateAt(at time.Time) error {
 	if n.capabilityID != "" {
+		if nativePasskeySignupCounterAction(n.scope.Operation) {
+			return n.policy.ValidatePasskeySignup(n.command, n.scope, n.subject, n.capabilityID, at)
+		}
 		if n.scope.Operation == "identity.email.change-confirm" {
 			return n.policy.ValidateEmailChange(n.command, n.scope, n.subject, n.capabilityID, at)
 		}
@@ -330,6 +372,11 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 				return fail()
 			}
 			subject.Session = f.Value.Text
+		case "counter.device":
+			if !anonymousPasskeySignupCounter(s) || f.Value.Kind != identity.FeatureText {
+				return fail()
+			}
+			subject.Device = f.Value.Text
 		case "counter.capability":
 			if f.Value.Kind != identity.FeatureText || f.Value.Text == "" || s.Operation.Owner != "identity/email" && !anonymousMFACounter(s) {
 				return fail()
@@ -366,6 +413,13 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 	}
 	if anonymousMFASendCounter(s) {
 		if capabilityID != "" || subject.User == "" {
+			return fail()
+		}
+		expectedCount = 5
+		capabilityID = s.Binding.AnonymousFlowID
+	}
+	if anonymousPasskeySignupCounter(s) {
+		if capabilityID != "" || subject.User != "" || subject.Session != "" || subject.Device == "" {
 			return fail()
 		}
 		expectedCount = 5

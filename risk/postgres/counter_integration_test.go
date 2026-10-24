@@ -561,4 +561,5 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 		}
 	})
 	t.Run("anonymous-mfa-login-send-counters", func(t *testing.T) { testNativeMFALoginSendCounters(t, ctx, pool, native) })
+	t.Run("anonymous-passkey-signup-counters", func(t *testing.T) { testNativePasskeySignupCounters(t, ctx, pool, prepare) })
 }

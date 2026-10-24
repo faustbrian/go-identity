@@ -5,6 +5,19 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `PreparePasskeySignupCommandCounters(command, subject, primaryTime)` selects
+  only the anonymous `passkey` owner's two canonical registration actions with
+  their exact `.signup-v1` schemas. It uses the original bound browser flow and
+  trusted network/device, retaining CredentialMutation's five attempts per
+  fifteen minutes, deny outcome and transaction-owned reservation. No account,
+  session or identifier is fabricated. The native owner must authenticate the
+  original private browser cookie and protocol result; scalar preparation does
+  neither. Install `PasskeySignupCounterMigrationSource{Schema, Version}` after
+  the selected counter histories. It extends the actual validated constraints,
+  preserving all installed optional profiles and populated counter evidence.
+  Counter-only coordinator tests cover options charge/replay/denial; genuine
+  verification/account/session effects require the native passkey owner.
+
 - `PrepareMFALoginSendCommandCounters` selects only anonymous
   `identity.mfa.otp-send` with the exact original browser cookie, required factor
   ID and resolved account. Journal `UserID` remains empty. The browser dimension

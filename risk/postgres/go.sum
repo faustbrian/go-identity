@@ -55,8 +55,12 @@ github.com/faustbrian/go-identity v0.0.0-20261021021214-46ae60703809 h1:JuPdLhQO
 github.com/faustbrian/go-identity v0.0.0-20261021021214-46ae60703809/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261021074754-2eafc2592af0 h1:jc7zd6E9ejwCx2mK73DIRBB2wUa9TgRpu5tp3vDe5ng=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261021074754-2eafc2592af0/go.mod h1:m//LlYNUNgr+jJP2YDW0FQPdX8TOJkAsLTCIUYRtE60=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261023225527-afca324cae57 h1:6GH4QIVeWxcCZkuXiEqKyU2IBNRPbvzxSBBTDRV1fBY=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261023225527-afca324cae57/go.mod h1:m//LlYNUNgr+jJP2YDW0FQPdX8TOJkAsLTCIUYRtE60=
 github.com/faustbrian/go-identity/risk v0.0.0-20261021074754-2eafc2592af0 h1:WsudR+tnbUOpAIT+DgO37OoYMhccI+xAu+sv2+49T5k=
 github.com/faustbrian/go-identity/risk v0.0.0-20261021074754-2eafc2592af0/go.mod h1:zgNZ4X6AUlAWF12+6VIXijPginf0xGML8wBYVkv+FvY=
+github.com/faustbrian/go-identity/risk v0.0.0-20261024004351-b030e8e364ac h1:aMLxUeXsH+sCsqfreB6y93MKN8Bke2pXkt2hM4ozwW0=
+github.com/faustbrian/go-identity/risk v0.0.0-20261024004351-b030e8e364ac/go.mod h1:zgNZ4X6AUlAWF12+6VIXijPginf0xGML8wBYVkv+FvY=
 github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEWMARORc=
 github.com/faustbrian/go-jsonrpc v1.1.1/go.mod h1:thOSBE3KGGNbPHY/OcreIcDPwusQ273v61n6TlmJdxE=
 github.com/faustbrian/go-migrations/v2 v2.0.0 h1:ipOKc3CA0p8vL5GPVh6xISQUfLiPCBfD6nT8stuWfUo=
