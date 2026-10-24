@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Describe native ES256/Ed25519 registration options in OpenAPI, including either
+  ordered unique pair. Keep the response list bounded to one or two supported
+  parameters; native algorithm selection and the ES256 default are unchanged.
+
 - Explicitly select password-free credential removal with `SessionDeletion`
   on the existing delete route. Current cookie/CSRF and genuine action-bound
   UV protect the exact removal; independent recovery and session effects stay

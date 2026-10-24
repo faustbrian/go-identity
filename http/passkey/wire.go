@@ -383,7 +383,7 @@ func protocolOptionsWire(registration bool) map[string]any {
 	if registration {
 		fields["rp"] = wireObject([]string{"id", "name"}, map[string]any{"id": wireText(253), "name": wireText(256)})
 		fields["user"] = wireObject([]string{"id", "name", "displayName"}, map[string]any{"id": challenge, "name": challenge, "displayName": challenge})
-		fields["pubKeyCredParams"] = map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "items": wireObject([]string{"type", "alg"}, map[string]any{"type": map[string]any{"const": "public-key"}, "alg": map[string]any{"const": -7}})}
+		fields["pubKeyCredParams"] = map[string]any{"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": wireObject([]string{"type", "alg"}, map[string]any{"type": map[string]any{"const": "public-key"}, "alg": map[string]any{"type": "integer", "enum": []int{-7, -8}}})}
 		fields["attestation"] = map[string]any{"const": "none"}
 		fields["authenticatorSelection"] = wireObject([]string{"userVerification", "residentKey", "requireResidentKey"}, map[string]any{"userVerification": map[string]any{"const": "required"}, "residentKey": map[string]any{"const": "required"}, "requireResidentKey": map[string]any{"const": true}})
 		fields["excludeCredentials"] = map[string]any{"type": "array", "maxItems": 100, "items": wireObject([]string{"type", "id"}, map[string]any{"type": map[string]any{"const": "public-key"}, "id": map[string]any{"type": "string", "minLength": 1, "maxLength": 1366, "pattern": "^[A-Za-z0-9_-]+$"}})}

@@ -268,6 +268,12 @@ No metadata read renews expiry or establishes account eligibility.
 Fresh options return `commandID`, `commitOutcome:"committed"`, `replayed:false`
 and `options`, containing the **exact** native `TransferJSON` document with its
 `publicKey` wrapper. Save that original command/ceremony ID for completion.
+Registration `pubKeyCredParams` describes the native supported passkey profile:
+ES256 (`-7`), EdDSA (`-8`, Ed25519 only), or either ordered unique pair. The
+response schema permits one or two unique parameters; it does not select an
+algorithm, reorder the native list or authorize an unselected key. Native
+configuration and verification remain authoritative, and the native default
+remains ES256. RS256 and other algorithms are not part of this passkey profile.
 A matching options retry returns only the original command metadata and
 `replayed:true`, with no `options`. Changed key scope/input denies. Never use
 a new key to recover an ambiguous original admission.
