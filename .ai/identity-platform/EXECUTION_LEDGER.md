@@ -1,5 +1,30 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 00:45 UTC: corrected risk root PreparePasskeySignup/Validate preserves
+registration's canonical CredentialMutation 5/15m deny/ReserveWithCommand policy;
+only actual tenant/browser/network/device dimensions replace impossible existing
+subject/session dimensions. Final four-file review passkey_signup_risk_final
+APPROVE/no findings, e50b6030608d68b7066e9a95c25588283b4a6b94aa38b809081cbc3dc0b02144
+against1d7f872. Replacement missing-API RED, full module/race1.379s+velocity1.241s,
+vet/modverify/scopedsecrets/diff pass Go1.27.3. Native protected PG consumption
+and sixth-attempt denial are next, not yet proven. Root signup issuer1d7f872
+is main-pushed with Required40045756458SUCCESS and authenticated public
+sessionv0.0.0-20261024003536-1d7f8729fe0e. Native signup test has actual missing-
+workflow RED; initial service composition is in progress, not passing native
+acceptance. Outbox push-trigger correction4279fe5 is on the exact CI carrier;
+eligible push Required40045947903 remains live, not main delivered.
+
+Native signup risk correction: independent review identified that selecting the
+Authentication class would change canonical registration's 5/15m deny policy and
+transaction-owned reservation. That uncommitted proposal and its approval are
+withdrawn. Preserve CredentialMutation numerical/failure/phase semantics; add
+only a closed tenant/original-browser-flow/network/device projection and reuse
+existing protected-provider custody plus same-Work counter reservation. No user,
+session or identifier is fabricated. Focused tests cover exact actions, keys,
+scope, expiry, original policy and malformed/foreign inputs; native PG must prove
+the sixth attempt denies and counters/effects/replay remain atomic. Existing
+enrollment and signin/discovery remain unchanged. No new preflight or decision.
+
 2026-10-24 00:36 UTC: root session's explicit prospective passkey-signup arm
 retains the existing opaque once-bind/once-execute engine and original complete
 session. Actual missing-API RED preceded implementation. Focused race1.283s,

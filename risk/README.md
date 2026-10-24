@@ -9,6 +9,29 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Anonymous passkey signup admission
+
+`CommandCounterPolicy.PreparePasskeySignup` selects only the two canonical
+`identity.passkey.register-options` and `identity.passkey.register-verify`
+operations, using their unchanged CredentialMutation limits, deny outcome and
+transaction-owned reservation phase. The native owner supplies the authenticated
+original browser-flow ID and actual tenant/network/device facts; no subject,
+session or identifier is invented. All mandatory provider signals and original
+exclusive expiry remain required through existing protected-provider custody.
+
+This closed dimension correction is for prospective signup only. Existing-account
+enrollment retains its original subject/session projection. The native owner
+must prove original browser custody, genuine WebAuthn and atomic account,
+credential, authority and session effects. Pure preparation grants none of them.
+This enables no public signup or HTTP route and does not qualify Valkey.
+
+Catalog reconciliation: identity-platform planning source
+`a67369a4805b1ce0afc86aea7d6436dfb92ec4cb`, `goals/passkey.md`'s pre-auth
+registration clauses and `REFERENCE_CONFIGURATION.md`'s
+`struct:ref.risk.operation_matrix` require anonymous signup and protected
+registration respectively. This profile corrects only their otherwise impossible
+existing-user/session dimensions; the registration policy remains unchanged.
+
 ### Identifier-free passkey admission
 
 `PolicyConfig.PasskeyDiscovery` is an explicit trusted startup selection for

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Prospective passkey registration can prepare a closed protected counter
+  projection using the actual original browser flow, tenant, network and device.
+  Credential-mutation limits, deny policy and transaction-owned reservation
+  remain unchanged; no authenticated subject or session is fabricated.
+
 - Explicit startup `PolicyConfig.PasskeyDiscovery` admits genuine identifier-free
   passkey signin with the existing authentication limits, required signals and
   tenant/network/device buckets. Identified logins retain their identifier
