@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Initialize known-empty MFA authority only for an account actually created by
+  the original native passkey signup Work. Exact original creation and factor
+  provenance are required again before commit; missing or enrolled state never
+  becomes an inferred empty generation. Append `PasskeySignupMigrationSource`
+  after selected factor-initialization histories. No factors or recovery methods
+  are enrolled, and no session is issued by this prerequisite.
+
 - Fence original known-empty factor generations for the exact self-only native
   passkey deletion action without introducing a password-only MFA fallback.
 

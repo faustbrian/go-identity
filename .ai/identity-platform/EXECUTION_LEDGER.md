@@ -1,5 +1,41 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24: passkey-first signup remains the active M16 outcome, not complete.
+Protocol bdbb114, kernel afca324 and root carriers f569044 are main-pushed with
+Required CI green. MFA prospective-account initialization passed real PG/race
+1.584s (including successful foreign-provenance replacement -> rollback),
+ordinary module/race1.318s, tagged vet and module/secret checks. Complete eight-
+file final review by passkey_first_mfa_final APPROVE/no remaining requests,
+base afca324, candidate7c2adbcba2a5875c974a6d7af314c88120f654deafeef19a02f159c4209fcf2a.
+Preparing ordinary main delivery of that prerequisite, not session signup.
+The outbox lane is stopped with its tested28-file module handed back; the
+earlier20-file inventory below was an undercount. All retained archive source,
+migration and generated binary baseline bytes are preserved. Primary registered
+the optional module; its bounded final source review APPROVE, runtime/full
+selected local gate and exact-source CI delivery claims remain separate.
+Next primary work is passkey signup session issuance and actual native/Reference
+composition. No user decision or additional whole-unit closure; ~25%,11/39.
+
+Dependency-ready outbox lane: passkey_first_outbox owns only postgres/identity/**
+in /private/tmp/identity-passkey-signup.1eomVv/outbox-main, main at
+6ed5e0861542b6e13fbaed8886743644041320ed. The user's original outbox checkout is
+on unrelated refactor/migrations-ledger-name, and its local main diverges from
+origin/main (non-FF fetch rejected, no reset/force). An isolated task-owned bare
+clone + main worktree preserves both existing checkouts and targets ordinary
+remote main. This is not a new feature branch or historical merge.
+Current outbox main lacks the actually published identity adapter; adopt only
+that existing20file native module from authenticated public5c139522d060 (archive
+in task cache), preserve existing API/migrations and add the real typed passkey
+account/credential event persistence method. Consumes public kernel
+v0.0.0-20261023225527-afca324cae57 (Required40036651592SUCCESS; real downloaded
+kernel signup PG/race1.747s; all18 archive files match source). Parent owns root
+module/package registration and workspace metadata, native signup/MFA/session
+integration, final review, all Git delivery. Worker owns module-local files,
+focused tests/docs/changelog/pins only, no Git/children/heavy runs without slot.
+Observable prerequisite: real original coordinator signup commit persists both
+staged outbox events atomically, and failure/retry preserve existing custody.
+No copied planning/history/evidence tree, generic outbox rewrite or Tools change.
+
 2026-10-23 22:55 UTC: kernel prospective creation final review APPROVE/no
 findings by /root/passkey_first_kernel_final, complete18path candidate
 55bf64afacedb1b50aac78d86eaf602621683addb0a506ee583946719f0a0bd8

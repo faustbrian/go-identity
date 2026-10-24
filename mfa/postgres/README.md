@@ -1,5 +1,28 @@
 # PostgreSQL MFA authority (in development)
 
+## Passkey-only signup authority
+
+After real WebAuthn verification and kernel prospective account creation in the
+original `identity.passkey.register-verify.signup-v1` Work, the native
+`kernel.PasskeyRegistrationContributor` calls `InitializePasskeySignup`.
+It uses `Work.PasskeyRegistrationUser`, so a current row, caller-selected ID or
+missing factor state cannot substitute for this command's actual new account.
+The initial known-empty generation is insert-only, with original command/purpose
+provenance. It does not invent an email, password, factor or recovery method.
+
+Call `RequirePasskeySignupFactors` in Apply and the final precommit check.
+It repeats kernel creation/current-reference checks and locks that exact
+initial factor generation and provenance. Missing, enrolled or changed state
+denies without adopting another generation. Every error must abort the complete
+native account/protocol/session transaction. Neither function grants signup
+permission, WebAuthn assurance, session issuance or independent transaction
+ownership. Work remains borrowed, serial and invocation-bound.
+
+Append `PasskeySignupMigrationSource` after the factor-authority history and
+selected historical magic-link/username successors. Previous migration bytes
+and rows are preserved; no empty-factor backfill is performed. This storage
+and owner seam alone does not expose a usable signup endpoint.
+
 ## Selected email-OTP disable
 
 `NewOTPDisableService` reuses the existing native factor mutation coordinator
