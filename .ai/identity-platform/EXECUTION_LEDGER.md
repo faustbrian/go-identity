@@ -1,5 +1,18 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 01:01 UTC: risk PostgreSQL5910465 is main-pushed with exact Required
+40047612425SUCCESS and authenticated public module
+v0.0.0-20261024005826-5910465e0e2e. Kernel third-session lifecycle final review
+passkey_signup_session_lifecycle_final APPROVE/no findings, complete six-path
+diff2365e84d32af5ded0ee0ca471dfdeff9550f54d3663c790bca024f804f3ad4d6
+againstb030e8e (currentHEAD5910465). Real PG/race1.900s proves literal nondefault
+and reversed index ordering, both overflow poison/rollback branches, old-adapter
+denial and rollback after actual third-event writes. Taggedvet/modverify/scoped
+secrets/diff pass; ordinary module/race5.413s retains unchanged inputs.
+Next: actual session effect stages the original event only after full session
+persistence, and actual outbox consumes all three. Full native/signup acceptance
+remains open; no milestone or additional qualified unit is claimed.
+
 2026-10-24 01:00 UTC: protected signup risk PostgreSQL leaf is reviewed locally,
 not yet main-delivered. Final nine-path review passkey_signup_risk_pg_final
 APPROVE/no findings at b030e8e; candidate

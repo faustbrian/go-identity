@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 00:49 UTC
+## Current TL;DR — 2026-10-24 01:01 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional fully qualified unit is claimed.
@@ -17,9 +17,13 @@
   Required `40045947903` green. Earlier manual-dispatch green did not satisfy
   GitHub rulesets; the minimal carrier trigger preserves the identical gates.
   No PR, Tools programme or protection bypass was used.
+- **Protected counters delivered:** reviewed risk PostgreSQL `5910465` is on
+  main with Required `40047612425` green. Real PostgreSQL/race proves options
+  charging, sixth-attempt denial, unchanged replay and preserved migration state.
 - **Current actual Go work:** primary owns native signup composition and its
-  real journey test; an independent leaf worker owns PostgreSQL consumption of
-  the committed protected risk contract. Local native source is not yet passing
+  real journey test. Kernel third-event staging has completed focused tests and
+  independent review; actual session/outbox consumption is next.
+  Local native source is not yet passing
   or delivered. Its first test must prove no pre-verification account/handle,
   genuine registration, readable session and all three lifecycle events.
 - **Next:** finish native counters, prove signup/session/read/logout/new signin,

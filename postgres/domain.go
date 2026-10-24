@@ -303,7 +303,16 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 			} else if w.state.invitationMembership != nil {
 				err = entry.contributor.(OrganizationInvitationLifecycleContributor).PersistOrganizationInvitation(w.state.ctx, w)
 			} else if w.state.execution.reservation.plan.passkeyRegistration != nil {
-				err = entry.contributor.(PasskeyRegistrationLifecycleContributor).PersistPasskeyRegistration(w.state.ctx, w)
+				if w.state.passkeySignupSessionID != "" {
+					phase, ok := entry.contributor.(PasskeySignupSessionLifecycleContributor)
+					if !ok {
+						err = invalidLifecycle()
+					} else {
+						err = phase.PersistPasskeySignupSession(w.state.ctx, w)
+					}
+				} else {
+					err = entry.contributor.(PasskeyRegistrationLifecycleContributor).PersistPasskeyRegistration(w.state.ctx, w)
+				}
 			} else if w.state.execution.reservation.plan.magicLinkRegistration != nil {
 				err = entry.contributor.(MagicLinkRegistrationLifecycleContributor).PersistMagicLinkRegistration(w.state.ctx, w)
 			} else if w.state.credentialReceipt != nil {

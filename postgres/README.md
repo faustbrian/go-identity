@@ -2,6 +2,19 @@
 
 ## Passkey-only prospective creation
 
+After actual initial session persistence and its full current-owner checks,
+the session owner calls `Work.StagePasskeyRegistrationSession` with that exact
+original command and its command-bound `session.result.session.id`. This is
+provisional event staging, not session validation or token issuance. Duplicate,
+foreign, mismatched or overflowing staging aborts. The existing outbox participant
+must implement `PasskeySignupSessionLifecycleContributor` and persist
+`StagedPasskeyRegistrationSessionLifecycle` when present. An older account-only
+contributor aborts instead of silently omitting this required event. Its
+next unused index follows the unchanged credential/account indexes; existing
+effect IDs and encoded plans remain unchanged. Legacy account-only profiles
+produce no session event. The native signup journey must prove all three events
+and actual session persistence atomically; these kernel contracts alone do not.
+
 `PasskeyRegistrationIntent` contains a trusted generated prospective user,
 already admitted attributes and an initial passkey-owned `CredentialRef`, not
 authenticator material or signup permission. Bind `PasskeyRegistrationFields`

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Stage original passkey-signup session creation beside account and credential
+  lifecycles in the same Work, using the command-bound session ID and existing
+  deterministic event indexes. Duplicate or substituted staging aborts; account-
+  only profiles and existing encoded plans remain unchanged. Native session
+  persistence and all three outbox effects remain required for usable signup.
+
 - Add original-command passkey-only account creation inside the native signup
   transaction, with an initial passkey reference, admitted attributes and
   separate account/credential lifecycle events. Append

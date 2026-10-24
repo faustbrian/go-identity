@@ -37,6 +37,7 @@ type workState struct {
 	execution                 *domainExecution
 	creation                  *identity.User
 	registrationUser          *identity.User
+	passkeySignupSessionID    string
 	anonymousCreation         *anonymousCreationProgress
 	anonymousDisposal         *anonymousDisposalProgress
 	registrationAccepted      bool

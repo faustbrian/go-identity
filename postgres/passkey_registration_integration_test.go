@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,6 +66,19 @@ func (p *passkeyRegistrationPhase) ApplyFeature(ctx context.Context, w Work, c i
 		if p.mode == "duplicate" {
 			_, _ = p.domain.Apply(ctx, w, p, c)
 		}
+		if strings.HasPrefix(p.mode, "session") {
+			id := "new-session-" + string(user.ID)
+			if p.mode == "session-mismatch" {
+				id = "different-session"
+			}
+			err := w.StagePasskeyRegistrationSession(ctx, p, c, id)
+			if err != nil && !strings.Contains(p.mode, "overflow") {
+				return identity.FeatureReceipt{}, err
+			}
+			if p.mode == "session-duplicate" {
+				_ = w.StagePasskeyRegistrationSession(ctx, p, c, id)
+			}
+		}
 	}
 	if p.mode == "native-failure" {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
@@ -72,7 +86,7 @@ func (p *passkeyRegistrationPhase) ApplyFeature(ctx context.Context, w Work, c i
 	return identity.FeatureReceipt{Operation: p.FeatureOperations()[0], AfterVersion: 1}, nil
 }
 func (p *passkeyRegistrationPhase) CheckFeatureCommit(ctx context.Context, w Work, c identity.Command) error {
-	if p.mode == "final-check-failure" {
+	if p.mode == "final-check-failure" || p.mode == "session-final-check-failure" {
 		return identity.ForbiddenError{}
 	}
 	if p.mode == "late-user-block" {
@@ -97,7 +111,25 @@ func (*passkeyRegistrationPhase) RecoverParticipant(context.Context, RecoveryWor
 	return RecoveryUnknown, nil
 }
 
-type passkeyRegistrationOutbox struct{ recoveryLifecyclePhase }
+type passkeyRegistrationOutbox struct {
+	recoveryLifecyclePhase
+	expectedSessionIndex uint16
+	failAfterSession     bool
+	sessionWritten       bool
+}
+
+func (p *passkeyRegistrationOutbox) PersistPasskeySignupSession(ctx context.Context, w Work) error {
+	return p.PersistPasskeyRegistration(ctx, w)
+}
+
+type legacyPasskeyRegistrationOutbox struct {
+	recoveryLifecyclePhase
+	base *passkeyRegistrationOutbox
+}
+
+func (p *legacyPasskeyRegistrationOutbox) PersistPasskeyRegistration(ctx context.Context, w Work) error {
+	return p.base.PersistPasskeyRegistration(ctx, w)
+}
 
 func (p *passkeyRegistrationOutbox) PersistPasskeyRegistration(ctx context.Context, w Work) error {
 	if err := p.PersistLifecycle(ctx, w); err != nil {
@@ -107,7 +139,23 @@ func (p *passkeyRegistrationOutbox) PersistPasskeyRegistration(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	_, err = w.Exec(ctx, `INSERT INTO public.identity_test_passkey_created(event_id,command_id,user_id,event_type,before_version,after_version) VALUES($1,$2,$3,$4,$5,$6)`, created.ID, string(created.CommandID), created.SubjectID, created.EventType, created.BeforeVersion, created.AfterVersion)
+	if _, err = w.Exec(ctx, `INSERT INTO public.identity_test_passkey_created(event_id,command_id,user_id,event_type,before_version,after_version) VALUES($1,$2,$3,$4,$5,$6)`, created.ID, string(created.CommandID), created.SubjectID, created.EventType, created.BeforeVersion, created.AfterVersion); err != nil {
+		return err
+	}
+	session, present, err := w.StagedPasskeyRegistrationSessionLifecycle()
+	if err != nil || !present {
+		return err
+	}
+	if session.EventType != "session.created.v1" || session.SubjectType != "session" || session.SubjectID != "new-session-"+string(created.UserID) || session.EventIndex != p.expectedSessionIndex || session.ID == created.ID || session.ID == w.state.lifecycle.record.ID || !session.OccurredAt.Equal(created.OccurredAt) {
+		return invalidLifecycle()
+	}
+	_, err = w.Exec(ctx, `INSERT INTO public.identity_test_passkey_created(event_id,command_id,user_id,event_type,before_version,after_version) VALUES($1,$2,$3,$4,$5,$6)`, session.ID, string(session.CommandID), string(session.UserID), session.EventType, session.BeforeVersion, session.AfterVersion)
+	if err == nil {
+		p.sessionWritten = true
+		if p.failAfterSession {
+			return identity.ForbiddenError{}
+		}
+	}
 	return err
 }
 
@@ -124,14 +172,14 @@ func TestPasskeyRegistrationCreationPostgres(t *testing.T) {
 			}
 		}
 	}
-	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_passkey_created(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE,user_id text NOT NULL,event_type text NOT NULL,before_version numeric NOT NULL,after_version numeric NOT NULL)`); err != nil {
+	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_passkey_created(event_id text PRIMARY KEY,command_id text NOT NULL,user_id text NOT NULL,event_type text NOT NULL,before_version numeric NOT NULL,after_version numeric NOT NULL,UNIQUE(command_id,event_type))`); err != nil {
 		t.Fatal(err)
 	}
 	domain, err := NewPasskeyRegistrationDomain(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "missing-creation", "premature-read", "foreign-owner", "reconstructed-command", "changed-intent", "unknown-field", "duplicate", "existing-user", "disabled-reference", "native-failure", "audit-failure", "outbox-failure", "final-check-failure", "late-user-block", "late-credential-disable", "late-reference-expiry"} {
+	for _, mode := range []string{"commit", "session", "session-slots", "session-reversed-slots", "session-primary-overflow", "session-account-overflow", "session-outbox-after-failure", "session-final-check-failure", "session-old-outbox", "session-mismatch", "session-duplicate", "missing-creation", "premature-read", "foreign-owner", "reconstructed-command", "changed-intent", "unknown-field", "duplicate", "existing-user", "disabled-reference", "native-failure", "audit-failure", "outbox-failure", "final-check-failure", "late-user-block", "late-credential-disable", "late-reference-expiry"} {
 		t.Run(mode, func(t *testing.T) {
 			intent := passkeyRegistrationIntentFixture()
 			id, err := identity.NewCommandID()
@@ -154,6 +202,9 @@ func TestPasskeyRegistrationCreationPostgres(t *testing.T) {
 			if mode == "unknown-field" {
 				fields = append(fields, identity.FeatureField{Name: "registration.unselected", Value: identity.FeatureValue{Kind: identity.FeatureBool}})
 			}
+			if strings.HasPrefix(mode, "session") {
+				fields = append(fields, identity.FeatureField{Name: "session.result.session.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "new-session-" + string(intent.Credential.UserID)}})
+			}
 			p.command = featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields})
 			digest, err := PasskeyRegistrationDigest(intent)
 			if err != nil {
@@ -161,7 +212,12 @@ func TestPasskeyRegistrationCreationPostgres(t *testing.T) {
 			}
 			auditing := &anonymousCreationAuditPhase{recoveryAuditPhase: recoveryAuditPhase{domainAuditPhase: domainAuditPhase{fail: mode == "audit-failure"}}}
 			outbox := &passkeyRegistrationOutbox{recoveryLifecyclePhase: recoveryLifecyclePhase{domainLifecyclePhase: domainLifecyclePhase{fail: mode == "outbox-failure"}}}
-			registry, err := NewContributorRegistry([]Contributor{repo, auditing, outbox, p})
+			outbox.failAfterSession = mode == "session-outbox-after-failure"
+			lifecycle := Contributor(outbox)
+			if mode == "session-old-outbox" {
+				lifecycle = &legacyPasskeyRegistrationOutbox{base: outbox}
+			}
+			registry, err := NewContributorRegistry([]Contributor{repo, auditing, lifecycle, p})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -173,6 +229,19 @@ func TestPasskeyRegistrationCreationPostgres(t *testing.T) {
 			plan.Contributors, plan.Feature, plan.SubjectType = registry.Descriptors(), &FeatureRegistration{Contributor: p.Descriptor(), Operation: op}, "credential"
 			plan.Lifecycle = &LifecyclePlan{EventType: "identity.passkey.create_credential", AfterVersion: 1}
 			plan.PasskeyRegistration = &PasskeyRegistrationPlan{UserID: intent.Credential.UserID, CredentialID: intent.Credential.ID, CreationDigest: digest, CreationEventIndex: 1}
+			outbox.expectedSessionIndex = 2
+			switch mode {
+			case "session-slots":
+				plan.Lifecycle.EventIndex, plan.PasskeyRegistration.CreationEventIndex = 3, 7
+				outbox.expectedSessionIndex = 8
+			case "session-reversed-slots":
+				plan.Lifecycle.EventIndex, plan.PasskeyRegistration.CreationEventIndex = 7, 3
+				outbox.expectedSessionIndex = 8
+			case "session-primary-overflow":
+				plan.Lifecycle.EventIndex = ^uint16(0)
+			case "session-account-overflow":
+				plan.PasskeyRegistration.CreationEventIndex = ^uint16(0)
+			}
 			plan.Audits[0].EventType, plan.Audits[0].RetentionClass = "identity.passkey.create_credential", "protected"
 			seed, err := securityMutationAudit(ctx, b, 0, 1, time.Now().UTC().Truncate(time.Microsecond), "committed", plan.Audits[0].EventType, plan.SubjectType, b.RecordID, "protected", true)
 			if err != nil {
@@ -213,7 +282,8 @@ func TestPasskeyRegistrationCreationPostgres(t *testing.T) {
 			} else {
 				result, err = coordinator.Commit(work, result)
 			}
-			success := mode == "commit"
+			sessionSuccess := mode == "session" || mode == "session-slots" || mode == "session-reversed-slots"
+			success := mode == "commit" || sessionSuccess
 			if success && (err != nil || result.Outcome != identity.CommitOutcomeCommitted) {
 				t.Fatal("prospective account did not commit", err, applyErr)
 			}
@@ -222,6 +292,12 @@ func TestPasskeyRegistrationCreationPostgres(t *testing.T) {
 			}
 			if (mode == "native-failure" || mode == "audit-failure" || mode == "outbox-failure" || mode == "final-check-failure" || mode == "duplicate") && !p.created {
 				t.Fatal("rollback control did not reach creation", applyErr)
+			}
+			if (mode == "session-outbox-after-failure" || mode == "session-final-check-failure") && !outbox.sessionWritten {
+				t.Fatal("late failure control did not write the third event", applyErr)
+			}
+			if strings.Contains(mode, "overflow") && !p.created {
+				t.Fatal("overflow control did not reach session staging", applyErr)
 			}
 			var users, credentials, bindings, audits, primaryEvents, creationEvents, attributes, identifiers int
 			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$3 AND succeeded),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_passkey_created WHERE command_id=$3 AND user_id=$2 AND event_type='user.created.v1' AND before_version=0 AND after_version=1),(SELECT count(*) FROM identity.user_attributes WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2)`, string(b.TenantID), string(intent.Credential.UserID), string(b.CommandID)).Scan(&users, &credentials, &bindings, &audits, &primaryEvents, &creationEvents, &attributes, &identifiers); err != nil {
@@ -239,6 +315,13 @@ func TestPasskeyRegistrationCreationPostgres(t *testing.T) {
 			}
 			if users != want+oldUser || credentials != want+oldCredential || bindings != want || audits != want || primaryEvents != want || creationEvents != want || attributes != want || identifiers != 0 {
 				t.Fatal("creation/effects not atomic or unwanted identity method created", users, credentials, bindings, audits, primaryEvents, creationEvents, attributes, identifiers)
+			}
+			var sessionEvents int
+			if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM public.identity_test_passkey_created WHERE command_id=$1 AND event_type='session.created.v1' AND user_id=$2 AND before_version=0 AND after_version=1`, string(b.CommandID), string(intent.Credential.UserID)).Scan(&sessionEvents); err != nil {
+				t.Fatal(err)
+			}
+			if (sessionEvents == 1) != sessionSuccess {
+				t.Fatal("session lifecycle absent, duplicated or survived rollback", sessionEvents)
 			}
 			if success {
 				current, err := repo.GetCredentialAuthority(ctx, identity.CredentialAuthorityQuery{TenantID: b.TenantID, UserID: intent.Credential.UserID, CredentialID: intent.Credential.ID})
