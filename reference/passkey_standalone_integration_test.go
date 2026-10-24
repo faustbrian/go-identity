@@ -20,6 +20,7 @@ import (
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	passkey "github.com/faustbrian/go-passkey"
 	webauthn "github.com/faustbrian/go-webauthn"
 )
 
@@ -29,7 +30,7 @@ import (
 func TestReferencePostgresPasskeyStandalone(t *testing.T) {
 	for _, upgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-			proveReferencePasskeyStandalone(t, upgrade, false, false)
+			proveReferencePasskeyStandalone(t, upgrade, false, false, false)
 		})
 	}
 }
@@ -38,20 +39,48 @@ func TestReferencePostgresPasskeyConditional(t *testing.T) {
 	for _, persistent := range []bool{false, true} {
 		for _, upgrade := range []bool{false, true} {
 			t.Run(map[bool]string{false: "browser", true: "persistent"}[persistent]+"/"+map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
-				proveReferencePasskeyStandalone(t, upgrade, true, persistent)
+				proveReferencePasskeyStandalone(t, upgrade, true, persistent, false)
 			})
 		}
 	}
 }
 
-func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persistent bool) {
+func TestReferencePostgresPasskeySessionManagement(t *testing.T) {
+	for _, upgrade := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "populated-kernel-upgrade"}[upgrade], func(t *testing.T) {
+			proveReferencePasskeyStandalone(t, upgrade, false, false, true)
+		})
+	}
+}
+
+func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persistent, management bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, true)
 	c := standalonePasskeyConfiguration(t, f.config)
 	c.HTTPPasskey.Conditional = conditional
+	if management {
+		c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie}
+	}
 	deps := reference.ReferenceDependencies{PostgreSQL: f.pool}
+	if management && !upgrade {
+		for _, mode := range []string{"missing-keyed-owner", "invalid-transport"} {
+			selected := c
+			p, m := *c.Passkey, *c.Passkey.SessionManagement
+			p.SessionManagement = &m
+			selected.Passkey = &p
+			if mode == "missing-keyed-owner" {
+				p.KeyedOptions = nil
+			} else {
+				m.Transport = 0
+			}
+			if graph, err := reference.ComposeStores(selected, deps); err == nil {
+				_ = graph.Close(ctx)
+				t.Fatal("incomplete native session management composed", mode)
+			}
+		}
+	}
 	if !upgrade {
 		for name, edit := range map[string]func(*reference.StoreConfiguration){
 			"absent session issuer": func(c *reference.StoreConfiguration) { c.Session.Passkey = false },
@@ -179,6 +208,19 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade, conditional, persist
 	}
 	if out, err := stores.ReferenceMigrationApply(ctx, request); err != nil || out.Result.State() != reference.MigrationApplied {
 		t.Fatal("passkey-only owned migration apply", err)
+	}
+	if management {
+		owner, err := features.Passkeys()
+		if err != nil {
+			t.Fatal(err)
+		}
+		manager, err := owner.SessionManagement()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out, err := manager.UpdateOptions(ctx, passkey.SessionUpdateOptionsRequest{}); err == nil || out.CommandID != "" {
+			t.Fatal("pre-initialization handle executed")
+		}
 	}
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal("passkey-only startup", err)

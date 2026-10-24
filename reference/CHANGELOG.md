@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Explicitly compose current-passkey-session UV label management through
+  `Passkey.SessionManagement` and the guarded `Passkeys().SessionManagement()`
+  handle. The same native owner binds original keyed intent and atomically
+  consumes the genuine assertion with the rename; retries reveal metadata only.
+  It works in passkey-only deployments without password, OTP or delivery
+  configuration. Existing password-proof management and migration histories
+  remain unchanged. This native selection enables no HTTP route or browser UI.
+
 - Expose guarded native conditional options and opt-in
   `HTTPPasskey.Conditional` for discoverable signin, including passkey-only
   deployments. Presentation shares the original command, flow, remember choice

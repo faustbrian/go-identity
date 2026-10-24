@@ -314,6 +314,9 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 			t.Fatal("safe signup inventory exposed protocol credential or user handle")
 		}
 	}
+	if c.Passkey.SessionManagement != nil {
+		proveReferenceSessionRename(t, ctx, features, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle)
+	}
 	proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), func() bool { return read(issued).Authenticated })
 	flowID, cookies = flow("passkey")
 	assertionOptions := call("/v1/passkey/signin-options", map[string]any{"mode": "discoverable", "flowID": flowID}, "reference-http-signup-signin", cookies, "", origin)
@@ -339,7 +342,11 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 		t.Fatal("signin options retry disclosed a new challenge or authentication", optionsRetry.code)
 	}
 	command, _ = identity.NewCommandID()
-	signinBody := map[string]any{"mode": "discoverable", "flowID": flowID, "commandID": command, "ceremonyID": created.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, private, id, handle, assertionProtocol.PublicKey.Challenge))}
+	count := uint32(1)
+	if c.Passkey.SessionManagement != nil {
+		count = 2
+	}
+	signinBody := map[string]any{"mode": "discoverable", "flowID": flowID, "commandID": command, "ceremonyID": created.CommandID, "response": json.RawMessage(referencePasskeyAssertion(t, private, id, handle, assertionProtocol.PublicKey.Challenge, count))}
 	signin := call("/v1/passkey/signin-verify", signinBody, "", cookies, "", origin)
 	if signin.code != 200 || len(signin.cookies) != 1 || signin.header.Get("X-CSRF-Token") == "" {
 		t.Fatal("signup key fresh HTTP signin", signin.code)

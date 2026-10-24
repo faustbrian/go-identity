@@ -47,6 +47,10 @@ type PasskeyConfiguration struct {
 	// Management independently selects keyed self-label rename. It requires
 	// KeyedOptions for the same kernel request-key owner, not another journal.
 	Management *PasskeyManagementConfiguration
+	// SessionManagement independently selects fresh action-bound UV rename
+	// under a current passkey session. It requires KeyedOptions, not password
+	// verification, and enables no HTTP routes. Nil retains existing behavior.
+	SessionManagement *PasskeySessionManagementConfiguration
 	// Deletion independently selects signed-proof self-removal backed by this
 	// graph's actual configured PasswordReset owner. It requires KeyedOptions;
 	// enabling label management is not a prerequisite.
@@ -168,19 +172,20 @@ func (PasskeyConfiguration) MarshalJSON() ([]byte, error) { return nil, session.
 func (PasskeyConfiguration) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
 type passkeyState struct {
-	standalone  bool
-	tenant      identity.TenantID
-	signup      *native.SignupService
-	enrollment  *native.EnrollmentService
-	signin      *native.SigninService
-	inventory   *native.InventoryService
-	management  *native.ManagementService
-	deletion    *native.DeletionService
-	reader      *session.SessionService
-	logout      *session.CookieSignOutService
-	revoke      *sessionpg.CookieRevokeOneExecutor
-	schema      string
-	predecessor string
+	standalone        bool
+	tenant            identity.TenantID
+	signup            *native.SignupService
+	enrollment        *native.EnrollmentService
+	signin            *native.SigninService
+	inventory         *native.InventoryService
+	management        *native.ManagementService
+	sessionManagement *native.SessionManagementService
+	deletion          *native.DeletionService
+	reader            *session.SessionService
+	logout            *session.CookieSignOutService
+	revoke            *sessionpg.CookieRevokeOneExecutor
+	schema            string
+	predecessor       string
 }
 
 // Construct one authority for both the separate native handle and the explicitly
@@ -333,6 +338,21 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 		}
 	}
 	var deletion *native.DeletionService
+	var sessionManagement *native.SessionManagementService
+	if n.SessionManagement != nil {
+		if n.KeyedOptions == nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_session_management"}
+		}
+		selected := *n.SessionManagement
+		var csrf []session.CSRFKey
+		if selected.Transport == session.CredentialCookie {
+			csrf = slices.Clone(c.Session.CSRFKeys)
+		}
+		sessionManagement, err = native.NewSessionManagementService(d.PostgreSQL, native.SessionManagementConfig{Protocol: n.Protocol, Profile: profile, Validation: validation, SessionRepository: e.Repository, OptionsRequests: keyed, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Transport: selected.Transport, CSRFKeys: csrf, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_session_management"}
+		}
+	}
 	if n.Deletion != nil {
 		primary := n.Deletion.Primary
 		if n.KeyedOptions == nil || reset == nil || c.PasswordReset == nil || primary.Action != "identity.passkey.delete" || len(primary.CSRFKeys) != 0 {
@@ -377,5 +397,5 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if _, err := (sessionpg.PasskeySigninMigrationSource{Schema: e.Repository.Schema, Version: 1, PreviousConstraint: n.SessionPredecessor}).Load(context.Background()); err != nil {
 		return nil, invalid
 	}
-	return &passkeyState{standalone: standalone, tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
+	return &passkeyState{standalone: standalone, tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, sessionManagement: sessionManagement, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
 }

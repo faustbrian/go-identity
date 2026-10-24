@@ -57,6 +57,11 @@ Independently select `Passkey.Management` for signed-proof label rename, and
 `HTTPPasskey.Update` for its cookie endpoint. Retain original retry custody;
 the graph appends forward metadata/proof histories without changing signin
 authority. See the linked passkey guide for the exact configuration and rollout.
+For current-passkey-session UV rename without a password proof, separately
+select `Passkey.SessionManagement` and `Passkey.KeyedOptions`, then obtain the
+guarded `Passkeys().SessionManagement()` handle. It also works with
+`Passkey.Standalone`; its native selection exposes no HTTP routes. See the
+[passkey guide](PASSKEY.md#current-passkey-session-rename) for the two-phase API.
 Select `Passkey.Deletion` independently for fresh-proof credential removal;
 it requires this graph's actual configured email/password reset recovery owner,
 not label management. `HTTPPasskey.Delete` separately enables its cookie-only

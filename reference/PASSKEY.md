@@ -31,10 +31,53 @@ The common kernel registration schema is not a password workflow.
 This finite standalone profile requires signup and supports discovery, safe
 inventory and session read/logout. Password-proof enrollment, label management,
 deletion and mixed password/OTP/delivery selections fail construction rather
-than being silently ignored. Passkey-proof management remains a later profile.
+than being silently ignored. Session-assertion label management is separately
+selected below; the password-proof management restriction is unchanged.
 Conditional browser presentation is separately selected below; no UI is provided.
 The actual public construction/configuration and fresh/populated-kernel-upgrade
 journeys are executable in `TestReferencePostgresPasskeyStandalone`.
+
+## Current-passkey-session rename
+
+Set `Passkey.SessionManagement` to
+`&reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie}`
+or explicitly select bearer transport. `Passkey.KeyedOptions` is required. The
+graph supplies its actual protocol, current session/directory/factor/passkey
+authority, authorization, protected risk, coordinator and retained cookie-CSRF
+keys. Do not supply a password proof, domain store, replay journal or transaction
+callback. This additive selection works with `Passkey.Standalone` and the
+retained deployment; `Passkey.Management` keeps its separate password-proof API.
+The existing mapping1/signin2/metadata3 histories remain unchanged.
+
+After migration apply and `Initialize`, obtain `Passkeys()`, then its
+`SessionManagement()` handle. The nested handle preserves the native contract:
+
+1. Use `Passkeys().List` to obtain the safe target reference and current positive
+   metadata version under the actual current passkey session.
+2. Call `UpdateOptions` with `passkey.SessionUpdateOptionsRequest`, preserving
+   original session/cookie-CSRF custody, self-user `identity.passkey.update`
+   context, intended reference/version/label, trusted origin/network and one
+   original key. Transfer the genuine options once to the authenticator.
+3. Call `Update` with `passkey.SessionUpdateCompletion`, the unchanged original
+   request, returned ceremony ID, genuine UV assertion and a **distinct completion
+   key**. Both requests occupy the protected update namespace, so one key cannot
+   represent both bodies. The native owner consumes the assertion and performs
+   the label CAS, current-authority/risk checks and required audit/lifecycle in
+   the sole existing transaction. No session or reusable proof is issued.
+4. Read the updated inventory and continue session read/logout or fresh signin.
+   Matching retries return the original receipt only; retain the same key/body
+   for uncertain-outcome reconciliation rather than requesting new authority.
+
+The guarded handle denies before initialization and after graph `Close`,
+including historical recovery. Cookie transport requires the actual original
+synchronizer, not another session's token. Session, target/version/name, RP,
+origin and network substitution deny. Native selection advertises no new HTTP
+route or metadata; `HTTPPasskey.Update` remains the existing password-proof
+endpoint. Browser UI, passkey-only deletion/recovery and additional enrollment
+are separate profiles. `TestReferencePostgresPasskeySessionManagement` proves
+the public graph from real HTTP signup through native rename and HTTP
+read/logout/fresh signin on fresh and populated-upgrade PostgreSQL without
+password, OTP or delivery configuration.
 
 ## Retained existing-account deployment
 
