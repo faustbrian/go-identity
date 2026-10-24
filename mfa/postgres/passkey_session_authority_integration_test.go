@@ -150,7 +150,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 			life := kernel.LifecyclePlan{EventType: "session.created.v1", AfterVersion: 1}
 			b := identity.CommandBinding{CommandID: commandID, TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, RecordID: spec.SessionID, PolicyID: "policy", PolicyVersion: 1, CorrelationID: "correlation"}
 			if strings.HasPrefix(mode, "update-options") {
-				op.OperationID, op.SchemaID = "identity.passkey.signin-options", "identity.passkey.signin-options.update-v1"
+				op.OperationID, op.SchemaID = "identity.passkey.update", "identity.passkey.update.options-v1"
 				life = kernel.LifecyclePlan{EventType: "passkey.reauthentication.started.v1", AfterVersion: 1}
 				b.RecordID = "original-ceremony"
 			} else if strings.HasPrefix(mode, "update-assertion") {

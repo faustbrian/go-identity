@@ -58,7 +58,10 @@ func RequirePasskeySessionFactors(ctx context.Context, w kernel.Work, owner kern
 		return invalidAuthority()
 	}
 	signin := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.signin-verify", SchemaID: "identity.passkey.signin-verify.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
-	updateOptions := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.signin-options", SchemaID: "identity.passkey.signin-options.update-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	// Both phases belong to the protected update action. Public signin options
+	// select Authentication/BeforeCredential, not its transactional mutation
+	// counters; substituting that profile would misclassify current-session use.
+	updateOptions := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.update", SchemaID: "identity.passkey.update.options-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	updateAssertion := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.update", SchemaID: "identity.passkey.update.assertion-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	passkeyOwner := kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 	switch {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind current-session passkey update options to the protected update action,
+  not public signin. Both assertion phases retain the action's transactional
+  credential-mutation policy without enabling a preauthentication profile.
+
 - Fence original known-empty factor authority for explicit passkey-session
   label-update assertion options and atomic rename. Exact native schemas,
   owner and lifecycle are required; ordinary signin/password-proof profiles
