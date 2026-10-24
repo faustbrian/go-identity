@@ -181,11 +181,14 @@ type SigninConfig struct {
 	Device                    session.BrowserDeviceConfig
 	Address                   email.AddressParser
 	Discoverable              bool
-	ActorID                   identity.ActorID
-	PolicyRevision            authorization.Revision
-	Audience                  string
-	Now                       func() time.Time
-	MaximumDuration           time.Duration
+	// DiscoverableOnly requires Discoverable and rejects identified requests.
+	// Address is unused; no email/password comparison owner is required.
+	DiscoverableOnly bool
+	ActorID          identity.ActorID
+	PolicyRevision   authorization.Revision
+	Audience         string
+	Now              func() time.Time
+	MaximumDuration  time.Duration
 }
 
 // RegistrationConfig selects existing-account cookie-only enrollment. Sessions

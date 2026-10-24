@@ -86,8 +86,13 @@ func newSigninHandler(c SigninConfig, m []identityhttp.MiddlewareDescriptor, com
 	if err != nil {
 		return nil, identityhttp.ErrInvalidInput
 	}
-	if _, err := c.Address.Parse(email.AddressInput("configuration@example.invalid")); err != nil {
+	if c.DiscoverableOnly && !c.Discoverable {
 		return nil, identityhttp.ErrInvalidInput
+	}
+	if !c.DiscoverableOnly {
+		if _, err := c.Address.Parse(email.AddressInput("configuration@example.invalid")); err != nil {
+			return nil, identityhttp.ErrInvalidInput
+		}
 	}
 	operation := "signin-options"
 	if complete {
@@ -107,7 +112,7 @@ func newSigninHandler(c SigninConfig, m []identityhttp.MiddlewareDescriptor, com
 			if err != nil {
 				return s, err
 			}
-			if body.discoverable && !c.Discoverable {
+			if body.discoverable && !c.Discoverable || !body.discoverable && c.DiscoverableOnly {
 				return s, identityhttp.ErrInvalidInput
 			}
 			flow, present, err := i.decoder.CookieBearer(r, flowCookie.Name, identityhttp.HeaderRequired)

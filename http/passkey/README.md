@@ -61,6 +61,13 @@ rate-source methods. Supply the real original-flow cookie policy named
 Origin, shared rate owners, fixed trusted actor/revision/session audience, and
 the same concrete `email.AddressParser` as the original identity owner.
 Local-part comparison and nontransitional IDNA domain processing remain separate.
+`SigninConfig.DiscoverableOnly:true` additionally requires `Discoverable:true`
+and selects identifier-free signin exclusively. Leave `Address` unset in that
+profile: neither handler nor its OpenAPI request accepts identified mode or an
+identifier field. Original flow/device/origin, native discovery policy, UV,
+rates and one-use completion remain required. The default combined profile
+still requires the configured email parser; there is no failure fallback.
+
 There is no account lookup in normalization. `Discoverable:true` explicitly
 permits `mode:"discoverable"`; no identifier or fabricated user accompanies it.
 Omitting that selection denies discovery, never falling back from identified

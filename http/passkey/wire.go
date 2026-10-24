@@ -90,7 +90,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 			return wireObject(required, fields)
 		}
 		request = variant(false)
-		if c.Signin.Discoverable {
+		if c.Signin.DiscoverableOnly {
+			request = variant(true)
+		} else if c.Signin.Discoverable {
 			request = map[string]any{"oneOf": []any{request, variant(true)}}
 		}
 	}
@@ -137,6 +139,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		responses["200"].(map[string]any)["headers"] = map[string]any{"Set-Cookie": map[string]any{"description": "Owned secure HttpOnly session cookie; never replayed.", "schema": wireText(4096)}, "X-CSRF-Token": map[string]any{"description": "Original session synchronizer, never replayed.", "schema": wireText(43)}}
 	}
 	operation := map[string]any{"operationId": "identity.passkey." + name, "description": "Explicit existing-account cookie-only passkey profile. Trusted HTTPS tenant/origin and original session/proof or original flow/mode custody are mandatory; ceremonies additionally require original device custody. Header-only keys apply to options, label update and deletion; ceremony completion forbids keys and is one-use. No body identity/remember/cookie/CSRF/command-allocation override, signup, conditional UI or fallback. Native authorization, recovery, risk and atomic consumption remain authoritative. Responses are synchronously bounded; hooks cannot acquire credential custody.", "parameters": parameters, "responses": responses}
+	if !registration && !management && !list && c.Signin.DiscoverableOnly {
+		operation["description"] = "Explicit identifier-free-only resident passkey signin. Identified mode and identifier input are not selected. Original flow/device/origin, UV, risk, current native authority, one-use completion and original remember policy remain mandatory. Header-only original keys apply to options; completion forbids keys. Historical responses expose no challenge or session. No email/password comparison owner, fallback or browser UI is enabled."
+	}
 	if registration && c.Signup != nil {
 		operation["description"] = "Explicit passkey registration variants. Signup requires mode=signup, original flow/device cookies and exact Origin; session cookies, session CSRF and proofID are forbidden. Enrollment, when selected, retains its unchanged proofID/session/synchronizer contract with no mode field. Neither branch falls back after failure. Options require the original header-only Idempotency-Key; completion forbids it. Only fresh committed signup issues a session cookie and synchronizer. Native risk, protocol, account/session transaction and metadata-only recovery remain authoritative. No browser identity, RP or remember override is accepted."
 	}

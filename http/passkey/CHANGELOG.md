@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select `SigninConfig.DiscoverableOnly` to expose identifier-free signin
+  without an email comparison parser. Identified requests and identifier fields
+  remain rejected, including by the selected OpenAPI schema. Discovery policy,
+  original flow custody, UV, rates and one-use native completion are unchanged.
+
 - Explicitly select passkey-first signup on the canonical registration pair
   with `Signup`. Original flow/device cookies and exact Origin remain required;
   signup rejects session/proof/CSRF and identity overrides. Shared original-flow
