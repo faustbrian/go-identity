@@ -1,5 +1,23 @@
 # PostgreSQL MFA authority (in development)
 
+## Current-session additional passkey enrollment
+
+`RequirePasskeySessionFactors` admits the selected native enrollment phases
+from `passkey/postgres` only: `register-options.session-assertion-options-v1`,
+`register-options.session-registration-options-v1` and
+`register-verify.session-registration-v1` (all prefixed `identity.passkey.`).
+Their exact creation lifecycles are respectively
+`passkey.reauthentication.started.v1`, `passkey.registration.started.v1` and
+`identity.passkey.create_credential`, each version 0 to 1. Call the guard in
+Apply and final precommit checks and propagate every error to abort Work.
+
+The guard locks the original verified passkey session's known-empty factor
+generation, never initializes or adopts one, and denies active or changed MFA
+state. The native/protocol owners still authenticate genuine UV, enforce current
+session/CSRF and bind original intent and authorization expiry through all
+phases. This prerequisite grants no authentication, enrollment or HTTP endpoint
+by itself; password-proof and enrolled-factor profiles remain distinct.
+
 ## Passkey-only signup authority
 
 After real WebAuthn verification and kernel prospective account creation in the

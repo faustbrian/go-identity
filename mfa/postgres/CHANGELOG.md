@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fence original known-empty MFA authority for current-session additional-passkey
+  assertion options, atomic assertion-to-registration authorization and final
+  credential creation. Only their exact native owner, schema and lifecycle
+  profiles admit; changed/enrolled authority and password-profile aliases deny.
+  No factor generation is initialized or advanced by these guards.
+
 - Bind current-session passkey update options to the protected update action,
   not public signin. Both assertion phases retain the action's transactional
   credential-mutation policy without enabling a preauthentication profile.
