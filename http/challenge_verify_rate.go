@@ -50,6 +50,18 @@ type PasskeyVerificationRateRequest struct {
 	ChallengeLifetime time.Duration
 }
 
+// PasskeySignupVerificationRateRequest carries only the original native-
+// authenticated anonymous signup flow and create ceremony. A prospective user
+// is not a rate subject or authenticated identity. The caller must authenticate
+// original cookie/flow/ceremony custody before admission; this metadata grants
+// no validity or authority. ChallengeLifetime is the immutable original policy
+// duration, with the same bounds as ChallengeVerificationRateRequest.
+type PasskeySignupVerificationRateRequest struct {
+	AnonymousFlowID   identity.PreAuthTransactionID
+	ChallengeID       string
+	ChallengeLifetime time.Duration
+}
+
 // ChallengeVerificationRateLimiter owns no store or goroutine. It composes the
 // existing strict native atomic owner; no retry, local fallback or second journal
 // is introduced. Independent calls/Close are safe. Zero is invalid. Each call
@@ -125,6 +137,27 @@ func (l *ChallengeVerificationRateLimiter) AdmitPasskey(ctx context.Context, fac
 	return l.admitPasskey(ctx, facts, r, true)
 }
 
+// AdmitPasskeySignupChallenge counts only the authenticated anonymous signup
+// flow10/10m and original create ceremony10/lifetime, after this attempt's
+// successful AdmitIP. The original anonymous-flow bucket is shared with signin;
+// ceremonies remain operation-separated. It never recounts IP or verifies proof.
+func (l *ChallengeVerificationRateLimiter) AdmitPasskeySignupChallenge(ctx context.Context, facts NetworkFacts, r PasskeySignupVerificationRateRequest) (AuthRateResult, error) {
+	return l.admitSignup(ctx, facts, r, false)
+}
+
+// AdmitPasskeySignup counts IP and original anonymous signup flow/ceremony
+// dimensions atomically for a custody-authenticated direct caller. Do not call
+// after AdmitIP on the same attempt. Failure denies without retry or fallback;
+// only a nil error and Allowed permit proceeding to native verification.
+func (l *ChallengeVerificationRateLimiter) AdmitPasskeySignup(ctx context.Context, facts NetworkFacts, r PasskeySignupVerificationRateRequest) (AuthRateResult, error) {
+	return l.admitSignup(ctx, facts, r, true)
+}
+
+func (l *ChallengeVerificationRateLimiter) admitSignup(ctx context.Context, facts NetworkFacts, r PasskeySignupVerificationRateRequest, ip bool) (AuthRateResult, error) {
+	original := ChallengeVerificationRateRequest{OperationID: "identity.passkey.register-verify", ChallengeID: r.ChallengeID, ChallengeLifetime: r.ChallengeLifetime}
+	return l.admitSource(ctx, facts, original, "anonymous-flow", string(r.AnonymousFlowID), ip, true)
+}
+
 func (l *ChallengeVerificationRateLimiter) admitPasskey(ctx context.Context, facts NetworkFacts, r PasskeyVerificationRateRequest, ip bool) (AuthRateResult, error) {
 	kind, value := "anonymous-flow", string(r.AnonymousFlowID)
 	if r.Identifier != "" {
@@ -150,7 +183,7 @@ func (l *ChallengeVerificationRateLimiter) admitSource(ctx context.Context, fact
 	if sourceKind == "identifier" {
 		validSource = rateIdentifier(sourceValue)
 	}
-	if sourceKind != "subject" && r.OperationID != "identity.passkey.signin-verify" {
+	if sourceKind != "subject" && r.OperationID != "identity.passkey.signin-verify" && !(sourceKind == "anonymous-flow" && r.OperationID == "identity.passkey.register-verify") {
 		validSource = false
 	}
 	if challenge && (!l.operations[r.OperationID] || !validSource || !rateIdentifier(r.ChallengeID) || len(r.ChallengeID) > 256 || r.ChallengeLifetime < time.Second || r.ChallengeLifetime > 24*time.Hour || r.ChallengeLifetime%time.Microsecond != 0) {
@@ -218,6 +251,26 @@ func (PasskeyVerificationRateRequest) MarshalJSON() ([]byte, error) { return nil
 
 // MarshalText rejects implicit text/map-key correlation.
 func (PasskeyVerificationRateRequest) MarshalText() ([]byte, error) { return nil, ErrInvalidInput }
+
+// Format redacts original signup browser/ceremony correlation.
+func (PasskeySignupVerificationRateRequest) Format(f fmt.State, _ rune) {
+	_, _ = io.WriteString(f, "identityhttp.PasskeySignupVerificationRateRequest(redacted)")
+}
+
+// LogValue exposes only the fixed redacted marker.
+func (PasskeySignupVerificationRateRequest) LogValue() slog.Value {
+	return slog.StringValue("identityhttp.PasskeySignupVerificationRateRequest(redacted)")
+}
+
+// MarshalJSON rejects implicit original signup-custody projection.
+func (PasskeySignupVerificationRateRequest) MarshalJSON() ([]byte, error) {
+	return nil, ErrInvalidInput
+}
+
+// MarshalText rejects implicit text/map-key correlation.
+func (PasskeySignupVerificationRateRequest) MarshalText() ([]byte, error) {
+	return nil, ErrInvalidInput
+}
 
 // Format redacts source bindings.
 func (ChallengeVerificationRateRequest) Format(f fmt.State, _ rune) {

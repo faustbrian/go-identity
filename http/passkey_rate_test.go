@@ -144,6 +144,68 @@ func TestPasskeyVerificationRateRequestRedactsOriginalCustody(t *testing.T) {
 	}
 }
 
+func TestPasskeySignupVerificationRetainsAnonymousBudgets(t *testing.T) {
+	b := &secretShared{}
+	l, err := identityhttp.NewChallengeVerificationRateLimiter(identityhttp.PasswordVerificationRateConfig{Shared: b, Namespace: "verify-test", Key: [32]byte{1}, Now: func() time.Time { return time.Unix(1800000000, 0) }, MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	facts := safeFacts(t, "198.51.100.1")
+	r := identityhttp.PasskeySignupVerificationRateRequest{AnonymousFlowID: "original-flow", ChallengeID: "original-ceremony", ChallengeLifetime: 5 * time.Minute}
+	if out, err := l.AdmitPasskeySignup(context.Background(), facts, r); err != nil || !out.Allowed || len(b.last.Requests) != 3 {
+		t.Fatal("original signup verification denied", err)
+	}
+	original := b.last
+	if original.Requests[0].Policy.Capacity() != 20 || original.Requests[0].Policy.Period() != 10*time.Minute || original.Requests[1].Policy.Capacity() != 10 || original.Requests[1].Policy.Period() != 10*time.Minute || original.Requests[2].Policy.Capacity() != 10 || original.Requests[2].Policy.Period() != r.ChallengeLifetime {
+		t.Fatal("signup reset or weakened canonical budgets")
+	}
+	if _, err := l.AdmitPasskey(context.Background(), facts, identityhttp.PasskeyVerificationRateRequest{AnonymousFlowID: r.AnonymousFlowID, ChallengeID: r.ChallengeID, ChallengeLifetime: r.ChallengeLifetime}); err != nil || b.last.Requests[0].Key != original.Requests[0].Key || b.last.Requests[1].Key != original.Requests[1].Key || b.last.Requests[2].Key == original.Requests[2].Key {
+		t.Fatal("signup/signin did not share anonymous subject or separate ceremonies", err)
+	}
+	if _, err := l.AdmitIP(context.Background(), facts); err != nil || len(b.last.Requests) != 1 || b.last.Requests[0].Key != original.Requests[0].Key {
+		t.Fatal("signup preliminary IP budget diverged", err)
+	}
+	if _, err := l.AdmitPasskeySignupChallenge(context.Background(), facts, r); err != nil || len(b.last.Requests) != 2 || b.last.Requests[0].Key != original.Requests[1].Key || b.last.Requests[1].Key != original.Requests[2].Key || b.last.CommandID == original.CommandID {
+		t.Fatal("signup source admission recounted IP or changed original dimensions", err)
+	}
+	for _, mutate := range []func(*identityhttp.PasskeySignupVerificationRateRequest){
+		func(r *identityhttp.PasskeySignupVerificationRateRequest) { r.AnonymousFlowID = "" },
+		func(r *identityhttp.PasskeySignupVerificationRateRequest) { r.AnonymousFlowID = "space flow" },
+		func(r *identityhttp.PasskeySignupVerificationRateRequest) { r.ChallengeID = "" },
+		func(r *identityhttp.PasskeySignupVerificationRateRequest) { r.ChallengeLifetime = 0 },
+		func(r *identityhttp.PasskeySignupVerificationRateRequest) {
+			r.ChallengeLifetime = 24*time.Hour + time.Second
+		},
+		func(r *identityhttp.PasskeySignupVerificationRateRequest) { r.ChallengeLifetime = time.Second + 1 },
+	} {
+		bad := r
+		mutate(&bad)
+		before := b.calls
+		if got, err := l.AdmitPasskeySignup(context.Background(), facts, bad); !errors.Is(err, identityhttp.ErrInvalidInput) || got.Allowed || b.calls != before {
+			t.Fatal("unsafe signup source reached backend")
+		}
+	}
+	for _, mode := range []int{1, 2, 3, 4, 5} {
+		b.mode = mode
+		before := b.calls
+		if out, err := l.AdmitPasskeySignup(context.Background(), facts, r); err == nil || out.Allowed || b.calls != before+1 {
+			t.Fatal("signup backend failure retried or authenticated")
+		}
+	}
+	for _, value := range []any{r} {
+		if strings.Contains(fmt.Sprintf("%#v", value), "original") {
+			t.Fatal("signup rate custody disclosed")
+		}
+		if _, err := json.Marshal(value); !errors.Is(err, identityhttp.ErrInvalidInput) {
+			t.Fatal("signup rate custody serialized")
+		}
+	}
+	if data, err := r.MarshalText(); len(data) != 0 || !errors.Is(err, identityhttp.ErrInvalidInput) || strings.Contains(r.LogValue().String(), "original") {
+		t.Fatal("signup rate custody exported")
+	}
+}
+
 func FuzzPasskeyVerificationRateSource(f *testing.F) {
 	f.Add("person@example.invalid", "", "original-ceremony", int64(time.Minute))
 	f.Add("", "original-flow", "original-ceremony", int64(time.Minute))

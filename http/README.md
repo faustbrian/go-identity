@@ -18,6 +18,17 @@ This checkpoint is not a release-qualified complete identity endpoint platform.
 
 ## Selected secure router
 
+Passkey registration may explicitly select `CSRFVariantOriginSessionState`:
+the owning feature must dispatch a closed signup variant using original
+pre-auth cookie/flow and exact Origin, versus enrollment using the original
+session synchronizer and Origin. Failed enrollment must never fall back to
+signup. The base selects neither handler. `AdmitPasskeySignupChallenge` accepts
+native-authenticated original anonymous-flow/create-ceremony metadata only,
+after the same attempt's `AdmitIP`; `AdmitPasskeySignup` performs all three
+dimensions for a direct custody-authenticated caller. Neither proves authority.
+Use the same namespace/key/backend as other verification profiles: IP and
+anonymous-flow budgets remain shared; ceremony keys include the operation.
+
 Use `NewOperationDescriptors(FeatureServices{Features: selected})`, then
 `NewRouter(TransportPolicy{Network: networkConfig, CORS: routePolicies,
 HandlerTimeout: timeout, Document: DocumentConfig{Title: title, Version: version}},

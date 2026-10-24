@@ -65,6 +65,33 @@ func TestCanonicalPasskeyManagementUsesOriginalSessionSynchronizer(t *testing.T)
 	}
 }
 
+func TestCanonicalPasskeyRegistrationSelectsExplicitSignupEnrollmentUnion(t *testing.T) {
+	policy := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFVariantOriginSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
+	for _, operation := range []string{"identity.passkey.register-options", "identity.passkey.register-verify"} {
+		c := identityhttp.CanonicalOperationConfig{Owner: "passkey", OperationID: operation, Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), CSRF: policy, MaximumSerializedBytes: 300000}
+		op, err := identityhttp.NewCanonicalOperation(c)
+		if err != nil || op.Route.CSRF != policy || op.Record.CSRFOrigin != policy {
+			t.Fatal("explicit signup/enrollment union rejected or silently narrowed", operation, err)
+		}
+		for _, mutate := range []func(*identityhttp.CanonicalOperationConfig){
+			func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.TokenHeader = "Other-Token" },
+			func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.TokenMaximumAge = time.Minute },
+			func(c *identityhttp.CanonicalOperationConfig) {
+				c.CSRF.RefererFallback = identityhttp.RefererFallbackSameOriginHTTPS
+			},
+			func(c *identityhttp.CanonicalOperationConfig) { c.OperationID = "identity.passkey.delete" },
+			func(c *identityhttp.CanonicalOperationConfig) { c.OperationID = "identity.passkey.update" },
+			func(c *identityhttp.CanonicalOperationConfig) { c.OperationID = "identity.passkey.signin-verify" },
+		} {
+			bad := c
+			mutate(&bad)
+			if _, err := identityhttp.NewCanonicalOperation(bad); err == nil {
+				t.Fatal("signup union broadened unrelated or weakened policy")
+			}
+		}
+	}
+}
+
 // HTTPSEL-01/06/07: selecting no feature exposes nothing; selecting probes
 // returns real owned handlers, not fabricated domain-route placeholders.
 func TestSelectedProbeOperations(t *testing.T) {

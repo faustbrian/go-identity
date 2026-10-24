@@ -42,8 +42,9 @@ const (
 	// session state; no independent token-age bound is claimed.
 	CSRFSessionState
 	// CSRFVariantOriginSessionState requires exact Origin for the explicitly
-	// selected login variant and original stored-session synchronizer plus Origin
-	// for enrollment confirmation. No independent token age is minted.
+	// selected pre-auth signin/signup variant and original stored-session
+	// synchronizer plus Origin for enrollment confirmation. No independent token
+	// age is minted; the feature must reject mixed or ambiguous branch custody.
 	CSRFVariantOriginSessionState
 )
 
@@ -433,6 +434,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		// canonical session/pre-auth union; it neither invents token age nor
 		// extends the cookie exception to anonymous assertion/signin routes.
 		if (r.OperationID == "identity.passkey.register-options" || r.OperationID == "identity.passkey.register-verify" || r.OperationID == "identity.passkey.update" || r.OperationID == "identity.passkey.delete") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
+		// The canonical registration pair also owns explicit pre-auth signup.
+		// Its disjoint handler branches retain origin-only original browser flow
+		// versus enrollment's original session synchronizer; neither is fallback.
+		if (r.OperationID == "identity.passkey.register-options" || r.OperationID == "identity.passkey.register-verify") && r.CSRFOrigin.Mode == CSRFVariantOriginSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
 		// Anonymous mutations validate the original native session synchronizer

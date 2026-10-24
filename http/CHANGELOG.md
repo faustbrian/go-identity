@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Support original anonymous passkey-signup verification rate admission without
+  inventing a user or identifier. Share existing IP/anonymous-flow budgets and
+  retain the operation-bound original ceremony lifetime. Permit explicitly
+  selected registration routes to declare disjoint origin-only signup and
+  stored-session enrollment CSRF branches. Selection enables no route by itself.
+
 - Admit explicitly selected passkey self-deletion under its native stored-session
   synchronizer, exact token header and Origin. Signin retains its separate
   pre-auth profile. Its native keyed repeat profile preserves original shared
