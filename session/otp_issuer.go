@@ -197,6 +197,9 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	}
 	if r.state.passkey != nil {
 		p := r.state.passkey
+		if p.signup {
+			return p.binding, passkeySignupOperation(), p.record, true
+		}
 		return p.binding, passkeySigninOperation(), p.record, true
 	}
 	if r.state.upgrade != nil {
@@ -240,8 +243,11 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
 	if s.passkey {
-		if r.state == nil || r.state.passkey == nil {
+		if r.state == nil || r.state.passkey == nil || r.state.passkey.signup != s.passkeySignup {
 			return ErrInvalidIssuance
+		}
+		if s.passkeySignup {
+			return validatePasskeySignupIssuanceAt(r.state.passkey.record, now)
 		}
 		return validatePasskeyIssuanceAt(r.state.passkey.record, now)
 	}

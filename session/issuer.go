@@ -93,6 +93,7 @@ type SessionIssuer struct {
 	anonymous        bool
 	anonymousUpgrade bool
 	passkey          bool
+	passkeySignup    bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated

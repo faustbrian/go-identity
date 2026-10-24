@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicit anonymous prospective passkey-signup issuer without changing
+  existing assertion or password profiles. Share original one-bind/one-issue
+  custody and commit-gated bearer/CSRF delivery; replay, unknown and late results
+  disclose neither credential. Initial account/credential/policy/factor/passkey
+  generations remain one. Real WebAuthn and atomic native signup effects are
+  required before this profile may return a committed result.
+
 - Add an explicit prospective identified UV-passkey issuer with original
   one-use bind/issue custody and commit-gated bearer/CSRF delivery. Other
   authentication profiles cannot admit it. Genuine WebAuthn verification,

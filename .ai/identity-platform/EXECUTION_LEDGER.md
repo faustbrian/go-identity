@@ -1,5 +1,27 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 00:36 UTC: root session's explicit prospective passkey-signup arm
+retains the existing opaque once-bind/once-execute engine and original complete
+session. Actual missing-API RED preceded implementation. Focused race1.283s,
+complete module/race1.475s, vet, modverify, secrets and diff checks pass on
+Go1.27.3. Complete eight-file final review passkey_signup_issuer_final approves
+candidate d03db2fcf39d7784cf4bd4841133d906ecff4bef99569c35c24108c9b2f9841e
+against94e5a953. This prerequisite is not native signup acceptance. Outbox's
+Required40044607836 is green, but main push still reports Required expected;
+the exact remote remains6ed5e086. No protection bypass or delivered claim.
+
+Native signup integration: session94e5a95 is now main-pushed/Required-green and
+authenticated as public session/postgres v0.0.0-20261024002511-94e5a953df44.
+The retained root SessionIssuer only admits self-scoped assertion commands;
+using it for prospective anonymous signup would relabel custody. Add an explicit
+passkey-signup preparation/bind/request arm within that same issuer, preserving
+its once-only bearer/CSRF delivery engine and every existing profile. Prove
+new commit-only delivery, replay/unknown/error/late denial, initial owner epochs,
+foreign profiles and concurrent copied preparations. No private native issuer.
+This is part of the already frozen signup path, not a new milestone or preflight.
+Native consumer still owes original pre-auth/risk/RP mapping, actual cryptographic
+registration, all lifecycle events and full read/logout/new-signin acceptance.
+
 2026-10-24 00:24 UTC: signup session persistence is source-reviewed locally,
 not a usable public signup journey. Actual kernel/MFA/policy/session owners in
 one Work commit initial account/reference/factors/policy/session/family/issuance;

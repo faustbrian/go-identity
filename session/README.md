@@ -1,5 +1,28 @@
 # Session
 
+## Explicit prospective passkey-only signup
+
+`NewPasskeySignupSessionIssuer` and its `WithCSRF` variant select anonymous
+passkey signup without broadening the existing assertion or password profiles.
+`PreparePasskeySignup` freezes the original tokenless prospective session;
+`BindPasskeySignup` binds its exact original command once. The signup command's
+record is the new credential, while the session has its own allocated ID.
+The owned native executor receives the separate `PasskeySignupCommand` arm;
+legacy `PasskeyCommand` never interprets signup as an authenticated assertion.
+
+Account, credential, authorization, known-empty factor and passkey generations
+start at one. Original deployment epochs, remember, proof expiry and CSRF remain
+unchanged. Copies share one issuance attempt, and only an acknowledged new commit
+can reveal the prepared bearer/synchronizer. Replay, ambiguity, substituted
+records, failure and late results reveal neither. Native metadata recovery must
+not prepare or deliver another token.
+
+Preparation is not WebAuthn verification or signup permission. The owned native
+adapter must prove real registration and original pre-auth/risk custody, then
+commit account, protocol, RP mapping, factor/policy, session and required
+lifecycle effects atomically. This issuance contract alone is not a signup
+workflow or public endpoint and accepts no application-written authority store.
+
 ## Explicitly unprivileged anonymous recognition
 
 `NewAnonymousSessionService` selects anonymous-only primary validation and returns

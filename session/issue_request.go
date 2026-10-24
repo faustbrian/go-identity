@@ -18,8 +18,8 @@ var ErrInvalidIssueRequest = errors.New("session: invalid issue request")
 // is invalid; copies are immutable and concurrency safe. Proof requests require
 // Validate against the configured authority. OTP requests are created only by
 // BindOTP; signin requests by BindPassword, signup requests by BindSignup and
-// magic-link requests by BindMagicLink, passkey requests by BindPasskey and
-// MFA requests by BindMFA.
+// magic-link requests by BindMagicLink, assertion requests by BindPasskey,
+// passkey-signup requests by BindPasskeySignup and MFA requests by BindMFA.
 // Native owners must establish
 // successful authentication and all
 // effects atomically, not treat prospective metadata as a checked proof. This

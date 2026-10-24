@@ -12,6 +12,7 @@ import (
 type passkeyPreparationState struct {
 	binding identity.CommandBinding
 	record  Session
+	signup  bool
 	bound   atomic.Bool
 }
 
@@ -19,6 +20,7 @@ type passkeyIssueRequestState struct {
 	command identity.Command
 	binding identity.CommandBinding
 	record  Session
+	signup  bool
 }
 
 // NewPasskeySessionIssuer selects prospective identified UV-passkey issuance.
@@ -69,15 +71,28 @@ func passkeySigninOperation() identity.FeatureOperation {
 // No cryptographic verification, reservation or authority read occurs here.
 // Map the entire Session into the native command, then BindPasskey once.
 func (s *SessionIssuer) PreparePasskey(binding identity.CommandBinding, spec SessionSpec) (out PreparedIssuance, err error) {
+	return s.preparePasskey(binding, spec, false)
+}
+
+func (s *SessionIssuer) preparePasskey(binding identity.CommandBinding, spec SessionSpec, signup bool) (out PreparedIssuance, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = PreparedIssuance{}, ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || !s.passkey || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || binding.RecordID != spec.SessionID || binding.TenantID != spec.TenantID || binding.UserID != spec.UserID || binding.ActorKind != authorization.SubjectUser || binding.ActorID != identity.ActorID(spec.UserID) || binding.AnonymousFlowID != "" {
+	if s == nil || !s.passkey || s.passkeySignup != signup || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || binding.TenantID != spec.TenantID {
 		return out, ErrInvalidIssuance
 	}
-	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: passkeySigninOperation()})
+	op := passkeySigninOperation()
+	if signup {
+		op = passkeySignupOperation()
+		if binding.UserID != "" || binding.AnonymousFlowID == "" || binding.ActorKind != authorization.SubjectServiceAccount || binding.RecordID != spec.Authentication.CredentialID {
+			return out, ErrInvalidIssuance
+		}
+	} else if binding.RecordID != spec.SessionID || binding.UserID != spec.UserID || binding.ActorKind != authorization.SubjectUser || binding.ActorID != identity.ActorID(spec.UserID) || binding.AnonymousFlowID != "" {
+		return out, ErrInvalidIssuance
+	}
+	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: op})
 	if err != nil {
 		return out, ErrInvalidIssuance
 	}
@@ -87,14 +102,20 @@ func (s *SessionIssuer) PreparePasskey(binding identity.CommandBinding, spec Ses
 	if err != nil {
 		return out, err
 	}
-	if err := validatePasskeyIssuanceAt(record, s.config.Clock.Now()); err != nil {
+	now := s.config.Clock.Now()
+	if signup {
+		err = validatePasskeySignupIssuanceAt(record, now)
+	} else {
+		err = validatePasskeyIssuanceAt(record, now)
+	}
+	if err != nil {
 		return out, err
 	}
 	token, record, csrf, err := s.prepareTokenRecord(record)
 	if err != nil {
 		return out, err
 	}
-	return PreparedIssuance{state: &preparedIssuanceState{owner: s, token: token, csrf: csrf, passkey: &passkeyPreparationState{binding: frozen.Binding, record: record}}}, nil
+	return PreparedIssuance{state: &preparedIssuanceState{owner: s, token: token, csrf: csrf, passkey: &passkeyPreparationState{binding: frozen.Binding, record: record, signup: signup}}}, nil
 }
 
 // BindPasskey freezes the native owner's exact original command under a shared
@@ -103,7 +124,11 @@ func (s *SessionIssuer) PreparePasskey(binding identity.CommandBinding, spec Ses
 // Other secret-bearing method commands cannot be reinterpreted as assertions.
 // Recovery uses separate native metadata correlation, not this preparation.
 func (s *SessionIssuer) BindPasskey(prepared PreparedIssuance, command identity.Command) (PreparedIssuance, error) {
-	if s == nil || !s.passkey || prepared.state == nil || prepared.state.owner != s || prepared.state.passkey == nil {
+	return s.bindPasskey(prepared, command, false)
+}
+
+func (s *SessionIssuer) bindPasskey(prepared PreparedIssuance, command identity.Command, signup bool) (PreparedIssuance, error) {
+	if s == nil || !s.passkey || s.passkeySignup != signup || prepared.state == nil || prepared.state.owner != s || prepared.state.passkey == nil || prepared.state.passkey.signup != signup {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if prepared.state.request.state != nil {
@@ -113,13 +138,17 @@ func (s *SessionIssuer) BindPasskey(prepared PreparedIssuance, command identity.
 	_, code := command.OneTimeCode()
 	_, cookie := command.PreAuthCookie()
 	_, token := command.SessionToken()
-	if !ok || spec.Binding != prepared.state.passkey.binding || spec.Operation != passkeySigninOperation() || code || cookie || token {
+	op := passkeySigninOperation()
+	if signup {
+		op = passkeySignupOperation()
+	}
+	if !ok || spec.Binding != prepared.state.passkey.binding || spec.Operation != op || code || cookie || token {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if !prepared.state.passkey.bound.CompareAndSwap(false, true) {
 		return PreparedIssuance{}, ErrIssuanceAlreadyBound
 	}
-	request := IssueRequest{state: &issueRequestState{passkey: &passkeyIssueRequestState{command: command, binding: spec.Binding, record: prepared.state.passkey.record}}}
+	request := IssueRequest{state: &issueRequestState{passkey: &passkeyIssueRequestState{command: command, binding: spec.Binding, record: prepared.state.passkey.record, signup: signup}}}
 	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: prepared.state.token, csrf: prepared.state.csrf, passkey: prepared.state.passkey}}, nil
 }
 
@@ -128,7 +157,7 @@ func (s *SessionIssuer) BindPasskey(prepared PreparedIssuance, command identity.
 // authority-issued proof. The native owner must retain and verify genuine
 // WebAuthn custody itself; metadata must never replace cryptographic admission.
 func (r IssueRequest) PasskeyCommand() (identity.Command, Session, bool) {
-	if r.state == nil || r.state.passkey == nil {
+	if r.state == nil || r.state.passkey == nil || r.state.passkey.signup {
 		return identity.Command{}, Session{}, false
 	}
 	return r.state.passkey.command, r.state.passkey.record, true
