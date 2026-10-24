@@ -1,6 +1,29 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 09:26 UTC
+## Current TL;DR — 2026-10-24 10:59 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  Full M16 and qualification across all 67 units remain open; this delivers
+  another complete native passkey profile, not another whole milestone.
+- **New native behavior delivered:** a genuine current passkey session obtains
+  action-bound UV and removes either its own key or a sibling. Both affected
+  original sessions deny; the surviving key signs in/read/logout. Last usable
+  key removal denies. A new surviving-key session can recover original metadata
+  without repeating removal, including lost COMMIT acknowledgement.
+- **On main:** independently approved `go-passkey@16ac977`, Required CI
+  `40087749915` green. Actual PostgreSQL/race acceptance, scoped security,
+  rollback/contention/recovery, module race, vet and dependency checks pass.
+  Final corrections preserve cancellation errors and fence expired retries.
+- **Public module proof:** the authenticated downloaded native module matches
+  all twelve delivered files and passes both-target/last-key/COMMIT recovery
+  under PostgreSQL/race (77.606s), with dependencies verified and no replacements.
+- **Current/next:** primary connects native Reference startup/migrations/facade;
+  a GPT-6.1 Sol high worker implements the disjoint HTTP passkey leaf against
+  these committed contracts. HTTP/Reference removal is not delivered yet.
+  Prior signup, second-key enrollment and rename remain delivered through HTTP.
+  No user decision is needed; browser/full-unit qualification remains pending.
+
+## Retained checkpoint — 2026-10-24 09:26 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required. Additional enrollment advances the open passkey

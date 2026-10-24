@@ -1,5 +1,110 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 10:58 UTC: native removal16ac977d610f1c72111661d2f54fbd437b787850
+is exact origin/main, Required40087749915 SUCCESS. Complete12path successor
+review session_removal_native_final APPROVE, both original expiry/cancellation
+findings closed; snapshot98d202e3b033635bbd51603a5e1d4c418c83a7de5b7678874efe91a97c82fbfc.
+Final47955 exit0: affected PG/race67.740s, module race1.597s, taggedvet0,
+modverifyall; changed88.11KB secrets clean. Original91687 atomic/contention/
+COMMIT evidence retained. Failed10534 is not passing: reached changed tests
+passed, other fixtures timed out under high host load; no runtime timeout was
+relaxed. Public native v0.0.0-20261024105401-16ac977d610f
+Sumh1:2tC+cACaBqH2C1VlMePDaMYsMT+LlaVB7p9sFmnPASU= matches all12 Git paths.
+Untouched downloaded module6829 passes actual both-target/last-key/new-session
+recovery and COMMIT-disconnect PG/race77.606s plus modverifyall. No replacements.
+
+Freeze ready successor composition in same M16 removal profile: primary owns
+reference/**, native/public integration pins, migration6 readiness, guarded
+native facade and actual cookie/bearer x fresh/populated removal/recovery proof.
+HTTP leaf worker session_removal_http owns ONLY http/passkey/**; no Git,
+children, shared contracts/Reference edits or heavy checks without token.
+Consume committed/proven root5bca8c5, native16ac977, identity93c437e and
+protocolac9b461. Add explicit FeatureConfig.SessionDeletion, mutually exclusive
+with existing password Delete, reusing canonical POST /v1/passkey/delete.
+Current cookie/CSRF/self-delete policy/exact trusted origin/network required.
+Wire phase=options|complete|recover with original referenceID/expectedVersion;
+options uses a distinct header key, completion additionally original ceremonyID/
+genuine response and its distinct header key; recover additionally original
+commandID under a new genuine surviving-key session. All phases require header
+Idempotency-Key for shared keyed rate.secret admission; recovery uses it only
+for rate admission, never allocating/repeating/rebinding a native command.
+RecoverDelete owns historical authorization; query tenant/user/actor/action are
+derived from current session, target/command are exact locators, not authority.
+No proofID, identity/RP/session/network/body-key override, new route/store or
+fallback. Safe original receipt metadata only, no session/cookie/CSRF/proof
+disclosure. Options honor actual original challenge and current read/context
+after hooks; final removal acknowledgement retains original authenticated
+invocation ceiling, not a re-read of its deliberately invalidated session.
+Receipt kernel-reference versions must not be equated with inventory metadata.
+Worker TDD strict parser/phase/receipt/hooks/admission/denial/recovery/wire tests,
+module race/vet/verify and bounded hostile-parser fuzz, one complete review.
+Primary adopts reviewed committed public leaf pin before actual HTTPS journey.
+Heavy token PRIMARY; parallel read/coding only until explicit release. Full
+M16/67-unit qualification still open; whole~25%,11/39. No new lifecycle programme.
+
+2026-10-24 10:39 UTC: native final91687 is terminal/pass: selected new/retained
+PG18/race214.465s, module race1.377s, taggedvet0, modverifyall. Independent
+session_removal_native_final reviewed all12 paths against5bca8c5. Its initial
+APPROVE was explicitly withdrawn after bounded recheck: metadata replay needs
+the original positive-read/context delivery fence; cancellation/deadline at
+target/remaining credential reads must retain public classification rather than
+Forbidden. These are finite defects in the frozen profile, not new scope.
+Primary reproduces them at actual public methods/PG read boundaries, fixes only
+those paths, reruns affected checks and obtains complete successor review.
+Unchanged atomic/contention/COMMIT evidence remains retained; native not pushed.
+Whole estimate~25%,11/39; HTTP/Reference removal remains pending.
+
+2026-10-24 10:14 UTC: local native removal's first genuine public journey43993
+passes PG18/race15.488s: target authenticating key or sibling, both original
+passkey sessions deny, remaining key signs in/read/logout; last usable key denies.
+This is local incomplete native acceptance, not delivery/full M16. Root carriers
+5bca8c5 main/Required40083153021 green, exact identity kernel/MFA admission93c437e
+main/Required40083934420 green, protocol compound+remaining fence ac9b461
+main/Required40084816123 green. Independent complete reviews approve each owner;
+protocol F1 native/signup provenance test gap is resolved without source changes.
+Root privacy/module race, kernel/MFA real PG RED/GREEN+module race/taggedvet/
+modverify and protocol original/remaining/native/signup PG/race evidence retained
+in native reports. No old histories were rewritten. Native uses authenticated
+public pins, no replacements. Primary now implements remaining native denial,
+withdrawal, contention/rollback/expiry/COMMIT-recovery acceptance before complete
+native review/main delivery; HTTP/Reference still pending. Heavy token PRIMARY;
+protocol worker released and its child DB/roles cleaned; shared isolated PG/cache
+still required for this bounded native run. Whole estimate remains~25%,11/39.
+
+2026-10-24 09:34 UTC: prior goal turn is progress: native/HTTP Reference
+second-key profile is delivered (7a521cf progress/main/Required40082000656 green),
+not a status-only wait. All previous task caches/PG are removed. Freeze next M16
+consumer: genuine passkey-only current-session UV -> remove selected own key ->
+all affected passkey sessions deny -> remaining key signs in/read/logout; deny
+last usable key. Cover both authenticating-key and sibling-key targets, original
+intent/version/session/CSRF/expiry, rollback/contention and both COMMIT outcomes.
+Two keyed phases share canonical identity.passkey.delete, with distinct original
+keys and schemas identity.passkey.delete.options-v1 / .assertion-v1. Options
+lifecycle passkey.reauthentication.started.v1 (0->1); completion canonical
+identity.passkey.remove_credential (kernel reference N->N+1). Protocol source
+assertion advances V->V+1; same-key removal then erases that exact verified
+successor (V+2), distinct target has its own removal CAS. Mapping/key reservations
+survive erasure. Native locks RP/handle plus eligible remaining mapping/protocol/
+kernel authority; at least one independently usable resident key must survive.
+No password/OTP recovery source is invented or substituted; broader supported
+recovery methods remain required subsequent profiles. Removal advances passkey
+generation/reference authority as owned today; metadata acknowledgement may use
+original authenticated invocation, but new calls with invalidated sessions deny.
+Primary owns go-passkey root/native and identity kernel/MFA narrow admissions,
+then HTTP/Reference integration/pins/Git. Consumed baselines: passkey d970e39,
+webauthn eb85721, identity7a521cf, real signup/enrollment/rename/read/logout proof.
+Protocol worker passkey_removal_protocol_boundary owns ONLY go-webauthn/postgres
+explicit removal-assertion selectors/compound participant/owned forward migration,
+tests/docs/changelog; no root crypto/identity/passkey edits, children or Git.
+Reuse original Work/effects/recovery, not a second transaction/proof/store. Its
+committed focused genuine protocol proof unlocks native adoption. Primary root
+carrier/privacy API RED/GREEN, exact kernel/MFA guard RED/GREEN, real native
+two-key+last-key/withdrawal/atomicity/expiry/recovery PG tests and retained legacy
+password deletion, then actual selected HTTP/Reference and public consumers.
+One independent complete review per coherent owner batch; no whole-unit claim.
+Heavy local token PRIMARY; protocol worker reads/codes and requests token before
+Go/service work. New task-owned disposable root identity-passkey-removal.3docij.
+
 2026-10-24 09:26 UTC: selected HTTP Reference e301cac775869e6634b7c3d3416f135905ddedb2
 is on exact origin/main, Required40081818725 SUCCESS. Complete nine-path successor
 review session_enrollment_reference_final APPROVE against0fe1147, no actions or
