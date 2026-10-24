@@ -1,5 +1,180 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 09:26 UTC: selected HTTP Reference e301cac775869e6634b7c3d3416f135905ddedb2
+is on exact origin/main, Required40081818725 SUCCESS. Complete nine-path successor
+review session_enrollment_reference_final APPROVE against0fe1147, no actions or
+questions; exact snapshot retained in native report. Final59144 exit0: new/retained
+PG/race71.004s, Reference/cmd race8.842s/6.544s, taggedvet0/modverify all; changed
+secrets16.31KB clean/diffcheck0. Authenticated public Reference
+v0.0.0-20261024092412-e301cac77586 Sumh1:MWGkQKVHq4nIO+RbyT4TGR7mMbxTWpV3GttLWEehsPA=
+matches all9 changed archive paths. Untouched public new HTTPS enrollment and
+retained HTTP rename fresh/populated PG/race26.283s, modverify all pass. This
+handles the finite session-enrollment HTTP/Reference profile, not full M16 or
+unit/release qualification. Original native/public results and expiry-after-hook
+claim boundary remain recorded below. Next consumer: safe passkey-only removal/
+recovery; no worker is active, no new removal assignment or implementation yet.
+
+2026-10-24 09:22 UTC: HTTP leaf0fe1147900741f1531ded5004800778727cec7ff is
+on exact origin/main, Required40081133301 SUCCESS. session_enrollment_http_final
+APPROVE complete13path source5b91a449e4eebe05f1efbefb8c1729528f17d65799b03e548c6bff67d5792fb4;
+full worker race17.640s, parserfuzz5.510s/88234execs, vet0/modverifyall retained.
+Primary repeated scoped secret349.67KB clean and source binding before commit.
+Normal authenticated public pin v0.0.0-20261024091336-0fe114790074
+Sumh1:4Fj2IoNDfDnp60zMUhqd6OjiVnMw/1N6/nHhY1klxog= matches all13 archivepaths.
+Reference missing selection API RED27257 captured. Actual HTTP signup/AUV/B/C,
+two-key inventory, either-key HTTPS signin/read/logout, original session/logout
+and revoked-retry denial passes fresh+populated PG/race15.514s. First60068 failed
+second-key signin-options409 because new test reused one options key across two
+different flows; per-flow test key correction only, no runtime/security change.
+Selected session-only configuration composes without HTTP pre-auth/device owner;
+missing native/cookie/CSRF, competing password profile deny. Nine Reference paths
+remain local; complete review session_enrollment_reference_final successor and
+final new/retained/module race/vet/modverify59144 pending. Generic HTTP original-A
+post-hook ceiling is source-reviewed, but no genuine five-minute expiry-after-hook
+run is claimed. Reference.NewServer currently supplies nil middleware; no new hook
+API or timer programme is added to this finite selection. Full M16/browser/unit
+qualification remains open; these native/public and local HTTP results do not
+close a whole milestone or alter the whole~25% estimate (11/39).
+
+2026-10-24 09:10 UTC: Reference3385506 Required40080517729 SUCCESS.
+Authenticated public v0.0.0-20261024090409-3385506f8d11
+Sumh1:bWG7xEzIo+Csh3fm+UaWfSDfQNT3xfJivdZ1d7vDKnI= matches all12 changed
+archive files. Untouched downloaded public cookie/bearer x fresh/populated native
+enrollment PG/race24.951s and moduleverify pass. Native Reference delivery is
+handled; full M16/whole-unit qualification is not. Heavy token returned by HTTP;
+its local13path final race17.640s, parserfuzz5.510s/88234execs, vet0/modverify all,
+349.67KB scoped secrets and diffcheck0 are retained; exact worker cache removed.
+Independent HTTP review session_enrollment_http_final is active. Primary next
+finite integration selects HTTPPasskey.SessionEnrollment only with actual cookie
+native owner/CSRF/keyed/shared rates; conflicts with legacy Registration deny.
+No original browser-device/password dependency is added for this session branch.
+Canonical registration routes coexist with Signup's original device/flow branch.
+Consume reviewed committed HTTP public pin before production adoption. Test-first
+actual HTTPS signup -> A genuine UV -> B registration options -> C second key ->
+two-key inventory/either-key signin/read/logout -> original-session logout and
+revoked-retry denial, fresh/populated upgrade; original replay, intent and CSRF
+denials and no new session/cookie disclosures. Primary owns Reference/server/
+fixtures/pins/docs only; worker leaf is frozen. Missing selection API RED then
+focused genuine/retained PG/race, module race/vet/verify and one complete review.
+
+2026-10-24 09:04 UTC: Reference source3385506f8d11e467df686e94d80be1dc6eb6e066
+is on exact origin/main; Required40080517729 queued, public Reference consumer
+pending. session_enrollment_reference_final APPROVE covers all12 owned paths
+against451ed51 with no actions/questions; native report retains exact source
+identities. Run62863 outcomes below remain current; unchanged source was committed
+without broad reruns. Final changed-content scan33.17KB clean/diffcheck0. A separate
+full-file stdin scan matched two pre-existing go.sum h1 records (lines266/350),
+confirmed byte-identical at451ed51; no new credential finding or full-history
+clearance is asserted. HTTP worker's first full three-phase focused cohort0.473s
+passes, primary inspected initial public boundary and integrated dispatcher/wire
+alignment, not final approval. Heavy token stays HTTP for its remaining checks;
+primary actual public Reference consumer follows its explicit release.
+
+2026-10-24 08:59 UTC: native d970e39 Required40079679894 SUCCESS. Final
+Reference run62863 terminal exit0: guard unitrace1.532s; actual new cookie/bearer
+x fresh/populated enrollment plus retained standalone/conditional/HTTPrename
+PG/race64.824s; Reference/cmd race8.759s/6.525s; taggedvet0/modverify all. This
+uses authenticated public native v0.0.0-20261024085132-d970e39d608a (all5 changed
+archive paths matched Git), not replacement/local adapters. Twelve Reference
+paths remain local; session_enrollment_reference_final is assigned their complete
+independent final review against451ed51, excluding HTTP worker and .ai notes.
+HTTP worker exclusively holds heavy token after62863 terminal; root2aeb513 normal
+adoption then missing constructor/config API RED observed. Worker now implements
+its frozen leaf contract; primary review/Git remain non-heavy. No HTTP/public
+Reference delivery, new milestone/unit qualification or percentage increase.
+
+2026-10-24 08:54 UTC: native delivery-ceiling d970e39d608a53afa0f463cbe955c334526434c9
+main-pushed (CI pending). API RED missing RegistrationOptionsForDelivery; final
+serialized PG/race31.639s, unitrace1.322s, taggedvet0/modverify all, secret10.02KB,
+complete native review session_enrollment_native_final APPROVE at1375a09 plus
+5path acbd31c71ecbdc077fc51949188fdac0632b4ec2ad5c07ccb2e87bdab571d187.
+Accidental overlap74211(native)/28254(Reference) produced role-cleanup/migration
+fixture failures; both terminal and notpassing, corrected serialized98696 passed.
+Reference missing-v5-column readiness RED5.152s observed; existing migration guard
+now covers all4 new owner columns/two constraints. Cookie/bearer x fresh/populated
+current enrollment PG/race25.515s passes; final publicpin/facade/static/review pending.
+
+Assigned ready HTTP leaf lane session_enrollment_http: ONLY http/passkey/** in
+go-identity main451ed51, no Git/other-owner edits/children. Consume root2aeb513,
+native d970e39 (same B + genuine original-A deadline, legacy API retained), native
+1375a09 original C rate source and preceding genuine native/public consumer proof.
+Outcome: explicit FeatureConfig.SessionEnrollment + cookie SessionEnrollmentConfig
+exposes canonical register-options/register-verify, no new URL/operation. Reject
+simultaneous legacy Registration; allow Signup via one strict mode dispatcher,
+same actual ingress/Origin/session-cookie/shared OptionsRate/VerificationRate.
+Wire: mode=session; options phase=assertion|registration and intended optional
+label; B additionally original ceremonyID/actual response. Both options phases use
+distinct header-only keys. C repeats mode/label, original commandID/ceremonyID/
+registration response, no phase/proofID/Idempotency-Key. No identity/RP/remember/
+session/body overrides. A/B retain canonical rate.auth; C canonical rate.verify
+with native authenticated original source, never caller-derived buckets or a
+duration used as a new validity lease. Actual cookie/CSRF/self policy/trusted
+network mandatory; no password/proof/device-cookie dependency is introduced.
+Use native EnrollmentAssertionOptions, RegistrationOptionsForDelivery,
+SessionRegistrationRateSource and Register ports. Final B options delivery checks
+owner's absolute A ceiling plus current session/request/B expiry AFTER hooks,
+without IO inside prompt predicate. A uses actual assertion expiry. Matching
+retries/unknown outcomes preserve original receipt metadata without options/new
+credential/session; no response cookies/CSRF. C may expose safe metadata only.
+Worker owns leaf handler/parser/dispatch/wire/tests/docs/changelog/module-local
+root pin; primary owns selected contract, Reference/server/pins/shared modules,
+Git and acceptance. RED before production; focused leaf tests, closed parser/wire
+and config/security/rate/replay/hook expiry/error negatives, retained old profiles,
+bounded parser fuzz, race/vet/modverify and independent complete final review.
+Double only native boundary for transport tests; actual PG proof stays primary.
+Heavy local token stays PRIMARY until explicit grant; worker reads/codes tests
+and requests token before any Go/service/analyzer. No stubs unlock consumers.
+
+2026-10-24 08:48 UTC: native1375a09286b4a780d7635f3523c31671ff0fe876 is
+main-pushed/Required40078591042 SUCCESS. Same four-path snapshot independently
+APPROVE after final native source cohort/race49.408s, tagged vet0/modverify all.
+Authenticated public v0.0.0-20261024083439-1375a09286b4 (Sumh1:8+GaLRgctABIFEabT2HxJLhkTciR/syZMH7p4+2udJo=)
+matches all4 changed paths and passes genuine read-only/final-fence PG/race13.130s,
+modverify all. Prior failed/stopped runs remain recorded below, not passing.
+Reference API RED after normal public adoption: exactly missing selection/state/
+guarded facade. New lifecycle/privacy unit0.442s passes; first PG invocation
+failed fixture input (DSN instead of explicit loopback port), not application.
+Corrected actual fixture58915/postgres gives fresh+populated-kernel additional-
+enrollment PG/race13.119s: actual no-password signup, both-key native signin and
+HTTP session read/logout, original session/use and retained original-key retries.
+Current Reference candidate remains local/unreviewed; no delivery/M16 claim.
+Bounded mapping passkey_additional_enrollment_boundary confirms real HTTP B
+delivery gap: public options/receipt expose B's later protocol TTL, not genuine
+A expiry; the rate source is IO and returns fixed duration, not a prompt lease.
+Add native RegistrationOptionsForDelivery returning existing options result and
+owner-captured absolute A delivery ceiling. Preserve old RegistrationOptions;
+no root contract/store/proof/IO-in-predicate. Fresh result requires real nonzero
+ceiling; replay returns metadata and zero ceiling. Reference forwards the value;
+HTTP later checks it after hooks alongside session/request/B expiry. Primary owns
+native source/tests/docs first (API RED), focused genuine lineage/retry/C and
+retained enrollment/source PG/race, vet/modverify, one complete native review.
+HTTP worker waits for this exact consumed contract to be committed/proven.
+
+2026-10-24 08:31 UTC: continue M16 additional-enrollment consumer. Previous turn
+made progress: native27d1d01 delivered/public-proven; rate-source final checks
+failed under overload, not a no-progress or passing turn. Host load fell and
+actual CPU snapshot showed62.88% idle, so one serialized bounded native final
+run40865 is live in new task-owned UTF8 PostgreSQL58915, Go1.27.3/p1/procs2.
+No old process or resource was reused: prior cluster/cache root removed.
+Primary freezes Reference native successor against committed/public native27d1d01,
+root2aeb513, kernel e44c3d6, MFAc5e2482 and protocol eb85721. Outcome: selected
+Passkey.SessionEnrollment + guarded Passkeys().SessionEnrollment() A/B/C facade
+lets the actual password-free signup account add another key, inspect both and
+signin/read/logout with either while preserving original session. Native-only
+selection enables no HTTP or metadata; actual graph startup/fixedtenant/Close,
+original session/CSRF/selfpolicy/retries and original expiry remain owned/fenced.
+Require KeyedOptions and explicit cookie/bearer transport; graph injects actual
+owners and copies CSRF configuration. No new store, migration SQL or proof owner.
+Writable paths: reference/passkey_configuration.go, new session_enrollment facade/
+tests, existing standalone/signup journey fixtures, docs/changelog, normal public
+go.mod/go.sum pins. HTTP leaf/server selection stays later; the rate facade is
+added only once its actual upstream method is committed/proven. Checks: missing
+facade/selector API RED after public-native adoption, true signup/add-second/
+either-key native + original HTTP read/logout on fresh/populated kernel upgrade,
+foreign custody and graph lifecycle denial, retained standalone/rename/signup,
+focused race/vet/modverify and independent complete-final-diff review. This is
+one finite native Reference profile, not full M16 or unit qualification.
+
 2026-10-24 08:19 UTC: native27d1d01 exact remote main and Required40076273067
 SUCCESS confirmed. Authenticated public module
 github.com/faustbrian/go-passkey/postgres@v0.0.0-20261024075909-27d1d01ffb32
