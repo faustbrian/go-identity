@@ -1,5 +1,26 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 04:08 UTC: finite M16 standalone passkey-only profile CLOSED.
+Referencefdf8f86261ab6f712a90d8e5fee47035e60a662b is exactmain/Required40061091902
+SUCCESS. PublicReferencev0.0.0-20261024040717-fdf8f86261ab authenticates with
+Originfdf8f86/Sumh1:pyvlcils/mDwOZ56Ti+VLrD08lST+BUNu+LvBptHAlw=;
+all22changed archivefiles match approved b46fccdb candidate. Downloaded-public
+actual fresh/populated-kernel signup/inventory/read/CSRFlogout/freshdiscovery
+race8.101s and modverify pass, without replacements. Native owners/security
+remain unchanged; fullM16/unit/milestone count remains open/~25%,11/39.
+Next finite primary TierC/D profile: explicitly selected conditional-signin
+options through HTTP/Reference -> same genuine discoverable completion -> usable
+session/read/logout. Consume public rootc0819f9/nativeea2adfd (public PG/race
+17.600s, Requiredgreen) and Referencefdf8f86/leaf1eadce3; retain current default
+identified/discoverable wire/API compatibility. Conditional mediation is outer
+browser presentation, not another durable ceremony mode. Preserve original
+flow/device/origin/remember, UV, native discovery opt-in/risk, same original-key
+intent and metadata-only retry; no new authority, schema, journal or browser UI.
+Primary owns HTTP/Reference/pins/Git. Check leaf selection/wire/native denial,
+genuine public PG/race consumer fresh/populated journey, retained modes and
+remember/retry/security, relevant vet/modverify/secrets, independent final diff,
+mainCI and downloaded public acceptance. No package worker currently active.
+
 2026-10-24 04:06 UTC: final normal-public-pin standalone race8.511s and tagged
 vet exit0. Prior standalone+retainedHTTPsignup cohort32.422s, ordinary Reference/
 cmd race8.968s/7.768s and modverify pass. Review namespace action reproduced:
