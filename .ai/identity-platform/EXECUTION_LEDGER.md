@@ -1,5 +1,35 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 04:06 UTC: final normal-public-pin standalone race8.511s and tagged
+vet exit0. Prior standalone+retainedHTTPsignup cohort32.422s, ordinary Reference/
+cmd race8.968s/7.768s and modverify pass. Review namespace action reproduced:
+same session/risk schema was accepted until planning (RED1.536s). Standalone now
+calls the existing namespace validator before retaining native/HTTP owners;
+fresh/populated journeys, safe inventory and missing-rate readiness checks pass.
+Timeout comment corrected against actual native1ms..30s session policy; no
+native security/budget rule changed. Final22-path b46fccdb25c3845a9a3341e0c137dedc908474fae9bd78d4a358977e486e04e7
+has independent standalone_passkey_final APPROVE with no unresolved actions;
+main delivery and downloaded-public acceptance remain pending. Leaf1eadce3 Required
+40060408777 SUCCESS; public archive allsix changedfiles match approved source.
+
+2026-10-24 03:59 UTC: standalone passkey-only Reference signup/read/logout/
+fresh-discovery passes actual PostgreSQL/race on fresh and populated kernel/risk
+upgrade; the prior native counter authority is preserved. Unsupported mixed
+selections fail construction and unselected password/OTP handles/metadata are
+absent. Selected atomic-rate history now follows the verification limiter,
+not an incidental password route. Current final regression/readiness run pending.
+Independent HTTP-only reviewer discoverable_only_final APPROVE/no findings for
+six leaf paths at a26c00f; leaf1eadce3 is main-pushed, Required40060408777 pending.
+Reference source/docs/pins/final review/main delivery remain unfinished.
+Conditional lane delivered rootc0819f9/nativeea2adfd, respective Required
+40059168531/40059438586 SUCCESS. Authenticated downloaded-public native
+v0.0.0-20261024034254-ea2adfda451c passes genuine conditional session/read/logout,
+policy and expiry/verification under PostgreSQL/race17.600s; modverify passes.
+The earlier public attempt failed on leaked task-cluster audit roles before the
+new behavior; owned fixture cleanup now removes those roles, unchanged native
+rerun passes. No protocol policy/timeout was relaxed. HTTP/Reference conditional
+integration remains separate pending work. Whole estimate~25%,11/39 unchanged.
+
 2026-10-24 03:24 UTC: finite M16 HTTP signup profile delivered as reviewed
 Reference321563e82a7d5f737431669e6714f07cf9979d74, exactmain/Required40057908311
 SUCCESS. Authenticated publicReferencev0.0.0-20261024032016-321563e82a7d

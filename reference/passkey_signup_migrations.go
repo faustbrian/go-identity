@@ -30,7 +30,11 @@ func (s StoreSet) passkeySignupMigrationCatalog(ctx context.Context, catalog []m
 	}
 	if registration < 0 {
 		var err error
-		catalog, err = passwordSignupMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		if p.standalone {
+			catalog, err = registrationKernelMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		} else {
+			catalog, err = passwordSignupMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		}
 		if err != nil {
 			return nil, err
 		}

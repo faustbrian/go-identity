@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Select a PostgreSQL-only passkey deployment with `Passkey.Standalone`:
+  signup, discoverable signin, inventory and common session read/logout need
+  no password, OTP, delivery or email-parser configuration. Bootstrap scope,
+  risk/UV/browser custody and native authority remain mandatory. Select
+  `HTTPPasskey.DiscoverableOnly` for identifier-free-only transport. Apply
+  selected owner histories; unsupported mixed or password-proof management
+  selections fail closed. Existing deployment selection remains unchanged.
+
 - Explicitly compose `HTTPPasskey.Signup` with a distinct `passkey-signup`
   browser initiation method and the canonical registration route pair. Original
   flow/device custody, shared anonymous verification rates and native atomic

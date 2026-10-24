@@ -1,9 +1,11 @@
 package reference
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/faustbrian/go-authorization/v3"
+	identity "github.com/faustbrian/go-identity"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/session"
 	passkey "github.com/faustbrian/go-passkey"
@@ -86,6 +88,27 @@ func TestPasskeySignupMigrationsRetainInstalledHistories(t *testing.T) {
 		}
 		if !found {
 			t.Fatal("signup missing owned forward history", namespace)
+		}
+	}
+}
+
+func TestStandalonePasskeyCatalogContainsOnlySelectedOwners(t *testing.T) {
+	f := &featureState{migrations: featureMigrationConfig{standalonePasskey: true, sessionSchema: "session_store", signinSchema: "session_store", global: "deployment", preauthIssue: true, singleSessionRevocation: true}, passkey: &passkeyState{standalone: true, signup: &native.SignupService{}, schema: "session_store", predecessor: "session_issuances_purpose_v2"}}
+	s := StoreSet{state: &storeState{durable: true, config: VelocityStoreConfiguration{Schema: "risk_store"}, features: f}}
+	catalog, err := s.migrationCatalog(t.Context())
+	if err != nil {
+		var input identity.InvalidInputError
+		if errors.As(err, &input) {
+			t.Fatal("standalone migration catalog", input.Field)
+		}
+		t.Fatal("standalone migration catalog", err)
+	}
+	for _, h := range catalog {
+		for _, owner := range h.owners {
+			switch owner {
+			case "identity/otp/postgres", "identity/password/postgres", "identity/delivery/postgres":
+				t.Fatal("unselected workflow contributes migrations", h.namespace, owner)
+			}
 		}
 	}
 }

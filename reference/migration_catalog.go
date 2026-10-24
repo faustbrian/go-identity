@@ -133,7 +133,7 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 			return nil, err
 		}
 		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
-		if s.state.features != nil && (s.state.features.httpAnonymous != nil && s.state.features.httpAnonymous.secret != nil || s.state.features.httpUsername != nil && s.state.features.httpUsername.rate != nil || s.state.features.httpPasswordReset != nil || s.state.features.httpPhonePasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpEmailRequests != nil && s.state.features.httpEmailRequests.secret != nil || s.state.features.httpEmailOTPVerification != nil || s.state.features.httpPhoneVerification != nil || s.state.features.httpPhoneRemoval != nil || s.state.features.httpPhoneChange != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume || s.state.features.httpPasskey != nil && s.state.features.httpPasskey.secret != nil) {
+		if s.state.features != nil && (s.state.features.httpAnonymous != nil && s.state.features.httpAnonymous.secret != nil || s.state.features.httpUsername != nil && s.state.features.httpUsername.rate != nil || s.state.features.httpPasswordReset != nil || s.state.features.httpPhonePasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpEmailRequests != nil && s.state.features.httpEmailRequests.secret != nil || s.state.features.httpEmailOTPVerification != nil || s.state.features.httpPhoneVerification != nil || s.state.features.httpPhoneRemoval != nil || s.state.features.httpPhoneChange != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume || s.state.features.httpPasskey != nil && (s.state.features.httpPasskey.secret != nil || s.state.features.httpPasskey.verification != nil)) {
 			native := ratepg.AtomicSchemaMigration()
 			atomic, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
 			if err != nil {
@@ -188,6 +188,11 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 			migrationGuard{version: 1412, schema: c.signinSchema, tables: []string{"session_issuances"}})
 		if c.signinSchema != c.sessionSchema && c.signinSchema != c.authenticatedSchema {
 			catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1410, schema: c.signinSchema})
+		}
+		if c.standalonePasskey {
+			// The common native record-format prefix ends at OTPIssue version
+			// 1416's v2 CHECK. No PasswordSignin owner contributes its v3 suffix.
+			catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1416, schema: c.signinSchema, constraints: []string{"session_issuances.session_issuances_purpose_v2"}})
 		}
 	}
 	if c.singleSessionRevocation {

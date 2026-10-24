@@ -18,8 +18,9 @@ import (
 // cookie signout; an empty slice disables it, never enables legacy cookie
 // mutation. Bearer signout has no cookie fallback. Resources/callbacks remain
 // borrowed, bounded and concurrent-safe. Construction performs no IO.
-// The explicit verified profile remains selected; configured OTP and magic-link
-// consuming issuers add their own native profiles to both read and revoke paths.
+// The retained deployment selects its verified profile; configured OTP and
+// magic-link consuming issuers add their own native read and revoke profiles.
+// Explicit passkey-only composition admits only its native passkey provenance.
 // Selected MagicLink.TOTP additionally composes current confirmed factor
 // authority into both paths; MFA never falls back to a single-factor profile.
 // Every selected issuer must use the same store, deployment, policy namespace,
@@ -46,12 +47,19 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_session"}
-	if c.OTP == nil || d.PostgreSQL == nil {
+	if d.PostgreSQL == nil {
 		return nil, invalid
 	}
 	n, o := c.Session.Native, c.OTP
 	e := n.Execution
-	if n.Validation.Clock != nil || e.Profile.GlobalAuthorityID != o.Store.GlobalAuthorityID || e.Profile.PolicyNamespace != o.Store.UserPolicyNamespace || o.Signin != nil && e.Repository.Schema != o.Signin.Session.Schema || e.Repository.MaximumDuration > o.Timeout || e.Coordinator.MaximumDuration > o.Timeout || n.MaximumDuration > o.Timeout || e.PolicyVersion != o.RequestKeys.Policy.PolicyVersion || !sameServerAuthorization(e.Authorization, o.RequestKeys.Policy.Authorization) {
+	if n.Validation.Clock != nil {
+		return nil, invalid
+	}
+	if o == nil {
+		if c.Passkey == nil || c.Passkey.Standalone == nil || !c.Session.Passkey || e.Repository.MaximumDuration > n.MaximumDuration || e.Coordinator.MaximumDuration > n.MaximumDuration {
+			return nil, invalid
+		}
+	} else if e.Profile.GlobalAuthorityID != o.Store.GlobalAuthorityID || e.Profile.PolicyNamespace != o.Store.UserPolicyNamespace || o.Signin != nil && e.Repository.Schema != o.Signin.Session.Schema || e.Repository.MaximumDuration > o.Timeout || e.Coordinator.MaximumDuration > o.Timeout || n.MaximumDuration > o.Timeout || e.PolicyVersion != o.RequestKeys.Policy.PolicyVersion || !sameServerAuthorization(e.Authorization, o.RequestKeys.Policy.Authorization) {
 		return nil, invalid
 	}
 	selection, err := sessionAdmissionSelection(c)
@@ -128,6 +136,9 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 		return nil, invalid
 	}
 	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey}
+	if selection.Verified == nil && selection.OTP == nil && selection.MagicLink == nil {
+		execution.Admission = nil
+	}
 	revoke, err := sessionpg.NewRevokeOneExecutor(d.PostgreSQL, execution)
 	if err != nil {
 		return nil, invalid
@@ -166,7 +177,18 @@ func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSess
 	deny := func() (sessionpg.SingleFactorSessionAdmissionConfig, error) {
 		return sessionpg.SingleFactorSessionAdmissionConfig{}, invalid
 	}
-	if c.Session == nil || c.OTP == nil || c.OTP.Signin == nil && c.PasswordSignin == nil {
+	if c.Session == nil {
+		return deny()
+	}
+	if c.OTP == nil && c.PasswordSignin == nil {
+		if !c.Session.Passkey || c.Passkey == nil || !sessionIssuanceMatches(*c.Session, c.Passkey.Issuer, c.Passkey.CSRF) {
+			return deny()
+		}
+		// Passkey provenance has its own native admission owner. Selecting it
+		// must not also admit an unconfigured password or email-OTP issuer.
+		return sessionpg.SingleFactorSessionAdmissionConfig{}, nil
+	}
+	if c.OTP == nil || c.OTP.Signin == nil && c.PasswordSignin == nil {
 		return deny()
 	}
 	n, e := *c.Session, c.Session.Native.Execution

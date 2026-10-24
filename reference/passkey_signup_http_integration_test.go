@@ -19,6 +19,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	passkeyhttp "github.com/faustbrian/go-identity/http/passkey"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
 	openapi "github.com/faustbrian/go-openapi/v2"
@@ -265,9 +266,41 @@ func proveReferencePasskeySignupHTTP(t *testing.T, ctx context.Context, features
 	if err != nil {
 		t.Fatal(err)
 	}
-	var events, identifiers, passwords int
-	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic IN ('identity.passkey.create_credential','user.created.v1','session.created.v1')),(SELECT count(*) FROM identity.identifiers WHERE user_id=$2),(SELECT count(*) FROM identity_password.credentials WHERE user_id=$2)`, string(command), string(record.UserID)).Scan(&events, &identifiers, &passwords); err != nil || events != 3 || identifiers != 0 || passwords != 0 {
-		t.Fatal("HTTP signup lost atomic effects or invented fallback", err, events, identifiers, passwords)
+	var events, identifiers int
+	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic IN ('identity.passkey.create_credential','user.created.v1','session.created.v1')),(SELECT count(*) FROM identity.identifiers WHERE user_id=$2)`, string(command), string(record.UserID)).Scan(&events, &identifiers); err != nil || events != 3 || identifiers != 0 {
+		t.Fatal("HTTP signup lost atomic effects or invented identifier", err, events, identifiers)
+	}
+	if c.Passkey.Standalone != nil {
+		var passwordOwner bool
+		if err := pool.Raw().QueryRow(ctx, `SELECT to_regclass('identity_password.credentials') IS NOT NULL`).Scan(&passwordOwner); err != nil || passwordOwner {
+			t.Fatal("standalone signup installed an unselected password owner", err)
+		}
+	} else {
+		var passwords int
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_password.credentials WHERE user_id=$1`, string(record.UserID)).Scan(&passwords); err != nil || passwords != 0 {
+			t.Fatal("HTTP signup invented password fallback", err, passwords)
+		}
+	}
+	if c.HTTPPasskey.Inventory {
+		r, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/v1/passkey/list", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Host = strings.TrimPrefix(origin, "https://")
+		r.AddCookie(issued.cookies[0])
+		got, err := client.Do(r)
+		if err != nil {
+			t.Fatal("signup inventory HTTPS request failed")
+		}
+		wire, readErr := io.ReadAll(io.LimitReader(got.Body, 16385))
+		closeErr := got.Body.Close()
+		var listed passkeyhttp.InventoryResponse
+		if readErr != nil || closeErr != nil || len(wire) > 16384 || got.StatusCode != 200 || json.Unmarshal(wire, &listed) != nil || len(listed.Credentials) != 1 || listed.Credentials[0].Label != "HTTP signup key" || listed.Credentials[0].ReferenceID == "" || len(got.Cookies()) != 0 || got.Header.Get("X-CSRF-Token") != "" {
+			t.Fatal("signup session failed safe HTTP inventory", got.StatusCode)
+		}
+		if bytes.Contains(wire, []byte(base64.RawURLEncoding.EncodeToString(id))) || bytes.Contains(wire, []byte(protocol.PublicKey.User.ID)) {
+			t.Fatal("safe signup inventory exposed protocol credential or user handle")
+		}
 	}
 	proveReferencePasskeySessionHTTP(t, ctx, handler, c, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), func() bool { return read(issued).Authenticated })
 	flowID, cookies = flow("passkey")

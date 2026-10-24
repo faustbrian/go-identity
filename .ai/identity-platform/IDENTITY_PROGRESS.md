@@ -1,6 +1,30 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 03:24 UTC
+## Current TL;DR — 2026-10-24 04:06 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  All 67 units remain required; no additional full-unit qualification is claimed.
+- **Delivered:** passkey-first HTTP signup -> session read -> CSRF logout ->
+  fresh discoverable signin on fresh/upgraded PostgreSQL (details below).
+- **New native delivery:** conditional-signin options and the real PostgreSQL
+  adapter are reviewed, on main and Required-CI green (`go-passkey` root
+  `c0819f9`, adapter `ea2adfd`). The downloaded public adapter passes genuine
+  session/read/logout, policy and expiry checks under PostgreSQL/race (17.600s).
+  Browser UI and HTTP/Reference conditional integration are not claimed.
+- **Working locally, not delivered:** the reference backend now completes
+  signup/read/logout/fresh discovery without password, OTP or delivery
+  configuration. Fresh and populated-kernel/risk upgrade journeys pass under
+  PostgreSQL/race, preserving prior counter authority. Final standalone race
+  (8.511s), retained signup cohort (32.422s), ordinary module/cmd race,
+  tagged vet and dependency verification pass. Independent complete-final-diff
+  review approves with no remaining actions; main/public delivery remains.
+  Its reviewed discoverable-only HTTP prerequisite `1eadce3` is
+  main-pushed with green Required CI `40060408777`.
+- **Next:** finish standalone-profile main/public delivery;
+  then integrate conditional signin. Full M16, other open milestones and final
+  release qualification remain open. No user decision is needed.
+
+## Retained checkpoint — 2026-10-24 03:24 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional full-unit qualification is claimed.
@@ -2444,7 +2468,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account enrollment, identified/identifier-free signin, safe inventory, label rename and session read/logout are delivered through native/Reference/HTTP. Keyed retries retain original metadata. Signed-proof deletion is also delivered: native `e175ffe`, HTTP `5bb695c`, Reference `85c7651`, independent reviews and exact Required CI green. A clean public Reference consumer passes native/HTTP fresh/populated and management-off deletion, affected-session denial, metadata retry and retained password-session read/logout under PostgreSQL/race (42.348s). Signup, conditional signin and remaining qualification keep the full row open. |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Existing-account enrollment, identified/identifier-free signin, safe inventory, rename, signed-proof deletion and session read/logout are delivered through native/Reference/HTTP; original-key retries expose only retained metadata. Passkey-first HTTP signup/read/logout/fresh signin is delivered through Reference `321563e`, with fresh/populated public-consumer PostgreSQL/race proof (22.616s) and green Required CI. Native conditional options root `c0819f9` / adapter `ea2adfd` are delivered and public-consumer proven (17.600s); HTTP/Reference conditional integration is pending. Standalone passkey-only Reference is currently local with fresh/populated-kernel upgrade proof, final review/main delivery pending. Remaining profiles/interoperability and qualification keep the full row open. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |

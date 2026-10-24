@@ -27,6 +27,29 @@ func TestSessionSelectionRequiresNativeOwners(t *testing.T) {
 	}
 }
 
+func TestSessionSelectionPasskeyOnlyDoesNotSelectPasswordOrOTP(t *testing.T) {
+	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-session", SameSite: http.SameSiteStrictMode})
+	lookup, _ := session.NewDigestKey(1, bytes.Repeat([]byte{1}, 32))
+	csrf, _ := session.NewCSRFKey(1, bytes.Repeat([]byte{2}, 32))
+	c := StoreConfiguration{
+		Session: &SessionConfiguration{Passkey: true, Native: sessionpg.SignOutServiceConfig{Validation: session.ServiceConfig{LookupKeys: []session.DigestKey{lookup}}, Cookie: cookie}, CSRFKeys: []session.CSRFKey{csrf}},
+		Passkey: &PasskeyConfiguration{Issuer: session.IssuerConfig{LookupKey: lookup, Cookie: cookie}, CSRF: csrf},
+	}
+	selected, err := sessionAdmissionSelection(c)
+	if err != nil || selected.Verified != nil || selected.OTP != nil || selected.MagicLink != nil {
+		t.Fatal("passkey-only common sessions require or select an unrelated issuer", err)
+	}
+	c.Session.Passkey = false
+	if _, err := sessionAdmissionSelection(c); err == nil {
+		t.Fatal("empty issuer selection enabled common sessions")
+	}
+	c.Session.Passkey = true
+	c.Passkey = nil
+	if _, err := sessionAdmissionSelection(c); err == nil {
+		t.Fatal("passkey-only selection accepted an absent issuer")
+	}
+}
+
 func TestSessionSelectionMatchesEverySelectedIssuer(t *testing.T) {
 	configuration := func() StoreConfiguration {
 		cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-session", SameSite: http.SameSiteStrictMode})

@@ -91,6 +91,8 @@ github.com/faustbrian/go-identity/http/passkey v0.0.0-20261023220657-5bb695cf2da
 github.com/faustbrian/go-identity/http/passkey v0.0.0-20261023220657-5bb695cf2da0/go.mod h1:MROEd+7Q6oOT24SODdzZ5CDd2rb6p8FncfiftLf2E2k=
 github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024031704-b286e8950cbc h1:zGxelDtgdM64KpB4zaK0bzEBx/NSxpArWRaTFbZudng=
 github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024031704-b286e8950cbc/go.mod h1:PxjQ3q5MDL0fftD6x+xrTXMaqRtOHfB91+XUl7hqhaQ=
+github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024035712-1eadce3d222c h1:gseSdnMg7qDl0LTWGsYxpoQXfIQPK/9jgJt068pWRNY=
+github.com/faustbrian/go-identity/http/passkey v0.0.0-20261024035712-1eadce3d222c/go.mod h1:PxjQ3q5MDL0fftD6x+xrTXMaqRtOHfB91+XUl7hqhaQ=
 github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b h1:/pRsdYZJU1RlGP61opkK4WMmtJBr7yOxREpSAFuq/Pg=
 github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b/go.mod h1:6GgiAaUSsZ/G75FWMc/tD7gxZhuGtY9xr3t/giirZkE=
 github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806 h1:qb9igHzxzFt2mv8awhYHw81jEr+QiWiaVLtqRaLYWIY=

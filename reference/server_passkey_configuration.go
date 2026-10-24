@@ -32,6 +32,9 @@ import (
 // verification identities; no consumer store or alternative workflow is accepted.
 type HTTPPasskeyConfiguration struct {
 	Registration, Signin, Inventory, Discoverable bool
+	// DiscoverableOnly explicitly rejects identifier-based signin and requires
+	// Discoverable. It needs no email/password comparison configuration.
+	DiscoverableOnly bool
 	// Signup selects original-flow passkey-first registration and a distinct
 	// passkey-signup initiation method. It requires native Passkey.Signup and
 	// Session.Passkey; it never substitutes an enrollment proof or password.
@@ -90,7 +93,7 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_passkey"}
 	h := *c.HTTPPasskey
-	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete || h.Discoverable && !h.Signin || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil || c.PasswordSignin == nil {
+	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete || h.Discoverable && !h.Signin || h.DiscoverableOnly && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
 		return nil, invalid
 	}
 	n := *c.Passkey
@@ -145,9 +148,14 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 		}
 	}
 	if h.Signin {
-		out.address, err = email.NewAddressParser(c.PasswordSignin.Native.Address)
-		if err != nil {
-			return nil, invalid
+		if !h.DiscoverableOnly {
+			if c.PasswordSignin == nil {
+				return nil, invalid
+			}
+			out.address, err = email.NewAddressParser(c.PasswordSignin.Native.Address)
+			if err != nil {
+				return nil, invalid
+			}
 		}
 		if n.Flow.FlowTTL != 5*time.Minute {
 			return nil, invalid

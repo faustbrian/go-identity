@@ -14,7 +14,7 @@ import (
 // Registration is selectable after an installed signin/reset deployment. Its
 // independent suffix leaves every installed shared and native checksum intact.
 // Actual source owners supply SQL; common physical histories are reused once.
-func passwordSignupMigrationCatalog(ctx context.Context, catalog []migrationHistory, riskSchema string) ([]migrationHistory, error) {
+func registrationKernelMigrationCatalog(ctx context.Context, catalog []migrationHistory, riskSchema string) ([]migrationHistory, error) {
 	base := fixedMigrationSource(catalog[0].history)
 	identifiers := kernel.IdentifierMutationMigrationSource{Base: base, Version: 1600}
 	registration := kernel.PasswordRegistrationMigrationSource{Base: identifiers, Version: 1601}
@@ -43,6 +43,14 @@ func passwordSignupMigrationCatalog(ctx context.Context, catalog []migrationHist
 	// reject every valid populated upgrade. Its native ledger/checksum and the
 	// shared counter history retain custody; confirmation exercises the new arm.
 	catalog = append(catalog, migrationHistory{namespace: "identity_registration_counters", history: counterSteps, owners: map[migrations.Version]ModuleID{1: "identity/risk/postgres"}})
+	return catalog, nil
+}
+
+func passwordSignupMigrationCatalog(ctx context.Context, catalog []migrationHistory, riskSchema string) ([]migrationHistory, error) {
+	catalog, err := registrationKernelMigrationCatalog(ctx, catalog, riskSchema)
+	if err != nil {
+		return nil, err
+	}
 	capabilities, err := migrations.NewFSSource(ownedMigrationFiles{capabilitypg.Migrations()}, ".")
 	if err != nil {
 		return nil, err

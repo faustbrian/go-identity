@@ -95,6 +95,7 @@ func (s fixedMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 }
 
 type featureMigrationConfig struct {
+	standalonePasskey                                       bool
 	otpSigninFactors                                        bool
 	otpSchema, sessionSchema, global                        string
 	authenticatedSchema                                     string
@@ -150,11 +151,14 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 	if err != nil {
 		return nil, err
 	}
-	sources := []migrations.Source{
-		otppostgres.MigrationSource{Schema: c.otpSchema, Version: 1100},
-		otppostgres.LockoutMigrationSource{Schema: c.otpSchema, Version: 1101},
-		otppostgres.SendFamilyMigrationSource{Schema: c.otpSchema, Version: 1102},
-		otppostgres.IssuanceMigrationSource{Schema: c.otpSchema, Version: 1103},
+	var sources []migrations.Source
+	if !c.standalonePasskey {
+		sources = []migrations.Source{
+			otppostgres.MigrationSource{Schema: c.otpSchema, Version: 1100},
+			otppostgres.LockoutMigrationSource{Schema: c.otpSchema, Version: 1101},
+			otppostgres.SendFamilyMigrationSource{Schema: c.otpSchema, Version: 1102},
+			otppostgres.IssuanceMigrationSource{Schema: c.otpSchema, Version: 1103},
+		}
 	}
 	if c.sessionSchema != "" {
 		sources = append(sources, sessionpostgres.MigrationSource{Schema: c.sessionSchema, Version: 1200}, sessionpostgres.PreAuthMigrationSource{Schema: c.sessionSchema, Version: 1201})
@@ -184,9 +188,11 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 		deliverySource.ReconciliationCommandVersion = 1259
 		deliverySource.ReconciliationQueryVersion = 1260
 	}
-	history, err = deliverySource.Load(ctx)
-	if err != nil {
-		return nil, err
+	if !c.standalonePasskey {
+		history, err = deliverySource.Load(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// The authority owner exposes a version-neutral SQL value as well as its
 	// older migrations-module adapter. Adapt that value, not a copied schema.
@@ -199,7 +205,7 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 		return nil, err
 	}
 	history = append(history, next)
-	if c.signinSchema != "" || c.emailOTP || c.phoneOTP {
+	if !c.standalonePasskey && (c.signinSchema != "" || c.emailOTP || c.phoneOTP) {
 		next, err := (otppostgres.ConsumingMigrationSource{Schema: c.otpSchema, Version: 1400}).Load(ctx)
 		if err != nil {
 			return nil, err

@@ -164,6 +164,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.Passkey != nil && c.Passkey.Standalone != nil {
+		return s.composeStandalonePasskeys(c, d)
+	}
 	if c.HTTPPasskey != nil && c.Passkey == nil {
 		return identity.InvalidInputError{Field: "reference_http_passkey"}
 	}
@@ -942,15 +945,16 @@ type WorkerSet struct {
 	delivery []*deliverypg.Worker
 }
 
-// ComposeWorkers composes 1..128 real bounded native delivery workers from the
-// selected provider and store graph. Each selected tenant must have a worker
+// ComposeWorkers requires zero configs when delivery is unselected; otherwise
+// it composes 1..128 real bounded native delivery workers from the selected
+// provider and store graph. Each selected tenant must have a worker
 // for the OTP provider and any independently selected phone provider. Duplicate
 // tenant/provider pairs deny. Native scope and
 // current authorization policy requirements are validated by the owning adapter.
 // All construction is pure; unsuccessful validation leaves the stage retryable.
 func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliverypg.WorkerConfig) (WorkerSet, error) {
 	s := stores.state
-	if s == nil || providers.state != s || len(configs) < 1 || len(configs) > 128 {
+	if s == nil || providers.state != s || len(configs) > 128 {
 		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 	}
 	s.mu.Lock()
@@ -960,6 +964,21 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 	}
 	f := s.features
 	s.mu.Unlock()
+	if f.delivery == nil {
+		if len(configs) != 0 {
+			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.closed || f.workers {
+			return WorkerSet{}, identity.UnavailableError{}
+		}
+		f.workers = true
+		return WorkerSet{state: s}, nil
+	}
+	if len(configs) == 0 {
+		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
+	}
 	workers := make([]*deliverypg.Worker, 0, len(configs))
 	seen := make(map[string]map[uint64]bool, len(configs))
 	for _, c := range configs {
@@ -998,10 +1017,9 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 	return WorkerSet{state: s, delivery: workers}, nil
 }
 
-// FeatureSet exposes public workflow interfaces, never concrete adapter stores.
-// This development profile contains OTP Send, optional original-flow initiation
-// and optional single-factor Signin,
-// not HTTP or a complete server.
+// FeatureSet exposes only selected public workflow interfaces, never concrete
+// adapter stores. Unselected workflows remain unavailable, including OTP and
+// delivery in the explicit passkey-only profile.
 // Initialize and RecoverVelocity remain explicit, separate startup operations.
 type FeatureSet struct{ state *storeState }
 
@@ -1009,22 +1027,23 @@ type FeatureSet struct{ state *storeState }
 // once. A foreign graph or absent native worker fails before exposing features.
 func ComposeFeatures(stores StoreSet, providers ProviderSet, workers WorkerSet) (FeatureSet, error) {
 	s := stores.state
-	if s == nil || providers.state != s || workers.state != s || len(workers.delivery) == 0 {
+	if s == nil || providers.state != s || workers.state != s {
 		return FeatureSet{}, identity.InvalidInputError{Field: "reference_features"}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed || s.features == nil || !s.features.workers || s.features.composed {
+	if s.closed || s.features == nil || !s.features.workers || s.features.composed || s.features.delivery != nil && len(workers.delivery) == 0 {
 		return FeatureSet{}, identity.UnavailableError{}
 	}
 	s.features.composed = true
 	return FeatureSet{state: s}, nil
 }
 
-// Initialize registers selected native delivery/OTP startup metadata in order,
-// never schema, risk coverage or business effects. All operations remain denied
-// until both succeed; exact configuration retries are supported. It is bounded
-// by the OTP timeout and shutdown; a concurrent startup returns unavailable.
+// Initialize registers selected delivery/OTP startup metadata in order, never
+// schema, risk coverage or business effects. Readiness separately validates all
+// selected native schemas. Operations remain denied until selected startup
+// succeeds; exact configuration retries are supported. The selected operation
+// timeout and shutdown bound it; a concurrent startup returns unavailable.
 func (f FeatureSet) Initialize(ctx context.Context) error {
 	w, done, err := f.state.enterFeature(ctx, false)
 	if err != nil {
@@ -1044,11 +1063,15 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	s.features.initializing = true
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); s.features.initializing = false; s.mu.Unlock() }()
-	if err := s.features.delivery.Initialize(w); err != nil {
-		return err
+	if s.features.delivery != nil {
+		if err := s.features.delivery.Initialize(w); err != nil {
+			return err
+		}
 	}
-	if err := s.features.otp.Initialize(w); err != nil {
-		return err
+	if s.features.otp != nil {
+		if err := s.features.otp.Initialize(w); err != nil {
+			return err
+		}
 	}
 	if p := s.features.phoneOTPSignin; p != nil {
 		if err := p.owner.Initialize(w); err != nil {
@@ -1120,7 +1143,7 @@ func (f FeatureSet) OTP() (otp.Service, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed || s.features == nil || !s.features.composed {
+	if s.closed || s.features == nil || !s.features.composed || s.features.otp == nil {
 		return nil, identity.UnavailableError{}
 	}
 	return composedOTP{state: s}, nil

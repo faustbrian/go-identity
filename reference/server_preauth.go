@@ -40,25 +40,45 @@ func (HTTPPreAuthConfiguration) MarshalText() ([]byte, error) {
 }
 
 type preAuthHTTPState struct {
-	deployment     OTPPreAuthConfiguration
+	deployment     browserFlowDeployment
 	lifetime       session.LifetimeConfig
 	device         *session.BrowserDeviceConfig
 	action, policy string
 	version        uint64
 }
 
+type browserFlowDeployment struct {
+	Origin, CallbackURL string
+	Cookie              session.CookiePolicy
+}
+
 func composePreAuthHTTP(c StoreConfiguration) (*preAuthHTTPState, error) {
 	if c.HTTPPreAuth == nil {
 		return nil, nil
 	}
-	if c.OTP == nil || c.OTP.PreAuth == nil || c.HTTPRate == nil || c.OTP.PreAuth.FlowTTL != 5*time.Minute {
+	if c.HTTPRate == nil {
 		return nil, identity.InvalidInputError{Field: "reference_http_preauth"}
 	}
 	p := c.HTTPPreAuth
 	if _, err := session.ResolveRememberPolicy(session.RememberDefault, p.Lifetime); err != nil {
 		return nil, err
 	}
-	state := &preAuthHTTPState{deployment: *c.OTP.PreAuth, lifetime: p.Lifetime, action: c.OTP.PreAuthAction, policy: c.OTP.PolicyID, version: c.OTP.PolicyVersion}
+	state := &preAuthHTTPState{lifetime: p.Lifetime}
+	if c.OTP == nil {
+		if c.Passkey == nil || c.Passkey.Standalone == nil || c.Passkey.Flow.FlowTTL != 5*time.Minute {
+			return nil, identity.InvalidInputError{Field: "reference_http_preauth"}
+		}
+		n := c.Passkey.Flow
+		state.deployment = browserFlowDeployment{Origin: n.Origin, CallbackURL: n.CallbackURL, Cookie: n.Cookie}
+		state.action, state.policy, state.version = n.Action, n.PolicyID, n.PolicyVersion
+	} else {
+		if c.OTP.PreAuth == nil || c.OTP.PreAuth.FlowTTL != 5*time.Minute {
+			return nil, identity.InvalidInputError{Field: "reference_http_preauth"}
+		}
+		n := c.OTP.PreAuth
+		state.deployment = browserFlowDeployment{Origin: n.Origin, CallbackURL: n.CallbackURL, Cookie: n.Cookie}
+		state.action, state.policy, state.version = c.OTP.PreAuthAction, c.OTP.PolicyID, c.OTP.PolicyVersion
+	}
 	if p.Device != nil {
 		device := *p.Device
 		device.Keys = slices.Clone(device.Keys)
@@ -75,7 +95,17 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 	if h == nil {
 		return nil, nil
 	}
-	owner, err := f.PreAuth()
+	var owner sessionhttp.PreAuthService
+	var err error
+	if s.state.features.preauth != nil {
+		owner, err = f.PreAuth()
+	} else if s.state.features.passkey != nil {
+		var passkeys *PasskeyService
+		passkeys, err = f.Passkeys()
+		owner = passkeyPreAuthHTTP{owner: passkeys}
+	} else {
+		err = identity.UnavailableError{}
+	}
 	if err != nil {
 		return nil, err
 	}

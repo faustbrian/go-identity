@@ -82,27 +82,29 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 	}
 	// Preserve the common password proof prefix in its existing physical ledger.
 	// All later action suffixes retain separate namespaces and original bytes.
-	prefix, err := (passwordpg.EmailReauthenticationMigrationSource{}).Load(ctx)
-	if err != nil {
-		return nil, err
-	}
-	index := slices.IndexFunc(catalog, func(h migrationHistory) bool { return h.namespace == "identity_password" })
-	if index < 0 {
-		return nil, invalid
-	}
-	h := catalog[index]
-	for i := 0; i < min(len(h.history), len(prefix)); i++ {
-		if h.history[i] != prefix[i] {
+	if !p.standalone {
+		prefix, err := (passwordpg.EmailReauthenticationMigrationSource{}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		index := slices.IndexFunc(catalog, func(h migrationHistory) bool { return h.namespace == "identity_password" })
+		if index < 0 {
 			return nil, invalid
 		}
-	}
-	if len(h.history) < len(prefix) {
-		h.owners = maps.Clone(h.owners)
-		h.history = append(slices.Clone(h.history), prefix[len(h.history):]...)
-		for _, step := range prefix {
-			h.owners[step.Version()] = "identity/password/postgres"
+		h := catalog[index]
+		for i := 0; i < min(len(h.history), len(prefix)); i++ {
+			if h.history[i] != prefix[i] {
+				return nil, invalid
+			}
 		}
-		catalog[index] = h
+		if len(h.history) < len(prefix) {
+			h.owners = maps.Clone(h.owners)
+			h.history = append(slices.Clone(h.history), prefix[len(h.history):]...)
+			for _, step := range prefix {
+				h.owners[step.Version()] = "identity/password/postgres"
+			}
+			catalog[index] = h
+		}
 	}
 	if !present("identity_mfa") {
 		if err := appendOwned("identity_mfa", "identity/mfa/postgres", mfapg.MigrationSource{Version: 1}, migrationGuard{version: 1, schema: "identity_mfa", tables: []string{"factor_authorities"}}); err != nil {
@@ -119,52 +121,54 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 			return nil, err
 		}
 	}
-	passwordHistory := func() []migrations.Migration {
-		var out []migrations.Migration
-		for _, h := range catalog {
-			for _, step := range h.history {
-				if h.owners[step.Version()] == "identity/password/postgres" {
-					out = append(out, step)
+	if !p.standalone {
+		passwordHistory := func() []migrations.Migration {
+			var out []migrations.Migration
+			for _, h := range catalog {
+				for _, step := range h.history {
+					if h.owners[step.Version()] == "identity/password/postgres" {
+						out = append(out, step)
+					}
 				}
 			}
+			return out
 		}
-		return out
-	}
-	if !present("identity_username_actions") {
-		steps, err := (passwordpg.ActionReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 21}).Load(ctx)
+		if !present("identity_username_actions") {
+			steps, err := (passwordpg.ActionReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 21}).Load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if err := appendOwned("identity_username_actions", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 21, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.username.update"}); err != nil {
+				return nil, err
+			}
+		}
+		steps, err := (passwordpg.PasskeyReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 40}).Load(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if err := appendOwned("identity_username_actions", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 21, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.username.update"}); err != nil {
+		if err := appendOwned("identity_passkey_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 40, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.register-verify"}); err != nil {
 			return nil, err
 		}
-	}
-	steps, err := (passwordpg.PasskeyReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 40}).Load(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if err := appendOwned("identity_passkey_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 40, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.register-verify"}); err != nil {
-		return nil, err
-	}
-	// Deletion retains the published label-proof suffix even when its runtime
-	// owner is off. Otherwise an existing signed/consumed update row could lose
-	// its allowance when the deletion suffix replaces the shared constraint.
-	if p.management != nil || p.deletion != nil {
-		steps, err := (passwordpg.PasskeyManagementReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 41}).Load(ctx)
-		if err != nil {
-			return nil, err
+		// Deletion retains the published label-proof suffix even when its runtime
+		// owner is off. Otherwise an existing signed/consumed update row could lose
+		// its allowance when the deletion suffix replaces the shared constraint.
+		if p.management != nil || p.deletion != nil {
+			steps, err := (passwordpg.PasskeyManagementReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 41}).Load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if err := appendOwned("identity_passkey_management_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 41, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.update"}); err != nil {
+				return nil, err
+			}
 		}
-		if err := appendOwned("identity_passkey_management_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 41, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.update"}); err != nil {
-			return nil, err
-		}
-	}
-	if p.deletion != nil {
-		steps, err := (passwordpg.PasskeyDeletionReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 42}).Load(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if err := appendOwned("identity_passkey_deletion_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 42, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.delete"}); err != nil {
-			return nil, err
+		if p.deletion != nil {
+			steps, err := (passwordpg.PasskeyDeletionReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory()), Version: 42}).Load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if err := appendOwned("identity_passkey_deletion_password", "identity/password/postgres", fixedMigrationSource(steps[len(steps)-1:]), migrationGuard{version: 42, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.passkey.delete"}); err != nil {
+				return nil, err
+			}
 		}
 	}
 	protocol, err := (webauthnpg.MigrationSource{}).Load(ctx)

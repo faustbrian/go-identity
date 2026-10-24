@@ -22,16 +22,22 @@ import (
 // enrollment and identified signin. Identifier-free signin additionally requires
 // the authentication risk policy's PasskeyDiscovery opt-in; no HTTP or signup
 // capability is selected.
-// The graph supplies its actual password proof, authorization, coordinator,
+// With Standalone nil the graph supplies its actual password proof, authorization, coordinator,
 // counted risk, session reader and cookie-CSRF logout owners. Both primary
 // selections need distinct exact enrollment actions and signed proof targets
 // in PasswordVerification. Flow and Issuer clocks and Risk.Evaluation must be
-// absent for graph injection. Protected selects retained encryption/evidence
+// absent for graph injection. Standalone instead selects signup/discovery with
+// native session authority and no password proof or enrollment owner.
+// Protected selects retained encryption/evidence
 // keys and a native command counter policy matching the protected command's
 // revision; it is distinct from anonymous authentication admission and accepts
 // no caller store. Issuance keys/cookie must match Session read/logout policy.
 // All borrowed configuration must remain immutable during construction.
 type PasskeyConfiguration struct {
+	// Standalone selects a passkey-only graph without password, OTP or delivery
+	// workflows. It disables password-proof enrollment and management, not UV,
+	// native authority, risk or session checks. Nil retains the existing graph.
+	Standalone *PasskeyStandaloneConfiguration
 	// Signup independently selects prospective-account registration. Nil keeps
 	// existing-account enrollment/signin only; it enables no HTTP capability.
 	Signup *PasskeySignupConfiguration
@@ -162,6 +168,7 @@ func (PasskeyConfiguration) MarshalJSON() ([]byte, error) { return nil, session.
 func (PasskeyConfiguration) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
 type passkeyState struct {
+	standalone  bool
 	tenant      identity.TenantID
 	signup      *native.SignupService
 	enrollment  *native.EnrollmentService
@@ -195,35 +202,56 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_passkey"}
-	if c.OTP == nil || c.Session == nil || c.PasswordVerification == nil || c.PasswordSignin == nil || d.PostgreSQL == nil || proofs == nil || proofs.native == nil || counters == nil || authority == nil {
+	if c.Session == nil || d.PostgreSQL == nil || counters == nil || authority == nil {
 		return nil, invalid
 	}
 	n, e := *c.Passkey, c.Session.Native.Execution
+	standalone := n.Standalone != nil
+	if !standalone && (c.OTP == nil || c.PasswordVerification == nil || c.PasswordSignin == nil || proofs == nil || proofs.native == nil) {
+		return nil, invalid
+	}
+	maximum := c.Session.Native.MaximumDuration
+	if !standalone {
+		maximum = c.OTP.Timeout
+	}
 	tenants := c.Velocity.Tenants
 	if c.DurableAdmission != nil {
 		tenants = c.DurableAdmission.Tenants
 	}
-	if !slices.Contains(tenants, string(n.Protocol.TenantID)) || n.Protocol.MaximumDuration > c.OTP.Timeout || n.Flow.Clock != nil || n.Issuer.Clock != nil || n.Issuer.Authority != nil || n.Risk.Evaluation != (risk.Evaluator{}) || n.Flow.PolicyID != e.PolicyID || n.Flow.PolicyVersion != e.PolicyVersion || n.OptionsPrimary.Action != "identity.passkey.register-options" || n.RegistrationPrimary.Action != "identity.passkey.register-verify" || n.Protected.Schema != c.Velocity.Schema || n.Protected.PolicyVersion != e.PolicyVersion || n.Protected.CommandCounters == nil || !n.Protected.EnforceLockouts || !sessionIssuanceMatches(*c.Session, n.Issuer, n.CSRF) {
+	if !slices.Contains(tenants, string(n.Protocol.TenantID)) || n.Protocol.MaximumDuration > maximum || n.Flow.Clock != nil || n.Issuer.Clock != nil || n.Issuer.Authority != nil || n.Risk.Evaluation != (risk.Evaluator{}) || n.Flow.PolicyID != e.PolicyID || n.Flow.PolicyVersion != e.PolicyVersion || n.Protected.Schema != c.Velocity.Schema || n.Protected.PolicyVersion != e.PolicyVersion || n.Protected.CommandCounters == nil || !n.Protected.EnforceLockouts || !sessionIssuanceMatches(*c.Session, n.Issuer, n.CSRF) {
 		return nil, invalid
 	}
-	for _, primary := range []*passwordpg.ActionPrimaryConfig{&n.OptionsPrimary, &n.RegistrationPrimary} {
-		if len(primary.CSRFKeys) != 0 {
-			return nil, invalid
-		}
-		if primary.Transport == session.CredentialCookie {
-			if len(c.PasswordVerification.CSRFKeys) == 0 {
+	var options, registration *passwordpg.ActionPrimarySource
+	if standalone {
+		for _, primary := range []passwordpg.ActionPrimaryConfig{n.OptionsPrimary, n.RegistrationPrimary} {
+			if primary.Action != "" || primary.Audience != "" || primary.MaximumAge != 0 || primary.Transport != 0 || len(primary.CSRFKeys) != 0 {
 				return nil, invalid
 			}
-			primary.CSRFKeys = slices.Clone(c.PasswordVerification.CSRFKeys)
 		}
-	}
-	options, err := passwordpg.NewActionPrimarySource(proofs.native, n.OptionsPrimary)
-	if err != nil {
-		return nil, identity.InvalidInputError{Field: "reference_passkey_options_primary"}
-	}
-	registration, err := passwordpg.NewActionPrimarySource(proofs.native, n.RegistrationPrimary)
-	if err != nil {
-		return nil, identity.InvalidInputError{Field: "reference_passkey_registration_primary"}
+	} else {
+		if n.OptionsPrimary.Action != "identity.passkey.register-options" || n.RegistrationPrimary.Action != "identity.passkey.register-verify" {
+			return nil, invalid
+		}
+		for _, primary := range []*passwordpg.ActionPrimaryConfig{&n.OptionsPrimary, &n.RegistrationPrimary} {
+			if len(primary.CSRFKeys) != 0 {
+				return nil, invalid
+			}
+			if primary.Transport == session.CredentialCookie {
+				if len(c.PasswordVerification.CSRFKeys) == 0 {
+					return nil, invalid
+				}
+				primary.CSRFKeys = slices.Clone(c.PasswordVerification.CSRFKeys)
+			}
+		}
+		var err error
+		options, err = passwordpg.NewActionPrimarySource(proofs.native, n.OptionsPrimary)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_options_primary"}
+		}
+		registration, err = passwordpg.NewActionPrimarySource(proofs.native, n.RegistrationPrimary)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_registration_primary"}
+		}
 	}
 	protected, err := riskpg.NewRepository(n.Protected)
 	if err != nil {
@@ -247,9 +275,12 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 		}
 		requestKeys = keys
 	}
-	enrollment, err := native.NewEnrollmentService(d.PostgreSQL, native.EnrollmentConfig{OptionsRequests: keyed, Protocol: n.Protocol, RPNamespace: n.RPNamespace, Coordinator: e.Coordinator, Authorization: e.Authorization, OptionsSource: options, RegistrationSource: registration, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
-	if err != nil {
-		return nil, identity.InvalidInputError{Field: "reference_passkey_enrollment"}
+	var enrollment *native.EnrollmentService
+	if !standalone {
+		enrollment, err = native.NewEnrollmentService(d.PostgreSQL, native.EnrollmentConfig{OptionsRequests: keyed, Protocol: n.Protocol, RPNamespace: n.RPNamespace, Coordinator: e.Coordinator, Authorization: e.Authorization, OptionsSource: options, RegistrationSource: registration, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_enrollment"}
+		}
 	}
 	n.Risk.Evaluation = evaluation
 	profile := sessionpg.PasskeyAdmissionConfig{GlobalAuthorityID: e.Profile.GlobalAuthorityID, PolicyNamespace: e.Profile.PolicyNamespace, Audience: e.Profile.Audience, RPNamespace: n.RPNamespace}
@@ -346,5 +377,5 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if _, err := (sessionpg.PasskeySigninMigrationSource{Schema: e.Repository.Schema, Version: 1, PreviousConstraint: n.SessionPredecessor}).Load(context.Background()); err != nil {
 		return nil, invalid
 	}
-	return &passkeyState{tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
+	return &passkeyState{standalone: standalone, tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
 }

@@ -8,6 +8,7 @@ import (
 
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	"github.com/faustbrian/go-identity/otp"
+	otppg "github.com/faustbrian/go-identity/otp/postgres"
 )
 
 // NATIVE-06 isolates the shared graph lifetime, not persistence or provider IO.
@@ -19,6 +20,10 @@ func TestFeatureAdmissionIsBoundedCanceledAndDrained(t *testing.T) {
 	close(drained)
 	s := &storeState{lifetime: lifetime, cancel: cancel, drained: drained, features: &featureState{composed: true, timeout: time.Second}}
 	features := FeatureSet{state: s}
+	if _, err := features.OTP(); err == nil {
+		t.Fatal("unselected OTP exported a handle")
+	}
+	s.features.otp = &otppg.SendService{}
 	service, err := features.OTP()
 	if err != nil {
 		t.Fatal(err)

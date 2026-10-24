@@ -1,6 +1,44 @@
-# Native existing-account passkeys
+# Native passkeys
 
-Select `StoreConfiguration.Passkey` only when its password signin, session and
+## Passkey-only deployment
+
+Set `Passkey.Standalone` with an explicit immutable bootstrap tenant set,
+bounded risk/audit timeouts and risk policy ID. Select `Passkey.Signup`,
+`Session.Passkey` and real `DurableAdmission` for the PostgreSQL-only graph.
+No password, OTP, delivery sender, templates, envelope keys or delivery workers
+are required or configured. The standard construction sequence is unchanged:
+`ComposeStores` -> `ComposeProviders` -> `ComposeWorkers` (no worker arguments)
+-> `ComposeFeatures` -> apply selected native migrations -> `Initialize` ->
+`NewServer`. Readiness checks the actual selected owners; skipping migrations
+does not make a usable server.
+
+For the HTTP signup -> read/logout -> identifier-free signin journey, also
+select `HTTPPasskey.Signup`, `Signin`, `Discoverable`, `DiscoverableOnly` and
+optionally `Inventory`, plus `HTTPPreAuth`, `HTTPRate` and `HTTPSession`.
+`Passkey.KeyedOptions`, signed browser-device configuration, five-minute flows,
+matching session/CSRF keys and `PasskeyDiscovery` risk opt-in remain required.
+No email parser is needed: identified mode and identifier fields are rejected.
+The existing signup and signin wire contracts below remain unchanged.
+
+Select the installed session predecessor `session_issuances_purpose_v2` for a
+new passkey-only graph. Existing deployments retain their original predecessor
+and migration history; this is not permission to rewrite deployed checksums or
+convert a password deployment by deleting its historical configuration. Native
+kernel/session, known-empty factor authority, risk, authorization, audit,
+outbox, WebAuthn/passkey and HTTP rate schemas are still real prerequisites.
+The common kernel registration schema is not a password workflow.
+
+This finite standalone profile requires signup and supports discovery, safe
+inventory and session read/logout. Password-proof enrollment, label management,
+deletion and mixed password/OTP/delivery selections fail construction rather
+than being silently ignored. Passkey-proof management remains a later profile.
+Conditional browser presentation is not selected here, and no UI is provided.
+The actual public construction/configuration and fresh/populated-kernel-upgrade
+journeys are executable in `TestReferencePostgresPasskeyStandalone`.
+
+## Retained existing-account deployment
+
+With `Passkey.Standalone` nil, select `StoreConfiguration.Passkey` only when its password signin, session and
 password-verification owners are configured. This profile composes public
 `go-passkey/postgres` rather than accepting application domain stores, protocol
 verifiers or transaction callbacks. Nil selection exposes no passkey handle.

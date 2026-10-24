@@ -2,6 +2,15 @@
 
 ## Optional native passkey backend
 
+For a passkey-only backend, explicitly select `Passkey.Standalone`,
+`Passkey.Signup`, `Session.Passkey` and durable PostgreSQL admission. The same
+sealed construction graph runs with no password, OTP or delivery configuration
+and zero delivery-worker arguments. Opt-in signup and discoverable-only HTTP
+compose the genuine registration -> read/logout -> fresh signin journey;
+`HTTPPasskey.DiscoverableOnly` rejects identifier-based requests without an
+email parser. See [the standalone deployment profile](PASSKEY.md#passkey-only-deployment)
+for exact configuration, owner migrations and excluded mixed/management modes.
+
 `StoreConfiguration.Passkey` composes the delivered existing-account native
 enrollment, identified signin, safe inventory and cookie-CSRF session/logout
 owners. `FeatureSet.Passkeys()` retains graph startup, tenant and shutdown
