@@ -1,6 +1,35 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 06:24 UTC
+## Current TL;DR — 2026-10-24 08:19 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  All 67 units remain required. Additional enrollment advances the open passkey
+  milestone; it does not close full M16 or another whole-unit qualification.
+- **New native behavior delivered:** a genuinely passkey-only account adds a
+  second resident key without password proofs. Both keys support fresh
+  discoverable signin/inventory/read/logout; the original signup session remains
+  usable. No password or identifier is created for that account.
+- **Delivery:** independently approved `go-passkey@27d1d01` is on remote main,
+  Required CI `40076273067` is green. Its authenticated downloaded public module
+  matches all 13 changed paths and passes the genuine passkey-only journey,
+  all-phase cookie CSRF and retained original authorization ceiling under real
+  PostgreSQL/race (19.762s); dependencies verify. Native denial, rollback,
+  contention and COMMIT-uncertainty evidence is retained in the ledger.
+- **Not connected yet:** this additional-enrollment profile has no HTTP or
+  Reference selection. Existing HTTP signup/signin/read/logout and rename remain
+  delivered; this is backend library behavior, not UI/interoperability proof.
+- **Current:** the HTTP prerequisite's read-only original ceremony rate source
+  is implemented. Review found and corrected a final-time expiry fence; no source
+  finding remains, but final verification has not passed. Severe local host load
+  interrupted fixture checks; a retry was stopped, and security limits are
+  unchanged. The four-file addition is uncommitted, not delivered or qualified.
+- **Next:** finish its affected checks, then connect opt-in HTTP/Reference and
+  prove the complete consumer journey. Safe passkey-only removal/recovery, other
+  profiles, remaining milestones and final unit/release gates remain. No user
+  decision is needed. The earlier unrelated public-run 503 remains unexplained
+  in the retained checkpoint below; no claim is made that it is fixed.
+
+## Retained checkpoint — 2026-10-24 06:24 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional full-unit qualification is closed.

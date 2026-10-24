@@ -1,5 +1,128 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 08:19 UTC: native27d1d01 exact remote main and Required40076273067
+SUCCESS confirmed. Authenticated public module
+github.com/faustbrian/go-passkey/postgres@v0.0.0-20261024075909-27d1d01ffb32
+Sumh1:0sh+dLihahISQjWFWNTO/NbaANzdtLpDJGRh0kj71CU= matches all13 changed
+archive paths. Untouched public passkey-only/add-second/either-key journey,
+all3 cookie-CSRF phases and genuine original-A ceiling pass PG/race19.762s;
+modverify all. Original native delivery is handled, not full M16 or HTTP.
+Rate-source successor remains four owned dirty paths in go-passkey/postgres:
+ceremony_rate.go,session_enrollment_rate_integration_test.go,README.md,CHANGELOG.md.
+API RED missing SessionRegistrationRateSource; initial new PG/race42.636s and
+new+retained source cohort72.385s pass. Independent session_enrollment_native_final
+found F1: pre-read time alone could disclose rate metadata after original expiry
+while session evidence remained valid (not a Register authorization bypass).
+Extracted original return predicate gives six-case policy-boundary RED1.119s
+using genuine session evidence that remains valid through controlled A/B equality
+times; no claim of elapsed genuine five-minute expiry. Fix resamples primary time
+after both protocol reads and fences original A/B on database/service times.
+Final complete review: no remaining source finding, readiness REQUEST_CHANGES
+because final-source GREEN/static verification is missing. Candidate4path
+manifest e5b5f39960d744c35672c1958c66b3ea2bc36dd19af5dd405b789ff5a973224b;
+changed secret scan17.36KB and diffcheck0. Run4774 FAILED at180.577s with fixture
+signin-options unavailable, setup deadlines and alarm during genuine Argon2
+fixture KDF; it is not a pass. Final vet/modverify never ran. Measured local load
+181.73 then191.78. Narrow retry2735 stopped with SIGINT/exit130 after overload
+was established; no production/test security deadlines were relaxed. Stop heavy
+local work until resource pressure recovers; do not launch duplicate retries or
+claim existing older-source proof qualifies the new fence. Preserve code and
+unchanged ingress evidence, then run smallest affected GREEN/vet/modverify,
+reconcile independent disposition and deliver. HTTP worker still unassigned;
+no replacement domain/rate authority. Whole~25%,11/39, all67 retained.
+
+2026-10-24 08:01 UTC: native additional enrollment27d1d01ffb320e9d09fe031fa863e4340a20f1d4
+is main-pushed; Required40076273067 pending. Complete independent native review
+session_enrollment_native_final APPROVE (13-path snapshot7e51f56ed02e9e9086840798dc7f3d2aacd6340ae586c1a39c26295cad057f98).
+Real passkey-only signup creates no identifier/password, adds a second genuine
+resident key and proves either-key discoverable signin/inventory/read/logout
+and original signup-session read/logout (race4.564s). New/retained native intent,
+cookie CSRF, withdrawal, rollback, contention and reservation/final-COMMIT cuts
+pass; module race1.377s, retained cohort14.522s, tagged vet0, modverify and complete
+changed-secret scan106.02KB pass. Public-consumer delivery remains pending.
+Prerequisites kernel e44c3d6/Required40073808639 and protocol eb85721/
+Required40074263389 attempt2 are main/green. Protocol attempt1 scanner compilation
+timed out; unchanged rerun passed, not a suppressed failure. MFA/root are below.
+Next concrete HTTP dependency: native SessionRegistrationRateSource authenticates
+current actual session/CSRF, exact original native B intent and genuine A/B
+protocol records, retaining original A absolute ceiling. It returns only canonical
+original user/challenge rate metadata (fixed five-minute policy duration), never
+proof, options, command reservation, risk admission or consumption. Existing
+register-options rate.auth and register-verify rate.verify remain unchanged.
+Primary owns this narrow native source (ceremony_rate.go and focused tests/docs)
+and guarded Reference facade; HTTP worker remains unassigned until consumed
+native contracts are committed/proven. RED missing method; GREEN real PostgreSQL
+original/foreign/withdrawn/expired custody, repeated read-only counts, subsequent
+genuine completion and retained original rate-source cohorts, affected race/vet
+and one independent final review. No new store, source callback or validity lease.
+HTTP integration/full M16/unit qualification remain unfinished; whole~25%,11/39.
+
+2026-10-24 07:20 UTC: additional-enrollment prerequisites delivered on main:
+go-passkey2aeb513a8aebe54abe41869256ec2d75053cbd4e, Required40073204767 SUCCESS;
+identityc5e2482fbeaa0cc1272f2d574aca82afc4fc3c83, Required40073205951 SUCCESS.
+Root carriers use intrinsic closure custody and explicit unredacted Spec/Bindings
+projection. Review session_enrollment_contract_final found nested fmt leakage;
+runtime RED reproduced all carriers, corrected source passes focused0.213s,
+root0.251s, vet0, changed-secret scan0; final complete review APPROVE at9840ecf
+plus b480ba1660c6f46e18d26763aa5db95672228c0e69b6c45e74594e1f80abb2b9.
+MFA exact three-phase current-session guard real PG RED denied all three intended
+profiles, GREEN retained/new44 partitions under race1.650s, tagged vet0 and
+changed-secret scan0. Independent session_enrollment_mfa_final APPROVE at
+a827080 plus exact four-path source snapshot retained in its native report.
+Native adapter now consumes ordinary authenticated public root/MFA pins, without
+replace. Full consumer test written: genuine A/B/C, metadata-only retries, both
+credentials in inventory, original-session logout and either-key signin/logout;
+API RED is exactly missing NewSessionEnrollmentService/SessionEnrollmentConfig.
+Protocol worker passkey_enrollment_protocol is assigned and has genuine compound
+transaction cohort GREEN; final added partitions/race/retained histories and
+independent review remain pending. Primary inspection found kernel credential
+creation still restricts native-v1. Extend only exact new C session schema with
+canonical 0->1 lifecycle under unchanged owner/epochs; preserve legacy API and
+legacy lifecycle behavior. This is a concrete consumed-contract gap, not another
+preflight. No native/HTTP enrollment or full M16 closure is claimed.
+
+2026-10-24 06:35 UTC: freeze next M16 consumer: a passkey-only account adds a
+second resident UV credential, inventory contains both, either credential can
+signin/read/logout, and original session read/logout follows unchanged authority.
+Preserve all password-proof APIs. Three native phases: A original session-bound
+enrollment assertion options; B genuine assertion consumption + registration
+creation in ONE existing Work; C genuine registration consumption + kernel
+credential/mapping/label/create lifecycle in ONE Work. A/B are canonical keyed
+identity.passkey.register-options with distinct original keys; C retains canonical
+single-use identity.passkey.register-verify, original CommandID/ceremony identity
+and no IdempotencyKey. New native schemas respectively
+identity.passkey.register-options.session-assertion-options-v1,
+identity.passkey.register-options.session-registration-options-v1,
+identity.passkey.register-verify.session-registration-v1 (version1, passkey owner).
+A lifecycle passkey.reauthentication.started.v1 (0->1), B
+passkey.registration.started.v1 (0->1), C identity.passkey.create_credential (0->1).
+Both canonical operations already use native CredentialMutation/transactional
+risk; no signin admission substitution. Actual current cookie/bearer transport,
+CSRF when selected, self-human caller, stable RP/handle, original complete session
+intent, label/origin/network, known-empty MFA generation and current credential/
+directory/session/policy fences remain mandatory. Enforce A's genuine original
+ExpiresAt through B and C Apply/final precommit; later protocol ceremony TTL
+cannot renew authorization. Reject foreign/stale/changed/consumed/expired proof,
+UV/counter failure, wrong actual CSRF and current authority withdrawal; prove
+rollback, contention, both sides of COMMIT loss and metadata-only retry.
+Existing protocol effects permit one field/row per command, so owner must add
+narrow compound support rather than stack participants or copy protocol SQL.
+Primary owns native public carriers/service, identity session/MFA admissions,
+HTTP/Reference/pins/manifests/Git and final integration. Assigned bounded upstream
+worker passkey_enrollment_protocol ownership: go-webauthn/postgres enrollment assertion/compound creation/
+registration selectors, participant codec/phase/recovery and necessary forward
+SQL, focused real-PG tests/docs/changelog; no root crypto, current profile rewrite,
+identity/passkey source, branches or Git delivery. Consume protocol05c2d39,
+passkey9840ecf and identitya827080, with existing genuine protocol/UV/transaction
+and HTTP rename results retained above. Final upstream API inspection and review
+precede adoption; stubs do not unlock native consumer. Checks: missing API/profile
+RED, real protocol compound atomicity/rollback/commit cuts + retained profiles;
+new native full journey fresh/upgrade with either key and original session,
+affected race/vet, selected HTTP/Reference/public consumers and one complete
+independent review per coherent owner batch. No new proof/session/replay engine.
+Deletion/recovery, MFA-enrolled/org, other algorithms, browser qualification and
+whole-unit gates remain later required profiles, not additions to this freeze.
+
 2026-10-24 06:24 UTC: frozen M16 HTTP session-assertion rename profile delivered.
 HTTPb9fbdcfac2f81bd00abba81f8e3b277f58fe31e9 / Required40069135904 SUCCESS;
 Referencec62f1ac4a141f938467bc9f22349a7fbd616c34c / Required40069571943 SUCCESS.
