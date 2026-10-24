@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Select `Passkey.SessionDeletion` and the guarded
+  `Passkeys().SessionDeletion()` handle for genuine current-session UV removal
+  with another independently usable resident ES256 key. Removal and affected
+  passkey-session invalidation commit together; a new surviving-key session
+  can recover original metadata without repeating removal. Cookie/bearer
+  transport is explicit. Install WebAuthn migration 6 through the owned graph;
+  readiness checks its compound-effect storage. Native selection enables no
+  HTTP route; existing password-proof deletion remains unchanged.
+
 - Select `HTTPPasskey.SessionEnrollment` for password-free additional-key
   enrollment through the native graph and existing registration routes. Current
   cookie/CSRF custody authorizes genuine UV before registration; original intent,

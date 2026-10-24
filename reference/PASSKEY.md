@@ -589,3 +589,48 @@ mandatory. Native-only selection advertises no session-enrollment wire variant.
 signup, all three phases/retries, two-key inventory, either-key signin/read/logout
 and revoked original-session retry denial on fresh/populated PostgreSQL. It is
 not browser/authenticator interoperability or full M16 qualification.
+
+## Current-session resident-key removal
+
+Explicitly select `Passkey.SessionDeletion` with
+`PasskeySessionDeletionConfiguration{Transport: session.CredentialCookie}` or
+`session.CredentialBearer`, alongside `Passkey.KeyedOptions`. The graph supplies
+the actual session, self-user delete policy, protected risk, protocol and native
+transaction owners. Cookie transport uses the graph's original CSRF keys.
+The passkey-only deployment needs no password, email or OTP recovery owner.
+Native selection alone enables no delete HTTP route or metadata.
+
+After initializing the selected owned histories, obtain
+`FeatureSet.Passkeys()` and its guarded `SessionDeletion()` handle:
+
+1. Call `DeleteOptions` with `passkey.NewSessionDeleteRequest` carrying the
+   current credential, original cookie CSRF when selected, self-user
+   `identity.passkey.delete` caller, exact inventory reference/metadata version
+   and trusted origin/network. Retain the original options key and ceremony.
+2. Obtain genuine action-bound UV, then call `Delete` with
+   `passkey.NewSessionDeleteCompletion`, the unchanged intent and a distinct
+   original completion key. The sole native Work removes the target, consumes
+   the assertion, advances passkey authority and commits required effects.
+3. Existing affected passkey sessions deny. Authenticate with the surviving key
+   and use `RecoverDelete` with the original command and target for metadata-only
+   recovery. The invalidated original session cannot recover or obtain options.
+
+Another independently usable resident ES256 key must remain. Removal can target
+the authenticating key or a sibling; last-key removal denies. No password,
+delivery or OTP fallback is inferred. Inventory metadata, kernel-reference and
+protocol versions remain independent. Unknown is not rollback: retain original
+command/keys/input, authenticate with a surviving key and recover; never restart
+removal automatically. Recovery issues no credential, challenge or session.
+
+Install WebAuthn history through migration 6, including both compound target
+snapshots and its profile constraint. The graph appends it without rewriting
+installed histories; readiness detects missing successor storage. Handles retain
+graph initialization, fixed-tenant lifetime and shutdown guards. Original read
+and ceremony expiry are not renewed by retries, history reads or hooks.
+
+`TestReferencePostgresPasskeySessionDeletion` exercises actual HTTP signup,
+native second-key enrollment, genuine removal, revoked-source denial, surviving-
+key signin, original metadata recovery, last-key protection and read/logout for
+cookie/bearer selection on fresh/populated PostgreSQL. The current selected
+removal transport is native; no removal browser/UI or full M16 qualification is
+claimed. Password-proof `Passkey.Deletion` remains independent and unchanged.

@@ -55,6 +55,9 @@ type PasskeyConfiguration struct {
 	// under current passkey-session UV. It requires KeyedOptions and enables no
 	// HTTP routes. Native owners retain original intent, expiry and atomicity.
 	SessionEnrollment *PasskeySessionEnrollmentConfiguration
+	// SessionDeletion independently selects current-session UV removal while
+	// another resident key remains. It requires KeyedOptions and enables no HTTP.
+	SessionDeletion *PasskeySessionDeletionConfiguration
 	// Deletion independently selects signed-proof self-removal backed by this
 	// graph's actual configured PasswordReset owner. It requires KeyedOptions;
 	// enabling label management is not a prerequisite.
@@ -185,6 +188,7 @@ type passkeyState struct {
 	management        *native.ManagementService
 	sessionManagement *native.SessionManagementService
 	sessionEnrollment *native.SessionEnrollmentService
+	sessionDeletion   *native.SessionDeletionService
 	deletion          *native.DeletionService
 	reader            *session.SessionService
 	logout            *session.CookieSignOutService
@@ -373,6 +377,21 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 			return nil, identity.InvalidInputError{Field: "reference_passkey_session_enrollment"}
 		}
 	}
+	var sessionDeletion *native.SessionDeletionService
+	if n.SessionDeletion != nil {
+		if n.KeyedOptions == nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_session_deletion"}
+		}
+		selected := *n.SessionDeletion
+		var csrf []session.CSRFKey
+		if selected.Transport == session.CredentialCookie {
+			csrf = slices.Clone(c.Session.CSRFKeys)
+		}
+		sessionDeletion, err = native.NewSessionDeletionService(d.PostgreSQL, native.SessionDeletionConfig{Protocol: n.Protocol, Profile: profile, Validation: validation, SessionRepository: e.Repository, OptionsRequests: keyed, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Transport: selected.Transport, CSRFKeys: csrf, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_session_deletion"}
+		}
+	}
 	if n.Deletion != nil {
 		primary := n.Deletion.Primary
 		if n.KeyedOptions == nil || reset == nil || c.PasswordReset == nil || primary.Action != "identity.passkey.delete" || len(primary.CSRFKeys) != 0 {
@@ -417,5 +436,5 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if _, err := (sessionpg.PasskeySigninMigrationSource{Schema: e.Repository.Schema, Version: 1, PreviousConstraint: n.SessionPredecessor}).Load(context.Background()); err != nil {
 		return nil, invalid
 	}
-	return &passkeyState{standalone: standalone, tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, sessionManagement: sessionManagement, sessionEnrollment: sessionEnrollment, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
+	return &passkeyState{standalone: standalone, tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, sessionManagement: sessionManagement, sessionEnrollment: sessionEnrollment, sessionDeletion: sessionDeletion, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
 }

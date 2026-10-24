@@ -25,6 +25,7 @@ import (
 	openapi "github.com/faustbrian/go-openapi/v2"
 	"github.com/faustbrian/go-openapi/v2/parse"
 	"github.com/faustbrian/go-openapi/v2/validate"
+	passkey "github.com/faustbrian/go-passkey"
 	database "github.com/faustbrian/go-postgres"
 )
 
@@ -506,6 +507,12 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 		counter := uint32(1)
 		if c.Passkey.SessionManagement != nil {
 			counter++
+		}
+		if c.Passkey.SessionDeletion != nil {
+			proveReferenceSessionEnrollment(t, ctx, features, c, handler, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle, counter, func(secondKey *ecdsa.PrivateKey, secondID []byte, metadata passkey.CredentialMetadata) {
+				proveReferenceSessionDeletion(t, ctx, features, c, handler, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle, counter, secondKey, secondID, metadata)
+			})
+			return
 		}
 		proveReferenceSessionEnrollment(t, ctx, features, c, handler, record.UserID, issued.cookies[0].Value, issued.header.Get("X-CSRF-Token"), private, id, handle, counter)
 	}

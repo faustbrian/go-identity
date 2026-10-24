@@ -20,7 +20,7 @@ import (
 // The original account and cookie come from genuine HTTP passkey-only signup.
 // Only the external authenticator is controlled; all graph/domain owners and
 // discovery/session/logout operations remain real and public.
-func proveReferenceSessionEnrollment(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey *ecdsa.PrivateKey, firstID, handle []byte, firstCounter uint32) {
+func proveReferenceSessionEnrollment(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey *ecdsa.PrivateKey, firstID, handle []byte, firstCounter uint32, after ...func(*ecdsa.PrivateKey, []byte, passkey.CredentialMetadata)) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -145,6 +145,12 @@ func proveReferenceSessionEnrollment(t *testing.T, ctx context.Context, features
 	page, err := owner.List(ctx, passkey.InventoryRequest{Credential: credential, Caller: caller, AttemptID: attempt, Limit: 10})
 	if err != nil || len(page.Credentials) != 2 {
 		t.Fatal("original session cannot inspect both enrolled credentials", err)
+	}
+	if len(after) != 0 {
+		// A successor journey continues with this genuine registration and its
+		// original session, rather than seeding keys or inventing fresh authority.
+		after[0](secondKey, secondID, *fields.Credential)
+		return
 	}
 	for _, authenticator := range []struct {
 		key     *ecdsa.PrivateKey

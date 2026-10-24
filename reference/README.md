@@ -79,6 +79,13 @@ it requires this graph's actual configured email/password reset recovery owner,
 not label management. `HTTPPasskey.Delete` separately enables its cookie-only
 endpoint. Removal revokes affected passkey sessions, preserves the original
 password session for metadata-only retries and returns no replacement secret.
+For passkey-only removal instead, select `Passkey.SessionDeletion` with
+`Passkey.KeyedOptions`, then obtain `Passkeys().SessionDeletion()`. The guarded
+native handle supplies genuine removal UV options, exact completion and current-
+session metadata recovery. Another usable resident ES256 key must remain; no
+password/email/OTP fallback is inferred. Install WebAuthn history through
+migration 6. Native selection enables no delete HTTP route. See
+[resident-key removal](PASSKEY.md#current-session-resident-key-removal).
 
 ## Native secondary-OTP enrollment
 

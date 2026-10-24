@@ -180,6 +180,7 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 		migrationGuard{version: 2, schema: "webauthn", constraints: []string{"effects.effects_subject_namespace"}, constraintValue: "webauthn.begin-get-discoverable"},
 		migrationGuard{version: 3, schema: "webauthn", constraints: []string{"effects.effects_subject_namespace"}, constraintValue: "identity.passkey.signin-options"},
 		migrationGuard{version: 5, schema: "webauthn", columns: []string{"ceremonies.authorization_expires_at", "ceremonies.authorization_ceremony_id", "effects.enrollment_stage", "effects.enrollment_source"}, constraints: []string{"ceremonies.ceremonies_enrollment_authority", "effects.effects_enrollment_profile"}},
+		migrationGuard{version: 6, schema: "webauthn", columns: []string{"effects.removal_before_credential", "effects.removal_after_credential"}, constraints: []string{"effects.effects_removal_assertion_profile"}},
 	); err != nil {
 		return nil, err
 	}

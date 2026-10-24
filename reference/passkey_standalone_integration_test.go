@@ -85,6 +85,7 @@ func TestReferencePostgresPasskeyHTTPSessionEnrollment(t *testing.T) {
 }
 
 type standalonePasskeyJourney struct {
+	sessionDeletion                                                 bool
 	conditional, persistent, management, httpManagement, enrollment bool
 	enrollmentTransport                                             session.CredentialKind
 	httpEnrollment                                                  bool
@@ -106,7 +107,32 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 	if selected.enrollment {
 		c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: selected.enrollmentTransport}
 	}
+	if selected.sessionDeletion {
+		c.Passkey.SessionDeletion = &reference.PasskeySessionDeletionConfiguration{Transport: selected.enrollmentTransport}
+	}
 	deps := reference.ReferenceDependencies{PostgreSQL: f.pool}
+	if selected.sessionDeletion && !upgrade {
+		for _, mode := range []string{"missing-keyed-owner", "invalid-transport", "missing-csrf"} {
+			changed := c
+			p, removal, sessions := *c.Passkey, *c.Passkey.SessionDeletion, *c.Session
+			changed.Passkey, changed.Session, p.SessionDeletion = &p, &sessions, &removal
+			switch mode {
+			case "missing-keyed-owner":
+				p.KeyedOptions = nil
+			case "invalid-transport":
+				removal.Transport = 0
+			case "missing-csrf":
+				if removal.Transport != session.CredentialCookie {
+					continue
+				}
+				sessions.CSRFKeys = nil
+			}
+			if graph, err := reference.ComposeStores(changed, deps); err == nil {
+				_ = graph.Close(ctx)
+				t.Fatal("incomplete native session removal composed", mode)
+			}
+		}
+	}
 	if selected.httpEnrollment && !upgrade {
 		for _, mode := range []string{"native-disabled", "bearer-native", "competing-password-profile", "no-csrf"} {
 			changed := c
@@ -383,6 +409,21 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 	}
 	if status := server.Readiness(ctx); !status.Ready {
 		t.Fatal("passkey-only readiness", status.Failures)
+	}
+	if selected.sessionDeletion && !upgrade {
+		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE webauthn.effects RENAME COLUMN removal_after_credential TO removal_successor_missing`); err != nil {
+			t.Fatal(err)
+		}
+		status := server.Readiness(ctx)
+		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE webauthn.effects RENAME COLUMN removal_successor_missing TO removal_after_credential`); err != nil {
+			t.Fatal("restore owned removal successor column", err)
+		}
+		if status.Ready {
+			t.Fatal("removal readiness ignored missing compound successor storage")
+		}
+		if status := server.Readiness(ctx); !status.Ready {
+			t.Fatal("restored removal readiness", status.Failures)
+		}
 	}
 	if selected.enrollment && !upgrade {
 		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE webauthn.ceremonies RENAME COLUMN authorization_expires_at TO enrollment_expiry_missing`); err != nil {
