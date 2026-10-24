@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose original passkey-session authority derivation for native protected
+  actions without losing the credential, RP/passkey or known-empty MFA
+  dimensions. This grants no fresh authentication; action owners still require
+  a genuine bound assertion and same-transaction current-owner fences.
+
 - Enlist the exact newly persisted passkey-signup session lifecycle in its
   original transaction. Successful signup requires a three-event-capable
   outbox adapter; an old account-only adapter fails closed. Account, credential,

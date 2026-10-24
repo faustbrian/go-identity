@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence original known-empty factor authority for explicit passkey-session
+  label-update assertion options and atomic rename. Exact native schemas,
+  owner and lifecycle are required; ordinary signin/password-proof profiles
+  retain their prior admission and no factor generation is initialized.
+
 - Initialize known-empty MFA authority only for an account actually created by
   the original native passkey signup Work. Exact original creation and factor
   provenance are required again before commit; missing or enrolled state never

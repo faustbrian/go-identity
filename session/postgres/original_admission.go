@@ -55,3 +55,20 @@ func OriginalMFAPasswordSessionAdmission(profile IdentifierAdmissionConfig, orig
 	}
 	return passwordMFASessionAdmission(profile, original, binding, s.SessionID, s.Version)
 }
+
+// OriginalPasskeySessionAdmission derives the exact original primary directory,
+// credential and authorization expectations of a passkey session. Unlike
+// OriginalSessionAdmission it retains both RP/passkey and known-empty factor
+// dimensions; password, completed-MFA and organization profiles deny. The action's
+// target record never replaces the session's authenticating credential.
+//
+// This pure derivation performs no IO, signature verification, authentication or
+// freshness renewal. The native owner must separately authenticate possession,
+// require this same session/family, fence the RP/mapping and factor generations
+// through PasskeySessionAuthority, and recheck time after waits in protected Work.
+// A fresh action also needs a genuine action-bound WebAuthn assertion; a session
+// timestamp or these caller-owned expectations do not constitute that proof.
+// Immutable profile and record reads support concurrent independent calls.
+func OriginalPasskeySessionAdmission(profile PasskeyAdmissionConfig, original session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	return passkeySessionAdmission(profile, original, binding)
+}

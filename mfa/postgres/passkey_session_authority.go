@@ -34,8 +34,8 @@ func ReadPasskeySessionFactors(ctx context.Context, pool *database.Pool, record 
 }
 
 // RequirePasskeySessionFactors locks the original known-empty MFA generation
-// only in exact native identified passkey signin or self-session revoke-one
-// Work. The registered owner must already bind the genuine original command
+// only in exact native identified passkey signin, action-bound label-update
+// assertion or self-session revoke-one Work. The registered owner must already bind the genuine original command
 // and record and fence directory, credential, policy and RP/mapping authority.
 // Signin targets this exact new record; revocation also permits the caller's
 // same-user source session when its target is a sibling. Call in Apply and
@@ -58,9 +58,23 @@ func RequirePasskeySessionFactors(ctx context.Context, w kernel.Work, owner kern
 		return invalidAuthority()
 	}
 	signin := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.signin-verify", SchemaID: "identity.passkey.signin-verify.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	updateOptions := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.signin-options", SchemaID: "identity.passkey.signin-options.update-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	updateAssertion := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.update", SchemaID: "identity.passkey.update.assertion-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	passkeyOwner := kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 	switch {
-	case f.Operation == signin && f.Contributor == (kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}):
+	case f.Operation == signin && f.Contributor == passkeyOwner:
 		if b.RecordID != spec.SessionID || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || life != (kernel.LifecyclePlan{EventType: "session.created.v1", AfterVersion: 1}) {
+			return invalidAuthority()
+		}
+	case f.Operation == updateOptions && f.Contributor == passkeyOwner:
+		if life != (kernel.LifecyclePlan{EventType: "passkey.reauthentication.started.v1", AfterVersion: 1}) {
+			return invalidAuthority()
+		}
+	case f.Operation == updateAssertion && f.Contributor == passkeyOwner:
+		// The native owner binds the original live session and genuine UV
+		// assertion to the target metadata. These are metadata versions, not
+		// session or protocol-counter versions; factor authority never advances.
+		if life.EventType != "identity.passkey.rename_credential" || life.EventIndex != 0 || life.BeforeVersion == 0 || life.BeforeVersion == ^uint64(0) || life.AfterVersion != life.BeforeVersion+1 {
 			return invalidAuthority()
 		}
 	case f.Operation == session.RevokeOneOperation() && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1}):
