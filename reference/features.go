@@ -524,7 +524,25 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	passkeyOwner, err := composePasskey(c, d, passwordVerificationOwner, evaluator, &counters, passkeyAuthority, resetOwner)
+	var signupEvaluation risk.Evaluator
+	if c.Passkey != nil && c.Passkey.Signup != nil {
+		protected := c.Passkey.Protected.CommandCounters
+		if protected == nil {
+			return identity.InvalidInputError{Field: "reference_passkey_signup"}
+		}
+		// Anonymous authentication and protected mutations may have distinct
+		// policy revisions. Bind provider-only signup assessment to its exact
+		// protected policy; native reservation remains the sole attempt owner.
+		protectedCounters, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: protected.Policy, Keys: protected.Keys, Store: velocityCounterRouter{state: s}, Clock: time.Now, Timeout: o.RiskTimeout})
+		if err != nil {
+			return err
+		}
+		signupEvaluation, err = risk.NewEvaluator(risk.EvaluatorConfig{Policy: protected.Policy, Counters: &protectedCounters, Clock: time.Now, Timeout: o.RiskTimeout})
+		if err != nil {
+			return err
+		}
+	}
+	passkeyOwner, err := composePasskey(c, d, passwordVerificationOwner, evaluator, &counters, passkeyAuthority, resetOwner, signupEvaluation)
 	if err != nil {
 		return err
 	}

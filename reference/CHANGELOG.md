@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Select native passkey-first signup with `Passkey.Signup`. The graph composes
+  original browser/remember custody, protected risk, actual account/credential
+  creation and session issuance without requiring an email or password for the
+  new account. Keyed retries/recovery never redeliver authentication. Apply
+  selected forward kernel, MFA, counter, native and session histories; existing
+  migration prefixes and enrollment/signin behavior remain unchanged. Readiness
+  requires the actual signup constraint successors. HTTP signup stays separate.
+
 - Independently compose native passkey deletion and opt-in cookie HTTP deletion
   with genuine action-bound password proofs, the configured reset recovery owner
   and original request-key custody. Atomic removal denies affected passkey

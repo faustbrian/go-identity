@@ -1,5 +1,48 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 02:18 UTC: final Reference15-path review
+passkey_signup_reference_final APPROVE/no findings at candidate
+c618978dfb2927df8ed2b59e63349f3972af0b53f03a0d2ebd31ce5607e859ea againstbc99151.
+Single action resolved: real disposition_v4 constraint rename exposed readiness
+claim (RED18.042s); owned forward guard now requires both purpose+disposition.
+Final actual fresh/populated signup/read/logout/discoverable journeys and four
+missing-constraint fences pass race29.155s; focused normal passkey race2.081s,
+final taggedvet/secrets/diff pass. Dependencies unchanged since modverify.
+Next coherent Reference commit/main push/exactCI and downloaded-public journey.
+No runtime changes after this final fingerprint; current new profile is still
+local, not yet a delivered/M16/unit-qualification claim.
+
+2026-10-24 02:12 UTC: Reference native signup complete locally, in independent
+passkey_signup_reference_final review. Selected actual fresh/populated upgrades,
+retained enrollment/discoverable signin and missing-constraint readiness/race
+18.890s; ordinaryReference/cmd baseline race9.342s/6.677s; taggedvet/modverify,
+changedsecrets/diff pass. Native exact protected revision9 is distinct from
+anonymous auth revision3: graph binds provider-only evaluator to protected policy,
+while native reservation owns charges. Existing checksums stay unchanged; real
+readiness now follows signup constraint successors rather than removed names.
+15reference-path candidate4bd670eaa76031bfa940772e014e0f0d23f22ad2777101c9cb04a130664c79f2
+againstbc99151 is frozen. No new release/unit/M16 closure or delivered claim yet.
+Bounded read-only HTTP mapping is complete: canonical registration pair covers
+both enrollment and signup, so HTTP needs one explicit disjoint-mode dispatcher,
+native original-signup rate metadata and anonymous register-verify rate admission.
+No alternative route/operation or fake user rate identity may substitute.
+
+2026-10-24 01:51 UTC: freeze primary-owned M16 Reference native signup profile.
+Add explicit optional Passkey.Signup using native04cf774 public contract (clean
+consumerPG/race20.220s; mainRequiredgreen). Existing deployment profile retains
+enrollment/signin; signup creates a different real account without identifier or
+password, then common passkey session read/CSRF logout/fresh discoverable signin.
+Reference owns only configuration injection, graph admission and forward owner
+migration composition. Preserve installed history and selected old profiles;
+no SQL copies, private stores, account/proof/session seeding or new engines.
+Require original flow/remember/cookie and configured protected policy, metadata-
+only retries/recovery, tenant/lifetime rejection and atomic3event behavior.
+Prove fresh and populated upgrades through public graph; focused race integration
+TestReferencePostgresPasskeySignup plus retained passkey regressions, ordinary
+module checks/vet/modverify/changedsecrets, one independent final diff, mainCI and
+clean public module consumer. HTTP signup/conditionalsignin and passkey-session
+management remain next same-M16 profiles, not falsely closed by native delivery.
+
 2026-10-24 01:46 UTC: native signup is reviewed/main-pushed as
 go-passkey04cf7740130a2040d87c4cb059e4f73ed03f3485 with Required40051166075SUCCESS.
 Final independent passkey_signup_native_final APPROVE/no remaining actions at

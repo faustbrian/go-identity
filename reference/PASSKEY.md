@@ -282,6 +282,52 @@ go test -race -tags=integration -count=1 \
 These exercise actual fresh and populated-upgrade registration/verification,
 enrollment/assertion, signed rename/delete proofs and original-key retry. Removal
 also proves passkey-session denial and retained password-session read/logout;
-native removal runs without label management too. Signup, conditional signin,
+native removal runs without label management too. HTTP signup, conditional signin,
 completed secondary MFA and organization profiles remain required work. This
 profile is not complete M16, full release qualification, deployment or a UI.
+
+## Native passkey-first signup
+
+Set `Passkey.Signup` to a `PasskeySignupConfiguration` on the existing selected
+native deployment. Its `Flow` has action `identity.passkey.register-verify`,
+the session execution policy ID/revision, original trusted origin/callback,
+remember policy, flow-cookie policy and lookup key. Leave `Flow.Clock` and
+`Risk.Evaluation` absent. Supply `Risk.ConfigurationID` and retained evidence
+keys. The graph binds provider assessment to `Protected.CommandCounters.Policy`,
+not the potentially different anonymous-authentication policy revision. Native
+reservation remains the sole protected attempt owner; no provider or HTTP
+callback can replace it. `Signup=nil` keeps signup unavailable.
+
+Use the public handle in this order:
+
+1. `PrepareSignupFlow(ctx, session.PreAuthPrepareInput)` and `IssueSignupFlow`
+   retain the original tenant, browser cookie, remember choice and expiry.
+2. `KeyedSignupOptions` with empty command ID and an original request key
+   commits one real resident-registration ceremony. Its trusted caller is the
+   configured service actor on the original `identity.anonymous-flow` resource.
+   `SignupOptions` is the explicit keyless native alternative.
+3. Give the actual creation options to the authenticator, retain the ceremony,
+   and call `Signup` with genuine response bytes and a distinct original command.
+   No account, email/password or stable handle exists before verification.
+4. Fresh acknowledged commitment alone delivers the session/CSRF pair. With
+   `Session.Passkey`, the same graph's common session read/logout can use it.
+   Existing discoverable signin can then authenticate this new account.
+
+Matching options retries and `RecoverSignupOptions` return original metadata
+only. `RecoverSignup` additionally retains the original completion command and
+ceremony; original-cookie possession and current query authorization remain
+mandatory even when historical execution has consumed/expired the flow.
+Recovery never retries verification or reconstructs a challenge or session.
+
+Apply the selected owned migration plan before initialization. Signup extends
+native mapping history with context4 and passkey session history with purpose2,
+plus separate forward kernel-registration, factor-provenance and counter
+histories. Existing checksums/rows stay unchanged. Readiness requires the actual
+successor constraints; deleting or renaming them fails closed. This selects
+native account creation within the existing deployment, not a password-free
+deployment configuration or HTTP signup.
+
+`TestReferencePostgresPasskeySignup` exercises fresh and populated upgrades,
+genuine signup/read/logout/new discoverable signin, three lifecycle events,
+absence of fabricated identifiers/passwords, retries/recovery and missing-schema
+readiness. It is a Reference profile, not full M16 or release qualification.

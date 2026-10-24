@@ -195,5 +195,5 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 	if err := appendOwned("identity_passkey_session", "identity/session/postgres", sessionpg.PasskeySigninMigrationSource{Schema: p.schema, Version: 1, PreviousConstraint: p.predecessor}, migrationGuard{version: 1, schema: p.schema, constraints: []string{"session_issuances.session_issuances_purpose_passkey_v1"}}); err != nil {
 		return nil, err
 	}
-	return catalog, nil
+	return s.passkeySignupMigrationCatalog(ctx, catalog)
 }

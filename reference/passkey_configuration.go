@@ -32,6 +32,9 @@ import (
 // no caller store. Issuance keys/cookie must match Session read/logout policy.
 // All borrowed configuration must remain immutable during construction.
 type PasskeyConfiguration struct {
+	// Signup independently selects prospective-account registration. Nil keeps
+	// existing-account enrollment/signin only; it enables no HTTP capability.
+	Signup *PasskeySignupConfiguration
 	// KeyedOptions explicitly selects native original-key admission for both
 	// enrollment and signin options. Nil preserves existing keyless behavior.
 	KeyedOptions *PasskeyKeyedOptionsConfiguration
@@ -160,6 +163,7 @@ func (PasskeyConfiguration) MarshalText() ([]byte, error) { return nil, session.
 
 type passkeyState struct {
 	tenant      identity.TenantID
+	signup      *native.SignupService
 	enrollment  *native.EnrollmentService
 	signin      *native.SigninService
 	inventory   *native.InventoryService
@@ -186,7 +190,7 @@ func composePasskeySessionAuthority(c StoreConfiguration, d ReferenceDependencie
 	return authority, nil
 }
 
-func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passwordVerificationState, evaluation risk.Evaluator, counters *risk.CounterCoordinator, authority *native.SessionAuthority, reset *passwordpg.ResetService) (*passkeyState, error) {
+func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passwordVerificationState, evaluation risk.Evaluator, counters *risk.CounterCoordinator, authority *native.SessionAuthority, reset *passwordpg.ResetService, signupEvaluation risk.Evaluator) (*passkeyState, error) {
 	if c.Passkey == nil {
 		return nil, nil
 	}
@@ -252,6 +256,18 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	signin, err := native.NewSigninService(d.PostgreSQL, native.SigninConfig{OptionsRequests: keyed, Protocol: n.Protocol, Profile: profile, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Flow: n.Flow, Session: n.Issuer, CSRF: n.CSRF, Repository: e.Repository, Risk: n.Risk, IdentifierKey: n.IdentifierKey})
 	if err != nil {
 		return nil, fmt.Errorf("reference: passkey signin composition: %w", err)
+	}
+	var signup *native.SignupService
+	if n.Signup != nil {
+		selected := *n.Signup
+		if selected.Flow.Clock != nil || selected.Flow.PolicyID != e.PolicyID || selected.Flow.PolicyVersion != e.PolicyVersion || selected.Risk.Evaluation != (risk.Evaluator{}) {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_signup"}
+		}
+		selected.Risk.Evaluation = signupEvaluation
+		signup, err = native.NewSignupService(d.PostgreSQL, native.SignupConfig{Protocol: n.Protocol, Profile: profile, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Flow: selected.Flow, Session: n.Issuer, CSRF: n.CSRF, Repository: e.Repository, Risk: selected.Risk, Counters: n.Protected, OptionsRequests: keyed})
+		if err != nil {
+			return nil, fmt.Errorf("reference: passkey signup composition: %w", err)
+		}
 	}
 	validation := c.Session.Native.Validation
 	validation.Clock = e.Clock
@@ -330,5 +346,5 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if _, err := (sessionpg.PasskeySigninMigrationSource{Schema: e.Repository.Schema, Version: 1, PreviousConstraint: n.SessionPredecessor}).Load(context.Background()); err != nil {
 		return nil, invalid
 	}
-	return &passkeyState{tenant: n.Protocol.TenantID, enrollment: enrollment, signin: signin, inventory: inventory, management: management, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
+	return &passkeyState{tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
 }

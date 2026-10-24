@@ -63,6 +63,12 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		if c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && c.Request.Action == "identity.passkey.signin-options" {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
+		if c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && (c.Request.Resource.Type == "identity.anonymous-flow" || c.Request.Resource.Type == "identity.request-admission" || c.Request.Resource.Type == "identity.preauth") {
+			switch c.Request.Action {
+			case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.register-options.recover", "identity.passkey.register-verify.recover":
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
+		}
 		if c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 			switch c.Request.Action {
 			case "identity.passkey.register-options", "identity.passkey.register-verify", "identity.passkey.register-verify.recover", "identity.passkey.signin-verify", "identity.passkey.list", "identity.passkey.update", "identity.passkey.delete":
@@ -280,6 +286,7 @@ type signupGraphExtensions struct {
 	passkeyHTTP          bool
 	passkeyManagement    bool
 	passkeyDeletion      bool
+	passkeySignup        bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -563,6 +570,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferencePasskey(t, &c)
 		if extensions.passkeyKeyed {
 			configureReferencePasskeyKeyed(t, &c)
+		}
+		if extensions.passkeySignup {
+			flow := c.Passkey.Flow
+			flow.Action = "identity.passkey.register-verify"
+			c.Passkey.Signup = &reference.PasskeySignupConfiguration{Flow: flow, Risk: risk.ProtectedProviderAdmissionCustodyConfig{ConfigurationID: "reference-passkey-signup", Keys: c.OTP.RiskKeys}}
 		}
 		if extensions.passkeyManagement {
 			c.Passkey.Management = &reference.PasskeyManagementConfiguration{Primary: passwordpg.ActionPrimaryConfig{Action: "identity.passkey.update", Audience: "reference-passkey", MaximumAge: time.Minute, Transport: session.CredentialCookie}}
@@ -1500,11 +1512,17 @@ END $$`); err != nil {
 				}
 				sessionHandler = selectedServer.Handler()
 				passkeyDocument = selectedServer.OpenAPI().JSON()
+				if extensions.passkeySignup {
+					proveReferencePasskeySignupReadiness(t, ctx, selectedServer, deps.PostgreSQL)
+				}
 			}
 			if extensions.passkeyHTTP {
 				proveReferencePasskeyHTTP(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler, passkeyDocument)
 			} else {
 				proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)
+			}
+			if extensions.passkeySignup {
+				proveReferencePasskeySignup(t, ctx, selected, selectedConfig, deps.PostgreSQL)
 			}
 		}
 	}

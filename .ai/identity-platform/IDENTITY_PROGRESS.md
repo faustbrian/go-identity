@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 01:46 UTC
+## Current TL;DR — 2026-10-24 02:18 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional fully qualified unit is claimed.
@@ -24,9 +24,20 @@
   module passes signup/read/logout/fresh signin and both options/completion
   COMMIT-cut journeys under race (20.220s), without replacements. All 19 changed
   archive files match the reviewed commit; no further review actions remain.
-- **Next:** connect actual Reference/HTTP signup. M16 remains open; the native
-  delivery does not close the complete milestone or another unit's release
-  qualification. No user decision is needed.
+- **Reference local progress:** explicit `Passkey.Signup` now completes the
+  actual public graph's signup/read/logout/new-discoverable-signin journey on
+  fresh and populated PostgreSQL. Retained enrollment/signin and missing-schema
+  readiness counterfactuals pass under race (18.890s selected cohort). Ordinary
+  Reference/baseline-command race tests (9.342s/6.677s), tagged vet and dependency
+  verification pass. Review exposed a missing disposition-readiness guard; its
+  real rename regression failed before the fix. Final fresh/upgrade race passes
+  (29.155s), focused passkey unit/race passes (2.081s), and independent final-tree
+  review approves with no remaining actions. Main/public delivery is next.
+- **Next:** finish Reference review/main/public-consumer delivery, then HTTP
+  signup composition. The current Reference profile uses the existing selected
+  deployment; standalone signup-only deployment, HTTP signup, conditional signin
+  and passkey-session management remain required. Full M16 and whole-unit release
+  qualification remain open. No user decision is needed.
 - **Remaining:** conditional passkey signin, other open milestone profiles and
   the platform's full-unit, journey/shared-issuer and release qualification.
 

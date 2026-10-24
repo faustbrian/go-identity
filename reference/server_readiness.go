@@ -380,16 +380,27 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 	if state.features != nil && state.features.passkey != nil {
 		p := state.features.passkey
 		for i := range guards {
-			if guards[i].schema != p.schema {
-				continue
-			}
 			guards[i].constraints = slices.Clone(guards[i].constraints)
 			for j, name := range guards[i].constraints {
 				// The native passkey suffix replaces this exact selected CHECK
 				// while preserving its predicate. Require the actual successor,
 				// not a removed name or a looser absence exception.
-				if name == "session_issuances."+p.predecessor {
+				if guards[i].schema == p.schema && name == "session_issuances."+p.predecessor {
 					guards[i].constraints[j] = "session_issuances.session_issuances_purpose_passkey_v1"
+				}
+				if p.signup != nil {
+					// Signup's forward owners replace these selected predecessor
+					// names, never their historical migration/collision identities.
+					switch {
+					case guards[i].schema == p.schema && guards[i].constraints[j] == "session_issuances.session_issuances_purpose_passkey_v1":
+						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_passkey_signup_v1"
+					case guards[i].schema == "identity" && (name == "registration_bindings.identity_registration_purpose_v2" || name == "registration_bindings.identity_registration_purpose_v3"):
+						guards[i].constraints[j] = "registration_bindings.identity_registration_purpose_v4"
+					case guards[i].schema == "identity" && (name == "registration_bindings.identity_registration_disposition_v2" || name == "registration_bindings.identity_registration_disposition_v3"):
+						guards[i].constraints[j] = "registration_bindings.identity_registration_disposition_v4"
+					case guards[i].schema == "identity_mfa" && (name == "factor_authorities.factor_authorities_initialized_purpose_v2" || name == "factor_authorities.factor_authorities_initialized_purpose_v3"):
+						guards[i].constraints[j] = "factor_authorities.factor_authorities_initialized_purpose_v4"
+					}
 				}
 			}
 		}

@@ -14,6 +14,17 @@ signin. Both modes use the same guarded passkey session read/logout owner.
 `Passkey.KeyedOptions` separately enables native original-key options and
 metadata-only retry through that handle; it creates no HTTP routes.
 
+`Passkey.Signup` additionally composes native passkey-first account creation.
+Supply its distinct `identity.passkey.register-verify` browser-flow config and
+protected provider custody keys, leaving their clock/evaluator absent for graph
+injection. No email or password is required for the new account. The existing
+deployment's enrollment/signin configuration stays explicit and unchanged.
+Apply the selected forward migrations, then use `PrepareSignupFlow` ->
+`IssueSignupFlow` -> `KeyedSignupOptions` (or `SignupOptions`) -> `Signup` on
+`FeatureSet.Passkeys()`. Only fresh acknowledged commitment reveals bearer/CSRF;
+retry/recovery returns original metadata, not replacement credentials. Common
+read/logout requires `Session.Passkey`; signup itself enables no HTTP route.
+
 Select `HTTPPasskey` separately for cookie enrollment options/verification,
 original-flow signin options/verification and safe inventory. Each group is
 explicit; identifier-free mode additionally requires both HTTP and native risk
