@@ -85,6 +85,7 @@ func TestReferencePostgresPasskeyHTTPSessionEnrollment(t *testing.T) {
 }
 
 type standalonePasskeyJourney struct {
+	httpDeletion                                                    bool
 	sessionDeletion                                                 bool
 	conditional, persistent, management, httpManagement, enrollment bool
 	enrollmentTransport                                             session.CredentialKind
@@ -101,6 +102,7 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 	c.HTTPPasskey.Conditional = conditional
 	c.HTTPPasskey.SessionUpdate = httpManagement
 	c.HTTPPasskey.SessionEnrollment = selected.httpEnrollment
+	c.HTTPPasskey.SessionDeletion = selected.httpDeletion
 	if management {
 		c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie}
 	}
@@ -111,6 +113,37 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 		c.Passkey.SessionDeletion = &reference.PasskeySessionDeletionConfiguration{Transport: selected.enrollmentTransport}
 	}
 	deps := reference.ReferenceDependencies{PostgreSQL: f.pool}
+	if selected.httpDeletion && !upgrade {
+		minimal := c
+		minimal.HTTPPreAuth = nil
+		minimal.HTTPPasskey = &reference.HTTPPasskeyConfiguration{SessionDeletion: true}
+		graph, err := reference.ComposeStores(minimal, deps)
+		if err != nil {
+			t.Fatal("session-only removal acquired a browser-flow/device dependency", err)
+		}
+		if err := graph.Close(ctx); err != nil {
+			t.Fatal(err)
+		}
+		for _, mode := range []string{"native-disabled", "bearer-native", "competing-password-profile", "missing-csrf"} {
+			changed := c
+			p, removal, h, sessions := *c.Passkey, *c.Passkey.SessionDeletion, *c.HTTPPasskey, *c.Session
+			changed.Passkey, changed.HTTPPasskey, changed.Session, p.SessionDeletion = &p, &h, &sessions, &removal
+			switch mode {
+			case "native-disabled":
+				p.SessionDeletion = nil
+			case "bearer-native":
+				removal.Transport = session.CredentialBearer
+			case "competing-password-profile":
+				h.Delete = true
+			case "missing-csrf":
+				sessions.CSRFKeys = nil
+			}
+			if graph, err := reference.ComposeStores(changed, deps); err == nil {
+				_ = graph.Close(ctx)
+				t.Fatal("incomplete HTTP session removal composed", mode)
+			}
+		}
+	}
 	if selected.sessionDeletion && !upgrade {
 		for _, mode := range []string{"missing-keyed-owner", "invalid-transport", "missing-csrf"} {
 			changed := c
@@ -396,16 +429,20 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 	if err != nil {
 		t.Fatal("passkey-only HTTP composition", err)
 	}
-	selectedUpdate := false
+	selectedUpdate, selectedDelete := false, false
 	for _, op := range server.OpenAPI().Operations() {
 		id := op.Record.OperationID
 		selectedUpdate = selectedUpdate || id == "identity.passkey.update"
+		selectedDelete = selectedDelete || id == "identity.passkey.delete"
 		if strings.HasPrefix(id, "identity.password.") || strings.HasPrefix(id, "identity.otp.") || strings.HasPrefix(id, "identity.delivery.") {
 			t.Fatal("unselected authentication workflow advertised", id)
 		}
 	}
 	if selectedUpdate != httpManagement {
 		t.Fatal("native selection enabled unselected HTTP update")
+	}
+	if selectedDelete != selected.httpDeletion {
+		t.Fatal("native selection enabled unselected HTTP deletion")
 	}
 	if status := server.Readiness(ctx); !status.Ready {
 		t.Fatal("passkey-only readiness", status.Failures)

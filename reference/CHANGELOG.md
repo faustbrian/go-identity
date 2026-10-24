@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Select `HTTPPasskey.SessionDeletion` for password-free removal and metadata
+  recovery on the existing delete route. Genuine current-session UV protects
+  removal; after invalidation, sign in with the surviving key before recovering
+  the original command. Closed options/complete/recover payloads preserve native
+  custody and use shared keyed rates. Cookie/CSRF native selection is required;
+  password-proof `Delete` is mutually exclusive. Native-only selection continues
+  to expose no HTTP removal route or metadata.
+
 - Select `Passkey.SessionDeletion` and the guarded
   `Passkeys().SessionDeletion()` handle for genuine current-session UV removal
   with another independently usable resident ES256 key. Removal and affected

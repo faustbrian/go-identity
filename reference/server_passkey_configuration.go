@@ -47,6 +47,10 @@ type HTTPPasskeyConfiguration struct {
 	// instead of password-proof Update. It requires native SessionManagement in
 	// cookie mode and the graph's original CSRF keys; no device/proof owner.
 	SessionUpdate bool
+	// SessionDeletion selects genuine current-passkey-session UV removal and
+	// current-session metadata recovery instead of password-proof Delete. It
+	// requires native cookie SessionDeletion, CSRF and shared keyed rate owners.
+	SessionDeletion bool
 	// SessionEnrollment selects genuine current-session UV enrollment instead
 	// of password-proof Registration. It requires native cookie SessionEnrollment,
 	// original CSRF and keyed/rate owners, not HTTP pre-auth or a device cookie.
@@ -104,7 +108,7 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_passkey"}
 	h := *c.HTTPPasskey
-	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete && !h.SessionUpdate && !h.SessionEnrollment || h.Update && h.SessionUpdate || h.Registration && h.SessionEnrollment || h.Discoverable && !h.Signin || (h.DiscoverableOnly || h.Conditional) && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory || h.SessionUpdate || h.SessionEnrollment) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
+	if !h.Registration && !h.Signup && !h.Signin && !h.Inventory && !h.Update && !h.Delete && !h.SessionUpdate && !h.SessionEnrollment && !h.SessionDeletion || h.Update && h.SessionUpdate || h.Delete && h.SessionDeletion || h.Registration && h.SessionEnrollment || h.Discoverable && !h.Signin || (h.DiscoverableOnly || h.Conditional) && !h.Discoverable || c.Passkey == nil || owner == nil || sessions == nil || sessions.reader == nil || c.Session == nil || (h.Signup || h.Signin || h.Inventory || h.SessionUpdate || h.SessionEnrollment || h.SessionDeletion) && !c.Session.Passkey || c.Session.Native.Execution.Clock == nil || c.HTTPRate == nil || shared == nil {
 		return nil, invalid
 	}
 	n := *c.Passkey
@@ -160,7 +164,10 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 	if h.SessionEnrollment && (n.SessionEnrollment == nil || owner.sessionEnrollment == nil || n.SessionEnrollment.Transport != session.CredentialCookie || n.KeyedOptions == nil || len(c.Session.CSRFKeys) == 0) {
 		return nil, invalid
 	}
-	if h.Update || h.Delete || h.SessionUpdate {
+	if h.SessionDeletion && (n.SessionDeletion == nil || owner.sessionDeletion == nil || n.SessionDeletion.Transport != session.CredentialCookie || n.KeyedOptions == nil || len(c.Session.CSRFKeys) == 0) {
+		return nil, invalid
+	}
+	if h.Update || h.Delete || h.SessionUpdate || h.SessionDeletion {
 		out.secret, err = identityhttp.NewKeyedSecretRateLimiter(identityhttp.KeyedSecretRateConfig{Shared: shared.backend, Namespace: c.HTTPRate.Namespace, Key: c.HTTPRate.IdentifierKey, Now: out.now, MaximumDuration: c.HTTPRate.MaximumDuration})
 		if err != nil {
 			return nil, invalid

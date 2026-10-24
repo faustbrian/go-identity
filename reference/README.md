@@ -86,6 +86,10 @@ session metadata recovery. Another usable resident ES256 key must remain; no
 password/email/OTP fallback is inferred. Install WebAuthn history through
 migration 6. Native selection enables no delete HTTP route. See
 [resident-key removal](PASSKEY.md#current-session-resident-key-removal).
+Select `HTTPPasskey.SessionDeletion` separately for its cookie-only
+options/completion/recovery endpoint. The graph supplies the same native owner,
+session/CSRF and shared keyed rate admission, not a password proof or device
+cookie. It is mutually exclusive with password-proof `HTTPPasskey.Delete`.
 
 ## Native secondary-OTP enrollment
 

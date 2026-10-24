@@ -71,6 +71,13 @@ func (s *Server) passkeyFeature(network identityhttp.NetworkConfig, f FeatureSet
 		}
 		config.Delete = &passkeyhttp.DeleteConfig{Network: network, Sessions: state.session.reader, Proofs: state.passwordVerification.proofs, Service: owner, Rate: h.secret, Origin: identityhttp.Origin(n.Flow.Origin), SessionCookie: n.Issuer.Cookie, CSRFKeys: h.csrf, PolicyRevision: revision, Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
 	}
+	if h.config.SessionDeletion {
+		removal, err := owner.SessionDeletion()
+		if err != nil {
+			return nil, err
+		}
+		config.SessionDeletion = &passkeyhttp.SessionDeletionConfig{Network: network, Sessions: state.session.reader, Service: removal, Rate: h.secret, Origin: identityhttp.Origin(n.Flow.Origin), SessionCookie: n.Issuer.Cookie, CSRFKeys: h.csrf, PolicyRevision: revision, Audience: state.session.readerAudience, Now: h.now, MaximumDuration: n.Protocol.MaximumDuration}
+	}
 	feature, err := passkeyhttp.NewFeature(config)
 	if err != nil {
 		return nil, err

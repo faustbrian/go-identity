@@ -53,12 +53,7 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	type response struct {
-		code    int
-		header  http.Header
-		body    []byte
-		cookies []*http.Cookie
-	}
+	type response = passkeyDeletionHTTPObservation
 	call := func(path string, body any, key string, cookies []*http.Cookie, csrf, selectedOrigin string) response {
 		t.Helper()
 		wire, err := json.Marshal(body)
@@ -496,6 +491,19 @@ func proveReferencePasskeySignupHTTPRemember(t *testing.T, ctx context.Context, 
 		var listed passkeyhttp.InventoryResponse
 		if readErr != nil || closeErr != nil || len(wire) > 16384 || got.StatusCode != 200 || json.Unmarshal(wire, &listed) != nil || len(listed.Credentials) != 2 {
 			t.Fatal("HTTP second credential was not durably listed", got.StatusCode)
+		}
+		if c.HTTPPasskey.SessionDeletion {
+			var second passkeyhttp.CredentialMetadata
+			for _, item := range listed.Credentials {
+				if item.ReferenceID != managedCredential.ReferenceID {
+					second = item
+				}
+			}
+			if second.ReferenceID == "" {
+				t.Fatal("HTTP additional credential metadata absent")
+			}
+			proveReferenceHTTPSessionDeletion(t, ctx, features, c, handler, record.UserID, issued.cookies, csrf, private, id, handle, counter, managedCredential, second, additionalKey, additionalID, call, flow)
+			return
 		}
 		checkEnrollmentAfterLogout = func() {
 			denied := call("/v1/passkey/register-verify", completion, "", issued.cookies, csrf, origin)

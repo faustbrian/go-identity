@@ -634,3 +634,37 @@ key signin, original metadata recovery, last-key protection and read/logout for
 cookie/bearer selection on fresh/populated PostgreSQL. The current selected
 removal transport is native; no removal browser/UI or full M16 qualification is
 claimed. Password-proof `Passkey.Deletion` remains independent and unchanged.
+
+### Opt-in HTTP resident-key removal
+
+Select `HTTPPasskey.SessionDeletion` independently with native cookie
+`Passkey.SessionDeletion`, `Passkey.KeyedOptions`, `Session.Passkey`, original
+CSRF keys and shared HTTP rates. This uses the canonical
+`POST /v1/passkey/delete`; password-proof `HTTPPasskey.Delete` is mutually
+exclusive. Session-only removal selects no pre-auth/device-cookie dependency.
+All phases require exact mapped HTTPS host/Origin, current session cookie,
+`X-CSRF-Token` and one header-only `Idempotency-Key`.
+
+1. Send `phase:"options"`, `referenceID` and inventory `expectedVersion` with
+   the original options key. Only fresh success returns genuine UV options.
+2. Send `phase:"complete"`, unchanged reference/version, original `ceremonyID`
+   and genuine `response` with a different completion key. Fresh success returns
+   original durability metadata, not a credential, cookie or synchronizer.
+3. After removal invalidates the source session, sign in with the surviving
+   key. Send `phase:"recover"`, the original target/version and original
+   completion `commandID` with the new session/CSRF. The header key is used only
+   for shared rate admission in this phase; it allocates no command and cannot
+   restart removal. Recovery returns original metadata and no options history.
+
+Retain original keys/command/intent on unknown outcomes; never automatically
+repeat removal. Options and original positive-read expiry survive all hooks.
+Subsequent requests with the invalidated source session deny, including recovery.
+No body identity, RP, proof, session, network or retry-key override is accepted.
+Inventory metadata versions do not replace kernel lifecycle versions.
+
+`TestReferencePostgresPasskeyHTTPSessionDeletion` proves actual HTTPS signup,
+second-key enrollment, UV removal, stale-intent/CSRF/Origin and old-source denial,
+surviving-key HTTP signin, metadata recovery, last-key protection and read/logout
+against fresh/populated PostgreSQL, validating request/results against the
+selected OpenAPI. This is backend HTTP proof, not browser/authenticator or full
+M16/release qualification.
