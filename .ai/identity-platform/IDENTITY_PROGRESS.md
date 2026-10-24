@@ -1,6 +1,34 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 12:10 UTC
+## Current TL;DR — 2026-10-24 12:59 UTC
+
+- **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
+  M16 has more working consumer profiles, not full closure. All 67 units retain
+  their required final qualification; other capability milestones remain open.
+- **Native Ed25519 delivered:** `go-passkey@0b8b646` is independently approved,
+  pushed to main and Required-CI green (`40094300216`). Ed-only and either mixed
+  order support genuine signup/session/discovery, current-key UV second-key
+  enrollment/rename/removal, invalidated sessions, surviving-key signin and
+  original removal recovery/read/logout. Last selected usable key stays protected.
+- **Consumer proof:** the authenticated downloaded native module matches all
+  sixteen changed nested files and passes all three complete lifecycle profiles
+  on real PostgreSQL/race (15.054s), with dependencies verified. Local original
+  profile, atomicity, failure/recovery and race evidence is retained in the ledger.
+- **Reference on main:** reviewed `14ea79c`, Required CI `40095616027` green,
+  consumes the native/protocol profiles and schema correction `f1bdf30`.
+  All six Ed/mixed HTTPS/OpenAPI fresh/upgrade profiles plus retained ES256
+  journeys pass locally on PostgreSQL/race (150.269s); Reference/command race,
+  tagged vet and dependency verification pass. Existing browser proof is retained.
+- **Public reproof pending:** the authenticated public Reference matches all
+  fourteen changed files, but its three fresh journeys failed on context
+  deadlines during severe host pressure (load109, about47GB swap). That is not
+  a pass; no source defect is established, and deadlines were not weakened.
+  The isolated database is stopped; cleanup precedes another bounded run.
+- **Next:** retry unchanged public inputs once the host is usable; meanwhile
+  trace remaining enrolled-MFA ownership without heavy checks. No user decision
+  is needed. Ed25519 browser/physical-device and full M16 qualification stay open.
+
+## Retained checkpoint — 2026-10-24 12:10 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   The selected ES256 passkey backend lifecycle is delivered. Full M16 still
@@ -2621,7 +2649,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Selected ES256/known-empty-MFA lifecycle delivered: existing-account and standalone signup, identified/discoverable signin, conditional options, inventory, additional enrollment, rename, safe removal and original recovery. Native/HTTP/Reference latest `16ac977`/`e0cc14f`/`9a1af93` reviewed/main/CI green. Browser consumer `22462f7` adds actual HTTPS/secure-cookie/native-JSON journeys with internal/USB virtual CTAP2.1 on fresh/populated PG/race52.546s; downloaded-public both-transports40.237s. Protocol Ed25519 prerequisite `4801d79` is reviewed/main/CI/public-PG proven; native adoption is active, not delivered yet. Enrolled-MFA, remaining algorithm/interoperability profiles and unit qualification keep full M16 open. Physical hardware/conditional-autofill are unproved; earlier rename signin-options503 remains unexplained, not claimed fixed. |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | ES256/known-empty-MFA lifecycle delivered through native/HTTP/Reference; browser `22462f7` covers actual HTTPS/secure-cookie/native-JSON internal/USB CTAP2.1 fresh/upgrade PG/race52.546s and public40.237s. Ed-only/both mixed orders now native `0b8b646` main/CI/public lifecycle15.054s; protocol `4801d79` likewise delivered. Schema `f1bdf30` and Reference `14ea79c` reviewed/main/CI green; six new HTTPS profiles plus retained defaults local PG/race150.269s. Public Reference byte identity matches, but its runtime reproof failed on deadlines during severe host pressure; remains pending, not passed. Enrolled-MFA, interoperability and full-unit qualification keep M16 open. Physical hardware/conditional-autofill unproved; earlier rename signin-options503 unexplained, not claimed fixed. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |

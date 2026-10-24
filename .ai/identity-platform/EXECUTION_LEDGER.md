@@ -1,5 +1,86 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 12:59 UTC: Reference14ea79c697e8c2f4ea38d8d789854bd5a41163c1 is exact
+origin/main/Required40095616027 SUCCESS. Independent
+passkey_algorithms_reference_final APPROVE complete14path source; tracked diff
+4c13410f8c28dae66bdf3dbfe93c4a200d63a66113d41ddf09258d9e4e217ddb,
+newtest9ba3210d9e4cb460ce0afe3dbac76872a454138b16085225f7ad2e7dd118ab8f.
+Final92750 exit0: six selected Ed/mixed fresh/upgrade plus retained ES/native/
+HTTP PG/race150.269s; Reference/actualcmd race9.230/8.002s; taggedvet0 and
+modverifyall. Changed33.40KB+2.68KB secrets clean. No source finding remains.
+Public Reference v0.0.0-20261024125033-14ea79c697e8 Sum
+h1:yyqXpXDXeW+FtD6UQ2DlrqkPkWGKAsyyerN2+myjzvs= matches all14 changed files.
+However untouched public84123 TERMINAL FAIL342.334s: all3 fresh profiles hit
+context deadlines (113.07/166.32/61.34s). Host simultaneously reached load109.31
+and46.79GB swap use; process was live/CPU-runnable with idle PG between calls.
+Host pressure is the supported contributor, not a proven source defect or a
+passing reproof. Group's later public modverify did NOT run. Do not weaken
+timeouts, claim public Reference completion, or blindly repeat under that load.
+Task PG58918 is stopped; no per-test DBs remained. Remove its owned cache/root
+after this checkpoint. Reproof of these unchanged public inputs waits for a
+usable host; next safe light work is the bounded remaining M16/MFA ownership
+trace, not restarting previous profiles or historical evidence machinery.
+Whole goal~25%,11/39, no additional unit qualification or full M16 closure.
+
+2026-10-24 12:46 UTC: bounded HTTP schema fixf1bdf300418ca41c0973f6a278a1b351b72cc76e
+is exact origin/main/Required40095104586 SUCCESS. Independent
+passkey_algorithm_wire_final APPROVE complete4path source; original native
+worker output RED40444/0.498s -> GREEN60259/0.466s; final24720 unit1.860s,
+vet0/modverifyall; changed57.98KB secrets clean. Published leaf
+v0.0.0-20261024124312-f1bdf300418c matches all4 changed files; Reference pins it
+normally (no replacement) and actual Ed25519 HTTPS/OpenAPI36277 GREEN3.452s.
+Native0b8b646 is exact origin/main/Required40094300216 SUCCESS; untouched public
+all3 signed lifecycle PG/race75069 exit0/15.054s, all16nested files cmpmatch,
+modverifyall. Public native Sumh1:ISNRTefFtHmUNKcgNe0N6nVuG6C1W1GoYpRRmTK+aYs=.
+Final frozen Reference selected/retained PG-race + unit/actualcmd + taggedvet/
+integrity session92750 and independent passkey_algorithms_reference_final review
+are live. Earlier unit81553 failed setup for nonexistent cmd/identity-reference;
+its Reference package passed9.034s; corrected cmd/identity-baseline38966 passes
+7.663s. This is not hidden as an all-command pass. Runtime evidence is not
+invalidated by these report-only notes; full M16/qualification remain open.
+
+2026-10-24 12:38 UTC: actual Reference Ed25519 consumer RED50282 rejects
+composition under old native pin0.716s. Adopting committed native0b8b646 and
+protocol4801d79 reaches HTTP200, but RED52929 detects published registration
+schema still hardcodes one ES256 parameter (wire mismatch2.829s). Leaf worker
+passkey_algorithm_wire owns only http/passkey/wire.go, selected wire tests,
+README/CHANGELOG in that module; no shared/root/Reference/pin/Git changes.
+Finite correction: bounded ES256/Ed25519 registration algorithm schema covers
+both unique mixed orders and rejects unsupported/duplicate/empty/excess arrays;
+actual native selected order remains authoritative, no crypto or algorithm
+policy copy. Consume current public native/WebAuthn profiles and existing
+OpenAPI parse/validate owners; reproduce actual instance denial then prove
+correction with focused wire/hostile-boundary checks. Primary owns current
+Reference tests/docs, subsequent public leaf pin and complete integration.
+Heavy token belongs to leaf worker; primary codes/reads only meanwhile. One
+complete independent final-diff review before coherent leaf delivery.
+
+2026-10-24 12:33 UTC: native Ed/mixed batch0b8b646887dcc171ff483f46b221551e9e4e40dc
+is pushed exact go-passkey origin/main; independent passkey_ed25519_native_final
+APPROVE complete19path source (native report retained). Constructor RED0.708s,
+unselected-recovery sensitivity RED1.007s and later-selected-key RED1.184s ->
+GREEN1.286s establish actual missing behavior. Final selected/default PG9.878s,
+atomic/recovery/cancellation70.618s, selected lifecycle/contention race186.364s,
+unit0.299s, taggedvet0/modverifyall and changed secrets/diffcheck0. Worker PG58920
+and evidence root removed. Hosted Required40094300216 and downloaded-public
+lifecycle75069 remain pending; no M16 or whole-unit closure is claimed.
+
+Next frozen primary consumer slice: Reference's existing public protocol
+configuration selects Ed-only or either ordered mixed list. After native public
+delivery proof, adopt its normal authenticated public pin (no sibling replace)
+and prove actual HTTPS signup -> current-key UV rename -> second-key enrollment
+-> removal/old-session denial -> selected survivor signin -> original removal
+recovery/last-key denial/read/logout, fresh/populated PostgreSQL. Reuse real
+Reference startup/migration/OpenAPI/transport/domain owners; controlled signed
+authenticators supply raw WebAuthn only. Assert exact algorithm advertisement;
+retain default ES256, origin/CSRF/replay and unselected-feature denials. Extend
+existing test helpers only as needed for standard crypto.Signer keys; no verifier
+or store substitute, new proof/schema/history, browser Ed or enrolled-MFA claim.
+Primary owns reference/** and these live notes. Focus new profile plus retained
+standalone/HTTP lifecycle, Reference/cmd race, tagged vet/module integrity,
+changed secrets, one complete independent final-diff review, main/Required CI
+and downloaded-public journey. Frozen support does not add neighboring variants.
+
 2026-10-24 12:08 UTC: next dependency-ready native lane passkey_ed25519_native
 owns go-passkey/postgres/** on16ac977 main; primary owns root docs, Reference/
 HTTP integration/pins and Git. Consume committed/proven public protocol4801d79
