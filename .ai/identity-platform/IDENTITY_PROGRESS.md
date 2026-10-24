@@ -1,16 +1,22 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-24 04:08 UTC
+## Current TL;DR — 2026-10-24 04:36 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   All 67 units remain required; no additional full-unit qualification is claimed.
 - **Delivered:** passkey-first HTTP signup -> session read -> CSRF logout ->
   fresh discoverable signin on fresh/upgraded PostgreSQL (details below).
-- **New native delivery:** conditional-signin options and the real PostgreSQL
-  adapter are reviewed, on main and Required-CI green (`go-passkey` root
-  `c0819f9`, adapter `ea2adfd`). The downloaded public adapter passes genuine
-  session/read/logout, policy and expiry checks under PostgreSQL/race (17.600s).
-  Browser UI and HTTP/Reference conditional integration are not claimed.
+- **Conditional backend delivered to main:** optional native facade and HTTP
+  presentation use the same genuine discoverable assertion, original request
+  key, flow, UV, remember policy and expiry. Reviewed HTTP `60bf9b7` and Reference
+  `521583c` have green Required CI (`40062390163`/`40062775128`). Normal public
+  dependencies pass conditional browser/persistent x fresh/populated-upgrade,
+  retained standalone and HTTP signup PostgreSQL/race (44.417s), ordinary
+  Reference/cmd race (8.878s/6.596s), tagged vet and dependency verification.
+  The authenticated downloaded-public Reference also passes all four conditional
+  PostgreSQL/race journeys (16.955s); all eleven changed archive files match and
+  dependencies verify. This generates browser options; it does not implement UI
+  or prove real browser interoperability.
 - **Newly delivered:** the reference backend now completes
   signup/read/logout/fresh discovery without password, OTP or delivery
   configuration. Fresh and populated-kernel/risk upgrade journeys pass under
@@ -21,9 +27,11 @@
   downloaded public module passes both standalone PostgreSQL/race journeys
   (8.101s); all 22 changed archive files match and dependencies verify. Reviewed
   discoverable-only HTTP prerequisite `1eadce3` is also main/CI green.
-- **Next:** integrate conditional-signin HTTP/reference presentation using the
-  delivered native owner. Full M16, other open milestones and final
-  release qualification remain open. No user decision is needed.
+- **Next:** genuine fresh passkey-session reauthentication for password-free
+  credential management.
+  The current management proof still requires a password; the missing owner is
+  explicit, not supplied by transport or a session timestamp. Full M16, other
+  milestones and release qualification remain open. No user decision is needed.
 
 ## Retained checkpoint — 2026-10-24 03:24 UTC
 

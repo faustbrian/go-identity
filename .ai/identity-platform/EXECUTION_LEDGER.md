@@ -1,5 +1,73 @@
 # Identity Implementation — Current Milestone
 
+2026-10-24 04:36 UTC: finite conditional HTTP/Reference consumer profile CLOSED.
+Reference521583cd0b7599b9fcaacb22fe42b60afe531885 is origin/main with exact
+Required40062775128 SUCCESS; reviewed HTTP60bf9b7/Required40062390163 also green.
+Authenticated public Referencev0.0.0-20261024043246-521583cd0b75,
+Sumh1:/1fq4uRyaYhRLywdOKoTuqTtAER6TTLQBJ9MQA9K8+U=, Origin521583c,
+matches all eleven changed archive files. Its isolated unchanged public copy
+passes conditional browser/persistent x fresh/populated PostgreSQL/race16.955s
+and modverify, without replacements. Retained normal-pin cohort44.417s,
+ordinary module/cmd8.878s/6.596s and tagged vet remain applicable. Source review
+conditional_reference_final APPROVE/no actions at final8db55984dabb candidate.
+No browser/device interoperability, fullM16 or full-unit qualification closure.
+Next actual owner: fresh current-passkey-session UV reauthentication -> original
+action-bound signed proof -> password-free label update, preserving password
+APIs and sole existing transaction/proof authorities. Mapping below identifies
+the required native session/MFA/WebAuthn operation boundaries; do not bypass
+them with a fresh timestamp or duplicate proof/replay store. Whole goal~25%,
+11/39 closed; all67 units remain required. No implementation worker active.
+
+2026-10-24 04:33 UTC: conditional_reference_final complete final eleven-path
+review APPROVE/no remaining findings at60bf9b7 + 8db55984dabb1224364b503ea2bc30039bbdcafde816c778b8663b694a9c2fe5.
+One stale documentation claim corrected; no runtime input changed after the
+normal-public-pin 44.417s/8.878s/6.596s checks. Main delivery/public Reference
+acceptance pending; no full M16 or unit qualification closure.
+
+2026-10-24 04:30 UTC: HTTP60bf9b753c9141a5996b5eaba1f80e207359d5d2 is on
+origin/main; exact Required40062390163 SUCCESS. Authenticated public leaf
+v0.0.0-20261024042650-60bf9b753c91, Sumh1:vxlxR1eWAn2NEW/8QfzVpAe3sLOqO2Wil8FK181ZfNw=,
+Origin60bf9b7 matches all nine changed archive files. Reference adopts that
+normal public pin plus native rootc0819f9/adapterea2adfd. Final genuine
+conditional browser/persistent x fresh/populated and retained standalone/signup
+PG/race44.417s; ordinary module/cmd race8.878s/6.596s, tagged vet exit0,
+modverify allmodulesverified. The unsupported conditional-without-discovery
+case is included. Complete eleven-path Reference candidate fa809c4b is under
+independent review; no Reference delivery/fullM16/whole-unit closure claimed.
+
+2026-10-24 04:25 UTC: conditional HTTP leaf candidate independently reviewed by
+conditional_http_final: APPROVE/no findings, all nine selected paths at
+e4b3be5 + content f564134b3dfa9487debd9b10337831a68990481faabb562191f12477995ad881.
+Leaf race7.250s, vet/modverify and changed-content secrets pass. Genuine local
+two-module Reference conditional browser/persistent x fresh/populated upgrade,
+retained standalone/HTTPsignup cohort race44.196s; ordinary Reference/cmd race
+8.981s/8.091s, tagged vet pass. That run predates only the added unsupported-
+configuration test case; cover it with the final public leaf pin. HTTP/main
+delivery and final Reference/public dependency proof remain pending. Full M16
+and whole unit qualification remain open.
+
+Read-only passkey_management_boundary report at public nativeea2adfd/current
+identitye4b3be5 identifies the next actual missing owner: genuine current-passkey-
+session fresh UV reauthentication -> original action-bound signed proof. Existing
+authentication d9f5132 framing/source, kernel.Work, WebAuthn assertion transition
+and native passkey-session authority are reusable; no new crypto/proof engine.
+Explicit WebAuthn parent and MFA/session operation admission must be extended by
+their owners first. Current passkey management hardcodes password ActionPrimary
+and session profiles; deletion also hardcodes emailed-password reset recovery.
+Preserve those APIs; do not merely remove checks or accept a fresh-session bool.
+This is a later additive native profile, not a blocker to conditional transport.
+
+2026-10-24 04:14 UTC: conditional HTTP selection regression captured missing
+SigninConfig.Conditional (compile RED); normal native rootc0819f9 is adopted by
+the leaf. Primary owns current HTTP/Reference code. Bounded read-only parallel
+question passkey_management_boundary owns no writes: locate the existing public
+proof/persistence/session contracts needed for genuine passkey-session fresh
+reauthentication -> label management without password configuration. Consume
+go-passkey nativeea2adfd and current identity/session owners; report reusable
+owners versus the first actual missing contract, with source lines. No new
+proof store/engine or shared-contract edit is authorized. This investigation
+does not gate current conditional-signin implementation or imply delivery.
+
 2026-10-24 04:08 UTC: finite M16 standalone passkey-only profile CLOSED.
 Referencefdf8f86261ab6f712a90d8e5fee47035e60a662b is exactmain/Required40061091902
 SUCCESS. PublicReferencev0.0.0-20261024040717-fdf8f86261ab authenticates with
