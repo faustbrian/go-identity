@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an executable isolated-Chromium adoption journey for the selected
+  passkey-only HTTP profile: browser-owned HTTPS/cookies and native WebAuthn
+  JSON cover signup, second-key enrollment, rename, removal, surviving-key
+  recovery and logout on fresh/populated PostgreSQL. Internal/USB virtual-device
+  coverage does not claim physical-device or conditional-autofill certification.
+
 - Select `HTTPPasskey.SessionDeletion` for password-free removal and metadata
   recovery on the existing delete route. Genuine current-session UV protects
   removal; after invalidation, sign in with the surviving key before recovering

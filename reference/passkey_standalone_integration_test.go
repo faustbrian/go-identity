@@ -85,6 +85,10 @@ func TestReferencePostgresPasskeyHTTPSessionEnrollment(t *testing.T) {
 }
 
 type standalonePasskeyJourney struct {
+	// A browser consumer retains the same public graph while owning its actual
+	// HTTPS origin, cookies and authenticator. Existing signer journeys are default.
+	origin                                                          string
+	consume                                                         func(*testing.T, context.Context, http.Handler, []byte)
 	httpDeletion                                                    bool
 	sessionDeletion                                                 bool
 	conditional, persistent, management, httpManagement, enrollment bool
@@ -99,6 +103,12 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, true)
 	c := standalonePasskeyConfiguration(t, f.config)
+	if selected.origin != "" {
+		c.Passkey.Protocol.RelyingParty.Origins = []string{selected.origin}
+		c.Passkey.Flow.Origin = selected.origin
+		c.Passkey.Signup.Flow.Origin = selected.origin
+		c.HTTPSession.TrustedOrigins = []identityhttp.Origin{identityhttp.Origin(selected.origin)}
+	}
 	c.HTTPPasskey.Conditional = conditional
 	c.HTTPPasskey.SessionUpdate = httpManagement
 	c.HTTPPasskey.SessionEnrollment = selected.httpEnrollment
@@ -494,7 +504,11 @@ func proveReferencePasskeyStandalone(t *testing.T, upgrade bool, selected standa
 			t.Fatal("restored standalone readiness", status.Failures)
 		}
 	}
-	proveReferencePasskeySignupHTTPRemember(t, ctx, features, c, server.Handler(), server.OpenAPI().JSON(), f.pool, persistent)
+	if selected.consume != nil {
+		selected.consume(t, ctx, server.Handler(), server.OpenAPI().JSON())
+	} else {
+		proveReferencePasskeySignupHTTPRemember(t, ctx, features, c, server.Handler(), server.OpenAPI().JSON(), f.pool, persistent)
+	}
 }
 
 func standalonePasskeyConfiguration(t *testing.T, c reference.StoreConfiguration) reference.StoreConfiguration {

@@ -37,6 +37,40 @@ Conditional browser presentation is separately selected below; no UI is provided
 The actual public construction/configuration and fresh/populated-kernel-upgrade
 journeys are executable in `TestReferencePostgresPasskeyStandalone`.
 
+### Browser interoperability journey
+
+`TestBrowserReferencePasskeySignupManagementRecovery` selects the same public
+PostgreSQL graph with an isolated Chromium browser. Browser `fetch` owns the
+actual HTTPS Origin, secure/HttpOnly cookies and original CSRF continuation;
+`navigator.credentials` and native JSON conversion produce the registration
+and assertion responses. No Go signer, injected credential/private key,
+request interceptor or application-owned domain store supplies the journey.
+
+The selected resident-UV/ES256 profile covers signup, second-key enrollment,
+rename, removal, invalidated-session rejection, surviving-key discovery signin,
+original removal recovery, last-key protection and session read/logout. It runs
+internal and USB CTAP2.1 virtual-authenticator profiles against fresh and
+populated-upgrade PostgreSQL. The recovery device uses USB because Chromium
+allows only one internal virtual authenticator in an environment.
+
+From `reference/`, run against an explicitly disposable local PostgreSQL cluster
+with `IDENTITY_REFERENCE_POSTGRES_PORT` set and the task-owned Go caches described
+in the repository contributing guide:
+
+```sh
+export WEBAUTHN_BROWSER_BINARY='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+go test -race -tags=integration,browser \
+  -run '^TestBrowserReferencePasskeySignupManagementRecovery$' -count=1 .
+```
+
+The fixture generates its own short-lived TLS certificate, trusts only that
+certificate's SPKI in the isolated browser, maps `identity.example` to loopback,
+and removes its browser profile/processes. It does not change system trust or
+use a personal browser profile. Runtime versions are recorded in test output.
+Virtual-device results are not physical platform/roaming hardware certification,
+conditional-autofill interaction proof, Ed25519 or enrolled-MFA qualification.
+Those remaining profiles and complete module release gates remain separate.
+
 ## Current-passkey-session rename
 
 Set `Passkey.SessionManagement` to
