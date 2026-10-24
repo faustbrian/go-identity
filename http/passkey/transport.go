@@ -196,6 +196,8 @@ func (i *ingress) decode(r *http.Request, operation string, csrf bool) (identity
 	pathOperation := operation
 	if operation == "session-update" {
 		pathOperation = "update"
+	} else if operation == "session-delete" {
+		pathOperation = "delete"
 	}
 	if r.URL.Path != "/v1/passkey/"+pathOperation || r.URL.EscapedPath() != r.URL.Path {
 		return facts, body, key, failure{status: 404, code: "not_found"}
@@ -207,7 +209,7 @@ func (i *ingress) decode(r *http.Request, operation string, csrf bool) (identity
 		return facts, body, key, identityhttp.ErrInvalidInput
 	}
 	mode := identityhttp.HeaderForbidden
-	if strings.HasSuffix(operation, "options") || pathOperation == "update" || operation == "delete" {
+	if strings.HasSuffix(operation, "options") || pathOperation == "update" || pathOperation == "delete" {
 		mode = identityhttp.HeaderRequired
 	}
 	var err error

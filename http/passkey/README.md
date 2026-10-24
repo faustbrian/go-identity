@@ -75,6 +75,58 @@ Unknown commitment stays unknown. No browser device cookie, password verifier,
 private proof store, UI or session timestamp is substituted for genuine UV.
 Existing password-proof callers retain their unchanged selected contract.
 
+## Password-free session-bound removal and recovery
+
+Select `FeatureConfig.SessionDeletion` with `SessionDeletionConfig`, borrowing
+the actual native `DeleteOptions`/`Delete`/`RecoverDelete` owner, its current
+session reader and synchronizer keys, and the shared keyed-secret limiter.
+It is mutually exclusive with password-proof `Delete`; neither is a fallback.
+No password proof reader, device cookie or concrete store is imported.
+
+Every phase is POST `/v1/passkey/delete` with the current secure session cookie,
+exact trusted Origin, original `X-CSRF-Token` and one `Idempotency-Key` header.
+First request genuine identified UV options for the exact inventory target:
+
+```json
+{"phase":"options","referenceID":"<inventory reference>","expectedVersion":7}
+```
+
+Fresh success alone returns browser `options.publicKey` and its original
+`commandID`. Obtain a genuine UV assertion and complete with a **different**
+original header key, repeating the unchanged target and inventory metadata
+version:
+
+```json
+{"phase":"complete","referenceID":"<inventory reference>","expectedVersion":7,"ceremonyID":"<options commandID>","response":{"id":"<browser assertion>"}}
+```
+
+`response` is the complete genuine browser assertion object, not the abbreviated
+placeholder above. Native ownership binds the original session, RP, target,
+metadata version, Origin and trusted network; it consumes the assertion with
+current self policy, independent surviving-passkey recovery and exact atomic
+removal/session effects. The inventory metadata version is not the independent
+kernel reference lifecycle version. Completion returns durability only; no
+credential payload is required or disclosed, even for fresh removal.
+
+Removal may invalidate the invocation's own session. That invocation may
+acknowledge its result only within its original positive-read/context ceiling;
+later requests reauthenticate current authority and reject the old session.
+After removal, sign in with a surviving key, then recover the original mutation:
+
+```json
+{"phase":"recover","referenceID":"<original inventory reference>","expectedVersion":7,"commandID":"<original completion commandID>"}
+```
+
+Recovery requires that new current session's cookie and synchronizer. Its header
+key is used only for `rate.secret` admission: recovery never allocates, repeats
+or rebinds a native command, consumes another assertion or recovers options
+history. Retain the original command, target and metadata version. Unknown,
+in-progress and not-committed remain distinct; none authorizes automatic retry
+or a replacement removal. All phases reject body keys, proof IDs, identities,
+RP/session/network overrides and unselected fields. Options expiry and original
+positive-read validity are checked again after hooks, with no renewed lease.
+No phase issues cookies, synchronizers or replacement credentials.
+
 `FeatureConfig.Signup` explicitly selects the `mode: "signup"` registration
 variant. Options accepts only `mode` and original `flowID`, with one header-only
 `Idempotency-Key`; completion adds original `commandID`, `ceremonyID`, raw
@@ -111,7 +163,7 @@ requests and outlive the handlers.
 | POST `/v1/passkey/signin-verify` | Same original mode/flow/identifier plus `commandID`, `ceremonyID`, `response` | Forbidden |
 | GET `/v1/passkey/list` | Optional `after`, `limit` (1..100, default100) | Forbidden |
 | POST `/v1/passkey/update` | `proofID`, `referenceID`, `expectedVersion`, `name` | Required |
-| POST `/v1/passkey/delete` | `proofID`, `referenceID`, `expectedVersion` | Required |
+| POST `/v1/passkey/delete` | Password profile: `proofID`, `referenceID`, `expectedVersion`; session profile: `phase:"options"`, `"complete"` or `"recover"`, exact `referenceID`/metadata `expectedVersion`; complete adds original `ceremonyID` and assertion `response`, recover adds original `commandID` | Required in every phase |
 
 ## Composition and custody
 

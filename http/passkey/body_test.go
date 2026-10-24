@@ -37,6 +37,9 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		{5, deleteWire},
 		{6, sessionUpdateOptionsWire},
 		{6, sessionUpdateCompleteWire},
+		{7, sessionDeletionOptionsWire},
+		{7, sessionDeletionCompleteWire},
+		{7, sessionDeletionRecoverWire},
 		{0, enrollmentAssertionWire},
 		{0, enrollmentRegistrationWire},
 		{1, enrollmentCompleteWire},
@@ -58,10 +61,15 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		if err != nil {
 			return
 		}
-		operations := []string{"register-options", "register-verify", "signin-options", "signin-verify", "update", "delete", "session-update"}
+		operations := []string{"register-options", "register-verify", "signin-options", "signin-verify", "update", "delete", "session-update", "session-delete"}
 		out, err := decodeBody(operations[int(mode)%len(operations)], fields)
 		if err == nil && (out.discoverable && out.identifier != "" || out.signup && (out.proofID != "" || out.flowID == "" || out.discoverable) || out.sessionEnrollment && (out.signup || out.proofID != "" || out.flowID != "" || out.discoverable || out.identifier != "") || len(out.response) > 262144 || len(out.label) > 128 || len(out.identifier) > 320) {
 			t.Fatal("admitted body escaped fixed bounds/mode")
+		}
+		if err == nil && operations[int(mode)%len(operations)] == "session-delete" {
+			if out.proofID != "" || out.referenceID == "" || out.expectedVersion == 0 || out.name != "" || out.sessionRecovery && (out.commandID == "" || out.ceremonyID != "" || len(out.response) != 0 || out.sessionOptions) || out.sessionOptions && (out.commandID != "" || out.ceremonyID != "" || len(out.response) != 0) || !out.sessionRecovery && !out.sessionOptions && (out.commandID != "" || out.ceremonyID == "" || len(out.response) == 0) {
+				t.Fatal("removal phase acquired alternate custody")
+			}
 		}
 	})
 }

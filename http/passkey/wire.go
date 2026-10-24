@@ -51,6 +51,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		// allocated command ID. In particular, imported ULIDs remain unchanged.
 		reference := map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "pattern": `^[^\x00-\x20\x7f]+$`, "description": "Exact canonical kernel credential reference, at most128 UTF-8 bytes; never a raw authenticator credential."}
 		request = wireObject([]string{"proofID", "referenceID", "expectedVersion"}, map[string]any{"proofID": wireID(), "referenceID": reference, "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 1}})
+		if c.SessionDeletion != nil {
+			request = sessionDeletionRequestWire()
+		}
 	} else if update {
 		request = wireObject([]string{"proofID", "referenceID", "expectedVersion", "name"}, map[string]any{"proofID": wireID(), "referenceID": wireID(), "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 1}, "name": map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "description": "Exact UTF-8 display label, at most128bytes, non-whitespace and no controls; not authenticator provenance."}})
 		if c.SessionUpdate != nil {
@@ -106,6 +109,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	switch {
 	case deletion:
 		success = wireObject([]string{"commandID", "commitOutcome", "replayed"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"type": "boolean"}})
+		if c.SessionDeletion != nil {
+			success = sessionDeletionResultWire()
+		}
 	case update:
 		fields := map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "credential": metadataWire()}
 		fresh := wireObject([]string{"commandID", "commitOutcome", "replayed", "credential"}, fields)
@@ -174,6 +180,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	if update && c.SessionUpdate != nil {
 		operation["description"] = "Explicit password-free current-session UV rename. phase=options binds exact reference/version/name to the current cookie session, CSRF, Origin and trusted client network. phase=complete repeats that intent with the returned commandID as ceremonyID and a genuine assertion. Each phase requires its own distinct header-only Idempotency-Key under the same protected rate.secret action. No proofID, device cookie, caller command, tenant or credential override. Matching retries expose original metadata only; no challenge, authentication cookie or renewed validity. Native ownership retains atomic current authority, assertion consumption, risk, metadata, audit and lifecycle effects. No fallback to password-proof update."
 	}
+	if deletion && c.SessionDeletion != nil {
+		operation["description"] = "Explicit password-free current-session UV removal. phase=options binds the exact reference and inventory metadata version to the current cookie session, stored CSRF, exact Origin and trusted client network; fresh delivery alone contains genuine UV options within their original expiry. phase=complete repeats that intent with original ceremonyID and assertion under a distinct original header key. Removal can invalidate this invocation's session; acknowledgement retains only its original positive-read/context ceiling. Later calls authenticate current authority. phase=recover requires a new surviving-key session after removal, exact original commandID and target; it reads metadata only, never options history, repeats removal or allocates a command. Every phase requires header-only Idempotency-Key for rate.secret; the recovery key has no native-command effect. No password proof, device cookie, identity/RP/session/network override, session issuance or fallback. Unknown remains unknown."
+	}
 	if !registration && !management && !list && c.Signin.DiscoverableOnly {
 		operation["description"] = "Explicit identifier-free-only resident passkey signin. Identified mode and identifier input are not selected. Original flow/device/origin, UV, risk, current native authority, one-use completion and original remember policy remain mandatory. Header-only original keys apply to options; completion forbids keys. Historical responses expose no challenge or session. No email/password comparison owner, fallback or browser UI is enabled."
 	}
@@ -202,8 +211,15 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	}
 	switch {
 	case deletion:
-		policy, _ := c.Delete.SessionCookie.DeletionAttributes()
-		cookie("Session", policy.Name)
+		var policyName string
+		if c.SessionDeletion != nil {
+			policy, _ := c.SessionDeletion.SessionCookie.DeletionAttributes()
+			policyName = policy.Name
+		} else {
+			policy, _ := c.Delete.SessionCookie.DeletionAttributes()
+			policyName = policy.Name
+		}
+		cookie("Session", policyName)
 	case update:
 		var cookieName string
 		if c.SessionUpdate != nil {
@@ -303,12 +319,40 @@ func sessionUpdateRequestWire() any {
 }
 func sessionUpdateResultWire(fresh, replay map[string]any) any {
 	fresh["properties"].(map[string]any)["credential"].(map[string]any)["properties"].(map[string]any)["referenceID"] = sessionReferenceWire()
+	options := sessionAssertionOptionsWire()
+	freshOptions := wireObject([]string{"commandID", "commitOutcome", "replayed", "options"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "options": options})
+	return map[string]any{"oneOf": []any{fresh, freshOptions, replay}}
+}
+
+func sessionAssertionOptionsWire() map[string]any {
 	options := protocolOptionsWire(false)
 	key := options["properties"].(map[string]any)["publicKey"].(map[string]any)
 	key["properties"].(map[string]any)["allowCredentials"] = map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "items": wireObject([]string{"type", "id"}, map[string]any{"type": map[string]any{"const": "public-key"}, "id": map[string]any{"type": "string", "minLength": 1, "maxLength": 1366, "pattern": "^[A-Za-z0-9_-]+$"}})}
 	key["required"] = append(key["required"].([]string), "allowCredentials")
-	freshOptions := wireObject([]string{"commandID", "commitOutcome", "replayed", "options"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "options": options})
-	return map[string]any{"oneOf": []any{fresh, freshOptions, replay}}
+	return options
+}
+
+func sessionDeletionRequestWire() any {
+	variant := func(phase string) any {
+		fields := map[string]any{"phase": map[string]any{"const": phase}, "referenceID": sessionReferenceWire(), "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 1}}
+		required := []string{"phase", "referenceID", "expectedVersion"}
+		switch phase {
+		case "complete":
+			fields["ceremonyID"], fields["response"] = wireID(), browserResponseWire(false)
+			required = append(required, "ceremonyID", "response")
+		case "recover":
+			fields["commandID"] = wireID()
+			required = append(required, "commandID")
+		}
+		return wireObject(required, fields)
+	}
+	return map[string]any{"oneOf": []any{variant("options"), variant("complete"), variant("recover")}}
+}
+
+func sessionDeletionResultWire() any {
+	metadata := wireObject([]string{"commandID", "commitOutcome", "replayed"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"type": "boolean"}})
+	freshOptions := wireObject([]string{"commandID", "commitOutcome", "replayed", "options"}, map[string]any{"commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "options": sessionAssertionOptionsWire()})
+	return map[string]any{"oneOf": []any{metadata, freshOptions}}
 }
 
 func metadataWire() any {

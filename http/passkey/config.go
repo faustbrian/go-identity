@@ -271,6 +271,9 @@ type FeatureConfig struct {
 	// at the update route. It is mutually exclusive with the password profile.
 	SessionUpdate *SessionUpdateConfig
 	Delete        *DeleteConfig
+	// SessionDeletion selects current-session genuine-UV removal and current-
+	// authorized metadata recovery instead of the password-proof Delete profile.
+	SessionDeletion *SessionDeletionConfig
 }
 
 func (UpdateConfig) Format(f fmt.State, _ rune) {

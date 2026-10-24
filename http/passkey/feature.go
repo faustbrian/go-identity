@@ -20,7 +20,7 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // credential response custody. This non-streaming JSON profile buffers bounded
 // responses until all synchronous hooks return; no goroutine owns delivery.
 func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.Update != nil && c.SessionUpdate != nil || c.Registration != nil && c.SessionEnrollment != nil {
+	if c.Update != nil && c.SessionUpdate != nil || c.Registration != nil && c.SessionEnrollment != nil || c.Delete != nil && c.SessionDeletion != nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var ops []identityhttp.OperationDescriptor
@@ -93,6 +93,12 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 	}
 	if c.Delete != nil {
 		h, err := NewDeleteHandlerWithMiddleware(*c.Delete, middleware)
+		if err := add("delete", h, err); err != nil {
+			return identityhttp.Feature{}, err
+		}
+	}
+	if c.SessionDeletion != nil {
+		h, err := NewSessionDeletionHandlerWithMiddleware(*c.SessionDeletion, middleware)
 		if err := add("delete", h, err); err != nil {
 			return identityhttp.Feature{}, err
 		}

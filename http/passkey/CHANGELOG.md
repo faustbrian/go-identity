@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Explicitly select password-free credential removal with `SessionDeletion`
+  on the existing delete route. Current cookie/CSRF and genuine action-bound
+  UV protect the exact removal; independent recovery and session effects stay
+  native-owned. Closed options/completion phases retain original distinct keys.
+  Recovery under a new surviving-key session reads only original command/target
+  durability; its required header key is rate admission, never another mutation.
+  Original options and positive-read expiry survive hooks unchanged. The legacy
+  password-proof `Delete` profile remains unchanged and mutually exclusive.
+
 - Explicitly select password-free additional-key enrollment with
   `SessionEnrollment` on the existing registration route pair. Current cookie,
   stored CSRF and genuine action-bound UV authorize resident-key registration;

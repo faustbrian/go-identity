@@ -19,6 +19,7 @@ type requestBody struct {
 	discoverable                              bool
 	signup                                    bool
 	sessionOptions                            bool
+	sessionRecovery                           bool
 	sessionEnrollment, enrollmentRegistration bool
 	response                                  json.RawMessage
 	referenceID, name                         string
@@ -45,19 +46,25 @@ func decodeBody(operation string, fields map[string]json.RawMessage) (requestBod
 	allowed := map[string]bool{}
 	completion := operation == "register-verify" || operation == "signin-verify"
 	switch operation {
-	case "update", "delete", "session-update":
+	case "update", "delete", "session-update", "session-delete":
 		for _, name := range []string{"proofID", "referenceID", "expectedVersion"} {
 			allowed[name] = true
 		}
-		if operation == "session-update" {
+		if operation == "session-update" || operation == "session-delete" {
 			delete(allowed, "proofID")
 			allowed["phase"] = true
 			var phase string
-			if !text("phase", &phase) || (phase != "options" && phase != "complete") {
+			if !text("phase", &phase) || (phase != "options" && phase != "complete" && !(operation == "session-delete" && phase == "recover")) {
 				return invalid()
 			}
 			out.sessionOptions = phase == "options"
-			if !out.sessionOptions {
+			out.sessionRecovery = phase == "recover"
+			if out.sessionRecovery {
+				allowed["commandID"] = true
+				if !command("commandID", &out.commandID) {
+					return invalid()
+				}
+			} else if !out.sessionOptions {
 				allowed["ceremonyID"], allowed["response"] = true, true
 				if !command("ceremonyID", &out.ceremonyID) {
 					return invalid()
