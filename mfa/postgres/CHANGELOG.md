@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fence original known-empty MFA authority for exact current-session passkey
+  removal options and genuine-assertion completion. Require the original
+  options command and canonical removal lifecycle; foreign/aliased profiles,
+  enrolled or changed factor state deny. No generation or recovery permission
+  is created, and native last-path/session/protocol checks remain mandatory.
+
 - Fence original known-empty MFA authority for current-session additional-passkey
   assertion options, atomic assertion-to-registration authorization and final
   credential creation. Only their exact native owner, schema and lifecycle

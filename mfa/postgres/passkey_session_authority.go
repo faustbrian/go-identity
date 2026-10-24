@@ -35,7 +35,7 @@ func ReadPasskeySessionFactors(ctx context.Context, pool *database.Pool, record 
 
 // RequirePasskeySessionFactors locks the original known-empty MFA generation
 // only in exact native identified passkey signin, action-bound label-update or
-// additional-enrollment phases, or self-session revoke-one Work. The registered
+// additional-enrollment/removal phases, or self-session revoke-one Work. The registered
 // owner must already bind the genuine original command
 // and record and fence directory, credential, policy and RP/mapping authority.
 // Signin targets this exact new record; revocation also permits the caller's
@@ -64,6 +64,8 @@ func RequirePasskeySessionFactors(ctx context.Context, w kernel.Work, owner kern
 	// counters; substituting that profile would misclassify current-session use.
 	updateOptions := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.update", SchemaID: "identity.passkey.update.options-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	updateAssertion := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.update", SchemaID: "identity.passkey.update.assertion-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	deleteOptions := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.delete", SchemaID: "identity.passkey.delete.options-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	deleteAssertion := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.delete", SchemaID: "identity.passkey.delete.assertion-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	enrollmentAssertion := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.register-options", SchemaID: "identity.passkey.register-options.session-assertion-options-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	enrollmentRegistration := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.register-options", SchemaID: "identity.passkey.register-options.session-registration-options-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	enrollmentComplete := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.register-verify", SchemaID: "identity.passkey.register-verify.session-registration-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
@@ -82,6 +84,17 @@ func RequirePasskeySessionFactors(ctx context.Context, w kernel.Work, owner kern
 		// assertion to the target metadata. These are metadata versions, not
 		// session or protocol-counter versions; factor authority never advances.
 		if life.EventType != "identity.passkey.rename_credential" || life.EventIndex != 0 || life.BeforeVersion == 0 || life.BeforeVersion == ^uint64(0) || life.AfterVersion != life.BeforeVersion+1 {
+			return invalidAuthority()
+		}
+	case f.Operation == deleteOptions && f.Contributor == passkeyOwner:
+		if b.RecordID != string(b.CommandID) || life != (kernel.LifecyclePlan{EventType: "passkey.reauthentication.started.v1", AfterVersion: 1}) {
+			return invalidAuthority()
+		}
+	case f.Operation == deleteAssertion && f.Contributor == passkeyOwner:
+		// Native/protocol owners prove original session UV and last-path safety.
+		// This guard retains the same known-empty generation even when this Work
+		// removes its authenticating key; it cannot adopt or mutate factor state.
+		if life.EventType != "identity.passkey.remove_credential" || life.EventIndex != 0 || life.BeforeVersion == 0 || life.BeforeVersion == ^uint64(0) || life.AfterVersion != life.BeforeVersion+1 {
 			return invalidAuthority()
 		}
 	case (f.Operation == enrollmentAssertion || f.Operation == enrollmentRegistration || f.Operation == enrollmentComplete) && f.Contributor == passkeyOwner:

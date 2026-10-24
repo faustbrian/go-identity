@@ -78,8 +78,10 @@ func (w Work) requirePasskeyRemovalScope(ctx context.Context, owner FeatureExecu
 	b, feature, lifecycle, err := w.FeatureScope(owner)
 	s, ok := command.Feature()
 	op := identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.delete", SchemaID: "identity.passkey.delete.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	assertion := op
+	assertion.SchemaID = "identity.passkey.delete.assertion-v1"
 	descriptor := ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
-	if err != nil || !ok || s.Binding != b || s.Operation != op || feature.Operation != op || feature.Contributor != descriptor || lifecycle.EventType != "identity.passkey.remove_credential" || lifecycle.BeforeVersion != c.Version || lifecycle.AfterVersion != c.Version+1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || !passkeyCredentialRemovalMatches(s, c, a) {
+	if err != nil || !ok || s.Binding != b || (s.Operation != op && s.Operation != assertion) || feature.Operation != s.Operation || feature.Contributor != descriptor || lifecycle.EventType != "identity.passkey.remove_credential" || lifecycle.EventIndex != 0 || lifecycle.BeforeVersion != c.Version || lifecycle.AfterVersion != c.Version+1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || !passkeyCredentialRemovalMatches(s, c, a) {
 		return w.fail(ctx, invalidPasskeyCredentialRemoval())
 	}
 	if err := ctx.Err(); err != nil {
@@ -91,7 +93,8 @@ func (w Work) requirePasskeyRemovalScope(ctx context.Context, owner FeatureExecu
 // RemovePasskeyCredential disables and advances only the exact original
 // passkey reference during its registered native Apply invocation. The original
 // command must bind PasskeyCredentialRemovalFields and the canonical removal
-// lifecycle. Primary user/reference locks, original epochs and current expiry
+// lifecycle at index zero under the exact native-v1 or assertion-v1 schema;
+// deletion options cannot remove a reference. Primary locks and current expiry
 // are fenced through the sole coordinator Work; every live rejection poisons it.
 // Disabled references remain reserved and cannot be removed twice or restored.
 //

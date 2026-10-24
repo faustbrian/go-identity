@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit exact current-session passkey assertion removal in the original Work,
+  preserving disabled-reference reservations and independent user epochs.
+  Options and aliased schemas cannot remove credentials; canonical removal
+  requires event index zero. Native UV, usable recovery, protocol/mapping
+  effects and passkey-session invalidation remain required in that same Work.
+
 - Admit initial credential creation in the exact current-session additional-
   passkey enrollment profile. Preserve original user security epochs and require
   the canonical creation lifecycle; the historical lifecycle alias remains
