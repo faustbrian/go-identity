@@ -20,7 +20,7 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // credential response custody. This non-streaming JSON profile buffers bounded
 // responses until all synchronous hooks return; no goroutine owns delivery.
 func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.Update != nil && c.SessionUpdate != nil {
+	if c.Update != nil && c.SessionUpdate != nil || c.Registration != nil && c.SessionEnrollment != nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var ops []identityhttp.OperationDescriptor
@@ -31,7 +31,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 		csrf := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}
 		switch name {
 		case "register-options", "register-verify":
-			if c.Registration != nil {
+			if c.Registration != nil || c.SessionEnrollment != nil {
 				mode := identityhttp.CSRFSessionState
 				if c.Signup != nil {
 					mode = identityhttp.CSRFVariantOriginSessionState
@@ -51,7 +51,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 		ops = append(ops, op)
 		return nil
 	}
-	if c.Registration != nil || c.Signup != nil {
+	if c.Registration != nil || c.SessionEnrollment != nil || c.Signup != nil {
 		for _, complete := range []bool{false, true} {
 			name := "register-options"
 			if complete {

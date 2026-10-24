@@ -255,14 +255,18 @@ type InventoryConfig struct {
 // of the same canonical registration pair. Combined Registration+Signup must
 // share ingress limits/host/proxy mapping, Origin, session cookie and actual
 // rate-owner pointers. The closed mode discriminator never falls back between
-// branches. At least one group is required; no conditional UI or MFA fallback
-// is selected.
+// branches. SessionEnrollment is the alternative current-session UV enrollment
+// profile and shares the same strict selection rules with Signup. At least one
+// group is required; no browser UI or MFA fallback is selected.
 type FeatureConfig struct {
 	Registration *RegistrationConfig
-	Signup       *SignupConfig
-	Signin       *SigninConfig
-	Inventory    *InventoryConfig
-	Update       *UpdateConfig
+	// SessionEnrollment selects current-session genuine-UV additional-key
+	// enrollment instead of the legacy password-proof Registration profile.
+	SessionEnrollment *SessionEnrollmentConfig
+	Signup            *SignupConfig
+	Signin            *SigninConfig
+	Inventory         *InventoryConfig
+	Update            *UpdateConfig
 	// SessionUpdate explicitly selects current-session UV options/completion
 	// at the update route. It is mutually exclusive with the password profile.
 	SessionUpdate *SessionUpdateConfig

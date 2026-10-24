@@ -14,14 +14,15 @@ import (
 // Body fields are locators or untrusted intent, never authentication. The native
 // owner supplies the tenant, RP, authenticated user and original remember policy.
 type requestBody struct {
-	flowID, commandID, ceremonyID, proofID string
-	identifier, label                      string
-	discoverable                           bool
-	signup                                 bool
-	sessionOptions                         bool
-	response                               json.RawMessage
-	referenceID, name                      string
-	expectedVersion                        uint64
+	flowID, commandID, ceremonyID, proofID    string
+	identifier, label                         string
+	discoverable                              bool
+	signup                                    bool
+	sessionOptions                            bool
+	sessionEnrollment, enrollmentRegistration bool
+	response                                  json.RawMessage
+	referenceID, name                         string
+	expectedVersion                           uint64
 }
 
 func decodeBody(operation string, fields map[string]json.RawMessage) (requestBody, error) {
@@ -91,22 +92,63 @@ func decodeBody(operation string, fields map[string]json.RawMessage) (requestBod
 		}
 	case "register-options", "register-verify":
 		if _, selected := fields["mode"]; selected {
-			allowed["mode"], allowed["flowID"] = true, true
+			allowed["mode"] = true
 			var mode string
-			if !text("mode", &mode) || mode != "signup" || !text("flowID", &out.flowID) {
+			if !text("mode", &mode) {
 				return invalid()
 			}
-			if _, err := identity.ParsePreAuthTransactionID(out.flowID); err != nil {
+			switch mode {
+			case "signup":
+				allowed["flowID"] = true
+				if !text("flowID", &out.flowID) {
+					return invalid()
+				}
+				if _, err := identity.ParsePreAuthTransactionID(out.flowID); err != nil {
+					return invalid()
+				}
+				out.signup = true
+			case "session":
+				out.sessionEnrollment = true
+				allowed["label"] = true
+				if _, present := fields["label"]; present {
+					if !text("label", &out.label) {
+						return invalid()
+					}
+					if out.label != "" {
+						if _, err := passkey.NewDeviceLabel(out.label); err != nil {
+							return invalid()
+						}
+					}
+				}
+				if !completion {
+					allowed["phase"] = true
+					var phase string
+					if !text("phase", &phase) || phase != "assertion" && phase != "registration" {
+						return invalid()
+					}
+					out.enrollmentRegistration = phase == "registration"
+					if out.enrollmentRegistration {
+						allowed["ceremonyID"], allowed["response"] = true, true
+						if !command("ceremonyID", &out.ceremonyID) {
+							return invalid()
+						}
+						raw := bytes.TrimSpace(fields["response"])
+						if len(raw) < 2 || len(raw) > 262144 || raw[0] != '{' || !json.Valid(raw) || !utf8.Valid(raw) {
+							return invalid()
+						}
+						out.response = fields["response"]
+					}
+				}
+			default:
 				return invalid()
 			}
-			out.signup = true
 		} else {
 			allowed["proofID"] = true
 			if !command("proofID", &out.proofID) {
 				return invalid()
 			}
 		}
-		if completion {
+		if completion && !out.sessionEnrollment {
 			allowed["label"] = true
 			if _, present := fields["label"]; present && (!text("label", &out.label) || len(out.label) > 128 || !utf8.ValidString(out.label)) {
 				return invalid()

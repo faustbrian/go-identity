@@ -37,6 +37,9 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		{5, deleteWire},
 		{6, sessionUpdateOptionsWire},
 		{6, sessionUpdateCompleteWire},
+		{0, enrollmentAssertionWire},
+		{0, enrollmentRegistrationWire},
+		{1, enrollmentCompleteWire},
 		{5, `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","referenceID":"AAAAAAAAAAAAAAAAAAAAAg","expectedVersion":18446744073709551615}`},
 	} {
 		f.Add(seed.mode, seed.wire)
@@ -57,7 +60,7 @@ func FuzzPasskeyHTTPBody(f *testing.F) {
 		}
 		operations := []string{"register-options", "register-verify", "signin-options", "signin-verify", "update", "delete", "session-update"}
 		out, err := decodeBody(operations[int(mode)%len(operations)], fields)
-		if err == nil && (out.discoverable && out.identifier != "" || out.signup && (out.proofID != "" || out.flowID == "" || out.discoverable) || len(out.response) > 262144 || len(out.label) > 128 || len(out.identifier) > 320) {
+		if err == nil && (out.discoverable && out.identifier != "" || out.signup && (out.proofID != "" || out.flowID == "" || out.discoverable) || out.sessionEnrollment && (out.signup || out.proofID != "" || out.flowID != "" || out.discoverable || out.identifier != "") || len(out.response) > 262144 || len(out.label) > 128 || len(out.identifier) > 320) {
 			t.Fatal("admitted body escaped fixed bounds/mode")
 		}
 	})

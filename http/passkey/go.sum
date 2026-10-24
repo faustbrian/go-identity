@@ -48,6 +48,8 @@ github.com/faustbrian/go-passkey v0.0.0-20261024033855-c0819f95259f h1:JPMlLE9SH
 github.com/faustbrian/go-passkey v0.0.0-20261024033855-c0819f95259f/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
 github.com/faustbrian/go-passkey v0.0.0-20261024051723-b9b8df7baab6 h1:+/zR0jLIDRYAqYWi4ok2ngLpa6WzgXkXwzJY7zX/2vo=
 github.com/faustbrian/go-passkey v0.0.0-20261024051723-b9b8df7baab6/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
+github.com/faustbrian/go-passkey v0.0.0-20261024071202-2aeb513a8aeb h1:ZI8j+2JrlxGJZ6WTAMfU/tkHNPy2dX3z5pfVCgUA9Eo=
+github.com/faustbrian/go-passkey v0.0.0-20261024071202-2aeb513a8aeb/go.mod h1:jOUhuyTXzRDs7vkb951iukmotuOZeWrSbjnuHH0v7aY=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff h1:8BIB469appqyn79T6j/sJQAS3dN6+budadfpPLwtqIg=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff/go.mod h1:Tqc83xc8RVAsi6JAW3dkKM1OFVos7cfayeNHBbWstsA=
 github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1 h1:wClLzW8mUPmV7ilNALEIP0wJZ8LFWjb0nmGKh7LmDGw=

@@ -30,7 +30,7 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	if !list {
 		parameters = append(parameters, map[string]any{"name": "Origin", "in": "header", "required": true, "schema": wireText(2048)})
 	}
-	if registration && c.Registration != nil || management {
+	if registration && (c.Registration != nil || c.SessionEnrollment != nil) || management {
 		description := "Original stored-session synchronizer; required with exact Origin."
 		if registration && c.Signup != nil {
 			description = "Required for the enrollment branch; forbidden for explicit signup."
@@ -63,6 +63,9 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 			required = append(required, "commandID", "ceremonyID", "response")
 		}
 		request = wireObject(required, fields)
+		if c.SessionEnrollment != nil {
+			request = sessionEnrollmentRequestWire(options)
+		}
 		if c.Signup != nil {
 			fields, required := map[string]any{"mode": map[string]any{"const": "signup"}, "flowID": wireID()}, []string{"mode", "flowID"}
 			if !options {
@@ -70,7 +73,7 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 				required = append(required, "commandID", "ceremonyID", "response")
 			}
 			signup := wireObject(required, fields)
-			if c.Registration != nil {
+			if c.Registration != nil || c.SessionEnrollment != nil {
 				request = map[string]any{"oneOf": []any{request, signup}}
 			} else {
 				request = signup
@@ -113,6 +116,13 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		}
 	case options:
 		var browserOptions any = protocolOptionsWire(registration)
+		if registration && c.SessionEnrollment != nil {
+			assertion := protocolOptionsWire(false)
+			key := assertion["properties"].(map[string]any)["publicKey"].(map[string]any)
+			key["properties"].(map[string]any)["allowCredentials"] = map[string]any{"type": "array", "minItems": 1, "maxItems": 1, "items": wireObject([]string{"type", "id"}, map[string]any{"type": map[string]any{"const": "public-key"}, "id": wireText(1366)})}
+			key["required"] = append(key["required"].([]string), "allowCredentials")
+			browserOptions = map[string]any{"oneOf": []any{assertion, browserOptions}}
+		}
 		if !registration && c.Signin.Conditional {
 			conditional := protocolOptionsWire(false)
 			conditional["required"] = []string{"publicKey", "mediation"}
@@ -128,9 +138,14 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		success = map[string]any{"oneOf": []any{fresh, replay}}
 	case registration:
 		success = wireObject([]string{"registered", "commandID", "commitOutcome"}, map[string]any{"registered": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}})
+		if c.SessionEnrollment != nil {
+			fresh := wireObject([]string{"registered", "commandID", "commitOutcome", "replayed"}, map[string]any{"registered": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": false}, "credential": metadataWire()})
+			replay := wireObject([]string{"registered", "commandID", "commitOutcome", "replayed"}, map[string]any{"registered": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "replayed": map[string]any{"const": true}})
+			success = map[string]any{"oneOf": []any{fresh, replay}}
+		}
 		if c.Signup != nil {
 			signup := wireObject([]string{"registered", "signedIn", "commandID", "commitOutcome", "sessionID", "counterRisk"}, map[string]any{"registered": map[string]any{"const": true}, "signedIn": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "sessionID": wireText(128), "counterRisk": map[string]any{"const": false}})
-			if c.Registration != nil {
+			if c.Registration != nil || c.SessionEnrollment != nil {
 				success = map[string]any{"oneOf": []any{success, signup}}
 			} else {
 				success = signup
@@ -168,6 +183,12 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	if registration && c.Signup != nil {
 		operation["description"] = "Explicit passkey registration variants. Signup requires mode=signup, original flow/device cookies and exact Origin; session cookies, session CSRF and proofID are forbidden. Enrollment, when selected, retains its unchanged proofID/session/synchronizer contract with no mode field. Neither branch falls back after failure. Options require the original header-only Idempotency-Key; completion forbids it. Only fresh committed signup issues a session cookie and synchronizer. Native risk, protocol, account/session transaction and metadata-only recovery remain authoritative. No browser identity, RP or remember override is accepted."
 	}
+	if registration && c.SessionEnrollment != nil {
+		operation["description"] = "Explicit password-free additional-key enrollment. mode=session requires current cookie session, stored synchronizer and exact Origin. Options phase=assertion binds optional label to a genuine UV ceremony; phase=registration repeats that label and supplies the original ceremonyID and assertion under a distinct header-only key. Completion repeats mode/label with original commandID/ceremonyID and registration response, forbidding phase and keys. No password proof, device cookie, body identity, RP, remember or session override. Native original source owns completion rate identity. Fresh B delivery retains A's genuine original absolute ceiling through hooks, never B's later TTL. Matching retries expose durability only; this profile never issues a session or synchronizer."
+		if c.Signup != nil {
+			operation["description"] = operation["description"].(string) + " Explicit mode=signup separately retains original flow/device custody without session/CSRF authority. The strict selected dispatcher never falls back. Only fresh committed signup may issue a session cookie and synchronizer."
+		}
+	}
 	if !list {
 		operation["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}}
 	}
@@ -194,7 +215,10 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		}
 		cookie("Session", cookieName)
 	case registration:
-		if c.Registration != nil {
+		if c.SessionEnrollment != nil {
+			policy, _ := c.SessionEnrollment.SessionCookie.DeletionAttributes()
+			cookie("Session", policy.Name)
+		} else if c.Registration != nil {
 			policy, _ := c.Registration.SessionCookie.DeletionAttributes()
 			cookie("Session", policy.Name)
 		} else {
@@ -208,21 +232,54 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		policy, _ := c.Signin.FlowCookie.DeletionAttributes()
 		cookie("Flow", policy.Name)
 	}
-	if !list && !management {
+	if !list && !management && (!registration || c.SessionEnrollment == nil) {
 		cookie("Device", "__Host-identity_device")
 	}
 	operation["security"] = []any{security}
-	if registration && c.Signup != nil && c.Registration != nil {
+	if registration && c.Signup != nil && (c.Registration != nil || c.SessionEnrollment != nil) {
 		// Security Requirement entries are alternatives, not an AND of an
-		// anonymous flow and an authenticated session. Device is common to both.
+		// anonymous flow and an authenticated session. Only legacy password-proof
+		// enrollment shares signup's device-cookie prerequisite.
 		enrollment := security
-		security = map[string]any{prefix + "Device": []any{}}
+		security = map[string]any{}
+		if c.SessionEnrollment != nil {
+			cookie("Device", "__Host-identity_device")
+		} else {
+			security[prefix+"Device"] = []any{}
+		}
 		policy, _ := c.Signup.FlowCookie.DeletionAttributes()
 		cookie("Flow", policy.Name)
 		operation["security"] = []any{enrollment, security}
 	}
 	definition, _ := json.Marshal(operation)
 	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: schemes}
+}
+
+func sessionEnrollmentRequestWire(options bool) any {
+	variant := func(registration bool) any {
+		fields := map[string]any{"mode": map[string]any{"const": "session"}, "label": map[string]any{"type": "string", "maxLength": 128, "description": "Optional exact display label, empty or at most128 UTF-8 bytes, non-whitespace and without controls. Repeat unchanged across phases."}}
+		required := []string{"mode"}
+		if options {
+			phase := "assertion"
+			if registration {
+				phase = "registration"
+			}
+			fields["phase"] = map[string]any{"const": phase}
+			required = append(required, "phase")
+		} else {
+			fields["commandID"] = wireID()
+			required = append(required, "commandID")
+		}
+		if registration || !options {
+			fields["ceremonyID"], fields["response"] = wireID(), browserResponseWire(!options)
+			required = append(required, "ceremonyID", "response")
+		}
+		return wireObject(required, fields)
+	}
+	if options {
+		return map[string]any{"oneOf": []any{variant(false), variant(true)}}
+	}
+	return variant(true)
 }
 
 func sessionReferenceWire() any {

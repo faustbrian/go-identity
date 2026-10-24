@@ -4,6 +4,46 @@ This nested module contributes only explicitly selected cookie-only passkey
 operations. The base HTTP module imports neither this package nor a
 PostgreSQL adapter. Omitting the feature exposes no passkey routes or metadata.
 
+## Password-free additional-key enrollment
+
+Select `FeatureConfig.SessionEnrollment` with `SessionEnrollmentConfig`, borrowing
+the actual native enrollment owner, current session reader, retained synchronizer
+keys and shared options/verification limiters. It is mutually exclusive with
+password-proof `Registration`. No password verifier or browser-device cookie is
+required, and no phase issues or renews a session.
+
+All three requests require the current secure session cookie, exact trusted
+Origin and original `X-CSRF-Token`. Keep the optional `label` unchanged:
+
+1. POST `/v1/passkey/register-options` with an original `Idempotency-Key` and
+   `{"mode":"session","phase":"assertion","label":"Additional key"}`.
+   Deserialize the fresh `options.publicKey` and obtain a genuine UV assertion.
+2. POST the same route with a **different** original header key,
+   `mode:"session"`, `phase:"registration"`, the same `label`, the first response's
+   `commandID` as `ceremonyID`, and the raw assertion as `response`. Deserialize
+   the fresh creation options and perform resident-key registration. Delivery
+   remains bounded by the genuine original assertion expiry even when these
+   registration options have a later protocol expiry.
+3. POST `/v1/passkey/register-verify` with `mode:"session"`, the same `label`, an
+   original canonical completion `commandID`, the second response's `commandID`
+   as `ceremonyID`, and the raw registration `response`. This phase forbids
+   `phase` and `Idempotency-Key`. Retain that exact command and body for recovery;
+   never allocate a new completion command after an unknown outcome.
+
+Options use canonical `rate.auth`; completion uses `rate.verify` with the native
+owner's authenticated original user/challenge, not browser-selected buckets.
+Fresh completion returns `registered`, original durability and optionally safe
+credential metadata. Retries expose original durability without another
+challenge or credential projection. Original cookie/CSRF/self policy and native
+protocol/current-authority checks remain mandatory on every retry. No proof ID,
+identity/RP/remember override, private proof store or alternate endpoint exists.
+
+`Signup` may share this canonical pair only with identical ingress, Origin,
+session-cookie policy and actual shared rate-owner pointers. Its existing explicit
+`mode:"signup"` flow/device profile remains separate from `mode:"session"`;
+unsupported modes and failed branches never fall back. Session-only selection
+advertises no signup, proof or device prerequisite.
+
 ## Password-free session-bound rename
 
 Select `FeatureConfig.SessionUpdate` with a `SessionUpdateConfig` borrowing the
@@ -65,8 +105,8 @@ requests and outlive the handlers.
 
 | Path | Body/query | Idempotency-Key |
 | --- | --- | --- |
-| POST `/v1/passkey/register-options` | Enrollment: `proofID`; signup: `mode:"signup"`, `flowID` | Required |
-| POST `/v1/passkey/register-verify` | Same selected registration variant plus `commandID`, `ceremonyID`, `response`, optional `label` | Forbidden |
+| POST `/v1/passkey/register-options` | Password profile: `proofID`; session profile: `mode:"session"`, `phase:"assertion"` or `"registration"`, optional original `label`, latter adds original `ceremonyID`/assertion `response`; signup: `mode:"signup"`, `flowID` | Required |
+| POST `/v1/passkey/register-verify` | Same selected registration mode/intent plus `commandID`, `ceremonyID`, registration `response`, optional `label`; no session-profile `phase` | Forbidden |
 | POST `/v1/passkey/signin-options` | `mode`, `flowID`, identified `identifier` | Required |
 | POST `/v1/passkey/signin-verify` | Same original mode/flow/identifier plus `commandID`, `ceremonyID`, `response` | Forbidden |
 | GET `/v1/passkey/list` | Optional `after`, `limit` (1..100, default100) | Forbidden |

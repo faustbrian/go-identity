@@ -32,6 +32,15 @@ func selectedRegistrationHandler(c FeatureConfig, m []identityhttp.MiddlewareDes
 			return nil, err
 		}
 	}
+	if c.SessionEnrollment != nil {
+		if c.Registration != nil {
+			return nil, identityhttp.ErrInvalidInput
+		}
+		enrollment, err = newSessionEnrollmentHandler(*c.SessionEnrollment, m, complete)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if c.Signup != nil {
 		signup, err = newSignupHandler(*c.Signup, m, complete)
 		if err != nil {
@@ -46,8 +55,15 @@ func selectedRegistrationHandler(c FeatureConfig, m []identityhttp.MiddlewareDes
 	}
 	// One public route has one ingress profile and shared rate identities.
 	// Host/proxy admission is still performed by the selected branch itself.
-	a, b := c.Registration.Network, c.Signup.Network
-	if a.Limits != b.Limits || a.MaximumForwardedHops != b.MaximumForwardedHops || !slices.Equal(a.TrustedProxyCIDRs, b.TrustedProxyCIDRs) || !slices.Equal(a.TenantHosts, b.TenantHosts) || !slices.Equal(a.PublicHosts, b.PublicHosts) || c.Registration.Origin != c.Signup.Origin || c.Registration.SessionCookie != c.Signup.SessionCookie || c.Registration.OptionsRate != c.Signup.OptionsRate || c.Registration.VerificationRate != c.Signup.VerificationRate {
+	var selected RegistrationConfig
+	if c.Registration != nil {
+		selected = *c.Registration
+	} else {
+		a := c.SessionEnrollment
+		selected = RegistrationConfig{Network: a.Network, Origin: a.Origin, SessionCookie: a.SessionCookie, OptionsRate: a.OptionsRate, VerificationRate: a.VerificationRate, MaximumDuration: a.MaximumDuration}
+	}
+	a, b := selected.Network, c.Signup.Network
+	if a.Limits != b.Limits || a.MaximumForwardedHops != b.MaximumForwardedHops || !slices.Equal(a.TrustedProxyCIDRs, b.TrustedProxyCIDRs) || !slices.Equal(a.TenantHosts, b.TenantHosts) || !slices.Equal(a.PublicHosts, b.PublicHosts) || selected.Origin != c.Signup.Origin || selected.SessionCookie != c.Signup.SessionCookie || selected.OptionsRate != c.Signup.OptionsRate || selected.VerificationRate != c.Signup.VerificationRate {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	decoder, err := identityhttp.NewRequestDecoder(c.Signup.Network.Limits)
@@ -58,7 +74,7 @@ func selectedRegistrationHandler(c FeatureConfig, m []identityhttp.MiddlewareDes
 	if complete {
 		operation = "register-verify"
 	}
-	return &registrationDispatcher{enrollment: enrollment, signup: signup, decoder: decoder, operation: operation, maximum: min(c.Registration.MaximumDuration, c.Signup.MaximumDuration)}, nil
+	return &registrationDispatcher{enrollment: enrollment, signup: signup, decoder: decoder, operation: operation, maximum: min(selected.MaximumDuration, c.Signup.MaximumDuration)}, nil
 }
 
 func (d *registrationDispatcher) WithOperationMiddleware(m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {

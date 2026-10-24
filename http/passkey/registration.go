@@ -124,7 +124,7 @@ func newRegistrationHandler(c RegistrationConfig, m []identityhttp.MiddlewareDes
 			if err != nil {
 				return s, err
 			}
-			if body.signup {
+			if body.signup || body.sessionEnrollment {
 				return s, identityhttp.ErrInvalidInput
 			}
 			s.facts, s.body, s.key = facts, body, key

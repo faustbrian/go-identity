@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Explicitly select password-free additional-key enrollment with
+  `SessionEnrollment` on the existing registration route pair. Current cookie,
+  stored CSRF and genuine action-bound UV authorize resident-key registration;
+  distinct options keys and original completion identity preserve recovery.
+  Final creation-options delivery retains the original assertion expiry through
+  hooks. Retries disclose durability only, and enrollment never issues a session.
+  The legacy password-proof profile remains unchanged and mutually exclusive;
+  selected signup retains its separate original-flow/device contract.
+
 - Explicitly select password-free credential renaming with `SessionUpdate`.
   The update route accepts closed options/completion phases using the current
   session, stored CSRF and genuine action-bound UV assertion. Each phase keeps
