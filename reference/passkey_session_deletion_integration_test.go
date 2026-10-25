@@ -13,6 +13,7 @@ import (
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
 	passkey "github.com/faustbrian/go-passkey"
+	webauthn "github.com/faustbrian/go-webauthn"
 )
 
 func TestReferencePostgresPasskeySessionDeletion(t *testing.T) {
@@ -50,7 +51,17 @@ func referenceRemovalCredential(t *testing.T, kind session.CredentialKind, token
 	return credential, synchronizer
 }
 
-func referenceRemovalSignin(t *testing.T, ctx context.Context, owner *reference.PasskeyService, c reference.StoreConfiguration, key crypto.Signer, id, handle []byte, count uint32) passkey.SigninResult {
+type removalSessionResult struct {
+	Session session.IssueResult
+	CSRF    session.CSRFToken
+}
+
+type removalSessionCompletion struct {
+	discoverable bool
+	finish       func(passkey.SigninResult, passkey.DiscoverableSigninRequest, string) removalSessionResult
+}
+
+func referenceRemovalSignin(t *testing.T, ctx context.Context, owner *reference.PasskeyService, c reference.StoreConfiguration, key crypto.Signer, id, handle []byte, count uint32, finish ...removalSessionCompletion) removalSessionResult {
 	t.Helper()
 	command, err := identity.NewCommandID()
 	if err != nil {
@@ -72,12 +83,27 @@ func referenceRemovalSignin(t *testing.T, ctx context.Context, owner *reference.
 	if err != nil {
 		t.Fatal(err)
 	}
+	cookieWire, err := issued.Token.Reveal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserCookie, err := session.ParseToken(cookieWire)
+	if err != nil {
+		t.Fatal(err)
+	}
 	optionsID, err := identity.NewCommandID()
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := passkey.DiscoverableSigninRequest{CommandID: optionsID, FlowID: flow.Binding.ID, Cookie: issued.Token, Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1", Device: "reference-passkey", CorrelationID: "removal-survivor-signin"}
-	options, err := owner.DiscoverableAuthenticationOptions(ctx, r)
+	r := passkey.DiscoverableSigninRequest{CommandID: optionsID, FlowID: flow.Binding.ID, Cookie: browserCookie, Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1", Device: "reference-passkey", CorrelationID: "removal-survivor-signin"}
+	discoverable := len(finish) == 0 || finish[0].discoverable
+	identified := passkey.SigninRequest{CommandID: r.CommandID, FlowID: r.FlowID, Cookie: r.Cookie, Identifier: "registered@example.invalid", Origin: r.Origin, Network: r.Network, Device: r.Device, CorrelationID: r.CorrelationID}
+	var options webauthn.AssertionOptions
+	if discoverable {
+		options, err = owner.DiscoverableAuthenticationOptions(ctx, r)
+	} else {
+		options, err = owner.AuthenticationOptions(ctx, identified)
+	}
 	if err != nil {
 		t.Fatal("surviving-key discovery options", err)
 	}
@@ -90,16 +116,26 @@ func referenceRemovalSignin(t *testing.T, ctx context.Context, owner *reference.
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := owner.DiscoverableSignin(ctx, passkey.DiscoverableSigninCompletion{DiscoverableSigninRequest: r, CeremonyID: ceremony.ID, Response: referencePasskeyAssertion(t, key, id, handle, challenge, count)})
+	identified.CommandID = r.CommandID
+	response := referencePasskeyAssertion(t, key, id, handle, challenge, count)
+	var out passkey.SigninResult
+	if discoverable {
+		out, err = owner.DiscoverableSignin(ctx, passkey.DiscoverableSigninCompletion{DiscoverableSigninRequest: r, CeremonyID: ceremony.ID, Response: response})
+	} else {
+		out, err = owner.Signin(ctx, passkey.SigninCompletion{SigninRequest: identified, CeremonyID: ceremony.ID, Response: response})
+	}
 	if err != nil {
 		t.Fatal("surviving key cannot obtain a genuine new session", err)
 	}
-	return out
+	if len(finish) != 0 {
+		return finish[0].finish(out, r, cookieWire)
+	}
+	return removalSessionResult{Session: out.Session, CSRF: out.CSRF}
 }
 
 // Signup and both resident keys are created by their actual public owners.
 // The controlled external authenticator supplies only genuine protocol crypto.
-func proveReferenceSessionDeletion(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey crypto.Signer, firstID, handle []byte, firstCounter uint32, secondKey crypto.Signer, secondID []byte, second passkey.CredentialMetadata) {
+func proveReferenceSessionDeletion(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, handler http.Handler, user identity.UserID, bearer, csrf string, firstKey crypto.Signer, firstID, handle []byte, firstCounter uint32, secondKey crypto.Signer, secondID []byte, second passkey.CredentialMetadata, finish ...removalSessionCompletion) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -135,7 +171,11 @@ func proveReferenceSessionDeletion(t *testing.T, ctx context.Context, features r
 		remainingKey, remainingID, remainingCounter = secondKey, secondID, 1
 	}
 	caller.Request.Action = "identity.passkey.delete"
-	intent := passkey.SessionDeleteRequestSpec{Credential: credential, CSRFToken: synchronizer, Caller: caller, ReferenceID: identity.CredentialID(target.ReferenceID), ExpectedVersion: target.Version, Origin: c.Passkey.Signup.Flow.Origin, Network: "127.0.0.1"}
+	origin := c.Passkey.Flow.Origin
+	if c.Passkey.Signup != nil {
+		origin = c.Passkey.Signup.Flow.Origin
+	}
+	intent := passkey.SessionDeleteRequestSpec{Credential: credential, CSRFToken: synchronizer, Caller: caller, ReferenceID: identity.CredentialID(target.ReferenceID), ExpectedVersion: target.Version, Origin: origin, Network: "127.0.0.1"}
 	keyA, _ := identity.NewIdempotencyKey([]byte("reference-removal-A"))
 	keyB, _ := identity.NewIdempotencyKey([]byte("reference-removal-B"))
 	a := passkey.SessionDeleteOptionsRequest{SessionDeleteRequest: passkey.NewSessionDeleteRequest(intent), IdempotencyKey: keyA}
@@ -173,7 +213,7 @@ func proveReferenceSessionDeletion(t *testing.T, ctx context.Context, features r
 	if _, err := removal.RecoverDelete(ctx, a.SessionDeleteRequest, query); err == nil {
 		t.Fatal("revoked original source obtained recovery metadata")
 	}
-	next := referenceRemovalSignin(t, ctx, owner, c, remainingKey, remainingID, handle, remainingCounter)
+	next := referenceRemovalSignin(t, ctx, owner, c, remainingKey, remainingID, handle, remainingCounter, finish...)
 	newBearer, err := next.Session.Token.Reveal()
 	if err != nil {
 		t.Fatal(err)

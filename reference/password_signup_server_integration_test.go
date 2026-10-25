@@ -291,6 +291,7 @@ type signupGraphExtensions struct {
 	passkeyTOTP           bool
 	passkeyTOTPManagement bool
 	passkeyTOTPEnrollment bool
+	passkeyTOTPDeletion   bool
 	mfaOTPDisable         bool
 	mfaOTPDisableAll      bool
 	mfaOTPActiveCase      string
@@ -617,6 +618,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		if extensions.passkeyTOTPEnrollment {
 			c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie, TOTP: true}
+		}
+		if extensions.passkeyTOTPDeletion {
+			c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie, TOTP: true}
+			c.Passkey.SessionDeletion = &reference.PasskeySessionDeletionConfiguration{Transport: session.CredentialCookie, TOTP: true}
 		}
 	}
 	if extensions.mfaOTPEnrollment {
@@ -1038,9 +1043,14 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		proveReferencePasskeyHTTPPrimarySelection(t, selected, deps)
 	}
-	if extensions.passkeyTOTPManagement || extensions.passkeyTOTPEnrollment {
+	if extensions.passkeyTOTPManagement || extensions.passkeyTOTPEnrollment || extensions.passkeyTOTPDeletion {
 		invalid, selected := c, *c.Passkey
 		selected.TOTP = nil
+		if extensions.passkeyTOTPDeletion {
+			// Isolate removal's dependency rather than failing first on the
+			// additional-enrollment profile used to create the second key.
+			selected.SessionEnrollment = nil
+		}
 		invalid.Passkey = &selected
 		if graph, err := reference.ComposeStores(invalid, deps); err == nil {
 			bounded, stop := context.WithTimeout(context.Background(), time.Second)

@@ -75,6 +75,22 @@ No account, factor secret, session or successful receipt is seeded.
 profiles through fresh UV, additional-key registration, two-key inventory,
 original metadata retries, a new-key MFA challenge and session read/logout.
 
+For resident-key removal, independently select `Passkey.SessionDeletion` with
+`TOTP:true`, exact transport and `Passkey.KeyedOptions`. The graph requires its
+native TOTP owner. Use the [existing removal API](#current-session-resident-key-removal)
+with a fresh action-bound UV assertion and another independently usable resident
+key. Confirmed factor/enrollment/generation, original session authority and
+positive-read ceilings remain fenced through Apply and final commit. Removal
+invalidates the old passkey generation; a surviving-key signin must complete
+TOTP before it can recover original metadata. Last-key removal remains denied.
+No HTTP selection, password fallback or replacement recovery authority is added.
+
+`TestReferencePasskeyTOTPKeyRemoval` proves both original signin profiles through
+genuine second-key enrollment, authenticating-key removal, old-session denial,
+surviving-key signin/TOTP, original metadata recovery, last-key protection and
+session read/logout. The fixture waits for a new real TOTP step before starting
+the next primary; it neither resets replay state nor renews frozen evidence.
+
 ### Opt-in HTTP original passkey plus TOTP
 
 Select `HTTPPasskey.Signin` and `HTTPPasskey.MFAContinuation` with native

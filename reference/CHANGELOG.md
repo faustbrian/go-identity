@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently select resident-key removal from completed passkey/TOTP
+  sessions with `Passkey.SessionDeletion.TOTP`. Preserve fresh UV, original
+  factor/session authority and another usable key; invalidate prior sessions
+  and require surviving-key TOTP before original metadata recovery. The graph
+  rejects a missing native TOTP owner. No new HTTP selection is added.
+
 - Independently select additional-key enrollment after completed passkey/TOTP
   signin with `Passkey.SessionEnrollment.TOTP`. Require the native TOTP owner
   and genuine fresh UV, retaining original factor/session authority, atomic

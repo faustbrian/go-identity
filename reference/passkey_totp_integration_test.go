@@ -60,6 +60,14 @@ func TestReferencePasskeyTOTPAdditionalKeyEnrollment(t *testing.T) {
 	}
 }
 
+func TestReferencePasskeyTOTPKeyRemoval(t *testing.T) {
+	for _, discoverable := range []bool{false, true} {
+		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyDiscovery: discoverable, passkeyTOTP: true, passkeyTOTPDeletion: true}, true)
+		})
+	}
+}
+
 func TestReferencePasskeyTOTPHTTPSFromRealEnrollment(t *testing.T) {
 	for _, discoverable := range []bool{false, true} {
 		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
@@ -133,7 +141,7 @@ func proveReferencePasskeyTOTPFromEnrollment(t *testing.T, ctx context.Context, 
 			if c.HTTPPasskey != nil && c.HTTPPasskey.MFAContinuation {
 				proveReferencePasskeyTOTPHTTPS(t, ctx, f, features, c, client, base, enrollmentOrigin, user, credential, key, id, factor, secret, discoverable, sessionHandler, document)
 			} else {
-				proveReferencePasskeyTOTP(t, ctx, f, features, c, client, base, enrollmentOrigin, user, credential, key, id, factor, secret, discoverable)
+				proveReferencePasskeyTOTP(t, ctx, f, features, c, client, base, enrollmentOrigin, user, credential, key, id, factor, secret, discoverable, sessionHandler)
 			}
 		}
 		token, err := session.ParseToken(cookies[0].Value)
@@ -154,7 +162,7 @@ func proveReferencePasskeyTOTPFromEnrollment(t *testing.T, ctx context.Context, 
 	})
 }
 
-func proveReferencePasskeyTOTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, c reference.StoreConfiguration, client *http.Client, base, logoutOrigin string, user identity.UserID, credential webauthn.Credential, key *ecdsa.PrivateKey, id []byte, factor mfa.FactorID, secret []byte, discoverable bool) {
+func proveReferencePasskeyTOTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, c reference.StoreConfiguration, client *http.Client, base, logoutOrigin string, user identity.UserID, credential webauthn.Credential, key *ecdsa.PrivateKey, id []byte, factor mfa.FactorID, secret []byte, discoverable bool, sessionHandler http.Handler) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -344,7 +352,12 @@ func proveReferencePasskeyTOTP(t *testing.T, ctx context.Context, f liveStores, 
 				t.Fatal("withdrawn original MFA authority admitted enrollment", table)
 			}
 		}
-		proveReferenceSessionEnrollment(t, ctx, features, c, nil, user, issuedCookie.Value, csrfWire, key, id, credential.UserHandle, 2, func(second crypto.Signer, secondID []byte, _ passkey.CredentialMetadata) {
+		proveReferenceSessionEnrollment(t, ctx, features, c, nil, user, issuedCookie.Value, csrfWire, key, id, credential.UserHandle, 2, func(second crypto.Signer, secondID []byte, secondMetadata passkey.CredentialMetadata) {
+			if c.Passkey.SessionDeletion != nil {
+				finish := referenceRemovalTOTPCompletion(t, ctx, f, features, c, user, factor, secret, discoverable)
+				proveReferenceSessionDeletion(t, ctx, features, c, sessionHandler, user, issuedCookie.Value, csrfWire, key, id, credential.UserHandle, 2, second, secondID, secondMetadata, finish)
+				return
+			}
 			// The new credential must be usable, but may not bypass the account's
 			// independent factor. Exercise the actual selected primary owner.
 			flowID, _ := identity.NewCommandID()
@@ -392,6 +405,11 @@ func proveReferencePasskeyTOTP(t *testing.T, ctx context.Context, f liveStores, 
 			}
 			_ = out.Challenge.Proof.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
 		})
+	}
+	if c.Passkey.SessionDeletion != nil {
+		// The genuine removal helper already proves old-session denial and
+		// surviving-key TOTP completion, original recovery and read/logout.
+		return
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, logoutOrigin, []*http.Cookie{&issuedCookie}, csrfWire, record.SessionID, f, features)
 }

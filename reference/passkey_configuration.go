@@ -412,7 +412,7 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	}
 	var sessionDeletion *native.SessionDeletionService
 	if n.SessionDeletion != nil {
-		if n.KeyedOptions == nil {
+		if n.KeyedOptions == nil || n.SessionDeletion.TOTP && n.TOTP == nil {
 			return nil, identity.InvalidInputError{Field: "reference_passkey_session_deletion"}
 		}
 		selected := *n.SessionDeletion
@@ -420,7 +420,7 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 		if selected.Transport == session.CredentialCookie {
 			csrf = slices.Clone(c.Session.CSRFKeys)
 		}
-		sessionDeletion, err = native.NewSessionDeletionService(d.PostgreSQL, native.SessionDeletionConfig{Protocol: n.Protocol, Profile: profile, Validation: validation, SessionRepository: e.Repository, OptionsRequests: keyed, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Transport: selected.Transport, CSRFKeys: csrf, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
+		sessionDeletion, err = native.NewSessionDeletionService(d.PostgreSQL, native.SessionDeletionConfig{Protocol: n.Protocol, Profile: profile, Validation: validation, SessionRepository: e.Repository, OptionsRequests: keyed, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Transport: selected.Transport, CSRFKeys: csrf, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion, TOTP: selected.TOTP})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: "reference_passkey_session_deletion"}
 		}

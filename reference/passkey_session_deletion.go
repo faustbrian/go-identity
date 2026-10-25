@@ -14,7 +14,12 @@ import (
 // remains. Transport must be
 // bearer or cookie; the graph injects original CSRF keys for cookies. KeyedOptions
 // is required. Selection enables no HTTP or password/OTP recovery fallback.
-type PasskeySessionDeletionConfiguration struct{ Transport session.CredentialKind }
+type PasskeySessionDeletionConfiguration struct {
+	Transport session.CredentialKind
+	// TOTP admits only completed passkey/TOTP sessions through the selected
+	// native owner. False preserves the ordinary known-empty profile.
+	TOTP bool
+}
 
 // Format redacts deployment selection.
 func (PasskeySessionDeletionConfiguration) Format(f fmt.State, _ rune) {

@@ -23,6 +23,13 @@ factor/session and assertion expiry, and returns only metadata on retries.
 The new key still requires independent MFA at signin. This native selection
 does not enable HTTP enrollment or MFA key removal.
 
+Independently set `Passkey.SessionDeletion.TOTP` with `Passkey.TOTP` and
+`Passkey.KeyedOptions` for resident-key removal from a completed MFA session.
+Fresh action-bound UV and another usable key are mandatory. Removal invalidates
+old sessions; surviving-key signin must complete TOTP before original metadata
+recovery and read/logout. The ordinary profile remains separate; this selection
+adds no HTTP route or secondary-factor fallback.
+
 For a passkey-only backend, explicitly select `Passkey.Standalone`,
 `Passkey.Signup`, `Session.Passkey` and durable PostgreSQL admission. The same
 sealed construction graph runs with no password, OTP or delivery configuration
