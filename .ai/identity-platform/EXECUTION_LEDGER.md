@@ -1,5 +1,111 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 21:26 UTC: primary HTTP MFA enrollment fresh identified journey
+42923 PASS10.916s on genuine UTF8 PostgreSQL/race. Exact registration receipt
+uses UTC while PostgreSQL inventory serializes its offset; compare time instants,
+not Go pointer/location identity, preserving every other metadata field. Prior
+41043/12849 were overly strict test oracles, not product regressions. No production
+source changed. Frozen8Referencepaths under totp_http_enrollment_final independent
+review; full four-profile plus retained native enrollment/HTTPrename cohort running.
+Capability main-triggered40234743200 now success on unchanged9c2e204. Worker
+authors legacy disclosure regression; compile/PG remains serialized.
+
+2026-10-25 21:22 UTC: M22 original-key native invitation-send profile CLOSED,
+not full M22. Actual downloaded native25e7a9e PG/race45294 PASS31.746s,
+normal public dependencies/no replacements; all10files byte-match reviewed
+commit and public sums above. Modules verified. Required40234771017 green;
+capability Required40234198266 green/exactmain9c2e204, main-triggered repeat
+40234743200 still pending. Worker removed exact downloaded-native PG child,
+returned heavy slot and preserved primaryroot. Owner/session/recipient final
+fences, no renewed proof/delivery and irreversible expiry/recovery all proven.
+
+Next organization lane frozen: legacy public InvitationService.Recover Send/
+Accept final-disclosure fences, based on native25e7a9e and unchanged publicpins.
+Worker owns ONLY postgres/invitation_recovery.go, a new bounded disclosure
+integration test, minimal invitation_consumer_integration_test.go dispatch,
+README.md and CHANGELOG.md. Reproduce original callback withdrawal using real
+signup/signin, send/delivery/accept provenance. Deny withdrawn current primary
+session, owner/member/org or exact verified recipient after relevant callbacks
+before returning any historical receipt. Reuse existing native final fences;
+do not renew observation, require membership for unjoined recipients, change
+history/outcome/proof/delivery or invent authority. Retain committed/rollback
+metadata semantics. No new public API, SQL migration, journal or handler.
+Checks: exact failing/passing PG/race cases, retained invitation operations and
+native recovery cohort, module race/taggedvet, scoped scanner, one independent
+complete review, main/CI/downloaded consumer. Primary owns integration/Git.
+Worker may code while primary HTTP enrollment owns the heavy slot; Go/PG
+tests wait for explicit handoff. Existing M22 primary cache root is transferred
+for this adjacent bounded follow-on, then must be cleaned when no longer needed.
+
+2026-10-25 21:20 UTC: M22 native25e7a9e1d4fdda08f253f4c5167666eedc27f1ac
+is exact origin/main; Required40234771017 success. Independent complete10path
+invitation_operation_final re-review APPROVE with final normal-public results:
+PG/race31.878s, native race1.351s, taggedvet0/modverifyall, scanner99.17KB clean.
+Capability9c2e204 exactorigin/main after green Required40234198266 on existing
+carrier; no code/history/protection changes during promotion. Main-triggered
+same-source run40234743200 remains distinct/pending, not a new local gate.
+Authenticated public native v0.0.0-20261025211634-25e7a9e1d4fd matches all10files,
+sumEkhWERWdiuU0qzvolaPCTxT7NfY5ZvHe1ojSLixcjQ8=,
+modsumiSLYSE+p9b2n5tn1p2wcucDjra/cHhbZwZoiI45ZRgY=.
+Worker owns actual downloaded-module consumer/PG heavy slot; no successor yet.
+M16 new HTTP enrollment source is characterization, no product source changed.
+First27227 fixture oracle incorrectly checked disabled ordinary registration;
+7161/16157 owned SQL_ASCII template encoding blocked UTF8 migration. Primary
+recreated only own disposable cluster explicitly UTF8; no product budgets or
+security relaxed. Heavy slot returned to worker until public native proof ends.
+
+2026-10-25 21:15 UTC: primary M16 HTTP additional-key enrollment profile frozen.
+Own Reference test/config-fixture/docs only; existing main4697d4c composes native
+passkey935ddaf with explicit cookie SessionEnrollment.TOTP and real HTTP owners.
+Outcome: actual identified/discoverable HTTP passkey/TOTP session -> fresh UV
+assertion -> second-key registration -> safe two-key inventory -> metadata-only
+retries -> original session read/logout and revoked retry denial. New key must
+produce only a TOTP challenge, not bypass the enrolled factor. Exercise fresh
+and populated upgrade, original intent, CSRF/Origin and factor withdrawal.
+No new auth engine, store, migration, HTTP public schema or MFA fallback.
+Checks: focused four-profile PG/race consumer and retained native enrollment/
+HTTP rename checks, Reference/command race, tagged vet/module integrity, scoped
+secret checks, one complete independent review, main/CI and downloaded consumer.
+HTTP key removal is the next separate outcome, not added before this closes.
+
+2026-10-25 21:14 UTC: M22 original invitation-send consumer now GREEN against
+authenticated public capability9c2e204461690e2922ddbc9f1a1ee6690f9a50c1.
+Original public34ff029 regression29.971s -> local-candidate31.830s -> normal
+public-pin PG/race89333 PASS31.878s, no replacements/alternate module file.
+Exact expired deferred-COMMIT rollback, committed acknowledgement loss,
+send/delivery/accept/member read, contention and late-recipient callback fence
+all reached. Native10path final re-review running; no native delivery claim yet.
+Capability5path independent invitation_issuance_recovery_final APPROVE, exact
+hashes retained; selector race1.258s, affected module race3.369s/vet0/modverifyall.
+Commit9c2e204 is on existing CI-only carrier; direct main correctly rejected
+pending Required. Exact CI40234198266 live; no checks/protection bypassed.
+Authenticated v0.0.0-20261025210917-9c2e20446169 matches all five reviewed files,
+sumT0PL1eSfO8HmrcC4cKlr5QQcgFw3K7t8IhmIFlv2UMI=,
+modsum7KzF2zSWRvClSnXLy+j+0Z6/vYfIUm8d6ZphKEwuhbQ=.
+Existing legacy send/accept final-disclosure gap remains finite required follow-on
+before full M22. Whole-goal estimate25%/11of39, complete67-unit scope unchanged.
+
+2026-10-25 20:59 UTC: M22 consumed capability-owner correction frozen.
+Actual supported original2s lease expired, final plan attached/profile4 and
+no protected effects; direct native and mapped recovery both retain InProgress/
+Unavailable29.971s. Issuer34ff029 and current main2d729ef do not select scoped
+absence proof for organization invitation-send. Primary owns ONLY capability
+postgres/identity issuer selection, focused tests/docs/changelog in clean main
+clone /Users/brian/Developer/.worktrees/golib-go-capability-identity-main.
+Original canonical and older identity worktrees remain dirty and untouched;
+their local-main history diverges, so no reset/rebase/ref rewrite is attempted.
+Required outcome: exact canonical user-actor invitation-send v1, one original
+accept-purpose grant and no competing recipient profile may use the existing
+fenced capability-ID/replay-identity/origin-command absence query. Ordinary,
+signup, foreign/multigrant/retired-key profiles remain Unknown; retained evidence
+is never absence, expiry never becomes rollback, and all other owners vote.
+No new public API, cryptography, store, migration or kernel relaxation. Checks:
+selector bounds/rotation/custody tests, affected issuer module race/tagged vet,
+genuine downstream deferred-COMMIT recovery (existing exact RED), independent
+complete review, ordinary main push/CI and public pin/consumer. Native worker
+keeps its10path lane paused at the proven consumed-contract gap, not goal-blocked.
+Its retained invitation recovery cohort passed58.155s; module/fuzz/vet pass.
+
 2026-10-25 20:47 UTC: HTTP completed-passkey/TOTP inventory/rename profile
 CLOSED, not full M16. Reference1490d59af2b7db91f469bf611ca85773dbe50c26
 exact origin/main; Required40231638863 success. Independent complete eight-path

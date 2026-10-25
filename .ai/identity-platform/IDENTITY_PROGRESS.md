@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 20:47 UTC
+## Current TL;DR — 2026-10-25 21:27 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
@@ -59,12 +59,21 @@
   Expired never-started originals can be definitively refused without permitting
   late execution; existing commands retain their actual recovery outcomes.
   Native invitation sending still needs adoption and complete consumer proof.
-- **Next:** invitation sending remains local: independent review found an
-  existing-journal participant-identity mismatch, and actual rollback recovery
-  still needs definitive proof. A separate older legacy send/accept recovery
-  disclosure-fence gap is recorded for correction before full M22 closure.
-  Primary continues HTTP MFA enrollment/removal from the delivered backend;
-  ordinary known-empty profiles and valid evidence remain retained.
+- **Invitation sending now on main:** reviewed native `25e7a9e` and capability
+  recovery `9c2e204`; both have exact-source green Required checks. Original-key
+  send -> encrypted delivery -> acceptance/member read, retries, real COMMIT
+  rollback/acknowledgement recovery and late-recipient denial pass against the
+  public dependency (31.878s). The authenticated downloaded adapter also passes
+  the full PostgreSQL/race journey (31.746s), closing this finite native profile.
+  HTTP/Reference invitation mutations remain open.
+- **Next:** primary is proving HTTP MFA second-key enrollment, retaining the
+  native TOTP factor and genuine fresh UV. The fresh identified HTTP journey
+  passes PostgreSQL/race (10.916s); all four signin/upgrade profiles and retained
+  consumers are being checked, with independent review pending. Earlier fixture
+  encoding/metadata-oracle failures are not product regression evidence.
+  A worker is correcting the older legacy send/accept recovery disclosure-fence
+  gap before full M22 closure. Ordinary known-empty profiles and unchanged valid
+  evidence remain retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.
