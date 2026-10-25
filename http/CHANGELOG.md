@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit the explicitly selected strict-bearer invitation-send policy. Cookie
+  synchronizer protection remains unchanged; invitation acceptance and other
+  mutations gain no exemption. Selection alone enables no route or authority.
+
 - Decode the immutable embedded operation catalog once across repeated and
   concurrent construction, reducing startup allocation without changing
   canonical validation, selected routes or detached exported metadata.
