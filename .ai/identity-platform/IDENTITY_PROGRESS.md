@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 19:40 UTC
+## Current TL;DR — 2026-10-25 20:24 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
@@ -26,14 +26,21 @@
   reviewed, main/CI-green; the authenticated downloaded Reference passes both
   actual identified/discoverable PostgreSQL/race journeys (12.383s). Existing
   ordinary and four HTTP-TOTP profiles pass. MFA-management HTTP qualification
-  and key removal remain open; additional enrollment is delivered below.
+  remains open; additional enrollment and removal are delivered below.
 - **Closed MFA additional-key enrollment profile:** completed passkey/TOTP
   sessions can authorize registration with genuine fresh UV, enroll a second
   key, list both, recover original metadata and read/logout. The new key still
   requires TOTP at identified/discoverable signin. Reviewed native `fc7ce6f` and
   Reference `fa47e2a` are main/CI-green. The authenticated downloaded Reference
   passes both PostgreSQL/race journeys (13.175s), including original-factor and
-  enrollment withdrawal denial. No HTTP enrollment or key removal is claimed.
+  enrollment withdrawal denial. HTTP MFA enrollment remains open.
+- **Closed MFA key-removal profile:** a completed passkey/TOTP session can
+  authorize removal with fresh UV while preserving a usable key, reject its old
+  session, sign in with the survivor and TOTP, recover original metadata, reject
+  last-key removal and read/logout. Reviewed MFA `fdf6e3f`, native `935ddaf` and
+  Reference `ecad99d` are main/CI-green. The authenticated downloaded Reference
+  passes both genuine identified/discoverable PostgreSQL/race journeys (62.736s).
+  HTTP MFA management and full M16 qualification remain open.
 - **Closed organization HTTP read profile:** recipients can discover invitations
   before membership; exact native owner-only get remains enforced. Genuine
   send/delivery/accept/membership and restarted current reads pass, including
@@ -45,9 +52,9 @@
   Expired never-started originals can be definitively refused without permitting
   late execution; existing commands retain their actual recovery outcomes.
   Native invitation sending still needs adoption and complete consumer proof.
-- **Next:** the invitation worker has resumed original-key send/delivery/restart
-  against that committed kernel. Primary continues completed-MFA key removal;
-  ordinary known-empty profiles and valid evidence remain retained.
+- **Next:** the invitation worker is testing original-key send/delivery/restart
+  against the committed kernel. Primary continues HTTP completed-MFA credential
+  management; ordinary known-empty profiles and valid evidence remain retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.

@@ -1,5 +1,49 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 20:24 UTC: completed-passkey/TOTP key-removal profile CLOSED,
+not full M16. MFAfdf6e3f9e868759491372319145808a354d0da6c,
+native935ddaffedb1e79282523be2aec4fa0f88be1847 and
+Referenceecad99dae4f6bc1009fcfe11d83011bcfb74d6fe are exact origin/main;
+Required40227745666/40229476264/40230186982 success. Independent native
+reports mfa_removal_factor_final, native_mfa_removal_final and
+reference_mfa_removal_final APPROVE their complete respective diffs.
+Genuine registration/verified email/key/confirmed TOTP -> primary challenge
+only -> TOTP session -> fresh UV second-key enrollment/removal -> old-session
+denial -> survivor signin/TOTP -> original metadata recovery -> last-key denial
+-> read/logout passes for identified and discoverable profiles. No successful
+domain/factor/session/receipt is seeded and no positive-read lease is renewed.
+Focused MFA RED51466 -> GREEN65413 PG/race2.732s. Native retained removal,
+rollback/contention/COMMIT cohort13181 PASS210.567s; native module race1.414s,
+tagged vet0/modverifyall. Final normal-public-pin Reference97968 affected
+PG/race107.838s, reference/command race5.208s/5.893s, tagged vet0/modverifyall.
+Earlier candidate81083 failed a discovery-policy test oracle, not a passing
+consumer; corrected local candidate75761 used an alternate modfile and is not
+public proof. Final public Reference ecad version
+v0.0.0-20261025201852-ecad99dae4f6, sum0R9y030e7e+q8ulLVNPJN3Gl5/6DSmuRA9v7TQMfQ80=,
+go.modsum6HgXyls5x3ze6sIiSBCxXUpQ7zjSGUmKBKcIx4UCLGU= matches all eleven
+changed files. Actual downloaded PG/race40400 PASS62.736s, modreadonly,
+GOWORKoff/no replacement; all modules verified. Scoped secret/diff checks pass.
+HTTP MFA management, other assigned profiles and full unit qualification remain
+open; whole-goal estimate ~25%,11/39 unchanged. Invitation worker now has the
+serialized integration slot for its corrected exact application admission fixture.
+
+2026-10-25 19:43 UTC: next primary M16 profile frozen: actual completed
+passkey/TOTP session -> existing two-key inventory -> fresh action-bound UV
+removal -> old-session denial -> surviving-key signin/TOTP -> original metadata
+recovery/read/logout, with last-key protection. Consume delivered MFA1cd0ac3,
+nativefc7ce6f, Referencefa47e2a and unchanged protocol/kernel removal owners.
+Primary owns exact two-phase MFA admission, native SessionDeletion TOTP selection
+and Reference composition. Keep ordinary guard/default behavior, original
+factor/enrollment/user/credential/policy/session/family and evidence ceilings;
+preserve same-Work UV, remaining-key and removal effects/rollback/final checks.
+No fallback to password/OTP/recovery or HTTP selection in this profile. Checks:
+actual-Work factor RED/GREEN and retained guard matrix; genuine Reference
+identified/discoverable deletion journey and withdrawal/last-key/recovery checks;
+affected native ordinary removal/rollback/contention/COMMIT tests, module race,
+tagged vet/auth/secrets, independent complete-diff review and public consumers.
+Invitation worker remains separate on its existing owned paths; local heavy
+lease primary for the initial MFA guard regression, worker currently coding.
+
 2026-10-25 19:38 UTC: mapped-origin expiry kernel candidate implements the
 frozen optional terminal fence through the existing global command-ID claim.
 Original runtime RED23823 FAIL0.539s -> focused real PostgreSQL/race76414
