@@ -66,10 +66,51 @@ type mfaSessionFixture struct {
 	cookieKey      session.DigestKey
 	primaryOrigin  identity.CommandID
 	counters       *riskpg.Repository
+	passkey        bool
+	passkeyEffect  *MFAPasskeyTOTPCompletionEffect
+	finalExpiry    bool
+	expiryWaited   bool
+	finalDenied    bool
+}
+
+// Deliberately wait after Apply's successful credential check, as later audit
+// or outbox IO can do. The original database expiry is never renewed.
+type mfaCredentialExpiryAudit struct {
+	revokeAudit
+	entered *bool
+	id      string
+}
+
+func (a *mfaCredentialExpiryAudit) PersistAudits(ctx context.Context, w kernel.Work) error {
+	if err := a.revokeAudit.PersistAudits(ctx, w); err != nil {
+		return err
+	}
+	rows, err := w.Query(ctx, `SELECT expires_at FROM identity.credential_references WHERE tenant_id='magic-effect' AND user_id='recipient' AND credential_id=$1`, a.id)
+	if err != nil {
+		return err
+	}
+	var expires time.Time
+	err = readSessionAdmission(rows, &expires)
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	*a.entered = true
+	timer := time.NewTimer(time.Until(expires) + 10*time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (p *mfaSessionFixture) Descriptor() kernel.ContributorDescriptor {
 	if p.effect == nil {
+		if p.passkey {
+			return kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
+		}
 		return kernel.ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}
 	}
 	return kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}
@@ -96,6 +137,12 @@ func (p *mfaSessionFixture) ValidateMagicLinkMFAChallenge(c identity.Command, sc
 	}
 	return nil
 }
+func (p *mfaSessionFixture) ValidatePasskeyMFAChallenge(c identity.Command, scope kernel.MFAContinuationPlan) error {
+	if !p.passkey || c != p.command || scope != p.challenge {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
 func (p *mfaSessionFixture) ValidateMFACompletion(c identity.Command, child kernel.CapabilityPlan, scope kernel.MFACompletionPlan) error {
 	if c != p.command || child != p.child || scope != p.completion {
 		return identity.ForbiddenError{}
@@ -106,9 +153,16 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	p.calls++
 	if p.effect == nil {
 		p.stage = "challenge"
-		if err := mfapg.PersistMagicLinkContinuation(ctx, w, p, c, p.continuation); err != nil {
+		var err error
+		if p.passkey {
+			err = mfapg.PersistPasskeyContinuation(ctx, w, p, c, p.continuation)
+		} else {
+			err = mfapg.PersistMagicLinkContinuation(ctx, w, p, c, p.continuation)
+		}
+		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
+		p.stage = "child-issuance"
 		if err := p.issuer.Stage(ctx, w, p.issuance); err != nil {
 			return identity.FeatureReceipt{}, err
 		}
@@ -117,13 +171,19 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 			return identity.FeatureReceipt{}, err
 		}
 		use := PreAuthUse{Command: b, Fingerprint: fingerprint, Generation: generation}
+		p.stage = "browser-reservation"
 		if err := ReservePreAuth(ctx, w, Config{Schema: "session_store", MaximumDuration: time.Second}, p.flow, use); err != nil {
 			return identity.FeatureReceipt{}, err
 		}
+		p.stage = "browser-finalization"
 		if err := FinalizePreAuth(ctx, w, Config{Schema: "session_store", MaximumDuration: time.Second}, p.flow, use); err != nil {
 			return identity.FeatureReceipt{}, err
 		}
+		p.stage = "challenge-effects"
 		s, _ := c.Feature()
+		if p.passkey {
+			return identity.FeatureReceipt{Operation: s.Operation, AfterVersion: 1}, nil
+		}
 		return identity.FeatureReceipt{Operation: s.Operation}, nil
 	}
 	p.stage = "browser"
@@ -150,8 +210,14 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	if p.flow.Check(now, flow.Binding, digest) != nil {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
-	if err := RequireMFAConsumedPreAuth(ctx, w, p, c, p.effect.config, p.flow, p.primaryOrigin); err != nil {
-		return identity.FeatureReceipt{}, err
+	var browserErr error
+	if p.passkeyEffect != nil {
+		browserErr = RequireMFAPasskeyConsumedPreAuth(ctx, w, p, c, p.effect.config, p.flow, p.primaryOrigin)
+	} else {
+		browserErr = RequireMFAConsumedPreAuth(ctx, w, p, c, p.effect.config, p.flow, p.primaryOrigin)
+	}
+	if browserErr != nil {
+		return identity.FeatureReceipt{}, browserErr
 	}
 	p.stage = "directory"
 	record, err := MFATOTPCompletionSession(c)
@@ -164,6 +230,14 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	s, _ := record.Bindings()
 	a, _ := s.Authority.Bindings()
 	q, authority, err := verifiedIdentifierSessionAdmissionWithFactor(OTPAdmissionConfig(p.effect.profile), s, a.Factor)
+	var credential kernel.CredentialAdmission
+	if p.passkeyEffect != nil {
+		feature, _ := p.command.Feature()
+		selected := feature.Binding
+		selected.UserID, selected.ActorID, selected.ActorKind = s.UserID, identity.ActorID(s.UserID), authorization.SubjectUser
+		directory, admitted, policyScope, e := passkeyMFASessionAdmission(p.passkeyEffect.native.passkey.profile, record, selected)
+		q, authority, credential, err = directory.Query, policyScope.Scope, admitted, e
+	}
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -171,8 +245,17 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	if err := w.RequireActiveDirectoryAuthority(ctx, p, kernel.DirectoryAuthorityAdmission{Query: q, GlobalVersion: a.Global.Version, TenantVersion: a.Tenant.Version}); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err := w.RequireRecipient(ctx, p, p.recipient); err != nil {
-		return identity.FeatureReceipt{}, err
+	if p.passkeyEffect != nil {
+		if _, err := w.RequireMFAPasskeyCredential(ctx, p, credential); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if err := p.passkeyEffect.native.passkey.authority.RequireMFAPasskeySession(ctx, w, p, p.passkeyEffect.native.passkey.profile.RPNamespace, record); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	} else {
+		if err := w.RequireRecipient(ctx, p, p.recipient); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	if err := policy.RequireAuthority(ctx, w, authority, a.Authorization.Version, time.Second); err != nil {
 		return identity.FeatureReceipt{}, err
@@ -210,6 +293,14 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 		return identity.FeatureReceipt{}, err
 	}
 	p.stage = "session"
+	if p.passkeyEffect != nil {
+		if p.finalExpiry {
+			if _, err := w.Exec(ctx, `UPDATE identity.credential_references SET expires_at=clock_timestamp()+interval '200 milliseconds' WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3`, string(s.TenantID), string(s.UserID), s.Authentication.CredentialID); err != nil {
+				return identity.FeatureReceipt{}, err
+			}
+		}
+		return p.passkeyEffect.Apply(ctx, w, p, c, locked)
+	}
 	return p.effect.Apply(ctx, w, p, c, p.recipient, locked)
 }
 func (p *mfaSessionFixture) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {
@@ -224,11 +315,20 @@ func (p *mfaSessionFixture) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 		if err != nil {
 			return err
 		}
+		if p.passkeyEffect != nil {
+			err := p.passkeyEffect.Check(ctx, w, p, c)
+			var denied identity.ForbiddenError
+			p.finalDenied = errors.As(err, &denied)
+			return err
+		}
 		return requireMFAIssueTime(ctx, w, r)
 	}
 	return ctx.Err()
 }
 func (p *mfaSessionFixture) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	if p.passkeyEffect != nil {
+		return p.passkeyEffect.Recover(ctx, w, p)
+	}
 	if p.recoveryEffect != nil {
 		return p.recoveryEffect.Recover(ctx, w, p)
 	}
@@ -373,6 +473,13 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 	if _, err := pool.Raw().Exec(ctx, recoveryHistory[len(recoveryHistory)-1].UpSQL()); err != nil {
 		t.Fatal(err)
 	}
+	passkeyHistory, err := (mfapg.PasskeyContinuationMigrationSource{Base: fixtureSource(recoveryHistory), Version: 6}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Raw().Exec(ctx, passkeyHistory[len(passkeyHistory)-1].UpSQL()); err != nil {
+		t.Fatal(err)
+	}
 	preparation, err := (kernel.PreparationMigrationSource{Base: kernel.MigrationSource{}, Version: 43}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -395,7 +502,7 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 	}
 	for _, source := range []interface {
 		Load(context.Context) ([]migrations.Migration, error)
-	}{MFAMigrationSource{Schema: "session_store", Version: 45}, MFASigninMigrationSource{Schema: "session_store", Version: 46}, PasswordMFAMigrationSource{Schema: "session_store", Version: 47}, MFARecoveryMigrationSource{Schema: "session_store", Version: 48}} {
+	}{MFAMigrationSource{Schema: "session_store", Version: 45}, MFASigninMigrationSource{Schema: "session_store", Version: 46}, PasswordMFAMigrationSource{Schema: "session_store", Version: 47}, MFARecoveryMigrationSource{Schema: "session_store", Version: 48}, PasskeyMFAMigrationSource{Schema: "session_store", Version: 67, PreviousConstraint: "session_record_binding_v8"}} {
 		history, err := source.Load(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -417,9 +524,10 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 		t.Fatal(err)
 	}
 	counters := installMFACounters(t, ctx, pool)
-	for _, mode := range []string{"late-denial", "blocked-user", "stale-factor", "changed-remember", "wrong-cookie", "foreign-primary", "released-flow", "foreign-browser-fingerprint", "foreign-browser-generation", "counted-wrong-code", "counted-wrong-cookie", "counted-risk-wrong-code", "counted-risk-correct-code", "counted-risk-wrong-cookie", "counted-risk-audit-failure", "commit", "risk-commit", "recovery-late-denial", "recovery-wrong-cookie", "recovery-commit", "recovery-risk-commit", "stale-policy"} {
+	for _, mode := range []string{"late-denial", "blocked-user", "stale-factor", "changed-remember", "wrong-cookie", "foreign-primary", "released-flow", "foreign-browser-fingerprint", "foreign-browser-generation", "counted-wrong-code", "counted-wrong-cookie", "counted-risk-wrong-code", "counted-risk-correct-code", "counted-risk-wrong-cookie", "counted-risk-audit-failure", "commit", "risk-commit", "recovery-late-denial", "recovery-wrong-cookie", "recovery-commit", "recovery-risk-commit", "stale-policy", "passkey-commit", "passkey-late-denial", "passkey-disabled-credential", "passkey-final-expiry"} {
 		t.Run(mode, func(t *testing.T) {
 			recovery := strings.HasPrefix(mode, "recovery-")
+			passkey := strings.HasPrefix(mode, "passkey-")
 			var now time.Time
 			if err := pool.Raw().QueryRow(ctx, "SELECT clock_timestamp()").Scan(&now); err != nil {
 				t.Fatal(err)
@@ -528,11 +636,15 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if _, err := pool.Raw().Exec(ctx, `INSERT INTO public.capability_identity_one_use(tenant_id,purpose,replay_key_version,replay_digest,capability_id,proof_fingerprint,expires_at,max_uses) VALUES('magic-effect',$1,1,$2,$3,$4,$5,1)`, string(primary.Purpose), primary.ReplayDigest[:], primary.CapabilityID, primary.ProofFingerprint[:], primary.ExpiresAt); err != nil {
 				t.Fatal(err)
 			}
+			if passkey {
+				b.UserID, b.ActorID, b.ActorKind, b.RecordID, b.AnonymousFlowID = "recipient", "recipient", authorization.SubjectUser, string(primaryID), ""
+				b.OperationID, b.SchemaID = "identity.passkey.signin-verify", "identity.passkey.signin-verify.native-v1"
+			}
 			_, original := magicLinkSigninMappingFixture(t, false)
 			s, _ := original.Bindings()
 			cookieKey, _ := session.NewDigestKey(1, bytes.Repeat([]byte{4}, 32))
 			browserToken, _ := session.ParseToken(strings.Repeat("A", 43))
-			flowBinding := session.PreAuthBinding{ID: identity.PreAuthTransactionID(b.AnonymousFlowID), Intent: session.PreAuthIntent{TenantID: b.TenantID, Action: b.OperationID, Origin: "https://app.example.test", CallbackURL: "https://app.example.test/login", Nonce: [32]byte{1}, Remember: s.Remember, PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion}, IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute)}
+			flowBinding := session.PreAuthBinding{ID: identity.PreAuthTransactionID(primaryID), Intent: session.PreAuthIntent{TenantID: b.TenantID, Action: b.OperationID, Origin: "https://app.example.test", CallbackURL: "https://app.example.test/login", Nonce: [32]byte{1}, Remember: s.Remember, PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion}, IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute)}
 			cookieDigest, err := browserToken.PreAuthDigest(cookieKey, flowBinding)
 			if err != nil {
 				t.Fatal(err)
@@ -545,14 +657,20 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := pool.Raw().Exec(ctx, `INSERT INTO session_store.preauth_transactions(tenant_id,flow_id,record,issued_at,expires_at,digest_version,digest,issued_version,version,state) VALUES($1,$2,$3,$4,$5,1,$6,1,1,'issued')`, string(b.TenantID), b.AnonymousFlowID, flowWire, now.Format(storedTimeLayout), flowBinding.ExpiresAt.Format(storedTimeLayout), cookieDigest.Sum[:]); err != nil {
+			if _, err := pool.Raw().Exec(ctx, `INSERT INTO session_store.preauth_transactions(tenant_id,flow_id,record,issued_at,expires_at,digest_version,digest,issued_version,version,state) VALUES($1,$2,$3,$4,$5,1,$6,1,1,'issued')`, string(b.TenantID), string(flowBinding.ID), flowWire, now.Format(storedTimeLayout), flowBinding.ExpiresAt.Format(storedTimeLayout), cookieDigest.Sum[:]); err != nil {
 				t.Fatal(err)
 			}
 			methods := []string{"totp"}
 			if recovery {
 				methods = append(methods, "recovery-code")
 			}
-			continuation, err := mfa.NewPartialAuthContinuation(mfa.ContinuationSpec{ID: mfa.ContinuationID(childID), PrimaryProofID: auth.ProofID(primary.CapabilityID), PrimaryProofDigest: primary.ProofFingerprint, PrimaryProofExpiresAt: primary.ExpiresAt, TenantID: b.TenantID, SubjectID: "recipient", SourcePreAuthID: identity.PreAuthTransactionID(b.AnonymousFlowID), Origin: "https://app.example.test", AllowedMethods: methods, PolicyVersion: 1, FactorVersion: 2, RememberPolicy: s.Remember, Purpose: "identity.mfa.complete", Audience: "service-a", IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute), MaxAttempts: 3, AttemptsRemaining: 3, State: mfa.Pending, Version: 1})
+			continuationSpec := mfa.ContinuationSpec{ID: mfa.ContinuationID(childID), PrimaryProofID: auth.ProofID(primary.CapabilityID), PrimaryProofDigest: primary.ProofFingerprint, PrimaryProofExpiresAt: primary.ExpiresAt, TenantID: b.TenantID, SubjectID: "recipient", SourcePreAuthID: flowBinding.ID, Origin: "https://app.example.test", AllowedMethods: methods, PolicyVersion: 1, FactorVersion: 2, RememberPolicy: s.Remember, Purpose: "identity.mfa.complete", Audience: "service-a", IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute), MaxAttempts: 3, AttemptsRemaining: 3, State: mfa.Pending, Version: 1}
+			if passkey {
+				// The primary verifier is this component test's explicit seam.
+				// No assertion-authentication claim is made by this projection.
+				continuationSpec.PrimaryProofID, continuationSpec.PasskeyCommandID = auth.ProofID(primaryID), primaryID
+			}
+			continuation, err := mfa.NewPartialAuthContinuation(continuationSpec)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -562,23 +680,37 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 				t.Fatal(err)
 			}
 			prepared, err := issuer.PrepareMFAContinuation(ctx, b, payload)
+			if passkey {
+				payload.CorrelationID = string(primaryID)
+				prepared, err = issuer.PreparePasskeyMFAContinuation(ctx, b, payload)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
 			issue, _ := prepared.Plan()
 			command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: magicLinkSessionOperation(), Fields: []identity.FeatureField{{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: primary.CapabilityID}}}})
+			if passkey {
+				op := identity.FeatureOperation{Owner: "passkey", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+				command, err = identity.NewFeaturePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: op}, auth.NewBearerCredential(strings.Repeat("A", 43)))
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			phase := &mfaSessionFixture{command: command, primary: primary, challenge: kernel.MFAContinuationPlan{ID: childID, UserID: "recipient", ScopeDigest: digest, PolicyVersion: 1, FactorVersion: 2, IssuedAt: now, ExpiresAt: payload.ExpiresAt}, continuation: continuation, issuer: issuer, issuance: prepared, flow: flow}
+			phase := &mfaSessionFixture{command: command, primary: primary, challenge: kernel.MFAContinuationPlan{ID: childID, UserID: "recipient", ScopeDigest: digest, PolicyVersion: 1, FactorVersion: 2, IssuedAt: now, ExpiresAt: payload.ExpiresAt}, continuation: continuation, issuer: issuer, issuance: prepared, flow: flow, passkey: passkey}
 			fingerprintVersion := uint32(1)
 			newCoordinator := func(p *mfaSessionFixture, issuance bool) *kernel.Coordinator {
 				t.Helper()
-				entries := []kernel.Contributor{domain, &revokeAudit{fail: !issuance && mode == "counted-risk-audit-failure"}, &revokeOutbox{}, p}
+				var auditing kernel.Contributor = &revokeAudit{fail: !issuance && mode == "counted-risk-audit-failure"}
+				if !issuance && mode == "passkey-final-expiry" {
+					auditing = &mfaCredentialExpiryAudit{entered: &p.expiryWaited, id: "passkey-completion-" + mode}
+				}
+				entries := []kernel.Contributor{domain, auditing, &revokeOutbox{}, p}
 				if p.counters != nil {
 					entries = append(entries, p.counters)
 				}
-				entries = append(entries, capabilitypg.NewParticipant())
+				if !issuance || !p.passkey {
+					entries = append(entries, capabilitypg.NewParticipant())
+				}
 				if issuance {
 					entries = append(entries, issuer)
 				}
@@ -597,8 +729,13 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			planFor := func(p *mfaSessionFixture, event string) kernel.CommandPlan {
 				t.Helper()
 				spec, _ := p.command.Feature()
+				subject := spec.Binding.AnonymousFlowID
+				after := uint64(0)
+				if p.effect == nil && p.passkey {
+					subject, after = spec.Binding.RecordID, 1
+				}
 				builder, _ := audit.NewBuilder(audit.BuilderConfig{})
-				seed, err := builder.Build(audit.RecordInput{OccurredAt: now, Action: "authentication.succeeded", Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(spec.Binding.ActorID)}, Subject: audit.SubjectInput{Type: "authentication_attempt", ID: spec.Binding.AnonymousFlowID}, Context: audit.ContextInput{TenantID: string(spec.Binding.TenantID), CorrelationID: spec.Binding.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: spec.Binding.PolicyID, Version: fmt.Sprint(spec.Binding.PolicyVersion)}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(spec.Binding.CommandID), "aggregate.type": "authentication_attempt", "aggregate.id": spec.Binding.AnonymousFlowID, "aggregate.before_version": "0", "aggregate.after_version": "0", "retention.class": "protected"}})
+				seed, err := builder.Build(audit.RecordInput{OccurredAt: now, Action: "authentication.succeeded", Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(spec.Binding.ActorID)}, Subject: audit.SubjectInput{Type: "authentication_attempt", ID: subject}, Context: audit.ContextInput{TenantID: string(spec.Binding.TenantID), CorrelationID: spec.Binding.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: spec.Binding.PolicyID, Version: fmt.Sprint(spec.Binding.PolicyVersion)}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(spec.Binding.CommandID), "aggregate.type": "authentication_attempt", "aggregate.id": subject, "aggregate.before_version": "0", "aggregate.after_version": fmt.Sprint(after), "retention.class": "protected"}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -606,26 +743,48 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 				if err != nil {
 					t.Fatal(err)
 				}
-				return kernel.CommandPlan{Contributors: p.plan.Contributors, SubjectType: "authentication_attempt", Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: spec.Operation}, Lifecycle: &kernel.LifecyclePlan{EventType: event}, Audits: []kernel.AuditPlan{{EventType: "authentication.succeeded", SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: d}}}
+				return kernel.CommandPlan{Contributors: p.plan.Contributors, SubjectType: "authentication_attempt", Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: spec.Operation}, Lifecycle: &kernel.LifecyclePlan{EventType: event, AfterVersion: after}, Audits: []kernel.AuditPlan{{EventType: "authentication.succeeded", SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: d}}}
 			}
 			coordinator := newCoordinator(phase, true)
 			phase.plan = planFor(phase, "mfa.challenge.created.v1")
 			phase.plan.Capability = &primary
+			if passkey {
+				phase.plan.Capability = nil
+			}
 			phase.plan.MFAContinuation = &phase.challenge
 			phase.plan.CapabilityIssuance = &issue
 			phase.plan, err = coordinator.PrepareCommandPlan(b, command, phase.plan)
 			if err != nil {
 				t.Fatal("final native challenge declaration", err)
 			}
-			originalPlan := phase.plan
-			originalPlan.CapabilityIssuance = nil
-			originalPlan.Contributors = originalPlan.Contributors[:len(originalPlan.Contributors)-1]
-			originalPlan, err = coordinator.PrepareFeaturePreparationPlan(command, originalPlan)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if result, err := coordinator.ExecutePreparedFeature(ctx, command, originalPlan); err != nil || result.Outcome != identity.CommitOutcomeCommitted {
-				t.Fatal("original challenge failed", phase.stage, err)
+			if passkey {
+				reservation, _, err := coordinator.ReserveCommand(ctx, b, command, phase.plan)
+				if err != nil {
+					t.Fatal("component passkey primary reservation", err)
+				}
+				work, err := coordinator.Begin(ctx, reservation)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer coordinator.Abort(work, identity.UnavailableError{})
+				result, err := coordinator.ApplyFeature(ctx, work, command)
+				if err == nil {
+					result, err = coordinator.Commit(work, result)
+				}
+				if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+					t.Fatal("component passkey primary challenge failed", phase.stage, err)
+				}
+			} else {
+				originalPlan := phase.plan
+				originalPlan.CapabilityIssuance = nil
+				originalPlan.Contributors = originalPlan.Contributors[:len(originalPlan.Contributors)-1]
+				originalPlan, err = coordinator.PrepareFeaturePreparationPlan(command, originalPlan)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if result, err := coordinator.ExecutePreparedFeature(ctx, command, originalPlan); err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+					t.Fatal("original challenge failed", phase.stage, err)
+				}
 			}
 			childWire, err := capability.Issue(ctx, payload, signer, capability.DefaultLimits())
 			if err != nil {
@@ -691,6 +850,10 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 				code, _ = auth.NewOneTimeCode("123456")
 			}
 			b.CommandID = completeID
+			if passkey {
+				b = revokeBinding()
+				b.CommandID, b.TenantID, b.UserID, b.RecordID, b.AnonymousFlowID = completeID, "magic-effect", "", "", string(flowBinding.ID)
+			}
 			b.OperationID = "identity.mfa.totp-verify"
 			b.SchemaID = "mfa-totp-verify"
 			if recovery {
@@ -758,6 +921,20 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 				}
 			}
 			record, err := session.NewSessionWithMagicLinkMFA(s, primaryMeta, factorMeta)
+			if passkey {
+				credentialID := "passkey-completion-" + mode
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES($1,$2,$3,2,'passkey',1,$4)`, string(s.TenantID), string(s.UserID), credentialID, mode != "passkey-disabled-credential"); err != nil {
+					t.Fatal(err)
+				}
+				s.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, ProofVersion: 1, CredentialID: credentialID, CredentialVersion: 1, Proof: auth.Proof{ID: auth.ProofID(primaryID), Tenant: string(s.TenantID), Subject: string(s.UserID), Method: "passkey", Assurance: auth.AssurancePhishingResistant, Purpose: session.PasskeyMFAPrimaryPurpose, Audience: s.Audience, IssuedAt: now, ExpiresAt: primary.ExpiresAt}}
+				vector, _ := s.Authority.Bindings()
+				vector.Passkey = session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: "passkey:rp-a:completion", Version: 4}}
+				s.Authority, err = session.NewAuthoritySnapshot(vector)
+				if err != nil {
+					t.Fatal(err)
+				}
+				record, err = session.NewSessionWithPasskeyMFA(s, factorMeta)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -783,6 +960,15 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			totp, _ := mfa.NewTOTPVerifier([32]byte{1})
 			completion := kernel.MFACompletionPlan{ID: childID, UserID: "recipient", ScopeDigest: digest, PolicyVersion: 1, FactorVersion: 2, ContinuationVersion: 1}
 			phase = &mfaSessionFixture{command: command, child: child, completion: completion, effect: effect, recipient: recipient, snapshot: snapshot, secret: secret, verifier: totp, deny: mode == "late-denial", flow: flow, cookieKey: cookieKey, primaryOrigin: primaryOrigin}
+			if passkey {
+				selected := MFAPasskeySessionAdmission{Profile: PasskeyAdmissionConfig{GlobalAuthorityID: profile.GlobalAuthorityID, PolicyNamespace: profile.PolicyNamespace, Audience: profile.Audience, RPNamespace: "rp-a"}, Authority: &mfaPasskeyMappingComponent{version: 4, now: completeNow}}
+				phase.passkeyEffect, err = NewMFAPasskeyTOTPCompletionEffect(config, selected)
+				if err != nil {
+					t.Fatal(err)
+				}
+				phase.deny = mode == "passkey-late-denial"
+				phase.finalExpiry = mode == "passkey-final-expiry"
+			}
 			if recovery {
 				phase.recoveryEffect, err = NewMFARecoveryCompletionEffect(config, profile)
 				if err != nil {
@@ -894,7 +1080,13 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 					t.Fatal("recovery burn split from original outcome", err, burned, runErr, phase.stage)
 				}
 			}
-			if mode != "commit" && mode != "risk-commit" && mode != "recovery-commit" && mode != "recovery-risk-commit" {
+			if mode != "commit" && mode != "risk-commit" && mode != "recovery-commit" && mode != "recovery-risk-commit" && mode != "passkey-commit" {
+				if mode == "passkey-final-expiry" && (!phase.expiryWaited || !phase.finalDenied) {
+					t.Fatal("expiry test did not reach final credential denial after audit wait", phase.stage, runErr)
+				}
+				if mode == "passkey-late-denial" && phase.stage != "session" {
+					t.Fatal("passkey rollback never reached recorded factor/session", phase.stage, runErr)
+				}
 				if mode == "recovery-late-denial" && phase.stage != "recovery-session" {
 					t.Fatal("rollback case never reached recorded burn/session", phase.stage, runErr)
 				}
@@ -965,6 +1157,33 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			}
 			readNow := completeNow.Add(time.Second)
 			validation := session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: "service-a", Clock: sessionReadClock(func() time.Time { return readNow }), MaximumDuration: 2 * time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{lookupKey}}
+			if passkey {
+				selected := phase.passkeyEffect.native.passkey
+				service, err := NewMFAPasskeySessionService(pool, MFAPasskeySessionServiceConfig{Repository: config, Profile: selected.profile, Authority: selected.authority, Validation: validation})
+				if err != nil {
+					t.Fatal(err)
+				}
+				credential, _ := session.NewCredential(session.CredentialBearer, issuedToken)
+				request := session.GetRequest{TenantID: s.TenantID, Credential: credential}
+				admitted, err := service.Get(ctx, request)
+				actual, _ := admitted.Session.MFAAuthentication().Bindings()
+				want, _ := record.MFAAuthentication().Bindings()
+				if err != nil || !admitted.Authenticated || actual != want {
+					t.Fatal("recorded passkey/TOTP session cannot authenticate", err)
+				}
+				replay, err := coordinator.ExecutePreparedFeature(ctx, command, phase.plan)
+				if err != nil || !reflect.DeepEqual(replay, result) || phase.calls != 1 {
+					t.Fatal("passkey completion replay repeated factor/session", err)
+				}
+				query, caller := revokeRecoveryInput(b)
+				query.AnonymousFlowID = b.AnonymousFlowID
+				caller.Request.Resource = authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(b.AnonymousFlowID)}
+				if recovered, err := coordinator.RecoverFeatureCommand(ctx, query, caller); err != nil || recovered.Outcome != identity.CommitOutcomeCommitted {
+					t.Fatal("passkey TOTP issuance receipt unrecoverable", err)
+				}
+				testPasskeyMFARevoke(t, ctx, pool, config, profile, validation.Clock, service, admitted, request, selected)
+				return
+			}
 			service, err := NewMFAMagicLinkSessionService(pool, MFAMagicLinkSessionServiceConfig{Repository: config, Profile: profile, Validation: validation})
 			if err != nil {
 				t.Fatal(err)
@@ -981,6 +1200,11 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if mode == "commit" || mode == "recovery-commit" {
 				t.Run("password-origin session reader", func(t *testing.T) {
 					testPasswordMFASessionRead(t, ctx, pool, config, profile, validation, record, request)
+				})
+			}
+			if mode == "commit" {
+				t.Run("passkey-origin session reader", func(t *testing.T) {
+					testPasskeyMFASessionRead(t, ctx, pool, config, profile, validation, record, request)
 				})
 			}
 			combined, err := NewSelectedSessionService(pool, SelectedSessionServiceConfig{Repository: config, Validation: validation, Admission: SelectedSessionAdmissionConfig{SingleFactor: SingleFactorSessionAdmissionConfig{MagicLink: &profile}, MFAMagicLink: &profile}})

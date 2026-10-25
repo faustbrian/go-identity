@@ -29,6 +29,7 @@ type MFATOTPCompletionEffect struct {
 	password     *IdentifierAdmissionConfig
 	verification bool
 	phone        bool
+	passkey      *mfaPasskeySessionSelection
 }
 
 // Format redacts correlated deployment configuration for every verb.
@@ -175,6 +176,9 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 	if e.verification != (scope.VerificationCommandID != "") {
 		return deny()
 	}
+	if e.passkey == nil && scope.PasskeyCommandID != "" || e.passkey != nil && (method != "totp" || scope.PasskeyCommandID != primaryCommand || scope.VerificationCommandID != "") {
+		return deny()
+	}
 	s, _ := record.Bindings()
 	a, _ := s.Authority.Bindings()
 	m, _ := record.MFAAuthentication().Bindings()
@@ -206,20 +210,28 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 		}
 		kind = identity.IdentifierPhone
 	}
-	if recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != kind || recipient.Query.Eligibility != kernel.RecipientVerified || recipient.User.ID != s.UserID || recipient.UserAuthorityVersion != a.User.Version || recipient.IdentifierAuthorityVersion != a.Identifier.Version || recipient.CredentialAuthorityVersion != a.Credential.Version {
+	if e.passkey == nil && (recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != kind || recipient.Query.Eligibility != kernel.RecipientVerified || recipient.User.ID != s.UserID || recipient.UserAuthorityVersion != a.User.Version || recipient.IdentifierAuthorityVersion != a.Identifier.Version || recipient.CredentialAuthorityVersion != a.Credential.Version) {
 		return deny()
 	}
 	var query kernel.DirectoryAuthorityQuery
 	var policy authority.AuthorityScope
 	var credential kernel.CredentialAdmission
-	if e.password != nil {
+	if e.password != nil || e.passkey != nil {
 		proof := s.Authentication.Proof
 		if string(proof.ID) != string(primaryCommand) || proof.ID != scope.PrimaryProofID || !proof.IssuedAt.Equal(scope.IssuedAt) || !proof.ExpiresAt.Equal(scope.PrimaryProofExpiresAt) {
 			return deny()
 		}
 		selected := b
 		selected.UserID, selected.ActorID, selected.ActorKind = s.UserID, identity.ActorID(s.UserID), authorization.SubjectUser
-		directory, admitted, authorizationScope, admissionErr := passwordMFASessionAdmissionMethod(*e.password, record, selected, s.SessionID, s.Version, method)
+		var directory kernel.DirectoryAuthorityAdmission
+		var admitted kernel.CredentialAdmission
+		var authorizationScope kernel.UserAuthorizationAdmission
+		var admissionErr error
+		if e.passkey != nil {
+			directory, admitted, authorizationScope, admissionErr = passkeyMFASessionAdmission(e.passkey.profile, record, selected)
+		} else {
+			directory, admitted, authorizationScope, admissionErr = passwordMFASessionAdmissionMethod(*e.password, record, selected, s.SessionID, s.Version, method)
+		}
 		if admissionErr != nil {
 			return deny()
 		}
@@ -236,12 +248,21 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 	if err := w.RequireActiveDirectoryAuthority(bounded, owner, kernel.DirectoryAuthorityAdmission{Query: query, GlobalVersion: a.Global.Version, TenantVersion: a.Tenant.Version}); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err := w.RequireRecipient(bounded, owner, recipient); err != nil {
-		return identity.FeatureReceipt{}, err
-	}
-	if e.password != nil {
-		if _, err := w.RequireRecipientCredential(bounded, owner, recipient, credential); err != nil {
+	if e.passkey != nil {
+		if _, err := w.RequireMFAPasskeyCredential(bounded, owner, credential); err != nil {
 			return identity.FeatureReceipt{}, err
+		}
+		if err := e.passkey.authority.RequireMFAPasskeySession(bounded, w, owner, e.passkey.profile.RPNamespace, record); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	} else {
+		if err := w.RequireRecipient(bounded, owner, recipient); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if e.password != nil {
+			if _, err := w.RequireRecipientCredential(bounded, owner, recipient, credential); err != nil {
+				return identity.FeatureReceipt{}, err
+			}
 		}
 	}
 	if err := authority.RequireAuthority(bounded, w, policy, a.Authorization.Version, e.config.MaximumDuration); err != nil {
@@ -253,7 +274,7 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 	if err := e.native.requireIssueFamily(bounded, w, s, false); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err := requireMFAIssueTime(bounded, w, record); err != nil {
+	if err := e.requireIssueTime(bounded, w, record); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if err := e.native.writeIssuedSession(bounded, w, b, transition, record, s); err != nil {
@@ -272,13 +293,33 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 			return identity.FeatureReceipt{}, err
 		}
 	}
-	if err := requireMFAIssueTime(bounded, w, record); err != nil {
+	if e.passkey != nil {
+		if _, err := w.RequireMFAPasskeyCredential(bounded, owner, credential); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if err := e.passkey.authority.RequireMFAPasskeySession(bounded, w, owner, e.passkey.profile.RPNamespace, record); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
+	if err := e.requireIssueTime(bounded, w, record); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	return identity.FeatureReceipt{Operation: feature.Operation}, nil
 }
 
+func (e *MFATOTPCompletionEffect) requireIssueTime(ctx context.Context, w kernel.Work, record session.Session) error {
+	purpose := session.PasswordMFAPrimaryPurpose
+	if e.passkey != nil {
+		purpose = session.PasskeyMFAPrimaryPurpose
+	}
+	return requireMFAPrimaryIssueTime(ctx, w, record, purpose)
+}
+
 func requireMFAIssueTime(ctx context.Context, w kernel.Work, record session.Session) error {
+	return requireMFAPrimaryIssueTime(ctx, w, record, session.PasswordMFAPrimaryPurpose)
+}
+
+func requireMFAPrimaryIssueTime(ctx context.Context, w kernel.Work, record session.Session, purpose auth.Purpose) error {
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
@@ -293,7 +334,7 @@ func requireMFAIssueTime(ctx context.Context, w kernel.Work, record session.Sess
 	}
 	if s.Authentication.Kind == session.AuthenticationVerified {
 		life, err := record.Lifetime(now)
-		if err != nil || now.Before(s.IssuedAt) || !life.Fresh || s.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(s.TenantID), Subject: string(s.UserID), Purpose: session.PasswordMFAPrimaryPurpose, Audience: s.Audience, Now: now}) != nil {
+		if err != nil || now.Before(s.IssuedAt) || !life.Fresh || s.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(s.TenantID), Subject: string(s.UserID), Purpose: purpose, Audience: s.Audience, Now: now}) != nil {
 			return identity.ForbiddenError{}
 		}
 		return nil

@@ -74,6 +74,9 @@ func sessionFromCSRFFieldsWithMFA(values map[string]identity.FeatureValue, prefi
 			return session.NewSessionWithMagicLink(base, magic)
 		}
 		if hasFactor {
+			if base.Authentication.Proof.Method == "passkey" {
+				return session.NewSessionWithPasskeyMFA(base, factor)
+			}
 			return session.NewSessionWithPasswordMFA(base, factor)
 		}
 		return session.NewSession(base)
@@ -100,6 +103,9 @@ func sessionFromCSRFFieldsWithMFA(values map[string]identity.FeatureValue, prefi
 		return session.NewSessionWithMagicLinkAndCSRF(base, magic, state)
 	}
 	if hasFactor {
+		if base.Authentication.Proof.Method == "passkey" {
+			return session.NewSessionWithPasskeyMFAAndCSRF(base, factor, state)
+		}
 		return session.NewSessionWithPasswordMFAAndCSRF(base, factor, state)
 	}
 	return session.NewSessionWithCSRF(base, state)

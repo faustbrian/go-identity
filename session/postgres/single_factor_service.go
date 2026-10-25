@@ -76,10 +76,10 @@ func NewSingleFactorSessionService(pool *database.Pool, c SingleFactorSessionSer
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, c, nil, nil, nil, methods, profile)
+	return newSelectedNativeSessionService(pool, c, nil, nil, nil, nil, methods, profile)
 }
 
-func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, passkey *PasskeySessionAdmission, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
+func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, passkey *PasskeySessionAdmission, mfaPasskey *MFAPasskeySessionAdmission, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
 	if c.Repository.MaximumDuration > c.Validation.MaximumDuration {
 		return nil, session.ErrInvalidInput
 	}
@@ -101,6 +101,9 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	}
 	if passkey != nil {
 		audience = passkey.Profile.Audience
+	}
+	if mfaPasskey != nil {
+		audience = mfaPasskey.Profile.Audience
 	}
 	if audience != c.Validation.Audience {
 		return nil, session.ErrInvalidInput
@@ -133,7 +136,7 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	if p := mfa; p != nil {
 		r.mfaMagicLink = &MagicLinkAdmissionConfig{clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience)}
 	}
-	if mfa != nil || passwordMFA != nil {
+	if mfa != nil || passwordMFA != nil || mfaPasskey != nil {
 		r.mfaFactors, err = mfapg.NewTOTPSessionFactorReader(pool, c.Repository.MaximumDuration)
 		if err != nil {
 			return nil, session.ErrInvalidInput
@@ -151,6 +154,10 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	if p := passkey; p != nil {
 		selected := &passkeySessionSelection{profile: freezePasskeyProfile(p.Profile), authority: p.Authority}
 		r.passkeyReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, passkey: selected}
+	}
+	if p := mfaPasskey; p != nil {
+		selected := &mfaPasskeySessionSelection{profile: freezePasskeyProfile(p.Profile), authority: p.Authority}
+		r.mfaPasskeyReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, mfaFactors: r.mfaFactors, mfaPasskey: selected}
 	}
 	return session.NewSelectedProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))
 }

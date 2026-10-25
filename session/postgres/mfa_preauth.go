@@ -23,6 +23,20 @@ import (
 // This check alone is not browser possession, factor proof or session authority.
 // Locks last until the sole coordinator closes Work; propagate every error.
 func RequireMFAConsumedPreAuth(ctx context.Context, w kernel.Work, owner kernel.MFACompletionContributor, command identity.Command, c Config, original session.PreAuthTransaction, primary identity.CommandID) error {
+	return requireMFAConsumedPreAuthProfile(ctx, w, owner, command, c, original, primary, false)
+}
+
+// RequireMFAPasskeyConsumedPreAuth fences only the original browser consumed
+// by the committed native passkey primary during protected TOTP completion.
+// It does not authenticate an assertion, compare a cookie, consume again or
+// issue a session. The exact MFA owner must authenticate original primary and
+// child custody and compare the submitted cookie before calling. Propagate any
+// error to abort; original expiry and command/fingerprint/generation remain fixed.
+func RequireMFAPasskeyConsumedPreAuth(ctx context.Context, w kernel.Work, owner kernel.MFACompletionContributor, command identity.Command, c Config, original session.PreAuthTransaction, primary identity.CommandID) error {
+	return requireMFAConsumedPreAuthProfile(ctx, w, owner, command, c, original, primary, true)
+}
+
+func requireMFAConsumedPreAuthProfile(ctx context.Context, w kernel.Work, owner kernel.MFACompletionContributor, command identity.Command, c Config, original session.PreAuthTransaction, primary identity.CommandID, passkey bool) error {
 	if ctx == nil || owner == nil {
 		return identity.InvalidInputError{Field: "session_mfa_preauth"}
 	}
@@ -41,7 +55,10 @@ func RequireMFAConsumedPreAuth(ctx context.Context, w kernel.Work, owner kernel.
 	if err != nil || !ok || !cookie || !code || spec.Binding != b || spec.Operation != feature.Operation || feature.Operation != operation || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
 		return identity.ForbiddenError{}
 	}
-	return requireMFAConsumedPreAuth(ctx, w, w.DatabaseTime, b, c, original, primary)
+	if passkey && operation != mfaTOTPCompletionSessionOperation() {
+		return identity.ForbiddenError{}
+	}
+	return requireMFAConsumedPreAuthOrigin(ctx, w, w.DatabaseTime, b, c, original, primary, false, passkey)
 }
 
 // RequireMFAConsumedPreAuthAttempt applies the same original-browser fence in
@@ -151,6 +168,10 @@ func requireMFAConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQuer
 }
 
 func requireMFAConsumedPreAuthMode[R SessionRows](ctx context.Context, q SessionQueryer[R], databaseTime func(context.Context) (time.Time, error), b identity.CommandBinding, c Config, original session.PreAuthTransaction, primary identity.CommandID, verification bool) error {
+	return requireMFAConsumedPreAuthOrigin(ctx, q, databaseTime, b, c, original, primary, verification, false)
+}
+
+func requireMFAConsumedPreAuthOrigin[R SessionRows](ctx context.Context, q SessionQueryer[R], databaseTime func(context.Context) (time.Time, error), b identity.CommandBinding, c Config, original session.PreAuthTransaction, primary identity.CommandID, verification, passkey bool) error {
 	if _, err := identity.ParseCommandID(string(primary)); err != nil || primary == b.CommandID {
 		return identity.ForbiddenError{}
 	}
@@ -163,6 +184,9 @@ func requireMFAConsumedPreAuthMode[R SessionRows](ctx context.Context, q Session
 	validPurpose := primaryPurpose == "identity.magic-link.consume" || primaryPurpose == "identity.password.signin" || primaryPurpose == "identity.username.signin" || primaryPurpose == "identity.phone.password-signin"
 	if verification {
 		validPurpose = primaryPurpose == "identity.password.signup"
+	}
+	if passkey {
+		validPurpose = !verification && primaryPurpose == "identity.passkey.signin-verify"
 	}
 	if s.Binding.Intent.TenantID != b.TenantID || string(s.Binding.ID) != b.AnonymousFlowID || !validPurpose {
 		return identity.ForbiddenError{}

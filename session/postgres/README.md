@@ -1,5 +1,33 @@
 # PostgreSQL session storage
 
+## Passkey primary with confirmed TOTP
+
+`MFAPasskeySessionAdmission` explicitly selects RP mapping plus the MFA owner's
+current confirmed TOTP enrollment and account-factor generation. It is separate
+from `PasskeySessionAdmission`, which requires known-empty MFA. Use the same
+selection in `NewMFAPasskeySessionService` (or `SelectedSessionAdmissionConfig`)
+and `RevokeOneExecutorConfig.MFAPasskey`; neither may fall back to a single-factor
+reader. The borrowed `MFAPasskeySessionAuthority` supplies mapping evidence only,
+not factor proof. Primary reads retain the earliest contributing 20-second
+validity bound, including cached paths; copying cannot renew it.
+
+`NewMFAPasskeyTOTPCompletionEffect` persists the original projected session only
+after real native TOTP completion was recorded in the same protected Work.
+The native owner must first authenticate the original assertion, browser and
+child, authorize the operation, and lock directory/credential/RP mapping before
+factor locks. Call the effect's `Check` in the original `CheckFeatureCommit`
+after audit/outbox waits; an original credential can expire while those wait.
+`RequireMFAPasskeyConsumedPreAuth` checks that exact original
+passkey browser's consumed journal without consuming it again. No email
+recipient or password evidence is invented. This effect is not a login service.
+
+Install `PasskeyMFAMigrationSource` after the actual selected v6-v9 record and
+matching credential-continuation constraints, with a permanently allocated
+version. The transactional forward suffix validates populated rows and preserves
+the existing predicate and records, adding only the closed passkey/TOTP branch.
+Upgrade readers before enabling issuance. Existing password and known-empty
+passkey profiles retain their separate semantics.
+
 ## Prospective passkey-only signup
 
 `PasskeySignupSessionFields` retains a complete initial UV-passkey session in

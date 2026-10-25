@@ -19,7 +19,7 @@ import (
 // issuance. Real JSONB, constraints and exact primary-record comparison are
 // exercised here; the public protected workflow remains a separate obligation.
 func testMFAPrimaryRecord(t *testing.T, ctx context.Context, pool *database.Pool) {
-	for _, profile := range []struct{ csrf, password, recovery bool }{{false, false, false}, {true, false, false}, {false, true, false}, {true, true, false}, {false, false, true}, {true, false, true}, {false, true, true}, {true, true, true}} {
+	for _, profile := range []struct{ csrf, password, recovery, passkey bool }{{false, false, false, false}, {true, false, false, false}, {false, true, false, false}, {true, true, false, false}, {false, false, true, false}, {true, false, true, false}, {false, true, true, false}, {true, true, true, false}, {false, false, false, true}, {true, false, false, true}} {
 		csrf := profile.csrf
 		func() {
 			tx, err := pool.Raw().Begin(ctx)
@@ -44,8 +44,14 @@ func testMFAPrimaryRecord(t *testing.T, ctx context.Context, pool *database.Pool
 			if profile.password {
 				s.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, ProofVersion: 1, CredentialID: "password", CredentialVersion: 3, Proof: auth.Proof{ID: auth.ProofID(primary.CommandID), Tenant: string(s.TenantID), Subject: string(s.UserID), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: session.PasswordMFAPrimaryPurpose, Audience: s.Audience, IssuedAt: primary.AuthenticatedAt, ExpiresAt: primary.ValidUntil}}
 			}
+			if profile.passkey {
+				s.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, ProofVersion: 1, CredentialID: "passkey", CredentialVersion: 3, Proof: auth.Proof{ID: auth.ProofID(primary.CommandID), Tenant: string(s.TenantID), Subject: string(s.UserID), Method: "passkey", Assurance: auth.AssurancePhishingResistant, Purpose: session.PasskeyMFAPrimaryPurpose, Audience: s.Audience, IssuedAt: primary.AuthenticatedAt, ExpiresAt: primary.ValidUntil}}
+			}
 			a, _ := s.Authority.Bindings()
 			a.Factor = session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: "factor/user", Version: 7}}
+			if profile.passkey {
+				a.Passkey = session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: "passkey:rp-a:user-a", Version: 2}}
+			}
 			s.Authority, _ = session.NewAuthoritySnapshot(a)
 			remember, _ := s.Remember.Bindings()
 			p := session.MFAAuthenticationSpec{CommandID: "BAQEBAQEBAQEBAQEBAQEBA", PrimaryCommandID: primary.CommandID, ContinuationID: "BQUFBQUFBQUFBQUFBQUFBQ", ContinuationScopeDigest: [32]byte{1}, Method: "totp", FactorID: "BgYGBgYGBgYGBgYGBgYGBg", EnrollmentVersion: 1, FactorAuthorityVersion: 7, ContinuationVersion: 1, Remember: remember, VerifiedAt: now, ValidUntil: primary.ValidUntil}
@@ -57,6 +63,12 @@ func testMFAPrimaryRecord(t *testing.T, ctx context.Context, pool *database.Pool
 				t.Fatal(err)
 			}
 			makeRecord := func(factor session.MFAAuthentication) (session.Session, error) {
+				if profile.passkey && csrf {
+					return session.NewSessionWithPasskeyMFAAndCSRF(s, factor, source.CSRFState())
+				}
+				if profile.passkey {
+					return session.NewSessionWithPasskeyMFA(s, factor)
+				}
 				if profile.password && csrf {
 					return session.NewSessionWithPasswordMFAAndCSRF(s, factor, source.CSRFState())
 				}
@@ -103,6 +115,29 @@ func testMFAPrimaryRecord(t *testing.T, ctx context.Context, pool *database.Pool
 			if err := tx.QueryRow(ctx, `SELECT record::text FROM session_store.sessions WHERE tenant_id='tenant-a' AND session_id='session-a'`).Scan(&afterUpgrade); err != nil || beforeUpgrade != afterUpgrade {
 				t.Fatal("upgrade rewrote populated legacy record", err)
 			}
+			if profile.passkey {
+				if _, err := tx.Exec(ctx, `SAVEPOINT old_passkey_mfa_profile`); err != nil {
+					t.Fatal(err)
+				}
+				_, err := tx.Exec(ctx, `UPDATE session_store.sessions SET record=$1::jsonb,expires_at=$2 WHERE tenant_id='tenant-a' AND session_id='session-a'`, payload, expiry)
+				var rejected *pgconn.PgError
+				if !errors.As(err, &rejected) || rejected.Code != "23514" {
+					t.Fatal("old schema admitted new passkey/TOTP profile", err)
+				}
+				if _, err := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT old_passkey_mfa_profile`); err != nil {
+					t.Fatal(err)
+				}
+				history, err := (PasskeyMFAMigrationSource{Schema: "session_store", Version: 20, PreviousConstraint: "session_record_binding_v8"}).Load(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := tx.Exec(ctx, history[0].UpSQL()); err != nil {
+					t.Fatal("passkey/TOTP forward record migration", err)
+				}
+				if err := tx.QueryRow(ctx, `SELECT record::text FROM session_store.sessions WHERE tenant_id='tenant-a' AND session_id='session-a'`).Scan(&afterUpgrade); err != nil || beforeUpgrade != afterUpgrade {
+					t.Fatal("passkey/TOTP upgrade rewrote populated legacy record", err)
+				}
+			}
 			tag, err := tx.Exec(ctx, `UPDATE session_store.sessions SET record=$1::jsonb,expires_at=$2 WHERE tenant_id='tenant-a' AND session_id='session-a'`, payload, expiry)
 			if err != nil || tag.RowsAffected() != 1 {
 				t.Fatal("complete MFA record rejected", err)
@@ -134,6 +169,15 @@ func testMFAPrimaryRecord(t *testing.T, ctx context.Context, pool *database.Pool
 			}
 			if profile.recovery {
 				mutations = append(mutations, `record #- '{MFA,RecoverySetID}'`, `record #- '{MFA,RecoverySetVersion}'`, `jsonb_set(record,'{MFA,RecoverySetID}','"AAAAAAAAAAAAAAAAAAAAAA"')`, `jsonb_set(record,'{MFA,RecoverySetID}','null')`, `jsonb_set(record,'{MFA,RecoverySetVersion}','0')`, `jsonb_set(record,'{MFA,RecoverySetVersion}','1.5')`, `jsonb_set(record,'{MFA,RecoverySetVersion}','18446744073709551616')`, `jsonb_set(record,'{MFA,Method}','"totp"')`)
+			}
+			if profile.passkey {
+				mutations = append(mutations,
+					`jsonb_set(record,'{Authority,Passkey,Present}','false')`,
+					`jsonb_set(record,'{Authority,Passkey,Binding,Version}','0')`,
+					`jsonb_set(record,'{Authentication,Proof,Method}','"password"')`,
+					`jsonb_set(record,'{Authentication,Proof,Purpose}','"identity.password.mfa-primary"')`,
+					`jsonb_set(record,'{Authentication,Proof,Assurance}','1')`,
+				)
 			}
 			for _, mutation := range mutations {
 				if _, err := tx.Exec(ctx, `SAVEPOINT bad_record`); err != nil {

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Explicitly compose original passkey plus confirmed TOTP session persistence,
+  primary reading and revocation without password or known-empty-factor fallback.
+  Require same-Work recorded factor completion and exact current credential,
+  RP mapping and enrollment authority; preserve original primary and evidence
+  deadlines. Install the selected forward `PasskeyMFAMigrationSource` and upgrade
+  readers before enabling this profile. Assertion/browser authentication and
+  complete public login orchestration remain the native consumer's obligations.
+
 - Expose original passkey-session authority derivation for native protected
   actions without losing the credential, RP/passkey or known-empty MFA
   dimensions. This grants no fresh authentication; action owners still require

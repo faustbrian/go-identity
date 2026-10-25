@@ -58,6 +58,7 @@ type Repository struct {
 	revokeMFAMagicLink  *MagicLinkAdmissionConfig
 	revokeMFAPassword   *IdentifierAdmissionConfig
 	revokePasskey       *passkeySessionSelection
+	revokeMFAPasskey    *mfaPasskeySessionSelection
 }
 
 // NewRepository validates configuration without IO. The database must already

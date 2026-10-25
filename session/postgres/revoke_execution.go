@@ -40,6 +40,9 @@ type RevokeOneExecutorConfig struct {
 	// session reader. Nil keeps passkey callers/targets disabled; it never
 	// converts their original factor/passkey dimensions into password authority.
 	Passkey *PasskeySessionAdmission
+	// MFAPasskey retains independent RP mapping and confirmed TOTP authority
+	// for both caller and target. The identical profile must read Sessions.
+	MFAPasskey *MFAPasskeySessionAdmission
 }
 
 // RevokeOneExecutor owns kernel/native/audit/outbox composition. It accepts no
@@ -112,6 +115,13 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 			return nil, session.ErrInvalidInput
 		}
 		owned.native.revokePasskey = &passkeySessionSelection{freezePasskeyProfile(p.Profile), p.Authority}
+	}
+	if p := c.MFAPasskey; p != nil {
+		base := c.Execution.Profile
+		if !p.Profile.valid() || nilIssueDependency(p.Authority) || p.Profile.GlobalAuthorityID != base.GlobalAuthorityID || p.Profile.PolicyNamespace != base.PolicyNamespace || p.Profile.Audience != base.Audience || c.Passkey != nil && c.Passkey.Profile != p.Profile {
+			return nil, session.ErrInvalidInput
+		}
+		owned.native.revokeMFAPasskey = &mfaPasskeySessionSelection{freezePasskeyProfile(p.Profile), p.Authority}
 	}
 	return &RevokeOneExecutor{owned, c.Sessions}, nil
 }

@@ -115,6 +115,8 @@ type primarySessionReader struct {
 	mfaPasswordReader *primarySessionReader
 	passkey           *passkeySessionSelection
 	passkeyReader     *primarySessionReader
+	mfaPasskey        *mfaPasskeySessionSelection
+	mfaPasskeyReader  *primarySessionReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -167,6 +169,16 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	// kind. Dispatch it first: no single-factor reader may erase that dimension,
 	// even when both magic-link profiles are selected by the same graph.
 	if stored.Session.MFAAuthentication() != (session.MFAAuthentication{}) {
+		vector, _ := spec.Authority.Bindings()
+		if spec.Authentication.Proof.Method == "passkey" || vector.Passkey.Present {
+			if r.mfaPasskeyReader != nil {
+				return r.mfaPasskeyReader.observeCredential(bounded, stored, start)
+			}
+			if r.mfaPasskey == nil || r.mfaFactors == nil {
+				return session.SessionObservation{}, session.ErrUnauthenticated
+			}
+			return r.observeCredential(bounded, stored, start)
+		}
 		if spec.Authentication.Kind == session.AuthenticationVerified && r.mfaPasswordReader != nil {
 			return r.mfaPasswordReader.observeCredential(bounded, stored, start)
 		}
@@ -216,6 +228,9 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	if r.passkey != nil {
 		directory, credential, policy, err = passkeySessionAdmission(r.passkey.profile, stored.Session, binding)
 	}
+	if r.mfaPasskey != nil {
+		directory, credential, policy, err = passkeyMFASessionAdmission(r.mfaPasskey.profile, stored.Session, binding)
+	}
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
@@ -243,13 +258,20 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	}
 	var factorVersion uint64
 	var passkeyObserved PasskeySessionAuthorityObservation
+	var mfaPasskeyObserved MFAPasskeySessionAuthorityObservation
 	if r.passkey != nil {
 		passkeyObserved, err = r.passkey.authority.ObservePasskeySession(bounded, r.passkey.profile.RPNamespace, stored.Session)
 		if err != nil {
 			return session.SessionObservation{}, observationError(err)
 		}
 	}
-	if r.mfaPassword {
+	if r.mfaPasskey != nil {
+		mfaPasskeyObserved, err = r.mfaPasskey.authority.ObserveMFAPasskeySession(bounded, r.mfaPasskey.profile.RPNamespace, stored.Session)
+		if err != nil {
+			return session.SessionObservation{}, observationError(err)
+		}
+	}
+	if r.mfaPassword || r.mfaPasskey != nil {
 		if r.mfaFactors == nil {
 			return session.SessionObservation{}, session.ErrUnauthenticated
 		}
@@ -293,7 +315,7 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	vector.Credential.Version = currentCredential.AuthorityVersion
 	vector.SessionFamily.Version, vector.Session.Version = stored.CurrentFamilyVersion, spec.Version
 	vector.Authorization.Version = currentPolicy.Version
-	if r.mfaPassword {
+	if r.mfaPassword || r.mfaPasskey != nil {
 		vector.Factor.Binding.Version = factorVersion
 	}
 	current, err := session.NewAuthoritySnapshot(vector)
@@ -309,6 +331,17 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 		}
 		vector.Passkey.Binding.Version = passkeyObserved.PasskeyVersion
 		vector.Factor.Binding.Version = passkeyObserved.FactorVersion
+		current, err = session.NewAuthoritySnapshot(vector)
+		if err != nil {
+			return session.SessionObservation{}, session.ErrUnavailable
+		}
+	}
+	if r.mfaPasskey != nil {
+		start, until, err = mfaPasskeyObservationBounds(mfaPasskeyObserved, start, now)
+		if err != nil {
+			return session.SessionObservation{}, err
+		}
+		vector.Passkey.Binding.Version = mfaPasskeyObserved.PasskeyVersion
 		current, err = session.NewAuthoritySnapshot(vector)
 		if err != nil {
 			return session.SessionObservation{}, session.ErrUnavailable

@@ -1,5 +1,24 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 10:46 UTC: kernel guard a59f410769b55d54a9c685c59364cadbc7b23b93
+is exact remote main, Required40183342318 SUCCESS. Authenticated public native
+v0.0.0-20261025100515-a59f410769b5 matches all5 changed kernel files and is
+consumed by the session candidate. Native organization2cbf261 likewise matches
+all10 public files. No historical/full-release qualification claim is added.
+
+Native completed passkey/TOTP session25-path batch has complete independent
+passkey_mfa_session_final APPROVE. Final88881: actual signed-child/native-TOTP/
+session/read/retry/recovery/owned-revoke component and failure/expiry cases pass
+PostgreSQL/race2.131s; retained password/passkey readers1.781s, populated-record
+oracle0.855s, module units0.304s, tagged vet0, module verification all and
+selected secrets clean. Reviewer F1 final credential expiry after downstream
+wait reproduced46047 as committed effects; mandatory effect.Check and original
+commit callback now reject at that final fence and roll back all effects.
+The tightened expiry oracle distinguishes final credential denial from timeout.
+Primary verifier/policy/RP mapping remain explicit component seams. Actual
+delivered assertion->TOTP mapping/Reference and full login journey remain next;
+no fullM16 closure. Native batch main delivery follows; no user decision needed.
+
 2026-10-25 10:01 UTC: organization native keyed Update is delivered at
 2cbf261a87d6f67315e5522ae66972d6371d30a3 exact origin/main, Required40182027661
 SUCCESS. Complete ten-path organization_update_native_final APPROVE covers

@@ -161,15 +161,22 @@ func passkeySessionAdmission(c PasskeyAdmissionConfig, record session.Session, b
 }
 
 func passkeyObservationBounds(o PasskeySessionAuthorityObservation, start, now time.Time) (time.Time, time.Time, error) {
-	if !sessionReadTime(start) || !sessionReadTime(now) || now.Before(start) || o.PasskeyVersion == 0 || o.FactorVersion == 0 || !sessionReadTime(o.ReadStartedAt) || !sessionReadTime(o.ValidUntil) || o.ReadStartedAt.After(now) || !o.ValidUntil.After(o.ReadStartedAt) || o.ValidUntil.After(o.ReadStartedAt.Add(20*time.Second)) || !now.Before(o.ValidUntil) {
+	if o.FactorVersion == 0 {
 		return time.Time{}, time.Time{}, session.ErrUnauthenticated
 	}
-	if o.ReadStartedAt.Before(start) {
-		start = o.ReadStartedAt
+	return passkeyMappingObservationBounds(o.PasskeyVersion, o.ReadStartedAt, o.ValidUntil, start, now)
+}
+
+func passkeyMappingObservationBounds(version uint64, readStart, validUntil, start, now time.Time) (time.Time, time.Time, error) {
+	if !sessionReadTime(start) || !sessionReadTime(now) || now.Before(start) || version == 0 || !sessionReadTime(readStart) || !sessionReadTime(validUntil) || readStart.After(now) || !validUntil.After(readStart) || validUntil.After(readStart.Add(20*time.Second)) || !now.Before(validUntil) {
+		return time.Time{}, time.Time{}, session.ErrUnauthenticated
+	}
+	if readStart.Before(start) {
+		start = readStart
 	}
 	until := start.Add(20 * time.Second)
-	if o.ValidUntil.Before(until) {
-		until = o.ValidUntil
+	if validUntil.Before(until) {
+		until = validUntil
 	}
 	if !now.Before(until) {
 		return time.Time{}, time.Time{}, session.ErrUnauthenticated

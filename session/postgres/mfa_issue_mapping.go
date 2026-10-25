@@ -139,7 +139,7 @@ func mfaCompletionRecord(record session.Session, method string) bool {
 		return false
 	}
 	a, err := s.Authority.Bindings()
-	if err != nil || a.Organization.Present || !a.Factor.Present || a.Passkey.Present {
+	if err != nil || a.Organization.Present || !a.Factor.Present {
 		return false
 	}
 	m, err := record.MFAAuthentication().Bindings()
@@ -149,11 +149,18 @@ func mfaCompletionRecord(record session.Session, method string) bool {
 	switch s.Authentication.Kind {
 	case session.AuthenticationMagicLink:
 		p, err := record.MagicLinkAuthentication().Bindings()
-		if err != nil || m.PrimaryCommandID != p.CommandID {
+		if err != nil || m.PrimaryCommandID != p.CommandID || a.Passkey.Present {
 			return false
 		}
 	case session.AuthenticationVerified:
-		if s.Authentication.Proof.Method != "password" || string(m.PrimaryCommandID) != string(s.Authentication.Proof.ID) {
+		if string(m.PrimaryCommandID) != string(s.Authentication.Proof.ID) {
+			return false
+		}
+		if s.Authentication.Proof.Method == "passkey" {
+			if method != "totp" || !a.Passkey.Present || s.Authentication.Proof.Purpose != session.PasskeyMFAPrimaryPurpose {
+				return false
+			}
+		} else if s.Authentication.Proof.Method != "password" || a.Passkey.Present {
 			return false
 		}
 	default:

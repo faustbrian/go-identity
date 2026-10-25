@@ -21,6 +21,9 @@ type SelectedSessionAdmissionConfig struct {
 	// Passkey selects the owned RP/mapping and known-empty factor authority.
 	// Stored passkey provenance selects only this owner, never another method.
 	Passkey *PasskeySessionAdmission
+	// MFAPasskey independently selects original passkey plus confirmed TOTP.
+	// It cannot fall back to the known-empty Passkey selection or password MFA.
+	MFAPasskey *MFAPasskeySessionAdmission
 }
 
 // SelectedSessionServiceConfig retains the native repository and validation
@@ -33,6 +36,49 @@ type SelectedSessionServiceConfig struct {
 }
 
 func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.AuthenticationKind, string, error) {
+	if c.MFAPasskey != nil {
+		p := c.MFAPasskey.Profile
+		if !p.valid() || nilIssueDependency(c.MFAPasskey.Authority) || c.Passkey != nil && c.Passkey.Profile != p {
+			return nil, "", session.ErrInvalidInput
+		}
+		common := OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience}
+		profiles := []*OTPAdmissionConfig{c.SingleFactor.OTP}
+		for _, v := range []*IdentifierAdmissionConfig{c.SingleFactor.Verified, c.MFAPassword} {
+			if v != nil {
+				profiles = append(profiles, &OTPAdmissionConfig{v.GlobalAuthorityID, v.PolicyNamespace, v.Audience})
+			}
+		}
+		for _, v := range []*MagicLinkAdmissionConfig{c.SingleFactor.MagicLink, c.MFAMagicLink} {
+			if v != nil {
+				profile := OTPAdmissionConfig(*v)
+				profiles = append(profiles, &profile)
+			}
+		}
+		for _, v := range profiles {
+			if v != nil && *v != common {
+				return nil, "", session.ErrInvalidInput
+			}
+		}
+		var methods []session.AuthenticationKind
+		var previous string
+		if c.Passkey != nil || c.SingleFactor.Verified != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil || c.MFAPassword != nil {
+			prior := c
+			prior.MFAPasskey = nil
+			var err error
+			methods, previous, err = selectedSessionAdmission(prior)
+			if err != nil {
+				return nil, "", err
+			}
+		}
+		found := false
+		for _, kind := range methods {
+			found = found || kind == session.AuthenticationVerified
+		}
+		if !found {
+			methods = append(methods, session.AuthenticationVerified)
+		}
+		return methods, nativeAdmissionCacheProfile("native-selected-passkey-totp-session-v1", previous, p.GlobalAuthorityID, p.PolicyNamespace, p.Audience, p.RPNamespace), nil
+	}
 	if c.Passkey != nil {
 		p := c.Passkey.Profile
 		if !p.valid() || nilIssueDependency(c.Passkey.Authority) {
@@ -161,7 +207,7 @@ func NewSelectedSessionService(pool *database.Pool, c SelectedSessionServiceConf
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, methods, profile)
+	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, c.Admission.MFAPasskey, methods, profile)
 }
 
 // Format redacts deployment, profile and key configuration.

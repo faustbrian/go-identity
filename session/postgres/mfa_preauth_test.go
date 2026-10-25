@@ -42,6 +42,39 @@ type consumedMFAFlowQuery struct {
 	clock   *consumedMFAFlowRows
 }
 
+func TestMFAPasskeyConsumedBrowserCannotEnterAnotherPrimaryProfile(t *testing.T) {
+	now := time.Now().UTC()
+	s, _ := testPreAuth(t, now).Bindings()
+	b := identity.CommandBinding{CommandID: "AgICAgICAgICAgICAgICAg", TenantID: s.Binding.Intent.TenantID, AnonymousFlowID: string(s.Binding.ID)}
+	for _, purpose := range []string{"identity.passkey.signin-verify", "identity.password.signin", "identity.magic-link.consume", "identity.password.signup"} {
+		for _, passkey := range []bool{false, true} {
+			s.Binding.Intent.Action = purpose
+			flow, err := session.NewPreAuthTransaction(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wire, err := encodePreAuth(flow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q := &consumedMFAFlowQuery{rows: &consumedMFAFlowRows{record: wire}, purpose: purpose}
+			err = requireMFAConsumedPreAuthOrigin(t.Context(), q, func(context.Context) (time.Time, error) { return now, nil }, b, Config{Schema: "session_store", MaximumDuration: time.Second}, flow, "AwMDAwMDAwMDAwMDAwMDAw", false, passkey)
+			want := passkey && purpose == "identity.passkey.signin-verify" || !passkey && (purpose == "identity.password.signin" || purpose == "identity.magic-link.consume")
+			if want != (err == nil) || want != q.rows.closed {
+				t.Fatal("consumed browser crossed original primary profile", purpose, passkey, err)
+			}
+		}
+	}
+	if err := RequireMFAPasskeyConsumedPreAuth(t.Context(), kernel.Work{}, nil, identity.Command{}, Config{}, session.PreAuthTransaction{}, ""); err == nil {
+		t.Fatal("unowned Work admitted consumed passkey browser")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := RequireMFAPasskeyConsumedPreAuth(ctx, kernel.Work{}, nil, identity.Command{}, Config{}, session.PreAuthTransaction{}, ""); err == nil {
+		t.Fatal("canceled unowned Work admitted consumed passkey browser")
+	}
+}
+
 func (q *consumedMFAFlowQuery) Query(_ context.Context, _ string, args ...any) (*consumedMFAFlowRows, error) {
 	if len(args) == 0 && q.clock != nil {
 		return q.clock, nil

@@ -1,10 +1,19 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 10:01 UTC
+## Current TL;DR — 2026-10-25 10:46 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
   their required final qualification; other capability milestones remain open.
+- **Latest native session result:** actual signed child -> TOTP verification ->
+  session/read -> original retry/recovery -> native self-revocation/read denial
+  passes PostgreSQL/race, including late rollback and final credential expiry.
+  The complete25-path session batch is independently approved; main delivery
+  follows. Its primary-verifier and RP-mapping boundaries are explicit fixtures,
+  not proof of the complete genuine assertion-to-TOTP consumer. That integration
+  remains unfinished; no full milestone is newly closed.
+- **Kernel prerequisite delivered:** a59f410 is main/Required-CI green and all5
+  changed files match the authenticated public module consumed by this batch.
 - **Latest delivered:** passkey challenge-only native68e1b64 and organization
   keyed metadata Update2cbf261 are independently reviewed, pushed to main and
   Required-CI green. All14 native passkey files match the authenticated public

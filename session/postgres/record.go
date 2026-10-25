@@ -336,7 +336,11 @@ func decodeRecord(b []byte) (session.Session, error) {
 		if e != nil {
 			return invalid()
 		}
-		if hasCSRF {
+		if spec.Authentication.Proof.Method == "passkey" && hasCSRF {
+			result, err = session.NewSessionWithPasskeyMFAAndCSRF(spec, factor, state)
+		} else if spec.Authentication.Proof.Method == "passkey" {
+			result, err = session.NewSessionWithPasskeyMFA(spec, factor)
+		} else if hasCSRF {
 			result, err = session.NewSessionWithPasswordMFAAndCSRF(spec, factor, state)
 		} else {
 			result, err = session.NewSessionWithPasswordMFA(spec, factor)
