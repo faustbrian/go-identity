@@ -1,5 +1,22 @@
 # MFA HTTP transport
 
+## Original passkey plus TOTP
+
+Select `FeatureConfig.PasskeyTOTPVerify` with the actual native passkey/TOTP
+completion owner. POST the unchanged closed TOTP completion body to
+`/v1/mfa/totp-verify` with exactly one `X-MFA-Variant: passkey`, the original
+flow/device cookies, exact Origin and original callback. This variant is never
+the absent-header default, even when selected alone. It cannot use password or
+email-possession provenance, and duplicate/mixed variants deny before native
+admission. Independent factor verification and atomic browser/child/session
+effects remain native-owned. Only fresh acknowledged completion delivers the
+session cookie and synchronizer; retry/recovery never redisclose them.
+
+`TOTPVerifyConfig.PasskeyPrimary` selects that exact session delivery profile
+for direct handler composition and is mutually exclusive with PasswordPrimary.
+It does not select passkey assertion, enrollment, recovery codes or trusted
+devices. Use the passkey HTTP owner for the separately selected primary phase.
+
 To issue an email-change TOTP step-up proof, independently select
 `ActiveStepUpConfig.Purposes: []auth.Purpose{"identity.email.change-request"}`
 over an explicitly selected native issuer. Submit the exact purpose to

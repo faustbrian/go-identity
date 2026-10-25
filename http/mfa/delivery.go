@@ -41,6 +41,11 @@ func deliverCompletion(c TOTPVerifyConfig, s input, result completionResult) (st
 		primaryID, primaryAt, primaryUntil = identity.CommandID(proof.ID), proof.IssuedAt, proof.ExpiresAt
 		primaryValid = spec.Authentication.Kind == session.AuthenticationVerified && proof.Method == "password" && proof.Assurance == auth.AssuranceSingleFactor && proof.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: session.PasswordMFAPrimaryPurpose, Audience: c.Audience, Now: now}) == nil
 	}
+	if c.PasskeyPrimary {
+		proof := spec.Authentication.Proof
+		primaryID, primaryAt, primaryUntil = identity.CommandID(proof.ID), proof.IssuedAt, proof.ExpiresAt
+		primaryValid = spec.Authentication.Kind == session.AuthenticationVerified && proof.Method == "passkey" && proof.Assurance == auth.AssurancePhishingResistant && proof.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: session.PasskeyMFAPrimaryPurpose, Audience: c.Audience, Now: now}) == nil
+	}
 	if err != nil || fe != nil || !primaryValid || ce != nil || spec.TenantID != tenant || spec.UserID != s.rate.UserID || spec.Audience != c.Audience || factor.Method != method || factor.CommandID != command || string(factor.ContinuationID) != s.rate.ChallengeID || string(factor.ContinuationID) != continuation || !factorValid || factor.PrimaryCommandID != primaryID || result.Session.Cookie.Value != "" || csrfState.Binding != (session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
 		return deny()
 	}

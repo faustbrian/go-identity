@@ -298,8 +298,17 @@ func signinComplete(c SigninConfig, w http.ResponseWriter, r *http.Request, s Si
 	} else {
 		out, err = c.Service.Signin(r.Context(), passkey.SigninCompletion{SigninRequest: s.request, CeremonyID: s.body.ceremonyID, Response: s.body.response})
 	}
+	if out.Challenge != nil {
+		// Returning native child custody transfers cleanup ownership even when
+		// the borrowed service also reports an error or invalid observation.
+		defer out.Challenge.Proof.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
+	}
 	if err != nil {
 		rejectNative(w, r, err)
+		return
+	}
+	if out.Challenge != nil {
+		deliverSigninMFAChallenge(c, w, r, s, out)
 		return
 	}
 	deliverPasskeySession(w, r, authenticationDelivery{tenant: s.facts.TenantID(), command: s.request.CommandID, audience: c.Audience, cookie: c.SessionCookie, now: c.Now, fresh: func() bool { return signinFresh(c, s) }}, out.Session, out.CSRF, out.CounterRisk, false)

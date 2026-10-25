@@ -4,6 +4,22 @@ This nested module contributes only explicitly selected cookie-only passkey
 operations. The base HTTP module imports neither this package nor a
 PostgreSQL adapter. Omitting the feature exposes no passkey routes or metadata.
 
+## Native passkey plus independent TOTP
+
+Set `SigninConfig.MFAContinuation` only when the borrowed native signin owner
+supports the original passkey/TOTP profile. Options and assertion requests keep
+their existing identified/discoverable input, original flow/device cookies and
+exact Origin. After genuine assertion, an enrolled account returns
+`signedIn:false`, `challengeRequired:true`, original challenge ID/method/expiry
+and a reveal-once child in `X-MFA-Token`. There is no session cookie or CSRF
+synchronizer. Retain the original browser cookie and pass this child to the
+separately selected native TOTP completion; this module verifies no factor.
+
+With the option absent no child is exported. Replay, ambiguity, cancellation,
+invalid native observations and post-middleware expiry disclose no child or
+session. Native current-factor policy remains decisive; a failed MFA operation
+never falls back to another login method. This is HTTP backend support, not UI.
+
 ## Password-free additional-key enrollment
 
 Select `FeatureConfig.SessionEnrollment` with `SessionEnrollmentConfig`, borrowing

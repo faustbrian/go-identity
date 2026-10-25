@@ -190,6 +190,10 @@ type SigninConfig struct {
 	Device                    session.BrowserDeviceConfig
 	Address                   email.AddressParser
 	Discoverable              bool
+	// MFAContinuation explicitly permits the native owner's original TOTP
+	// challenge instead of session delivery. It does not verify a factor or
+	// enable a completion route; absent selection never exports a child proof.
+	MFAContinuation bool
 	// DiscoverableOnly requires Discoverable and rejects identified requests.
 	// Address is unused; no email/password comparison owner is required.
 	DiscoverableOnly bool

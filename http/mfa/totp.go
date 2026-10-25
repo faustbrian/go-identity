@@ -44,6 +44,10 @@ type TOTPVerifyConfig struct {
 	// email-possession delivery; the selected native owner still authenticates
 	// its exact magic-link or registration-verification origin without fallback.
 	PasswordPrimary bool
+	// PasskeyPrimary selects original UV-passkey plus independent TOTP session
+	// provenance. It is mutually exclusive with PasswordPrimary and does not
+	// enable enrollment, recovery codes or another primary's fallback.
+	PasskeyPrimary  bool
 	Network         identityhttp.NetworkConfig
 	Service         TOTPVerifyService
 	Rate            *identityhttp.ChallengeVerificationRateLimiter
@@ -126,6 +130,9 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 func newNativeCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService, otpService OTPVerifyService, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
 	recovery := recoveryService != nil
 	otp := otpService != nil
+	if c.PasskeyPrimary && (c.PasswordPrimary || recovery || otp) {
+		return nil, identityhttp.ErrInvalidInput
+	}
 	var service any = c.Service
 	operation, path := "identity.mfa.totp-verify", "/v1/mfa/totp-verify"
 	if recovery {

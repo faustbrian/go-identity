@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Explicitly project native passkey/TOTP continuation challenges through
+  reveal-once response custody, without issuing a session or synchronizer.
+  Existing signin contracts remain unchanged when the option is absent.
+
 - Describe native ES256/Ed25519 registration options in OpenAPI, including either
   ordered unique pair. Keep the response list bounded to one or two supported
   parameters; native algorithm selection and the ES256 default are unchanged.

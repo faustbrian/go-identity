@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select original passkey/TOTP completion with the explicit `passkey` variant.
+  Deliver only the native UV-passkey plus independently completed TOTP session;
+  password/email primaries and absent or ambiguous variants never substitute.
+
 - Independently select username-origin TOTP completion with
   `UsernameTOTPVerify` and singleton `X-MFA-Variant: username`, even when alone.
   It never becomes the default or another primary's fallback; selected wire

@@ -41,7 +41,11 @@ type FeatureConfig struct {
 	// UsernameTOTPVerify selects the actual username/password-origin owner.
 	// Singleton X-MFA-Variant: username is always required, even when selected
 	// alone. It never becomes the default or a fallback for another primary.
-	UsernameTOTPVerify     *TOTPVerifyConfig
+	UsernameTOTPVerify *TOTPVerifyConfig
+	// PasskeyTOTPVerify selects only original passkey/TOTP completion. Singleton
+	// X-MFA-Variant: passkey is always required, even when selected alone.
+	// It never becomes a default or a fallback after another primary fails.
+	PasskeyTOTPVerify      *TOTPVerifyConfig
 	Enable                 *EnableConfig
 	URI                    *URIConfig
 	EnrollmentConfirmation *EnrollmentConfirmationConfig
@@ -57,7 +61,7 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.Disable == nil && c.FactorUpdate == nil && c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil && c.UsernameTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil && c.OTPVerify == nil && c.OTPSend == nil {
+	if c.Disable == nil && c.FactorUpdate == nil && c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil && c.UsernameTOTPVerify == nil && c.PasskeyTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil && c.OTPVerify == nil && c.OTPSend == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
@@ -145,17 +149,23 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		op.Wire = recoveryWire(*c.RecoveryUse)
 		operations = append(operations, op)
 	}
-	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil || c.EnrollmentConfirmation != nil || c.ActiveStepUp != nil {
+	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil || c.PasskeyTOTPVerify != nil || c.EnrollmentConfirmation != nil || c.ActiveStepUp != nil {
 		h := &verifyDispatch{passwordDefault: c.TOTPVerify == nil && c.PasswordTOTPVerify != nil}
 		var err error
 		policy := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}
 		if c.TOTPVerify != nil {
+			if c.TOTPVerify.PasskeyPrimary {
+				return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+			}
 			h.login, err = NewTOTPVerifyHandlerWithMiddleware(*c.TOTPVerify, m)
 			if err != nil {
 				return identityhttp.Feature{}, err
 			}
 		}
 		if c.PasswordTOTPVerify != nil {
+			if c.PasswordTOTPVerify.PasskeyPrimary {
+				return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+			}
 			if c.TOTPVerify != nil {
 				a, b := *c.TOTPVerify, *c.PasswordTOTPVerify
 				if a.Origin != b.Origin || a.CallbackURL != b.CallbackURL || a.ActorID != b.ActorID || a.PolicyRevision != b.PolicyRevision || a.Audience != b.Audience {
@@ -176,7 +186,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 			}
 			policy.Mode = identityhttp.CSRFSessionState
 			policy.TokenHeader = "X-CSRF-Token"
-			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil {
+			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil || c.PasskeyTOTPVerify != nil {
 				policy.Mode = identityhttp.CSRFVariantOriginSessionState
 			}
 		}
@@ -187,12 +197,12 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 			}
 			policy.Mode = identityhttp.CSRFSessionState
 			policy.TokenHeader = "X-CSRF-Token"
-			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil {
+			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil || c.PasskeyTOTPVerify != nil {
 				policy.Mode = identityhttp.CSRFVariantOriginSessionState
 			}
 		}
 		if c.VerificationTOTPVerify != nil {
-			if c.VerificationTOTPVerify.PasswordPrimary {
+			if c.VerificationTOTPVerify.PasswordPrimary || c.VerificationTOTPVerify.PasskeyPrimary {
 				return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 			}
 			h.verification, err = NewTOTPVerifyHandlerWithMiddleware(*c.VerificationTOTPVerify, m)
@@ -201,9 +211,23 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 			}
 		}
 		if c.UsernameTOTPVerify != nil {
+			if c.UsernameTOTPVerify.PasskeyPrimary {
+				return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+			}
 			username := *c.UsernameTOTPVerify
 			username.PasswordPrimary = true
 			h.username, err = NewTOTPVerifyHandlerWithMiddleware(username, m)
+			if err != nil {
+				return identityhttp.Feature{}, err
+			}
+		}
+		if c.PasskeyTOTPVerify != nil {
+			passkey := *c.PasskeyTOTPVerify
+			if passkey.PasswordPrimary {
+				return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+			}
+			passkey.PasskeyPrimary = true
+			h.passkey, err = NewTOTPVerifyHandlerWithMiddleware(passkey, m)
 			if err != nil {
 				return identityhttp.Feature{}, err
 			}
@@ -290,7 +314,7 @@ func totpWire(c TOTPVerifyConfig) *identityhttp.WireOperation {
 	proof := map[string]any{"type": "string", "minLength": 32, "maxLength": 4096, "writeOnly": true}
 	code := map[string]any{"type": "string", "minLength": 4, "maxLength": 128, "writeOnly": true, "description": "Opaque bounded input; native enrolled TOTP profile owns mismatch and shared attempts."}
 	body := object([]string{"commandID", "preAuthID", "challengeID", "factorID", "token", "code", "callbackURL", "trustDevice"}, map[string]any{"commandID": id, "preAuthID": id, "challengeID": id, "factorID": id, "token": proof, "code": code, "callbackURL": map[string]any{"const": c.CallbackURL}, "trustDevice": map[string]any{"type": "boolean", "description": "Native unsupported trusted-device requests deny; never silently ignored."}})
-	definition := map[string]any{"operationId": "identity.mfa.totp-verify", "description": "Explicit browser TOTP completion for the selected native magic-link continuation. Exact tenant/HTTPS/Origin/callback and original flow/device cookies required. No Idempotency-Key, Authorization, query, redirect or automatic retry. IP admission precedes owning original source and subject/challenge quotas; native protected factor/risk/one-use/session authority remains decisive. Only a fresh error-free committed result delivers credentials. Expired-proof history uses explicit native recovery.", "security": []any{map[string]any{"MFAOriginalFlow": []string{}, "MFABrowserDevice": []string{}}}, "parameters": []any{map[string]any{"name": "Origin", "in": "header", "required": true, "schema": map[string]any{"const": string(c.Origin)}}}, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": body}}}, "responses": responses}
+	definition := map[string]any{"operationId": "identity.mfa.totp-verify", "description": "Explicit browser TOTP completion for the selected native original-primary continuation. Exact tenant/HTTPS/Origin/callback and original flow/device cookies required. No Idempotency-Key, Authorization, query, redirect or automatic retry. IP admission precedes owning original source and subject/challenge quotas; native protected factor/risk/one-use/session authority remains decisive. Only a fresh error-free committed result delivers credentials. Expired-proof history uses explicit native recovery.", "security": []any{map[string]any{"MFAOriginalFlow": []string{}, "MFABrowserDevice": []string{}}}, "parameters": []any{map[string]any{"name": "Origin", "in": "header", "required": true, "schema": map[string]any{"const": string(c.Origin)}}}, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": body}}}, "responses": responses}
 	data, _ := json.Marshal(definition)
 	flow, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": "__Host-identity_flow", "description": "Original native browser-flow possession, not a session."})
 	device, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": "__Host-identity_device", "description": "Signed browser correlation, not a trusted MFA device."})

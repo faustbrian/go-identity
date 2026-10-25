@@ -55,6 +55,20 @@ func issuance(t *testing.T, c TOTPVerifyConfig, r mfa.TotpVerifyRequest) mfa.Tot
 		spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(parent), Tenant: string(r.TenantID), Subject: "user-a", Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: session.PasswordMFAPrimaryPurpose, Audience: c.Audience, IssuedAt: now.Add(-5 * time.Second), ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: "credential-a", CredentialVersion: 1}
 		record, err = session.NewSessionWithPasswordMFAAndCSRF(spec, factor, state)
 	}
+	if c.PasskeyPrimary {
+		spec, _ := record.Bindings()
+		spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(parent), Tenant: string(r.TenantID), Subject: "user-a", Method: "passkey", Assurance: auth.AssurancePhishingResistant, Purpose: session.PasskeyMFAPrimaryPurpose, Audience: c.Audience, IssuedAt: now.Add(-5 * time.Second), ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: "credential-a", CredentialVersion: 1}
+		authority, e := spec.Authority.Bindings()
+		if e != nil {
+			t.Fatal(e)
+		}
+		authority.Passkey = session.OptionalAuthorityBinding{Present: true, Binding: bind("passkey")}
+		spec.Authority, err = session.NewAuthoritySnapshot(authority)
+		if err != nil {
+			t.Fatal(err)
+		}
+		record, err = session.NewSessionWithPasskeyMFAAndCSRF(spec, factor, state)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

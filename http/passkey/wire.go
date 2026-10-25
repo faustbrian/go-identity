@@ -161,6 +161,10 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 		success = wireObject([]string{"credentials"}, map[string]any{"credentials": map[string]any{"type": "array", "maxItems": 100, "items": metadataWire()}, "next": wireID()})
 	default:
 		success = wireObject([]string{"signedIn", "commandID", "commitOutcome", "sessionID", "counterRisk"}, map[string]any{"signedIn": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "sessionID": wireText(128), "counterRisk": map[string]any{"type": "boolean"}})
+		if c.Signin.MFAContinuation {
+			challenge := wireObject([]string{"signedIn", "challengeRequired", "commandID", "commitOutcome", "challengeID", "challengeMethod", "challengeExpiresAt"}, map[string]any{"signedIn": map[string]any{"const": false}, "challengeRequired": map[string]any{"const": true}, "commandID": wireID(), "commitOutcome": map[string]any{"const": "committed"}, "challengeID": wireID(), "challengeMethod": map[string]any{"const": "totp"}, "challengeExpiresAt": map[string]any{"type": "string", "format": "date-time"}})
+			success = map[string]any{"oneOf": []any{success, challenge}}
+		}
 	}
 	failure := wireObject([]string{"error"}, map[string]any{"error": wireText(64), "commandID": wireID(), "commitOutcome": map[string]any{"type": "string", "enum": []string{"committed", "not_committed", "unknown", "conflict", "in_progress"}}})
 	response := func(schema any) map[string]any {
@@ -175,8 +179,14 @@ func passkeyWire(c FeatureConfig, name string) *identityhttp.WireOperation {
 	}
 	if name == "signin-verify" || name == "register-verify" && c.Signup != nil {
 		responses["200"].(map[string]any)["headers"] = map[string]any{"Set-Cookie": map[string]any{"description": "Owned secure HttpOnly session cookie; never replayed.", "schema": wireText(4096)}, "X-CSRF-Token": map[string]any{"description": "Original session synchronizer, never replayed.", "schema": wireText(43)}}
+		if name == "signin-verify" && c.Signin.MFAContinuation {
+			responses["200"].(map[string]any)["headers"].(map[string]any)["X-MFA-Token"] = map[string]any{"description": "Reveal-once original native TOTP child, only with challengeRequired and without session cookie or synchronizer. Never renewed or replayed.", "schema": wireText(4096)}
+		}
 	}
 	operation := map[string]any{"operationId": "identity.passkey." + name, "description": "Explicit existing-account cookie-only passkey profile. Trusted HTTPS tenant/origin and original session/proof or original flow/mode custody are mandatory; ceremonies additionally require original device custody. Header-only keys apply to options, label update and deletion; ceremony completion forbids keys and is one-use. No body identity/remember/cookie/CSRF/command-allocation override, signup, conditional UI or fallback. Native authorization, recovery, risk and atomic consumption remain authoritative. Responses are synchronously bounded; hooks cannot acquire credential custody.", "parameters": parameters, "responses": responses}
+	if name == "signin-verify" && c.Signin.MFAContinuation {
+		operation["description"] = operation["description"].(string) + " Explicit MFA continuation permits the actual native owner's original TOTP challenge after genuine UV assertion. challengeRequired means no session was delivered; retain the original browser and transfer X-MFA-Token only to the separately selected native factor completion. No challenge is exported without this selection, on replay, ambiguity or expired delivery. Authenticator UV never substitutes for the independent factor."
+	}
 	if update && c.SessionUpdate != nil {
 		operation["description"] = "Explicit password-free current-session UV rename. phase=options binds exact reference/version/name to the current cookie session, CSRF, Origin and trusted client network. phase=complete repeats that intent with the returned commandID as ceremonyID and a genuine assertion. Each phase requires its own distinct header-only Idempotency-Key under the same protected rate.secret action. No proofID, device cookie, caller command, tenant or credential override. Matching retries expose original metadata only; no challenge, authentication cookie or renewed validity. Native ownership retains atomic current authority, assertion consumption, risk, metadata, audit and lifecycle effects. No fallback to password-proof update."
 	}

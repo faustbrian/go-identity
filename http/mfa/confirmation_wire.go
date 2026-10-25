@@ -43,8 +43,11 @@ func selectedBaseVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 	if selected.TOTPVerify == nil {
 		selected.TOTPVerify = selected.UsernameTOTPVerify
 	}
+	if selected.TOTPVerify == nil {
+		selected.TOTPVerify = selected.PasskeyTOTPVerify
+	}
 	wire := combinedVerifyWire(selected)
-	if c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil && c.UsernameTOTPVerify == nil {
+	if c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil && c.UsernameTOTPVerify == nil && c.PasskeyTOTPVerify == nil {
 		return wire
 	}
 	var definition map[string]any
@@ -58,6 +61,9 @@ func selectedBaseVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 	if c.UsernameTOTPVerify != nil {
 		definition["description"] = definition["description"].(string) + " Username/password completion requires singleton X-MFA-Variant: username and its exact original native username challenge/browser. It is never a default or a fallback after another primary fails."
 	}
+	if c.PasskeyTOTPVerify != nil {
+		definition["description"] = definition["description"].(string) + " Passkey/TOTP completion requires singleton X-MFA-Variant: passkey and the exact original native UV-passkey challenge/browser. It never becomes a default or accepts password/email provenance; UV does not replace the independent factor."
+	}
 	var variants []string
 	if c.EnrollmentConfirmation != nil {
 		variants = append(variants, "enrollment")
@@ -70,6 +76,9 @@ func selectedBaseVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 	}
 	if c.UsernameTOTPVerify != nil {
 		variants = append(variants, "username")
+	}
+	if c.PasskeyTOTPVerify != nil {
+		variants = append(variants, "passkey")
 	}
 	parameters := definition["parameters"].([]any)
 	found := false
@@ -85,9 +94,9 @@ func selectedBaseVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 		parameters = append(parameters, map[string]any{"name": "X-MFA-Variant", "in": "header", "required": c.TOTPVerify == nil && c.PasswordTOTPVerify == nil, "schema": map[string]any{"type": "string", "enum": variants}})
 	}
 	definition["parameters"] = parameters
-	if c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil {
+	if c.VerificationTOTPVerify != nil || c.UsernameTOTPVerify != nil || c.PasskeyTOTPVerify != nil {
 		var callbacks, origins []string
-		for _, login := range []*TOTPVerifyConfig{c.TOTPVerify, c.PasswordTOTPVerify, c.VerificationTOTPVerify, c.UsernameTOTPVerify} {
+		for _, login := range []*TOTPVerifyConfig{c.TOTPVerify, c.PasswordTOTPVerify, c.VerificationTOTPVerify, c.UsernameTOTPVerify, c.PasskeyTOTPVerify} {
 			if login == nil {
 				continue
 			}

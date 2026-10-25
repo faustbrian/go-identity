@@ -251,6 +251,7 @@ type delivery struct {
 	payload      []byte
 	status       int
 	cookie, csrf string
+	challenge    string
 	valid        func() bool
 	deadline     time.Time
 	observed     *failure
@@ -322,7 +323,7 @@ func (p *protectedPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if inbound, ok := r.Context().Deadline(); ok && inbound.Before(deadline) {
 		deadline = inbound
 	}
-	defer func() { clear(d.payload); d.cookie, d.csrf = "", "" }()
+	defer func() { clear(d.payload); d.cookie, d.csrf, d.challenge = "", "", "" }()
 	r = r.WithContext(context.WithValue(r.Context(), deliveryKey{}, d))
 	b := &boundedResponse{header: make(http.Header)}
 	p.pipeline.ServeHTTP(b, r)
@@ -340,7 +341,7 @@ func (p *protectedPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			reject(b, r, identityhttp.ErrUnavailable)
 		}
-		d.cookie, d.csrf = "", ""
+		d.cookie, d.csrf, d.challenge = "", "", ""
 	}
 	for name, values := range b.header {
 		lower := strings.ToLower(name)
@@ -351,6 +352,7 @@ func (p *protectedPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Del("Set-Cookie")
 	w.Header().Del("X-CSRF-Token")
+	w.Header().Del("X-MFA-Token")
 	w.Header().Del("Authorization")
 	w.Header().Del("Location")
 	w.Header().Set("Content-Type", "application/json")
@@ -359,6 +361,9 @@ func (p *protectedPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if valid && d.payload != nil && d.cookie != "" && d.csrf != "" {
 		w.Header().Set("Set-Cookie", d.cookie)
 		w.Header().Set("X-CSRF-Token", d.csrf)
+	}
+	if valid && d.payload != nil && d.challenge != "" && d.cookie == "" && d.csrf == "" {
+		w.Header().Set("X-MFA-Token", d.challenge)
 	}
 	status := b.status
 	if status == 0 {
