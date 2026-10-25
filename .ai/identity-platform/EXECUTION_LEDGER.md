@@ -1,5 +1,86 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 18:52 UTC: M16 completed-passkey/TOTP additional-key enrollment
+profile CLOSED, not full M16. Nativefc7ce6f9baaa60b658fed37cb81be6f6fb8cccf5
+exact origin/main, Required40222755555 success, complete ten-path review
+native_mfa_enrollment_final APPROVE0533be8f. Referencefa47e2aada640cad1c6c61c8fe3e5245c4477569
+exact origin/main, Required40223158145 success, complete ten-path review
+reference_mfa_enrollment_final APPROVEabc5d155. Real public-native-pin31514
+PASS13.328s; retained ordinary cookie/bearer fresh/populated enrollment and MFA
+inventory/rename21125 PASS33.834s. Ordinary Reference/command89132 PASS5.252s/
+5.863s; taggedvet0/allmodulesverified/secrets24597bytesclean. All ten downloaded
+Reference files match authenticated v0.0.0-20261025185020-fa47e2aada64,
+sumheBWSmvJ... / go.modsumFPqNgXcS.... Actual downloaded-public Reference50568
+PASS13.175s PostgreSQL/race, both genuine profiles, dependencies verified,
+GOWORKoff/modreadonly/no replacements. This proves original MFA -> freshUV
+A/B/C -> two-key inventory and metadata-only retries -> new-key TOTP-only
+challenge -> read/logout, including current factor/enrollment withdrawal denial.
+Earlier local-modfile run remains only local candidate proof, not relabeled.
+Ordinary profiles remain distinct; no MFA HTTP enrollment/removal or whole-unit
+qualification is claimed. Next primary owns the missing mapped-origin terminal
+noncommit fence to unblock the parked invitation-send consumer; worker remains
+read-only on native original deadline/retention feasibility. Whole goal stays
+active, ~25% low-confidence,11/39 full milestones; all67 final qualification
+obligations remain. No package release/tag/deployment authority used.
+
+2026-10-25 18:32 UTC: next M16 finite profile frozen: genuine completed
+passkey/TOTP session -> action-bound UV -> additional-key registration -> safe
+two-key inventory -> original metadata-only retries -> session read/logout.
+Primary owns the three existing enrollment phases in go-passkey/postgres and
+explicit Reference composition; existing factor and mapping owners are extended
+only for those exact registered schemas/lifecycles. Consume session49fde04,
+MFA83b26ec, native930e129 and Referencebfbf71e; unchanged protocol enrollment,
+atomic A-consumption/B-creation and C credential-CAS owners remain retained.
+Preserve original factor/enrollment/account generation, primary credential,
+session/family and immutable positive-read/A authorization ceilings. Deny
+ordinary/OTP/recovery or foreign provenance in this selected MFA path; wrong
+schema/lifecycle/record/current factor and withdrawal roll back. Ordinary
+enrollment remains unchanged; removal/other MFA/HTTP qualification excluded.
+Checks: focused genuine-coordinator factor RED/GREEN; native mapping/enrollment
+PostgreSQL/race plus retained ordinary enrollment; actual identified/discoverable
+Reference enrollment/race and retry/read/logout; affected module tests/vet,
+authentication/secrets, complete independent final review and downloaded public
+consumer after committed prerequisite adoption. No new transaction/proof store.
+
+Factor prerequisite1cd0ac39236463df5b3704f21b15eddf15246d7e pushed main:
+three-phase real-Work RED23386 FAIL0.408s -> selected PostgreSQL/race36398
+PASS2.496s, ordinaryrace88370 PASS1.338s/taggedvet0/allmodulesverified;
+scoped secrets11333bytes clean. Independent mfa_enrollment_factor_final APPROVE
+complete three-path diff18529380, downstream consumer excluded. Real Reference
+RED26134 FAIL5.002s reaches genuine MFA session then denies enrollment A;
+no synthetic session/factor/domain state supplied. Native adoption follows.
+
+Native ten-path candidate on930e129 consumes authenticated MFA1cd0ac3; all three
+MFA enrollment mapping scopes RED40977 FAIL3.651s -> entire mapping/Work profile
+81656 PASS8.439s PostgreSQL/race. Selected actual ordinary/no-fallback,
+CSRF/withdrawal/expiry/rollback/contention/COMMIT cohort30374 PASS134.246s;
+ordinaryrace77811 PASS1.357s/taggedvet0/allmodulesverified/secrets20979bytesclean.
+Actual external-package Reference journey29622 PASS13.218s identified and
+discoverable: genuine enrolled MFA session -> freshUV A/B/C -> two-key inventory
+and metadata retries -> new-key TOTP-only challenge -> read/logout. This run used
+an explicitly task-owned alternate modfile for the uncommitted native candidate;
+it is local composition proof, NOT public-consumer/authenticated delivery proof.
+No permanent replacement/workspace was added. Native review and public pin follow.
+
+Nativefc7ce6f9baaa60b658fed37cb81be6f6fb8cccf5 exact origin/main,
+Required40222755555 success; native_mfa_enrollment_final APPROVE entire ten-path
+0533be8f. All ten authenticated downloaded native files match reviewed bytes at
+v0.0.0-20261025184515-fc7ce6f9baaa. MFA1cd0ac3 Required40222050644 success;
+all three authenticated public factor-prerequisite files also match source.
+Final real Reference31514 PASS13.328s PostgreSQL/race using normal public pins,
+no alternate modfile: both genuine profiles, current factor/enrollment withdrawal
+denial, A/B/C and inventory/metadata retries, new-key identified/discoverable
+TOTP-only challenge and read/logout. Reference review/compatibility/delivery and
+authenticated downloaded Reference proof remain next; full M16 not closed.
+
+M22 original-key invitation-send lane is parked on a demonstrated upstream gap:
+current kernel47a2942 and consumed422b9fa both intentionally leave mapping-only
+origins Unknown. No claim/fence API can prove terminal noncommit against a late
+original executor. Worker root contract RED88144 FAIL0.202s is retained; its
+owned scratch was cleaned and no native facade exists. Primary owns the missing
+kernel behavior; existing invitation/read deliveries are unchanged. Do not
+reprepare original session/recipient authority or reinterpret Unknown as rollback.
+
 2026-10-25 18:20 UTC: M16 completed-passkey/TOTP inventory and fresh-UV rename
 native/Reference profile CLOSED, not full M16. Native930e129e16625c14eeda3a38479acc65e807b66d
 exact origin/main, Required40219538168 success; complete ten-file review

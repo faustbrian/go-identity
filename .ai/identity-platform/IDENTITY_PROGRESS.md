@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 18:20 UTC
+## Current TL;DR — 2026-10-25 18:52 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
@@ -25,18 +25,25 @@
   then retry/read/logout. Native `930e129` and Reference `bfbf71e` are independently
   reviewed, main/CI-green; the authenticated downloaded Reference passes both
   actual identified/discoverable PostgreSQL/race journeys (12.383s). Existing
-  ordinary and four HTTP-TOTP profiles pass. This does not claim MFA-management
-  HTTP qualification or enrolled-MFA additional-key enrollment/removal.
+  ordinary and four HTTP-TOTP profiles pass. MFA-management HTTP qualification
+  and key removal remain open; additional enrollment is delivered below.
+- **Closed MFA additional-key enrollment profile:** completed passkey/TOTP
+  sessions can authorize registration with genuine fresh UV, enroll a second
+  key, list both, recover original metadata and read/logout. The new key still
+  requires TOTP at identified/discoverable signin. Reviewed native `fc7ce6f` and
+  Reference `fa47e2a` are main/CI-green. The authenticated downloaded Reference
+  passes both PostgreSQL/race journeys (13.175s), including original-factor and
+  enrollment withdrawal denial. No HTTP enrollment or key removal is claimed.
 - **Closed organization HTTP read profile:** recipients can discover invitations
   before membership; exact native owner-only get remains enforced. Genuine
   send/delivery/accept/membership and restarted current reads pass, including
   identifier/session withdrawal. Reviewed `83b26ec` is main/CI-green and its
   downloaded public consumer passes PostgreSQL/race (6.535s). HTTP invitation
   mutations, remaining M22 profiles and Reference selection remain open.
-- **Next:** primary completes additional-key enrollment from MFA sessions, then
-  removal; an independent worker prepares native original-key invitation send
-  and restart custody over the existing invitation/delivery/acceptance engine.
-  Ordinary known-empty profiles and their valid evidence remain retained.
+- **Next:** primary resolves the request crash-recovery prerequisite for native
+  original-key invitation send/restart. Its worker is parked on that actual
+  kernel dependency, not substituting another recovery authority. MFA key removal
+  follows; ordinary known-empty profiles and valid evidence remain retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.
