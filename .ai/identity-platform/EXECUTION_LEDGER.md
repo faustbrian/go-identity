@@ -1,5 +1,39 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 17:15 UTC: selected HTTP passkey/TOTP profile CLOSED. Reference
+dependency adoption8579adf1252e1631525fc387bfd87da713d35680 exact origin/main,
+Required40214834196 success. All twelve changed Reference files match public
+v0.0.0-20261025170601-8579adf1252e. Downloaded public race binary33323 compiled;
+real consumer41440 PASS15.60s: identifiedfresh7.76/discoveryfresh7.84, using
+ordinary authenticated pins/no replaces. Local four-profile31.01s and current
+module5.115s/command6.042s/taggedvet/auth proof retained. Readiness review and
+adoption review both APPROVE at their original scopes. No further HTTP-slice
+variant is added before closing; full M16 and final unit qualification stay open.
+
+OAuth selected refresh-issued HUMAN ACCESS exchange profile CLOSED. Complete
+ten-path oauth_refresh_access_r2_final APPROVE at tracked a064bb99 plus new
+source86b5f392/test39d11920. Native40418 actual public-root/HTTP F1 bothmodes
+PASS18.504s, fivegroups42.327s (seven withdrawal modes), before/after-COMMIT
+ambiguity29.364s, taggedracevet0; ordinarymodule85757 race1.234s/allmodules
+verified, currentsecretsclean. Delivered ed2b1a36ee452b370bdabfa553090121209f9e20
+exact origin/main, Required40215199875 success. All ten public native files
+match v0.0.0-20261025171034-ed2b1a36ee45; downloaded-public consumer38916
+PASS9.117s, repeatedrotation4.30/defaultpolicy3.30, module authenticationpasses.
+Source/fixture/deadlines stayed unchanged after successful selected checks;
+old failed runs remain failed. All worker PG/driver roots removed. This is
+native profile closure, not full M33, OAuth HTTP/Reference, release or platform.
+
+Next bounded native M16 outcome is completed-passkey/TOTP session inventory
+and fresh action-bound UV rename, not all credential management at once.
+Source-only mapping found ordinary known-empty readers in passkey inventory/
+session management and exact TOTP/mapping Work allowlists excluding management.
+Reuse actual completed-MFA reader/factor/credential owners; do not infer new
+authority from session existence. Primary owns the upcoming cross-owner slice;
+additional-key enrollment/removal, other MFA methods, org/session variants and
+new protocol algorithms remain outside that next finite profile. Its focused
+acceptance and exact writable boundaries must be frozen before first code write.
+Current whole-goal estimate stays~25%,11/39 full milestones; no unit/newrowclaim.
+
 2026-10-25 17:05 UTC: http static-catalog producer independently APPROVED by
 http_static_catalog_final at exact source0638fea1/test13682433/changelog9df3cf93.
 Delivered ba26dedec95f04a997fa5e0c61e21ee1b0fba142, exact origin/main,

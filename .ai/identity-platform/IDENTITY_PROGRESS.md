@@ -1,76 +1,36 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 17:05 UTC
+## Current TL;DR — 2026-10-25 17:15 UTC
 
-- **Overall: ~25%, low-confidence estimate; 11/39 full milestones closed.**
-  No additional full milestone or fully qualified unit is claimed this update.
-- **Current HTTP profile:** explicit challenge-only passkey signin and exact
-  passkey/TOTP completion transports are independently approved and pushed at
-  `83149c8`, Required `40205289622` green. Both authenticated public modules
-  match all22 changed files; Reference now pins them without replacements.
-  Complete Reference HTTPS identified/discoverable signin now passes on fresh
-  and populated-upgrade PostgreSQL: genuine enrollment/assertion -> child only
-  -> exact TOTP -> session/read/logout, with wrong variant/origin/browser/factor,
-  suspended-account/code denial, original retry and durable one-use effects.
-  Independent complete Reference review APPROVES the current source; affected
-  race units, tagged vet, module authentication and secrets pass. Reference
-  `e441b71` is pushed to main, Required `40212238986` green. All twelve changed
-  files match the authenticated public download. Its runtime rerun timed out
-  during repeated HTTP catalog decoding in graph construction, so public-runtime
-  acceptance remains open. The bounded HTTP fix is now independently approved,
-  delivered as `ba26ded`, Required `40214311877` green. Repeated canonical
-  construction falls from about1.09MB/4561 allocations to904B/17 allocations.
-  Reference's published-dependency adoption passes all four HTTPS profiles
-  together (31.01s), affected units/vet/auth and independent review. Its new
-  pin delivery/public-consumer proof follows. No timeout or security relaxation;
-  this is not exclusive proof of the earlier timeout's cause. Full M16 is open.
-  Identified HTTP signin exposed a native rate-reader defect. Its bounded fix
-  is independently approved and delivered in go-passkey `d4f1b8a`, Required
-  `40209137333` green. All five public module files match; Reference now pins
-  that authenticated dependency; the identified HTTP journeys pass against it.
-- **Parallel OAuth:** restricted exchange of refresh-issued human access
-  passes its five focused PostgreSQL/race cases. Independent review found
-  ordinary prepared refresh could be stranded when delegation is disabled;
-  the source correction is complete and independently has no further source
-  finding. Its final two-mode/regression run still failed during prerequisite
-  startup/migrations under severe host contention, so native acceptance remains
-  unqualified; ambiguity and tagged vet did not run. The default-false root
-  policy prerequisite is delivered at `da70252`, Required `40208679787` green;
-  native consumes that public dependency. Final run `31068` failed before its
-  refresh scenario at actual password/server setup; subsequent cases and vet
-  did not run. No existing lean native fixture can substitute real session
-  creation. The candidate is preserved, not accepted or published. The same
-  finite checks are now running against the changed public HTTP dependency;
-  feature/fixture code and deadlines are unchanged.
-  This is not native-profile or milestone closure.
-- **New delivered profile:** genuine registration/key enrollment and
-  confirmed TOTP enrollment -> real passkey assertion -> challenge only ->
-  wrong-code denial -> correct TOTP -> session/read -> exact retry/recovery
-  without credential redisclosure -> CSRF-protected logout/read denial.
-  Identified and discoverable signin pass on fresh and populated-upgrade
-  databases, including the strengthened browser single-use/journal oracle.
-  Final discoverable proof uses published dependencies without replacements.
-  Earlier migration/server/enrollment failures under severe host contention
-  remain recorded, not passing evidence. Product deadlines are unchanged.
-- **Delivered:** real RP mapping0de1392 and factor/mapping lock-order correction
-  a02703b and kernel preparation guard87c816c are main/CI-green, with matching
-  authenticated public sources. Session browser completion10fb24a is reviewed
-  and main/CI-green, with matching authenticated public sources.
-- **Reference delivered:** independently approved187c54e is main/Required-CI
-  green. All24 changed public module files match; genuine identified and
-  discoverable journeys pass from the downloaded public Reference (12.74s).
-  Affected race units/command, tagged vet and module authentication pass.
-  This closes the selected MFA-first existing-account profile, not full M16
-  or a fully qualified release unit. Remaining passkey/MFA profiles stay open.
-  Proposed new lock/counter changes were withdrawn: existing tenant advisory
-  serialization already prevents the reported same-tenant cycles. No such
-  kernel changes were made. The new HTTP journey is locally proven as above;
-  its delivery and remaining passkey/MFA profiles are separate obligations.
-- **Remaining whole goal:** full passkey/MFA profiles, remaining organization,
-  OAuth/federation/provisioning and cross-cutting milestones, plus final
-  qualification of all67 units. Historical full-history secrets remain open.
+- **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
+  Two more complete consumer profiles are delivered below, not two full rows.
+  No additional fully qualified release unit is claimed.
+- **Closed HTTP profile:** real enrollment -> identified/discoverable passkey
+  -> challenge only -> TOTP -> session/read/logout. All four fresh/upgrade
+  PostgreSQL/race journeys pass, including denied authority and atomic one-use
+  effects. `go-identity@8579adf` is main/CI-green; authenticated downloaded
+  Reference passes both genuine fresh HTTP journeys (15.60s).
+- **Closed native OAuth profile:** explicitly selected restricted exchange of
+  refresh-issued human access after real session/consent/S256 and rotation.
+  Both disable/recovery modes, withdrawals, lineage, defaults and actual commit
+  ambiguity pass. `go-oauth-server@ed2b1a3` is main/CI-green; its authenticated
+  downloaded adapter passes repeated rotation/exchange and default-policy
+  consumer checks (9.117s). Wider OAuth/reference integration remains open.
+- **Supporting fixes delivered:** native passkey rate-context reading `d4f1b8a`
+  and private immutable HTTP catalog decoding `ba26ded`, reviewed/main/CI-green.
+  No timeout, authority or validation was relaxed. Earlier failures remain in
+  the execution ledger; they are not passing evidence.
+- **Next finite outcome:** safe credential inventory and fresh UV rename from
+  a completed passkey/TOTP session. Enrolled-MFA enrollment/removal follow;
+  ordinary known-empty profiles and their valid evidence are retained.
+- **Remaining:** full M16/M33 and other open organization, social/federation,
+  provisioning and cross-cutting milestones; complete 67-unit qualification.
+  Historical full-history secret findings remain an explicit release gap.
+- **User decision/blocker:** none for the next in-scope implementation.
 
 ## Retained evidence and earlier checkpoints
+
+These are historical snapshots; the current state is summarized above.
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
