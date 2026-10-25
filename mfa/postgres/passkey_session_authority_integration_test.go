@@ -137,6 +137,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("MFA-primary", func(t *testing.T) { testPasskeyMFAChallengeFactorAuthority(t, ctx, pool, repo) })
 	modes := []string{"known-empty", "missing", "enrolled", "stale", "foreign-owner", "foreign-user", "foreign-tenant", "foreign-schema", "foreign-lifecycle", "foreign-record", "foreign-factor-key", "password-record", "revoke-target", "revoke-source", "update-options", "update-assertion", "update-options-lifecycle", "update-assertion-lifecycle", "update-assertion-version", "update-assertion-stale", "update-assertion-enrolled", "update-assertion-schema", "update-assertion-owner"}
 	for _, stage := range []string{"enroll-assertion-options", "enroll-registration-options", "enroll-register"} {
 		for _, suffix := range []string{"", "-lifecycle", "-version", "-stale", "-enrolled", "-schema", "-owner"} {

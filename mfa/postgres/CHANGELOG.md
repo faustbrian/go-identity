@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fence an original enrolled factor generation and confirmed independent TOTP
+  for exact passkey-primary MFA challenge Work. Reject empty, pending, changed
+  and foreign state without adopting a generation or issuing a session. Native
+  assertion verification, continuation and final factor/session composition
+  remain required; existing single-factor profiles are unchanged.
+
 - Fence original known-empty MFA authority for exact current-session passkey
   removal options and genuine-assertion completion. Require the original
   options command and canonical removal lifecycle; foreign/aliased profiles,

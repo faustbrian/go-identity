@@ -1,5 +1,20 @@
 # PostgreSQL MFA authority (in development)
 
+## Passkey primary with an enrolled independent TOTP
+
+`RequirePasskeySigninFactors` fences a positive original factor generation and
+an actually confirmed TOTP row in the exact registered passkey owner's
+challenge-only signin Work. It requires the self-user, original command record
+and `mfa.challenge.created.v1` zero-to-one lifecycle. Call in Apply and final
+checks; propagate every error to abort. Empty, changed, pending or foreign state
+cannot satisfy it. The existing single-factor/known-empty guards are unchanged.
+
+This is a stored-authority guard, not passkey or TOTP authentication. The native
+owner must verify the original UV assertion, bind browser and primary expiry,
+create only the original MFA continuation/child, and complete the independent
+factor before any session issuance. No password purpose is borrowed, factor is
+enrolled, authority generation advanced or session produced by this function.
+
 ## Current-session additional passkey enrollment
 
 `RequirePasskeySessionFactors` admits the selected native enrollment phases

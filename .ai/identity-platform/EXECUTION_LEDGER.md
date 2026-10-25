@@ -1,5 +1,26 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 06:33 UTC: resumed existing main checkpoints; no live old Go/services.
+MFA passkey-primary authority guard frozen across7paths, independent
+passkey_mfa_factor_guard_final APPROVE with no outstanding action; ordered
+manifest0f00a738a6b8826ac26e6ab73a49b9cf6cc6086eec51b8abb86e9a173c3fa91c.
+Original missing-API RED61369 -> actualWork GREEN80393/0.427s, full unit and
+retained known-empty PG/race66982/0.249s/1.779s, taggedvet0/modverifyall.
+Review's foreign stored-user/tenant coverage action added actual unrelated
+confirmed witnesses; sensitivity74960/0.438s and42569/0.349s fail when their
+respective SQL predicate is removed. Restored original guardhash ef28a8b...;
+final25618 scoped PG/race1.360s/taggedvet0, newtest11.68KB secrets clean.
+Owned PG58918 stopped/removed. This is a stored-authority prerequisite, not a
+complete passkey/TOTP/continuation/session journey. Native consumer follows.
+
+Organization HTTP14path leaf has final APPROVE298b9df... after actual response
+and uint64-schema defects: workerRED39641/0.604s ->GREEN99228/0.574s;
+full80679/2.441s,vet0/modverifyall/diffcheck0,96.56KB secrets clean. Original
+parser/rate proof retained; manifest/Reference integration still primary-owned.
+Native15path review approves source with one accepted concurrency-test action:
+worker adds forced concurrent non-keyed removal/winner-receipt proof, not a new
+workflow or journal. Worker owns heavy token; primary serializes Git/pins.
+
 2026-10-24 14:51 UTC: mapped-original recovery frozen at ceef6bc plus12postgres
 paths; independent mapped_original_recovery_final APPROVE. Existing mapping
 and exact native authenticated decoder/current policy retain Unknown for an
