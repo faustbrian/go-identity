@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence the original confirmed TOTP enrollment and factor generation in the
+  exact native passkey removal-options and assertion transactions. Require
+  original command/lifecycle custody without broadening known-empty admission
+  or replacing native fresh UV, remaining-key and session-invalidation checks.
+
 - Fence completed passkey/TOTP sessions during all three native additional-key
   enrollment phases. Require the original command record and exact lifecycle,
   confirmed enrollment and unchanged account-wide factor generation. Ordinary

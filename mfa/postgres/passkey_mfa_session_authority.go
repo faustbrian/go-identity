@@ -12,8 +12,8 @@ import (
 
 // RequireMFAPasskeySessionFactors fences the original confirmed TOTP enrollment
 // and account-wide factor generation of a completed passkey/TOTP session, only
-// in exact native passkey label-update or additional-key enrollment Work. It
-// does not broaden the known-empty guard or permit removal or signin.
+// in exact native passkey label-update, additional-key enrollment or removal
+// Work. It does not broaden the known-empty guard or permit signin.
 //
 // The registered native owner must authenticate possession and fence directory,
 // credential, policy and original session/family, and require genuine fresh
@@ -65,6 +65,14 @@ func RequireMFAPasskeySessionFactors(ctx context.Context, w kernel.Work, owner k
 		}
 	case f.Operation == (identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.register-verify", SchemaID: "identity.passkey.register-verify.session-registration-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}):
 		if b.RecordID != string(b.CommandID) || life != (kernel.LifecyclePlan{EventType: "identity.passkey.create_credential", AfterVersion: 1}) {
+			return invalidAuthority()
+		}
+	case f.Operation == (identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.delete", SchemaID: "identity.passkey.delete.options-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}):
+		if b.RecordID != string(b.CommandID) || life != (kernel.LifecyclePlan{EventType: "passkey.reauthentication.started.v1", AfterVersion: 1}) {
+			return invalidAuthority()
+		}
+	case f.Operation == (identity.FeatureOperation{Owner: "passkey", OperationID: "identity.passkey.delete", SchemaID: "identity.passkey.delete.assertion-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}):
+		if life.EventType != "identity.passkey.remove_credential" || life.EventIndex != 0 || life.BeforeVersion == 0 || life.BeforeVersion == ^uint64(0) || life.AfterVersion != life.BeforeVersion+1 {
 			return invalidAuthority()
 		}
 	default:
