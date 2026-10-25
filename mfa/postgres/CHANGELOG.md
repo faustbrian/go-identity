@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Require the exact explicit passkey primary command in persisted TOTP
+  continuation scope. Stored restoration retains its original signed child
+  correlation; password/magic-link owners reject this distinct origin.
+
 - Persist the original pending TOTP continuation for the explicit native
   passkey-primary challenge without resetting attempts, replacing its primary
   or granting a session. Append `PasskeyContinuationMigrationSource` with flags

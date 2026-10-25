@@ -36,7 +36,7 @@ func PersistMagicLinkContinuation(ctx context.Context, w kernel.Work, owner kern
 	if err != nil {
 		return invalidAuthority()
 	}
-	if s.VerificationCommandID != "" {
+	if !legacyPrimaryContinuationOrigin(s) {
 		return identity.ForbiddenError{}
 	}
 	digest, err := c.ScopeDigest()
@@ -72,7 +72,7 @@ func PersistPasswordContinuation(ctx context.Context, w kernel.Work, owner kerne
 	if err != nil {
 		return invalidAuthority()
 	}
-	if s.VerificationCommandID != "" {
+	if !legacyPrimaryContinuationOrigin(s) {
 		return identity.ForbiddenError{}
 	}
 	digest, err := c.ScopeDigest()
@@ -116,6 +116,12 @@ func PersistEmailVerificationContinuation(ctx context.Context, w kernel.Work, ow
 		return identity.ForbiddenError{}
 	}
 	return persistContinuation(ctx, w, c, b, fingerprint, generation)
+}
+
+// Password and magic-link owners must not adopt a newer primary-origin profile
+// merely because its subject and primary ID happen to fit their legacy scope.
+func legacyPrimaryContinuationOrigin(s mfa.ContinuationSpec) bool {
+	return s.VerificationCommandID == "" && s.PasskeyCommandID == ""
 }
 
 func persistContinuation(ctx context.Context, w kernel.Work, c mfa.PartialAuthContinuation, b identity.CommandBinding, fingerprint [32]byte, generation uint64) error {

@@ -2,6 +2,12 @@
 
 ## Passkey primary with an enrolled independent TOTP
 
+`PersistPasskeyContinuation` requires the exact original `PasskeyCommandID`
+from the passkey Work and retains it through the canonical stored scope. Build
+the child using the core continuation's `CapabilityPayload`; do not patch its
+correlation afterward. Password/magic-link owners reject this separate origin.
+Old stored rows omit the field and keep their original bytes and deadlines.
+
 `RequirePasskeySigninFactors` fences a positive original factor generation and
 an actually confirmed TOTP row in the exact registered passkey owner's
 challenge-only signin Work. It requires the self-user, original command record

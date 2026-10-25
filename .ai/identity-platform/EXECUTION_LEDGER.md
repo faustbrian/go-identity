@@ -1,5 +1,20 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 08:31 UTC: root MFA dcd89df is exact origin/main,
+Required40175935141 SUCCESS. Public MFA
+v0.0.0-20261025081547-dcd89dfc3e34 authenticates (sum
+h1:tA0vza2BfdWWMWPR31Z0IjBLbSrfprlrLlNUZwi6XHA=) and all five changed files
+match. Native8-path scope/matcher adoption now has independent final
+passkey_continuation_native_correlation_final APPROVE, no actions. Initial
+matcher RED37653/0.294s -> focused/fullmodule GREEN. Review's accepted sibling
+origin-coverage action gets RED90915/0.249s, then final61206 focused0.249s,
+fullmodule0.147s, taggedvet0/modverifyall. Existing storage fuzz with passkey
+seed passes11.295s but only eight executions under contention: limited
+exploration, not broad qualification. Final16.83KB secrets/diffcheck clean.
+No persistence schema/history or transaction owner changes. Publish this native
+pin before worker real assertion rerun. Worker may code against committed root
+field only, no Go/services until token; exact-reference regression remains next.
+
 2026-10-25 08:07 UTC: organization native HTTP consumer ec23514 is pushed to
 main, independent final five-path review APPROVE and Required40174763775
 SUCCESS. Real PostgreSQL fullcase2.818s and race7.441s pass; disabled-feature

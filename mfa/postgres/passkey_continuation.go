@@ -41,7 +41,7 @@ func PersistPasskeyContinuation(ctx context.Context, w kernel.Work, owner kernel
 
 func passkeyContinuationMatches(c mfa.PartialAuthContinuation, b identity.CommandBinding, challenge kernel.MFAContinuationPlan) bool {
 	s, err := c.Bindings()
-	if err != nil || s.VerificationCommandID != "" || len(s.AllowedMethods) != 1 || s.AllowedMethods[0] != "totp" {
+	if err != nil || s.PasskeyCommandID != b.CommandID || s.VerificationCommandID != "" || len(s.AllowedMethods) != 1 || s.AllowedMethods[0] != "totp" {
 		return false
 	}
 	digest, err := c.ScopeDigest()

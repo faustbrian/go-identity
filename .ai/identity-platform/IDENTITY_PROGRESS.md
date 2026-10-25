@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 08:15 UTC
+## Current TL;DR — 2026-10-25 08:31 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -47,19 +47,21 @@
   (`30bf015`). Original continuation persistence/forward SQL upgrade `0a39cb5`
   and capability issuer `2d729ef` are main/CI-green. Real signed identified and
   discoverable assertions now commit only a child, but MFA Reader rejects its
-  original-command correlation. Core correction passes focused/full-module
-  checks and is under independent review; native adoption/rerun follows.
+  original-command correlation. Reviewed core correction `dcd89df` is on main
+  with Required CI green. Its durable scope/matcher adoption has final approval
+  and selected checks; native passkey producer adoption/rerun follows.
   Final TOTP session/read/logout remains unproven. No early session is claimed.
 - **Current code delta:** the kernel's original challenge/child declaration,
   protected-owner custody and historical-query support pass their tests and
-  bounded parser fuzzing, with independent review. The separate organization
-  worker has delivered neutral requests on main/CI and is implementing the
-  actual native keyed/repeat operation facade; its HTTP consumer remains open.
+  bounded parser fuzzing, with independent review. Organization's native
+  keyed/repeat facade and actual HTTP consumer are delivered on main/CI.
+  Reference organization startup remains the outstanding composition boundary.
 - **Organization recovery correction:** independent review approves the kernel's
   explicit authenticated original-mapping path. Actual mapping-only retries now
   retain Unknown without executing again; generic missing/denied privacy stays
   unchanged. Complete selected PostgreSQL/race and new binding-mismatch cases
-  pass. Native-envelope adoption and the HTTP journey are still unfinished.
+  pass. Native-envelope adoption and the direct HTTP journey now pass; Reference
+  startup and remaining organization capability profiles are still unfinished.
 - **Next:** implement passkey primary -> enrolled TOTP challenge -> completion
   -> authenticated session/read/logout. No session is allowed before the
   independent factor completes. A bounded organization HTTP lane is assigned
