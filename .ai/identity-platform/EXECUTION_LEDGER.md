@@ -1,5 +1,20 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 06:55 UTC: organization bearer-only HTTP candidate is frozen across
+14 leaf paths plus modules.json/packages.json/go.work. Independent
+organization_http_leaf_final APPROVE covers all17 paths; leaf source remains
+298b9df11c04f2ea9a8b9c079c62fe51743f3dc0ee3aebaed330a1c40a20d8be.
+Reviewed response/outcome and durable-version regressions passed after their
+recorded RED; full80679 unit2.441s/vet0/modverifyall, retained parser/rate fuzz
+68340/130471 executions and closed-object sensitivity remain unchanged.
+Pinned public golib2.5.1 planning-check passes all41module registrations.
+Final rootdiff secrets6.97KB clean; no runtime source changed after review.
+Deliver this optional transport module separately. Actual HTTP-to-native SQL
+composition, Reference selection and full M22 remain unfinished. MFA guard
+86c8627 and original recovery422b9fa are pushed, respective Required CI
+40169538374/40104428897 SUCCESS. Worker retains heavy token for the forced
+concurrent-removal race; no additional primary heavy run is started.
+
 2026-10-25 06:33 UTC: resumed existing main checkpoints; no live old Go/services.
 MFA passkey-primary authority guard frozen across7paths, independent
 passkey_mfa_factor_guard_final APPROVE with no outstanding action; ordered

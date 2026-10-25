@@ -12,6 +12,7 @@ use (
 	./http/email
 	./http/magiclink
 	./http/mfa
+	./http/organization
 	./http/otp
 	./http/password
 	./http/passkey

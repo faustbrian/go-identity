@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 06:33 UTC
+## Current TL;DR — 2026-10-25 06:55 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -33,6 +33,10 @@
   guard is independently approved, including actual stored foreign-user/tenant
   denial and rollback. This grants no authentication or session by itself;
   native continuation, TOTP completion and session integration remain next.
+- **Organization HTTP:** bearer-only create/get/member-list/add/remove transport
+  and concrete OpenAPI pass their affected tests and independent final review,
+  including all module/workspace registrations. Native durable composition and
+  Reference integration remain unfinished; this does not close M22.
 - **Current code delta:** the kernel's original challenge/child declaration,
   protected-owner custody and historical-query support pass their tests and
   bounded parser fuzzing, with independent review. The separate organization
