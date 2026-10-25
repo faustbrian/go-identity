@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence completed passkey/TOTP sessions during all three native additional-key
+  enrollment phases. Require the original command record and exact lifecycle,
+  confirmed enrollment and unchanged account-wide factor generation. Ordinary
+  admission remains separate; no factor, freshness or execution proof is renewed.
+
 - Fence the original confirmed TOTP enrollment and factor generation for exact
   native passkey-session label-update options and assertion transactions.
   Completed-MFA admission remains separate from known-empty profiles; missing,

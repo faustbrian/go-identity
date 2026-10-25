@@ -166,8 +166,8 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 		t.Fatal(err)
 	}
 	modes := []string{"known-empty", "missing", "enrolled", "stale", "foreign-owner", "foreign-user", "foreign-tenant", "foreign-schema", "foreign-lifecycle", "foreign-record", "foreign-factor-key", "password-record", "revoke-target", "revoke-source", "update-options", "update-assertion", "update-options-lifecycle", "update-assertion-lifecycle", "update-assertion-version", "update-assertion-stale", "update-assertion-enrolled", "update-assertion-schema", "update-assertion-owner"}
-	for _, stage := range []string{"MFA-update-options", "MFA-update-assertion"} {
-		for _, suffix := range []string{"", "-stale", "-enrollment", "-pending", "-empty", "-blocked", "-foreign-factor", "-foreign-user", "-foreign-tenant", "-owner", "-descriptor", "-schema", "-lifecycle", "-version", "-ordinary", "-factor-key", "-otp", "-recovery-code"} {
+	for _, stage := range []string{"MFA-update-options", "MFA-update-assertion", "MFA-enroll-assertion-options", "MFA-enroll-registration-options", "MFA-enroll-register"} {
+		for _, suffix := range []string{"", "-stale", "-enrollment", "-pending", "-empty", "-blocked", "-foreign-factor", "-foreign-user", "-foreign-tenant", "-owner", "-descriptor", "-schema", "-lifecycle", "-version", "-ordinary", "-factor-key", "-otp", "-recovery-code", "-record", "-event-index"} {
 			modes = append(modes, stage+suffix)
 		}
 	}
@@ -193,7 +193,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 			descriptor := kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 			life := kernel.LifecyclePlan{EventType: "session.created.v1", AfterVersion: 1}
 			b := identity.CommandBinding{CommandID: commandID, TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, RecordID: spec.SessionID, PolicyID: "policy", PolicyVersion: 1, CorrelationID: "correlation"}
-			completedMFA := strings.HasPrefix(mode, "MFA-update-")
+			completedMFA := strings.HasPrefix(mode, "MFA-")
 			if completedMFA {
 				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity_mfa.totp_factors(tenant_id,user_id,factor_id,state,enrollment_version,row_version,algorithm,digits,period_seconds,skew_steps,issuer,encrypted_secret,created_command_id,created_purpose,created_at,enrollment_expires_at,confirmed_at) VALUES('tenant-a','user-a',$1,2,1,1,'SHA1',6,30,0,'Example',decode('01','hex'),$2,'identity.mfa.enable',clock_timestamp()-interval '1 minute',clock_timestamp()+interval '4 minutes',clock_timestamp())`, string(factorID), rawFactorID); err != nil {
 					t.Fatal(err)
@@ -215,6 +215,15 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 					op.SchemaID = "identity.passkey.update.assertion-v1"
 					life = kernel.LifecyclePlan{EventType: "identity.passkey.rename_credential", BeforeVersion: 4, AfterVersion: 5}
 					b.RecordID = "another-passkey"
+				}
+				if strings.HasPrefix(mode, "MFA-enroll-") {
+					op.OperationID, op.SchemaID = "identity.passkey.register-options", "identity.passkey.register-options.session-assertion-options-v1"
+					b.RecordID = string(commandID)
+					if strings.HasPrefix(mode, "MFA-enroll-registration-options") {
+						op.SchemaID, life.EventType = "identity.passkey.register-options.session-registration-options-v1", "passkey.registration.started.v1"
+					} else if strings.HasPrefix(mode, "MFA-enroll-register") {
+						op.OperationID, op.SchemaID, life.EventType = "identity.passkey.register-verify", "identity.passkey.register-verify.session-registration-v1", "identity.passkey.create_credential"
+					}
 				}
 				if _, err := pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET active_factors=1; UPDATE identity.users SET status='active'; UPDATE identity_mfa.totp_factors SET state=2,confirmed_at=created_at,enrollment_version=1`); err != nil {
 					t.Fatal(err)
@@ -270,6 +279,14 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 					if strings.HasPrefix(mode, "MFA-update-assertion") {
 						life.BeforeVersion, life.AfterVersion = 0, 1
 					}
+				case strings.HasSuffix(mode, "-record"):
+					if strings.HasPrefix(mode, "MFA-enroll-") {
+						b.RecordID = "not-original-command"
+					} else {
+						b.UserID, b.ActorID = "other-user", "other-user"
+					}
+				case strings.HasSuffix(mode, "-event-index"):
+					life.EventIndex = 1
 				}
 				if err != nil {
 					t.Fatal(err)
@@ -469,7 +486,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 				t.Fatal("test seam must abort after guard")
 			}
 			result, _ := coordinator.Abort(work, applyErr)
-			want := mode == "MFA-update-options" || mode == "MFA-update-assertion" || mode == "known-empty" || mode == "revoke-target" || mode == "revoke-source" || mode == "update-options" || mode == "update-assertion" || mode == "enroll-assertion-options" || mode == "enroll-registration-options" || mode == "enroll-register" || mode == "delete-options" || mode == "delete-assertion"
+			want := mode == "MFA-update-options" || mode == "MFA-update-assertion" || mode == "MFA-enroll-assertion-options" || mode == "MFA-enroll-registration-options" || mode == "MFA-enroll-register" || mode == "known-empty" || mode == "revoke-target" || mode == "revoke-source" || mode == "update-options" || mode == "update-assertion" || mode == "enroll-assertion-options" || mode == "enroll-registration-options" || mode == "enroll-register" || mode == "delete-options" || mode == "delete-assertion"
 			if feature.admitted != want {
 				t.Fatalf("factor guard admitted=%v want=%v", feature.admitted, want)
 			}
