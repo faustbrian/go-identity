@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 21:34 UTC
+## Current TL;DR — 2026-10-25 21:43 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
@@ -73,11 +73,14 @@
   public dependency (31.878s). The authenticated downloaded adapter also passes
   the full PostgreSQL/race journey (31.746s), closing this finite native profile.
   HTTP/Reference invitation mutations remain open.
-- **Next:** primary continues HTTP MFA key removal from the delivered enrollment
-  and native removal owners. A worker is correcting the older legacy public
-  send/accept recovery disclosure-fence gap: all nine actual late-callback cases
-  reproduce, and the correction is under checks and independent review.
-  Ordinary known-empty profiles and unchanged valid evidence remain retained.
+- **Legacy invitation disclosure fixed:** public send/accept recovery now denies
+  historical metadata after late session/domain/recipient withdrawal, retaining
+  legitimate unjoined rollback history. Reviewed `de104e4` is main/CI-green;
+  all nine actual regressions pass in the authenticated downloaded adapter
+  (8.855s). The previously recorded F2 gap is addressed, not deferred.
+- **Next:** HTTP MFA key removal from the delivered enrollment and native
+  removal owners, then remaining invitation HTTP/Reference mutations. Ordinary
+  known-empty profiles and unchanged valid evidence remain retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.

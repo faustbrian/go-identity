@@ -1,5 +1,38 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 21:43 UTC: legacy invitation disclosure correction CLOSED.
+Exact origin/main de104e47, Required40236548120 success; authenticated downloaded
+adapter66879 passes actual9-case PostgreSQL/race8.855s with normal publicpins,
+no replacement; all modules verified and five source files match reviewedcommit.
+The original base9-case RED7.675s/localGREEN9.054s, retained98.959s and public
+8.855s identities remain distinct. No source change followed independent review.
+Both Send/Accept final-disclosure defects previously recorded as F2 are addressed;
+full M22/67-unit qualification and invitation HTTP/Reference selection remain open.
+Worker is removing the transferred bounded M22 root after stopped-owned-PG
+validation; source workspaces remain intact. Next primary outcome is HTTP MFA
+key removal using delivered enrollment and native deletion contracts; not yet
+assigned or written. No new full milestone/unit closure is claimed: estimate25%,
+11/39, full67-unit scope unchanged. No user decision or goal blocker remains.
+
+2026-10-25 21:41 UTC: legacy public invitation recovery disclosure correction
+de104e47fab4fcdebcacc006ed42cb61fb1f7d80 is exact origin/main;
+Required40236548120 success. Complete5path invitation_legacy_disclosure_final
+APPROVE at frozen6bacd211 recovery source, no unresolved findings. All9case
+base RED7.675s -> GREEN9.054s; retained all-six-operation/recovery cohort98.959s,
+module race1.374s, taggedvet0/modverifyall, staged scanner26.36KB clean.
+Send reuses current owner/session/org/scoped authority; Accept reuses genuine
+session and exact organization/verified-recipient/invitation/target snapshots.
+Unjoined failed acceptance retains legitimate history. Product distinction
+adjudicated from organization.md101-102/API_OPERATIONS472,476: legacy owner
+Send history does not acquire mapped Send's richer recipient-envelope contract.
+No origin schema, query authority, original outcome, expiry or delivery changed.
+Authenticated v0.0.0-20261025213948-de104e47fab4 matches all5files,
+sumCK8XTzHPZZLmGb+CeQ2+dIXryovy7RahzdvXD9x3urQ=,
+modsumiSLYSE+p9b2n5tn1p2wcucDjra/cHhbZwZoiI45ZRgY=.
+Worker owns actual downloaded9-case PG/race proof and immediate transferred
+root cleanup; no complete delivery claim until that final proof returns.
+HTTP MFA enrollment bounded root fully removed; no primary Go/PG remains.
+
 2026-10-25 21:34 UTC: HTTP MFA additional-key enrollment profile CLOSED,
 not full M16. Exact main d6b788d93df374ef2993daaa852b3707660dfaf5;
 Required40235793203 success. Actual authenticated downloaded Reference82943
