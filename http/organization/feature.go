@@ -30,35 +30,47 @@ type Service interface {
 	RemoveMember(context.Context, organization.RemoveMemberOperationRequest, string) (organization.StoreResult, error)
 }
 
+// InvitationSender is the independently selected native original-key send port.
+// It owns current authority, immutable intent, protected risk and atomic proof/
+// invitation/delivery effects. Matching retries classify the original outcome,
+// never issue another proof or redispatch delivery. The caller borrows opaque
+// request custody; implementations must honor ctx and support concurrent calls.
+type InvitationSender interface {
+	Send(context.Context, organization.InvitationSendOperationRequest, string) (organization.StoreResult, error)
+}
+
 // Config borrows actual concurrency-safe owners for their lifetime. Sessions
 // supplies current actor custody for transport rate admission; Service and
 // Invitations retain their respective native final authority fences. Supply
-// only the owners used by selected operations; invitation-only selection needs
-// neither Service nor AdminRate. The selected profile is
+// only the owners used by selected operations; invitation-read-only selection
+// needs neither Service nor AdminRate. Send requires InvitationSender,
+// Invitations and AdminRate, not Service or SafeRate. The selected profile is
 // strict Authorization bearer only, never ambient cookies or browser CSRF.
 // Network policy is copied. SafeRate is required only for selected reads and
 // AdminRate only for selected mutations. Share them across routes/requests.
 // Now is trusted, prompt and concurrency-safe. MaximumDuration is 1ms..30s;
 // inbound earlier deadlines win. Construction performs no owner reads or IO.
 type Config struct {
-	Network         identityhttp.NetworkConfig
-	Sessions        *session.SessionService
-	Service         Service
-	Invitations     InvitationReader
-	SafeRate        *identityhttp.SafeRateLimiter
-	AdminRate       *AdminRateLimiter
-	Now             func() time.Time
-	MaximumDuration time.Duration
+	Network          identityhttp.NetworkConfig
+	Sessions         *session.SessionService
+	Service          Service
+	Invitations      InvitationReader
+	InvitationSender InvitationSender
+	SafeRate         *identityhttp.SafeRateLimiter
+	AdminRate        *AdminRateLimiter
+	Now              func() time.Time
+	MaximumDuration  time.Duration
 }
 
 // FeatureConfig opts into exactly the selected operations. Empty selection is
 // invalid; omission from FeatureServices exposes neither routes nor metadata.
-// Invitation reads are independently selectable; no invitation mutations,
-// team/browser/active-organization workflow is selected.
+// Invitation reads and original-key send are independently selectable; no
+// invitation acceptance, team/browser/active-organization workflow is selected.
 type FeatureConfig struct {
 	Config                                           Config
 	Create, Get, MemberList, MemberAdd, MemberRemove bool
 	InvitationGet, InvitationListMine                bool
+	InvitationSend                                   bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -70,14 +82,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.InvitationGet && !c.InvitationListMine {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}} {
+	}{{organization.Create, c.Create}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}} {
 		if !selected.on {
 			continue
 		}
@@ -95,6 +107,8 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		}
 		if selected.op == organization.InvitationGet || selected.op == organization.InvitationListMine {
 			op.Wire = invitationWire(selected.op)
+		} else if selected.op == organization.InvitationSend {
+			op.Wire = invitationSendWire()
 		} else {
 			op.Wire = operationWire(selected.op)
 		}
@@ -106,7 +120,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "organization", Operations: operations})
 }
 func selectedMutation(op organization.Operation) bool {
-	return op == organization.Create || op == organization.AddMember || op == organization.RemoveMember
+	return op == organization.Create || op == organization.AddMember || op == organization.RemoveMember || op == organization.InvitationSend
 }
 func nilService(service any) bool {
 	if service == nil {

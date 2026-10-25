@@ -85,10 +85,17 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	if in.op == organization.Create {
 		target = in.actor
 	}
-	if b.ValidateFor(in.op.Descriptor()) != nil || b.TenantID != in.auth.TenantID || b.ActorKind != authorization.SubjectUser || b.ActorID != identity.ActorID(in.actor) || b.UserID != target || result.MemberID != b.UserID || result.OrganizationID != organization.ID(b.RecordID) || in.op != organization.Create && organization.ID(b.RecordID) != in.org {
+	validRecord := result.OrganizationID == organization.ID(b.RecordID) && (in.op == organization.Create || organization.ID(b.RecordID) == in.org)
+	if in.op == organization.InvitationSend {
+		validRecord = boundedID(string(result.InvitationID)) && result.InvitationID == organization.ID(b.RecordID) && result.OrganizationID == in.org
+	}
+	if b.ValidateFor(in.op.Descriptor()) != nil || b.TenantID != in.auth.TenantID || b.ActorKind != authorization.SubjectUser || b.ActorID != identity.ActorID(in.actor) || b.UserID != target || result.MemberID != b.UserID || !validRecord {
 		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
 	}
 	out.CommandID, out.OrganizationID, out.MemberID = b.CommandID, result.OrganizationID, result.MemberID
+	if in.op == organization.InvitationSend {
+		out.MemberID = "" // Sending creates an invitation, not a membership.
+	}
 	out.Recovery = &CommandScope{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID, PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion, SchemaID: b.SchemaID, SchemaVersion: b.SchemaVersion, CorrelationID: b.CorrelationID}
 	if r.Outcome == identity.CommitOutcomeInvalid {
 		if err == nil {
@@ -101,7 +108,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 		return 503, out
 	}
 	expectedBefore := in.orgVersion
-	if in.op == organization.Create {
+	if in.op == organization.Create || in.op == organization.InvitationSend {
 		expectedBefore = 0
 	}
 	if r.Outcome == identity.CommitOutcomeCommitted && (r.Feature.BeforeVersion != expectedBefore || r.Feature.AfterVersion != expectedBefore+1) {

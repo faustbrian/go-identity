@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in strict-bearer invitation send through the actual original-key
+  native owner. Preserve exact recipient/version intent, atomic queue commitment,
+  metadata-only retries and shared administrative rates. Current owner-authorized
+  invitation/delivery projections never expose proof or provider custody; their
+  failure retains the known original commit rather than implying rollback.
+  Configure the native sender/reader and request-key expiry migration before
+  selection. HTTP acceptance/resend and Reference composition remain separate.
+
 - Add independently selected invitation recipient discovery and owner-only get
   routes through the native invitation reader, strict current bearer sessions
   and the shared safe-read budget. Recipient listing needs no membership and

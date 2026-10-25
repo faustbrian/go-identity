@@ -34,6 +34,14 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	scope := object([]string{"commandID", "tenantID", "userID", "actorID", "actorKind", "operationID", "recordID", "policyID", "policyVersion", "schemaID", "schemaVersion", "correlationID"}, map[string]any{"commandID": command, "tenantID": id, "userID": id, "actorID": id, "actorKind": map[string]any{"const": "user"}, "operationID": map[string]any{"const": string(op)}, "recordID": id, "policyID": id, "policyVersion": version(1), "schemaID": id, "schemaVersion": version(1), "correlationID": id})
 	mutationFields := map[string]any{"committed": map[string]any{"type": "boolean"}, "commitOutcome": map[string]any{"enum": []string{"none", "committed", "not_committed", "unknown", "conflict", "in_progress"}, "type": "string"}, "commandID": command, "organizationID": id, "memberID": id, "beforeVersion": version(0), "afterVersion": version(1), "recovery": scope, "error": errorCode}
+	mutationRequired := []string{"commandID", "organizationID", "memberID", "afterVersion", "recovery"}
+	if op == organization.InvitationSend {
+		delete(mutationFields, "memberID")
+		mutationFields["invitationID"] = id
+		mutationFields["invitation"] = invitationViewSchema()
+		mutationFields["deliveryState"] = map[string]any{"type": "string", "enum": []string{"queued", "attempting", "accepted", "delivered", "rejected", "bounced", "cancelled", "unknown", "retry_wait", "expired", "exhausted", "superseded", "transient_failure"}, "description": "Current authorized delivery observation; queued is local durable admission and accepted is provider acceptance, neither confirms delivery."}
+		mutationRequired = []string{"commandID", "organizationID", "invitationID", "afterVersion", "recovery", "invitation", "deliveryState"}
+	}
 	mutation := object([]string{"committed", "commitOutcome"}, mutationFields)
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	failure := any(errorSchema)
@@ -43,7 +51,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		success = map[string]any{"allOf": []any{
 			mutation,
 			map[string]any{
-				"required":   []string{"commandID", "organizationID", "memberID", "afterVersion", "recovery"},
+				"required":   mutationRequired,
 				"properties": map[string]any{"committed": map[string]any{"const": true}, "commitOutcome": map[string]any{"const": "committed"}},
 				"not":        map[string]any{"required": []string{"error"}},
 			},
@@ -58,7 +66,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		responses[status] = map[string]any{"description": "Bounded no-store JSON. Original command outcome and safe recovery correlation grant no authority; no credentials or redirects are issued.", "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
 	}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"description": "Bounded ceiling seconds for a known audited rate rejection; no automatic retry.", "schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}}}
-	description := "Explicit bearer-only organization profile. Exactly one Authorization Bearer credential; cookies never supply fallback authority. Exact HTTPS host-mapped tenant and trusted full client IP; closed bounded JSON/query and no identity, tenant, actor or command override. Current native authorization/protected effects remain with the organization owner. No invitations, teams, browser workflow or active organization selection. "
+	description := "Explicit bearer-only organization profile. Exactly one Authorization Bearer credential; cookies never supply fallback authority. Exact HTTPS host-mapped tenant and trusted full client IP; closed bounded JSON/query and no identity, tenant, actor or command override. Current native authorization/protected effects remain with the organization owner. No invitation acceptance, teams, browser workflow or active organization selection. "
 	if selectedMutation(op) {
 		description += "Canonical shared rate.admin atomically charges actor30/minute, tenant100/minute and trustedIP60/minute; denial/outage fails closed with mandatory secret-free auditing. "
 	} else {
@@ -66,7 +74,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.AddMember {
+	if op == organization.Create || op == organization.AddMember || op == organization.InvitationSend {
 		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated organization/command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
@@ -78,6 +86,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		if op == organization.Create {
 			required = []string{"name", "slug"}
 			fields = map[string]any{"name": text(1, 256), "slug": map[string]any{"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"}}
+		} else if op == organization.InvitationSend {
+			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}
+			description += "Exact verified recipient selection, never a submitted email address or claimed actor. The native owner allocates invitation/command IDs and atomically queues encrypted proof delivery. Matching keys recover original metadata only. A successful current read returns invitation and delivery status; if that read fails, the original committed outcome remains explicit without current metadata. No proof or delivery effect ID is exported. "
 		} else {
 			required = []string{"organizationID", "userID", "organizationVersion", "memberVersion"}
 			minimum := uint64(0)

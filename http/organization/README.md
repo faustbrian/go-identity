@@ -1,16 +1,25 @@
 # go-identity/http/organization
 
 Optional **bearer-only** HTTP integration for native organization creation,
-explicit organization reads, member listing, admission and removal. Omit its
+explicit organization reads, member listing, admission/removal and original-key
+invitation sending. Omit its
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
 Invitation reads are independently opt-in through `InvitationGet` and
 `InvitationListMine`. Supply the actual native invitation owner through
 `Config.Invitations`; it implements the narrow `InvitationReader` port directly.
-An invitation-only selection needs `Sessions`, shared `SafeRate`, network/clock
+An invitation-read-only selection needs `Sessions`, shared `SafeRate`, network/clock
 and timeout configuration, but neither the five-operation `Service` nor
 `AdminRate`. No application invitation store or authority adapter is needed.
+
+Invitation sending is independently opt-in through `InvitationSend`. Supply
+`Config.InvitationSender` as the actual native `InvitationOperationService` and
+`Config.Invitations` as its underlying `InvitationService`, plus `Sessions`,
+shared `AdminRate`, trusted network/clock and timeout configuration. A send-only
+selection requires neither `Service` nor `SafeRate`. Install the existing native
+request-key/preparation/expiry-fence and invitation/capability/delivery migrations
+before selecting it. No application workflow or transaction adapter is required.
 
 ## Composition
 
@@ -49,6 +58,7 @@ session, protected risk, membership and atomic commit fences.
 | List members | `GET /v1/organization/member/list` | Query `organizationID`, optional exclusive `cursor`, `limit` 1..100 (default100) |
 | Add member | `POST /v1/organization/member/add` | JSON `organizationID`, target `userID`, `role`, `organizationVersion`, `memberVersion`; required original key |
 | Remove member | `POST /v1/organization/member/remove` | JSON `organizationID`, target `userID`, exact positive organization/member versions; **no key** |
+| Send invitation | `POST /v1/organization/invitation-send` | JSON `organizationID`, exact positive `organizationVersion`, target `recipientUserID`, existing verified `recipientIdentifierID`; required original key |
 | Get invitation | `GET /v1/organization/invitation/get` | Required query `organizationID`, `invitationID`; native **owner-only** authorization |
 | List my invitations | `GET /v1/organization/invitation/list-mine` | Optional opaque `cursor`, `limit` 1..200 (default100); current verified recipient, no membership required |
 
@@ -67,7 +77,7 @@ and body/query limits come from the base bounded decoder. IDs remain
 case-sensitive; names and slugs retain the root module's validation. Caller
 correlation and command IDs are not accepted; the owner supplies correlation.
 
-Create/add forward the **single unchanged original key** to the actual native
+Create/add/send forward the **single unchanged original key** to the actual native
 owner. Matching retries recover that original command; changed intent conflicts.
 The transport never reconstructs an old bearer, refreshes original evidence,
 chooses another command ID, retries automatically or interprets a timeout as
@@ -127,8 +137,35 @@ no authority, cannot move between subjects/tenants and is revalidated natively.
 Restart the listing to observe additions before the current position. Acceptance
 remains a direct native operation; later HTTP member reads and current invitation
 reads observe its actual committed state without a positive authority cache.
-HTTP invitation send/accept or other mutations and Reference composition are not
-selected by this finite profile.
+This read-only selection enables neither invitation mutations nor Reference
+composition. Select sending independently as described below; HTTP acceptance
+and other invitation mutations remain unavailable.
+
+## Invitation sending and current delivery state
+
+The selected send route owns no invitation proof or delivery retry loop. The
+native owner allocates the original command and invitation IDs and atomically
+commits invitation, single-use proof, encrypted delivery, protected audit and
+lifecycle effects. Submit the same exact key and original input for a matching
+retry; changed recipient, organization/version or configuration conflicts.
+Never supply an address, acting identity, tenant, command ID or invitation ID.
+
+The response keeps `committed`, `commitOutcome`, original `commandID`,
+`invitationID` and safe `recovery` scope separate from the current `invitation`
+metadata and `deliveryState`. It returns no membership, proof, email, provider
+reference or delivery effect ID. A separate current owner-authorized native
+read supplies the metadata/status within the original HTTP read deadline. If
+that read fails or panics, the response retains the actual original committed
+outcome with its error status but omits current metadata; that failure is not
+rollback and must not cause a replacement send. Noncommitted/unknown outcomes
+do not perform a current projection.
+
+`queued` is durable local admission, `attempting` is a recorded attempt, and
+`accepted` is provider acceptance—not confirmed `delivered`. Rejection, bounce,
+cancellation, unknown, retry wait, expiry, exhaustion, supersession and transient
+failure remain distinct. HTTP retries charge the same shared administrative
+budgets and never redeliver proof. No HTTP acceptance or resend is selected;
+the native acceptance owner consumes the delivered proof exactly once.
 
 ## Results, recovery and security
 
@@ -157,7 +194,7 @@ cancellation wins. Callers retain raw body and server cleanup ownership.
 
 ## Tradeoffs / FAQ
 
-- **Cookies, invitation mutations, teams or active selection?** Not selected.
+- **Cookies, other invitation mutations, teams or active selection?** Not selected.
   These need their own native profile and transport contract, not fallback
   through this one.
 - **Does a role or recovery scope grant access?** No. Current native authority
@@ -170,6 +207,7 @@ cancellation wins. Callers retain raw body and server cleanup ownership.
   `AdminRateLimiter` only prevents new calls; it does not close its backend.
 
 Public API reference is the Go documentation for `Service`, `InvitationReader`,
+`InvitationSender`, `InvitationSendResponse`,
 `Config`, `FeatureConfig`, `NewFeatureWithMiddleware`, `AdminRateConfig`,
 `AdminRateLimiter`, `State`, and the explicit response DTOs. Release notes are in
 [CHANGELOG.md](CHANGELOG.md).

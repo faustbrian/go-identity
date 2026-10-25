@@ -75,6 +75,14 @@ import (
 // and outbound HIBP HTTP provider are controlled seams; no user, session,
 // verified identifier, invitation, capability or membership is fabricated.
 func TestInvitationGenuineHTTPConsumer(t *testing.T) {
+	proveInvitationGenuineHTTPConsumer(t, false)
+}
+
+func TestInvitationSendGenuineHTTPConsumer(t *testing.T) {
+	proveInvitationGenuineHTTPConsumer(t, true)
+}
+
+func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
 	ctx, pool, db := consumerDatabase(t)
 	keys := make(map[string][32]byte)
 	for _, name := range strings.Fields("fingerprint request counter risk-evidence risk-seal preauth-cookie session-token session-csrf http-device delivery-envelope dummy-password capability-binding capability-signing signin-proof migration counter-replay http-rate otp-lockout otp-wrap otp-attempt otp-code otp-intent identifier delivery-digest delivery-namespace password-flow signup-binding signup-intent verification-scope capability-replay capability-envelope counter-envelope verification-http") {
@@ -153,11 +161,27 @@ func TestInvitationGenuineHTTPConsumer(t *testing.T) {
 	network := identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 2048, MaximumBodyBytes: 4096, MaximumDecodedBytes: 4096, MaximumFields: 32, MaximumDepth: 4}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: parsedOrigin.Hostname(), TenantID: baselineTenant}, {Host: "foreign.example", TenantID: "foreign-tenant"}}}
 	transport := identityhttp.TransportPolicy{Network: network, HandlerTimeout: 5 * time.Second, Document: identityhttp.DocumentConfig{Title: "Genuine invitation consumer", Version: "1"}}
 	cfg := organizationhttp.Config{Network: network, Sessions: sessions, Service: memberReader, Invitations: invitations, SafeRate: safe, Now: time.Now, MaximumDuration: 4 * time.Second}
+	if httpSend {
+		cfg.AdminRate, err = organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{Shared: backend, Namespace: "invitation-http-consumer", Key: keys["http-rate"], Now: time.Now, MaximumDuration: time.Second, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error { return ctx.Err() }})
+		if err != nil {
+			t.Fatal("native invitation admin admission unavailable", err)
+		}
+		t.Cleanup(func() { _ = cfg.AdminRate.Close() })
+	}
 	build := func(current *organizationpg.InvitationService) (http.Handler, identityhttp.OpenAPIDocument) {
 		t.Helper()
 		selected := cfg
 		selected.Invitations = current
-		feature, e := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: selected, Get: true, InvitationGet: true, InvitationListMine: true})
+		if httpSend {
+			selected.InvitationSender, err = organizationpg.NewInvitationOperationService(current, organizationpg.InvitationOperationServiceConfig{ConfigurationID: "invitation-http-consumer", RequestKeys: requestKeys, Custody: custody, NewInvitationID: func(ctx context.Context) (organization.ID, error) {
+				id, e := identity.NewSubjectID()
+				return organization.ID(id), errors.Join(ctx.Err(), e)
+			}})
+			if err != nil {
+				t.Fatal("actual native initiating-key invitation owner unavailable", err)
+			}
+		}
+		feature, e := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: selected, Get: true, InvitationGet: true, InvitationListMine: true, InvitationSend: httpSend})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -173,13 +197,21 @@ func TestInvitationGenuineHTTPConsumer(t *testing.T) {
 	}
 	handler, document := build(invitations)
 	parsed, err := openapi.ParseJSON(ctx, bytes.NewReader(document.JSON()), parse.DefaultLimits())
-	if err != nil || len(document.Operations()) != 3 {
+	wantOperations := 3
+	if httpSend {
+		wantOperations++
+	}
+	if err != nil || len(document.Operations()) != wantOperations {
 		t.Fatal("selected invitation document invalid", err)
 	}
 	validateResponse := func(path string, status int, body []byte) {
 		t.Helper()
 		schema := parsed.Raw()
-		for _, key := range []string{"paths", strings.SplitN(path, "?", 2)[0], "get", "responses", strconv.Itoa(status), "content", "application/json", "schema"} {
+		method := "get"
+		if path == "/v1/organization/invitation-send" {
+			method = "post"
+		}
+		for _, key := range []string{"paths", strings.SplitN(path, "?", 2)[0], method, "responses", strconv.Itoa(status), "content", "application/json", "schema"} {
 			var found bool
 			schema, found = schema.Lookup(key)
 			if !found {
@@ -242,12 +274,60 @@ func TestInvitationGenuineHTTPConsumer(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		send, e := invitations.PrepareSend(ctx, organization.InvitationSendRequest{Authentication: owner, CommandID: commandID(t), ID: organization.ID(id), OrganizationID: organization.ID(org), OrganizationVersion: 1, RecipientUserID: recipientID, RecipientIdentifierID: identifiers.Identifiers[0].ID, CorrelationID: "invitation-http-send"}, "127.0.0.1")
-		if e != nil {
-			t.Fatal(e)
-		}
-		if out, e := invitations.Execute(ctx, send); e != nil || out.Receipt.Outcome != identity.CommitOutcomeCommitted {
-			t.Fatal("genuine invitation send failed", e)
+		if httpSend {
+			body, e := json.Marshal(map[string]any{"organizationID": org, "organizationVersion": 1, "recipientUserID": recipientID, "recipientIdentifierID": identifiers.Identifiers[0].ID})
+			if e != nil {
+				t.Fatal(e)
+			}
+			var original organizationhttp.InvitationSendResponse
+			for attempt := 0; attempt < 2; attempt++ {
+				r, e := http.NewRequestWithContext(ctx, http.MethodPost, origin+"/v1/organization/invitation-send", bytes.NewReader(body))
+				if e != nil {
+					t.Fatal(e)
+				}
+				r.Header.Set("Authorization", "Bearer "+owner.Bearer.Token())
+				r.Header.Set("Content-Type", "application/json")
+				r.Header.Set("Idempotency-Key", slug)
+				response, e := server.Client().Do(r)
+				if e != nil {
+					t.Fatal("genuine HTTP invitation send failed", e)
+				}
+				wire, e := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+				closed := response.Body.Close()
+				var sent organizationhttp.InvitationSendResponse
+				if e != nil || closed != nil || len(wire) > 1<<20 || response.StatusCode != 200 || json.Unmarshal(wire, &sent) != nil || !sent.Committed || sent.CommitOutcome != "committed" || sent.InvitationID == "" || sent.Invitation == nil || sent.Invitation.OrganizationID != organization.ID(org) || sent.DeliveryState != "queued" || sent.Recovery == nil || response.Header.Get("Set-Cookie") != "" || response.Header.Get("Cache-Control") != "no-store" {
+					t.Fatal("native HTTP send did not retain original queue outcome", response.StatusCode)
+				}
+				validateResponse("/v1/organization/invitation-send", response.StatusCode, wire)
+				for _, secret := range []string{owner.Bearer.Token(), recipient.Bearer.Token(), string(identifiers.Identifiers[0].ID), "@example.invalid", "capability", "ciphertext"} {
+					// User/identifier IDs can intentionally share the same scalar;
+					// original recovery scope identifies the target user, not an email.
+					if secret == string(identifiers.Identifiers[0].ID) {
+						continue
+					}
+					if bytes.Contains(wire, []byte(secret)) {
+						t.Fatal("HTTP invitation send leaked private custody")
+					}
+				}
+				if attempt == 0 {
+					original = sent
+				} else if sent.CommandID != original.CommandID || sent.InvitationID != original.InvitationID || *sent.Recovery != *original.Recovery || *sent.Invitation != *original.Invitation {
+					t.Fatal("HTTP matching key replaced original command or invitation")
+				}
+				id = identity.SubjectID(sent.InvitationID)
+			}
+			var rows, grants, effects int
+			if e := db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM organization.invitations WHERE tenant_id=$1 AND invitation_id=$2),(SELECT count(*) FROM public.capability_identity_one_use WHERE tenant_id=$1 AND origin_command_id=$3),(SELECT count(*) FROM organization.command_effects WHERE command_id=$3)`, baselineTenant, string(original.InvitationID), string(original.CommandID)).Scan(&rows, &grants, &effects); e != nil || rows != 1 || grants != 1 || effects != 1 {
+				t.Fatal("matching HTTP send repeated native invitation/proof/effects", e)
+			}
+		} else {
+			send, e := invitations.PrepareSend(ctx, organization.InvitationSendRequest{Authentication: owner, CommandID: commandID(t), ID: organization.ID(id), OrganizationID: organization.ID(org), OrganizationVersion: 1, RecipientUserID: recipientID, RecipientIdentifierID: identifiers.Identifiers[0].ID, CorrelationID: "invitation-http-send"}, "127.0.0.1")
+			if e != nil {
+				t.Fatal(e)
+			}
+			if out, e := invitations.Execute(ctx, send); e != nil || out.Receipt.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("genuine invitation send failed", e)
+			}
 		}
 		if _, e := worker.ProcessOne(ctx); e != nil {
 			t.Fatal("genuine encrypted delivery failed", e)
@@ -774,6 +854,9 @@ func (*baselineEvaluator) Evaluate(ctx context.Context, r authorization.Request)
 				allow = r.Resource.Type == "organization" || r.Resource.Type == "identity.user"
 			case "identity.organization.invitation-send", "identity.organization.invitation.accept", "identity.organization.invitation.cancel", "identity.organization.invitation.reject", "identity.organization.invitation.expire", "identity.organization.invitation.resend", "identity.organization.invitation.get", "identity.organization.invitation.list", "identity.organization.invitation.list-mine":
 				allow = r.Resource.Type == "organization" || r.Resource.Type == "identity.user"
+				if r.Action == "identity.organization.invitation-send" && r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action) {
+					allow = true
+				}
 			case "identity.delivery.status-get":
 				allow = r.Resource.Type == "identity.user"
 			}
@@ -1093,6 +1176,10 @@ func installOrganizationHTTPConsumer(t *testing.T, ctx context.Context, graph *b
 	if err != nil {
 		t.Fatal(err)
 	}
+	originExpiry, err := (kernel.RequestKeyExpiryMigrationSource{Base: kernel.RequestKeyPreparationMigrationSource{Base: kernel.RequestKeyMigrationSource{Base: kernel.MigrationSource{}, Version: 1800}, Version: 1801}, Version: 1802}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	riskBase := riskpg.CounterMigrationSource{Base: riskpg.ReservationMigrationSource{Base: riskpg.IssuanceIDMigrationSource{Base: riskpg.MigrationSource{Schema: "risk_store", Version: 1}, Version: 2}, Version: 3}, Version: 4}
 	riskSteps, err := (riskpg.LockoutMigrationSource{Base: riskBase, Version: 5}).Load(ctx)
 	if err != nil {
@@ -1113,7 +1200,7 @@ func installOrganizationHTTPConsumer(t *testing.T, ctx context.Context, graph *b
 	for _, extension := range []struct {
 		namespace string
 		steps     []migrations.Migration
-	}{{"identity_password_change_kernel", kernelSteps[len(kernelSteps)-1:]}, {"identity_risk_lockouts", riskSteps[len(riskSteps)-1:]}, {"organization", append(orgSteps, indexSteps...)}} {
+	}{{"identity_password_change_kernel", kernelSteps[len(kernelSteps)-1:]}, {"organization_http_invitation_kernel", originExpiry[len(originExpiry)-1:]}, {"identity_risk_lockouts", riskSteps[len(riskSteps)-1:]}, {"organization", append(orgSteps, indexSteps...)}} {
 		backend, err := migrationpg.New(db)
 		if err != nil {
 			t.Fatal(err)

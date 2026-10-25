@@ -111,6 +111,17 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out, err = c.Service.AddMember(r.Context(), in.add(), in.facts.ClientIP().String())
 				case organization.RemoveMember:
 					out, err = c.Service.RemoveMember(r.Context(), in.remove(), in.facts.ClientIP().String())
+				case organization.InvitationSend:
+					out, err = c.InvitationSender.Send(r.Context(), in.send(), in.facts.ClientIP().String())
+				}
+				if op == organization.InvitationSend {
+					status, response := invitationSendResponse(r.Context(), c, in, out, err)
+					if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+						status, response.Error = 503, "unavailable"
+						response.Invitation, response.DeliveryState = nil, ""
+					}
+					writeJSON(w, status, response)
+					return
 				}
 				status, response := mutationResponse(in, out, err)
 				// A post-dispatch deadline is not rollback. Preserve known safe

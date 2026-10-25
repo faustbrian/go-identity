@@ -13,7 +13,7 @@ func invitationWire(op organization.Operation) *identityhttp.WireOperation {
 	object := func(required []string, properties map[string]any) any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
 	}
-	invitation := object([]string{"id", "organizationID", "role", "status", "version", "expiresAt"}, map[string]any{"id": id, "organizationID": id, "role": map[string]any{"type": "string", "const": "member"}, "status": map[string]any{"type": "string", "enum": []string{"pending", "accepted", "expired", "cancelled", "rejected"}}, "version": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}, "expiresAt": map[string]any{"type": "string", "format": "date-time"}})
+	invitation := invitationViewSchema()
 	success := object([]string{"invitation"}, map[string]any{"invitation": invitation})
 	parameters := []any{map[string]any{"name": "organizationID", "in": "query", "required": true, "schema": id}, map[string]any{"name": "invitationID", "in": "query", "required": true, "schema": id}}
 	description := "Explicit bearer-only owner-authorized invitation metadata read. Recipient access is not inferred from an invitation ID or membership; the native Get owner retains its owner-only policy. "
@@ -35,4 +35,13 @@ func invitationWire(op organization.Operation) *identityhttp.WireOperation {
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"description": "Ceiling seconds for a known rate rejection; no automatic retry.", "schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}}}
 	wire, _ := json.Marshal(map[string]any{"operationId": string(op), "description": description, "parameters": parameters, "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses})
 	return &identityhttp.WireOperation{Definition: wire}
+}
+
+func invitationViewSchema() any {
+	id := map[string]any{"type": "string", "minLength": 1, "maxLength": 128}
+	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"id", "organizationID", "role", "status", "version", "expiresAt"}, "properties": map[string]any{"id": id, "organizationID": id, "role": map[string]any{"type": "string", "const": "member"}, "status": map[string]any{"type": "string", "enum": []string{"pending", "accepted", "expired", "cancelled", "rejected"}}, "version": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}, "expiresAt": map[string]any{"type": "string", "format": "date-time"}}}
+}
+
+func invitationSendWire() *identityhttp.WireOperation {
+	return operationWire(organization.InvitationSend)
 }
