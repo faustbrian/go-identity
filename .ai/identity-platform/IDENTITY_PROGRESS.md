@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 06:55 UTC
+## Current TL;DR — 2026-10-25 07:50 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -37,6 +37,16 @@
   and concrete OpenAPI pass their affected tests and independent final review,
   including all module/workspace registrations. Native durable composition and
   Reference integration remain unfinished; this does not close M22.
+- **Genuine organization consumer now works locally:** actual published HTTP
+  routes reach PostgreSQL through the native owner, using real signup/session
+  authority. Original keyed retries, repeat removal, last-owner protection and
+  revoked-user denial pass with durable receipt/audit/outbox assertions. Its
+  final selected checks/review and delivery are pending; full M22 remains open.
+- **Passkey/TOTP prerequisites:** the explicit challenge result is main/CI-green
+  (`30bf015`). Original continuation persistence and the forward SQL upgrade
+  have final approval, including populated upgrades preserving every enabled
+  predecessor origin. Native assertion-to-challenge execution and final TOTP
+  session/read/logout are not yet demonstrated. No early session is claimed.
 - **Current code delta:** the kernel's original challenge/child declaration,
   protected-owner custody and historical-query support pass their tests and
   bounded parser fuzzing, with independent review. The separate organization

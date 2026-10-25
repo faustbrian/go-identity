@@ -1,5 +1,72 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 07:50 UTC: organization genuine HTTP-to-PostgreSQL consumer now
+works locally (40030/2.818s) through public aef1d7d transport and native74525dd:
+actual Reference signup/verification/signin, bearer create/read/list/admit/remove,
+original keyed retries, changed-intent/last-owner/revoked-actor denial, repeat
+removal, exact receipts and protected SQL effects. Initial failures were duplicate
+test-owned atomic schema installation and an absolute-form in-process probe;
+only test setup changed. Final five-path review and selected race/static remain
+pending; no whole M22 closure. Worker retains heavy token and ownedPG58930.
+
+MFA continuation prerequisite: exact eight-path final independent review
+passkey_mfa_continuation_final APPROVE. Missing APIs RED49559/4422 -> unit
+GREEN15905/0.526s; final fullunit3809/0.403s, taggedvet0/modverifyall. Actual
+PG98210/0.524s proves nine predecessor profiles. Accepted review action seeds
+pending/completed records for every enabled old origin; final52627/1.057s,
+taggedvet0/diffcheck0 and finaltest5.74KB secrets clean. Scope/digest/primary and
+confirmed enrolled factor fences reuse existing sole Work/persistence; no new
+credential/session authority. Runtime source unchanged after review. Native
+positive assertion/continuation composition and final TOTP/session stay open.
+
+Passkey root30bf015 is exact origin/main Required40173755455 SUCCESS, independently
+reviewed across five paths; rootunit0.426s/vet0/modverifyall/secret scans clean.
+Public v0.0.0-20261025074150-30bf01583c86 authenticates and matches all five files.
+This is explicit private challenge-result custody only, not native MFA success.
+Capability child issuer37280c7 is committed/reviewed; main protection requires
+Required. Existing CI-only carrier contains corrected2d729ef (intentional nil
+test uses existing helper after SA1012). Focused corrected0.231s; production
+unchanged; corrected carrier40173915461 pending. Do not claim main adoption yet.
+
+2026-10-25: organization HTTP aef1d7d and native74525dd are exact origin/main,
+Required40170769726/40171295833 SUCCESS. Native final15path reviewer
+organization_direct_native_final APPROVE6bd53a96; new forced removal race passes
+three runs35.639s, disabling reconciliation fails as expected, taggedvet0.
+Native worker stopped/removed owned PG/cache and returned heavy token.
+Public HTTP v0.0.0-20261025065210-aef1d7d513f0 authenticates with sum
+h1:POupt2ChnJw9gZgjIWStsi3J/PwPWChfuKp+pP0625Y= and matches all14files.
+Next bounded organization assignment: same worker owns only new
+go-organization/postgres/operation_http_consumer_integration_test.go and affected
+native README/CHANGELOG; primary owns module pins/Git/Reference. Prove actual
+HTTP bearer routes -> OperationService -> PostgreSQL using real retained public
+Reference signup/session and native authorization/risk/audit/migrations. No fake
+domain authority/rate store. Create/get/list/admit/remove, same-key originals,
+changed-intent denial, last-owner and revoked-actor denial; no teams/invites or
+Reference startup expansion. Structural OpenAPI plus real native durable reads
+and original receipts, targeted concurrency only if new path changes it.
+Do not rerun unchanged native predecessor suites. Primary reviews resulting
+coherent diff and owns Reference wiring after accepted public consumer proof.
+
+M16 parallel native-primary assignment, 2026-10-25: passkey_mfa_native worker
+owns additive go-passkey root and postgres source/tests/docs only; primary owns
+all Git, root registrations and dependency-pin integration. Existing main
+0b8b646 is adopted, not restarted. Consume public identity kernel13afd08/422b9fa,
+sessione952895 and MFA86c8627 (seven downloaded files match source), existing
+WebAuthn4801d79. Finite outcome: explicitly selected genuine UV passkey assertion
+on an actually enrolled-TOTP account commits a browser-bound native MFA challenge
+and original continuation/child custody, with no session/token/CSRF before the
+factor; original retry/recovery preserves time, scope and remember policy.
+Default known-empty signin remains unchanged and enrolled selection fails closed.
+Reuse existing transaction/protocol/capability/factor owners and authenticated
+preparation output; no duplicate proof/store/journal or vendor engine. Prove real
+PostgreSQL challenge, no early session, wrong tenant/browser, expiry, changed
+factor/key and replay/rollback/unknown behavior with focused regressions/race.
+Return missing upstream authority to primary. Primary owns actual session TOTP
+completion/effect/read/logout and Reference/HTTP integration; worker must stop at
+that integration boundary. First public boundary and coherent tested batch are
+alignment checkpoints; independent complete final review before main delivery.
+Heavy token remains organization worker until explicit return, then PRIMARY.
+
 2026-10-25 06:55 UTC: organization bearer-only HTTP candidate is frozen across
 14 leaf paths plus modules.json/packages.json/go.work. Independent
 organization_http_leaf_final APPROVE covers all17 paths; leaf source remains

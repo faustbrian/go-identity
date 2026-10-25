@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Persist the original pending TOTP continuation for the explicit native
+  passkey-primary challenge without resetting attempts, replacing its primary
+  or granting a session. Append `PasskeyContinuationMigrationSource` with flags
+  matching installed predecessor profiles before selecting this origin; prior
+  continuation state and deadlines remain unchanged.
+
 - Fence an original enrolled factor generation and confirmed independent TOTP
   for exact passkey-primary MFA challenge Work. Reject empty, pending, changed
   and foreign state without adopting a generation or issuing a session. Native

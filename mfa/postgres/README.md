@@ -212,6 +212,17 @@ verification-origin predecessor is installed. Mismatched history fails rather
 than silently adopting or rewriting a constraint. These seams do not compare
 passwords, enroll factors, issue sessions or enable another fallback method.
 
+`PersistPasskeyContinuation` retains an explicitly selected UV-passkey primary's
+original TOTP-only continuation during the exact protected native challenge
+Apply. Its full frozen child scope, original primary command and current
+confirmed factor generation must agree. The assertion owner still proves the
+original browser, genuine WebAuthn result and primary expiry; this method issues
+no capability or session and never renews attempts or lifetime. Install
+`PasskeyContinuationMigrationSource` after the existing continuation history;
+its password/verification/username/phone flags describe already installed
+predecessors, not new authentication opt-ins. Default flags preserve only the
+original magic-link origin alongside the newly selected passkey origin.
+
 The post-registration-verification signin profile uses
 `ReadEmailVerificationSigninFactors` and fences its unchanged generation with
 `RequireEmailVerificationSigninFactors` in Apply and final commit admission.
