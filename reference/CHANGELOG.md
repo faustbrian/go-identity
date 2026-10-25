@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reuse the transport's immutable operation catalog during graph construction,
+  avoiding repeated full-catalog decoding while preserving canonical selection
+  and independent deployment configuration.
+
 - Independently select `HTTPPasskey.MFAContinuation` and
   `HTTPMFA.PasskeyTOTPVerify` for original UV-passkey/TOTP browser signin.
   Assertion success delivers only a reveal-once child header; exact passkey

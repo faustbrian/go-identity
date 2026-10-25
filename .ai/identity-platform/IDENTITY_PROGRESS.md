@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 16:31 UTC
+## Current TL;DR — 2026-10-25 17:05 UTC
 
 - **Overall: ~25%, low-confidence estimate; 11/39 full milestones closed.**
   No additional full milestone or fully qualified unit is claimed this update.
@@ -14,7 +14,16 @@
   suspended-account/code denial, original retry and durable one-use effects.
   Independent complete Reference review APPROVES the current source; affected
   race units, tagged vet, module authentication and secrets pass. Reference
-  main/CI/public-consumer delivery remains pending. No full M16 closure yet.
+  `e441b71` is pushed to main, Required `40212238986` green. All twelve changed
+  files match the authenticated public download. Its runtime rerun timed out
+  during repeated HTTP catalog decoding in graph construction, so public-runtime
+  acceptance remains open. The bounded HTTP fix is now independently approved,
+  delivered as `ba26ded`, Required `40214311877` green. Repeated canonical
+  construction falls from about1.09MB/4561 allocations to904B/17 allocations.
+  Reference's published-dependency adoption passes all four HTTPS profiles
+  together (31.01s), affected units/vet/auth and independent review. Its new
+  pin delivery/public-consumer proof follows. No timeout or security relaxation;
+  this is not exclusive proof of the earlier timeout's cause. Full M16 is open.
   Identified HTTP signin exposed a native rate-reader defect. Its bounded fix
   is independently approved and delivered in go-passkey `d4f1b8a`, Required
   `40209137333` green. All five public module files match; Reference now pins
@@ -27,7 +36,12 @@
   startup/migrations under severe host contention, so native acceptance remains
   unqualified; ambiguity and tagged vet did not run. The default-false root
   policy prerequisite is delivered at `da70252`, Required `40208679787` green;
-  native consumes that public dependency and awaits serialized verification.
+  native consumes that public dependency. Final run `31068` failed before its
+  refresh scenario at actual password/server setup; subsequent cases and vet
+  did not run. No existing lean native fixture can substitute real session
+  creation. The candidate is preserved, not accepted or published. The same
+  finite checks are now running against the changed public HTTP dependency;
+  feature/fixture code and deadlines are unchanged.
   This is not native-profile or milestone closure.
 - **New delivered profile:** genuine registration/key enrollment and
   confirmed TOTP enrollment -> real passkey assertion -> challenge only ->

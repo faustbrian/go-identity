@@ -1,5 +1,46 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 17:05 UTC: http static-catalog producer independently APPROVED by
+http_static_catalog_final at exact source0638fea1/test13682433/changelog9df3cf93.
+Delivered ba26dedec95f04a997fa5e0c61e21ee1b0fba142, exact origin/main,
+Required40214311877 success. All three authenticated public files match
+v0.0.0-20261025165940-ba26dedec95f. Public constructor allocation regression
+RED93276 FAIL4561>256, GREEN18396; five fixed10-iteration benchmark samples
+before851912..919812ns/1089237..1090308B/4561..4565alloc, after1475..2096ns/
+904B/17alloc. Go1.27.3/darwin-arm64/AppleM4Max/GOMAXPROCS2; latency samples
+are not a startup SLA. Complete HTTP race62974 PASS5.625s/vet0/secretsclean.
+New Reference public HTTP pin passes complete four-profile race48147 total
+31.01s (identifiedfresh7.81/upgrade7.61, discoveryfresh7.95/upgrade7.64).
+Current module72901 PASS Reference5.115s/command6.042s, taggedvet0/allmodules
+verified. Complete three-path adoption review APPROVE reference_passkey_totp_http_final
+at patcha0320b0a; prior feature review retained. The dependency also contains
+earlier exact-ID organization bearer admission, unselected by this Reference.
+No exclusive timeout cause or public-new-Reference acceptance is yet claimed.
+OAuth same four-command native driver40418 is now live with actual public
+rootda702 and HTTPba26; feature/fixture code and deadlines unchanged. Primary
+does no local Go/PG during its lease. No new full milestone or unit closure.
+
+2026-10-25 16:51 UTC: Reference e441b719a2416bfee221aede73dfce1dc13dae54
+is exact remote main, Required40212238986 success. All twelve changed Reference
+files match authenticated public v0.0.0-20261025163239-e441b719a241. Downloaded
+race binary built77912; its two-profile run13892 timed out after3m during
+discovery/fresh's negative-selection graph construction, with stack in repeated
+http.readCatalog JSON decoding through NewKeyedSecretRateLimiter. Public-runtime
+acceptance remains open; partial execution is not a passing result. Locally
+proven four-profile behavior and independent approval remain at original input.
+OAuth31068 also failed before selected behavior: real password signin503 and
+reference_server_router; newfive/ambiguity/vet skipped. Native candidate frozen.
+Do not launch another identical campaign or widen security/runtime deadlines.
+Next bounded owner check: http/selection.go, one focused catalog construction
+test/benchmark file and http/CHANGELOG.md only. Measure canonical construction
+before changing it; if repeated immutable catalog decoding is confirmed, remove
+that repeated work without changing bytes, metadata validation, caller ownership,
+selection, authority or API. Require focused red/green, complete HTTP race/vet,
+detached-descriptor and concurrent proof, one independent review, public delivery
+and actual affected Reference/OAuth consumer checks. No Tools/CI/manifest or
+catalog-generator changes. Primary retains Reference/pins/Git/progress; bounded
+worker owns only those HTTP paths and the serialized local Go lease.
+
 2026-10-25 16:31 UTC: complete selected Reference HTTP journey now passes.
 Race run27731 identified fresh17.30s/populated20.60s and discoverable
 populated29.26s PASS; discovery/fresh failed at earlier verification-confirm
