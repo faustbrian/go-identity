@@ -1,5 +1,82 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 23:33 UTC: M22 selected HTTP invitation-acceptance profile CLOSED.
+Delivered leaf5378a50da37858cb30ff617ecf6c9ec48f61333d exact origin/main,
+Required40245032163 success. Actual HTTP send -> encrypted delivery -> once HTTP
+accept -> current membership read -> fresh native original-outcome recovery;
+foreign recipient/consumed proof cannot reach the post-admission hook. No new
+HTTP recovery route, bare-ID recovery guarantee, resubmission or proof delivery.
+Native final caf870efbe7c8da26af569263ced1ba3322e5657 Required40244744952 success;
+root65f8517f23488d5765a8948b5f75259943caab58 Required40244421267 success.
+Prerequisite source reviews APPROVE with exact retained native reports/hashes.
+Leaf round1 REQUEST_CHANGES for actual F1: callback rate admission in Handle
+ran BeforeHandler too early. Behavioral33960 RED429/hook1/execute0,0.262s.
+Fixed with typed retained native preparation: real PrepareAcceptance/source/rate
+in Admit, BeforeHandler afterward, Handle only same Execute. No generic pipeline,
+second authority or journal. Existing direct callback Accept/Recover stay compatible.
+New root interface has structural RED10928/GREEN82930; native genuine RED9874
+-> GREEN50554 PG/race7.993s, module race1.348s/vet0/modverifyall/scannerclean.
+Leaf corrected92875 five middleware partitions PASS0.265s, module race8.331s,
+fuzz83034exec6.288s/vet0/modverifyall. Final public-pin92401 real retained/read,
+send and accept PG/HTTPS/race cohort17.729s +taggedvet0/modverifyall. Independent
+complete13path round2 organization_http_invitation_accept_final APPROVE; all
+reviewed hashes match committed and authenticated downloaded module bytes.
+Actual PUBLIC downloaded leaf v0.0.0-20261025232949-5378a50da378:
+Sum h1:NqBuvpvJTrpz+NSBXHEa42gSozdu8T4pABUCMUZ9x2U=,
+GoModSum h1:2PnsK87YXYMGXYQ62+p/botvJyvWtfzAlNVCE3Vz0uA=.
+Downloaded18549 actual acceptance PG/race7.173s +wholeleaf race8.227s,
+allmodulesverified. Owned PG55484/cache stopped/removed by worker76320; main
+owned build/module/tmp caches removed (read-only-module chmod correction needed,
+then exact-target secure cleanup verified). No live Go/test service remains.
+Full M22, Reference integration and final67unit qualification remain open;
+11/39 full milestones/~25% estimate unchanged. Next primary Reference composition;
+one bounded native archive/restore probe found existing real lifecycle engine
+but missing keyed proof-aware initiating/recovery facade, not missing stores.
+
+2026-10-25 22:53 UTC: M22 finite HTTP invitation-acceptance profile OPEN.
+Primary owns go-identity http/ organization leaf and base selection, integration
+pins, Git and these notes. organization_invitation_reads owns only additive
+go-organization invitation neutral/native facade files, tests and local docs;
+no Git or shared-kernel writes. Consumed main contracts: identity c1ab546,
+organization a80d336 (native invitation engine/recovery retained from de104e4),
+base HTTP 672ca4e and organization HTTP a643856. Read-only dependency probe done:
+no missing transaction engine; use existing PrepareAccept/Execute/Recover.
+Acceptance: genuine delivered invitation -> once HTTP acceptance -> current
+membership read -> fresh-service explicit native original-outcome recovery;
+preserve stable caller command ID, exact recipient/version/current-session
+authority, atomic proof consumption/membership/audit/outbox and Unknown semantics.
+No Idempotency-Key, request journal, automatic resubmission/recovery or new HTTP
+recovery route. Full safe original scope is required for direct recovery; bare
+command-ID recovery after total response loss is not promised. rate.secret
+must use authenticated original issuance ID/lifetime, never submitted facts.
+Exclude resend/reject/expire/Reference selection from this finite profile.
+Checks: root/native focused red-green + genuine PostgreSQL/race consumer and
+existing acceptance/recovery cohort; exact bearer selection regression; leaf
+wire/denial/rate tests, genuine HTTP journey, bounded decoder fuzz, affected
+module race/vet/mod verify; independent complete-final-diff reviews of consumed
+checkpoints, ordinary main delivery/required CI and public-download consumer.
+No new full milestone or qualified unit is claimed until its complete scope
+is proven. Prior goal turn was status-only (no progress); this starts coding
+from the finished dependency investigation, not another preflight.
+
+23:09 checkpoint: base strict-bearer selection delivered d8e16299fa5c619ec88490215837fd1b3a9c106b,
+Required40242181850 success; exact5file review http_invitation_accept_selection_final
+APPROVE. Constructor RED1641=0.298s -> affected module GREEN92773=2.180s,
+vet/modverify0/scoped scannerclean. Normal public base pin authenticated and all
+five files byte-match. Neutral organization root delivered5b2bc95052c33cd3a78c4759922709393a9ebd95,
+Required40242982561 success; root review organization_invitation_accept_root_final
+APPROVE after authentic >4096-byte proof coverage was added (no production change).
+Root RED11145 -> GREEN41022 and final19167 focused0.247s/module0.121s/vet0;
+unchanged fuzz142392exec PASS retained. Authenticated publicroot all4filesmatch.
+Native genuine acceptance RED27024=missing neutral facade after real setup;
+GREEN45453 actualPG/race7.713s including callback withdrawal, rollback/unjoined
+NotCommitted and actual COMMIT-loss/restart recovery. Native final8path review
+pending; no native/public-pin or HTTP journey delivery claimed yet.
+Leaf5813 missing-root-API compile failure is dependency evidence, not runtime RED.
+After publicroot/base adoption, leaf21624 acceptance units0.244s; final53338
+module race8.302s/fuzz67109exec6.278s/vet0/modverifyall. HTTP route-omission
+counterfactual and actual downloaded-native genuine consumer remain pending.
+
 2026-10-25 22:40 UTC: opt-in HTTP invitation-send profile CLOSED, not full M22.
 Fourteen-path slice independently APPROVED by organization_http_invitation_send_final;
 delivered a64385673023f285371e45a9c849cea3d88d7017 exact origin/main,

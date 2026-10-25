@@ -1,19 +1,23 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 22:40 UTC
+## Current TL;DR — 2026-10-25 23:33 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
   No additional fully qualified release unit is claimed.
-- **Latest delivered:** HTTP MFA key removal (`fabdc74`), native keyed static
-  member-role changes (`a80d336`) and HTTP invitation sending (`a643856`). All
-  are independently reviewed, on main with required CI green, and exercised
-  through authenticated downloaded modules on real PostgreSQL/race.
+- **Latest delivered:** once-only HTTP invitation acceptance (`5378a50`) and
+  its native retained-preparation/recovery port (`caf870e`). Both are independently
+  reviewed, on main with required CI green. The authenticated downloaded HTTP
+  module passes its real PostgreSQL/HTTPS acceptance journey and module race suite.
 - **Working invitation path:** HTTP original-key send -> encrypted delivery ->
-  native recipient acceptance -> authorized HTTP membership/invitation reads.
-  HTTP acceptance itself is still missing; this is not the full M22 milestone.
-- **Next:** add that missing HTTP acceptance/recovery boundary, then organization
-  Reference composition. SSO needs atomic challenge/proof composition before a
+  once-only HTTP recipient acceptance -> authorized HTTP membership/invitation
+  reads -> explicit fresh-native-owner original-outcome recovery. Reposting a
+  consumed proof is not recovery; no HTTP recovery route is claimed. This closes
+  the selected profile, not full M22.
+- **Next:** organization Reference composition. A separate native lane can add
+  genuine original-key archive/restore using the already implemented proof-aware
+  lifecycle owner; external cascade closure remains distinct. SSO needs atomic
+  challenge/proof composition before a
   DNS verifier can safely grant organization proof; it is not being substituted
   with parser-only scaffolding.
 - **Remaining:** 28 open consumer milestones, with substantial partial work;
@@ -117,7 +121,16 @@
   invitation/grant/effect; current-read failure/panic never erases known commit.
   Reviewed `a643856` is main/CI-green; the authenticated downloaded module passes
   actual HTTP send/delivery/native-accept/current-read PostgreSQL/race (6.840s).
-  HTTP acceptance/resend, Reference selection and full M22 remain open.
+  HTTP acceptance is delivered below; resend, Reference and full M22 remain open.
+- **Closed HTTP invitation-acceptance profile:** actual original-key send ->
+  captured encrypted delivery -> once HTTP acceptance -> current member read ->
+  fresh native original-outcome recovery. Native retained preparation keeps
+  actual source/quota admission before before-handler middleware and the same
+  transaction afterward. Foreign recipient, consumed proof, rate denial/outage
+  and middleware stop cannot advance to protected execution. `5378a50` is
+  reviewed/main/CI-green; its authenticated downloaded module passes genuine
+  PostgreSQL/HTTPS/race7.173s and module race8.227s. No HTTP recovery route or
+  bare-ID recovery guarantee is claimed. Full M22 and Reference remain open.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.
@@ -2861,7 +2874,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
-| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. Native original-key role updates `a80d336` and HTTP original-key invitation send `a643856` are reviewed/main/CI-green with actual downloaded PostgreSQL/race consumers (8.017s/6.840s). The HTTP send journey reaches encrypted delivery, native acceptance and current HTTP reads. HTTP acceptance/other remaining mutations, Reference selection, active-selection/lifecycle variants and full qualification keep this row open. |
+| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. Native keyed role updates `a80d336`, HTTP keyed invitation send `a643856`, native retained acceptance `caf870e` and HTTP once-only acceptance `5378a50` are independently reviewed/main/CI-green. The actual downloaded HTTP module proves send -> encrypted delivery -> HTTP accept -> member read -> fresh-owner explicit original recovery (7.173s), plus module race8.227s. Middleware denial/order regression is fixed and covered. Reference selection, remaining HTTP mutations, keyed lifecycle/external cascades, active-selection variants and full qualification keep this row open. |
 | M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native team creation/membership/read/update/terminal deletion delivered through `dc12ee7`, with green CI and downloaded-native genuine-session PostgreSQL/race proof. Dynamic roles/permissions and HTTP/reference remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
 | M25 | Verified domain/provider registration and federation policy: sso, sso/domain-verification, sso/postgres | Closure not reassessed |
