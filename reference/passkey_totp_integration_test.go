@@ -42,6 +42,14 @@ func TestReferencePasskeyTOTPFromRealEnrollment(t *testing.T) {
 	}
 }
 
+func TestReferencePasskeyTOTPInventoryAndFreshUVRename(t *testing.T) {
+	for _, discoverable := range []bool{false, true} {
+		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyDiscovery: discoverable, passkeyTOTP: true, passkeyTOTPManagement: true}, true)
+		})
+	}
+}
+
 func TestReferencePasskeyTOTPHTTPSFromRealEnrollment(t *testing.T) {
 	for _, discoverable := range []bool{false, true} {
 		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
@@ -289,6 +297,11 @@ func proveReferencePasskeyTOTP(t *testing.T, ctx context.Context, f liveStores, 
 	issuedCookie.Value, err = result.Session.Token.Reveal()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if c.Passkey.SessionManagement != nil {
+		// The genuine signin assertion consumed counter1. This next assertion
+		// must advance the same synthetic authenticator, not replay its counter.
+		proveReferenceSessionRename(t, ctx, features, c, user, issuedCookie.Value, csrfWire, key, id, credential.UserHandle, 2)
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, logoutOrigin, []*http.Cookie{&issuedCookie}, csrfWire, record.SessionID, f, features)
 }

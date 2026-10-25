@@ -278,38 +278,39 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
-	passkey              bool
-	passkeyUpgrade       bool
-	passkeyDiscovery     bool
-	passkeySessionHTTP   bool
-	passkeyKeyed         bool
-	passkeyHTTP          bool
-	passkeyManagement    bool
-	passkeyDeletion      bool
-	passkeySignup        bool
-	passkeySignupHTTP    bool
-	passkeyTOTP          bool
-	mfaOTPDisable        bool
-	mfaOTPDisableAll     bool
-	mfaOTPActiveCase     string
-	mfaOTPManage         bool
-	mfaOTPRemoval        bool
-	mfaOTPRemovalRace    bool
-	mfaOTPActive         bool
-	mfaOTPEnrollment     bool
-	mfaOTPEnrollmentOnly bool
-	mfaOTPListing        bool
-	mfaOTPListingHTTP    bool
-	phoneEnrollment      bool
-	phonePassword        bool
-	phoneTOTP            bool
-	phoneTOTPOnly        bool
-	phonePasswordReset   bool
-	phoneResetRollback   bool
-	phoneTOTPRollback    bool
-	phoneOTP             string
-	phoneRemoval         string
-	phoneChange          bool
+	passkey               bool
+	passkeyUpgrade        bool
+	passkeyDiscovery      bool
+	passkeySessionHTTP    bool
+	passkeyKeyed          bool
+	passkeyHTTP           bool
+	passkeyManagement     bool
+	passkeyDeletion       bool
+	passkeySignup         bool
+	passkeySignupHTTP     bool
+	passkeyTOTP           bool
+	passkeyTOTPManagement bool
+	mfaOTPDisable         bool
+	mfaOTPDisableAll      bool
+	mfaOTPActiveCase      string
+	mfaOTPManage          bool
+	mfaOTPRemoval         bool
+	mfaOTPRemovalRace     bool
+	mfaOTPActive          bool
+	mfaOTPEnrollment      bool
+	mfaOTPEnrollmentOnly  bool
+	mfaOTPListing         bool
+	mfaOTPListingHTTP     bool
+	phoneEnrollment       bool
+	phonePassword         bool
+	phoneTOTP             bool
+	phoneTOTPOnly         bool
+	phonePasswordReset    bool
+	phoneResetRollback    bool
+	phoneTOTPRollback     bool
+	phoneOTP              string
+	phoneRemoval          string
+	phoneChange           bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -610,6 +611,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passkeyTOTP {
 		configureReferencePasskeyTOTP(t, &c)
+		if extensions.passkeyTOTPManagement {
+			c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie, TOTP: true}
+		}
 	}
 	if extensions.mfaOTPEnrollment {
 		configureReferenceMFAOTPEnrollment(t, &c, origin, extensions.mfaOTPEnrollmentOnly)
@@ -1029,6 +1033,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			selected = *passkeyUpgrade
 		}
 		proveReferencePasskeyHTTPPrimarySelection(t, selected, deps)
+	}
+	if extensions.passkeyTOTPManagement {
+		invalid, selected := c, *c.Passkey
+		selected.TOTP = nil
+		invalid.Passkey = &selected
+		if graph, err := reference.ComposeStores(invalid, deps); err == nil {
+			bounded, stop := context.WithTimeout(context.Background(), time.Second)
+			_ = graph.Close(bounded)
+			stop()
+			t.Fatal("completed-MFA management accepted missing native TOTP owner")
+		}
 	}
 	if extensions.passkeyDeletion {
 		selected := c

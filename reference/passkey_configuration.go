@@ -354,7 +354,7 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if err != nil {
 		return nil, invalid
 	}
-	inventory, err := native.NewInventoryService(d.PostgreSQL, native.InventoryConfig{TenantID: n.Protocol.TenantID, RPNamespace: n.RPNamespace, RPID: n.Protocol.RelyingParty.ID, Passkey: &readProfile, Protocol: webauthnpg.Config{Coordinator: e.Coordinator, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion}, Authorization: e.Authorization, PolicyVersion: e.PolicyVersion, Rate: counters, MaximumDuration: n.Protocol.MaximumDuration})
+	inventory, err := native.NewInventoryService(d.PostgreSQL, native.InventoryConfig{TenantID: n.Protocol.TenantID, RPNamespace: n.RPNamespace, RPID: n.Protocol.RelyingParty.ID, Passkey: &readProfile, MFAPasskey: mfaAdmission, Protocol: webauthnpg.Config{Coordinator: e.Coordinator, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion}, Authorization: e.Authorization, PolicyVersion: e.PolicyVersion, Rate: counters, MaximumDuration: n.Protocol.MaximumDuration})
 	if err != nil {
 		return nil, invalid
 	}
@@ -382,7 +382,7 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	var deletion *native.DeletionService
 	var sessionManagement *native.SessionManagementService
 	if n.SessionManagement != nil {
-		if n.KeyedOptions == nil {
+		if n.KeyedOptions == nil || n.SessionManagement.TOTP && n.TOTP == nil {
 			return nil, identity.InvalidInputError{Field: "reference_passkey_session_management"}
 		}
 		selected := *n.SessionManagement
@@ -390,7 +390,7 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 		if selected.Transport == session.CredentialCookie {
 			csrf = slices.Clone(c.Session.CSRFKeys)
 		}
-		sessionManagement, err = native.NewSessionManagementService(d.PostgreSQL, native.SessionManagementConfig{Protocol: n.Protocol, Profile: profile, Validation: validation, SessionRepository: e.Repository, OptionsRequests: keyed, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Transport: selected.Transport, CSRFKeys: csrf, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion})
+		sessionManagement, err = native.NewSessionManagementService(d.PostgreSQL, native.SessionManagementConfig{Protocol: n.Protocol, Profile: profile, Validation: validation, SessionRepository: e.Repository, OptionsRequests: keyed, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Transport: selected.Transport, CSRFKeys: csrf, Risk: protected, PolicyID: e.PolicyID, PolicyVersion: e.PolicyVersion, TOTP: selected.TOTP})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: "reference_passkey_session_management"}
 		}

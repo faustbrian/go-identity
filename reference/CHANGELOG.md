@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose safe passkey inventory and explicitly selected fresh-UV label rename
+  after completed passkey/TOTP signin. Require the native TOTP owner for that
+  management selection, retain original factor/session authority and keep
+  ordinary known-empty profiles separate. No MFA key enrollment/removal or
+  other secondary-factor fallback is enabled by this selection.
+
 - Reuse the transport's immutable operation catalog during graph construction,
   avoiding repeated full-catalog decoding while preserving canonical selection
   and independent deployment configuration.

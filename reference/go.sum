@@ -99,8 +99,8 @@ github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-45633
 github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2/go.mod h1:m/dHR9FAKSLMsShqtada1M5j2nRPqrL2+hYGqWqH2rs=
 github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34 h1:tA0vza2BfdWWMWPR31Z0IjBLbSrfprlrLlNUZwi6XHA=
 github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34/go.mod h1:mHmrn9LRl/lICJbM1cpafYTMVJkwX5bz9dOhFxpJq/M=
-github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261025091105-611c29443a54 h1:/RS2XdGjUS2m2S3nIhoaJc+SxYvknw64FaiwzljyD7M=
-github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261025091105-611c29443a54/go.mod h1:FGZ5MMFEgV5r4RpV2bvMwDGDyI2ko1/8nnO5VRxOIys=
+github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261025175536-83b26ececce6 h1:m1iSZfxgrRSYCxCn3OyMpaRcZiaCyNBpebnJKgxIssQ=
+github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261025175536-83b26ececce6/go.mod h1:FGZ5MMFEgV5r4RpV2bvMwDGDyI2ko1/8nnO5VRxOIys=
 github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089 h1:7L2f0hvap+3H3t8nIYDGaqHYWNUK47/y+ZSc9iqZ6Vc=
 github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089/go.mod h1:qxYVoKX0qfE9ZwMxL773dOwGxhixbKprZGgIg619Ekg=
 github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261023131125-38648609fbb6 h1:gsE6xciVWT/iGrBA8MKbDWkZc933OqfFP2BEjjGuZF8=
@@ -123,8 +123,8 @@ github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
 github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3/go.mod h1:Dr+TKiY24feF9p9vYuWnsDaRE+Bnxlx7earFFjKNOLE=
 github.com/faustbrian/go-identity/session v0.0.0-20261024134726-e9528953435b h1:9kMC66zleZywuUGFJ8YcgrQwhZt260cL/EYlunHHRcI=
 github.com/faustbrian/go-identity/session v0.0.0-20261024134726-e9528953435b/go.mod h1:4881V+LxKRjNfZ8KZn7Xne258cP8IZZUPZGZd4TU/uc=
-github.com/faustbrian/go-identity/session/postgres v0.0.0-20261025134246-10fb24afef57 h1:iD+nqL5C2EW19EThs8c65pWQq7BuFIRGCcLCgCShY1c=
-github.com/faustbrian/go-identity/session/postgres v0.0.0-20261025134246-10fb24afef57/go.mod h1:n7bal5Lr2DYRotFjIFfLRAq8V56SYqrS7ld01JblM4A=
+github.com/faustbrian/go-identity/session/postgres v0.0.0-20261025174242-49fde04d4b1b h1:BEIe7E1GvDzZTykVcIOekJ0EogKJ7eNIYTZkkroPni0=
+github.com/faustbrian/go-identity/session/postgres v0.0.0-20261025174242-49fde04d4b1b/go.mod h1:n7bal5Lr2DYRotFjIFfLRAq8V56SYqrS7ld01JblM4A=
 github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94 h1:vval5r7iVaOPdh/JhzjfpBrZ4AnNJJP1SltC5/810Qk=
 github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94/go.mod h1:D5k1liTpGNaELsq7gEuXeSZNJRaaApGBrwxAh4B+FjU=
 github.com/faustbrian/go-json-schema/v2 v2.0.0 h1:88kzwDCcP8Xo3SaDyUzc6oWtl83id9P6uY/gjgyQ/74=
@@ -139,8 +139,8 @@ github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820 h1:/5nv
 github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820/go.mod h1:BpEy2DPz/YR5C9gcBcKAxkG4fO+jo6WLwjNDy075MYY=
 github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86 h1:lo/Aaj1zwOKvkbdE3TnwLo3ceaehtqphu35GySqHW68=
 github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86/go.mod h1:xo+sxfPGP2ieP7k8RDdziBimaw4ImeeVZYEQ/s99ICY=
-github.com/faustbrian/go-passkey/postgres v0.0.0-20261025155343-d4f1b8aced8d h1:PHTOP6gqPAmwPeMa8MuLr2T+OZSwP2F3gIFivHioYnw=
-github.com/faustbrian/go-passkey/postgres v0.0.0-20261025155343-d4f1b8aced8d/go.mod h1:cSxKTN4ws1AhM9Mow0r8u79EipLD+c0PcFWSTAHbj8o=
+github.com/faustbrian/go-passkey/postgres v0.0.0-20261025180448-930e129e1662 h1:y24tbWuAmqhOfNFcCVnbClO7p6H/jmwnOZP+4T2qGhc=
+github.com/faustbrian/go-passkey/postgres v0.0.0-20261025180448-930e129e1662/go.mod h1:l0PtlySaEgqRqwk+XAhPhw3VF2O9C3ZnwHTqVVPxhBI=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff h1:8BIB469appqyn79T6j/sJQAS3dN6+budadfpPLwtqIg=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff/go.mod h1:Tqc83xc8RVAsi6JAW3dkKM1OFVos7cfayeNHBbWstsA=
 github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7 h1:yYXsPBwz+mm8JMdWfl+DcTdeD52C/zlBW2H4Tb40gKk=

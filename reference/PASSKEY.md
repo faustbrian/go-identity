@@ -40,6 +40,26 @@ unless its distinct challenge/completion transport is explicitly selected below;
 common session HTTP remains independently selectable. Full passkey/MFA and
 release qualification are separate from this profile.
 
+For credential inventory after completion, the graph explicitly composes both
+known-empty and completed-TOTP native readers. Original stored provenance
+selects one; a failed factor read never falls back to the ordinary profile.
+To rename from that completed session, separately configure
+`Passkey.SessionManagement` with `TOTP:true`, exact bearer/cookie transport and
+`Passkey.KeyedOptions`. This requires `Passkey.TOTP`; it does not select a new
+login method or another factor. Use the existing
+[fresh action-bound UV rename API](#current-passkey-session-rename). Original
+confirmed factor ID, enrollment and account generation remain current through
+the native transaction alongside session, credential, policy and RP mapping.
+The new assertion advances the authenticator normally; it does not replay the
+signin assertion or consume a TOTP. Omitted `TOTP` management selection retains
+known-empty behavior. Enrolled-MFA additional-key enrollment/removal and other
+secondary methods remain separate profiles.
+
+`TestReferencePasskeyTOTPInventoryAndFreshUVRename` exercises real registration,
+key/factor enrollment, identified/discoverable signin, TOTP completion, safe
+inventory, fresh UV rename, metadata-only original retry and session read/logout.
+No account, factor secret, session or successful receipt is seeded.
+
 ### Opt-in HTTP original passkey plus TOTP
 
 Select `HTTPPasskey.Signin` and `HTTPPasskey.MFAContinuation` with native

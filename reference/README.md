@@ -10,6 +10,12 @@ common session read/logout. Native selection enables no new HTTP route. Select
 `X-MFA-Variant: passkey` completion. Without that opt-in, generic signin rejects
 the native MFA profile. See [the profile and lineage limits](PASSKEY.md#original-passkey-plus-confirmed-totp).
 
+Completed passkey/TOTP sessions can use safe inventory and explicitly selected
+`Passkey.SessionManagement` with `TOTP:true` for a fresh action-bound UV label
+rename. That selection requires the native TOTP owner and original current
+factor/session authority; it does not enable MFA key enrollment/removal or
+another secondary-factor fallback. Native selection adds no HTTP route.
+
 For a passkey-only backend, explicitly select `Passkey.Standalone`,
 `Passkey.Signup`, `Session.Passkey` and durable PostgreSQL admission. The same
 sealed construction graph runs with no password, OTP or delivery configuration

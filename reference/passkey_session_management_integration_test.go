@@ -16,7 +16,7 @@ import (
 
 // Use only the public graph and original HTTP-issued custody. The controlled
 // authenticator signs the actual challenge; no account/proof/store is seeded.
-func proveReferenceSessionRename(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, bearer, csrf string, key crypto.Signer, id, handle []byte) {
+func proveReferenceSessionRename(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, bearer, csrf string, key crypto.Signer, id, handle []byte, counters ...uint32) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -49,7 +49,11 @@ func proveReferenceSessionRename(t *testing.T, ctx context.Context, features ref
 		t.Fatal("actual safe native inventory", err)
 	}
 	caller.Request.Action = "identity.passkey.update"
-	r := passkey.SessionUpdateRequest{Credential: credential, CSRFToken: synchronizer, Caller: caller, ReferenceID: identity.CredentialID(page.Credentials[0].ReferenceID), ExpectedVersion: page.Credentials[0].Version, Name: "Passkey-only renamed key", Origin: c.Passkey.Signup.Flow.Origin, Network: "127.0.0.1"}
+	origin := c.Passkey.Flow.Origin
+	if c.Passkey.Signup != nil {
+		origin = c.Passkey.Signup.Flow.Origin
+	}
+	r := passkey.SessionUpdateRequest{Credential: credential, CSRFToken: synchronizer, Caller: caller, ReferenceID: identity.CredentialID(page.Credentials[0].ReferenceID), ExpectedVersion: page.Credentials[0].Version, Name: "Passkey-only renamed key", Origin: origin, Network: "127.0.0.1"}
 	optionsKey, err := identity.NewIdempotencyKey([]byte("standalone-rename-options"))
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +86,7 @@ func proveReferenceSessionRename(t *testing.T, ctx context.Context, features ref
 	if err != nil {
 		t.Fatal(err)
 	}
-	completion := passkey.SessionUpdateCompletion{SessionUpdateRequest: r, IdempotencyKey: completionKey, CeremonyID: ceremony.ID, Response: referencePasskeyAssertion(t, key, id, handle, challenge)}
+	completion := passkey.SessionUpdateCompletion{SessionUpdateRequest: r, IdempotencyKey: completionKey, CeremonyID: ceremony.ID, Response: referencePasskeyAssertion(t, key, id, handle, challenge, counters...)}
 	out, err := manager.Update(ctx, completion)
 	if err != nil || out.Outcome != identity.CommitOutcomeCommitted || out.Replayed || out.Credential == nil || out.Credential.Label != r.Name || out.Credential.Version != r.ExpectedVersion+1 {
 		t.Fatal("public graph did not atomically rename", err)

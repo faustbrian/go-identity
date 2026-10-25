@@ -13,8 +13,13 @@ import (
 // rename under a current passkey session. Transport must be exactly bearer or
 // cookie; the graph supplies original CSRF keys for cookies. KeyedOptions is
 // required. This selects neither a password proof nor HTTP, deletion, recovery
-// or enrollment. The sole existing graph owns all native stores and policies.
-type PasskeySessionManagementConfiguration struct{ Transport session.CredentialKind }
+// or enrollment. TOTP explicitly selects completed passkey/TOTP sessions and
+// requires Passkey.TOTP; false retains the ordinary known-empty profile. The
+// sole existing graph owns all native stores and policies.
+type PasskeySessionManagementConfiguration struct {
+	Transport session.CredentialKind
+	TOTP      bool
+}
 
 // Format redacts selected runtime configuration.
 func (PasskeySessionManagementConfiguration) Format(s fmt.State, _ rune) {
