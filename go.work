@@ -13,6 +13,7 @@ use (
 	./http/magiclink
 	./http/mfa
 	./http/organization
+	./http/organization/consumer
 	./http/otp
 	./http/password
 	./http/passkey

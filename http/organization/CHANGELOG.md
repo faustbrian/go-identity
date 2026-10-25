@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Keep genuine PostgreSQL/HTTPS consumer journeys in the explicit nested
+  `consumer` test module. The transport module no longer depends on Reference
+  or persistence adapters just to compile its tests, allowing Reference to
+  compose this feature without a reverse module dependency. Runtime APIs and
+  invitation behavior are unchanged.
+
 - Add independently selected once-only invitation acceptance through the actual
   native owner, strict bearer session and shared original-command secret rates.
   Preserve the caller-known command, signed original challenge interval and

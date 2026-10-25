@@ -44,6 +44,13 @@ outcome is not permission to allocate another command or replace the proof.
 
 ## Composition
 
+The retained genuine PostgreSQL/HTTPS tests live in the nested `consumer`
+test module. From that directory, set `GOLIB_ORGANIZATION_TEST_POSTGRES_DSN` to
+an isolated disposable PostgreSQL database and run
+`GOWORK=off go test -race -tags=integration -run '^TestInvitation.*GenuineHTTPConsumer$' -count=1 .`.
+They consume the authenticated public transport/native modules, not a local
+replacement. The ordinary transport module does not depend on Reference.
+
 For the original organization/member operations:
 
 1. Construct the actual native organization `OperationService` and its genuine

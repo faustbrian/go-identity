@@ -1,6 +1,6 @@
 //go:build integration
 
-package organizationhttp_test
+package organizationconsumer_test
 
 import (
 	"bytes"
