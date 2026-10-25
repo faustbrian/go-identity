@@ -35,6 +35,11 @@ func TestContinuationVerificationParentIsImmutableSignedScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldDigest, _ := original.ScopeDigest()
+	// Captured before passkey-origin support: adding another optional origin must
+	// not invalidate already issued password/magic-link capabilities.
+	if hex.EncodeToString(oldDigest[:]) != "3bcc5c63f603be28e4af4ae079092a29b35b9858d18b10c52429c250a201266b" {
+		t.Fatal("legacy immutable-scope bytes changed")
+	}
 	oldPayload, _ := original.CapabilityPayload("https://issuer.test")
 	if oldPayload.CorrelationID != "" {
 		t.Fatal("legacy continuation acquired verification origin")

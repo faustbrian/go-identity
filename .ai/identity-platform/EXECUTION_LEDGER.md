@@ -1,5 +1,34 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 08:07 UTC: organization native HTTP consumer ec23514 is pushed to
+main, independent final five-path review APPROVE and Required40174763775
+SUCCESS. Real PostgreSQL fullcase2.818s and race7.441s pass; disabled-feature
+counterfactual fails at the expected404. Full M22 still needs selected Reference
+composition and remaining lifecycle profiles; no milestone count increase.
+
+Passkey native actual signed assertions (identified/discoverable) commit only a
+child, but real continuation Reader rejects correlation: native owner binds the
+original primary command while core MFA expects empty correlation. Repro70510
+fails1.526s at durable continuation identity; native denial/rollback/race32915
+passes9.859s. Primary owns additive optional PasskeyCommandID in MFA immutable
+scope/signed correlation, distinct from verification and equal to original
+primary, TOTP-only. Existing absent-field scope bytes must stay unchanged.
+Affected consumer is native passkey -> durable MFA Reader/Authorize; exact
+grant/substitution/legacy-byte tests plus native stored-scope/matcher proof and
+one final review. Publish committed pins before worker resumes actual assertion.
+Do not weaken comparison or invent private child state. Heavy token returned;
+worker PG58943 stopped/removed. Final completion/session/Reference remain open.
+
+Core five-path final independent passkey_continuation_correlation_final
+APPROVE with no actions. API missing72e910 then field-only runtime RED20cfd9
+proves lost correlation and six admitted invalid profiles. Finalfocused a32ece
+continuation0.221s/vet0; fullmodule5f725d0.097s/modverifyall; tracked6.52KB and
+new4.10KB secrets clean/diffcheck0. Legacy pre-change immutable digest retained.
+Native matcher/storage and actual assertion consumer adoption remain pending.
+Capability2d729ef is now exact origin/main with Required40173915461 SUCCESS;
+MFA0a39cb5 likewise Required40174491937 SUCCESS. Earlier pending notes below
+retain their original checkpoint identity, not current delivery state.
+
 2026-10-25 07:50 UTC: organization genuine HTTP-to-PostgreSQL consumer now
 works locally (40030/2.818s) through public aef1d7d transport and native74525dd:
 actual Reference signup/verification/signin, bearer create/read/list/admit/remove,

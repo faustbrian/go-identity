@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 07:50 UTC
+## Current TL;DR — 2026-10-25 08:15 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -35,18 +35,21 @@
   native continuation, TOTP completion and session integration remain next.
 - **Organization HTTP:** bearer-only create/get/member-list/add/remove transport
   and concrete OpenAPI pass their affected tests and independent final review,
-  including all module/workspace registrations. Native durable composition and
-  Reference integration remain unfinished; this does not close M22.
-- **Genuine organization consumer now works locally:** actual published HTTP
+  including all module/workspace registrations. Native durable composition is
+  delivered; Reference integration remains unfinished. This does not close M22.
+- **Genuine organization consumer delivered:** actual published HTTP
   routes reach PostgreSQL through the native owner, using real signup/session
   authority. Original keyed retries, repeat removal, last-owner protection and
-  revoked-user denial pass with durable receipt/audit/outbox assertions. Its
-  final selected checks/review and delivery are pending; full M22 remains open.
+  revoked-user denial pass with durable receipt/audit/outbox assertions. Main
+  `ec23514`, independent final review and Required CI `40174763775` are complete;
+  real PostgreSQL/race passes. Full M22 remains open.
 - **Passkey/TOTP prerequisites:** the explicit challenge result is main/CI-green
-  (`30bf015`). Original continuation persistence and the forward SQL upgrade
-  have final approval, including populated upgrades preserving every enabled
-  predecessor origin. Native assertion-to-challenge execution and final TOTP
-  session/read/logout are not yet demonstrated. No early session is claimed.
+  (`30bf015`). Original continuation persistence/forward SQL upgrade `0a39cb5`
+  and capability issuer `2d729ef` are main/CI-green. Real signed identified and
+  discoverable assertions now commit only a child, but MFA Reader rejects its
+  original-command correlation. Core correction passes focused/full-module
+  checks and is under independent review; native adoption/rerun follows.
+  Final TOTP session/read/logout remains unproven. No early session is claimed.
 - **Current code delta:** the kernel's original challenge/child declaration,
   protected-owner custody and historical-query support pass their tests and
   bounded parser fuzzing, with independent review. The separate organization

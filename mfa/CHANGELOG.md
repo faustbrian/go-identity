@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind explicit TOTP-only passkey continuations to their original primary
+  command in immutable scope and signed correlation. Omitted selection retains
+  existing continuation bytes; no factor or session authority is inferred.
+
 - Allow the distinct disable purpose in authenticated OTP requests. Selected
   native owners still enforce action policy and consume one-use proof atomically;
   parsing alone neither authenticates nor enables disable.

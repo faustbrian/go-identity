@@ -93,6 +93,12 @@ type ContinuationSpec struct {
 	// It is immutable scope and the child's signed correlation, not a supplied
 	// proof of commitment. Native owners must authenticate its exact journal.
 	VerificationCommandID identity.CommandID `json:",omitempty"`
+	// PasskeyCommandID selects an original UV-passkey primary command, distinct
+	// from verification. It equals PrimaryProofID and binds the child's signed
+	// correlation and immutable scope. The selected profile allows only TOTP;
+	// native owners must authenticate that command's committed assertion journal.
+	// Zero preserves every existing continuation encoding and scope digest.
+	PasskeyCommandID identity.CommandID `json:",omitempty"`
 }
 
 // PartialAuthContinuation is an owned immutable partial-authentication view.
@@ -111,6 +117,11 @@ func invalidContinuation() error { return identity.InvalidInputError{Field: "mfa
 // names, duplicate-free and canonicalized by sorting; no implicit fallback or
 // passkey-as-factor occurs. A stored state is not refreshed or restarted.
 func NewPartialAuthContinuation(s ContinuationSpec) (PartialAuthContinuation, error) {
+	if s.PasskeyCommandID != "" {
+		if _, err := identity.ParseCommandID(string(s.PasskeyCommandID)); err != nil || s.VerificationCommandID != "" || string(s.PasskeyCommandID) == string(s.ID) || string(s.PasskeyCommandID) != string(s.PrimaryProofID) || len(s.AllowedMethods) != 1 || s.AllowedMethods[0] != "totp" {
+			return PartialAuthContinuation{}, invalidContinuation()
+		}
+	}
 	if s.VerificationCommandID != "" {
 		if _, err := identity.ParseCommandID(string(s.VerificationCommandID)); err != nil || string(s.VerificationCommandID) == string(s.ID) || string(s.VerificationCommandID) == string(s.PrimaryProofID) {
 			return PartialAuthContinuation{}, invalidContinuation()
@@ -290,6 +301,8 @@ func (c PartialAuthContinuation) CapabilityPayload(issuer string) (capability.Pa
 	payload := capability.Payload{Version: 1, Issuer: issuer, Audiences: []string{s.Audience}, Subject: string(s.SubjectID), Resource: "mfa/continuations/" + string(s.ID), Operation: s.Purpose, IssuedAt: s.IssuedAt, NotBefore: s.IssuedAt, ExpiresAt: s.ExpiresAt, ID: string(s.ID), Tenant: string(s.TenantID), MaxUses: 1, Caveats: map[string]string{"mfa.profile": "identity-mfa-continuation-v1", "mfa.scope": hex.EncodeToString(digest[:])}}
 	if s.VerificationCommandID != "" {
 		payload.CorrelationID = string(s.VerificationCommandID)
+	} else if s.PasskeyCommandID != "" {
+		payload.CorrelationID = string(s.PasskeyCommandID)
 	}
 	if _, err := capability.CanonicalPayload(payload, capability.DefaultLimits()); err != nil {
 		return capability.Payload{}, invalidContinuation()

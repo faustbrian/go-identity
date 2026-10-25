@@ -1,5 +1,21 @@
 # MFA (in development)
 
+## Explicit passkey primary continuation
+
+`ContinuationSpec.PasskeyCommandID` selects the original native UV-passkey
+command as the immutable primary and the child capability's signed correlation.
+It must equal `PrimaryProofID`, differ from the child ID and be disjoint from
+`VerificationCommandID`. This selected profile permits only confirmed TOTP as
+the secondary method; it does not enable a recovery/OTP fallback. Native owners
+must still prove the committed assertion, current credential and enrolled-factor
+authority. Construction grants no assertion, factor or session authority.
+
+Omitting the field preserves existing scope bytes. Attempts retain the original
+scope and absolute expiry; `Authorize` verifies exact signed scope without
+consuming the grant. Durable one-use completion and session issuance remain
+the native transaction owner's responsibility. Complete passkey/TOTP native
+and Reference integration is still in development.
+
 Active TOTP step-up may explicitly target `identity.email.change-request`.
 The returned proof is action/session/audience-bound and is not email mutation
 authority. The selected native email owner must authenticate its original
