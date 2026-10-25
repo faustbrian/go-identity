@@ -28,6 +28,18 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 		return nil, invalid
 	}
 	p := s.state.features.passkey
+	if p.totp != nil {
+		// The selected MFA-first deployment installs the native completion
+		// prefix before passkey's permanently pinned issuance successor.
+		present := slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == "identity_password_mfa_session" })
+		if !present {
+			var err error
+			catalog, err = passwordTOTPMigrationCatalog(ctx, catalog, p.schema, s.state.config.Schema, true, s.state.features.verificationSessionLineage == VerificationBeforeMFA)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	previous := "session_issuances_purpose_check"
 	for _, h := range catalog {
 		for _, g := range h.guards {
@@ -205,5 +217,9 @@ func (s StoreSet) passkeyMigrationCatalog(ctx context.Context, catalog []migrati
 	if err := appendOwned("identity_passkey_session", "identity/session/postgres", sessionpg.PasskeySigninMigrationSource{Schema: p.schema, Version: 1, PreviousConstraint: p.predecessor}, migrationGuard{version: 1, schema: p.schema, constraints: []string{"session_issuances.session_issuances_purpose_passkey_v1"}}); err != nil {
 		return nil, err
 	}
-	return s.passkeySignupMigrationCatalog(ctx, catalog)
+	catalog, err = s.passkeySignupMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	return s.passkeyTOTPMigrationCatalog(ctx, catalog)
 }

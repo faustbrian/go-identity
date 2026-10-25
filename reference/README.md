@@ -2,6 +2,11 @@
 
 ## Optional native passkey backend
 
+`Passkey.TOTP` selects original UV-passkey plus independent confirmed-TOTP
+completion through `FeatureSet.PasskeyTOTP()`, using real native owners and
+common session read/logout. It enables no new HTTP route and rejects unsupported
+generic signin transport. See [the profile and lineage limits](PASSKEY.md#original-passkey-plus-confirmed-totp).
+
 For a passkey-only backend, explicitly select `Passkey.Standalone`,
 `Passkey.Signup`, `Session.Passkey` and durable PostgreSQL admission. The same
 sealed construction graph runs with no password, OTP or delivery configuration

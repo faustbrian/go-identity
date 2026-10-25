@@ -1,5 +1,86 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 13:49 UTC: final selected discoverable fresh and populated-upgrade
+journeys98781 PASS11.92s (5.96s each), using the ordinary tracked public module
+pins, no replacements. Genuine enrollment/assertion/child/TOTP/session/read,
+wrong browser/code/suspended-account denial, exact retry/recovery, one consumed
+browser and CSRF logout/read denial all execute. Session10fb24a
+Required40198888904 SUCCESS; all5 public files match. Ordinary-modfile73102:
+all modules verified; race Reference30.918s and baseline command21.871s PASS;
+tagged vet0 and integration race compile0. Identified fresh/upgrade46593 proof
+is retained against identical authenticated dependency/source bytes. The owned
+runner limits runtime GOMAXPROCS to2; native/security deadlines are unchanged.
+Earlier failures remain in13:43 note. All26 selected paths pass secret scan;
+final complete review/main delivery follow. No full M16 or unit closure added.
+
+2026-10-25 13:43 UTC: session browser reservation/finalization prerequisite
+10fb24afef57df3676dac91d90be378eb9f420f2 is exact remote main. Complete
+five-path independent passkey_mfa_session_final APPROVE; session module race
+2.131s, tagged vet0, selected secrets clean. Hosted CI/public inspection follows.
+Kernel87c816c Required40196014749 SUCCESS; authenticated public five-file match.
+Reference46593 identified fresh7.57s and populated-upgrade20.96s pass the real
+enrollment/assertion/TOTP/session/read/retry/recovery/logout journey, including
+exact consumed-browser journal/fingerprint/generation. Initial four-case run
+54333 exposed a harness-only origin change; successor transport now preserves
+the original URL/Host/Origin and only changes its loopback destination.
+Discoverable remains unqualified:46593 setup/migration failures and58808 factor
+activation503/cleanup timeout occurred under measured load101.89 on16 CPUs.
+Further heavy launches are held; no product deadline is widened. Complete
+source review has no remaining findings, but final affected checks, public pin
+and ordinary-modfile consumer proof remain pending. Prior proposed lock/counter
+changes are WITHDRAWN: configureKernelWork's exact tenant advisory lock already
+serializes the claimed same-tenant interleavings; kernel tree is unchanged from
+delivered87c816c. Actual completion reserves browser after the factor lock, then
+finalizes with session effects. No full milestone or unit qualification added.
+
+2026-10-25 13:00 UTC: actual identified assertion -> confirmed TOTP -> native
+session/read -> exact retry/recovery -> common CSRF logout passes locally
+(48018,2.16s). This is not final acceptance: source audit requires original
+browser single use at successful completion. Runtime80721 proved the old
+consumed-browser assumption wrong: native MFA challenge intentionally leaves
+the flow issued. Removed the unpublished counted-consumed helper instead of
+weakening or changing the native challenge. Original issued-flow admission now
+uses RequirePreAuth; add sealed Reserve/FinalizeMFAPasskeyPreAuth continuation
+relation inside that existing session state machine, with original MFA Work
+custody and no rewritten action/policy. Reserve before factor locks, consume
+with session effects. New API compile RED90495; zero-owner GREEN3556. The
+strengthened final flow/journal/effect oracle and final profile run are pending.
+Temporary constant diagnostic prints removed after locating the first divergence.
+Full milestones remain11/39; no new unit qualification or release is claimed.
+
+2026-10-25 12:35 UTC: mapping0de1392 and correctiona02703b are delivered,
+Required CI green; authenticated public source matches. Reference's genuine
+assertion/child and original completion rate-source read work. Full TOTP/session
+consumer remains RED: wrong-code counted execution returns Unavailable, before
+correct completion. Temporary secret-free stage diagnostics locate that boundary;
+no product timeout or security check is relaxed. Independent Reference review
+also found an Apply-only credential guard used during preparation and an oracle
+expecting three debits for one wrong plus one correct submission. Correct scope:
+new exact-callback preparation eligibility fence, unchanged consumed Apply/final
+guard; final remaining attempts must be original minus two.
+Native prerequisite eight-path review approves source only (f8a0171d); fifteen
+real PostgreSQL/race credential/count/preparation cases pass2.259s, kernel units
+0.635s/tagged vet0, session selected browser units9.095s/vet0. Direct consumer,
+ordinary public pins, final Reference review and delivery remain unproven.
+
+2026-10-25 11:22 UTC: correctiona02703b is exact origin/main and
+Required40187797365 SUCCESS, authenticated public seven-file match complete.
+Primary continues the frozen genuine passkey/TOTP Reference profile: public
+registration and key enrollment -> genuine confirmed TOTP enrollment -> actual
+identified/discoverable assertion producing only a child -> counted TOTP
+completion -> session/read -> original retry/recovery -> logout/read denial.
+Use existing risk, original command/browser, factor, capability, session,
+directory/policy and RP mapping owners; never fabricate a recipient or promote
+UV to independent factor proof. Scope excludes recovery-code/passkey variants,
+trusted devices and new HTTP routes; common selected session read/logout remains
+required. New public selection must fail closed for missing owners/shutdown.
+Focused native/component authority/rollback evidence is retained; new Reference
+journey, negative browser/code/current-authority cases, populated bootstrap,
+affected units/static/race and one complete final review prove this profile.
+Initial Reference API red69576: PasskeyTOTP selection/configuration/owner field
+are absent. Mapping worker's native candidate is in independent final review;
+primary now holds the heavy test lease.
+
 2026-10-25 11:10 UTC: native session batch4d42d805910ca8c86b962a7e0e887bfc722ab360
 is exact origin/main, Required40186223714 SUCCESS; all25 native files match
 authenticated public session/postgres v0.0.0-20261025104719-4d42d805910c.

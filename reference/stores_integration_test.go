@@ -25,6 +25,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
+	"github.com/faustbrian/go-identity/mfa"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
@@ -76,6 +77,7 @@ type liveStores struct {
 	afterEmailSignin                   func(context.Context, identity.UserID, []*http.Cookie, string, func(...string) ([]*http.Cookie, string), func([]*http.Cookie) bool)
 	emailTOTPChange                    bool
 	afterEmailFactor                   func(auth.ReauthenticationProof, []*http.Cookie, string, []string)
+	afterTOTPEnrollment                func(mfa.FactorID, []byte)
 	afterEmailFactorHTTP               func(auth.ProofID)
 	disable                            bool
 	disableAll                         bool

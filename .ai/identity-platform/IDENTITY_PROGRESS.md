@@ -1,6 +1,33 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 11:10 UTC
+## Current TL;DR — 2026-10-25 13:49 UTC
+
+- **Overall: ~25%, low-confidence estimate; 11/39 full milestones closed.**
+  No additional full milestone or fully qualified unit is claimed this update.
+- **New working behavior (local):** genuine registration/key enrollment and
+  confirmed TOTP enrollment -> real passkey assertion -> challenge only ->
+  wrong-code denial -> correct TOTP -> session/read -> exact retry/recovery
+  without credential redisclosure -> CSRF-protected logout/read denial.
+  Identified and discoverable signin pass on fresh and populated-upgrade
+  databases, including the strengthened browser single-use/journal oracle.
+  Final discoverable proof uses published dependencies without replacements.
+  Earlier migration/server/enrollment failures under severe host contention
+  remain recorded, not passing evidence. Product deadlines are unchanged.
+- **Delivered:** real RP mapping0de1392 and factor/mapping lock-order correction
+  a02703b and kernel preparation guard87c816c are main/CI-green, with matching
+  authenticated public sources. Session browser completion10fb24a is reviewed
+  and main/CI-green, with matching authenticated public sources.
+- **Current:** final Reference review and main delivery. Its public dependency
+  authentication, affected race units/command, tagged vet and genuine selected
+  runtime acceptance pass. Reference itself is not yet delivered/public-qualified.
+  Proposed new lock/counter changes were withdrawn: existing tenant advisory
+  serialization already prevents the reported same-tenant cycles. No such
+  kernel changes were made. No new HTTP login route is claimed.
+- **Remaining whole goal:** full passkey/MFA profiles, remaining organization,
+  OAuth/federation/provisioning and cross-cutting milestones, plus final
+  qualification of all67 units. Historical full-history secrets remain open.
+
+## Retained evidence and earlier checkpoints
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain

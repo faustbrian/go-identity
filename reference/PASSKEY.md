@@ -1,5 +1,45 @@
 # Native passkeys
 
+## Original passkey plus confirmed TOTP
+
+`Passkey.TOTP` explicitly selects a genuine UV assertion followed by an
+independently confirmed TOTP factor. It requires the standard existing-account
+graph and `Session.Passkey`; it does not enable standalone signup, factor
+enrollment, recovery codes, trusted devices or new HTTP routes. With the option
+absent, known-empty-factor signin is unchanged.
+
+Configure `Challenge` with the native issuer, its matching trusted resolver and
+preparation custody, bounded lifetime/attempts and envelope key ID. Its issuer
+must match the configured passkey flow origin. Leave `Challenge.Envelope` nil:
+the graph supplies its actual envelope provider. `Completion` selects the
+counted-risk policy, comparison key and the same active envelope key ID. The
+flow needs a nonempty HTTPS callback because TOTP completion binds the exact
+original browser callback. Inputs remain configuration, not request overrides.
+
+This selection currently uses the MFA-first session lineage: the graph installs
+the actual native completion predecessors before the retained passkey issuance
+suffix. For the basic password deployment its `SessionPredecessor` is
+`session_issuances_purpose_v6`. Existing deployments must retain their original
+predecessor and applied checksums; changing that setting is not a migration.
+Upgrading an already installed passkey-before-MFA suffix remains unsupported by
+this Reference selection rather than silently rewriting its history.
+
+Use the public registration/key-enrollment and factor-enrollment owners first.
+`Passkeys().Signin` or `DiscoverableSignin` then returns a committed `Challenge`
+and no session or synchronizer. Retain the original browser cookie and child
+proof. `FeatureSet.PasskeyTOTP()` accepts the purpose-bound `mfa.TotpVerifyRequest`
+with that exact child/browser, confirmed factor and submitted code. Only a fresh
+acknowledged native commit returns the session and CSRF token; exact retry and
+`RecoverTotpVerify` reconcile metadata without disclosing them again.
+
+Common selected session reading and logout use actual directory, credential,
+policy, factor and RP mapping authority. The original assertion time, expiry and
+Remember policy cannot renew. No email recipient or password evidence is
+invented. Generic passkey signin HTTP is rejected with this native selection
+until its distinct challenge/completion transport is explicitly supported;
+common session HTTP remains independently selectable. Full passkey/MFA and
+release qualification are separate from this profile.
+
 ## Passkey-only deployment
 
 Set `Passkey.Standalone` with an explicit immutable bootstrap tenant set,

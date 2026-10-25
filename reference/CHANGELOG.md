@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Select original passkey/TOTP completion with `Passkey.TOTP` and the guarded
+  `PasskeyTOTP()` handle. Compose native assertion/child, counted factor and
+  same-transaction session effects without a fabricated email recipient.
+  Preserve original primary provenance and retry/recovery custody. Common
+  session reading/logout retain real factor and RP mapping authority. This
+  MFA-first existing-account profile enables no new HTTP route; generic passkey
+  signin HTTP and already-installed passkey-before-MFA upgrades fail closed.
+
 - Adopt native Ed25519 and ordered mixed-algorithm passkey profiles across
   signup, signin, additional enrollment, rename and safe removal/recovery.
   Nil keeps ES256; selected algorithms remain configuration-owned, never an

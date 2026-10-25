@@ -38,7 +38,9 @@ func (p *magicTOTPPhase) compose() error {
 	p.delivery = &magicTOTPDelivery{recovery: p.recovery}
 	// Recovery has no submitted input or decrypted primary. The explicitly
 	// composed owner selects the profile without requiring secret custody.
-	if p.state.password != nil {
+	if p.state.passkey != nil {
+		p.issuer, err = session.NewMFAPasskeySessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
+	} else if p.state.password != nil {
 		p.issuer, err = session.NewMFAPasswordSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
 	} else if p.state.verification != nil {
 		p.issuer, err = session.NewMFAVerificationSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
@@ -87,7 +89,7 @@ func (p *magicTOTPPhase) admitRisk(ctx context.Context) error {
 		}
 		network = p.input.recovery.Network
 	}
-	p.subject = risk.Subject{Network: network, User: string(p.input.recipient.User.ID)}
+	p.subject = risk.Subject{Network: network, User: string(p.input.userID())}
 	scope := risk.Context{Tenant: string(b.TenantID), Operation: risk.Action(b.OperationID), Attempt: string(b.CommandID)}
 	result, err := p.state.config.Risk.Evaluation.EvaluateProtectedProviders(ctx, risk.EvaluateRequest{Context: scope, Phase: risk.NonIssuing})
 	if err != nil {

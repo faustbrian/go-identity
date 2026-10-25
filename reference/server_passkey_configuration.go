@@ -112,6 +112,11 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 		return nil, invalid
 	}
 	n := *c.Passkey
+	if n.TOTP != nil && h.Signin {
+		// Native challenge custody needs its own selected transport projection;
+		// the existing signin serializer accepts only completed session output.
+		return nil, invalid
+	}
 	// The HTTP owner supplies a cookie synchronizer to both enrollment phases.
 	// A native bearer source deliberately rejects that custody, so do not
 	// advertise a selected route that can never execute its protected operation.

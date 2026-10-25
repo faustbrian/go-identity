@@ -14,6 +14,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	native "github.com/faustbrian/go-passkey/postgres"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	webauthn "github.com/faustbrian/go-webauthn"
 	webauthnpg "github.com/faustbrian/go-webauthn/postgres"
 )
@@ -36,6 +37,9 @@ import (
 // no caller store. Issuance keys/cookie must match Session read/logout policy.
 // All borrowed configuration must remain immutable during construction.
 type PasskeyConfiguration struct {
+	// TOTP explicitly selects enrolled-factor challenge/completion. Nil keeps
+	// known-empty signin only. Selection does not enable HTTP or enrollment.
+	TOTP *PasskeyTOTPConfiguration
 	// Standalone selects a passkey-only graph without password, OTP or delivery
 	// workflows. It disables password-proof enrollment and management, not UV,
 	// native authority, risk or session checks. Nil retains the existing graph.
@@ -181,6 +185,7 @@ func (PasskeyConfiguration) MarshalJSON() ([]byte, error) { return nil, session.
 func (PasskeyConfiguration) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
 type passkeyState struct {
+	totp              *magicLinkTOTPService
 	standalone        bool
 	tenant            identity.TenantID
 	signup            *native.SignupService
@@ -300,7 +305,24 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	}
 	n.Risk.Evaluation = evaluation
 	profile := sessionpg.PasskeyAdmissionConfig{GlobalAuthorityID: e.Profile.GlobalAuthorityID, PolicyNamespace: e.Profile.PolicyNamespace, Audience: e.Profile.Audience, RPNamespace: n.RPNamespace}
-	signin, err := native.NewSigninService(d.PostgreSQL, native.SigninConfig{OptionsRequests: keyed, Protocol: n.Protocol, Profile: profile, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Flow: n.Flow, Session: n.Issuer, CSRF: n.CSRF, Repository: e.Repository, Risk: n.Risk, IdentifierKey: n.IdentifierKey})
+	signinConfig := native.SigninConfig{OptionsRequests: keyed, Protocol: n.Protocol, Profile: profile, Coordinator: e.Coordinator, Authorization: e.Authorization, Clock: e.Clock, Flow: n.Flow, Session: n.Issuer, CSRF: n.CSRF, Repository: e.Repository, Risk: n.Risk, IdentifierKey: n.IdentifierKey}
+	var signin *native.SigninService
+	if n.TOTP != nil {
+		// Native TotpVerifyRequest retains an exact nonempty HTTPS callback as
+		// part of original browser custody; an incomplete selection cannot issue
+		// a challenge that its chosen completion owner can never accept.
+		if standalone || n.Flow.CallbackURL == "" || n.TOTP.Challenge.Envelope != nil || n.TOTP.Challenge.IssuerURL != n.Flow.Origin || n.TOTP.Challenge.EnvelopeKeyID != n.TOTP.Completion.ActiveEnvelopeKeyID {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_totp"}
+		}
+		challenge := n.TOTP.Challenge
+		challenge.Envelope, err = envelope.NewService(d.EnvelopeKeys)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_passkey_totp"}
+		}
+		signin, err = native.NewMFASigninService(d.PostgreSQL, signinConfig, challenge)
+	} else {
+		signin, err = native.NewSigninService(d.PostgreSQL, signinConfig)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("reference: passkey signin composition: %w", err)
 	}
@@ -319,7 +341,16 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	validation := c.Session.Native.Validation
 	validation.Clock = e.Clock
 	readProfile := sessionpg.PasskeySessionServiceConfig{Repository: e.Repository, Profile: profile, Validation: validation, Authority: authority}
-	reader, err := sessionpg.NewPasskeySessionService(d.PostgreSQL, readProfile)
+	var mfaAdmission *sessionpg.MFAPasskeySessionAdmission
+	if n.TOTP != nil {
+		mfaAdmission = &sessionpg.MFAPasskeySessionAdmission{Profile: profile, Authority: authority}
+	}
+	var reader *session.SessionService
+	if mfaAdmission == nil {
+		reader, err = sessionpg.NewPasskeySessionService(d.PostgreSQL, readProfile)
+	} else {
+		reader, err = sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{Passkey: &sessionpg.PasskeySessionAdmission{Profile: profile, Authority: authority}, MFAPasskey: mfaAdmission}, Validation: validation})
+	}
 	if err != nil {
 		return nil, invalid
 	}
@@ -423,7 +454,7 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if len(c.Session.CSRFKeys) == 0 {
 		return nil, invalid
 	}
-	revoke, err := sessionpg.NewCookieRevokeOneExecutor(d.PostgreSQL, sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Passkey: &sessionpg.PasskeySessionAdmission{Profile: profile, Authority: authority}}, c.Session.CSRFKeys)
+	revoke, err := sessionpg.NewCookieRevokeOneExecutor(d.PostgreSQL, sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Passkey: &sessionpg.PasskeySessionAdmission{Profile: profile, Authority: authority}, MFAPasskey: mfaAdmission}, c.Session.CSRFKeys)
 	if err != nil {
 		return nil, invalid
 	}
@@ -438,5 +469,9 @@ func composePasskey(c StoreConfiguration, d ReferenceDependencies, proofs *passw
 	if _, err := (sessionpg.PasskeySigninMigrationSource{Schema: e.Repository.Schema, Version: 1, PreviousConstraint: n.SessionPredecessor}).Load(context.Background()); err != nil {
 		return nil, invalid
 	}
-	return &passkeyState{standalone: standalone, tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, sessionManagement: sessionManagement, sessionEnrollment: sessionEnrollment, sessionDeletion: sessionDeletion, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
+	totp, err := composePasskeyTOTP(c, d, signin, authority, evaluation)
+	if err != nil {
+		return nil, err
+	}
+	return &passkeyState{totp: totp, standalone: standalone, tenant: n.Protocol.TenantID, signup: signup, enrollment: enrollment, signin: signin, inventory: inventory, management: management, sessionManagement: sessionManagement, sessionEnrollment: sessionEnrollment, sessionDeletion: sessionDeletion, deletion: deletion, reader: reader, logout: logout, revoke: revoke, schema: e.Repository.Schema, predecessor: n.SessionPredecessor}, nil
 }

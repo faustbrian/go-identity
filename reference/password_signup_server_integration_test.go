@@ -288,6 +288,7 @@ type signupGraphExtensions struct {
 	passkeyDeletion      bool
 	passkeySignup        bool
 	passkeySignupHTTP    bool
+	passkeyTOTP          bool
 	mfaOTPDisable        bool
 	mfaOTPDisableAll     bool
 	mfaOTPActiveCase     string
@@ -604,8 +605,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			c.Velocity.Native.Policy = discoveryPolicy
 		}
 	}
-	if extensions.mfaEnrollment {
+	if extensions.mfaEnrollment || extensions.passkeyTOTP {
 		configureReferenceMFAEnrollment(t, &c, origin)
+	}
+	if extensions.passkeyTOTP {
+		configureReferencePasskeyTOTP(t, &c)
 	}
 	if extensions.mfaOTPEnrollment {
 		configureReferenceMFAOTPEnrollment(t, &c, origin, extensions.mfaOTPEnrollmentOnly)
@@ -1095,7 +1099,7 @@ END $$`); err != nil {
 	}
 	migrationRequest := applyRequest(t, ctx, stores, modules)
 	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
-	if extensions.factorReplacement && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
+	if (extensions.factorReplacement || extensions.passkeyTOTP) && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
 		// widen the native authentication/read budgets to get the fixture ready.
@@ -1521,7 +1525,9 @@ END $$`); err != nil {
 					proveReferencePasskeySignupReadiness(t, ctx, selectedServer, deps.PostgreSQL)
 				}
 			}
-			if extensions.passkeyHTTP {
+			if extensions.passkeyTOTP {
+				proveReferencePasskeyTOTPFromEnrollment(t, ctx, f, selected, selectedConfig, client, network.URL, origin, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)
+			} else if extensions.passkeyHTTP {
 				proveReferencePasskeyHTTP(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler, passkeyDocument)
 			} else {
 				proveReferencePasskey(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)

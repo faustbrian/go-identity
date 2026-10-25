@@ -49,11 +49,19 @@ func (p *magicTOTPPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.W
 	if err != nil {
 		return err
 	}
-	requireBrowser := sessionpg.RequireMFAConsumedPreAuth
-	if p.input.verificationPrimary != nil {
-		requireBrowser = sessionpg.RequireMFAVerificationConsumedPreAuth
+	if p.input.passkeyPrimary != nil {
+		// Native passkey/factor writers lock the account before its browser.
+		// Preparation is read-only, so retain shared credential admission in
+		// that order without borrowing consumed-child Apply authority.
+		if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
+			return err
+		}
+		if err = p.requirePreparationPrimary(ctx, w, c); err != nil {
+			return err
+		}
+		return p.requireBrowser(ctx, w, c, primary)
 	}
-	if err = requireBrowser(ctx, w, p, c, p.state.config.Session, p.input.flow, primary); err != nil {
+	if err = p.requireBrowser(ctx, w, c, primary); err != nil {
 		return err
 	}
 	if err = p.verificationParent(ctx, w, c); err != nil {
@@ -62,18 +70,7 @@ func (p *magicTOTPPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.W
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
 		return err
 	}
-	if err := w.RequireRecipient(ctx, p, p.input.recipient); err != nil {
-		return err
-	}
-	if p.input.passwordPrimary != nil {
-		credential, err := p.input.passwordCredential()
-		if err != nil {
-			return err
-		}
-		_, err = w.RequireRecipientCredential(ctx, p, p.input.recipient, credential)
-		return err
-	}
-	return nil
+	return p.requirePreparationPrimary(ctx, w, c)
 }
 func (p *magicTOTPPhase) PrepareFeatureAdmission(ctx context.Context, c identity.Command) (kernel.FeaturePreparationAdmission, error) {
 	if p == nil || p.input == nil || c != p.counterCommand || !p.correct || p.verifiedAt.IsZero() {
@@ -94,6 +91,9 @@ func (*magicTOTPPhase) GenerateFeaturePreparation(context.Context, identity.Comm
 }
 
 func (p *magicTOTPPhase) sessionAuthority(id, family string) (session.AuthoritySnapshot, error) {
+	if p.input.passkeyPrimary != nil {
+		return p.passkeySessionAuthority(id, family)
+	}
 	q := p.directoryAdmission().Query
 	r := p.input.recipient
 	keys, err := kernel.KernelAuthorityKeys(q, r.User.ID)
@@ -171,8 +171,11 @@ func (a *magicTOTPAdmission) Generate(ctx context.Context, generation uint64) ([
 	if err != nil {
 		return nil, err
 	}
-	spec := session.SessionSpec{SessionID: string(id), FamilyID: string(family), TenantID: f.Binding.TenantID, UserID: p.input.recipient.User.ID, Audience: scope.Audience, Version: 1, FamilyVersion: 1, Remember: scope.RememberPolicy, Authority: authority, Authentication: session.AuthenticationMetadata{Kind: session.AuthenticationMagicLink}, IssuedAt: p.verifiedAt, LastActivityAt: p.verifiedAt}
-	if p.input.passwordPrimary != nil {
+	spec := session.SessionSpec{SessionID: string(id), FamilyID: string(family), TenantID: f.Binding.TenantID, UserID: p.input.userID(), Audience: scope.Audience, Version: 1, FamilyVersion: 1, Remember: scope.RememberPolicy, Authority: authority, Authentication: session.AuthenticationMetadata{Kind: session.AuthenticationMagicLink}, IssuedAt: p.verifiedAt, LastActivityAt: p.verifiedAt}
+	if p.input.passkeyPrimary != nil {
+		spec.Authentication = p.input.passkeyPrimary.Primary.Authentication
+		p.prepared, err = p.issuer.PrepareMFAPasskey(f.Binding, spec, mfa)
+	} else if p.input.passwordPrimary != nil {
 		spec.Authentication = p.input.passwordPrimary.Authentication
 		p.prepared, err = p.issuer.PrepareMFAPassword(f.Binding, spec, mfa)
 	} else if p.input.verificationPrimary != nil {
@@ -293,7 +296,7 @@ func (p *magicTOTPPhase) RestoreFeaturePreparation(ctx context.Context, original
 		return deny()
 	}
 	s, err := record.Bindings()
-	if err != nil || s.UserID != p.input.recipient.User.ID || s.TenantID != p.input.scope.TenantID {
+	if err != nil || s.UserID != p.input.userID() || s.TenantID != p.input.scope.TenantID {
 		return deny()
 	}
 	expected, err := p.sessionAuthority(s.SessionID, s.FamilyID)

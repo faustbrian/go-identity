@@ -159,6 +159,7 @@ func readinessSchemaPresent(ctx context.Context, state *storeState, catalog []mi
 // sources assembled in migrations.go; do not infer SQL or copy migration DDL.
 func readinessCatalogGuards(state *storeState, history migrationHistory) []migrationGuard {
 	guards := slices.Clone(history.guards)
+	passkeyTOTP := state.features != nil && state.features.passkey != nil && state.features.passkey.totp != nil
 	if state.features != nil && state.features.verificationSigninMFA {
 		for i := range guards {
 			if guards[i].schema != "identity_mfa" {
@@ -172,7 +173,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
-	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP || state.features.verificationSignin != nil) {
+	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP || state.features.verificationSignin != nil || passkeyTOTP) {
 		schema := state.features.migrations.magicSessionSchema
 		if schema == "" {
 			schema = state.features.migrations.passwordSigninSchema
@@ -193,7 +194,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 				case "sessions.session_credential_continuation_v1":
 					guards[i].constraints[j] = "sessions.session_credential_continuation_v2"
 				}
-				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP || state.features.verificationTOTP != nil {
+				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP || state.features.verificationTOTP != nil || passkeyTOTP {
 					switch guards[i].constraints[j] {
 					case "session_issuances.session_issuances_purpose_v5":
 						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_v6"
@@ -203,7 +204,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 						guards[i].constraints[j] = "sessions.session_record_binding_v6"
 					}
 				}
-				if state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP {
+				if state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP || passkeyTOTP {
 					switch guards[i].constraints[j] {
 					case "sessions.session_record_binding_v6":
 						guards[i].constraints[j] = "sessions.session_record_binding_v7"
@@ -382,6 +383,19 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 		for i := range guards {
 			guards[i].constraints = slices.Clone(guards[i].constraints)
 			for j, name := range guards[i].constraints {
+				if passkeyTOTP {
+					// The selected native suffixes replace these exact CHECKs;
+					// historical collision guards stay unchanged while readiness
+					// requires their actually installed successors.
+					switch {
+					case guards[i].schema == "identity_mfa" && (name == "continuations.continuations_origin_purpose_check" || name == "continuations.continuations_origin_purpose_v2" || name == "continuations.continuations_origin_purpose_username_v1" || name == "continuations.continuations_origin_purpose_phone_v1"):
+						guards[i].constraints[j] = "continuations.continuations_origin_purpose_passkey_v1"
+					case guards[i].schema == p.schema && (name == "sessions.session_record_binding_v6" || name == "sessions.session_record_binding_v7" || name == "sessions.session_record_binding_v8" || name == "sessions.session_record_binding_v9"):
+						guards[i].constraints[j] = "sessions.session_record_binding_passkey_mfa_v1"
+					case guards[i].schema == p.schema && (name == "sessions.session_credential_continuation_v3" || name == "sessions.session_credential_continuation_v4" || name == "sessions.session_credential_continuation_v5" || name == "sessions.session_credential_continuation_v6"):
+						guards[i].constraints[j] = "sessions.session_credential_continuation_passkey_mfa_v1"
+					}
+				}
 				// The native passkey suffix replaces this exact selected CHECK
 				// while preserving its predicate. Require the actual successor,
 				// not a removed name or a looser absence exception.

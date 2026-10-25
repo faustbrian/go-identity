@@ -49,6 +49,24 @@ type composedMagicTOTP struct {
 	verification bool
 	username     bool
 	phone        bool
+	passkey      bool
+}
+
+// PasskeyTOTP returns only explicitly selected original-passkey/TOTP completion.
+// It cannot fall back to password, magic-link or known-empty authentication.
+// Startup, tenant and shutdown guards also apply to retained handles; selecting
+// this owner enables no HTTP route, enrollment or trusted-device policy.
+func (f FeatureSet) PasskeyTOTP() (mfa.TOTPCompletionService, error) {
+	s := f.state
+	if s == nil {
+		return nil, invalidTOTPCompletion()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.features == nil || !s.features.composed || s.features.passkey == nil || s.features.passkey.totp == nil {
+		return nil, identity.UnavailableError{}
+	}
+	return composedMagicTOTP{state: s, passkey: true}, nil
 }
 
 // PhoneTOTP returns only the explicitly composed verified-phone/password TOTP
@@ -99,6 +117,9 @@ func (f FeatureSet) VerificationTOTP() (mfa.TOTPCompletionService, error) {
 }
 
 func (f composedMagicTOTP) owner() *magicLinkTOTPService {
+	if f.passkey {
+		return f.state.features.passkey.totp
+	}
 	if f.phone {
 		return f.state.features.phoneSignin.totp
 	}

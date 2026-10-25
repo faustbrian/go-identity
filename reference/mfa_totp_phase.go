@@ -118,7 +118,7 @@ func (p *magicTOTPPhase) directoryAdmission() kernel.DirectoryAuthorityAdmission
 	return kernel.DirectoryAuthorityAdmission{Query: kernel.DirectoryAuthorityQuery{GlobalAuthorityID: p.state.config.Profile.GlobalAuthorityID, TenantID: p.input.scope.TenantID}, GlobalVersion: p.input.directory.GlobalVersion, TenantVersion: p.input.directory.TenantVersion}
 }
 func (p *magicTOTPPhase) policyScope() policy.AuthorityScope {
-	return policy.AuthorityScope{TenantID: authorization.TenantID(p.input.scope.TenantID), SubjectID: authorization.SubjectID(p.input.recipient.User.ID), PolicyNamespace: p.state.config.Profile.PolicyNamespace}
+	return policy.AuthorityScope{TenantID: authorization.TenantID(p.input.scope.TenantID), SubjectID: authorization.SubjectID(p.input.userID()), PolicyNamespace: p.state.config.Profile.PolicyNamespace}
 }
 
 // Wrong-code accounting authenticates browser and current authority before
@@ -146,12 +146,10 @@ func (p *magicTOTPPhase) RecordMFATOTPAttemptDenial(ctx context.Context, w kerne
 	if err != nil {
 		return 0, err
 	}
-	requireBrowser := sessionpg.RequireMFAConsumedPreAuthAttempt
-	if p.input.verificationPrimary != nil {
-		requireBrowser = sessionpg.RequireMFAVerificationConsumedPreAuthAttempt
-	}
-	if err = requireBrowser(ctx, w, p, p.state.config.Session, p.input.flow, primary); err != nil {
-		return 0, err
+	if p.input.passkeyPrimary == nil {
+		if err = p.requireAttemptBrowser(ctx, w, primary); err != nil {
+			return 0, err
+		}
 	}
 	if p.input.verificationPrimary != nil {
 		if err = p.state.issuer.RequireVerificationMFATOTPParentAttempt(ctx, w, p, p.input.verificationPrimary.Parent); err != nil {
@@ -161,17 +159,8 @@ func (p *magicTOTPPhase) RecordMFATOTPAttemptDenial(ctx context.Context, w kerne
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
 		return 0, err
 	}
-	if err = w.RequireRecipient(ctx, p, p.input.recipient); err != nil {
+	if err = p.requireAttemptPrimary(ctx, w); err != nil {
 		return 0, err
-	}
-	if p.input.passwordPrimary != nil {
-		credential, err := p.input.passwordCredential()
-		if err != nil {
-			return 0, err
-		}
-		if _, err := w.RequireRecipientCredential(ctx, p, p.input.recipient, credential); err != nil {
-			return 0, err
-		}
 	}
 	if err = policy.RequireAuthority(ctx, w, p.policyScope(), p.input.policy.Version, p.state.config.MaximumDuration); err != nil {
 		return 0, err
@@ -181,17 +170,32 @@ func (p *magicTOTPPhase) RecordMFATOTPAttemptDenial(ctx context.Context, w kerne
 		return 0, err
 	}
 	if disposition == kernel.CommandCounterDenied {
+		if p.input.passkeyPrimary != nil {
+			if err = p.requireAttemptBrowser(ctx, w, primary); err != nil {
+				return 0, err
+			}
+		}
 		return kernel.MFAAttemptDenied, nil
 	}
 	if p.input.missingFactor {
 		if err := mfapg.RecordMissingTOTPAttemptDenial(ctx, w, p, string(p.input.request.FactorID)); err != nil {
 			return 0, err
 		}
+		if p.input.passkeyPrimary != nil {
+			if err = p.requireAttemptBrowser(ctx, w, primary); err != nil {
+				return 0, err
+			}
+		}
 		return kernel.MFAAttemptDenied, nil
 	}
 	locked, err := mfapg.LockTOTPAttempt(ctx, w, p, p.input.snapshot)
 	if err != nil {
 		return 0, err
+	}
+	if p.input.passkeyPrimary != nil {
+		if err = p.requireAttemptBrowser(ctx, w, primary); err != nil {
+			return 0, err
+		}
 	}
 	metadata, now, err := locked.VerificationState()
 	if err != nil {
@@ -237,12 +241,10 @@ func (p *magicTOTPPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	requireBrowser := sessionpg.RequireMFAConsumedPreAuth
-	if p.input.verificationPrimary != nil {
-		requireBrowser = sessionpg.RequireMFAVerificationConsumedPreAuth
-	}
-	if err = requireBrowser(ctx, w, p, command, p.state.config.Session, p.input.flow, primary); err != nil {
-		return identity.FeatureReceipt{}, err
+	if p.input.passkeyPrimary == nil {
+		if err = p.requireBrowser(ctx, w, command, primary); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	if err = p.verificationParent(ctx, w, command); err != nil {
 		return identity.FeatureReceipt{}, err
@@ -250,17 +252,8 @@ func (p *magicTOTPPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err = w.RequireRecipient(ctx, p, p.input.recipient); err != nil {
+	if err = p.requirePrimary(ctx, w); err != nil {
 		return identity.FeatureReceipt{}, err
-	}
-	if p.input.passwordPrimary != nil {
-		credential, err := p.input.passwordCredential()
-		if err != nil {
-			return identity.FeatureReceipt{}, err
-		}
-		if _, err := w.RequireRecipientCredential(ctx, p, p.input.recipient, credential); err != nil {
-			return identity.FeatureReceipt{}, err
-		}
 	}
 	if err = policy.RequireAuthority(ctx, w, p.policyScope(), p.input.policy.Version, p.state.config.MaximumDuration); err != nil {
 		return identity.FeatureReceipt{}, err
@@ -293,6 +286,11 @@ func (p *magicTOTPPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 	if err = p.check(ctx, now); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	if p.input.passkeyPrimary != nil {
+		if err = sessionpg.ReserveMFAPasskeyPreAuth(ctx, w, p, command, p.state.config.Session, p.input.flow); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	code, ok := command.OneTimeCode()
 	if !ok {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
@@ -304,7 +302,15 @@ func (p *magicTOTPPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 	if err = mfapg.RecordTOTPCompletion(ctx, w, p, locked, step); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	receipt, err := p.state.effect.Apply(ctx, w, p, command, p.input.recipient, locked)
+	var receipt identity.FeatureReceipt
+	if p.input.passkeyPrimary != nil {
+		receipt, err = p.state.passkeyEffect.Apply(ctx, w, p, command, locked)
+		if err == nil {
+			err = sessionpg.FinalizeMFAPasskeyPreAuth(ctx, w, p, command, p.state.config.Session, p.input.flow)
+		}
+	} else {
+		receipt, err = p.state.effect.Apply(ctx, w, p, command, p.input.recipient, locked)
+	}
 	if err == nil {
 		p.applied = true
 	}
@@ -317,6 +323,11 @@ func (p *magicTOTPPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, 
 	}
 	if command != p.command || !p.applied {
 		return identity.ForbiddenError{}
+	}
+	if p.input.passkeyPrimary != nil {
+		if err := p.state.passkeyEffect.Check(ctx, w, p, command); err != nil {
+			return err
+		}
 	}
 	if err := p.verificationParent(ctx, w, command); err != nil {
 		return err
@@ -344,6 +355,9 @@ func (p *magicTOTPPhase) verificationParent(ctx context.Context, w kernel.Work, 
 }
 
 func (p *magicTOTPPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	if p != nil && p.state != nil && p.state.passkeyEffect != nil {
+		return p.state.passkeyEffect.Recover(ctx, w, p)
+	}
 	if p != nil && p.recovery {
 		if p.state == nil || p.state.recoveryEffect == nil {
 			return kernel.RecoveryUnknown, identity.UnavailableError{}

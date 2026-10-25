@@ -269,7 +269,7 @@ func configureReferencePasskey(t *testing.T, c *reference.StoreConfiguration) {
 	}
 }
 
-func proveReferencePasskey(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, cookies []*http.Cookie, csrfWire string, discoverable bool, sessionHandler http.Handler) {
+func proveReferencePasskey(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, cookies []*http.Cookie, csrfWire string, discoverable bool, sessionHandler http.Handler, afterRegistration ...func(webauthn.Credential, *ecdsa.PrivateKey, []byte)) {
 	t.Helper()
 	owner, err := features.Passkeys()
 	if err != nil {
@@ -366,6 +366,10 @@ func proveReferencePasskey(t *testing.T, ctx context.Context, features reference
 	query := identity.RecoveryQuery{CommandID: completion.Primary.CommandID, TenantID: otpTenant, UserID: user, ActorID: identity.ActorID(user), ActorKind: authorization.SubjectUser, OperationID: "identity.passkey.register-verify", RecordID: string(completion.Primary.CommandID)}
 	if recovered, err := owner.RecoverEnrollment(ctx, query, completion.Primary.Caller); err != nil || recovered.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("original enrollment recovery", err)
+	}
+	if len(afterRegistration) == 1 {
+		afterRegistration[0](credential, key, id)
+		return
 	}
 	remember, err := session.ResolveRememberPolicy(session.BrowserSession, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
 	if err != nil {
