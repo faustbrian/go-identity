@@ -76,6 +76,45 @@ func TestReferencePostgresPasskeyHTTPDeletion(t *testing.T) {
 
 func proveReferencePasskeyHTTPPrimarySelection(t *testing.T, c reference.StoreConfiguration, deps reference.ReferenceDependencies) {
 	t.Helper()
+	if c.Passkey.TOTP != nil {
+		for _, kind := range []string{"implicit-challenge", "missing-native", "wrong-actor", "wrong-revision"} {
+			selected := c
+			httpSelection, nativeSelection, completion := *c.HTTPPasskey, *c.Passkey, *c.HTTPMFA
+			selected.HTTPPasskey, selected.Passkey, selected.HTTPMFA = &httpSelection, &nativeSelection, &completion
+			field := "reference_http_passkey"
+			switch kind {
+			case "implicit-challenge":
+				httpSelection.MFAContinuation = false
+			case "missing-native":
+				nativeSelection.TOTP = nil
+				selected.HTTPMFA = nil // Isolate the signin projection's own native prerequisite.
+			case "wrong-actor":
+				completion.ActorID = "AAAAAAAAAAAAAAAAAAAAAg"
+				field = "reference_http_mfa"
+			case "wrong-revision":
+				completion.PolicyRevision++
+				field = "reference_http_mfa"
+			}
+			graph, err := reference.ComposeStores(selected, deps)
+			if err == nil {
+				bounded, stop := context.WithTimeout(t.Context(), time.Second)
+				_ = graph.Close(bounded)
+				stop()
+				t.Fatal(kind, "accepted missing or contradictory HTTP primary ownership")
+			}
+			var input identity.InvalidInputError
+			if !errors.As(err, &input) || input.Field != field {
+				t.Fatal(kind, "did not reach exact HTTP selection boundary", err)
+			}
+		}
+		// The retained checks below cover the independent known-empty enrollment
+		// and RP/device variants, not a newly configured MFA issuer at another
+		// origin. Keep those fixtures separate from the selected MFA contract
+		// above and the genuine complete HTTP MFA journey.
+		nativeOnly, httpOnly := *c.Passkey, *c.HTTPPasskey
+		nativeOnly.TOTP, httpOnly.MFAContinuation = nil, false
+		c.Passkey, c.HTTPPasskey, c.HTTPMFA = &nativeOnly, &httpOnly, nil
+	}
 	if c.Passkey.Management != nil {
 		selected := c
 		native := *c.Passkey

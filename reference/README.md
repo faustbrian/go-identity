@@ -4,8 +4,11 @@
 
 `Passkey.TOTP` selects original UV-passkey plus independent confirmed-TOTP
 completion through `FeatureSet.PasskeyTOTP()`, using real native owners and
-common session read/logout. It enables no new HTTP route and rejects unsupported
-generic signin transport. See [the profile and lineage limits](PASSKEY.md#original-passkey-plus-confirmed-totp).
+common session read/logout. Native selection enables no new HTTP route. Select
+`HTTPPasskey.MFAContinuation` with `Signin` and independently select
+`HTTPMFA.PasskeyTOTPVerify` for explicit challenge-only signin and exact
+`X-MFA-Variant: passkey` completion. Without that opt-in, generic signin rejects
+the native MFA profile. See [the profile and lineage limits](PASSKEY.md#original-passkey-plus-confirmed-totp).
 
 For a passkey-only backend, explicitly select `Passkey.Standalone`,
 `Passkey.Signup`, `Session.Passkey` and durable PostgreSQL admission. The same

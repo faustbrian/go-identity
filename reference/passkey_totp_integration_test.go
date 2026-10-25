@@ -42,6 +42,18 @@ func TestReferencePasskeyTOTPFromRealEnrollment(t *testing.T) {
 	}
 }
 
+func TestReferencePasskeyTOTPHTTPSFromRealEnrollment(t *testing.T) {
+	for _, discoverable := range []bool{false, true} {
+		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
+			for _, upgrade := range []bool{false, true} {
+				t.Run(map[bool]string{false: "fresh", true: "populated-upgrade"}[upgrade], func(t *testing.T) {
+					proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyHTTP: true, passkeyDiscovery: discoverable, passkeyTOTP: true, passkeyUpgrade: upgrade}, true)
+				})
+			}
+		})
+	}
+}
+
 func configureReferencePasskeyTOTP(t *testing.T, c *reference.StoreConfiguration) {
 	t.Helper()
 	issuer := c.PasswordSignup.Issuer
@@ -71,12 +83,16 @@ func configureReferencePasskeyTOTP(t *testing.T, c *reference.StoreConfiguration
 	c.Passkey.SessionPredecessor = "session_issuances_purpose_v6"
 	c.Passkey.Flow.CallbackURL = c.Passkey.Flow.Origin + "/complete"
 	c.Passkey.TOTP = &reference.PasskeyTOTPConfiguration{Challenge: native.SigninMFAConfig{Lifetime: time.Minute, MaxAttempts: 3, IssuerURL: c.Passkey.Flow.Origin, Issuer: issuer, Custody: c.PasswordSignup.Preparation, EnvelopeKeyID: "issue-envelope"}, Completion: reference.MagicLinkTOTPConfiguration{MaximumDuration: c.OTP.Timeout, ConfigurationID: "reference-passkey-totp-v1", PolicyID: "passkey-totp", Counters: counters, RiskKeys: c.OTP.RiskKeys, ComparisonKey: [32]byte{197}, ComparisonKeyVersion: 1, ActiveEnvelopeKeyID: "issue-envelope"}}
+	if c.HTTPPasskey != nil {
+		c.HTTPPasskey.MFAContinuation = true
+		c.HTTPMFA = &reference.HTTPMFAConfiguration{PasskeyTOTPVerify: true, ActorID: c.Passkey.Flow.ActorID, PolicyRevision: authorization.Revision(c.Passkey.Flow.PolicyVersion), VerificationNamespace: "reference-mfa-verify", VerificationKey: [32]byte{198}}
+	}
 }
 
 // Registration, key enrollment and confirmed TOTP all use their actual public
 // owners. Only authenticator bytes are controlled; no account, key mapping,
 // factor secret, original challenge, session or successful receipt is seeded.
-func proveReferencePasskeyTOTPFromEnrollment(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, c reference.StoreConfiguration, client *http.Client, base, enrollmentOrigin string, user identity.UserID, cookies []*http.Cookie, csrf string, discoverable bool, sessionHandler http.Handler) {
+func proveReferencePasskeyTOTPFromEnrollment(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, c reference.StoreConfiguration, client *http.Client, base, enrollmentOrigin string, user identity.UserID, cookies []*http.Cookie, csrf string, discoverable bool, sessionHandler http.Handler, document []byte) {
 	t.Helper()
 	// A populated upgrade closes the baseline graph. Enrollment and logout
 	// must reach the actual successor, not its retired HTTP handlers. Origins
@@ -89,11 +105,18 @@ func proveReferencePasskeyTOTPFromEnrollment(t *testing.T, ctx context.Context, 
 		return (&net.Dialer{}).DialContext(ctx, networkName, network.Listener.Addr().String())
 	}
 	client = &http.Client{Transport: transport, Timeout: 5 * time.Second}
-	defer client.CloseIdleConnections()
+	if c.HTTPPasskey != nil {
+		client.Transport = passkeyFixtureHostTransport{next: transport}
+	}
+	defer transport.CloseIdleConnections()
 	proveReferencePasskey(t, ctx, features, c, user, cookies, csrf, discoverable, sessionHandler, func(credential webauthn.Credential, key *ecdsa.PrivateKey, id []byte) {
 		local := f
 		local.afterTOTPEnrollment = func(factor mfa.FactorID, secret []byte) {
-			proveReferencePasskeyTOTP(t, ctx, f, features, c, client, base, enrollmentOrigin, user, credential, key, id, factor, secret, discoverable)
+			if c.HTTPPasskey != nil && c.HTTPPasskey.MFAContinuation {
+				proveReferencePasskeyTOTPHTTPS(t, ctx, f, features, c, client, base, enrollmentOrigin, user, credential, key, id, factor, secret, discoverable, sessionHandler, document)
+			} else {
+				proveReferencePasskeyTOTP(t, ctx, f, features, c, client, base, enrollmentOrigin, user, credential, key, id, factor, secret, discoverable)
+			}
 		}
 		token, err := session.ParseToken(cookies[0].Value)
 		if err != nil {

@@ -36,9 +36,48 @@ Common selected session reading and logout use actual directory, credential,
 policy, factor and RP mapping authority. The original assertion time, expiry and
 Remember policy cannot renew. No email recipient or password evidence is
 invented. Generic passkey signin HTTP is rejected with this native selection
-until its distinct challenge/completion transport is explicitly supported;
+unless its distinct challenge/completion transport is explicitly selected below;
 common session HTTP remains independently selectable. Full passkey/MFA and
 release qualification are separate from this profile.
+
+### Opt-in HTTP original passkey plus TOTP
+
+Select `HTTPPasskey.Signin` and `HTTPPasskey.MFAContinuation` with native
+`Passkey.TOTP`, `Passkey.KeyedOptions`, signed `HTTPPreAuth` device custody and
+the shared HTTP rate owner. Select `HTTPMFA.PasskeyTOTPVerify` independently,
+matching the native original actor, policy revision, HTTPS origin/callback and
+session audience/cookie. Missing native ownership or a continuation flag without
+signin fails construction; native selection alone advertises no HTTP feature.
+Factor enrollment is a separate selection, not implied by login completion.
+
+1. Issue an original browser flow using `POST /v1/session/preauth-issue` with
+   `{"method":"passkey","remember":false}`. Retain both returned flow/device
+   cookies. Use the existing identified or selected discoverable signin options
+   and verification request contracts with genuine UV WebAuthn output.
+2. Fresh committed verification returns `signedIn:false`,
+   `challengeRequired:true`, original `commandID`, `challengeID`,
+   `challengeMethod:"totp"` and `challengeExpiresAt`. Only that response carries
+   the reveal-once `X-MFA-Token`. It sets no session cookie or CSRF token and
+   never places the proof or subject in JSON. An exact assertion retry does not
+   redisclose the proof. Lost proof requires a new deliberate login, not replay.
+3. Complete at `POST /v1/mfa/totp-verify` with singleton
+   `X-MFA-Variant: passkey`, exact Origin and both original cookies. Closed JSON
+   contains a new `commandID`, original `preAuthID`, `challengeID`, confirmed
+   `factorID`, the child proof as `token`, submitted `code`, original
+   `callbackURL` and `trustDevice:false`. No `Idempotency-Key`, Authorization,
+   primary/subject override or automatic fallback is accepted. The factor ID
+   comes from the separately supported enrollment/inventory workflow.
+4. Only fresh acknowledged completion returns `signedIn:true`, safe session
+   metadata, the session cookie and `X-CSRF-Token`. Use common session read and
+   CSRF-protected logout. Exact completion retries return no credentials;
+   original native recovery remains metadata-only. Preserve the original
+   command/input on uncertain outcomes, never automatically restart issuance.
+
+The independently confirmed factor remains mandatory: UV is not a TOTP
+substitute. Current account, factor, credential and RP authority, original
+browser, expiry, risk and protected one-use/session effects remain native-owned.
+Neither this profile nor its HTTP selection enables trusted devices, recovery
+codes, standalone MFA or a browser UI.
 
 ## Passkey-only deployment
 

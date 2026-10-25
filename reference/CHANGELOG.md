@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently select `HTTPPasskey.MFAContinuation` and
+  `HTTPMFA.PasskeyTOTPVerify` for original UV-passkey/TOTP browser signin.
+  Assertion success delivers only a reveal-once child header; exact passkey
+  variant completion retains native factor/browser/one-use authority before
+  session-cookie and CSRF delivery. Existing default transport stays unchanged.
+
 - Select original passkey/TOTP completion with `Passkey.TOTP` and the guarded
   `PasskeyTOTP()` handle. Compose native assertion/child, counted factor and
   same-transaction session effects without a fabricated email recipient.

@@ -1,5 +1,146 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 16:31 UTC: complete selected Reference HTTP journey now passes.
+Race run27731 identified fresh17.30s/populated20.60s and discoverable
+populated29.26s PASS; discovery/fresh failed at earlier verification-confirm
+timeout. Narrow59067 failed at server router construction; cause unproved.
+Unchanged-source narrow23692 discovery/fresh PASS11.07s. No runtime/security
+deadline was widened. All four genuine HTTP profiles cover selected OpenAPI,
+original flow/device, actual enrollment/assertion, child-only reveal, charged
+denials, current blocked-account rejection, exact TOTP, atomic one-use/session/
+browser effects, no retry redisclosure and authenticated read/CSRF logout.
+Reference/cmd ordinary race73837 PASS24.750s/18.583s, tagged vet0 and all modules
+verified. Changed tracked/new-file secret scans clean. Complete independent
+reference_passkey_totp_http_final APPROVE at base83149c8, tracked patchd2bdbd48
+plus newtest5de5574b. Main/CI/public-consumer delivery follows; full M16 open.
+Heavy lease transferred to OAuth worker for its already prepared finite run;
+primary retains shared cache cleanup and will not overlap local Go/PG work.
+
+2026-10-25 16:13 UTC: native identified MFA rate-reader correction is delivered
+in go-passkey d4f1b8aced8d6af9a48f96ba7f92e4cde6e14953, exact origin/main,
+Required40209137333 success. Independent passkey_mfa_rate_final APPROVE;
+five-path snapshot f39316d4 retained in its native report. Public regression
+RED12978 FAIL1.341s, corrected selected public/concurrency race19361 PASS15.476s,
+module race1.502s/vet0/bounded parser fuzz11.802s and changed secrets clean.
+All five public files byte-match authenticated postgres pseudoversion
+v0.0.0-20261025155343-d4f1b8aced8d, now consumed by Reference without replaces.
+Reference current denial oracle preserves native missing-factor attempt/risk
+charging, distinct command custody and the unchanged three-attempt ceiling.
+All four HTTP runtime profiles and final review remain pending, not accepted.
+OAuth root prerequisite4a2aefc plus spelling-onlyda70252 is exact remote main,
+Required40208679787 success. Authenticated public rootda702 is pinned by native;
+worker has prepared the finite F1/new-profile/ambiguity/vet run but is idle until
+the primary releases local heavy capacity. No native OAuth closure is claimed.
+
+2026-10-25 15:36 UTC: discovery19854 reached actual selected HTTPS original
+flow/options/assertion and reveal-once challenge successfully, then FAILED
+11.87s while the test parsed deliberate foreign-origin CORS403 as MFA JSON.
+Existing shared http/cors.go owns a plaintext denial and the concrete OpenAPI
+already declares its text/plain schema. Test now validates actual declared
+media, retaining exact403/no-credential/no-effect assertions; no policy changed.
+Identified native rate-reader worker holds serial heavy lease for public red
+and minimal correction. Reference source review has no source findings but
+REQUEST_CHANGES for pending four-profile real runtime acceptance; no closure.
+OAuth final source94f96415 R2 review likewise has no source findings but retains
+native-runtime readiness gap:11723 FAILED181.493s in prerequisite fixtures /
+three-minute timeout, not successful full F1; ambiguity/taggedvet not run.
+No worker OAuth resources remain. Pending work is runtime behavior, not plans.
+
+2026-10-25 15:29 UTC: genuine identified HTTP MFA run99043 reached assertion
+verification and denied403 (32.23s), after fixture-variant isolation. Source
+trace: native options contextWire wraps original identified context through
+signinMFAContext, but ceremony_rate.readRateContext still parses/canonicalizes
+only the historical bare identifiedSigninContext. HTTP requires that read before
+verification, so valid selected MFA records deny. This is a native go-passkey
+adapter prerequisite, not permission to skip original rate-source validation.
+Assign one bounded worker at clean main0de139245e841a236b3cb60cddca00f1db6a3f30
+owning postgres/ceremony_rate.go, related private context helper if necessary,
+directly affected tests and postgres docs/changelog only. Preserve APIs/default
+bare bytes, original flow/identifier/directory bounds and exact selected-MFA
+profile binding; reject changed/corrupt/noncanonical/oversized wrappers. No
+root protocol/crypto/session engine, manifest/migration or primary-owned HTTP
+changes. Native public rate-source regression plus bounded parsing cases and
+affected native race/vet precede independent review/main/public-pin adoption;
+actual Reference identified/discovery journey remains the consumer acceptance.
+Primary retains Git/pins/Reference and serial heavy lease; discovery19854 live.
+
+2026-10-25 15:06 UTC: HTTP passkey/TOTP leaf prerequisite independently
+APPROVED by passkey_totp_http_leaf_final: complete22-path diff againste194d5b,
+tracked41c377cb plus three native new-file hashes retained in its report.
+Delivered83149c8dcdf6b8f860aef22e606eeffc570426a4 exact origin/main;
+Required40205289622 success. Public leaves both authenticate as
+v0.0.0-20261025150519-83149c8dcdf6; all22 changed module files match downloaded
+bytes. Reference consumes these exact public pins without tracked replacements.
+Passkey module race31.819s/vet0/body fuzz11.271s
+(75,544 executions), MFA race16.656s/vet0/TOTP fuzz10.373s (2,382),
+both leaf secret scans no leaks. Approval is leaf-only, not Reference/runtime
+or milestone closure. Actual Reference API red3271 (missing explicit selectors)
+then composition compile28695 PASS0.431s. Native HTTPS fixture runs34141 and
+37661 stopped at negative selection-isolation assertions before signin; test
+setup now isolates both independently selected HTTP projections. Genuine HTTPS
+acceptance remains unfinished. Dev modfile binds only the two leaf candidates;
+tracked manifests retain no replaces. Native session/reference predecessors
+and previous genuine native consumer evidence remain unchanged.
+
+OAuth frozen31c56488: independent oauth_refresh_access_final REQUEST_CHANGES
+F1, confirmed source defect: disabling delegation strands retained prepared
+ordinary refresh. Worker is implementing one focused interruption/toggle fix;
+current delegation must still fence capture/exchange/derived reads, not erase
+or reject historical ordinary-rotation preparation. Focused prior PG/race87928
+PASS50.088s is retained at its actual snapshot. Final43361 root racePASS1.562s
+and vet0; selected native run FAILED601.417s at fixture HTTPS/bootstrap/router
+and ten-minute timeout under host load187, before affected exchange scenarios.
+No native final pass is claimed; tagged vet did not run. Owned PG/cache removed.
+Primary and worker serialize remaining bounded runtime checks; no timeouts or
+security controls were widened.
+
+2026-10-25 14:04 UTC: separate OAuth worker may own the next finite M33 native
+profile in go-oauth-server main3b58e4c: explicitly opted-in restricted exchange
+of refresh-issued human opaque ACCESS tokens, not refresh bearers. Genuine
+password/session -> consent/S256 -> code access/refresh -> native rotation ->
+narrow access-only child -> introspection/direct-resource read; current parent,
+grant, consent/account/credential withdrawal denies descendants. Preserve the
+existing code-only default, owner/actor/tenant/client separation, original
+lineage/freshness, depth/scope/audience/expiry bounds and reveal-once/recovery.
+Exclude device/session/API-key/org/JWT sources and HTTP/Reference composition.
+Consumed unchanged manifests: identity/session2eafc259, kernelc9d9dd76,
+session/postgrescf1f8c1d, authenticationd9f5132c, authorizationa55bbebb and
+OAuth root599225f6/native3b58e4c. Retain predecessor independent/CI/public
+five-journey PG/race64.253s evidence; no missing upstream owner identified.
+Worker owns OAuth exchange/policy/service/discovery and native human_exchange,
+phase/store/mutation/recovery/config plus directly affected tests, optional NEW
+forward migration and root/native docs/changelogs. Never rewrite old migrations.
+Primary retains module pins, manifests/CI/tooling, Git integration and identity
+composition. Worker reports at first public boundary and coherent tested batch;
+no children or external/Git mutations. Heavy Go/PG work is serialized by primary.
+Focused checks are root race, new/retained human exchange+refresh/revocation+
+workload native PG/race, tagged vet, populated/commit-loss proof and secrets.
+Independent full review/public consumer proof follow implementation, not a
+preflight factory. Worker must prove bounded original S256 ancestry after
+repeated refresh, without promoting expired consumed refresh authority.
+
+2026-10-25 14:02 UTC: primary next finite M16 profile is explicitly selected
+HTTP passkey/TOTP on the delivered MFA-first existing-account graph. Outcome:
+real enrollment -> original flow/device -> identified or discoverable HTTPS
+options/assertion -> committed challenge only -> X-MFA-Variant:passkey TOTP
+completion -> common session/read/logout. Consume native root30bf015,
+passkey/postgres0de1392, session root e952895, session/postgres10fb24a and
+Reference187c54e; predecessor focused/public runtime and review are retained.
+Primary owns http/passkey, http/mfa and Reference composition/pins/notes.
+No native proof/session/transaction engine changes are planned. Selection is
+additive and opt-in; absence preserves existing routes/contracts. Challenge
+proof transfers once in X-MFA-Token, never session/CSRF/cookie; exact native
+receipt/flow/actor/expiry is required. Completion selects exact passkey primary
+provenance, never password/email fallback. Denial, replay, cancellation and
+post-middleware expiry disclose no credentials; wrong variant/origin/browser,
+current account/factor authority and one-use effects remain mandatory.
+Exclude recovery codes/trusted devices/standalone-MFA/new protocol algorithms.
+Focused proof: leaf HTTP unit delivery/dispatch/closed-wire regressions plus
+bounded existing hostile-input fuzz; actual Reference PostgreSQL/race HTTPS
+identified/discoverable fresh/populated journeys and common logout; affected
+module units/vet/authentication/secrets, independent final review, main/CI and
+downloaded-public consumer. No unchanged ecosystem matrix will be repeated.
+
 2026-10-25 13:54 UTC: selected genuine passkey/TOTP Reference profile CLOSED.
 Complete26-path independent passkey_mfa_session_final APPROVE at content
 1ee7c471; delivered187c54e4bdd8e01c94463690cc18ddcf72907f2b exact remote main,

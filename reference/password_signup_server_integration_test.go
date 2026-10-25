@@ -980,6 +980,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		// HTTP transport is enabled with the real successor owner, not on the
 		// baseline graph used to create and verify the existing account.
 		c.HTTPPasskey = nil
+		if extensions.passkeyTOTP && extensions.passkeyHTTP {
+			c.HTTPMFA = nil
+		}
 		baselineSession := *c.Session
 		baselineSession.Passkey = false
 		c.Session = &baselineSession
@@ -1005,6 +1008,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		// Isolate common-session selection rather than the separately selected
 		// HTTP owner's earlier prerequisite validation.
 		invalid.HTTPPasskey = nil
+		if extensions.passkeyTOTP && extensions.passkeyHTTP {
+			invalid.HTTPMFA = nil
+		}
 		graph, err := reference.ComposeStores(invalid, deps)
 		if err == nil {
 			bounded, stop := context.WithTimeout(context.Background(), time.Second)
@@ -1526,7 +1532,7 @@ END $$`); err != nil {
 				}
 			}
 			if extensions.passkeyTOTP {
-				proveReferencePasskeyTOTPFromEnrollment(t, ctx, f, selected, selectedConfig, client, network.URL, origin, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler)
+				proveReferencePasskeyTOTPFromEnrollment(t, ctx, f, selected, selectedConfig, client, network.URL, origin, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler, passkeyDocument)
 			} else if extensions.passkeyHTTP {
 				proveReferencePasskeyHTTP(t, ctx, selected, selectedConfig, user, cookies, csrf, extensions.passkeyDiscovery, sessionHandler, passkeyDocument)
 			} else {

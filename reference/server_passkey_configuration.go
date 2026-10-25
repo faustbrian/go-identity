@@ -32,6 +32,10 @@ import (
 // verification identities; no consumer store or alternative workflow is accepted.
 type HTTPPasskeyConfiguration struct {
 	Registration, Signin, Inventory, Discoverable bool
+	// MFAContinuation selects challenge-only signin for native Passkey.TOTP.
+	// It requires Signin and the actual native TOTP owner. Completion remains
+	// independently selected by HTTPMFA.PasskeyTOTPVerify; no fallback is added.
+	MFAContinuation bool
 	// DiscoverableOnly explicitly rejects identifier-based signin and requires
 	// Discoverable. It needs no email/password comparison configuration.
 	DiscoverableOnly bool
@@ -112,9 +116,9 @@ func composePasskeyHTTP(c StoreConfiguration, owner *passkeyState, sessions *ses
 		return nil, invalid
 	}
 	n := *c.Passkey
-	if n.TOTP != nil && h.Signin {
-		// Native challenge custody needs its own selected transport projection;
-		// the existing signin serializer accepts only completed session output.
+	if h.MFAContinuation && (!h.Signin || n.TOTP == nil) || n.TOTP != nil && h.Signin && !h.MFAContinuation {
+		// Native selection must not silently change a session-only HTTP contract
+		// into a partial-authentication response, or imply its completion route.
 		return nil, invalid
 	}
 	// The HTTP owner supplies a cookie synchronizer to both enrollment phases.

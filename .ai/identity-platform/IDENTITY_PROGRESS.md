@@ -1,9 +1,34 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 13:54 UTC
+## Current TL;DR — 2026-10-25 16:31 UTC
 
 - **Overall: ~25%, low-confidence estimate; 11/39 full milestones closed.**
   No additional full milestone or fully qualified unit is claimed this update.
+- **Current HTTP profile:** explicit challenge-only passkey signin and exact
+  passkey/TOTP completion transports are independently approved and pushed at
+  `83149c8`, Required `40205289622` green. Both authenticated public modules
+  match all22 changed files; Reference now pins them without replacements.
+  Complete Reference HTTPS identified/discoverable signin now passes on fresh
+  and populated-upgrade PostgreSQL: genuine enrollment/assertion -> child only
+  -> exact TOTP -> session/read/logout, with wrong variant/origin/browser/factor,
+  suspended-account/code denial, original retry and durable one-use effects.
+  Independent complete Reference review APPROVES the current source; affected
+  race units, tagged vet, module authentication and secrets pass. Reference
+  main/CI/public-consumer delivery remains pending. No full M16 closure yet.
+  Identified HTTP signin exposed a native rate-reader defect. Its bounded fix
+  is independently approved and delivered in go-passkey `d4f1b8a`, Required
+  `40209137333` green. All five public module files match; Reference now pins
+  that authenticated dependency; the identified HTTP journeys pass against it.
+- **Parallel OAuth:** restricted exchange of refresh-issued human access
+  passes its five focused PostgreSQL/race cases. Independent review found
+  ordinary prepared refresh could be stranded when delegation is disabled;
+  the source correction is complete and independently has no further source
+  finding. Its final two-mode/regression run still failed during prerequisite
+  startup/migrations under severe host contention, so native acceptance remains
+  unqualified; ambiguity and tagged vet did not run. The default-false root
+  policy prerequisite is delivered at `da70252`, Required `40208679787` green;
+  native consumes that public dependency and awaits serialized verification.
+  This is not native-profile or milestone closure.
 - **New delivered profile:** genuine registration/key enrollment and
   confirmed TOTP enrollment -> real passkey assertion -> challenge only ->
   wrong-code denial -> correct TOTP -> session/read -> exact retry/recovery
@@ -25,7 +50,8 @@
   or a fully qualified release unit. Remaining passkey/MFA profiles stay open.
   Proposed new lock/counter changes were withdrawn: existing tenant advisory
   serialization already prevents the reported same-tenant cycles. No such
-  kernel changes were made. No new HTTP login route is claimed.
+  kernel changes were made. The new HTTP journey is locally proven as above;
+  its delivery and remaining passkey/MFA profiles are separate obligations.
 - **Remaining whole goal:** full passkey/MFA profiles, remaining organization,
   OAuth/federation/provisioning and cross-cutting milestones, plus final
   qualification of all67 units. Historical full-history secrets remain open.
