@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add optional expiry of an authenticated, never-started prepared request.
+  After its immutable original deadline, the existing global command-ID claim
+  permanently prevents execution and exact retries return metadata-only
+  noncommit. Existing commands keep their recovery owner; lost acknowledgement
+  stays unknown. Install the forward `RequestKeyExpiryMigrationSource` before
+  selecting this API; generic missing/retired query privacy is unchanged.
+
 - Check original passkey eligibility during native TOTP input preparation,
   before generating session output. Keep this non-consuming fence separate
   from the protected Apply/final-commit guard and preserve anonymous scope.

@@ -29,6 +29,42 @@ recovery owner. Generic outcome queries keep uniform missing/denied responses.
 The decoder performs no preparation or effects; native session/domain disclosure
 checks remain required. Retain the original envelope configuration and keys.
 
+### Definitive refusal of an expired, never-started original
+
+An explicitly registered `RequestKeyExpiryContributor` also authenticates the
+original exclusive preparation deadline. It must restore the earliest original
+session/preparation validity ceiling from the immutable envelope, not calculate
+a new deadline from current time or a replacement session. Its bounded decoder
+performs no reads, generation, counters or effects. Native possession and current
+session/domain disclosure checks remain required around this kernel operation.
+
+Install `RequestKeyExpiryMigrationSource{Base, Version}` after the selected
+request-preparation history, then select `ExpirePreparedFeatureCommand`. Before
+the deadline, an absent claim remains Unknown. After primary-database expiry,
+the operation arbitrates with every ordinary/prepared writer through the existing
+global command-ID primary key. Only a never-claimed original can become an
+irreversible, scope-free retired claim carrying a keyed original-envelope digest.
+This is an explicit exception to retirement after terminal-result retention:
+the fence proves effects can never start, rather than removing an existing result.
+An existing claim is never retired; its ordinary recovery owner still decides.
+
+An exact restarted retry returns metadata-only `CommitOutcomeNotCommitted`.
+It never permits that command ID to execute again or renews any authority. A lost
+commit acknowledgement remains Unknown until the same original is reconciled.
+Generic queries and ordinary retired claims retain their non-disclosure behavior;
+retain fingerprint keys and the original native codec/configuration for retries.
+No second journal, mutable mapping, background cleanup or HTTP route is added.
+
+The optional forward migration preserves earlier checksums and populated rows.
+It adds a nullable digest/check constraint and small invoker-rights triggers;
+typed fences reject UPDATE/DELETE, and command-claim TRUNCATE is rejected.
+Trusted schema owners can still bypass database enforcement and must not be
+application roles. Apply this upgrade before enabling the API. The ALTER/check
+validation and trigger installation take table locks and may scan existing claims;
+use the migration runner's bounded deployment window, including lock/statement
+budgets, and roll forward on failure. No downgrade, production-scale latency or
+live-rollout safety is claimed by the disposable PostgreSQL correctness tests.
+
 ## Challenge-only MFA after an original UV passkey
 
 The exact registered `PasskeyMFAChallengeContributor` can prepare a

@@ -29,6 +29,13 @@ func (p *preparedFeaturePhase) RestoreRequestKey(_ context.Context, b RequestKey
 	return p.requestOriginal, nil
 }
 
+func (p *preparedFeaturePhase) RestoreRequestKeyExpiry(ctx context.Context, b RequestKeyPreparationBinding, wire []byte) (identity.CommandBinding, time.Time, error) {
+	original, err := p.RestoreRequestKey(ctx, b, wire)
+	// A fixed historical deadline deliberately cannot justify replacing an
+	// already committed journal. This is a native-codec port fixture only.
+	return original, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), err
+}
+
 func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan, installed ...bool) {
 	t.Helper()
 	if len(installed) == 0 || !installed[0] {
@@ -89,6 +96,19 @@ func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator,
 	recovered, err := c.RecoverPreparedFeatureCommand(ctx, q, caller, *plan.Feature, phase)
 	if err != nil || recovered.Binding != result.Binding || recovered.Outcome != result.Outcome || recovered.AuditEventID != result.AuditEventID || recovered.Feature == nil || *recovered.Feature != *result.Feature {
 		t.Fatal("mapped recovery lost actual committed receipt", err)
+	}
+	if len(installed) == 0 {
+		if _, err := c.pool.Raw().Exec(ctx, requestKeyExpirySQL); err != nil {
+			t.Fatal("populated optional expiry schema", err)
+		}
+		expired, err := c.ExpirePreparedFeatureCommand(ctx, q, caller, *plan.Feature, phase)
+		if err != nil || expired.Binding != result.Binding || expired.Outcome != identity.CommitOutcomeCommitted || expired.AuditEventID != result.AuditEventID || expired.Feature == nil || *expired.Feature != *result.Feature {
+			t.Fatal("expiry relabeled a real committed journal", err)
+		}
+		var unchanged bool
+		if err := c.pool.Raw().QueryRow(ctx, `SELECT NOT retired AND request_key_expiry_fingerprint IS NULL FROM identity.identity_command_id_claims WHERE command_id=$1`, id).Scan(&unchanged); err != nil || !unchanged || snapshot() != before {
+			t.Fatal("expiry altered an existing claim or journal", err)
+		}
 	}
 	// RecoveryQuery omits these immutable fields. The new native full-binding
 	// comparison, not the ordinary query scope check, must fence substitution.

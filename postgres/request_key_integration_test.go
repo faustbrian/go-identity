@@ -614,6 +614,22 @@ func TestRequestKeyIntegration(t *testing.T) {
 				t.Fatal("racing candidates did not recover one winner", failures)
 			}
 		})
+		t.Run("expired mapped origin", func(t *testing.T) {
+			expiryHistory := RequestKeyExpiryMigrationSource{Base: source, Version: 12}
+			upgrade, err := migrations.NewRunner(expiryHistory, backend)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := upgrade.Up(ctx); err != nil {
+				t.Fatal("populated mapped-origin expiry upgrade", err)
+			}
+			input, wire, err := prepared.ResolvePreparedRequestKey(ctx, preparedScope, keyFor("prepared_expiry"), intent, preparedCaller, feature, owner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer clear(wire)
+			testExpiredMappedOrigin(t, ctx, prepared, owner, input, wire, spec.Binding, intent)
+		})
 	})
 }
 

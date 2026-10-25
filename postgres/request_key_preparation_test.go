@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	identity "github.com/faustbrian/go-identity"
 )
@@ -43,6 +44,11 @@ type requestPreparationParticipant struct {
 	scopeFeatureParticipant
 	prepare func(context.Context, RequestKeyPreparationBinding, identity.RequestIntent) ([]byte, error)
 	restore func(context.Context, RequestKeyPreparationBinding, []byte) (identity.CommandBinding, error)
+	expiry  func(context.Context, RequestKeyPreparationBinding, []byte) (identity.CommandBinding, time.Time, error)
+}
+
+func (p *requestPreparationParticipant) RestoreRequestKeyExpiry(ctx context.Context, b RequestKeyPreparationBinding, wire []byte) (identity.CommandBinding, time.Time, error) {
+	return p.expiry(ctx, b, wire)
 }
 
 func (p *requestPreparationParticipant) RestoreRequestKey(ctx context.Context, b RequestKeyPreparationBinding, wire []byte) (identity.CommandBinding, error) {
