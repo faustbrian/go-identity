@@ -15,7 +15,12 @@ import (
 // bearer or cookie; the graph supplies original synchronizer keys for cookies.
 // KeyedOptions is required for original A/B custody. Native selection enables no
 // HTTP, rename, deletion or fallback. Borrowed runtime resources remain graph-owned.
-type PasskeySessionEnrollmentConfiguration struct{ Transport session.CredentialKind }
+type PasskeySessionEnrollmentConfiguration struct {
+	Transport session.CredentialKind
+	// TOTP requires the selected native passkey/TOTP owner and admits only
+	// completed passkey/TOTP sessions. False preserves known-empty admission.
+	TOTP bool
+}
 
 // Format redacts deployment selection.
 func (PasskeySessionEnrollmentConfiguration) Format(f fmt.State, _ rune) {

@@ -290,6 +290,7 @@ type signupGraphExtensions struct {
 	passkeySignupHTTP     bool
 	passkeyTOTP           bool
 	passkeyTOTPManagement bool
+	passkeyTOTPEnrollment bool
 	mfaOTPDisable         bool
 	mfaOTPDisableAll      bool
 	mfaOTPActiveCase      string
@@ -613,6 +614,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferencePasskeyTOTP(t, &c)
 		if extensions.passkeyTOTPManagement {
 			c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie, TOTP: true}
+		}
+		if extensions.passkeyTOTPEnrollment {
+			c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie, TOTP: true}
 		}
 	}
 	if extensions.mfaOTPEnrollment {
@@ -1034,7 +1038,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		proveReferencePasskeyHTTPPrimarySelection(t, selected, deps)
 	}
-	if extensions.passkeyTOTPManagement {
+	if extensions.passkeyTOTPManagement || extensions.passkeyTOTPEnrollment {
 		invalid, selected := c, *c.Passkey
 		selected.TOTP = nil
 		invalid.Passkey = &selected
@@ -1042,7 +1046,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			bounded, stop := context.WithTimeout(context.Background(), time.Second)
 			_ = graph.Close(bounded)
 			stop()
-			t.Fatal("completed-MFA management accepted missing native TOTP owner")
+			t.Fatal("completed-MFA credential workflow accepted missing native TOTP owner")
 		}
 	}
 	if extensions.passkeyDeletion {

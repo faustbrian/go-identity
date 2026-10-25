@@ -16,6 +16,13 @@ rename. That selection requires the native TOTP owner and original current
 factor/session authority; it does not enable MFA key enrollment/removal or
 another secondary-factor fallback. Native selection adds no HTTP route.
 
+Independently set `Passkey.SessionEnrollment.TOTP` with the selected transport
+and `Passkey.KeyedOptions` to add a key from a completed passkey/TOTP session.
+The existing three-phase API requires fresh action-bound UV, preserves original
+factor/session and assertion expiry, and returns only metadata on retries.
+The new key still requires independent MFA at signin. This native selection
+does not enable HTTP enrollment or MFA key removal.
+
 For a passkey-only backend, explicitly select `Passkey.Standalone`,
 `Passkey.Signup`, `Session.Passkey` and durable PostgreSQL admission. The same
 sealed construction graph runs with no password, OTP or delivery configuration

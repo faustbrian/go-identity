@@ -47,7 +47,11 @@ func proveReferenceSessionEnrollment(t *testing.T, ctx context.Context, features
 		}
 	}
 	caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: "standalone-additional-enrollment", Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(user)}, Tenant: authorization.TenantID(otpTenant), Action: "identity.passkey.register-options", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
-	intent := passkey.SessionEnrollmentRequestSpec{Credential: credential, CSRFToken: synchronizer, Caller: caller, Label: "Additional reference key", Origin: c.Passkey.Signup.Flow.Origin, Network: "127.0.0.1"}
+	origin := c.Passkey.Flow.Origin
+	if c.Passkey.Signup != nil {
+		origin = c.Passkey.Signup.Flow.Origin
+	}
+	intent := passkey.SessionEnrollmentRequestSpec{Credential: credential, CSRFToken: synchronizer, Caller: caller, Label: "Additional reference key", Origin: origin, Network: "127.0.0.1"}
 	keyA, err := identity.NewIdempotencyKey([]byte("reference-enrollment-A"))
 	if err != nil {
 		t.Fatal(err)

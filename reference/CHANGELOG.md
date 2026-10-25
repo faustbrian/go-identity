@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Independently select additional-key enrollment after completed passkey/TOTP
+  signin with `Passkey.SessionEnrollment.TOTP`. Require the native TOTP owner
+  and genuine fresh UV, retaining original factor/session authority, atomic
+  registration and metadata-only retries. No HTTP route or MFA removal is added.
+
 - Compose safe passkey inventory and explicitly selected fresh-UV label rename
   after completed passkey/TOTP signin. Require the native TOTP owner for that
   management selection, retain original factor/session authority and keep

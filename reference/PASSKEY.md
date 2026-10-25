@@ -52,13 +52,28 @@ confirmed factor ID, enrollment and account generation remain current through
 the native transaction alongside session, credential, policy and RP mapping.
 The new assertion advances the authenticator normally; it does not replay the
 signin assertion or consume a TOTP. Omitted `TOTP` management selection retains
-known-empty behavior. Enrolled-MFA additional-key enrollment/removal and other
-secondary methods remain separate profiles.
+known-empty behavior. Other secondary methods remain separate profiles.
+
+For additional-key enrollment, separately set `Passkey.SessionEnrollment` with
+`TOTP:true`, the exact bearer/cookie transport and `Passkey.KeyedOptions`.
+`Passkey.TOTP` is required; omitted `TOTP` preserves the known-empty profile.
+Use the [existing three-phase enrollment API](#current-session-additional-enrollment)
+with a new action-bound assertion from the authenticating key, not its signin
+assertion. Each phase retains original confirmed factor/enrollment/generation,
+credential/session and positive-read ceilings; registration completion also
+retains the original assertion's expiry. A/B/C retries return metadata without
+new challenges or credentials. The newly registered key still requires TOTP
+at signin. This native selection enables no HTTP enrollment route or MFA key
+removal.
 
 `TestReferencePasskeyTOTPInventoryAndFreshUVRename` exercises real registration,
 key/factor enrollment, identified/discoverable signin, TOTP completion, safe
 inventory, fresh UV rename, metadata-only original retry and session read/logout.
 No account, factor secret, session or successful receipt is seeded.
+
+`TestReferencePasskeyTOTPAdditionalKeyEnrollment` continues both genuine signin
+profiles through fresh UV, additional-key registration, two-key inventory,
+original metadata retries, a new-key MFA challenge and session read/logout.
 
 ### Opt-in HTTP original passkey plus TOTP
 

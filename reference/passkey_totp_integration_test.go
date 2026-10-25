@@ -5,6 +5,7 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
+	passkey "github.com/faustbrian/go-passkey"
 	native "github.com/faustbrian/go-passkey/postgres"
 	webauthn "github.com/faustbrian/go-webauthn"
 )
@@ -46,6 +48,14 @@ func TestReferencePasskeyTOTPInventoryAndFreshUVRename(t *testing.T) {
 	for _, discoverable := range []bool{false, true} {
 		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
 			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyDiscovery: discoverable, passkeyTOTP: true, passkeyTOTPManagement: true}, true)
+		})
+	}
+}
+
+func TestReferencePasskeyTOTPAdditionalKeyEnrollment(t *testing.T) {
+	for _, discoverable := range []bool{false, true} {
+		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyDiscovery: discoverable, passkeyTOTP: true, passkeyTOTPEnrollment: true}, true)
 		})
 	}
 }
@@ -302,6 +312,86 @@ func proveReferencePasskeyTOTP(t *testing.T, ctx context.Context, f liveStores, 
 		// The genuine signin assertion consumed counter1. This next assertion
 		// must advance the same synthetic authenticator, not replay its counter.
 		proveReferenceSessionRename(t, ctx, features, c, user, issuedCookie.Value, csrfWire, key, id, credential.UserHandle, 2)
+	}
+	if c.Passkey.SessionEnrollment != nil {
+		token, _ := session.ParseToken(issuedCookie.Value)
+		browserCredential, err := session.NewCredential(session.CredentialCookie, token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		csrf, _ := session.ParseCSRFToken(csrfWire)
+		enrollment, err := owner.SessionEnrollment()
+		if err != nil {
+			t.Fatal(err)
+		}
+		caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: "mfa-enrollment-withdrawal", Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(user)}, Action: "identity.passkey.register-options", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
+		withdrawn := passkey.NewSessionEnrollmentRequest(passkey.SessionEnrollmentRequestSpec{Credential: browserCredential, CSRFToken: csrf, Caller: caller, Label: "Additional reference key", Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1"})
+		for _, table := range []string{"factor_authorities", "totp_factors"} {
+			column := "version"
+			if table == "totp_factors" {
+				column = "enrollment_version"
+			}
+			// Controlled withdrawal uses only this owned account's real rows.
+			if _, err := f.pool.Raw().Exec(ctx, "UPDATE identity_mfa."+table+" SET "+column+"="+column+"+1 WHERE tenant_id=$1 AND user_id=$2", otpTenant, string(user)); err != nil {
+				t.Fatal(err)
+			}
+			key, _ := identity.NewIdempotencyKey([]byte("mfa-enrollment-withdrawal-" + table))
+			out, denied := enrollment.EnrollmentAssertionOptions(ctx, passkey.SessionEnrollmentOptionsRequest{SessionEnrollmentRequest: withdrawn, IdempotencyKey: key})
+			if _, err := f.pool.Raw().Exec(ctx, "UPDATE identity_mfa."+table+" SET "+column+"="+column+"-1 WHERE tenant_id=$1 AND user_id=$2", otpTenant, string(user)); err != nil {
+				t.Fatal(err)
+			}
+			if _, options := out.Options.Ceremony(); denied == nil || out.CommandID != "" || options {
+				t.Fatal("withdrawn original MFA authority admitted enrollment", table)
+			}
+		}
+		proveReferenceSessionEnrollment(t, ctx, features, c, nil, user, issuedCookie.Value, csrfWire, key, id, credential.UserHandle, 2, func(second crypto.Signer, secondID []byte, _ passkey.CredentialMetadata) {
+			// The new credential must be usable, but may not bypass the account's
+			// independent factor. Exercise the actual selected primary owner.
+			flowID, _ := identity.NewCommandID()
+			prepared, err := owner.PrepareFlow(ctx, session.PreAuthPrepareInput{CommandID: flowID, TenantID: otpTenant, CorrelationID: "additional-key-mfa", Remember: remember})
+			if err != nil {
+				t.Fatal(err)
+			}
+			flow, err := owner.IssueFlow(ctx, prepared)
+			if err != nil {
+				t.Fatal(err)
+			}
+			flowSpec, _ := flow.Flow.Bindings()
+			wire, err := flow.Token.Reveal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cookie, _ := session.ParseToken(wire)
+			command, _ := identity.NewCommandID()
+			r := native.SigninRequest{CommandID: command, FlowID: flowSpec.Binding.ID, Cookie: cookie, Identifier: "registered@example.invalid", Origin: c.Passkey.Flow.Origin, Network: "127.0.0.1", Device: "additional-key-mfa", CorrelationID: "additional-key-mfa"}
+			discovery := native.DiscoverableSigninRequest{CommandID: r.CommandID, FlowID: r.FlowID, Cookie: r.Cookie, Origin: r.Origin, Network: r.Network, Device: r.Device, CorrelationID: r.CorrelationID}
+			var options webauthn.AssertionOptions
+			if discoverable {
+				options, err = owner.DiscoverableAuthenticationOptions(ctx, discovery)
+			} else {
+				options, err = owner.AuthenticationOptions(ctx, r)
+			}
+			if err != nil {
+				t.Fatal("new key MFA options", err)
+			}
+			ceremony, ok := options.Ceremony()
+			if !ok {
+				t.Fatal("new key assertion options absent")
+			}
+			r.CommandID, _ = identity.NewCommandID()
+			discovery.CommandID = r.CommandID
+			response := referencePasskeyAssertion(t, second, secondID, credential.UserHandle, referencePasskeyChallenge(t, ctx, options.TransferJSON), 1)
+			var out native.SigninResult
+			if discoverable {
+				out, err = owner.DiscoverableSignin(ctx, native.DiscoverableSigninCompletion{DiscoverableSigninRequest: discovery, CeremonyID: ceremony.ID, Response: response})
+			} else {
+				out, err = owner.Signin(ctx, native.SigninCompletion{SigninRequest: r, CeremonyID: ceremony.ID, Response: response})
+			}
+			if err != nil || out.Challenge == nil || out.Challenge.Method != "totp" || out.Receipt.Outcome != identity.CommitOutcomeCommitted || out.Session.Token != (session.Token{}) || out.CSRF != (session.CSRFToken{}) {
+				t.Fatal("additional credential bypassed or lost independent MFA", err)
+			}
+			_ = out.Challenge.Proof.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
+		})
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, logoutOrigin, []*http.Cookie{&issuedCookie}, csrfWire, record.SessionID, f, features)
 }
