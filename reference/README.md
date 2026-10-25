@@ -16,6 +16,13 @@ rename. That selection requires the native TOTP owner and original current
 factor/session authority; it does not enable MFA key enrollment/removal or
 another secondary-factor fallback. Native selection adds no HTTP route.
 
+For the HTTP completed-MFA inventory/rename profile, independently select
+`HTTPPasskey.Inventory` and `HTTPPasskey.SessionUpdate` with that native cookie
+management selection, the original graph CSRF keys and shared rates. Use the
+completed TOTP session cookie for safe inventory, then a new action-bound UV
+assertion for the two-phase rename. Original factor authority and metadata-only
+retries remain native-owned. See [the HTTP walkthrough](PASSKEY.md#http-inventory-and-fresh-uv-rename-after-totp).
+
 Independently set `Passkey.SessionEnrollment.TOTP` with the selected transport
 and `Passkey.KeyedOptions` to add a key from a completed passkey/TOTP session.
 The existing three-phase API requires fresh action-bound UV, preserves original

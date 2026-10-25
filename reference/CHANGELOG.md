@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Document and exercise the opt-in HTTP safe-inventory and fresh-UV rename
+  profile after genuine passkey/TOTP signin, using the existing native cookie
+  session, current-factor and action-bound management owners. Preserve original
+  intent, metadata-only retries and logout denial; no new auth workflow is added.
+
 - Independently select resident-key removal from completed passkey/TOTP
   sessions with `Passkey.SessionDeletion.TOTP`. Preserve fresh UV, original
   factor/session authority and another usable key; invalidate prior sessions

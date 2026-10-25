@@ -80,6 +80,18 @@ func TestReferencePasskeyTOTPHTTPSFromRealEnrollment(t *testing.T) {
 	}
 }
 
+func TestReferencePasskeyTOTPHTTPInventoryAndFreshUVRename(t *testing.T) {
+	for _, discoverable := range []bool{false, true} {
+		t.Run(map[bool]string{false: "identified", true: "discoverable"}[discoverable], func(t *testing.T) {
+			for _, upgrade := range []bool{false, true} {
+				t.Run(map[bool]string{false: "fresh", true: "populated-upgrade"}[upgrade], func(t *testing.T) {
+					proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, passkey: true, passkeyKeyed: true, passkeySessionHTTP: true, passkeyHTTP: true, passkeyDiscovery: discoverable, passkeyTOTP: true, passkeyTOTPManagement: true, passkeyUpgrade: upgrade}, true)
+				})
+			}
+		})
+	}
+}
+
 func configureReferencePasskeyTOTP(t *testing.T, c *reference.StoreConfiguration) {
 	t.Helper()
 	issuer := c.PasswordSignup.Issuer

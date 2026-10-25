@@ -130,6 +130,33 @@ browser, expiry, risk and protected one-use/session effects remain native-owned.
 Neither this profile nor its HTTP selection enables trusted devices, recovery
 codes, standalone MFA or a browser UI.
 
+### HTTP inventory and fresh-UV rename after TOTP
+
+Independently select `HTTPPasskey.Inventory` and `HTTPPasskey.SessionUpdate`
+alongside native `Passkey.SessionManagement` with `TOTP:true` and cookie
+transport. Keep `Session.Passkey`, `Passkey.TOTP`, keyed options, the graph's
+CSRF keys and shared HTTP rates configured. The existing session-update owner
+accepts the completed session; no password proof, extra TOTP consumption or
+new credential type is introduced. The native selection alone exposes no route.
+
+After actual HTTP passkey/TOTP completion, retain the session cookie and
+`X-CSRF-Token`. `GET /v1/passkey/list` returns safe reference/version metadata.
+Use `POST /v1/passkey/update` with the exact trusted Origin, original cookie,
+`X-CSRF-Token` and a distinct singleton `Idempotency-Key` for each phase:
+
+1. `phase:"options"`, the listed `referenceID`/`expectedVersion` and intended
+   `name` return the original action-bound assertion options and `commandID`.
+2. `phase:"complete"` preserves those target/version/name fields and supplies
+   that command as `ceremonyID` plus a genuinely fresh UV `response`. Only fresh
+   commitment returns the updated safe credential metadata. No session, token
+   or synchronizer is issued by either phase.
+
+Exact retries disclose historical command metadata, not renewed options or a
+new credential projection. A withdrawn original factor, altered intent, stale
+version or invalid cookie/CSRF/Origin denies without changing the label. Logout
+also removes retry authority. Additional-key enrollment and removal HTTP
+qualification remain separate; this selection does not imply either one.
+
 ## Passkey-only deployment
 
 Set `Passkey.Standalone` with an explicit immutable bootstrap tenant set,

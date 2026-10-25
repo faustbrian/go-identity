@@ -87,6 +87,8 @@ func proveReferencePasskeyHTTPPrimarySelection(t *testing.T, c reference.StoreCo
 				httpSelection.MFAContinuation = false
 			case "missing-native":
 				nativeSelection.TOTP = nil
+				nativeSelection.SessionManagement = nil
+				httpSelection.SessionUpdate = false
 				selected.HTTPMFA = nil // Isolate the signin projection's own native prerequisite.
 			case "wrong-actor":
 				completion.ActorID = "AAAAAAAAAAAAAAAAAAAAAg"
@@ -113,6 +115,7 @@ func proveReferencePasskeyHTTPPrimarySelection(t *testing.T, c reference.StoreCo
 		// above and the genuine complete HTTP MFA journey.
 		nativeOnly, httpOnly := *c.Passkey, *c.HTTPPasskey
 		nativeOnly.TOTP, httpOnly.MFAContinuation = nil, false
+		nativeOnly.SessionManagement, httpOnly.SessionUpdate = nil, false
 		c.Passkey, c.HTTPPasskey, c.HTTPMFA = &nativeOnly, &httpOnly, nil
 	}
 	if c.Passkey.Management != nil {

@@ -25,6 +25,13 @@ import (
 	webauthn "github.com/faustbrian/go-webauthn"
 )
 
+type passkeyTOTPHTTPObservation struct {
+	status  int
+	header  http.Header
+	body    []byte
+	cookies []*http.Cookie
+}
+
 // Registration, the credential and confirmed factor come from their real public
 // owners. This consumer controls only authenticator bytes and HTTP inputs; SQL
 // below observes durable effects or injects a reversible account suspension.
@@ -40,13 +47,7 @@ func proveReferencePasskeyTOTPHTTPS(t *testing.T, ctx context.Context, f liveSto
 	if err != nil {
 		t.Fatal("selected HTTP document invalid", err)
 	}
-	type response struct {
-		status  int
-		header  http.Header
-		body    []byte
-		cookies []*http.Cookie
-	}
-	request := func(path string, body map[string]any, selected []*http.Cookie, variant, key, trusted string) response {
+	request := func(path string, body map[string]any, selected []*http.Cookie, variant, key, trusted string, csrf ...string) passkeyTOTPHTTPObservation {
 		t.Helper()
 		wire, err := json.Marshal(body)
 		if err != nil {
@@ -59,6 +60,9 @@ func proveReferencePasskeyTOTPHTTPS(t *testing.T, ctx context.Context, f liveSto
 		r.Host = strings.TrimPrefix(origin, "https://")
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Origin", trusted)
+		if len(csrf) == 1 {
+			r.Header.Set("X-CSRF-Token", csrf[0])
+		}
 		if variant != "" {
 			r.Header.Set("X-MFA-Variant", variant)
 		}
@@ -116,7 +120,7 @@ func proveReferencePasskeyTOTPHTTPS(t *testing.T, ctx context.Context, f liveSto
 			}
 		}
 		check([]string{"paths", path, "post", "responses", strconv.Itoa(out.StatusCode), "content", media, "schema"}, responseWire, false)
-		return response{out.StatusCode, out.Header, payload, out.Cookies()}
+		return passkeyTOTPHTTPObservation{out.StatusCode, out.Header, payload, out.Cookies()}
 	}
 	flow := request("/v1/session/preauth-issue", map[string]any{"method": "passkey", "remember": false}, nil, "", "", origin)
 	var original struct {
@@ -270,5 +274,12 @@ func proveReferencePasskeyTOTPHTTPS(t *testing.T, ctx context.Context, f liveSto
 	if retry.status != 409 || len(retry.cookies) != 0 || retry.header.Get("X-CSRF-Token") != "" || observe() != after {
 		t.Fatal("HTTP completion retry redisclosed credentials or repeated effects", retry.status)
 	}
+	var afterLogout func()
+	if c.HTTPPasskey.SessionUpdate {
+		afterLogout = proveReferencePasskeyTOTPHTTPRename(t, ctx, f, c, client, server.URL, user, key, id, credential.UserHandle, factor, issued, document, request)
+	}
 	proveRegistrationSessionLogout(t, ctx, logoutClient, base, logoutOrigin, issued.cookies, issued.header.Get("X-CSRF-Token"), result.SessionID, f, features)
+	if afterLogout != nil {
+		afterLogout()
+	}
 }

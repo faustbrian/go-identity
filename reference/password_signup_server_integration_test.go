@@ -615,6 +615,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferencePasskeyTOTP(t, &c)
 		if extensions.passkeyTOTPManagement {
 			c.Passkey.SessionManagement = &reference.PasskeySessionManagementConfiguration{Transport: session.CredentialCookie, TOTP: true}
+			if c.HTTPPasskey != nil {
+				c.HTTPPasskey.SessionUpdate = true
+			}
 		}
 		if extensions.passkeyTOTPEnrollment {
 			c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie, TOTP: true}
@@ -1044,7 +1047,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		proveReferencePasskeyHTTPPrimarySelection(t, selected, deps)
 	}
 	if extensions.passkeyTOTPManagement || extensions.passkeyTOTPEnrollment || extensions.passkeyTOTPDeletion {
-		invalid, selected := c, *c.Passkey
+		invalid := c
+		if passkeyUpgrade != nil {
+			invalid = *passkeyUpgrade
+		}
+		selected := *invalid.Passkey
 		selected.TOTP = nil
 		if extensions.passkeyTOTPDeletion {
 			// Isolate removal's dependency rather than failing first on the
@@ -1177,13 +1184,13 @@ END $$`); err != nil {
 				t.Fatal("selected passkey operation missing", operation)
 			}
 		}
-		if c.HTTPPasskey.Update {
+		if c.HTTPPasskey.Update || c.HTTPPasskey.SessionUpdate {
 			wantOperations++
 		}
 		if c.HTTPPasskey.Delete {
 			wantOperations++
 		}
-		if seen["identity.passkey.update"] != c.HTTPPasskey.Update || seen["identity.passkey.delete"] != c.HTTPPasskey.Delete {
+		if seen["identity.passkey.update"] != (c.HTTPPasskey.Update || c.HTTPPasskey.SessionUpdate) || seen["identity.passkey.delete"] != c.HTTPPasskey.Delete {
 			t.Fatal("unselected passkey management advertised")
 		}
 	} else {
