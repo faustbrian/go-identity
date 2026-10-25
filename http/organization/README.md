@@ -5,7 +5,16 @@ explicit organization reads, member listing, admission and removal. Omit its
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
+Invitation reads are independently opt-in through `InvitationGet` and
+`InvitationListMine`. Supply the actual native invitation owner through
+`Config.Invitations`; it implements the narrow `InvitationReader` port directly.
+An invitation-only selection needs `Sessions`, shared `SafeRate`, network/clock
+and timeout configuration, but neither the five-operation `Service` nor
+`AdminRate`. No application invitation store or authority adapter is needed.
+
 ## Composition
+
+For the original organization/member operations:
 
 1. Construct the actual native organization `OperationService` and its genuine
    session owner. Apply that owner's request-key/preparation and concurrent
@@ -40,6 +49,8 @@ session, protected risk, membership and atomic commit fences.
 | List members | `GET /v1/organization/member/list` | Query `organizationID`, optional exclusive `cursor`, `limit` 1..100 (default100) |
 | Add member | `POST /v1/organization/member/add` | JSON `organizationID`, target `userID`, `role`, `organizationVersion`, `memberVersion`; required original key |
 | Remove member | `POST /v1/organization/member/remove` | JSON `organizationID`, target `userID`, exact positive organization/member versions; **no key** |
+| Get invitation | `GET /v1/organization/invitation/get` | Required query `organizationID`, `invitationID`; native **owner-only** authorization |
+| List my invitations | `GET /v1/organization/invitation/list-mine` | Optional opaque `cursor`, `limit` 1..200 (default100); current verified recipient, no membership required |
 
 Every request requires exactly one syntactically strict Authorization Bearer
 header containing the native opaque session token. Cookies are ignored as
@@ -85,6 +96,40 @@ Protected native domain audit and risk counters remain separately mandatory.
 Reads use the actual base `rate.safe` owner, including its documented bounded
 emergency behavior. Neither rate owner authenticates or authorizes a mutation.
 
+## Invitation discovery and current reads
+
+Select `NewFeature(FeatureConfig{Config: cfg, InvitationGet: true,
+InvitationListMine: true})` to expose only those two routes and their concrete
+OpenAPI operations. Omitting either flag omits that route and its metadata.
+Configure the actual native invitation migrations, delivery status owner and
+recipient-page index before selection. The native `Get` remains owner-only:
+being the invited recipient, including after acceptance, does not grant it.
+Recipient discovery uses `ListMine`, never a caller-supplied recipient/address.
+
+Both reads use the same strict bearer/current-session and shared `rate.safe`
+boundaries as other safe reads. For `ListMine`, the native owner separately
+revalidates current session, self policy and exact verified recipient identifier
+ID/version. Removing
+verification or replacing that identifier removes its discoverable invitations;
+an invitation or cursor never authenticates anyone or grants membership.
+
+Responses project only invitation ID, organization ID, role, status, version and
+expiry, without email, recipient identifiers, creator, capability, delivery
+effect/digest/ciphertext or internal authority. `Get` wraps one `invitation`;
+`ListMine` always returns an `invitations` array, including when empty, and an
+optional `nextCursor`. Status is `pending`, `accepted`, `expired`, `cancelled` or
+`rejected`. Native natural expiry projects `expired` at its exclusive boundary.
+All retained installed states are discoverable; this is not a pending-only list.
+
+Pages are current-state keysets ordered by bytewise invitation ID, not snapshots.
+Return the subject-bound opaque cursor unchanged (at most 512 bytes); it grants
+no authority, cannot move between subjects/tenants and is revalidated natively.
+Restart the listing to observe additions before the current position. Acceptance
+remains a direct native operation; later HTTP member reads and current invitation
+reads observe its actual committed state without a positive authority cache.
+HTTP invitation send/accept or other mutations and Reference composition are not
+selected by this finite profile.
+
 ## Results, recovery and security
 
 Responses are bounded explicit no-store/nosniff JSON, never credentials,
@@ -102,8 +147,8 @@ the original request/key; use the native owner's current-authorized
 `RecoverOperation` for explicit recovery. No extra recovery HTTP route is
 selected. Never resubmit an unknown operation with a replacement key.
 
-`State` offers only detached principal metadata to trusted synchronous
-middleware through the base real pipeline. Detached request headers still
+For the original five operations, `State` offers detached principal metadata to
+trusted synchronous middleware through the base real pipeline. Detached request headers still
 contain credentials: never log or retain them. Hooks cannot rewrite immutable
 owner inputs, extend original proof validity, replay stages or emit credential
 headers/trailers. After-handler observation means an attempt, not a commit.
@@ -112,8 +157,9 @@ cancellation wins. Callers retain raw body and server cleanup ownership.
 
 ## Tradeoffs / FAQ
 
-- **Cookies, invitations, teams or active selection?** Not selected. These need
-  their own native profile and transport contract, not fallback through this one.
+- **Cookies, invitation mutations, teams or active selection?** Not selected.
+  These need their own native profile and transport contract, not fallback
+  through this one.
 - **Does a role or recovery scope grant access?** No. Current native authority
   is checked again; last-owner protection is never a transport decision.
 - **Can I use an in-memory fake as shared production rate storage?** No. The
@@ -123,7 +169,7 @@ cancellation wins. Callers retain raw body and server cleanup ownership.
 - **Who closes borrowed stores?** The application, after requests finish. Closing
   `AdminRateLimiter` only prevents new calls; it does not close its backend.
 
-Public API reference is the Go documentation for `Service`, `Config`,
-`FeatureConfig`, `NewFeatureWithMiddleware`, `AdminRateConfig`,
+Public API reference is the Go documentation for `Service`, `InvitationReader`,
+`Config`, `FeatureConfig`, `NewFeatureWithMiddleware`, `AdminRateConfig`,
 `AdminRateLimiter`, `State`, and the explicit response DTOs. Release notes are in
 [CHANGELOG.md](CHANGELOG.md).

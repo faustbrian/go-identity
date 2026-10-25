@@ -31,8 +31,10 @@ type Service interface {
 }
 
 // Config borrows actual concurrency-safe owners for their lifetime. Sessions
-// supplies current actor custody for transport rate admission; Service remains
-// responsible for its native final authority fences. The selected profile is
+// supplies current actor custody for transport rate admission; Service and
+// Invitations retain their respective native final authority fences. Supply
+// only the owners used by selected operations; invitation-only selection needs
+// neither Service nor AdminRate. The selected profile is
 // strict Authorization bearer only, never ambient cookies or browser CSRF.
 // Network policy is copied. SafeRate is required only for selected reads and
 // AdminRate only for selected mutations. Share them across routes/requests.
@@ -42,6 +44,7 @@ type Config struct {
 	Network         identityhttp.NetworkConfig
 	Sessions        *session.SessionService
 	Service         Service
+	Invitations     InvitationReader
 	SafeRate        *identityhttp.SafeRateLimiter
 	AdminRate       *AdminRateLimiter
 	Now             func() time.Time
@@ -50,10 +53,12 @@ type Config struct {
 
 // FeatureConfig opts into exactly the selected operations. Empty selection is
 // invalid; omission from FeatureServices exposes neither routes nor metadata.
-// No invitation/team/browser/active-organization workflow is selected.
+// Invitation reads are independently selectable; no invitation mutations,
+// team/browser/active-organization workflow is selected.
 type FeatureConfig struct {
 	Config                                           Config
 	Create, Get, MemberList, MemberAdd, MemberRemove bool
+	InvitationGet, InvitationListMine                bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -65,18 +70,22 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.InvitationGet && !c.InvitationListMine {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.RemoveMember, c.MemberRemove}} {
+	}{{organization.Create, c.Create}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}} {
 		if !selected.on {
 			continue
 		}
-		h, err := newHandler(c.Config, selected.op, m)
+		constructor := newHandler
+		if selected.op == organization.InvitationGet || selected.op == organization.InvitationListMine {
+			constructor = newInvitationHandler
+		}
+		h, err := constructor(c.Config, selected.op, m)
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}
@@ -84,7 +93,11 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}
-		op.Wire = operationWire(selected.op)
+		if selected.op == organization.InvitationGet || selected.op == organization.InvitationListMine {
+			op.Wire = invitationWire(selected.op)
+		} else {
+			op.Wire = operationWire(selected.op)
+		}
 		if len(operations) == 0 {
 			op.Wire.SecuritySchemes = []identityhttp.WireComponent{{Name: "OrganizationBearer", Definition: []byte(`{"type":"http","scheme":"bearer","bearerFormat":"opaque native session","description":"Exactly one Authorization: Bearer SP token. Ambient cookies never supply authority."}`)}}
 		}
@@ -95,7 +108,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 func selectedMutation(op organization.Operation) bool {
 	return op == organization.Create || op == organization.AddMember || op == organization.RemoveMember
 }
-func nilService(service Service) bool {
+func nilService(service any) bool {
 	if service == nil {
 		return true
 	}
