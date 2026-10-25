@@ -44,6 +44,12 @@ old sessions; surviving-key signin must complete TOTP before original metadata
 recovery and read/logout. The ordinary profile remains separate; this selection
 adds no HTTP route or secondary-factor fallback.
 
+Independently select `HTTPPasskey.SessionDeletion` with that native cookie/TOTP
+owner for the existing HTTP delete/recover workflow; password-proof `Delete`
+remains disabled. After removal, discard the old session, sign in with the
+surviving key and complete TOTP before metadata-only recovery and logout.
+See [the HTTP MFA removal profile](PASSKEY.md#http-resident-key-removal-after-totp).
+
 For a passkey-only backend, explicitly select `Passkey.Standalone`,
 `Passkey.Signup`, `Session.Passkey` and durable PostgreSQL admission. The same
 sealed construction graph runs with no password, OTP or delivery configuration

@@ -5,6 +5,7 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/json"
@@ -22,7 +23,7 @@ import (
 
 // All authority and registration effects use the selected public HTTP graph.
 // Only authenticator signatures and reversible factor withdrawals are controlled.
-func proveReferencePasskeyTOTPHTTPEnrollment(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, client *http.Client, base string, user identity.UserID, first *ecdsa.PrivateKey, firstID, handle []byte, factor mfa.FactorID, issued passkeyTOTPHTTPObservation, discoverable bool, call func(string, map[string]any, []*http.Cookie, string, string, string, ...string) passkeyTOTPHTTPObservation) func() {
+func proveReferencePasskeyTOTPHTTPEnrollment(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, client *http.Client, base string, user identity.UserID, first *ecdsa.PrivateKey, firstID, handle []byte, factor mfa.FactorID, issued passkeyTOTPHTTPObservation, discoverable bool, call func(string, map[string]any, []*http.Cookie, string, string, string, ...string) passkeyTOTPHTTPObservation, after ...func(crypto.Signer, []byte, passkeyhttp.CredentialMetadata, passkeyhttp.CredentialMetadata)) func() {
 	t.Helper()
 	origin, csrf := c.Passkey.Flow.Origin, issued.header.Get("X-CSRF-Token")
 	list := func() []passkeyhttp.CredentialMetadata {
@@ -191,10 +192,18 @@ func proveReferencePasskeyTOTPHTTPEnrollment(t *testing.T, ctx context.Context, 
 	if !retained || !added {
 		t.Fatal("HTTP MFA enrollment replaced original credential metadata")
 	}
+	addedMetadata := *result.Credential
 	retry = complete(origin, csrf)
 	result.Credential = nil
 	if retry.status != 200 || json.Unmarshal(retry.body, &result) != nil || !result.Replayed || result.CommandID != command || result.Credential != nil || len(retry.cookies) != 0 || !reflect.DeepEqual(list(), listed) {
 		t.Fatal("HTTP MFA registration retry repeated projection/effects", retry.status)
+	}
+	if len(after) > 1 {
+		t.Fatal("ambiguous HTTP enrollment successor")
+	}
+	if len(after) == 1 {
+		after[0](second, secondID, original[0], addedMetadata)
+		return nil
 	}
 	// The independently enrolled key must reach the same real challenge-only
 	// primary. Registration cannot manufacture a factor-free signin profile.

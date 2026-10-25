@@ -89,8 +89,10 @@ func proveReferencePasskeyHTTPPrimarySelection(t *testing.T, c reference.StoreCo
 				nativeSelection.TOTP = nil
 				nativeSelection.SessionManagement = nil
 				nativeSelection.SessionEnrollment = nil
+				nativeSelection.SessionDeletion = nil
 				httpSelection.SessionUpdate = false
 				httpSelection.SessionEnrollment = false
+				httpSelection.SessionDeletion = false
 				selected.HTTPMFA = nil // Isolate the signin projection's own native prerequisite.
 			case "wrong-actor":
 				completion.ActorID = "AAAAAAAAAAAAAAAAAAAAAg"
@@ -119,6 +121,7 @@ func proveReferencePasskeyHTTPPrimarySelection(t *testing.T, c reference.StoreCo
 		nativeOnly.TOTP, httpOnly.MFAContinuation = nil, false
 		nativeOnly.SessionManagement, httpOnly.SessionUpdate = nil, false
 		nativeOnly.SessionEnrollment, httpOnly.SessionEnrollment = nil, false
+		nativeOnly.SessionDeletion, httpOnly.SessionDeletion = nil, false
 		httpOnly.Registration = true // The following checks select ordinary registration.
 		c.Passkey, c.HTTPPasskey, c.HTTPMFA = &nativeOnly, &httpOnly, nil
 	}

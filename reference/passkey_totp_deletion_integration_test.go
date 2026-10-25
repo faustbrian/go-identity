@@ -21,22 +21,7 @@ import (
 // letting the original twenty-second positive evidence expire during a wait.
 func referenceRemovalTOTPCompletion(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, c reference.StoreConfiguration, user identity.UserID, factor mfa.FactorID, secret []byte, discoverable bool) removalSessionCompletion {
 	t.Helper()
-	var last int64
-	if err := f.pool.Raw().QueryRow(ctx, `SELECT last_step::bigint FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2`, otpTenant, string(user), string(factor)).Scan(&last); err != nil {
-		t.Fatal("original TOTP replay state absent", err)
-	}
-	if delay := time.Until(time.Unix(last*30, 0).Add(time.Millisecond)); delay > 0 {
-		if delay > 31*time.Second {
-			t.Fatal("original TOTP replay step exceeds selected skew")
-		}
-		timer := time.NewTimer(delay)
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		}
-	}
+	waitReferenceRemovalTOTPStep(t, ctx, f, user, factor)
 	return removalSessionCompletion{discoverable: discoverable, finish: func(primary passkey.SigninResult, browser passkey.DiscoverableSigninRequest, cookie string) removalSessionResult {
 		t.Helper()
 		if primary.Challenge == nil || primary.Challenge.Method != "totp" || primary.Session.Token != (session.Token{}) || primary.CSRF != (session.CSRFToken{}) {
@@ -58,4 +43,24 @@ func referenceRemovalTOTPCompletion(t *testing.T, ctx context.Context, f liveSto
 		}
 		return removalSessionResult{Session: out.Session, CSRF: out.CSRFToken}
 	}}
+}
+
+func waitReferenceRemovalTOTPStep(t *testing.T, ctx context.Context, f liveStores, user identity.UserID, factor mfa.FactorID) {
+	t.Helper()
+	var last int64
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT last_step::bigint FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2`, otpTenant, string(user), string(factor)).Scan(&last); err != nil {
+		t.Fatal("original TOTP replay state absent", err)
+	}
+	if delay := time.Until(time.Unix(last*30, 0).Add(time.Millisecond)); delay > 0 {
+		if delay > 31*time.Second {
+			t.Fatal("original TOTP replay step exceeds selected skew")
+		}
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
 }

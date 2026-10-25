@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Document and exercise opt-in HTTP resident-key removal from completed
+  passkey/TOTP sessions. Require fresh UV and another usable key, invalidate
+  prior sessions, then require surviving-key TOTP before original metadata
+  recovery. Preserve last-key protection and the ordinary passkey profile.
+
 - Document and exercise opt-in HTTP additional-key enrollment from completed
   passkey/TOTP sessions using the existing cookie, fresh-UV and registration
   owners. Keep current factor authority, original intent and metadata-only

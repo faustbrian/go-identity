@@ -5,6 +5,7 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	passkeyhttp "github.com/faustbrian/go-identity/http/passkey"
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/reference"
 	openapi "github.com/faustbrian/go-openapi/v2"
@@ -279,6 +281,12 @@ func proveReferencePasskeyTOTPHTTPS(t *testing.T, ctx context.Context, f liveSto
 		afterLogout = proveReferencePasskeyTOTPHTTPRename(t, ctx, f, c, client, server.URL, user, key, id, credential.UserHandle, factor, issued, document, request)
 	}
 	if c.HTTPPasskey.SessionEnrollment {
+		if c.HTTPPasskey.SessionDeletion {
+			proveReferencePasskeyTOTPHTTPEnrollment(t, ctx, f, c, client, server.URL, user, key, id, credential.UserHandle, factor, issued, discoverable, request, func(second crypto.Signer, secondID []byte, first, added passkeyhttp.CredentialMetadata) {
+				proveReferencePasskeyTOTPHTTPDeletion(t, ctx, f, features, c, handler, user, key, id, credential.UserHandle, second, secondID, first, added, factor, secret, issued, discoverable, request)
+			})
+			return // Removal invalidates the original session; survivor read/logout is proved there.
+		}
 		afterLogout = proveReferencePasskeyTOTPHTTPEnrollment(t, ctx, f, c, client, server.URL, user, key, id, credential.UserHandle, factor, issued, discoverable, request)
 	}
 	proveRegistrationSessionLogout(t, ctx, logoutClient, base, logoutOrigin, issued.cookies, issued.header.Get("X-CSRF-Token"), result.SessionID, f, features)

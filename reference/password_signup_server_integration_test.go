@@ -629,6 +629,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if extensions.passkeyTOTPDeletion {
 			c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie, TOTP: true}
 			c.Passkey.SessionDeletion = &reference.PasskeySessionDeletionConfiguration{Transport: session.CredentialCookie, TOTP: true}
+			if c.HTTPPasskey != nil {
+				c.HTTPPasskey.Registration = false
+				c.HTTPPasskey.SessionEnrollment, c.HTTPPasskey.SessionDeletion = true, true
+			}
 		}
 	}
 	if extensions.mfaOTPEnrollment {
@@ -1191,10 +1195,10 @@ END $$`); err != nil {
 		if c.HTTPPasskey.Update || c.HTTPPasskey.SessionUpdate {
 			wantOperations++
 		}
-		if c.HTTPPasskey.Delete {
+		if c.HTTPPasskey.Delete || c.HTTPPasskey.SessionDeletion {
 			wantOperations++
 		}
-		if seen["identity.passkey.update"] != (c.HTTPPasskey.Update || c.HTTPPasskey.SessionUpdate) || seen["identity.passkey.delete"] != c.HTTPPasskey.Delete {
+		if seen["identity.passkey.update"] != (c.HTTPPasskey.Update || c.HTTPPasskey.SessionUpdate) || seen["identity.passkey.delete"] != (c.HTTPPasskey.Delete || c.HTTPPasskey.SessionDeletion) {
 			t.Fatal("unselected passkey management advertised")
 		}
 	} else {

@@ -165,6 +165,39 @@ session remains usable for read/logout; its subsequent enrollment retry denies.
 The additional-key assertion proves challenge-only MFA admission, not a second
 completed TOTP session or full M16 qualification.
 
+### HTTP resident-key removal after TOTP
+
+Select `HTTPPasskey.SessionDeletion` with native cookie
+`Passkey.SessionDeletion{TOTP:true}`, `Passkey.TOTP`, keyed options, the original
+CSRF keys and shared rates. Password-proof `HTTPPasskey.Delete` is mutually
+exclusive. HTTP additional enrollment is separately selected when needed to
+create the survivor; removal itself requires another independently usable key.
+
+After completed HTTP passkey/TOTP signin, use the same cookie, trusted Origin
+and `X-CSRF-Token` on `POST /v1/passkey/delete`:
+
+1. `phase:"options"`, listed `referenceID`/`expectedVersion` and an original
+   `Idempotency-Key` return action-bound UV options and their command ID.
+2. `phase:"complete"`, unchanged target/version, that ID as `ceremonyID`, fresh
+   UV `response` and a distinct original completion key remove the key. No
+   replacement session, CSRF token or proof is returned. Changed target/version
+   or withdrawn original factor/session authority denies.
+3. The old session and removed authenticator deny. Use the independently
+   selected identified or discoverable signin workflow with the surviving key;
+   its assertion returns only a TOTP challenge. Complete TOTP normally before
+   querying the original removal's metadata.
+4. `phase:"recover"`, original target/version, completion `commandID` and
+   completion key return only its original outcome under the new current
+   session. Invalidated source sessions cannot recover it; neither recovery
+   nor matching retries repeat removal. Last-key removal remains denied.
+
+`TestReferencePasskeyTOTPHTTPKeyRemoval` proves genuine HTTP enrollment, removal,
+invalidated-source/removed-key denial, surviving-key TOTP, original recovery,
+last-key protection and session read/logout across both signin modes and fresh/
+populated upgrades. It waits for the real next acceptable TOTP step before a
+new primary, without resetting replay state or renewing positive evidence.
+No browser UI, another MFA method or full M16 qualification is claimed.
+
 ### HTTP inventory and fresh-UV rename after TOTP
 
 Independently select `HTTPPasskey.Inventory` and `HTTPPasskey.SessionUpdate`
