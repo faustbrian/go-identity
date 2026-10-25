@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fence the original confirmed TOTP enrollment and factor generation for exact
+  native passkey-session label-update options and assertion transactions.
+  Completed-MFA admission remains separate from known-empty profiles; missing,
+  replaced, pending, blocked or foreign authority denies without consuming a
+  code, adopting an epoch or substituting for genuine action-bound UV.
+
 - Expose MFA-owned historical recovery for native passkey continuations.
   Retain original commitment across terminal challenge state and deny corrupt
   or conflicting lineage without fabricating noncommit or renewed credentials.

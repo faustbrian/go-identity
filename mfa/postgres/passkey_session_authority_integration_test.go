@@ -33,6 +33,7 @@ type passkeyFactorInvocation struct {
 	record     session.Session
 	foreign    bool
 	admitted   bool
+	mfa        bool
 }
 
 func (p *passkeyFactorInvocation) Descriptor() kernel.ContributorDescriptor { return p.descriptor }
@@ -54,7 +55,12 @@ func (p *passkeyFactorInvocation) ApplyFeature(ctx context.Context, w kernel.Wor
 		copy := *p
 		owner = &copy
 	}
-	err := RequirePasskeySessionFactors(ctx, w, owner, p.record)
+	var err error
+	if p.mfa {
+		err = RequireMFAPasskeySessionFactors(ctx, w, owner, p.record)
+	} else {
+		err = RequirePasskeySessionFactors(ctx, w, owner, p.record)
+	}
 	p.admitted = err == nil
 	// Always abort after the guard: this unit owns no protocol/session mutation.
 	// The probe verifies earlier writes cannot survive the denied/aborted Work.
@@ -140,7 +146,31 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 	t.Run("MFA-primary", func(t *testing.T) { testPasskeyMFAChallengeFactorAuthority(t, ctx, pool, repo) })
 	t.Run("MFA-continuation-migration", func(t *testing.T) { testPasskeyContinuationMigrationPostgres(t, ctx, pool) })
 	t.Run("MFA-continuation-recovery", func(t *testing.T) { testPasskeyContinuationRecoveryPostgres(t, ctx, pool) })
+	// Selected guard tests may skip MFA-primary, which normally creates this
+	// native table. Install it only when absent; never substitute a factor store.
+	var factorTable *string
+	if err := pool.Raw().QueryRow(ctx, `SELECT to_regclass('identity_mfa.totp_factors')::text`).Scan(&factorTable); err != nil {
+		t.Fatal(err)
+	}
+	if factorTable == nil {
+		if _, err := pool.Raw().Exec(ctx, totpFactorSQL); err != nil {
+			t.Fatal(err)
+		}
+	}
+	factorID, _ := identity.NewCommandID()
+	rawFactorID := mustContinuationCommandBytes(string(factorID))
+	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identity_command_id_claims(command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields) VALUES($1,'tenant-a','identity.mfa.enable',decode(repeat('01',32),'hex'),1,decode('01','hex'))`, rawFactorID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.commands(command_id,tenant_id,purpose) VALUES($1,'tenant-a','identity.mfa.enable')`, rawFactorID); err != nil {
+		t.Fatal(err)
+	}
 	modes := []string{"known-empty", "missing", "enrolled", "stale", "foreign-owner", "foreign-user", "foreign-tenant", "foreign-schema", "foreign-lifecycle", "foreign-record", "foreign-factor-key", "password-record", "revoke-target", "revoke-source", "update-options", "update-assertion", "update-options-lifecycle", "update-assertion-lifecycle", "update-assertion-version", "update-assertion-stale", "update-assertion-enrolled", "update-assertion-schema", "update-assertion-owner"}
+	for _, stage := range []string{"MFA-update-options", "MFA-update-assertion"} {
+		for _, suffix := range []string{"", "-stale", "-enrollment", "-pending", "-empty", "-blocked", "-foreign-factor", "-foreign-user", "-foreign-tenant", "-owner", "-descriptor", "-schema", "-lifecycle", "-version", "-ordinary", "-factor-key", "-otp", "-recovery-code"} {
+			modes = append(modes, stage+suffix)
+		}
+	}
 	for _, stage := range []string{"enroll-assertion-options", "enroll-registration-options", "enroll-register"} {
 		for _, suffix := range []string{"", "-lifecycle", "-version", "-stale", "-enrolled", "-schema", "-owner"} {
 			modes = append(modes, stage+suffix)
@@ -163,6 +193,88 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 			descriptor := kernel.ContributorDescriptor{Owner: "passkey/postgres", ContractID: "identity.passkey", Version: 1}
 			life := kernel.LifecyclePlan{EventType: "session.created.v1", AfterVersion: 1}
 			b := identity.CommandBinding{CommandID: commandID, TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, RecordID: spec.SessionID, PolicyID: "policy", PolicyVersion: 1, CorrelationID: "correlation"}
+			completedMFA := strings.HasPrefix(mode, "MFA-update-")
+			if completedMFA {
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity_mfa.totp_factors(tenant_id,user_id,factor_id,state,enrollment_version,row_version,algorithm,digits,period_seconds,skew_steps,issuer,encrypted_secret,created_command_id,created_purpose,created_at,enrollment_expires_at,confirmed_at) VALUES('tenant-a','user-a',$1,2,1,1,'SHA1',6,30,0,'Example',decode('01','hex'),$2,'identity.mfa.enable',clock_timestamp()-interval '1 minute',clock_timestamp()+interval '4 minutes',clock_timestamp())`, string(factorID), rawFactorID); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if _, err := pool.Raw().Exec(ctx, `DELETE FROM identity_mfa.totp_factors WHERE factor_id=$1`, string(factorID)); err != nil {
+						t.Error(err)
+					}
+					if _, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active'; UPDATE identity_mfa.factor_authorities SET version=1,active_factors=0`); err != nil {
+						t.Error(err)
+					}
+				}()
+				record = completedPasskeyFactorSession(t, string(factorID))
+				spec, _ = record.Bindings()
+				op.OperationID, op.SchemaID = "identity.passkey.update", "identity.passkey.update.options-v1"
+				life = kernel.LifecyclePlan{EventType: "passkey.reauthentication.started.v1", AfterVersion: 1}
+				b.RecordID = "original-ceremony"
+				if strings.HasPrefix(mode, "MFA-update-assertion") {
+					op.SchemaID = "identity.passkey.update.assertion-v1"
+					life = kernel.LifecyclePlan{EventType: "identity.passkey.rename_credential", BeforeVersion: 4, AfterVersion: 5}
+					b.RecordID = "another-passkey"
+				}
+				if _, err := pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET active_factors=1; UPDATE identity.users SET status='active'; UPDATE identity_mfa.totp_factors SET state=2,confirmed_at=created_at,enrollment_version=1`); err != nil {
+					t.Fatal(err)
+				}
+				switch {
+				case strings.HasSuffix(mode, "-ordinary"):
+					record = passkeyFactorSession(t)
+				case strings.HasSuffix(mode, "-factor-key"), strings.HasSuffix(mode, "-otp"), strings.HasSuffix(mode, "-recovery-code"):
+					projection, _ := record.Bindings()
+					metadata, _ := record.MFAAuthentication().Bindings()
+					if strings.HasSuffix(mode, "-factor-key") {
+						vector, _ := projection.Authority.Bindings()
+						vector.Factor.Binding.ScopeKey = "foreign-factor"
+						projection.Authority, err = session.NewAuthoritySnapshot(vector)
+					} else if strings.HasSuffix(mode, "-otp") {
+						metadata.Method = "otp"
+					} else {
+						metadata.Method, metadata.RecoverySetID, metadata.RecoverySetVersion = "recovery-code", "BwcHBwcHBwcHBwcHBwcHBw", 1
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					factor, err := session.NewMFAAuthentication(metadata)
+					if err != nil {
+						t.Fatal(err)
+					}
+					record, err = session.NewSessionWithPasskeyMFA(projection, factor)
+				case strings.HasSuffix(mode, "-descriptor"):
+					descriptor.Version = 2
+				case strings.HasSuffix(mode, "-stale"):
+					_, err = pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=2`)
+				case strings.HasSuffix(mode, "-enrollment"):
+					_, err = pool.Raw().Exec(ctx, `UPDATE identity_mfa.totp_factors SET enrollment_version=2`)
+				case strings.HasSuffix(mode, "-pending"):
+					_, err = pool.Raw().Exec(ctx, `UPDATE identity_mfa.totp_factors SET state=1,confirmed_at=NULL`)
+				case strings.HasSuffix(mode, "-empty"):
+					_, err = pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET active_factors=0`)
+				case strings.HasSuffix(mode, "-blocked"):
+					_, err = pool.Raw().Exec(ctx, `UPDATE identity.users SET status='banned'`)
+				case strings.HasSuffix(mode, "-foreign-factor"):
+					other, _ := identity.NewCommandID()
+					record = completedPasskeyFactorSession(t, string(other))
+				case strings.HasSuffix(mode, "-foreign-user"):
+					b.UserID, b.ActorID = "other-user", "other-user"
+				case strings.HasSuffix(mode, "-foreign-tenant"):
+					b.TenantID = "other-tenant"
+				case strings.HasSuffix(mode, "-schema"):
+					op.SchemaID = "identity.passkey.update.native-v1"
+				case strings.HasSuffix(mode, "-lifecycle"):
+					life.EventType = "session.created.v1"
+				case strings.HasSuffix(mode, "-version"):
+					life.BeforeVersion, life.AfterVersion = 1, 2
+					if strings.HasPrefix(mode, "MFA-update-assertion") {
+						life.BeforeVersion, life.AfterVersion = 0, 1
+					}
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 			if strings.HasPrefix(mode, "update-options") {
 				op.OperationID, op.SchemaID = "identity.passkey.update", "identity.passkey.update.options-v1"
 				life = kernel.LifecyclePlan{EventType: "passkey.reauthentication.started.v1", AfterVersion: 1}
@@ -312,7 +424,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 				op.SchemaID = "identity.passkey.update.native-v1"
 			}
 			readErr := ReadPasskeySessionFactors(ctx, pool, record, time.Second)
-			readDenies := mode == "missing" || mode == "enrolled" || mode == "stale" || mode == "foreign-factor-key" || mode == "password-record" || mode == "update-assertion-stale" || mode == "update-assertion-enrolled" || (enrollment || deletion) && (strings.HasSuffix(mode, "-stale") || strings.HasSuffix(mode, "-enrolled"))
+			readDenies := completedMFA || mode == "missing" || mode == "enrolled" || mode == "stale" || mode == "foreign-factor-key" || mode == "password-record" || mode == "update-assertion-stale" || mode == "update-assertion-enrolled" || (enrollment || deletion) && (strings.HasSuffix(mode, "-stale") || strings.HasSuffix(mode, "-enrolled"))
 			if (readErr != nil) != readDenies {
 				t.Fatal("original primary factor read", readErr)
 			}
@@ -321,7 +433,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 			if err != nil {
 				t.Fatal(err)
 			}
-			feature := &passkeyFactorInvocation{op: op, descriptor: descriptor, record: record, foreign: mode == "foreign-owner" || mode == "update-assertion-owner" || (enrollment || deletion) && strings.HasSuffix(mode, "-owner")}
+			feature := &passkeyFactorInvocation{op: op, descriptor: descriptor, record: record, mfa: completedMFA, foreign: mode == "foreign-owner" || mode == "update-assertion-owner" || (enrollment || deletion || completedMFA) && strings.HasSuffix(mode, "-owner")}
 			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, auditing, lifecycle, feature})
 			if err != nil {
 				t.Fatal(err)
@@ -357,7 +469,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-a',1,0,decod
 				t.Fatal("test seam must abort after guard")
 			}
 			result, _ := coordinator.Abort(work, applyErr)
-			want := mode == "known-empty" || mode == "revoke-target" || mode == "revoke-source" || mode == "update-options" || mode == "update-assertion" || mode == "enroll-assertion-options" || mode == "enroll-registration-options" || mode == "enroll-register" || mode == "delete-options" || mode == "delete-assertion"
+			want := mode == "MFA-update-options" || mode == "MFA-update-assertion" || mode == "known-empty" || mode == "revoke-target" || mode == "revoke-source" || mode == "update-options" || mode == "update-assertion" || mode == "enroll-assertion-options" || mode == "enroll-registration-options" || mode == "enroll-register" || mode == "delete-options" || mode == "delete-assertion"
 			if feature.admitted != want {
 				t.Fatalf("factor guard admitted=%v want=%v", feature.admitted, want)
 			}

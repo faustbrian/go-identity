@@ -100,13 +100,13 @@ func testPasskeyContinuationRecoveryPostgres(t *testing.T, ctx context.Context, 
 			case "wrong-child":
 				statement = `UPDATE identity_mfa.continuations SET continuation_id='AgICAgICAgICAgICAgICAg'`
 			case "wrong-user":
-				if _, err := tx.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES('tenant-a','user-b','active',1);
+				if _, err := tx.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES('tenant-a','recovery-foreign-user','active',1);
 INSERT INTO identity.identity_command_id_claims(command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields) VALUES(decode(repeat('02',16),'hex'),'tenant-a','identity.password.signup',decode(repeat('02',32),'hex'),1,decode('01','hex'));
 INSERT INTO identity.commands(command_id,tenant_id,purpose) VALUES(decode(repeat('02',16),'hex'),'tenant-a','identity.password.signup');
-INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','user-b',1,0,decode(repeat('02',16),'hex'),'identity.password.signup')`); err != nil {
+INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','recovery-foreign-user',1,0,decode(repeat('02',16),'hex'),'identity.password.signup')`); err != nil {
 					t.Fatal(err)
 				}
-				statement = `UPDATE identity_mfa.continuations SET user_id='user-b'`
+				statement = `UPDATE identity_mfa.continuations SET user_id='recovery-foreign-user'`
 			case "wrong-digest":
 				statement = `UPDATE identity_mfa.continuations SET scope_digest=decode(repeat('04',32),'hex')`
 			case "corrupt-wire":

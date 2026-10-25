@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose original completed-passkey/TOTP session authority for protected native
+  credential management without adopting a new factor generation or weakening
+  the ordinary known-empty profile. Native callers retain live factor, mapping,
+  session and fresh action-bound assertion obligations.
+
 - Consume an original pending passkey browser in its protected TOTP/session
   completion transaction. Preserve distinct original/MFA actions and policies,
   exact command custody and the existing pre-auth reservation state machine.

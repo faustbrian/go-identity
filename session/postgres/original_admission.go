@@ -72,3 +72,19 @@ func OriginalMFAPasswordSessionAdmission(profile IdentifierAdmissionConfig, orig
 func OriginalPasskeySessionAdmission(profile PasskeyAdmissionConfig, original session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 	return passkeySessionAdmission(profile, original, binding)
 }
+
+// OriginalMFAPasskeySessionAdmission derives the exact original directory,
+// passkey credential and authorization expectations of a completed passkey/TOTP
+// session. It retains primary-command linkage and original factor authority;
+// ordinary passkey, password and organization profiles deny. An action's target
+// never replaces the session's authenticating credential. This explicit profile
+// does not broaden OriginalPasskeySessionAdmission.
+//
+// No IO, authentication or freshness renewal occurs. Callers must authenticate
+// possession, fence the original factor ID/enrollment/generation and RP mapping,
+// require the same session/family in protected Work, and recheck time after waits.
+// Mutations still need a genuine fresh action-bound WebAuthn assertion; these
+// expectations grant no permission. Immutable reads are concurrency-safe.
+func OriginalMFAPasskeySessionAdmission(profile PasskeyAdmissionConfig, original session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	return passkeyMFASessionAdmission(profile, original, binding)
+}
