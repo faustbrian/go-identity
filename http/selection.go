@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -608,7 +609,10 @@ type catalogOperation struct {
 	ErrorDigest   string       `json:"error_digest"`
 }
 
-func readCatalog() map[string]catalogOperation {
+// Decode the immutable embedded build input once across all constructors.
+// Callers only read this private snapshot; record clones its exported Owners.
+// OnceValue also preserves fail-closed panics on every call if decoding fails.
+var readCatalog = sync.OnceValue(func() map[string]catalogOperation {
 	var data struct {
 		Operations []catalogOperation `json:"operations"`
 	}
@@ -622,7 +626,7 @@ func readCatalog() map[string]catalogOperation {
 		result[op.ID] = op
 	}
 	return result
-}
+})
 
 func (row catalogOperation) record() OperationRecord {
 	exposure := ExposureBoth

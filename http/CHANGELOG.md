@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Decode the immutable embedded operation catalog once across repeated and
+  concurrent construction, reducing startup allocation without changing
+  canonical validation, selected routes or detached exported metadata.
+
 - Permit an explicitly selected strict-bearer policy for organization creation,
   member admission and member removal. Existing cookie-CSRF requirements and
   all other organization operations are unchanged. Feature handlers must still
