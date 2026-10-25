@@ -621,6 +621,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		if extensions.passkeyTOTPEnrollment {
 			c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie, TOTP: true}
+			if c.HTTPPasskey != nil {
+				c.HTTPPasskey.Registration = false
+				c.HTTPPasskey.SessionEnrollment = true
+			}
 		}
 		if extensions.passkeyTOTPDeletion {
 			c.Passkey.SessionEnrollment = &reference.PasskeySessionEnrollmentConfiguration{Transport: session.CredentialCookie, TOTP: true}

@@ -278,6 +278,9 @@ func proveReferencePasskeyTOTPHTTPS(t *testing.T, ctx context.Context, f liveSto
 	if c.HTTPPasskey.SessionUpdate {
 		afterLogout = proveReferencePasskeyTOTPHTTPRename(t, ctx, f, c, client, server.URL, user, key, id, credential.UserHandle, factor, issued, document, request)
 	}
+	if c.HTTPPasskey.SessionEnrollment {
+		afterLogout = proveReferencePasskeyTOTPHTTPEnrollment(t, ctx, f, c, client, server.URL, user, key, id, credential.UserHandle, factor, issued, discoverable, request)
+	}
 	proveRegistrationSessionLogout(t, ctx, logoutClient, base, logoutOrigin, issued.cookies, issued.header.Get("X-CSRF-Token"), result.SessionID, f, features)
 	if afterLogout != nil {
 		afterLogout()

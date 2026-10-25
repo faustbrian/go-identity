@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Document and exercise opt-in HTTP additional-key enrollment from completed
+  passkey/TOTP sessions using the existing cookie, fresh-UV and registration
+  owners. Keep current factor authority, original intent and metadata-only
+  retries; a newly enrolled key still requires TOTP at signin.
+
 - Document and exercise the opt-in HTTP safe-inventory and fresh-UV rename
   profile after genuine passkey/TOTP signin, using the existing native cookie
   session, current-factor and action-bound management owners. Preserve original

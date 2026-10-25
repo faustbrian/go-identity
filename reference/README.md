@@ -30,6 +30,13 @@ factor/session and assertion expiry, and returns only metadata on retries.
 The new key still requires independent MFA at signin. This native selection
 does not enable HTTP enrollment or MFA key removal.
 
+For HTTP enrollment, independently select `HTTPPasskey.SessionEnrollment` with
+that native cookie/TOTP selection and safe inventory. Keep password-proof
+`HTTPPasskey.Registration` disabled: the shared registration routes select the
+three-phase current-session UV workflow explicitly. Original CSRF/Origin,
+factor authority and retry custody remain mandatory. See the
+[HTTP enrollment profile](PASSKEY.md#http-additional-key-enrollment-after-totp).
+
 Independently set `Passkey.SessionDeletion.TOTP` with `Passkey.TOTP` and
 `Passkey.KeyedOptions` for resident-key removal from a completed MFA session.
 Fresh action-bound UV and another usable key are mandatory. Removal invalidates

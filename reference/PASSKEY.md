@@ -130,6 +130,41 @@ browser, expiry, risk and protected one-use/session effects remain native-owned.
 Neither this profile nor its HTTP selection enables trusted devices, recovery
 codes, standalone MFA or a browser UI.
 
+### HTTP additional-key enrollment after TOTP
+
+Independently select `HTTPPasskey.SessionEnrollment` and safe inventory with
+native cookie `Passkey.SessionEnrollment{TOTP:true}`, `Passkey.TOTP`, keyed
+options, original graph CSRF keys and shared rates. The password-proof
+`HTTPPasskey.Registration` selection is mutually exclusive. Native selection
+alone exposes no HTTP registration workflow.
+
+After actual HTTP passkey/TOTP completion, retain the session cookie and
+`X-CSRF-Token`. Send the trusted Origin and both on each registration request:
+
+1. `POST /v1/passkey/register-options` with `mode:"session"`,
+   `phase:"assertion"`, the intended `label` and an original `Idempotency-Key`
+   returns genuine current-key UV options and their command/ceremony ID.
+2. The same route with `phase:"registration"`, unchanged label, that command
+   as `ceremonyID`, fresh UV `response` and a distinct original key returns
+   registration options for the additional authenticator.
+3. `POST /v1/passkey/register-verify` with `mode:"session"`, unchanged label,
+   a new `commandID`, the registration `ceremonyID` and authentic registration
+   `response` commits the second key. This phase uses no `Idempotency-Key`.
+   Safe inventory now lists both keys. No phase issues a replacement session.
+
+Exact retries return original metadata without fresh options or a credential
+projection. Changed intent conflicts; a withdrawn original factor/session denies,
+including withdrawal between registration options and completion. The additional
+key still reaches only a TOTP challenge at signin. This enrollment selection
+does not enable removal, recovery-code or trusted-device fallback.
+
+`TestReferencePasskeyTOTPHTTPAdditionalKeyEnrollment` exercises actual HTTPS,
+OpenAPI request/response validation, genuine registration and confirmed factor,
+both signin modes and fresh/populated PostgreSQL upgrades. The original completed
+session remains usable for read/logout; its subsequent enrollment retry denies.
+The additional-key assertion proves challenge-only MFA admission, not a second
+completed TOTP session or full M16 qualification.
+
 ### HTTP inventory and fresh-UV rename after TOTP
 
 Independently select `HTTPPasskey.Inventory` and `HTTPPasskey.SessionUpdate`
