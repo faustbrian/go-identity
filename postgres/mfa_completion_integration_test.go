@@ -22,6 +22,11 @@ type mfaCompletionAtomicPhase struct {
 	failApply, failCommit bool
 	retained              Work
 	plan                  CommandPlan
+	credential            *CredentialAdmission
+	ignoreCredentialError bool
+	finalCredentialDenial bool
+	openCredentialCursor  bool
+	sawCredentialError    bool
 }
 
 // Transaction oracle only: the production MFA owner must perform real locked
@@ -49,6 +54,11 @@ func (p *sqlMFATOTPAttempt) RecordMFATOTPAttemptDenial(ctx context.Context, w MF
 	}
 	if _, err := w.DatabaseTime(ctx); err != nil {
 		return 0, err
+	}
+	if p.credential != nil {
+		if _, err := w.RequirePasskeyCredential(ctx, p, *p.credential); err != nil {
+			return 0, err
+		}
 	}
 	if _, err := w.Exec(ctx, `INSERT INTO public.identity_test_mfa_attempts(command_id,fingerprint) VALUES($1,$2)`, string(b.Command.CommandID), b.Fingerprint[:]); err != nil {
 		return 0, err
@@ -130,6 +140,24 @@ func (p *mfaCompletionAtomicPhase) ApplyFeature(ctx context.Context, w Work, c i
 	if n != 1 {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
+	if p.credential != nil {
+		var rows *WorkRows
+		if p.openCredentialCursor {
+			rows, err = w.Query(ctx, "SELECT 1")
+			if err != nil {
+				return identity.FeatureReceipt{}, err
+			}
+		}
+		_, err := w.RequireMFAPasskeyCredential(ctx, p, *p.credential)
+		p.sawCredentialError = err != nil
+		if rows != nil {
+			// Closing the caller's cursor must not erase a rejected guard.
+			rows.Close()
+		}
+		if err != nil && !p.ignoreCredentialError {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	if p.failApply {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
@@ -145,6 +173,16 @@ func (p *mfaCompletionAtomicPhase) CheckFeatureCommit(ctx context.Context, w Wor
 	if _, _, err := w.MFACompletionConsumption(p); err == nil {
 		return invalidWork()
 	}
+	if p.credential != nil {
+		if p.finalCredentialDenial {
+			if _, err := w.Exec(ctx, `UPDATE identity.credential_references SET enabled=false WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3`, string(p.credential.Credential.TenantID), string(p.credential.Credential.UserID), string(p.credential.Credential.ID)); err != nil {
+				return err
+			}
+		}
+		if _, err := w.RequireMFAPasskeyCredential(ctx, p, *p.credential); err != nil {
+			return err
+		}
+	}
 	if p.failCommit {
 		return identity.ForbiddenError{}
 	}
@@ -155,6 +193,24 @@ func (*mfaCompletionAtomicPhase) RecoverParticipant(ctx context.Context, w Recov
 }
 
 func testMFACompletion(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository) {
+	// Focused selection can omit the earlier optional credential-history
+	// subtests. Install those actual owned suffixes only in that isolated case;
+	// a complete suite has already installed them through its migration runner.
+	var credentialHistory bool
+	if err := pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_attribute WHERE attrelid='identity.users'::regclass AND attname='authority_version' AND NOT attisdropped)`).Scan(&credentialHistory); err != nil {
+		t.Fatal(err)
+	}
+	if !credentialHistory {
+		history, err := (CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}).Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range history[len(history)-2:] {
+			if _, err := pool.Raw().Exec(ctx, step.UpSQL()); err != nil {
+				t.Fatal("owned current-credential fixture history", err)
+			}
+		}
+	}
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.identity_test_audits(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);
 CREATE TABLE public.identity_test_mfa_completion(command_id text PRIMARY KEY,tenant_id text NOT NULL,continuation_id text NOT NULL UNIQUE,scope_digest bytea NOT NULL);
@@ -165,10 +221,10 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.otp_reservation_fixture(tenant_id text PRIMARY KEY,challenge_id text NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,attempt_id text,generation numeric,version numeric NOT NULL,expiry timestamptz NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied", "prepared-otp-wrong", "prepared-totp", "prepared-totp-denied", "counted-denied", "counted-unchanged", "counted-error", "counted-panic", "counted-zero", "counted-rows", "counted-audit-failure"} {
+	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied", "prepared-otp-wrong", "prepared-totp", "prepared-totp-denied", "counted-denied", "counted-unchanged", "counted-error", "counted-panic", "counted-zero", "counted-rows", "counted-audit-failure", "passkey-current", "passkey-disabled", "passkey-foreign", "passkey-stale", "passkey-ignored", "passkey-open-ignored", "passkey-final-disabled", "counted-passkey-current", "counted-passkey-disabled", "counted-passkey-foreign"} {
 		t.Run(mode, func(t *testing.T) {
 			preparedOTP := strings.HasPrefix(mode, "prepared-otp")
-			preparedTOTP := mode == "prepared-totp" || mode == "prepared-totp-denied"
+			preparedTOTP := mode == "prepared-totp" || mode == "prepared-totp-denied" || strings.HasPrefix(mode, "passkey-")
 			prepared := preparedOTP || preparedTOTP
 			counted := strings.HasPrefix(mode, "counted-")
 			method := "totp-verify"
@@ -202,6 +258,26 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 				command = codeCodecCommand(t, s, code)
 			}
 			native := &mfaCompletionAtomicPhase{mfaCompletionValidationParticipant: mfaCompletionValidationParticipant{magicLinkPreparationParticipant: magicLinkPreparationParticipant{outputPreparationParticipant: outputPreparationParticipant{scopeFeatureParticipant{operations: []identity.FeatureOperation{op}}}, expected: command, proof: *p.Capability}, completion: *p.MFACompletion}, operation: op, failApply: mode == "apply-denied", failCommit: mode == "commit-denied"}
+			if strings.Contains(mode, "passkey-") {
+				for _, user := range []string{string(p.MFACompletion.UserID), "other-user"} {
+					if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version,authority_version,identifier_version,credential_version) VALUES($1,$2,'active',1,1,1,1)`, string(b.TenantID), user); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES($1,$2,'passkey-a',2,'passkey',1,$3)`, string(b.TenantID), user, !strings.HasSuffix(mode, "disabled") && mode != "passkey-ignored" || mode == "passkey-final-disabled"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				native.credential = &CredentialAdmission{Credential: identity.CredentialRef{ID: "passkey-a", TenantID: b.TenantID, UserID: p.MFACompletion.UserID, Kind: identity.CredentialPasskey, Owner: "passkey", Version: 1}, UserAuthorityVersion: 1, IdentifierAuthorityVersion: 1, CredentialAuthorityVersion: 1}
+				if strings.HasSuffix(mode, "foreign") {
+					native.credential.Credential.UserID = "other-user"
+				}
+				if mode == "passkey-stale" {
+					native.credential.CredentialAuthorityVersion++
+				}
+				native.ignoreCredentialError = mode == "passkey-ignored" || mode == "passkey-open-ignored"
+				native.openCredentialCursor = mode == "passkey-open-ignored"
+				native.finalCredentialDenial = mode == "passkey-final-disabled"
+			}
 			if mode == "prepared-otp-denied" || mode == "prepared-totp-denied" {
 				native.failCommit = true
 			}
@@ -271,7 +347,7 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 				if err == nil || state != "issued" || effects != 0 || events != 0 || attempt.calls.Load() != 1 {
 					t.Fatal("counted attempt granted completion or discarded error", err)
 				}
-				if mode == "counted-denied" {
+				if mode == "counted-denied" || mode == "counted-passkey-current" {
 					if result.Outcome != identity.CommitOutcomeNotCommitted || charges != 1 || audits != 1 {
 						t.Fatal("counted denial not atomic", charges, audits, err)
 					}
@@ -301,12 +377,15 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 			if preparedTOTP {
 				native.plan = p
 				result, err := c.ExecutePreparedFeature(ctx, command, p)
+				if native.openCredentialCursor && !native.sawCredentialError {
+					t.Fatal("outstanding cursor did not reject the credential guard")
+				}
 				var state string
 				var effects, audits, events int
 				if e := pool.Raw().QueryRow(ctx, `SELECT state,(SELECT count(*) FROM public.identity_test_mfa_completion WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$2) FROM identity.capability_recovery_fixture WHERE capability_id=$1`, p.Capability.CapabilityID, string(b.CommandID)).Scan(&state, &effects, &audits, &events); e != nil {
 					t.Fatal(e)
 				}
-				if mode == "prepared-totp" {
+				if mode == "prepared-totp" || mode == "passkey-current" {
 					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || state != "finalized" || effects != 1 || audits != 1 || events != 1 {
 						t.Fatal("prepared TOTP completion not atomic", state, effects, audits, events, err)
 					}
@@ -322,6 +401,11 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 					}
 				} else if err == nil || state != "released" || effects != 0 || audits != 1 || events != 0 {
 					t.Fatal("prepared TOTP late denial retained effects", state, effects, audits, events, err)
+				}
+				if native.credential != nil {
+					if _, err := native.retained.RequireMFAPasskeyCredential(ctx, native, *native.credential); err == nil {
+						t.Fatal("returned completion retained selected credential permission")
+					}
 				}
 				return
 			}

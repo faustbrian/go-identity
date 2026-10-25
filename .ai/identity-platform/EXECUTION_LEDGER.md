@@ -1,5 +1,105 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 10:01 UTC: organization native keyed Update is delivered at
+2cbf261a87d6f67315e5522ae66972d6371d30a3 exact origin/main, Required40182027661
+SUCCESS. Complete ten-path organization_update_native_final APPROVE covers
+actual PostgreSQL owner/admin success, authorization/version/intent failures,
+restart/retry, mapped-only and lost-COMMIT recovery and concurrent one-winner
+behavior (selected SQL1.414s, contention/race6.380s, unit0.157s, tagged vet and
+module verification). HTTP Update/schema and Reference remain primary-owned.
+Public native passkey68e1b64 authenticates and matches all14 delivered files.
+
+Kernel anonymous passkey/TOTP exact-subject eligibility guard has independent
+five-path final APPROVE, with no actions. Initial review found ignored open-cursor
+rejection left Work usable. Actual SQL/race RED94729 committed child/effects
+after the error; routing delegated failures through Work.fail produces rollback.
+Final37828 ten selected SQL/race cases pass2.647s, module tests5.785s,
+tagged vet exit0, module verification complete and selected secrets clean.
+Main delivery follows. No new authentication, recipient or session is inferred.
+Primary retains the heavy token; no worker runs/services remain active.
+
+2026-10-25 09:36 UTC: native challenge-only passkey/TOTP consumer delivered
+go-passkey68e1b64262f1cb5f4d25e369dd1e7f32b917f17d exact origin/main,
+Required40180955920 SUCCESS. Complete14-path independent final review
+passkey_mfa_native_final APPROVE at manifestc6d26425c747bcfa4696b53fd20ccfe4ae2fa74dfc723b644ef1299a02ae0e6c.
+Reviewer F1 found selected challenge bypassed configured verified-user Allow:
+actual6caseRED19761 committed despite deny/error/wrongrevision. Shared authorize
+helper fixes ordinary and selected paths; final12415 actual selected consumer
+cohort19.055s and7548 F1/F2 race29.579s pass. F2 now exercises public original
+primary reader with genuine issued child, substituted valid flow and changed
+factor/policy. Module unit91263 passes0.256s; tagged vet0, scan clean; no affected
+code/imported-package vulnerabilities, six uncalled required-module advisories.
+All worker PG/scanner scratch removed. Public download/byte match still follows;
+no genuine TOTP enrollment/completion/session/read/logout or fullM16 claimed.
+
+Organization root Update request prerequisite c0f3cea is exact main,
+Required40180631551 SUCCESS, independent4path organization_update_contract_final
+APPROVE. Root tests0.121s, bounded validator fuzz300910exec/10.323s, vet/modverify
+pass; missingAPI and removed-version-guard REDs retained. Public
+v0.0.0-20261025092558-c0f3cea82085 authenticates/matches all4files. Primary has
+repinned native; worker owns active finite Update implementation and heavy token.
+No primary Go/service runs while that bounded cohort runs.
+
+Primary session support now implements explicit passkey+TOTP read/revoke selection,
+independent mapping/factor ports and20s earliest-evidence bounds. Focused unit
+API RED20b3e7/25de0b -> GREEN0.247s/0.252s. Forward record constraint and actual
+populated SQL projection oracle35847 pass0.884s with fsync enabled: original rows
+unchanged, old schema rejects new profile, closed completed MFA profiles and
+corruptions checked. Owned PG stopped/removed. New real-primary session-reader
+component test is written but not run; mapping remains deliberate port seam.
+Same-Work passkey TOTP completion effect and genuine factor/session consumer
+remain primary-owned next, with final review/public delivery after their proof.
+
+Primary session continuation: selected completed passkey+TOTP records must retain
+both original RP/passkey authority and the exact currently confirmed TOTP
+enrollment/generation; no password or known-empty-factor fallback. New explicit
+native read/revoke/completion composition reuses existing credential/directory/
+authorization/session/family owners and same-Work recorded TOTP custody. Positive
+authority starts before first lookup and expires within20s without renewal.
+First focused assertions cover exact factor/key projections, disjoint ordinary
+readers, unchanged primary/time/remember and lease bounds; then actual SQL
+issuance/read/revoke and populated forward migration, followed by the genuine
+native factor/session consumer. No projected fixture alone closes acceptance.
+Primary owns session/postgres code/tests/migration/docs and integration pins;
+passkey worker owns its frozen native candidate, organization owns its assigned
+Update paths. Heavy token is currently passkey worker's; primary codes tests
+without launching concurrent Go/services.
+
+2026-10-25 09:13 UTC: recovery611c294 is exact remote main and
+Required40179612782 SUCCESS (changed-source structural/secrets lane, not full
+runtime qualification). Public six-file byte comparison passes. Native worker
+owns only existing signin_mfa_phase.go plus bounded recovery integration test,
+with heavy token; it will return the token after affected consumer checks.
+
+Next organization lane accepted after one read-only readiness pass: bounded
+keyed metadata Update, no hard delete/invitation expansion. Consumed actual
+metadata root/native authority ec23514 (root8811f018), kernel422b9fa9452f,
+sessione9528953435b and risk0e56be2725e5 are implemented/proven. Worker
+organization_http_native owns root operation_requests.go/operation_requests_test.go,
+README.md/CHANGELOG.md, and native postgres/operation_update.go, service.go,
+operation_service_test.go, operation_codec_test.go, operation_consumer_integration_test.go,
+README.md/CHANGELOG.md. Add focused operation_update*_test.go only as needed.
+Finite acceptance: real authorized Name/Slug update at exact version; original
+key retry/restart; changed intent/stale/no-op/slug conflict/member denial;
+withdrawn current authority; mapped-only/lost-COMMIT recovery never repeats an
+effect. Preserve existing Create/Add/Remove behavior and exact privileged risk.
+Primary exclusively owns manifests/pins/Git/HTTP rate/schema/Reference and
+integration. No worker Go/services until heavy token, no children or speculative
+upstream owner. Root public boundary must be reviewed/delivered before native
+consumes it; coding may overlap but no sibling replaces or forged dependency.
+
+2026-10-25 09:13 UTC: recovery API611c29443a545798d5a957736cfe300fcb3e289c
+is exact origin/main; push Required40179612782 pending. Public MFA/postgres
+v0.0.0-20261025091105-611c29443a54 authenticates and matches all six changed
+files (sum h1:/RS2XdGjUS2m2S3nIhoaJc+SxYvknw64FaiwzljyD7M=).
+Primary repins passkey/postgres. Existing passkey_mfa_native may now own only
+signin_mfa.go/recovery helper and its focused native recovery tests, within
+the retained14-path candidate: replace cross-owner SQL with public owning API,
+preserve all current assertion/challenge behavior and prove mismatched retained
+scope stays Unknown. Other source frozen; no Git/manifests/shared contracts or
+services/Go without primary's heavy token. Exact upstream and public consumer
+proof above permit this adoption; final native review/main CI remain required.
+
 2026-10-25 09:10 UTC: MFA-owned passkey continuation recovery exact-six-path
 final independent review passkey_continuation_recovery_final APPROVE, no actions.
 Accepted stored-user coverage action is resolved by a schema-valid same-tenant

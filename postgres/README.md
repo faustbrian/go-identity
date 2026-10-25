@@ -1,5 +1,16 @@
 # Identity PostgreSQL
 
+## Passkey eligibility during anonymous TOTP completion
+
+`Work.RequireMFAPasskeyCredential` fences the exact passkey reference and user
+epochs for the subject frozen in the protected TOTP completion plan. The child
+must already be consumed in that Work; the same guard remains available in its
+original final check. `MFATOTPAttemptWork.RequirePasskeyCredential` supplies
+the matching current-credential prerequisite before counted comparison/denial.
+Both retain the original anonymous command, poison live Work on denial and use
+existing credential locks/time checks. Neither authenticates an assertion or
+factor, authorizes an operation, supplies an email recipient or issues a session.
+
 ## Recovery when an original request precedes its journal
 
 An opted-in native `RequestKeyRecoveryContributor` authenticates its original

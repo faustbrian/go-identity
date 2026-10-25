@@ -1,10 +1,20 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 09:10 UTC
+## Current TL;DR — 2026-10-25 10:01 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
   their required final qualification; other capability milestones remain open.
+- **Latest delivered:** passkey challenge-only native68e1b64 and organization
+  keyed metadata Update2cbf261 are independently reviewed, pushed to main and
+  Required-CI green. All14 native passkey files match the authenticated public
+  module. Neither closes a complete milestone.
+- **Current consumer gap:** passkey -> TOTP -> session/read/logout is unfinished.
+  Native session selection, populated record migration and completion effect
+  are local. The kernel exact-subject credential guard's ignored-cursor defect
+  reproduces before the fix; ten selected real PostgreSQL/race cases pass after
+  it. Independent complete final review approves; module tests, tagged vet,
+  module verification and selected secrets pass. Main delivery follows.
 - **Native Ed25519 delivered:** `go-passkey@0b8b646` is independently approved,
   pushed to main and Required-CI green (`40094300216`). Ed-only and either mixed
   order support genuine signup/session/discovery, current-key UV second-key
@@ -53,6 +63,9 @@
   including wrong/changed authority, rollback and one-child race. Native source
   still needs MFA-owned historical recovery API adoption and final review/main
   delivery. The retained-factor fixture does not prove genuine TOTP enrollment.
+  Native challenge-only profile68e1b64 is now independently reviewed, pushed to
+  main and Required40180955920 green. Actual deny/error/wrong-policy-revision
+  guards and public primary-reader substitution denials pass, including race.
   Final TOTP session/read/logout remains unproven. No early session is claimed.
 - **Current code delta:** the kernel's original challenge/child declaration,
   protected-owner custody and historical-query support pass their tests and
@@ -73,8 +86,14 @@
   stay open.
 - **Recovery update:** MFA-owned historical recovery now passes sixteen real
   PostgreSQL lifecycle/conflict cases and independent final review with no
-  remaining actions. Main delivery and native consumer adoption remain pending;
-  this does not prove final TOTP/session behavior or close another milestone.
+  remaining actions. Main611c294 is pushed with Required40179612782 green;
+  authenticated public bytes match. Native adoption is delivered in68e1b64.
+  This does not prove final TOTP/session behavior or close another milestone.
+- **Session continuation:** native read/revoke selection and forward record
+  migration are being implemented. Focused owner/lease tests and the populated
+  PostgreSQL record oracle pass; actual completed passkey/TOTP session issuance
+  and the complete consumer remain unfinished. Organization keyed Update is
+  active in parallel against reviewed/main/CI-green rootc0f3cea.
 - **Qualification:** ordinary changed-source Required CI is green. Scheduled
   full-history secret checking failed (`40176478239`); all 18 finding revisions
   predate this run's `0a39cb5` baseline. That remains an unresolved broader

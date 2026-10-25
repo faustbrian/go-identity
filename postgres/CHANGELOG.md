@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence original passkey credentials for the exact protected anonymous TOTP
+  completion subject, including final checks and counted-attempt admission.
+  Preserve original browser/journal scope and fail closed on foreign, disabled
+  or stale authority without manufacturing identifier-possession evidence.
+
 - Add explicit original prepared-request recovery through its exact registered
   authenticated native decoder. A real mapping before its command claim retains
   the original unknown outcome; it never proves rollback or permits another
