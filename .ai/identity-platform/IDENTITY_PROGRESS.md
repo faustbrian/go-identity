@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 21:43 UTC
+## Current TL;DR — 2026-10-25 22:04 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
@@ -33,28 +33,36 @@
   requires TOTP at identified/discoverable signin. Reviewed native `fc7ce6f` and
   Reference `fa47e2a` are main/CI-green. The authenticated downloaded Reference
   passes both PostgreSQL/race journeys (13.175s), including original-factor and
-  enrollment withdrawal denial. HTTP MFA enrollment remains open.
+  enrollment withdrawal denial. HTTP MFA enrollment is delivered below.
 - **Closed MFA key-removal profile:** a completed passkey/TOTP session can
   authorize removal with fresh UV while preserving a usable key, reject its old
   session, sign in with the survivor and TOTP, recover original metadata, reject
   last-key removal and read/logout. Reviewed MFA `fdf6e3f`, native `935ddaf` and
   Reference `ecad99d` are main/CI-green. The authenticated downloaded Reference
   passes both genuine identified/discoverable PostgreSQL/race journeys (62.736s).
-  HTTP MFA removal and full M16 qualification remain open.
+  HTTP MFA removal is delivered below; full M16 qualification remains open.
 - **Closed HTTP MFA inventory/rename profile:** after actual HTTP passkey/TOTP
   signin, users can list safe key metadata, rename with fresh UV, retry without
   renewed options/credentials, then read/logout. Current-factor, original-intent,
   CSRF/Origin/version and revoked-session denials are exercised. Reviewed
   `1490d59` is main/CI-green; all four genuine fresh/upgrade and identified/
   discoverable journeys pass in the authenticated downloaded Reference (36.256s).
-  Existing owners needed no production change. HTTP MFA removal remains.
+  Existing owners needed no production change. HTTP MFA removal is below.
 - **Closed HTTP MFA additional-key enrollment profile:** completed HTTP
   passkey/TOTP session -> genuine fresh UV -> second-key registration ->
   two-key inventory -> metadata-only retries -> read/logout and revoked retry
   denial. New-key signin still requires TOTP. Reviewed `d6b788d` is main/CI-green;
   all four fresh/upgrade and identified/discoverable PostgreSQL/race journeys
   pass in the authenticated downloaded Reference (39.470s). No new production
-  workflow was necessary. Full M16 qualification and HTTP removal remain open.
+  workflow was necessary. Full M16 qualification remains open.
+- **Closed HTTP MFA key-removal profile:** actual HTTP passkey/TOTP session ->
+  fresh-UV second-key enrollment -> removal -> invalidated-source/removed-key
+  denial -> surviving-key HTTP signin and TOTP -> original metadata recovery ->
+  last-key denial -> read/logout. Reviewed `fabdc74` is main/CI-green; all four
+  identified/discoverable and fresh/upgrade journeys pass in the authenticated
+  downloaded Reference (119.022s). The affected local cohort, module race and
+  tagged vet pass. Existing production owners required no change. This closes
+  the finite HTTP profile, not full M16 or its remaining interoperability gates.
 - **Closed organization HTTP read profile:** recipients can discover invitations
   before membership; exact native owner-only get remains enforced. Genuine
   send/delivery/accept/membership and restarted current reads pass, including
@@ -78,9 +86,10 @@
   legitimate unjoined rollback history. Reviewed `de104e4` is main/CI-green;
   all nine actual regressions pass in the authenticated downloaded adapter
   (8.855s). The previously recorded F2 gap is addressed, not deferred.
-- **Next:** HTTP MFA key removal from the delivered enrollment and native
-  removal owners, then remaining invitation HTTP/Reference mutations. Ordinary
-  known-empty profiles and unchanged valid evidence remain retained.
+- **Next:** opt-in HTTP invitation sending through the delivered native owner,
+  then remaining invitation HTTP/Reference mutations. A parallel worker is
+  adding initiating-key static member-role updates around the existing native
+  mutation engine. Ordinary profiles and unchanged valid evidence are retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.

@@ -1,5 +1,86 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 22:04 UTC: HTTP MFA key-removal profile CLOSED, not full M16.
+Reviewed eleven-path Reference snapshot delivered as fabdc742b1ce290171252b6b7af7ef65d9071e54,
+exact origin/main, Required40238118275 success. Native totp_http_removal_final
+APPROVE with exact file hashes; no unresolved finding. Local69706 affected
+PG/race cohort210.115s, Reference/command race5.140s/5.804s, taggedvet0,
+modverifyall; staged secrets32.86KB clean. Actual authenticated downloaded
+Reference40297 four-profile PG/race119.022s/modverifyall; all eleven files match
+the reviewed commit. Public v0.0.0-20261025220004-fabdc742b1ce,
+sum9GAmQr6Ac7xelvrT4QMiFi2n9NiS/rgLXieaFHfSjEc=,
+modsum6HgXyls5x3ze6sIiSBCxXUpQ7zjSGUmKBKcIx4UCLGU=.
+Original mode/empty-CSRF test-oracle failures remain failures, not product fixes.
+Actual source session revocation, surviving-key TOTP, original recovery and
+last-key/read/logout prove the finite outcome. Owned PG55485 is stopped;
+bounded cache/root cleanup follows this reporting commit. Full67-unit scope,
+estimate25%/11of39 full milestones and remaining release gaps are unchanged.
+Previous goal turn PROGRESSED: completed integration evidence changed the next
+action to review/delivery; no preflight or already delivered work was restarted.
+
+Organization root four-path UpdateMemberOperationRequest checkpoint independently
+APPROVED by organization_member_role_root_final at de104e47+frozen patch.
+Expected recovery-admission RED0.249s; focusedGREEN0.215s/root0.130s;
+boundedfuzz208100exec/6.227s, vet0/modverifyall, scopedsecretsclean.
+Primary owns root commit/mainCI/public authentication before native pin adoption.
+Worker owns the assigned native role wrapper/consumer plus minimal existing
+operation_consumer_integration_test.go and operation_codec_test.go edits; root
+files remain frozen. Its bounded root cache is removed and heavy lease returned.
+
+2026-10-25 21:55 UTC: organization parallel implementation lane frozen at
+main de104e47. Existing worker owns root operation_requests.go/tests plus
+README/CHANGELOG for additive MemberUpdateOperationRequest and exact recovery
+admission, then postgres operation_update_member.go/new consumer plus necessary
+operation_service.go/operation codec helpers/tests, native README/CHANGELOG/
+go.mod/go.sum. First root contract checkpoint must be reviewed/committed/public-
+authenticated by primary before native adoption; no permanent replace. Actual
+native PrepareUpdateMember/Execute/Recover, scoped authority, owner transitions,
+self-demotion history and last-owner serialization already exist/proven in
+genuine consumer cohort98.959s. Outcome: genuine native owner/admin initiating
+key -> static membership role change -> resulting privilege/read -> exact
+metadata-only retry/recovery, no replacement command/effects. Preserve complete
+static owner/admin/member admission and last-owner/contended/rollback/unknown
+outcomes. Mapping-only origins remain Unknown absent actual kernel evidence;
+do not invent expiry/absence classification. No ownership-transfer proof/MFA,
+dynamic roles, HTTP/Reference, private authority or kernel/session changes.
+Worker first reports exact native helper paths before writes outside this list.
+Checks: root request validation/custody and affected module, actual genuine
+role-update consumer with native history/revocation/concurrency, affected cohort,
+race/taggedvet/scoped secrets/one complete final review/mainCI/public consumer.
+Go/PG waits for primary69706 to finish; source authoring may run in parallel.
+
+Primary HTTP removal: fresh identified77299 PG/race PASS25.165s; initial27076
+fixture inventory oracle omitted explicit SessionDeletion, 11621/15345 used
+ordinary helper assumptions about selected mode/empty-CSRF header. Corrected
+test caller preserves strict absence for anonymous signin; product ingress was
+not relaxed. Wrong-root44592 reported no tests and is not acceptance evidence.
+Complete11Referencepaths frozen for independent review; affected69706 running.
+
+Parallel read-only organization probe: existing organization worker identifies
+the next dependency-ready native member-role/ownership outcome from exact main
+de104e47, with no writable paths, Go/PG or new public contract assigned yet.
+Return existing ownership/callers and one finite consumer recommendation, not
+another platform inventory or speculative API. Primary retains integration/Git.
+
+2026-10-25 21:46 UTC: primary M16 HTTP MFA key-removal profile frozen at
+go-identity main5b12791980cbea81f112da2e1397af5cf1f60cb9, consuming native
+passkey935ddaf and MFAfdf6e3f public pins. Own Reference composition consumer
+tests/helpers/docs only unless actual runtime gap is reproduced. Outcome:
+genuine HTTP passkey/TOTP -> HTTP fresh-UV second-key enrollment -> action-bound
+HTTP removal -> old-session/removed-key denial -> surviving-key HTTP passkey/
+TOTP -> original metadata recovery -> last-key denial -> session read/logout.
+Both identified/discoverable, fresh/populated upgrade; CSRF/Origin/version/intent,
+current enrolled-factor and retry custody remain mandatory. Wait for a real new
+TOTP step before starting the survivor primary, never reset replay or renew
+frozen evidence. Reuse existing HTTP/native owners and ordinary deletion helper;
+no new auth engine, proof store, schema, transport endpoint or fallback.
+Checks: focused four-profile PG/race plus affected ordinary HTTP removal/native
+MFA removal and HTTP enrollment, Reference/command race/taggedvet/modverify,
+scoped secrets, one complete independent review, main/CI/public consumer.
+Previous goal turn PROGRESSED: keyed invitation sending, HTTP MFA enrollment and
+legacy disclosure fix delivered on main with real public consumers. Both prior
+bounded resource roots were removed; no tests/workers live at this checkpoint.
+
 2026-10-25 21:43 UTC: legacy invitation disclosure correction CLOSED.
 Exact origin/main de104e47, Required40236548120 success; authenticated downloaded
 adapter66879 passes actual9-case PostgreSQL/race8.855s with normal publicpins,
