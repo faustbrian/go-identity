@@ -1,10 +1,28 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 22:04 UTC
+## Current TL;DR — 2026-10-25 22:40 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
   No additional fully qualified release unit is claimed.
+- **Latest delivered:** HTTP MFA key removal (`fabdc74`), native keyed static
+  member-role changes (`a80d336`) and HTTP invitation sending (`a643856`). All
+  are independently reviewed, on main with required CI green, and exercised
+  through authenticated downloaded modules on real PostgreSQL/race.
+- **Working invitation path:** HTTP original-key send -> encrypted delivery ->
+  native recipient acceptance -> authorized HTTP membership/invitation reads.
+  HTTP acceptance itself is still missing; this is not the full M22 milestone.
+- **Next:** add that missing HTTP acceptance/recovery boundary, then organization
+  Reference composition. SSO needs atomic challenge/proof composition before a
+  DNS verifier can safely grant organization proof; it is not being substituted
+  with parser-only scaffolding.
+- **Remaining:** 28 open consumer milestones, with substantial partial work;
+  full 67-unit qualification, broader social/federation/provisioning and
+  cross-cutting journeys. Counts are not effort percentages. No user decision
+  blocks the next in-scope work; no release or deployment is claimed.
+
+### Delivered profile detail
+
 - **Closed HTTP profile:** real enrollment -> identified/discoverable passkey
   -> challenge only -> TOTP -> session/read/logout. All four fresh/upgrade
   PostgreSQL/race journeys pass, including denied authority and atomic one-use
@@ -86,10 +104,20 @@
   legitimate unjoined rollback history. Reviewed `de104e4` is main/CI-green;
   all nine actual regressions pass in the authenticated downloaded adapter
   (8.855s). The previously recorded F2 gap is addressed, not deferred.
-- **Next:** opt-in HTTP invitation sending through the delivered native owner,
-  then remaining invitation HTTP/Reference mutations. A parallel worker is
-  adding initiating-key static member-role updates around the existing native
-  mutation engine. Ordinary profiles and unchanged valid evidence are retained.
+- **Closed native original-key member-role profile:** owners/admins can change
+  static roles at exact organization/member versions, observe resulting access
+  and recover only original metadata. Owner transitions, legitimate self-demotion
+  history, last-owner contention, current-authority withdrawal, rollback and
+  actual COMMIT-loss outcomes pass. Reviewed root `fcf0ee7` and native `a80d336`
+  are main/CI-green; the actual downloaded native consumer passes PostgreSQL/
+  race (8.017s). HTTP role updates and full M22 qualification remain open.
+- **Closed HTTP invitation-send profile:** required original-key bearer send
+  reaches the actual native owner, queues encrypted proof delivery and returns
+  safe current invitation/provider state. Matching retries preserve one original
+  invitation/grant/effect; current-read failure/panic never erases known commit.
+  Reviewed `a643856` is main/CI-green; the authenticated downloaded module passes
+  actual HTTP send/delivery/native-accept/current-read PostgreSQL/race (6.840s).
+  HTTP acceptance/resend, Reference selection and full M22 remain open.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.
@@ -2827,13 +2855,13 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
-| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | ES256/known-empty-MFA lifecycle delivered through native/HTTP/Reference; browser `22462f7` covers actual HTTPS/secure-cookie/native-JSON internal/USB CTAP2.1 fresh/upgrade PG/race52.546s and public40.237s. Ed-only/both mixed orders now native `0b8b646` main/CI/public lifecycle15.054s; protocol `4801d79` likewise delivered. Schema `f1bdf30` and Reference `14ea79c` reviewed/main/CI green; six new HTTPS profiles plus retained defaults local PG/race150.269s. Public Reference byte identity matches, but its runtime reproof failed on deadlines during severe host pressure; remains pending, not passed. Enrolled-MFA, interoperability and full-unit qualification keep M16 open. Physical hardware/conditional-autofill unproved; earlier rename signin-options503 unexplained, not claimed fixed. |
+| M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Native/HTTP/Reference ES256 and selected Ed/mixed lifecycle profiles are delivered; retained browser `22462f7` covers internal/USB CTAP2.1 fresh/upgrade. Completed passkey/TOTP sessions now support native and actual HTTP inventory/rename, additional enrollment and removal, with surviving-key TOTP and original recovery. Latest Reference `fabdc74` is reviewed/main/CI-green; all four identified/discoverable and fresh/upgrade HTTP removal journeys pass in the authenticated downloaded module (119.022s). Remaining protocol/method profiles, physical hardware/conditional-autofill interoperability and full-unit qualification keep the full row open. Earlier startup/deadline uncertainties are historical, not claimed fixed. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
-| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave delivered through `f54f10a`, with independent review, green CI and canonical/downloaded-native genuine-session PostgreSQL/race proof. Organization HTTP/reference, active selection and remaining lifecycle/role requirements are not closed. |
+| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. Native original-key role updates `a80d336` and HTTP original-key invitation send `a643856` are reviewed/main/CI-green with actual downloaded PostgreSQL/race consumers (8.017s/6.840s). The HTTP send journey reaches encrypted delivery, native acceptance and current HTTP reads. HTTP acceptance/other remaining mutations, Reference selection, active-selection/lifecycle variants and full qualification keep this row open. |
 | M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native team creation/membership/read/update/terminal deletion delivered through `dc12ee7`, with green CI and downloaded-native genuine-session PostgreSQL/race proof. Dynamic roles/permissions and HTTP/reference remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
 | M25 | Verified domain/provider registration and federation policy: sso, sso/domain-verification, sso/postgres | Closure not reassessed |

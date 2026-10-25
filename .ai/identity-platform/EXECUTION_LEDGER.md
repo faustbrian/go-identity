@@ -1,5 +1,93 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 22:40 UTC: opt-in HTTP invitation-send profile CLOSED, not full M22.
+Fourteen-path slice independently APPROVED by organization_http_invitation_send_final;
+delivered a64385673023f285371e45a9c849cea3d88d7017 exact origin/main,
+Required40240972375 success. Actual HTTP send/retry -> encrypted delivery ->
+native intended-recipient acceptance -> current HTTP membership/invitation reads
+pass; one original invitation/grant/effect and original metadata/expiry remain.
+No HTTP acceptance/resend or Reference selection is claimed. Original known
+commit survives current-read denial/panic; provider accepted is not delivered.
+Leaf89224 runtime RED0.253s; postcommit-projection panic76654 RED0.260s ->
+GREEN66607; final52585 actual retained/new PG/race11.876s, module race8.295s,
+senderfuzz2637exec6.327s, taggedvet0/modverifyall. Initial compile/formatter and
+opaque-key identity-oracle failures were fixture/setup failures, not security
+relaxations or passing evidence. Complete staged secrets79.70KB clean.
+Actual authenticated downloaded module72293 PG/race6.840s/modverifyall;
+all fourteen public files match the reviewed commit, normal pins/no replacements.
+Public v0.0.0-20261025223605-a64385673023,
+sumqoYTYwZgdIQRmYnUKacdqpruDmBiBqm09aZj6mVAc7k=,
+modsumak3Cqg35fmUP88RMHCcBqNIDuyqIZTY7yxbRg47Y27U=.
+Prior role profile root/native mainCI/public proof remains closed below.
+Owned HTTP PostgreSQL/cache root cleanup follows this reporting checkpoint.
+Previous goal turn PROGRESSED: HTTP MFA removal, native keyed role updates and
+HTTP invitation send delivered with actual consumers, not only status or plans.
+Whole goal stays active/~25% low-confidence/11of39 full milestones; no new full
+unit qualification and no tag/release/deployment claim. Next finite endpoint
+is HTTP invitation acceptance/recovery; worker probes its actual once/keyless
+catalog/native port with no write/runtime authority yet. SSO readiness is not
+a goal blocker: existing org claim/proof works, but its original challenge
+checkpoint/rotation/consumption is not atomic with proof commitment. Do not
+claim DNS proof or fill that gap with a separate proof authority/parser-only
+delivery. Main read all three selected SSO goals for the later owning extension.
+
+2026-10-25 22:24 UTC: keyed static member-role native profile CLOSED, not full
+M22. Root fcf0ee75 and native a80d336537fe53251667192ac81107b7b1e06aad are
+exact origin/main, Required40238570117/40239494151 success. Independent complete
+root/native reviewers organization_member_role_root_final and
+organization_member_role_native_final APPROVE at their exact frozen hashes.
+Actual missing-method RED1.532s -> genuineGREEN1.739s; retained PG/race31.244s,
+native race1.358s/envelopefuzz6.318s/taggedvet0/modverifyall. Initial90353 remains
+an explicit-recovery error-oracle failure, corrected against unchanged native
+identity.UnavailableError semantics. Staged scanner47.94KB clean.
+All ten authenticated public files match; downloaded native68490 genuine
+PG/race8.017s/modverifyall, no replacements. Public version
+v0.0.0-20261025221718-a80d336537fe,
+sumgOFxeleq0JsMtSe40oR3mHg9ae2oYvKntHhPZm9UJkI=,
+modsumTOveexzbgFKCN8YoGNbuXWbtlgoeCMxDI8Bk9CN5qaY=.
+Test DB/audit roles removed; primary-owned invitation HTTP PG/cache remain for
+the next actual consumer. No new schema, request journal, role engine or HTTP
+role API. Full M22/67-unit qualification remains open.
+
+Primary base strict-bearer invitation-send policy delivered672ca4ecb9df,
+Required40239223925 success, five public files match authenticated download.
+Expected exact-constructor RED0.296s -> GREEN0.243s/module2.038s/vet0/modverifyall;
+complete five-path http_invitation_send_selection_final APPROVE. The public
+GoDoc correction changed no runtime input. This prerequisite enables no handler.
+Leaf send runtime RED89224 rejects the absent selected workflow0.253s after
+adding declarations; earlier compile errors were absent-API/setup evidence only.
+Primary implements leaf endpoint/closed wire/current projection and real native
+consumer, not another domain authority. Native role worker now may perform one
+read-only source-only M25 domain-verification readiness pass against delivered
+organization domain claim/evidence contracts; no writes/Go/services or speculative
+API assigned until exact consumed contracts and finite outcome are reconciled.
+
+2026-10-25 22:07 UTC: primary M22 opt-in HTTP invitation-send profile frozen
+at identity main2999d44. Consume actual native InvitationOperationService.Send
+de104e47 (original-key implementation25e7a9e) and neutral root fcf0ee75,
+both main/Required-green/authenticated public bytes. Outcome: genuine owner
+bearer -> exact original-key HTTP send -> queued encrypted delivery -> actual
+recipient proof/native acceptance -> authorized HTTP membership/current reads;
+matching send retry returns only original metadata, no new proof/delivery.
+HTTP acceptance/cookie profiles/Reference selection remain subsequent profiles.
+Primary owns http selection.go/organization_bearer_selection_test.go/README/
+CHANGELOG for the exact strict-bearer send selection, then http/organization
+feature/decode/handler/response/wire/rate and bounded send tests/integration/docs/
+go.mod/go.sum. Keep existing read/membership Service interfaces compatible;
+use a narrow separately selected native send port, no private domain store,
+proof engine, request journal, schema or transaction implementation.
+Preserve exact host/tenant, header-only bearer and original key, no ambient
+cookie fallback, closed input/no actor or address override, shared atomic admin
+rate, original outcome/current authority and private proof/delivery custody.
+Checks: constructor exact-policy RED/GREEN and affected HTTP package, hostile
+wire/authorization/projection/rate boundaries, actual native send/delivery/
+accept/member-read PostgreSQL consumer, retained read profile, bounded fuzz,
+race/vet/modverify/scoped secrets and one independent complete final review
+per consumed-owner checkpoint; main/CI and authentic public consumer.
+Organization worker owns separate native role paths and current heavy lease;
+primary authors test/source only until its RED/lease handback. Prior HTTP MFA
+removal PG and entire bounded cache root are now removed after public proof.
+
 2026-10-25 22:04 UTC: HTTP MFA key-removal profile CLOSED, not full M16.
 Reviewed eleven-path Reference snapshot delivered as fabdc742b1ce290171252b6b7af7ef65d9071e54,
 exact origin/main, Required40238118275 success. Native totp_http_removal_final
