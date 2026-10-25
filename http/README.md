@@ -1,7 +1,7 @@
 # Identity HTTP transport
 
-Organization creation, member admission/removal and invitation sending may explicitly
-select `CSRFNone` only for strict-bearer feature handlers that ignore ambient
+Organization creation, member admission/removal and invitation sending/acceptance
+may explicitly select `CSRFNone` only for strict-bearer feature handlers that ignore ambient
 cookies. This is not a cookie fallback or a general organization exemption:
 the canonical cookie profile and all other operation policies remain unchanged.
 `NewCanonicalOperation` validates metadata, not handler authentication. The

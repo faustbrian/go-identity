@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit an explicitly selected strict-bearer invitation-acceptance policy.
+  The original cookie protection and once-only command semantics are unchanged;
+  selection alone enables no route, proof consumption or authority.
+
 - Permit the explicitly selected strict-bearer invitation-send policy. Cookie
   synchronizer protection remains unchanged; invitation acceptance and other
   mutations gain no exemption. Selection alone enables no route or authority.
