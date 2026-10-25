@@ -141,12 +141,20 @@ func FinalizePreAuth[R SessionRows](ctx context.Context, q PreAuthWriter[R], c C
 }
 
 func transitionPreAuth[R SessionRows](ctx context.Context, q PreAuthWriter[R], c Config, record session.PreAuthTransaction, use PreAuthUse, final bool) error {
+	return transitionPreAuthProfile(ctx, q, c, record, use, final, false)
+}
+
+func transitionPreAuthProfile[R SessionRows](ctx context.Context, q PreAuthWriter[R], c Config, record session.PreAuthTransaction, use PreAuthUse, final, passkeyTOTP bool) error {
 	bounded, stop, s, canonical, err := preAuthContext(ctx, q, c, record)
 	if err != nil {
 		return err
 	}
 	defer stop()
-	if !use.valid(s) {
+	valid := use.valid(s)
+	if passkeyTOTP {
+		valid = validMFAPasskeyPreAuthUse(use, s)
+	}
+	if !valid {
 		return identity.InvalidInputError{Field: "session_preauth_use"}
 	}
 	var custody *PreAuthUse

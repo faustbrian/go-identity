@@ -18,8 +18,15 @@ child, authorize the operation, and take directory/credential/policy fences.
 Acquire factor authority before RP mapping locks, matching native passkey
 signin/enrollment. Call the effect's `Check` in the original `CheckFeatureCommit`
 after audit/outbox waits; an original credential can expire while those wait.
-`RequireMFAPasskeyConsumedPreAuth` checks that exact original
-passkey browser's consumed journal without consuming it again. No email
+The native passkey MFA challenge leaves its browser issued. At admission,
+`RequirePreAuth` fences that exact original record and expiry. During protected
+completion, use `ReserveMFAPasskeyPreAuth`, apply the recorded factor/session
+effects, then `FinalizeMFAPasskeyPreAuth` in the same Work. These sealed APIs
+retain distinct original-passkey and MFA command/policy identities; generic
+`ReservePreAuth` cannot substitute one for the other. Late failure rolls back
+browser, child, factor and session effects together. The older
+`RequireMFAPasskeyConsumedPreAuth` only checks an already-consumed-primary
+profile; it cannot admit the issued browser from native MFA signin. No email
 recipient or password evidence is invented. This effect is not a login service.
 
 Install `PasskeyMFAMigrationSource` after the actual selected v6-v9 record and

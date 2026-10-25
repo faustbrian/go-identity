@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Consume an original pending passkey browser in its protected TOTP/session
+  completion transaction. Preserve distinct original/MFA actions and policies,
+  exact command custody and the existing pre-auth reservation state machine.
+
 - Acquire confirmed factor authority before RP mapping locks during completed
   passkey/TOTP revocation, matching native passkey signin and enrollment.
 
