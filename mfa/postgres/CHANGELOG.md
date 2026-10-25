@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose MFA-owned historical recovery for native passkey continuations.
+  Retain original commitment across terminal challenge state and deny corrupt
+  or conflicting lineage without fabricating noncommit or renewed credentials.
+
 - Require the exact explicit passkey primary command in persisted TOTP
   continuation scope. Stored restoration retains its original signed child
   correlation; password/magic-link owners reject this distinct origin.

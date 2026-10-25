@@ -1,5 +1,76 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 09:10 UTC: MFA-owned passkey continuation recovery exact-six-path
+final independent review passkey_continuation_recovery_final APPROVE, no actions.
+Accepted stored-user coverage action is resolved by a schema-valid same-tenant
+foreign-user row with unchanged original scope. Final71032 real PostgreSQL
+sixteen-case oracle passes0.395s; default-fsync owned cluster stopped/removed.
+Final29261 module tests0.250s, tagged vet0 and all module verification remain
+applicable; format/diff clean. This proves historical owner evidence only,
+not public native recovery Work adoption or actual TOTP/session completion.
+Main delivery and native repin/adoption follow, with existing source preserved.
+
+2026-10-25 09:01 UTC: previous goal turn was progress, not a wait: dcd89df and
+3730cb5 reached main/push-CI green and actual passkey challenge/Reader consumers
+now pass. Current primary-owned recovery port is implemented at the existing
+MFA schema owner, with unit missing-API RED74e9dd. Real primary SQL oracle has
+15 lifecycle/missing/conflict/unavailable cases. First fixture was SQL_ASCII;
+observed UTF8 conversion failure fixed only disposable initdb encoding. Next
+fixture used NULL-generation foundation row; correct original pending journal
+shape fixes the fixture, not the production lineage check. Actual15389 passes
+0.385s. Counterfactual c6a5ed omitting lineage validation fails both foreign
+fingerprint and future generation0.387s; original guard restored immediately.
+Final checks/review and public native adoption remain pending. No new schema,
+recovery journal, assertion or session authority is introduced.
+
+Organization successor bounded read-only assignment: organization_http_native
+may inspect existing root/native ec23514 and complete organization goal for one
+next finite dependency-ready native lifecycle/invitation outcome. Writable
+paths none; no Go/services/Git or speculative implementation. Identify actual
+consumed committed contracts, missing owners and exact proposed private/public
+boundaries before a write assignment. Primary stays hands-on on passkey/TOTP.
+
+2026-10-25 08:46 UTC: native MFA3730cb5 is exact origin/main,
+Required40177035869 SUCCESS. Authenticated public native
+v0.0.0-20261025083226-3730cb5e7713 matches all eight changed files; passkey
+postgres pins/tidy updated. Worker real identified/discoverable challenge ->
+public continuation Reader -> original-primary reader now GREEN62753/1.26s.
+That run also proves the exact-reference race RED: disabling the selected
+credential after genuine verification still committed a child. Small current()
+guard fixes only the selected identified MFA arm. Final5188 full selected
+cohort7.893s and78399 targeted race plus two retained known-empty smokes47.405s
+pass. Missing-routing disposable counterfactual76585 fails0.905s as expected.
+Final unit/fuzz5636 passes11.335s (nine executions: limited exploration), tagged
+vet/format/diff/secrets clean. Pinned govulncheck1.6.0 required Go1.27 rebuild in
+disposable bin; final26692 reports no affected code/imported packages, six
+non-called required-module vulnerabilities. All worker PG/sourcecopy/scanner
+scratch removed; heavy token returned, no live Go/service. Leased primary cache
+remains in active use for the same unfinished profile.
+
+Default-fsync fixture64475 failed installation before assertion67.896s, not an
+authentication assertion. Owned synchronous-durability-disabled PG passes the
+functional transaction cases; no crash-durability claim. Controlled confirmed
+TOTP rows do not prove actual enrollment, factor completion or final sessions.
+
+Native source is frozen14 paths, pending a concrete ownership correction before
+independent review: recoverMFAChallenge reads MFA private tables. Primary owns
+additive mfapg.RecoverPasskeyContinuation(ctx,RecoveryWork,exact typed owner),
+following existing RecoverMagicLinkChallenge ownership, not a new journal or
+recovery engine. Bind original child/user/scope, command fingerprint/generation
+and stored immutable scope through existing Work; missing original evidence may
+vote NotCommitted only to the sole coordinator, conflicts/corruption stay Unknown.
+Historical completed/expired state must not erase original commitment or renew
+proof. Unit original-scope/denial checks plus real public native recovery test
+and mismatched evidence cover this bounded port. Publish committed authenticated
+pin, replace native private query, run only affected recovery/consumer checks,
+then independent complete14-path final review and main delivery. Do not expand
+into old password/magic-link cleanup. Final TOTP/session/Reference remains next.
+
+Scheduled full-history Required40176478239 failed secrets; all18 reported
+finding revisions are ancestors of this run's0a39cb5 baseline (ancestry exit0).
+Ordinary push Required40175935141/40177035869 passes. Preserve that distinction;
+no whole-history/unit qualification claim and no historical repair programme.
+
 2026-10-25 08:31 UTC: root MFA dcd89df is exact origin/main,
 Required40175935141 SUCCESS. Public MFA
 v0.0.0-20261025081547-dcd89dfc3e34 authenticates (sum

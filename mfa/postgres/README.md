@@ -8,6 +8,14 @@ the child using the core continuation's `CapabilityPayload`; do not patch its
 correlation afterward. Password/magic-link owners reject this separate origin.
 Old stored rows omit the field and keep their original bytes and deadlines.
 
+`RecoverPasskeyContinuation` supplies only the MFA participant's historical
+vote in the exact passkey owner's borrowed recovery Work. Completed/revoked/
+expired state does not erase original commitment. Missing rows vote noncommit
+only to the sole coordinator; conflicting child, immutable scope or original
+lineage stays unknown. It returns no credential and never authenticates a
+factor, retries an assertion or renews a challenge. Keep original rows until
+an owned retained-outcome mechanism replaces their recovery responsibility.
+
 `RequirePasskeySigninFactors` fences a positive original factor generation and
 an actually confirmed TOTP row in the exact registered passkey owner's
 challenge-only signin Work. It requires the self-user, original command record

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 08:31 UTC
+## Current TL;DR — 2026-10-25 09:10 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -47,9 +47,12 @@
   (`30bf015`). Original continuation persistence/forward SQL upgrade `0a39cb5`
   and capability issuer `2d729ef` are main/CI-green. Real signed identified and
   discoverable assertions now commit only a child, but MFA Reader rejects its
-  original-command correlation. Reviewed core correction `dcd89df` is on main
-  with Required CI green. Its durable scope/matcher adoption has final approval
-  and selected checks; native passkey producer adoption/rerun follows.
+  original-command correlation. Reviewed core `dcd89df` and native `3730cb5`
+  corrections are main/push-CI green. The real identified/discoverable challenge
+  -> public continuation read -> original-primary read now passes locally,
+  including wrong/changed authority, rollback and one-child race. Native source
+  still needs MFA-owned historical recovery API adoption and final review/main
+  delivery. The retained-factor fixture does not prove genuine TOTP enrollment.
   Final TOTP session/read/logout remains unproven. No early session is claimed.
 - **Current code delta:** the kernel's original challenge/child declaration,
   protected-owner custody and historical-query support pass their tests and
@@ -62,12 +65,20 @@
   unchanged. Complete selected PostgreSQL/race and new binding-mismatch cases
   pass. Native-envelope adoption and the direct HTTP journey now pass; Reference
   startup and remaining organization capability profiles are still unfinished.
-- **Next:** implement passkey primary -> enrolled TOTP challenge -> completion
-  -> authenticated session/read/logout. No session is allowed before the
-  independent factor completes. A bounded organization HTTP lane is assigned
-  separately; its real Reference integration remains primary-owned. No user
+- **Next:** finish native challenge recovery through its MFA owner, then real
+  TOTP completion -> authenticated session/read/logout. No session is allowed
+  before the independent factor completes. Organization Reference integration
+  remains primary-owned; its direct native HTTP consumer is delivered. No user
   decision is needed. Ed25519 browser/physical-device and full M16 qualification
   stay open.
+- **Recovery update:** MFA-owned historical recovery now passes sixteen real
+  PostgreSQL lifecycle/conflict cases and independent final review with no
+  remaining actions. Main delivery and native consumer adoption remain pending;
+  this does not prove final TOTP/session behavior or close another milestone.
+- **Qualification:** ordinary changed-source Required CI is green. Scheduled
+  full-history secret checking failed (`40176478239`); all 18 finding revisions
+  predate this run's `0a39cb5` baseline. That remains an unresolved broader
+  qualification boundary, not a passing full-history scan or a new tooling task.
 
 ## Retained checkpoint — 2026-10-24 12:10 UTC
 
