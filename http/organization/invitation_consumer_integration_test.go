@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -75,14 +76,18 @@ import (
 // and outbound HIBP HTTP provider are controlled seams; no user, session,
 // verified identifier, invitation, capability or membership is fabricated.
 func TestInvitationGenuineHTTPConsumer(t *testing.T) {
-	proveInvitationGenuineHTTPConsumer(t, false)
+	proveInvitationGenuineHTTPConsumer(t, false, false)
 }
 
 func TestInvitationSendGenuineHTTPConsumer(t *testing.T) {
-	proveInvitationGenuineHTTPConsumer(t, true)
+	proveInvitationGenuineHTTPConsumer(t, true, false)
 }
 
-func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
+func TestInvitationAcceptGenuineHTTPConsumer(t *testing.T) {
+	proveInvitationGenuineHTTPConsumer(t, true, true)
+}
+
+func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend, httpAccept bool) {
 	ctx, pool, db := consumerDatabase(t)
 	keys := make(map[string][32]byte)
 	for _, name := range strings.Fields("fingerprint request counter risk-evidence risk-seal preauth-cookie session-token session-csrf http-device delivery-envelope dummy-password capability-binding capability-signing signin-proof migration counter-replay http-rate otp-lockout otp-wrap otp-attempt otp-code otp-intent identifier delivery-digest delivery-namespace password-flow signup-binding signup-intent verification-scope capability-replay capability-envelope counter-envelope verification-http") {
@@ -161,6 +166,14 @@ func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
 	network := identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 2048, MaximumBodyBytes: 4096, MaximumDecodedBytes: 4096, MaximumFields: 32, MaximumDepth: 4}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: parsedOrigin.Hostname(), TenantID: baselineTenant}, {Host: "foreign.example", TenantID: "foreign-tenant"}}}
 	transport := identityhttp.TransportPolicy{Network: network, HandlerTimeout: 5 * time.Second, Document: identityhttp.DocumentConfig{Title: "Genuine invitation consumer", Version: "1"}}
 	cfg := organizationhttp.Config{Network: network, Sessions: sessions, Service: memberReader, Invitations: invitations, SafeRate: safe, Now: time.Now, MaximumDuration: 4 * time.Second}
+	if httpAccept {
+		cfg.SecretRate, err = identityhttp.NewKeyedSecretRateLimiter(identityhttp.KeyedSecretRateConfig{Shared: backend, Namespace: "invitation-http-consumer", Key: keys["http-rate"], Now: time.Now, MaximumDuration: time.Second})
+		if err != nil {
+			t.Fatal("native invitation secret admission unavailable", err)
+		}
+		cfg.InvitationProofLimits = limits
+		t.Cleanup(func() { _ = cfg.SecretRate.Close() })
+	}
 	if httpSend {
 		cfg.AdminRate, err = organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{Shared: backend, Namespace: "invitation-http-consumer", Key: keys["http-rate"], Now: time.Now, MaximumDuration: time.Second, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error { return ctx.Err() }})
 		if err != nil {
@@ -168,10 +181,14 @@ func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
 		}
 		t.Cleanup(func() { _ = cfg.AdminRate.Close() })
 	}
+	var acceptanceHooks atomic.Int32
 	build := func(current *organizationpg.InvitationService) (http.Handler, identityhttp.OpenAPIDocument) {
 		t.Helper()
 		selected := cfg
 		selected.Invitations = current
+		if httpAccept {
+			selected.InvitationAccepter = current
+		}
 		if httpSend {
 			selected.InvitationSender, err = organizationpg.NewInvitationOperationService(current, organizationpg.InvitationOperationServiceConfig{ConfigurationID: "invitation-http-consumer", RequestKeys: requestKeys, Custody: custody, NewInvitationID: func(ctx context.Context) (organization.ID, error) {
 				id, e := identity.NewSubjectID()
@@ -181,7 +198,18 @@ func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
 				t.Fatal("actual native initiating-key invitation owner unavailable", err)
 			}
 		}
-		feature, e := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: selected, Get: true, InvitationGet: true, InvitationListMine: true, InvitationSend: httpSend})
+		var middleware []identityhttp.MiddlewareDescriptor
+		if httpAccept {
+			middleware = []identityhttp.MiddlewareDescriptor{{Owner: "organization", Middleware: identityhttp.Middleware{Name: "native-accept-admitted", Phase: identityhttp.MiddlewareBeforeHandler, Order: 1, Handler: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/v1/organization/invitation/accept" {
+						acceptanceHooks.Add(1)
+					}
+					next.ServeHTTP(w, r)
+				})
+			}}}}
+		}
+		feature, e := organizationhttp.NewFeatureWithMiddleware(organizationhttp.FeatureConfig{Config: selected, Get: true, InvitationGet: true, InvitationListMine: true, InvitationSend: httpSend, InvitationAccept: httpAccept}, middleware)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -201,6 +229,9 @@ func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
 	if httpSend {
 		wantOperations++
 	}
+	if httpAccept {
+		wantOperations++
+	}
 	if err != nil || len(document.Operations()) != wantOperations {
 		t.Fatal("selected invitation document invalid", err)
 	}
@@ -208,7 +239,7 @@ func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
 		t.Helper()
 		schema := parsed.Raw()
 		method := "get"
-		if path == "/v1/organization/invitation-send" {
+		if path == "/v1/organization/invitation-send" || path == "/v1/organization/invitation/accept" {
 			method = "post"
 		}
 		for _, key := range []string{"paths", strings.SplitN(path, "?", 2)[0], method, "responses", strconv.Itoa(status), "content", "application/json", "schema"} {
@@ -437,12 +468,73 @@ func proveInvitationGenuineHTTPConsumer(t *testing.T, httpSend bool) {
 	if code, _ := call(recipient, "/v1/organization/invitation/list-mine", nil, "foreign.example"); code != 403 {
 		t.Fatal("recipient bearer crossed tenant", code)
 	}
-	accept, e := invitations.PrepareAccept(ctx, organization.InvitationAcceptRequest{Authentication: recipient, CommandID: commandID(t), ID: first.id, OrganizationID: first.org, OrganizationVersion: 1, InvitationVersion: 1, Proof: first.proof, CorrelationID: "invitation-http-accept"}, "127.0.0.1")
-	if e != nil {
-		t.Fatal("genuine native acceptance prepare failed", e)
-	}
-	if out, e := invitations.Execute(ctx, accept); e != nil || out.Receipt.Outcome != identity.CommitOutcomeCommitted {
-		t.Fatal("genuine native acceptance failed", e)
+	if httpAccept {
+		original := commandID(t)
+		wire, e := json.Marshal(map[string]any{"commandID": original, "organizationID": first.org, "invitationID": first.id, "organizationVersion": 1, "invitationVersion": 1, "token": first.wire})
+		if e != nil {
+			t.Fatal(e)
+		}
+		acceptCall := func(auth organization.Authentication, wire []byte) (int, []byte) {
+			r, e := http.NewRequestWithContext(ctx, http.MethodPost, origin+"/v1/organization/invitation/accept", bytes.NewReader(wire))
+			if e != nil {
+				t.Fatal(e)
+			}
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Authorization", "Bearer "+auth.Bearer.Token())
+			response, e := server.Client().Do(r)
+			if e != nil {
+				t.Fatal("genuine invitation acceptance HTTPS failed", e)
+			}
+			body, e := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+			closed := response.Body.Close()
+			if e != nil || closed != nil || len(body) > 1<<20 || response.Header.Get("Cache-Control") != "no-store" || response.Header.Get("Set-Cookie") != "" {
+				t.Fatal("acceptance response custody failed")
+			}
+			if bytes.Contains(body, []byte(first.wire)) || bytes.Contains(body, []byte(auth.Bearer.Token())) {
+				t.Fatal("acceptance exported credential")
+			}
+			validateResponse("/v1/organization/invitation/accept", response.StatusCode, body)
+			return response.StatusCode, body
+		}
+		if code, _ := acceptCall(owner, wire); code != 403 {
+			t.Fatal("invitation bearer replaced intended verified recipient", code)
+		}
+		if acceptanceHooks.Load() != 0 {
+			t.Fatal("native recipient rejection reached post-admission HTTP hook")
+		}
+		code, body := acceptCall(recipient, wire)
+		var out organizationhttp.InvitationAcceptResponse
+		if code != 200 || json.Unmarshal(body, &out) != nil || !out.Committed || out.CommandID != original || out.InvitationID != first.id || out.MemberID != recipientID || out.BeforeVersion != 1 || out.AfterVersion != 2 || out.Recovery == nil {
+			t.Fatal("genuine HTTP acceptance missing original receipt", code)
+		}
+		if acceptanceHooks.Load() != 1 {
+			t.Fatal("genuine admitted acceptance did not enter hook exactly once")
+		}
+		if code, _ := acceptCall(recipient, wire); code == 200 {
+			t.Fatal("consumed proof repost became another acceptance")
+		}
+		if acceptanceHooks.Load() != 1 {
+			t.Fatal("consumed-proof preparation reached post-admission HTTP hook")
+		}
+		scope := out.Recovery
+		binding := identity.CommandBinding{CommandID: scope.CommandID, TenantID: scope.TenantID, UserID: scope.UserID, ActorID: scope.ActorID, ActorKind: scope.ActorKind, OperationID: scope.OperationID, RecordID: scope.RecordID, PolicyID: scope.PolicyID, PolicyVersion: scope.PolicyVersion, SchemaID: scope.SchemaID, SchemaVersion: scope.SchemaVersion, CorrelationID: scope.CorrelationID}
+		recovery := organization.InvitationAcceptRecoveryRequest{Authentication: recipient, Binding: binding, OrganizationID: out.OrganizationID}
+		recovered, e := restartInvitations(pool).RecoverAccept(ctx, recovery)
+		if e != nil || recovered.Receipt.Outcome != identity.CommitOutcomeCommitted || recovered.Receipt.Binding != binding || recovered.InvitationID != first.id {
+			t.Fatal("fresh native owner did not recover HTTP original outcome", e)
+		}
+		recovery.Authentication = owner
+		if _, e := restartInvitations(pool).RecoverAccept(ctx, recovery); e == nil {
+			t.Fatal("foreign actor recovered recipient acceptance")
+		}
+	} else {
+		accept, e := invitations.PrepareAccept(ctx, organization.InvitationAcceptRequest{Authentication: recipient, CommandID: commandID(t), ID: first.id, OrganizationID: first.org, OrganizationVersion: 1, InvitationVersion: 1, Proof: first.proof, CorrelationID: "invitation-http-accept"}, "127.0.0.1")
+		if e != nil {
+			t.Fatal("genuine native acceptance prepare failed", e)
+		}
+		if out, e := invitations.Execute(ctx, accept); e != nil || out.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("genuine native acceptance failed", e)
+		}
 	}
 	statusCode, body = call(recipient, "/v1/organization/get?organizationID="+string(first.org), nil, "")
 	var member organizationhttp.ReadResponse

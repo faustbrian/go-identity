@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add independently selected once-only invitation acceptance through the actual
+  native owner, strict bearer session and shared original-command secret rates.
+  Preserve the caller-known command, signed original challenge interval and
+  atomic membership/proof effects. Responses retain original outcomes and safe
+  direct recovery scope, never proof or renewed authority. Configure the native
+  accepter and secret limiter; Idempotency-Key is forbidden. HTTP recovery,
+  resend and Reference composition are not selected by this feature.
+
 - Add opt-in strict-bearer invitation send through the actual original-key
   native owner. Preserve exact recipient/version intent, atomic queue commitment,
   metadata-only retries and shared administrative rates. Current owner-authorized

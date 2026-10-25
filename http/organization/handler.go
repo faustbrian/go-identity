@@ -71,10 +71,32 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				return State{}, requestFailure{status: 403, code: "forbidden"}
 			}
 			in.observed, in.actor = observed, binding.UserID
+			if op == organization.InvitationAccept {
+				in.user = binding.UserID
+			}
 			return state, nil
 		},
 		Admit: func(r *http.Request, state State) error {
 			in := state.input()
+			if op == organization.InvitationAccept {
+				prepared, err := c.InvitationAccepter.PrepareAcceptance(r.Context(), in.accept(), in.facts.ClientIP().String())
+				if err != nil {
+					status, code := domainFailure(err)
+					return requestFailure{status: status, code: code}
+				}
+				if nilService(prepared) {
+					return identityhttp.ErrUnavailable
+				}
+				source, err := prepared.Admission()
+				if err != nil {
+					return identityhttp.ErrUnavailable
+				}
+				if err := admitInvitationAccept(r.Context(), c, in, source); err != nil {
+					return err
+				}
+				in.acceptance = prepared
+				return nil
+			}
 			var retry time.Duration
 			var admitted bool
 			var err error
@@ -113,6 +135,20 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out, err = c.Service.RemoveMember(r.Context(), in.remove(), in.facts.ClientIP().String())
 				case organization.InvitationSend:
 					out, err = c.InvitationSender.Send(r.Context(), in.send(), in.facts.ClientIP().String())
+				case organization.InvitationAccept:
+					if nilService(in.acceptance) {
+						reject(w, r, identityhttp.ErrUnavailable)
+						return
+					}
+					out, err = in.acceptance.Execute(r.Context())
+				}
+				if op == organization.InvitationAccept {
+					status, response := invitationAcceptResponse(in, out, err)
+					if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+						status, response.Error = 503, "unavailable"
+					}
+					writeJSON(w, status, response)
+					return
 				}
 				if op == organization.InvitationSend {
 					status, response := invitationSendResponse(r.Context(), c, in, out, err)

@@ -107,7 +107,7 @@ func (l *AdminRateLimiter) Configured() bool {
 // actor must come from current session custody and facts from NetworkResolver.
 // Full IP and actor/tenant buckets are HMAC-protected and shared across routes.
 func (l *AdminRateLimiter) Admit(ctx context.Context, facts identityhttp.NetworkFacts, op organization.Operation, user identity.UserID) (AdminRateResult, error) {
-	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !selectedMutation(op) || !boundedID(string(user)) {
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !selectedMutation(op) || op == organization.InvitationAccept || !boundedID(string(user)) {
 		return AdminRateResult{}, identityhttp.ErrInvalidInput
 	}
 	s := l.state()

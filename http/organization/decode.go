@@ -2,10 +2,12 @@ package organizationhttp
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"unicode/utf8"
 
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/session"
@@ -28,6 +30,11 @@ type requestInput struct {
 	orgVersion, memberVersion uint64
 	cursor                    identity.UserID
 	limit                     uint32
+	commandID                 identity.CommandID
+	invitationID              organization.ID
+	invitationVersion         uint64
+	proof                     capability.Proof
+	acceptance                organization.PreparedInvitationAcceptance
 }
 
 func operationPath(op organization.Operation) (string, string) {
@@ -44,6 +51,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/member/remove", http.MethodPost
 	case organization.InvitationSend:
 		return "/v1/organization/invitation-send", http.MethodPost
+	case organization.InvitationAccept:
+		return "/v1/organization/invitation/accept", http.MethodPost
 	}
 	return "", ""
 }
@@ -53,7 +62,17 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	if op == organization.InvitationSend {
 		missingOwner = nilService(c.InvitationSender) || nilService(c.Invitations)
 	}
-	if path == "" || missingOwner || !c.Sessions.Configured() || c.Now == nil || selectedMutation(op) && !c.AdminRate.Configured() || !selectedMutation(op) && !c.SafeRate.Configured() {
+	missingRate := selectedMutation(op) && !c.AdminRate.Configured() || !selectedMutation(op) && !c.SafeRate.Configured()
+	if op == organization.InvitationAccept {
+		missingOwner, missingRate = nilService(c.InvitationAccepter), !c.SecretRate.Configured()
+		if c.InvitationProofLimits == (capability.Limits{}) {
+			c.InvitationProofLimits = capability.DefaultLimits()
+		}
+		if _, err := capability.ParseProof("", c.InvitationProofLimits); errors.Is(err, capability.ErrInvalidConfiguration) {
+			return nil, identityhttp.ErrInvalidInput
+		}
+	}
+	if path == "" || missingOwner || missingRate || !c.Sessions.Configured() || c.Now == nil {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
@@ -109,7 +128,11 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			if err != nil {
 				return zero, identityhttp.ErrInvalidInput
 			}
-			if err := decodeMutation(input, body); err != nil {
+			if op == organization.InvitationAccept {
+				if err := decodeAcceptance(input, body, c.InvitationProofLimits); err != nil {
+					return zero, err
+				}
+			} else if err := decodeMutation(input, body); err != nil {
 				return zero, err
 			}
 		} else {
@@ -144,11 +167,15 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 				}
 			}
 		}
-		id, err := identity.NewCommandID()
-		if err != nil {
-			return zero, identityhttp.ErrUnavailable
+		if op == organization.InvitationAccept {
+			input.correlation = string(input.commandID)
+		} else {
+			id, err := identity.NewCommandID()
+			if err != nil {
+				return zero, identityhttp.ErrUnavailable
+			}
+			input.correlation = string(id)
 		}
-		input.correlation = string(id)
 		if err := input.validate(); err != nil {
 			return zero, err
 		}
@@ -205,6 +232,8 @@ func (in *requestInput) validate() error {
 		return in.remove().Validate()
 	case organization.InvitationSend:
 		return in.send().Validate()
+	case organization.InvitationAccept:
+		return in.accept().Validate()
 	}
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/session"
@@ -39,6 +40,15 @@ type InvitationSender interface {
 	Send(context.Context, organization.InvitationSendOperationRequest, string) (organization.StoreResult, error)
 }
 
+// InvitationAccepter acquires the actual native preparation and authenticated
+// original issuance facts. HTTP admission retains it until Handle executes the
+// identical preparation. Final current authority and atomic one-use effects
+// remain native-owned. Calls must honor ctx and support concurrent independent
+// requests. Acceptance is once, not a keyed retry API.
+type InvitationAccepter interface {
+	PrepareAcceptance(context.Context, organization.InvitationAcceptRequest, string) (organization.PreparedInvitationAcceptance, error)
+}
+
 // Config borrows actual concurrency-safe owners for their lifetime. Sessions
 // supplies current actor custody for transport rate admission; Service and
 // Invitations retain their respective native final authority fences. Supply
@@ -47,30 +57,37 @@ type InvitationSender interface {
 // Invitations and AdminRate, not Service or SafeRate. The selected profile is
 // strict Authorization bearer only, never ambient cookies or browser CSRF.
 // Network policy is copied. SafeRate is required only for selected reads and
-// AdminRate only for selected mutations. Share them across routes/requests.
+// AdminRate only for selected administrator mutations. Acceptance requires
+// InvitationAccepter and SecretRate, not Service, Invitations or AdminRate.
+// Share each rate owner across its selected routes/requests.
 // Now is trusted, prompt and concurrency-safe. MaximumDuration is 1ms..30s;
 // inbound earlier deadlines win. Construction performs no owner reads or IO.
 type Config struct {
-	Network          identityhttp.NetworkConfig
-	Sessions         *session.SessionService
-	Service          Service
-	Invitations      InvitationReader
-	InvitationSender InvitationSender
-	SafeRate         *identityhttp.SafeRateLimiter
-	AdminRate        *AdminRateLimiter
-	Now              func() time.Time
-	MaximumDuration  time.Duration
+	Network            identityhttp.NetworkConfig
+	Sessions           *session.SessionService
+	Service            Service
+	Invitations        InvitationReader
+	InvitationSender   InvitationSender
+	InvitationAccepter InvitationAccepter
+	// InvitationProofLimits must match the selected issuer's bounded parsing
+	// profile. Zero uses capability.DefaultLimits; parsing grants no authority.
+	InvitationProofLimits capability.Limits
+	SafeRate              *identityhttp.SafeRateLimiter
+	AdminRate             *AdminRateLimiter
+	SecretRate            *identityhttp.KeyedSecretRateLimiter
+	Now                   func() time.Time
+	MaximumDuration       time.Duration
 }
 
 // FeatureConfig opts into exactly the selected operations. Empty selection is
 // invalid; omission from FeatureServices exposes neither routes nor metadata.
-// Invitation reads and original-key send are independently selectable; no
-// invitation acceptance, team/browser/active-organization workflow is selected.
+// Invitation reads, original-key send and once-only acceptance are independently
+// selectable. No team/browser/active-organization workflow is selected.
 type FeatureConfig struct {
 	Config                                           Config
 	Create, Get, MemberList, MemberAdd, MemberRemove bool
 	InvitationGet, InvitationListMine                bool
-	InvitationSend                                   bool
+	InvitationSend, InvitationAccept                 bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -82,14 +99,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}} {
+	}{{organization.Create, c.Create}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}} {
 		if !selected.on {
 			continue
 		}
@@ -120,7 +137,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "organization", Operations: operations})
 }
 func selectedMutation(op organization.Operation) bool {
-	return op == organization.Create || op == organization.AddMember || op == organization.RemoveMember || op == organization.InvitationSend
+	return op == organization.Create || op == organization.AddMember || op == organization.RemoveMember || op == organization.InvitationSend || op == organization.InvitationAccept
 }
 func nilService(service any) bool {
 	if service == nil {

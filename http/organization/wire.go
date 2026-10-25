@@ -42,6 +42,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		mutationFields["deliveryState"] = map[string]any{"type": "string", "enum": []string{"queued", "attempting", "accepted", "delivered", "rejected", "bounced", "cancelled", "unknown", "retry_wait", "expired", "exhausted", "superseded", "transient_failure"}, "description": "Current authorized delivery observation; queued is local durable admission and accepted is provider acceptance, neither confirms delivery."}
 		mutationRequired = []string{"commandID", "organizationID", "invitationID", "afterVersion", "recovery", "invitation", "deliveryState"}
 	}
+	if op == organization.InvitationAccept {
+		mutationFields["invitationID"] = id
+		mutationRequired = append(mutationRequired, "invitationID")
+	}
 	mutation := object([]string{"committed", "commitOutcome"}, mutationFields)
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	failure := any(errorSchema)
@@ -67,7 +71,9 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"description": "Bounded ceiling seconds for a known audited rate rejection; no automatic retry.", "schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}}}
 	description := "Explicit bearer-only organization profile. Exactly one Authorization Bearer credential; cookies never supply fallback authority. Exact HTTPS host-mapped tenant and trusted full client IP; closed bounded JSON/query and no identity, tenant, actor or command override. Current native authorization/protected effects remain with the organization owner. No invitation acceptance, teams, browser workflow or active organization selection. "
-	if selectedMutation(op) {
+	if op == organization.InvitationAccept {
+		description = "Explicit bearer-only one-time invitation acceptance. Exactly one Authorization Bearer session and HTTPS mapped tenant are mandatory; ambient cookies provide no authority. Current native recipient/session/verified identifier, exact invitation/organization versions and signed original capability are required. Canonical rate.secret charges trusted IP10/10m, authenticated subject10/10m and original challenge5/signed lifetime before the same native preparation executes. Membership, one-use proof, scoped authority, audit and lifecycle effects commit atomically. Preserve the caller-known original command ID. Re-posting a consumed proof is not original-outcome recovery; use the safe returned binding and organization through the direct current-authorized native recovery API. A bare command ID is insufficient after complete response loss. No automatic retry, recovery route, refreshed validity, credential or delivery is provided. "
+	} else if selectedMutation(op) {
 		description += "Canonical shared rate.admin atomically charges actor30/minute, tenant100/minute and trustedIP60/minute; denial/outage fails closed with mandatory secret-free auditing. "
 	} else {
 		description += "Canonical rate.safe applies before the current authorized primary read; no session refresh or positive authority cache. "
@@ -90,6 +96,9 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}
 			description += "Exact verified recipient selection, never a submitted email address or claimed actor. The native owner allocates invitation/command IDs and atomically queues encrypted proof delivery. Matching keys recover original metadata only. A successful current read returns invitation and delivery status; if that read fails, the original committed outcome remains explicit without current metadata. No proof or delivery effect ID is exported. "
+		} else if op == organization.InvitationAccept {
+			required = []string{"commandID", "organizationID", "invitationID", "organizationVersion", "invitationVersion", "token"}
+			fields = map[string]any{"commandID": command, "organizationID": id, "invitationID": id, "organizationVersion": version(1), "invitationVersion": version(1), "token": map[string]any{"type": "string", "minLength": 32, "maxLength": 4096, "writeOnly": true}}
 		} else {
 			required = []string{"organizationID", "userID", "organizationVersion", "memberVersion"}
 			minimum := uint64(0)

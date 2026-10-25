@@ -2,7 +2,7 @@
 
 Optional **bearer-only** HTTP integration for native organization creation,
 explicit organization reads, member listing, admission/removal and original-key
-invitation sending. Omit its
+invitation sending and once-only acceptance. Omit its
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
@@ -20,6 +20,27 @@ shared `AdminRate`, trusted network/clock and timeout configuration. A send-only
 selection requires neither `Service` nor `SafeRate`. Install the existing native
 request-key/preparation/expiry-fence and invitation/capability/delivery migrations
 before selecting it. No application workflow or transaction adapter is required.
+
+Invitation acceptance is independently opt-in through `InvitationAccept`.
+Supply the actual native `InvitationService` as `Config.InvitationAccepter`,
+current `Sessions` and one shared `identityhttp.KeyedSecretRateLimiter` as
+`SecretRate`. Despite the limiter's name, acceptance uses its original-command
+API and **forbids Idempotency-Key**. No `Service`, invitation reader, safe or
+administrative limiter is needed for acceptance alone. The native owner retains
+the exact prepared mutation across phases: admission validates the original
+signed challenge ID/lifetime and charges quota before any before-handler hook;
+the handler executes that same preparation. The transaction consumes proof with membership,
+authority, audit and lifecycle effects. No application domain adapter is needed.
+`InvitationProofLimits` defaults to capability's parsing limits; configure the
+issuer's matching bounded profile. The public accept token remains32..4096 bytes.
+
+Keep a caller-generated canonical `commandID` before the original attempt.
+Acceptance is once: re-posting a consumed proof may conflict and is not recovery.
+Persist the returned safe `recovery` binding plus `organizationID`; supply them
+with current authentication to native `RecoverAccept`. Recovery never resubmits
+or infers success from membership. No HTTP recovery route is selected, and a
+bare command ID cannot recover after losing the entire response. An unknown
+outcome is not permission to allocate another command or replace the proof.
 
 ## Composition
 
@@ -58,6 +79,7 @@ session, protected risk, membership and atomic commit fences.
 | List members | `GET /v1/organization/member/list` | Query `organizationID`, optional exclusive `cursor`, `limit` 1..100 (default100) |
 | Add member | `POST /v1/organization/member/add` | JSON `organizationID`, target `userID`, `role`, `organizationVersion`, `memberVersion`; required original key |
 | Remove member | `POST /v1/organization/member/remove` | JSON `organizationID`, target `userID`, exact positive organization/member versions; **no key** |
+| Accept invitation | `POST /v1/organization/invitation/accept` | JSON original `commandID`, `organizationID`, `invitationID`, exact positive `organizationVersion`, `invitationVersion`, private `token`; **no key** |
 | Send invitation | `POST /v1/organization/invitation-send` | JSON `organizationID`, exact positive `organizationVersion`, target `recipientUserID`, existing verified `recipientIdentifierID`; required original key |
 | Get invitation | `GET /v1/organization/invitation/get` | Required query `organizationID`, `invitationID`; native **owner-only** authorization |
 | List my invitations | `GET /v1/organization/invitation/list-mine` | Optional opaque `cursor`, `limit` 1..200 (default100); current verified recipient, no membership required |
@@ -134,12 +156,12 @@ All retained installed states are discoverable; this is not a pending-only list.
 Pages are current-state keysets ordered by bytewise invitation ID, not snapshots.
 Return the subject-bound opaque cursor unchanged (at most 512 bytes); it grants
 no authority, cannot move between subjects/tenants and is revalidated natively.
-Restart the listing to observe additions before the current position. Acceptance
-remains a direct native operation; later HTTP member reads and current invitation
-reads observe its actual committed state without a positive authority cache.
+Restart the listing to observe additions before the current position. After
+native or independently selected HTTP acceptance, member and invitation reads
+observe its actual committed state without a positive authority cache.
 This read-only selection enables neither invitation mutations nor Reference
-composition. Select sending independently as described below; HTTP acceptance
-and other invitation mutations remain unavailable.
+composition. Select sending or acceptance independently as described here;
+other invitation mutations remain unavailable.
 
 ## Invitation sending and current delivery state
 
@@ -164,8 +186,9 @@ do not perform a current projection.
 `accepted` is provider acceptance—not confirmed `delivered`. Rejection, bounce,
 cancellation, unknown, retry wait, expiry, exhaustion, supersession and transient
 failure remain distinct. HTTP retries charge the same shared administrative
-budgets and never redeliver proof. No HTTP acceptance or resend is selected;
-the native acceptance owner consumes the delivered proof exactly once.
+budgets and never redeliver proof. Sending does not select HTTP acceptance or
+resend. The independently selected native-backed acceptance handler consumes
+the delivered proof exactly once.
 
 ## Results, recovery and security
 
