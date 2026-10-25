@@ -1,5 +1,54 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 20:47 UTC: HTTP completed-passkey/TOTP inventory/rename profile
+CLOSED, not full M16. Reference1490d59af2b7db91f469bf611ca85773dbe50c26
+exact origin/main; Required40231638863 success. Independent complete eight-path
+review totp_http_rename_final APPROVE5ddabb08; no production-code change was
+needed. Actual existing opt-in owners now have complete public HTTP consumer
+and adoption proof across identified/discoverable x fresh/populated upgrade.
+Final affected PG/race39849 PASS88.519s, including retained HTTP TOTP, ordinary
+HTTP management and native TOTP rename; Reference/command race5.196s/5.813s,
+tagged vet0/modverifyall, scoped/new/staged redacted scanners and diff checks0.
+Earlier42254/94476 were test-oracle selection failures;58968 exposed an upgrade
+fixture dereferencing the retired baseline, not a production RED. Corrected
+actual upgrade35666 PASS10.209s. Do not call characterization a runtime fix.
+All eight downloaded public files match authenticated
+v0.0.0-20261025203718-1490d59af2b7,
+sumTEm9rl0TtWJfALyz7FxVniHZEKHlWu/5lzZv8V1ckQ4=,
+go.modsum6HgXyls5x3ze6sIiSBCxXUpQ7zjSGUmKBKcIx4UCLGU=.
+Actual downloaded four-profile PG/race93043 PASS36.256s, modreadonly/GOWORKoff,
+no replacements; all modules verified. HTTP MFA enrollment/removal remain next;
+whole-goal estimate ~25%,11/39 and complete67-unit qualification unchanged.
+
+M22 review checkpoint: original-key facade remains LOCAL/UNFINISHED. Reviewer
+invitation_operation_final identified exact registered-wrapper vs embedded-phase
+identity mismatch in durable-journal recovery; worker owns minimal shared-body
+fix, with kernel guard unchanged. Latest actual deferred-COMMIT call still returns
+InProgress/Unavailable; investigate live original lease/state before claiming the
+participant guard was reached. No definitive rollback or GREEN is inferred.
+Separate pre-existing legacy public Recover Send/Accept gap: post-policy time
+validation lacks the current primary/session/member or recipient revalidation
+already present for cancel/expire/resend/reject. It is not a facade regression;
+it must be reproduced/fixed in a finite follow-on before full M22/unit closure.
+No legacy-security qualification or deferral outside the active goal is claimed.
+
+2026-10-25 20:29 UTC: next primary M16 profile frozen: real HTTP
+registration/key/confirmed factor -> identified or discoverable HTTP signin
+challenge -> TOTP cookie session -> safe HTTP inventory -> fresh action-bound
+UV rename -> metadata-only retries -> current inventory -> read/logout and
+revoked retry denial. Cover fresh and populated upgrade through actual TLS and
+selected OpenAPI. Consume delivered Referenceecad99d/native935ddaf and existing
+HTTP session-update/session/risk owners; primary owns Reference-only composition,
+consumer tests/docs. Wrong CSRF/Origin, changed intent/version, original factor
+withdrawal and session revocation must deny without mutation or credentials.
+No new proof, session, rate, transaction or protocol owner; no HTTP key enrollment/
+removal or secondary-method expansion in this finite profile. Existing machinery
+may already support it: establish actual complete consumer proof before changing
+production. Smallest checks: four genuine HTTP PG/race profiles and retained
+HTTP/native rename journeys, Reference module race/tagged vet/auth/secrets,
+one complete independent review and downloaded public consumer. Invitation worker
+owns current heavy slot; primary edits only until its release.
+
 2026-10-25 20:24 UTC: completed-passkey/TOTP key-removal profile CLOSED,
 not full M16. MFAfdf6e3f9e868759491372319145808a354d0da6c,
 native935ddaffedb1e79282523be2aec4fa0f88be1847 and
