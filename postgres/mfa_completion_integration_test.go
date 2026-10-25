@@ -27,6 +27,8 @@ type mfaCompletionAtomicPhase struct {
 	finalCredentialDenial bool
 	openCredentialCursor  bool
 	sawCredentialError    bool
+	preparationCredential bool
+	preparationGenerated  bool
 }
 
 // Transaction oracle only: the production MFA owner must perform real locked
@@ -105,6 +107,12 @@ func (p *mfaCompletionAtomicPhase) AdmitFeaturePreparation(ctx context.Context, 
 	if _, _, _, err := w.FeatureScope(p); err != nil {
 		return err
 	}
+	if p.preparationCredential {
+		_, err := w.RequireMFAPasskeyPreparationCredential(ctx, p, c, *p.credential)
+		if err != nil && !p.ignoreCredentialError {
+			return err
+		}
+	}
 	_, err := w.DatabaseTime(ctx)
 	return err
 }
@@ -112,6 +120,7 @@ func (p *mfaCompletionAtomicPhase) GenerateFeaturePreparation(ctx context.Contex
 	if c != p.expected || generation == 0 || ctx.Err() != nil {
 		return nil, invalidPreparation()
 	}
+	p.preparationGenerated = true
 	return []byte("retained-mfa-test-output"), nil
 }
 func (p *mfaCompletionAtomicPhase) RestoreFeaturePreparation(ctx context.Context, c identity.Command, generation uint64, wire []byte) (identity.Command, CommandPlan, error) {
@@ -221,7 +230,7 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.otp_reservation_fixture(tenant_id text PRIMARY KEY,challenge_id text NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,attempt_id text,generation numeric,version numeric NOT NULL,expiry timestamptz NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied", "prepared-otp-wrong", "prepared-totp", "prepared-totp-denied", "counted-denied", "counted-unchanged", "counted-error", "counted-panic", "counted-zero", "counted-rows", "counted-audit-failure", "passkey-current", "passkey-disabled", "passkey-foreign", "passkey-stale", "passkey-ignored", "passkey-open-ignored", "passkey-final-disabled", "counted-passkey-current", "counted-passkey-disabled", "counted-passkey-foreign"} {
+	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied", "prepared-otp-wrong", "prepared-totp", "prepared-totp-denied", "counted-denied", "counted-unchanged", "counted-error", "counted-panic", "counted-zero", "counted-rows", "counted-audit-failure", "passkey-current", "passkey-disabled", "passkey-foreign", "passkey-stale", "passkey-ignored", "passkey-open-ignored", "passkey-final-disabled", "counted-passkey-current", "counted-passkey-disabled", "counted-passkey-foreign", "passkey-preparation-current", "passkey-preparation-disabled", "passkey-preparation-foreign", "passkey-preparation-stale", "passkey-preparation-ignored"} {
 		t.Run(mode, func(t *testing.T) {
 			preparedOTP := strings.HasPrefix(mode, "prepared-otp")
 			preparedTOTP := mode == "prepared-totp" || mode == "prepared-totp-denied" || strings.HasPrefix(mode, "passkey-")
@@ -271,10 +280,14 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 				if strings.HasSuffix(mode, "foreign") {
 					native.credential.Credential.UserID = "other-user"
 				}
-				if mode == "passkey-stale" {
+				if strings.HasSuffix(mode, "stale") {
 					native.credential.CredentialAuthorityVersion++
 				}
-				native.ignoreCredentialError = mode == "passkey-ignored" || mode == "passkey-open-ignored"
+				native.preparationCredential = strings.HasPrefix(mode, "passkey-preparation-")
+				native.ignoreCredentialError = mode == "passkey-ignored" || mode == "passkey-open-ignored" || mode == "passkey-preparation-ignored"
+				if mode == "passkey-preparation-ignored" {
+					native.credential.CredentialAuthorityVersion++
+				}
 				native.openCredentialCursor = mode == "passkey-open-ignored"
 				native.finalCredentialDenial = mode == "passkey-final-disabled"
 			}
@@ -385,7 +398,7 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 				if e := pool.Raw().QueryRow(ctx, `SELECT state,(SELECT count(*) FROM public.identity_test_mfa_completion WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$2) FROM identity.capability_recovery_fixture WHERE capability_id=$1`, p.Capability.CapabilityID, string(b.CommandID)).Scan(&state, &effects, &audits, &events); e != nil {
 					t.Fatal(e)
 				}
-				if mode == "prepared-totp" || mode == "passkey-current" {
+				if mode == "prepared-totp" || mode == "passkey-current" || mode == "passkey-preparation-current" {
 					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || state != "finalized" || effects != 1 || audits != 1 || events != 1 {
 						t.Fatal("prepared TOTP completion not atomic", state, effects, audits, events, err)
 					}
@@ -398,6 +411,10 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 					native.expected = changed
 					if _, e := c.ExecutePreparedFeature(ctx, changed, p); e == nil {
 						t.Fatal("changed opaque submission replayed completion")
+					}
+				} else if native.preparationCredential {
+					if err == nil || state != "issued" || effects != 0 || audits != 0 || events != 0 || native.preparationGenerated {
+						t.Fatal("preparation denial generated credentials or consumed original child", state, effects, audits, events, err)
 					}
 				} else if err == nil || state != "released" || effects != 0 || audits != 1 || events != 0 {
 					t.Fatal("prepared TOTP late denial retained effects", state, effects, audits, events, err)

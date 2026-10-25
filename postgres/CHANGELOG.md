@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Check original passkey eligibility during native TOTP input preparation,
+  before generating session output. Keep this non-consuming fence separate
+  from the protected Apply/final-commit guard and preserve anonymous scope.
+
 - Fence original passkey credentials for the exact protected anonymous TOTP
   completion subject, including final checks and counted-attempt admission.
   Preserve original browser/journal scope and fail closed on foreign, disabled

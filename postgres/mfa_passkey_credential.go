@@ -7,6 +7,36 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
+// RequireMFAPasskeyPreparationCredential checks the original passkey's current
+// eligibility only during the exact native owner's input-admission callback.
+// command must retain the coordinator's original opaque custody and its frozen
+// anonymous TOTP completion plan. The original subject is selected from that
+// plan, never from a caller's user identifier. Primary user/credential locks,
+// expiry checks and poisoned-error semantics match RequireMFAPasskeyCredential.
+// This performs no consumption, generation, mutation or authentication and
+// cannot replace the consumed-child check in Apply or final commit checks.
+func (w Work) RequireMFAPasskeyPreparationCredential(ctx context.Context, owner MFACompletionContributor, command identity.Command, expected CredentialAdmission) (time.Time, error) {
+	if err := w.usable(); err != nil {
+		return time.Time{}, err
+	}
+	if ctx == nil {
+		return time.Time{}, w.fail(w.state.ctx, invalidWork())
+	}
+	if err := ctx.Err(); err != nil {
+		return time.Time{}, w.fail(ctx, err)
+	}
+	b, _, _, err := w.FeatureScope(owner)
+	p := w.state.featurePreparationPlan
+	if err != nil || p == nil || w.state.featurePreparationCommand == nil || *w.state.featurePreparationCommand != command || p.binding != b || p.registry != w.state.registry || w.state.featureApplying || w.state.mfaConsumed || w.state.mfaFinalized || p.mfaCompletion == nil || p.capability == nil || p.capability.Purpose != "identity.mfa.complete" || p.capability.MaxUses != 1 || p.capability.CapabilityID != string(p.mfaCompletion.ID) {
+		return time.Time{}, w.fail(ctx, invalidWork())
+	}
+	selected, err := mfaPasskeyCredentialBinding(b, *p.mfaCompletion, expected)
+	if err != nil {
+		return time.Time{}, w.fail(ctx, err)
+	}
+	return w.requireActiveCredential(ctx, selected, expected)
+}
+
 // RequireMFAPasskeyCredential checks the exact original primary credential for
 // the subject frozen in this native anonymous TOTP completion plan. The child
 // must already be provisionally consumed in this same Work. Apply and final

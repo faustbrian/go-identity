@@ -11,6 +11,11 @@ Both retain the original anonymous command, poison live Work on denial and use
 existing credential locks/time checks. Neither authenticates an assertion or
 factor, authorizes an operation, supplies an email recipient or issues a session.
 
+Before output generation, `Work.RequireMFAPasskeyPreparationCredential` uses
+the original input-admission command and frozen continuation subject to perform
+the same eligibility read. It does not consume the child or admit Apply; the
+existing consumption-required guard must still run during Apply and final checks.
+
 ## Recovery when an original request precedes its journal
 
 An opted-in native `RequestKeyRecoveryContributor` authenticates its original
