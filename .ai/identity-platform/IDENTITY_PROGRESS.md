@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 18:52 UTC
+## Current TL;DR — 2026-10-25 19:40 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
@@ -40,10 +40,14 @@
   identifier/session withdrawal. Reviewed `83b26ec` is main/CI-green and its
   downloaded public consumer passes PostgreSQL/race (6.535s). HTTP invitation
   mutations, remaining M22 profiles and Reference selection remain open.
-- **Next:** primary resolves the request crash-recovery prerequisite for native
-  original-key invitation send/restart. Its worker is parked on that actual
-  kernel dependency, not substituting another recovery authority. MFA key removal
-  follows; ordinary known-empty profiles and valid evidence remain retained.
+- **Invitation recovery prerequisite delivered:** kernel `9ccf9a6` is reviewed,
+  main/CI-green; its authenticated downloaded module passes PostgreSQL/race.
+  Expired never-started originals can be definitively refused without permitting
+  late execution; existing commands retain their actual recovery outcomes.
+  Native invitation sending still needs adoption and complete consumer proof.
+- **Next:** the invitation worker has resumed original-key send/delivery/restart
+  against that committed kernel. Primary continues completed-MFA key removal;
+  ordinary known-empty profiles and valid evidence remain retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.

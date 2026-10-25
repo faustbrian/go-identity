@@ -1,5 +1,47 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 19:38 UTC: mapped-origin expiry kernel candidate implements the
+frozen optional terminal fence through the existing global command-ID claim.
+Original runtime RED23823 FAIL0.539s -> focused real PostgreSQL/race76414
+PASS3.781s, including genuine committed preservation, before-expiry Unknown,
+exact restarted refusal, foreign/changed/current-policy denial, irreversible
+fences, concurrent expiry, delayed writer conflict and both lost-COMMIT paths.
+Final actual original-reservation-vs-expiry race now uses the existing executable
+repository/audit/lifecycle owners, not the structural-only planning fixture.
+Earlier fixture setup failures remain failures, not regression proof.
+Affected preparation cohort59787 PASS3.987s; global claim/journal/domain/feature/
+prepared/recovery cohort87885 PASS4.733s. Its earlier59365 filter omitted the
+domain audit-table fixture and failed42P01; corrected selection, no source fix.
+Ordinary module race32031 PASS3.419s; integration-tagged vet0; all modules
+verified. Full ten-path scoped scanner43969bytes/no leaks; diff check0.
+Independent complete-final-diff reviewer mapped_origin_expiry_final APPROVE,
+all ten ordered blobs retained in its native report. Delivered9ccf9a60660275821e75b6ca23f3bf49166acd62
+exact origin/main; Required40226982479 success. All ten downloaded public files
+match authenticated v0.0.0-20261025193805-9ccf9a606602,
+sumStXq1Y3W.../go.modsumm//LlYNU.... Actual downloaded PostgreSQL/race72925
+PASS3.803s, modreadonly/GOWORKoff/no replacement; all modules verified.
+Invitation worker resumed its existing owned native lane against this exact
+committed/public contract. Kernel fixture approval does not prove native
+envelope/consumer correctness. No new milestone or fully qualified unit is
+counted; overall remains ~25%,11/39.
+
+2026-10-25 18:59 UTC: primary M22 prerequisite frozen: explicitly selected
+expired mapped-origin closure using the sole global command-ID claim. Native
+registered owner authenticates exact original ciphertext/binding/deadline;
+current query authorization and primary DB expiry precede an irreversible typed
+retired claim. Ordinary retired claims remain scope-free; retain only a closed
+privacy-safe origin digest. A competing existing claim/journal is never retired
+or relabeled; its normal recovery owner decides. Missing/live origins remain
+Unknown, no automatic reexecution or renewed preparation. Original mapping stays
+immutable; generic missing/retired query privacy is unchanged. Primary owns
+kernel/postgres only; invitation worker resumes only after committed/proven API.
+Checks: actual mapped-only RED -> definitive noncommit and delayed-reservation
+denial; before-expiry/foreign/corrupt/changed-policy denial, exact restarted
+fence replay, real claim-vs-fence contention and before/after-COMMIT ambiguity;
+populated forward migration/history, focused request/preparation/recovery race,
+module/vet/auth/secrets and complete independent review. No second store/journal,
+active-claim cancellation, generic retirement policy or HTTP selection added.
+
 2026-10-25 18:52 UTC: M16 completed-passkey/TOTP additional-key enrollment
 profile CLOSED, not full M16. Nativefc7ce6f9baaa60b658fed37cb81be6f6fb8cccf5
 exact origin/main, Required40222755555 success, complete ten-path review
