@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Acquire confirmed factor authority before RP mapping locks during completed
+  passkey/TOTP revocation, matching native passkey signin and enrollment.
+
 - Explicitly compose original passkey plus confirmed TOTP session persistence,
   primary reading and revocation without password or known-empty-factor fallback.
   Require same-Work recorded factor completion and exact current credential,

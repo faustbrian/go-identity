@@ -176,16 +176,21 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	if a.passkey {
 		return r.revokePasskey.authority.RequirePasskeySession(ctx, w, owner, r.revokePasskey.profile.RPNamespace, record)
 	}
-	if a.mfaPasskey {
-		if err := r.revokeMFAPasskey.authority.RequireMFAPasskeySession(ctx, w, owner, r.revokeMFAPasskey.profile.RPNamespace, record); err != nil {
+	if a.factor != nil {
+		var err error
+		if a.factor.Method == "otp" {
+			err = mfapg.RequireOTPSessionFactor(ctx, w, owner, b.UserID, a.factor.FactorID, mfapg.OTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
+		} else {
+			err = mfapg.RequireTOTPSessionFactor(ctx, w, owner, b.UserID, a.factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
+		}
+		if err != nil {
 			return err
 		}
 	}
-	if a.factor != nil {
-		if a.factor.Method == "otp" {
-			return mfapg.RequireOTPSessionFactor(ctx, w, owner, b.UserID, a.factor.FactorID, mfapg.OTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
-		}
-		return mfapg.RequireTOTPSessionFactor(ctx, w, owner, b.UserID, a.factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: a.factor.EnrollmentVersion, AuthorityVersion: a.factor.FactorAuthorityVersion})
+	if a.mfaPasskey {
+		// Match native passkey signin/enrollment: factor authority precedes
+		// mapping locks, whose credential rows signin later updates.
+		return r.revokeMFAPasskey.authority.RequireMFAPasskeySession(ctx, w, owner, r.revokeMFAPasskey.profile.RPNamespace, record)
 	}
 	return nil
 }

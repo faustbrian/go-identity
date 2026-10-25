@@ -21,8 +21,9 @@ type MFAPasskeyTOTPCompletionEffect struct{ native *MFATOTPCompletionEffect }
 
 // NewMFAPasskeyTOTPCompletionEffect freezes an explicit RP/mapping selection.
 // The actual native factor owner must authenticate original assertion/browser/
-// child, current policy, directory and credential, and lock mapping authority
-// before factor locks. Apply repeats eligibility checks but cannot manufacture
+// child, current policy, directory and credential. Acquire factor authority
+// before RP mapping locks, matching native passkey signin/enrollment. Apply
+// receives recorded factor custody and cannot manufacture
 // these proofs. Install the selected MFA/session histories before use. The
 // mapping owner is borrowed and must outlive calls; construction performs no IO.
 func NewMFAPasskeyTOTPCompletionEffect(c Config, p MFAPasskeySessionAdmission) (*MFAPasskeyTOTPCompletionEffect, error) {

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 10:46 UTC
+## Current TL;DR — 2026-10-25 11:10 UTC
 
 - **Whole goal: ~25% (low-confidence estimate); 11/39 milestones closed.**
   M16 has more working consumer profiles, not full closure. All 67 units retain
@@ -8,8 +8,9 @@
 - **Latest native session result:** actual signed child -> TOTP verification ->
   session/read -> original retry/recovery -> native self-revocation/read denial
   passes PostgreSQL/race, including late rollback and final credential expiry.
-  The complete25-path session batch is independently approved; main delivery
-  follows. Its primary-verifier and RP-mapping boundaries are explicit fixtures,
+  The complete25-path session batch is independently approved and delivered at
+  main4d42d80, Required40186223714 green; authenticated public bytes match.
+  Its primary-verifier and RP-mapping boundaries are explicit fixtures,
   not proof of the complete genuine assertion-to-TOTP consumer. That integration
   remains unfinished; no full milestone is newly closed.
 - **Kernel prerequisite delivered:** a59f410 is main/Required-CI green and all5
@@ -18,12 +19,12 @@
   keyed metadata Update2cbf261 are independently reviewed, pushed to main and
   Required-CI green. All14 native passkey files match the authenticated public
   module. Neither closes a complete milestone.
-- **Current consumer gap:** passkey -> TOTP -> session/read/logout is unfinished.
-  Native session selection, populated record migration and completion effect
-  are local. The kernel exact-subject credential guard's ignored-cursor defect
-  reproduces before the fix; ten selected real PostgreSQL/race cases pass after
-  it. Independent complete final review approves; module tests, tagged vet,
-  module verification and selected secrets pass. Main delivery follows.
+- **Current consumer gap:** genuine passkey -> TOTP -> session/read/logout is
+  unfinished. Native session selection, populated record migration and completion
+  effect are delivered, not the full consumer. A local factor-before-mapping
+  revocation correction passes four PostgreSQL/race cases and module tests;
+  independent final review approves; main delivery follows. A worker is preparing
+  the real native mapping adapter against delivered contracts. Primary owns composition.
 - **Native Ed25519 delivered:** `go-passkey@0b8b646` is independently approved,
   pushed to main and Required-CI green (`40094300216`). Ed-only and either mixed
   order support genuine signup/session/discovery, current-key UV second-key

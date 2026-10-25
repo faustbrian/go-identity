@@ -21,6 +21,8 @@ import (
 // enrollment and account factor generation. Observe reads current primary
 // mapping evidence; Require locks and compares the original mapping in the
 // exact native completion or revocation owner's Work. Both methods honor ctx,
+// and Require's caller must hold its actual factor fence before mapping locks,
+// matching the native passkey signin/enrollment lock order.
 // deny missing/changed authority and retain no Work, callbacks or goroutines.
 // Neither authenticates an assertion/factor, mutates, commits or issues tokens.
 type MFAPasskeySessionAuthority interface {

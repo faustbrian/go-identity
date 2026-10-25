@@ -14,8 +14,9 @@ validity bound, including cached paths; copying cannot renew it.
 `NewMFAPasskeyTOTPCompletionEffect` persists the original projected session only
 after real native TOTP completion was recorded in the same protected Work.
 The native owner must first authenticate the original assertion, browser and
-child, authorize the operation, and lock directory/credential/RP mapping before
-factor locks. Call the effect's `Check` in the original `CheckFeatureCommit`
+child, authorize the operation, and take directory/credential/policy fences.
+Acquire factor authority before RP mapping locks, matching native passkey
+signin/enrollment. Call the effect's `Check` in the original `CheckFeatureCommit`
 after audit/outbox waits; an original credential can expire while those wait.
 `RequireMFAPasskeyConsumedPreAuth` checks that exact original
 passkey browser's consumed journal without consuming it again. No email

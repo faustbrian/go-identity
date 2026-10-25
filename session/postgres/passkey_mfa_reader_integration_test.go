@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The mapping port is the deliberate component seam; real session/kernel and
@@ -21,12 +23,14 @@ import (
 type mfaPasskeyMappingComponent struct {
 	version uint64
 	now     time.Time
+	pool    *database.Pool
 }
 
 // Real owned revocation/audit/outbox; only RP mapping and policy use the same
 // explicitly declared component seams as the preceding completion fixture.
 func testPasskeyMFARevoke(t *testing.T, ctx context.Context, pool *database.Pool, config Config, profile MagicLinkAdmissionConfig, trustedClock clock.Clock, reader *session.SessionService, admitted session.GetResult, input session.GetRequest, selected *mfaPasskeySessionSelection) {
 	t.Helper()
+	selected.authority.(*mfaPasskeyMappingComponent).pool = pool
 	selection := MFAPasskeySessionAdmission{Profile: selected.profile, Authority: selected.authority}
 	execution := IssueExecutorConfig{Repository: config, Profile: IssueAdmissionConfig{GlobalAuthorityID: profile.GlobalAuthorityID, PolicyNamespace: profile.PolicyNamespace, Audience: profile.Audience, AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}, Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, Authorization: revokeQueryPolicy{}, Clock: trustedClock, PolicyID: revokeBinding().PolicyID, PolicyVersion: 1, AuditRetentionVersion: 1}
 	executor, err := NewRevokeOneExecutor(pool, RevokeOneExecutorConfig{Execution: execution, Sessions: reader, MFAPasskey: &selection})
@@ -122,6 +126,23 @@ func (a *mfaPasskeyMappingComponent) RequireMFAPasskeySession(ctx context.Contex
 	v, err := s.Authority.Bindings()
 	if err != nil || !v.Passkey.Present || v.Passkey.Binding.Version != a.version {
 		return identity.ForbiddenError{}
+	}
+	if a.pool != nil {
+		// Native mapping writers already use factor -> mapping order. Probe
+		// that the caller acquired its factor fence before entering this port;
+		// a separate NOWAIT transaction cannot borrow the caller's own lock.
+		tx, err := a.pool.Raw().Begin(ctx)
+		if err != nil {
+			return err
+		}
+		_, lockErr := tx.Exec(ctx, `SELECT 1 FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2 FOR UPDATE NOWAIT`, string(s.TenantID), string(s.UserID))
+		if err := tx.Rollback(ctx); err != nil {
+			return err
+		}
+		var unavailable *pgconn.PgError
+		if !errors.As(lockErr, &unavailable) || unavailable.Code != "55P03" {
+			return identity.InvalidInputError{Field: "factor_before_mapping"}
+		}
 	}
 	return nil
 }

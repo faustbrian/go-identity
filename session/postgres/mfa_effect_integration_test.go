@@ -249,9 +249,6 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 		if _, err := w.RequireMFAPasskeyCredential(ctx, p, credential); err != nil {
 			return identity.FeatureReceipt{}, err
 		}
-		if err := p.passkeyEffect.native.passkey.authority.RequireMFAPasskeySession(ctx, w, p, p.passkeyEffect.native.passkey.profile.RPNamespace, record); err != nil {
-			return identity.FeatureReceipt{}, err
-		}
 	} else {
 		if err := w.RequireRecipient(ctx, p, p.recipient); err != nil {
 			return identity.FeatureReceipt{}, err

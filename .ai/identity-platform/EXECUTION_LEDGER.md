@@ -1,5 +1,27 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 11:10 UTC: native session batch4d42d805910ca8c86b962a7e0e887bfc722ab360
+is exact origin/main, Required40186223714 SUCCESS; all25 native files match
+authenticated public session/postgres v0.0.0-20261025104719-4d42d805910c.
+Before adopting real RP mapping, source inspection found revocation acquired
+mapping before factor locks, reversing native signin/enrollment order. Local
+seven-path correction acquires factor first. Real separate-transaction NOWAIT
+probe RED89070 rejects the old order; GREEN53253 passes four completion/read/
+recovery/revoke/rollback PostgreSQL/race cases2.226s, module units0.318s and
+tagged vet0. Diff/format and changed-content secrets pass. Independent complete
+seven-path passkey_mfa_session_final review APPROVE, no actions; main delivery
+follows. No deployed deadlock or complete genuine journey is claimed.
+
+Worker passkey_mfa_mapping owns only go-passkey/postgres/session_authority.go,
+new mfa_session_authority tests and its README/CHANGELOG. It consumes proven
+native68e1b64 and session4d42d80 contracts; parent owns dependency repins/Git.
+Finite outcome: actual RP/handle/credential mapping observation/fence for the
+completed passkey/TOTP profile, not factor verification or session issuance.
+Tests must use genuine assertion/challenge mapping and current-authority denial;
+complete native factor/session/Reference composition stays primary-owned.
+Worker has prepared tests, not run them or changed production; heavy lease
+remains primary until the corrected public dependency is integrated.
+
 2026-10-25 10:46 UTC: kernel guard a59f410769b55d54a9c685c59364cadbc7b23b93
 is exact remote main, Required40183342318 SUCCESS. Authenticated public native
 v0.0.0-20261025100515-a59f410769b5 matches all5 changed kernel files and is
