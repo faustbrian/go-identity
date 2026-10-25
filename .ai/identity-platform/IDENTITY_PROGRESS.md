@@ -1,10 +1,10 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 13:49 UTC
+## Current TL;DR — 2026-10-25 13:54 UTC
 
 - **Overall: ~25%, low-confidence estimate; 11/39 full milestones closed.**
   No additional full milestone or fully qualified unit is claimed this update.
-- **New working behavior (local):** genuine registration/key enrollment and
+- **New delivered profile:** genuine registration/key enrollment and
   confirmed TOTP enrollment -> real passkey assertion -> challenge only ->
   wrong-code denial -> correct TOTP -> session/read -> exact retry/recovery
   without credential redisclosure -> CSRF-protected logout/read denial.
@@ -17,9 +17,12 @@
   a02703b and kernel preparation guard87c816c are main/CI-green, with matching
   authenticated public sources. Session browser completion10fb24a is reviewed
   and main/CI-green, with matching authenticated public sources.
-- **Current:** final Reference review and main delivery. Its public dependency
-  authentication, affected race units/command, tagged vet and genuine selected
-  runtime acceptance pass. Reference itself is not yet delivered/public-qualified.
+- **Reference delivered:** independently approved187c54e is main/Required-CI
+  green. All24 changed public module files match; genuine identified and
+  discoverable journeys pass from the downloaded public Reference (12.74s).
+  Affected race units/command, tagged vet and module authentication pass.
+  This closes the selected MFA-first existing-account profile, not full M16
+  or a fully qualified release unit. Remaining passkey/MFA profiles stay open.
   Proposed new lock/counter changes were withdrawn: existing tenant advisory
   serialization already prevents the reported same-tenant cycles. No such
   kernel changes were made. No new HTTP login route is claimed.
