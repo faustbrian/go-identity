@@ -1,5 +1,35 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 21:34 UTC: HTTP MFA additional-key enrollment profile CLOSED,
+not full M16. Exact main d6b788d93df374ef2993daaa852b3707660dfaf5;
+Required40235793203 success. Actual authenticated downloaded Reference82943
+PG/race four-profile consumer PASS39.470s, modreadonly/GOWORKoff/no replacements,
+modules verified. All eight public files match independent approved snapshot;
+public sums retained below. Test oracle repairs are not production regression
+claims. Original completed session, fresh UV, unchanged registration intent,
+factor withdrawal, metadata-only retries, actual two-key inventory/new-key TOTP
+challenge and read/logout/revoked-retry all reached. HTTP removal remains next.
+Worker now owns legacy9-case GREEN/cohort47314; independent complete five-path
+invitation_legacy_disclosure_final review running. Exact all9 base-production
+RED7.675s includes seven committed and two unjoined-rollback receipt leaks.
+Primary stopped own PG55485; enrollment cache root is removed after checkpoint.
+Worker55484 and transferred M22 cache root are untouched.
+
+2026-10-25 21:31 UTC: HTTP MFA additional enrollment reviewed and main-pushed
+d6b788d93df374ef2993daaa852b3707660dfaf5; Required40235793203 pending.
+Complete8path totp_http_enrollment_final APPROVE, exact40884323... new consumer
+identity retained. Final46992 PG/race10-profile cohort PASS86.133s; Reference/
+command race5.159s/7.042s, taggedvet0/modverifyall. Scoped/new/staged scanner
+22.90KB clean/diffcheck0. No production code was changed; actual public HTTP
+consumer closes the previously unproved composition, not a replacement engine.
+Authenticated public v0.0.0-20261025213006-d6b788d93df3 matches all8files,
+sumHE+bjaUyvFkzVI7oCKImeJeiP7PtseteyDzZBHB9gs8=,
+modsum6HgXyls5x3ze6sIiSBCxXUpQ7zjSGUmKBKcIx4UCLGU=.
+Actual downloaded four-profile PG/race still required before profile closure.
+Legacy disclosure RED47314 proves five real late-callback Send/Accept projection
+leaks10.931s; a later genuine-signin fixture failure leaves other partitions
+unproved. Worker repairs fixture redundancy without changing native auth/risk.
+
 2026-10-25 21:26 UTC: primary HTTP MFA enrollment fresh identified journey
 42923 PASS10.916s on genuine UTF8 PostgreSQL/race. Exact registration receipt
 uses UTC while PostgreSQL inventory serializes its offset; compare time instants,

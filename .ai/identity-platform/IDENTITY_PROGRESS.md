@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 21:27 UTC
+## Current TL;DR — 2026-10-25 21:34 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
@@ -47,7 +47,14 @@
   CSRF/Origin/version and revoked-session denials are exercised. Reviewed
   `1490d59` is main/CI-green; all four genuine fresh/upgrade and identified/
   discoverable journeys pass in the authenticated downloaded Reference (36.256s).
-  Existing owners needed no production change. HTTP MFA enrollment/removal remain.
+  Existing owners needed no production change. HTTP MFA removal remains.
+- **Closed HTTP MFA additional-key enrollment profile:** completed HTTP
+  passkey/TOTP session -> genuine fresh UV -> second-key registration ->
+  two-key inventory -> metadata-only retries -> read/logout and revoked retry
+  denial. New-key signin still requires TOTP. Reviewed `d6b788d` is main/CI-green;
+  all four fresh/upgrade and identified/discoverable PostgreSQL/race journeys
+  pass in the authenticated downloaded Reference (39.470s). No new production
+  workflow was necessary. Full M16 qualification and HTTP removal remain open.
 - **Closed organization HTTP read profile:** recipients can discover invitations
   before membership; exact native owner-only get remains enforced. Genuine
   send/delivery/accept/membership and restarted current reads pass, including
@@ -58,7 +65,7 @@
   main/CI-green; its authenticated downloaded module passes PostgreSQL/race.
   Expired never-started originals can be definitively refused without permitting
   late execution; existing commands retain their actual recovery outcomes.
-  Native invitation sending still needs adoption and complete consumer proof.
+  The native invitation-send consumer is delivered below; HTTP remains open.
 - **Invitation sending now on main:** reviewed native `25e7a9e` and capability
   recovery `9c2e204`; both have exact-source green Required checks. Original-key
   send -> encrypted delivery -> acceptance/member read, retries, real COMMIT
@@ -66,14 +73,11 @@
   public dependency (31.878s). The authenticated downloaded adapter also passes
   the full PostgreSQL/race journey (31.746s), closing this finite native profile.
   HTTP/Reference invitation mutations remain open.
-- **Next:** primary is proving HTTP MFA second-key enrollment, retaining the
-  native TOTP factor and genuine fresh UV. The fresh identified HTTP journey
-  passes PostgreSQL/race (10.916s); all four signin/upgrade profiles and retained
-  consumers are being checked, with independent review pending. Earlier fixture
-  encoding/metadata-oracle failures are not product regression evidence.
-  A worker is correcting the older legacy send/accept recovery disclosure-fence
-  gap before full M22 closure. Ordinary known-empty profiles and unchanged valid
-  evidence remain retained.
+- **Next:** primary continues HTTP MFA key removal from the delivered enrollment
+  and native removal owners. A worker is correcting the older legacy public
+  send/accept recovery disclosure-fence gap: all nine actual late-callback cases
+  reproduce, and the correction is under checks and independent review.
+  Ordinary known-empty profiles and unchanged valid evidence remain retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.
