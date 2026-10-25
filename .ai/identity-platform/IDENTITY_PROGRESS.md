@@ -1,9 +1,9 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 17:15 UTC
+## Current TL;DR — 2026-10-25 18:20 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
-  Two more complete consumer profiles are delivered below, not two full rows.
+  The completed profiles below do not close the full M16/M22/M33 rows.
   No additional fully qualified release unit is claimed.
 - **Closed HTTP profile:** real enrollment -> identified/discoverable passkey
   -> challenge only -> TOTP -> session/read/logout. All four fresh/upgrade
@@ -20,9 +20,23 @@
   and private immutable HTTP catalog decoding `ba26ded`, reviewed/main/CI-green.
   No timeout, authority or validation was relaxed. Earlier failures remain in
   the execution ledger; they are not passing evidence.
-- **Next finite outcome:** safe credential inventory and fresh UV rename from
-  a completed passkey/TOTP session. Enrolled-MFA enrollment/removal follow;
-  ordinary known-empty profiles and their valid evidence are retained.
+- **Closed MFA credential-management profile:** completed passkey/TOTP sessions
+  can list credentials and rename with a genuine fresh action-bound UV assertion,
+  then retry/read/logout. Native `930e129` and Reference `bfbf71e` are independently
+  reviewed, main/CI-green; the authenticated downloaded Reference passes both
+  actual identified/discoverable PostgreSQL/race journeys (12.383s). Existing
+  ordinary and four HTTP-TOTP profiles pass. This does not claim MFA-management
+  HTTP qualification or enrolled-MFA additional-key enrollment/removal.
+- **Closed organization HTTP read profile:** recipients can discover invitations
+  before membership; exact native owner-only get remains enforced. Genuine
+  send/delivery/accept/membership and restarted current reads pass, including
+  identifier/session withdrawal. Reviewed `83b26ec` is main/CI-green and its
+  downloaded public consumer passes PostgreSQL/race (6.535s). HTTP invitation
+  mutations, remaining M22 profiles and Reference selection remain open.
+- **Next:** primary completes additional-key enrollment from MFA sessions, then
+  removal; an independent worker prepares native original-key invitation send
+  and restart custody over the existing invitation/delivery/acceptance engine.
+  Ordinary known-empty profiles and their valid evidence remain retained.
 - **Remaining:** full M16/M33 and other open organization, social/federation,
   provisioning and cross-cutting milestones; complete 67-unit qualification.
   Historical full-history secret findings remain an explicit release gap.

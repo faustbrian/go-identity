@@ -1,5 +1,167 @@
 # Identity Implementation — Current Milestone
 
+2026-10-25 18:20 UTC: M16 completed-passkey/TOTP inventory and fresh-UV rename
+native/Reference profile CLOSED, not full M16. Native930e129e16625c14eeda3a38479acc65e807b66d
+exact origin/main, Required40219538168 success; complete ten-file review
+native_mfa_credential_management_final APPROVE tracked9fd96340 + newtestd90fc7db.
+Ordinaryrace75493 PASS1.403s/vet0; actual native PG mapping/update scopes plus
+ordinary rename47773 PASS12.042s; combined-reader freeze/mismatch/no-fallback
+38870 PASS4.718s/taggedvet0/authentication/secretsclean. All ten authenticated
+public native files match v0.0.0-20261025180448-930e129e1662, sumy24tbWuA....
+
+Referencebfbf71e756977ba8ed19daa7e031698938f26dd1 exact origin/main,
+Required40220507651 success. Complete ten-path independent review
+reference_mfa_credential_management_final APPROVE c6604af8. Real enrollment ->
+identified/discoverable passkey/TOTP -> inventory -> genuine action-bound UV
+rename -> original metadata-only retry -> read/logout13885 PASS11.947s,
+including selected management without native TOTP denial. Original RED88300
+inventory Forbidden remains; first connected76280 failed because the synthetic
+authenticator reused counter1 after signin. Only fixture counter advanced to2;
+protocol rejection was correct and unchanged. Earlier18449 PASS11.763s precedes
+the added missing-owner negative. Existing four HTTP-TOTP profiles and two
+ordinary standalone-management profiles99805 PASS40.734s; ordinaryReference/
+command72820 PASS5.188s/5.821s. Finaltaggedvet8189 0/allmodulesverified,
+finalsecretsclean. All ten public Reference files match authenticated
+v0.0.0-20261025181656-bfbf71e75697, sum1nfMuJcA.... Actual downloaded-public
+consumer2805 PASS12.383s on PostgreSQL/race, both genuine profiles and original
+retry/read/logout, dependencies verified. No workspace/replaces or dependency
+authentication bypass used. Required CI is structural/secret proof; these local
+and public consumer runs establish the stated runtime behavior.
+
+Additional-key enrollment/removal from completed MFA sessions, other methods,
+organization/new algorithm variants, selected MFA-management HTTP qualification
+and full unit/release obligations remain open. Next primary outcome is actual
+additional-key enrollment from original completed-passkey/TOTP authority; inspect
+and freeze its three native phases before coding, reuse prior proven owners.
+Whole goal remains~25% low-confidence,11/39 full milestones; no new full-row or
+fully qualified unit claim. The independent original-key invitation send lane
+below can proceed against its consumed committed owners without waiting for M16.
+
+2026-10-25 18:18 UTC next parallel M22 native outcome: original-key invitation
+send -> actual captured delivery -> existing exact one-use acceptance/member
+read, including same-key/restarted and ambiguous-command recovery. Owner worker
+go-organization on main2cbf261; actual consumed invitation/delivery/capability/
+session/kernel contracts are already committed and proved by the native and
+83b26 HTTP consumer. Reuse native invitation engine and existing operation
+request-key/preparation owners; no new replay/credential/transaction engine.
+Writable paths: root invitation_operation.go, invitation_operation_test.go,
+CHANGELOG.md, README.md; postgres/invitation_operation.go,
+invitation_operation_test.go, invitation_operation_integration_test.go,
+invitation_service.go, invitation_preparation.go, invitation_recovery.go,
+CHANGELOG.md, README.md, go.mod, go.sum. Scope extends only those explicit paths
+inside go-organization; primary owns cross-repository contracts/integration,
+HTTP admission/policies, Reference, final Git/acceptance and progress.
+Provide a storage-neutral direct send port with initiating key and immutable
+original command/invitation custody; retries/restart cannot allocate replacement
+IDs, disclose bearer or queue another delivery. Preserve verified intended
+recipient, current owner/session/membership/policy authority, expiry and tenant
+binding, protected risk and atomic capability/delivery/membership/lifecycle.
+Use existing native acceptance; do not force acceptance into the send's key
+semantics or add HTTP, resend/cancel/teams/roles/SSO/SCIM in this lane.
+Checks: focused red/green, actual PostgreSQL consumer send/delivery/accept/member
+read, same-key/different-intent/concurrent/restarted outcomes, withdrawal,
+rollback and before/after-COMMIT loss; affected native module race/vet/auth/
+secrets and one final independent complete review. Missing upstream behavior
+must be named, not substituted. Serialize Go/PG with primary; no Git writes,
+children or permanent replaces. Inspect first public boundary before expansion.
+
+2026-10-25 18:03 UTC: M22 invitation recipient-discovery/current owner-read
+profile CLOSED, not full M22. Nine-path leaf delivered83b26ececce6217d91909b0902f0ebfb2e448227,
+exact origin/main, Required40218809517 success. Native owner-only Get preserved;
+recipient ListMine requires current verified identifier/session but no membership.
+Actual native send/captured delivery -> recipient pagination -> accept -> HTTP
+membership/current accepted reads after restart passes local74431 race1.523s.
+Ordinaryrace26887 PASS8.113s/taggedvet0/authenticationclean. Reviewer
+organization_invitation_reads_final F1 required new-ingress active fuzz; added
+34seeds and primary68693 race/focused/3sfuzz PASS5.493s,1731executions. Complete
+final review APPROVE at tracked a46ea8c plus finaltesta5e2d64e and unchanged
+three new producer/fixture files; secret scans clean. All nine authenticated
+downloaded files match v0.0.0-20261025175536-83b26ececce6 (sum4F0krWLI...);
+actual downloaded-public PostgreSQL/race85621 PASS6.535s/allmodulesverified.
+Initial94931 failed fixture oracle is retained, not labeled passing. HTTP
+send/accept, remaining organization profiles and Reference selection stay open.
+
+Native MFA management prerequisite is local; ordinaryrace75493 PASS1.403s,
+actual PG mapping/update-Work + retained ordinary rename47773 PASS12.042s,
+taggedvet21149 0/allmodulesverified; independent complete native review pending.
+New constructor/provenance-selection regression is being exercised. Public
+MFA83b26 authenticates with original reviewed bytes; cached49fde lookup failure
+does not block development and no authentication fallback/bypass was used.
+
+17:43 M16 prerequisite49fde04 committed: exact original completed-passkey/TOTP
+admission and native management factor fence. Focused missing-export RED12382/
+91440; helper GREEN71658. Module race MFA1429 PASS1.383s/session84053 PASS1.876s,
+ordinary/tagged vet0, module authentication passes. Complete genuine-coordinator
+guard PostgreSQL/race90034 PASS2.240s including ordinary and completed OTP/
+recovery-code rejection, foreign descriptor/factor/tenant/user, original epochs,
+pending/blocked authority and aborted probe rollback. Initial81233 fixture/life
+failures retained; corrected99659 PASS2.251s before added review partitions.
+Independent mfa_passkey_management_prerequisite_final APPROVE full eight files
+at tracked1c744984 plus exact three new-file identities. Both secret scans clean.
+Native/Reference inventory+UV rename is not yet implemented or claimed closed.
+
+17:52 actual new Reference consumer88300 RED5.013s: genuine enrollment/assertion/
+TOTP reaches inventory and is forbidden by the ordinary native reader, as
+expected. Native implementation now connects explicit MFA inventory selection
+and TOTP-only label management; its source is still local/unreviewed. Public
+session49fde04 authenticates and all three changed files byte-match. The MFA
+module at the same revision is temporarily unavailable from upstream proxy/
+checksum database (cached GitHub DNS lookup404), not a missing source contract.
+Do not weaken authentication or claim public adoption. Continue independent
+invitation delivery while that exact public acquisition is retried naturally.
+
+2026-10-25 17:35 UTC: freeze M16 completed-passkey/TOTP credential inventory
+and fresh-UV rename profile. Primary owns session/postgres original-admission
+helper/tests/changelog, mfa/postgres exact management factor fence/tests/changelog,
+go-passkey/postgres inventory/session-management/mapping authority and tests,
+and Reference configuration/real-consumer tests/docs/pins. Baselines are identity
+473945c and passkey d4f1b8a; reuse completed-MFA session/factor/mapping readers.
+Consumer acceptance: real enrollment/assertion/TOTP -> safe own inventory ->
+genuine action-bound UV rename -> label/version+1 -> original retry/recovery ->
+session read/logout. Preserve original factor ID/enrollment/account generation,
+credential/directory/policy/RP/session authority and <=20s non-renewed evidence.
+Reject foreign actor/tenant/RP/target, wrong CSRF/action/assertion, stale factor,
+session or proof and changed-intent replay. Counter/label/lifecycle/risk effects
+stay atomic, late withdrawal rolls back, retries never repeat/redisclose proof.
+Ordinary known-empty behavior remains unchanged. Additional-key enrollment/
+removal, other MFA methods, organizations and new algorithms are later profiles.
+Checks: focused red/green; affected session/MFA/native module race+vet; real
+PostgreSQL guard/rename/rollback/recovery and selected Reference consumer;
+independent complete-diff review, main/Required CI and public-pin adoption.
+This is one consumer outcome across prerequisite commits, not helper closure.
+
+Parallel M22 profile: organization invitation recipient discovery/current read.
+Worker owns only http/organization/{feature.go,invitation_read.go,
+invitation_wire.go,invitation_read_test.go,
+invitation_consumer_integration_test.go,README.md,CHANGELOG.md,go.mod,go.sum}.
+Consume identity473945c, HTTP ba26ded public, session e952895 public,
+organization2cbf261 native/root and existing genuine native invitation proof
+(ledger9333, public PostgreSQL/race15.292s), not invented authority. Supported
+HTTP get/list-mine use exact strict bearer/current session and rate.safe;
+invitation-only selection must not demand unrelated mutation Service. Prove
+real signup/send/captured delivery -> recipient HTTP reads before membership ->
+native accept -> HTTP membership/read reflects acceptance, foreign recipient/
+tenant and revoked/changed-identifier denial, bounded pages/no secret leakage,
+route/OpenAPI omission and restart-current state. Exclude HTTP send/accept,
+other mutations, teams/roles and Reference composition/full M22 closure.
+Primary owns base HTTP, Reference/pins outside leaf, Git/acceptance. Worker
+implements/tests narrowly, requests serialized heavy-check lease, no Git writes
+or children; final independent review and native/public consumer delivery apply.
+
+17:35 contract correction from worker's first native boundary: invitation.Get
+is deliberately owner-only, whereas ListMine admits the verified recipient
+without membership. Preserve this authority: recipient discovery uses ListMine;
+Get requires actual owner authorization, including recipient denial. Native
+acceptance then enables member read; current ListMine/owner Get reflect status.
+Do not invent a recipient Get permission to satisfy the earlier assumed seam.
+
+17:38 first full factor-guard integration exposed an existing shared-fixture
+collision: continuation recovery's wrong-user case reused user-b retained by
+the earlier foreign-factor fixture. Use a distinct recovery-only user without
+changing production behavior. Invalid management lifecycle versions must be
+kernel-valid first, so they reach the intended guard rather than failing Prepare.
+Retain first failed81233; rerun the affected complete guard test after correction.
+
 2026-10-25 17:15 UTC: selected HTTP passkey/TOTP profile CLOSED. Reference
 dependency adoption8579adf1252e1631525fc387bfd87da713d35680 exact origin/main,
 Required40214834196 success. All twelve changed Reference files match public
