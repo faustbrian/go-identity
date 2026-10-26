@@ -1,11 +1,19 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 15:20 UTC
+## Current TL;DR — 2026-10-26 16:27 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
   qualification is still unproved; no new qualified unit is claimed.
-- **Latest complete consumer profile: current-user organization listing.**
+- **Latest complete consumer profile: natural self-leave.** Real signup-issued
+  sessions can leave through native APIs or opt-in HTTP, repeat/recover the
+  original receipt after departure, reject old leave intent after readmission,
+  preserve last-owner safety and lose recovery on actual logout. Native
+  `96076bc`, HTTP `0127ce0`, genuine consumer `fd71a90` and Reference `39b0145`
+  are independently reviewed, main-pushed and CI-green. The authenticated public
+  Reference passes fresh/populated PostgreSQL/HTTPS/race15.935s. This closes
+  the selected profile, not the full M22 row or final unit qualification.
+- **Also complete: current-user organization listing.**
   Genuine signup-issued sessions can page their current organizations through
   opt-in HTTP or guarded native Reference handles. Explicit limit1..200,
   self-only scope-bound continuation, membership removal, reconstruction and
@@ -25,9 +33,10 @@
   intended-recipient invitation rejection (`bb8415d`), with their public-module
   PostgreSQL/race proofs. Existing registration/verification/signin/session,
   reset/change, MFA/passkey and organization profiles are detailed below.
-- **Next:** existing native self-leave operation-facade readiness is being
-  checked once; continue remaining organization lifecycle composition from
-  these public owners, without restarting delivered profiles.
+- **Next:** remaining organization lifecycle composition, adopting these public
+  owners without restarting delivered profiles. A bounded SCIM readiness check
+  identified missing connection/provider-bound provisioning authority and atomic
+  identity-command composition; generic CRUD/parsers cannot substitute for it.
 - **Remaining:** 29 open/unassessed roadmap rows, substantial partial work,
   broader social/federation/provisioning and full platform qualification.
   No user decision blocks implementation. Earlier combined OIDC race failure

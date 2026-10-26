@@ -1,5 +1,102 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 16:27 UTC: natural self-leave profile CLOSED. Composition reviewer
+self_leave_composition_review APPROVE consumer5b6ab1 + Reference4d1571, no
+findings. Consumerfd71a90 and Reference39b0145 committed/pushed exact reviewed
+patches; Required40358853979/40358857532 SUCCESS. Actual authenticated public
+Referencev0.0.0-20261026162434-39b01458aaa5 originexact/Subdirreference,
+Sumh1:F0oj8a9uGcfQzWtBk1+6INsJwkbwP4HstY9+8RPJLy4=,
+GoModSumh1:UHU854dmDLold86fergBTDLhpP49Zyx9gZk7mo3jf7E=;
+all12 changed files byte-match. Downloaded fresh/populated PG/HTTPS/race22636
+terminal0 PASS15.935s (6.84s/7.33s): actual self-leave/natural repeat, guarded
+reconstructed history, wrong-human denial, readmission-old-intent conflict,
+last-owner and actual logout denial/independentowner survival. Final current
+published leaf fullmodule race48242 PASS17.933s (includes added denialtest);
+no legacy protocol/rate/security weakening. Stopped owned PG36255/53963 and
+removed exact /private/tmp/organization-leave-delivery.LPI4zt (81887 terminal0);
+fullM22/67qualification remainsopen, overall10/39/~25% lowconfidenceunchanged.
+
+SCIM bounded readiness disposition (scim_ready_lane): go-scim4297d91 is scaffold
+only, not blocked by all SSOprotocols or missing genericidentityCRUD. Native
+identity creation only accepts its exact original CreateUser binding and its
+current UOW selects identity/audit/outbox, not SCIM projection. Organization
+admission still requires verifiedhuman session, while OAuth machineprofile
+does not grant customer/org delegation. Need one public provisioning admission/
+atomiccomposition owner profile before assigning complete SCIM Users. No parser,
+fakeStore/privateauthority work assigned; read-only task finished with no writes.
+
+Parallel readiness only: scim_ready_lane is read-only in go-scim/current public
+identity/org owners. One bounded consumed-contract pass for an actual authorized
+durable SCIM Users outcome; no files/Go/Git/children and no placeholder authority.
+Primary does not wait to progress self-leave. Implementation requires a separate
+explicit non-overlapping path assignment after the actual authority boundary.
+
+2026-10-26 16:20 UTC: self-leave upstream owners delivered: root6d7d32d,
+native96076bc (review1888e997 APPROVE, Required40356236185 SUCCESS), baseHTTP
+b9742f8 (review245d31 APPROVE, Required40354983962 SUCCESS), leaf0127ce0
+(finalreviewac898 APPROVE, Required40357511692 SUCCESS). Actual public
+native/leaf bytes all match reviewed source; nativeSum2L7a4Wp8pJJWYUto6U213W9t83uu64Zi4RGwqn3urfk=.
+Native finitePG/race96312 PASS14.498s, ordinaryrace1.360s/taggedvet0,
+tidy/verify0. Initial SQL_ASCII fixture and consumer wrong-role failures remain
+failed fixture attempts, not productionfixes; current owned UTF8 PG36255/53963.
+Leaf firstreview70f119 REQUEST_CHANGES four items: epoch-before-projection,
+public admin eligibility, valid unknown/latecommit oracles, wire mutation text.
+Targeted3314 RED then coherentfix71909 focused0.276s/fullrace13.618s/vet0/
+fuzz15296exec3.931s/tidyverify0. Secondreviewbcb9 requested concrete runtime
+denial coverage; added only test, focusedrace84766 PASS1.579s. Final renewed
+completeac898 review has no findings; no safety/rate/authority relaxation.
+Genuine authenticated publicnativeconsumer25314 PASS6.802s (actual signup/
+verification/signin, departure/repeat/fresh-selfrecovery/readmission/logout);
+taggedvet/tidy/verify0. Consumerfivepath5b6ab1 + Referencetwelvepath4d1571 frozen
+under self_leave_composition_review. Reference directmethod RED50670 ->
+GREEN0.489s; fresh/populated PG/HTTPS/race7.231s/7.352s, fullordinaryrace
+Reference5.840s/command7.313s/taggedvet/tidy/verify0. Native index selects an
+independent transactional history, unchanged existing invitation prefix.
+Remaining: composition review/publication/exactCI/newReference publicdownload,
+then cleanup and immediate profile closure. FullM22/67 stillopen, overall10/39.
+
+2026-10-26 15:57 UTC: self-leave root6d7d32d reviewed/public/Required40351422623
+SUCCESS; native and HTTP root pins adopted normally (no replacements). Native
+writer resumed as organization_leave_native_resume after pause removed old agent;
+missing-method/migration RED then first actual UTF8 PG native batch85422 PASS
+1.353s for self-only execution/repeat/readmission/contention. PG36255/53963 in
+owned organization-leave-delivery.LPI4zt/pgdata-utf8; old SQL_ASCII fixture
+stopped/removed. Native final fence/fault/index cases still pending, no delivery.
+Primary genuine consumer + Reference self-leave tests prepared. Leaf transport
+missing-feature RED67622 retained; first implemented leaf68129 correctly failed
+constructor policy selection. Narrow baseHTTP prerequisite adds only member.leave
+to existing strict-bearer alternate profile, cookie CSRF unchanged; constructor
+RED -> focusedrace43036 PASS1.298s/vet/tidy/verify0. Four-path245d31 is under
+self_leave_http_policy_review; no broadened exemption/catalog rewrite. Native
+writer owns heavy slot; primary preserves all tests/source and does not duplicate
+live checks. Full native/public/HTTP/Reference outcome remains unfinished.
+
+Primary self-leave composition acceptance: strict bearer POST member/leave,
+only org ID/exact version, no target/key/command/proof override, shared safe
+rate and narrow native MemberLeaver port; preserve exact native original
+receipt/unknown outcome, no post-leave membership read. Root6d7d32d is now
+reviewed/main/CI-green and authenticated-public; existing PrepareLeaveMember/
+Execute already owns the protected mutation. Primary may implement the optional
+transport contract alongside native recovery (missing-feature RED67622), but
+actual composition/delivery waits for implemented/committed/proven native
+leave/recovery; root syntax or a substituted domain port cannot prove it. After native
+public delivery, genuine Reference leave/repeat/recovery/readmission/logout and
+last-owner denial close the profile. No sibling lifecycle variants are added.
+
+2026-10-26 15:24 UTC: next native lane is natural-repeat authenticated self-
+leave, owned by organization_slug_available in go-organization main22f2800.
+Adopt existing PrepareLeaveMember/protected coordinator/last-owner and actual
+command_effects; no substitute journal or weakening legacy Service.Recover.
+Add neutral self-only no-key/no-command request/validation, exact-epoch indexed
+lookup and narrowly current-authorized self-history disclosure, so actual lost
+acknowledgements remain recoverable after departure. Old intent must not remove
+readmitted membership; matching original metadata is not a new leave grant.
+Finite QA: member/admin/nonfinal-owner, last-owner/stale/foreign/revoked, once
+contention, rollback/unknown/recovery, absence without history, readmission.
+Root request prerequisite first; primary owns public pins/Git/integration and
+independent final reviews. Worker owns explicitly assigned root/native source,
+tests/docs only; no HTTP/Reference, manifests or Go-heavy run before handoff.
+
 2026-10-26 15:20 UTC: current-user organization-list outcome CLOSED. Reference
 ff448e55cbf1a09c543227ccd8fef1016754d6a2 committed/pushed exact reviewed
 ten-path3d5cd337; organization_list_reference_review APPROVE/no findings.
