@@ -30,6 +30,7 @@ type HTTPOrganizationConfiguration struct {
 	SlugAvailable                                     bool
 	List                                              bool
 	MemberLeave                                       bool
+	OwnerTransfer                                     bool
 	SafeNamespace                                     string
 	EmergencyMaximumKeys                              int
 	Degraded                                          func(context.Context, identityhttp.SafeRateEvent) error
@@ -83,7 +84,7 @@ func composeOrganizationHTTP(c StoreConfiguration, owner *organizationState, sha
 	}
 	h := *c.HTTPOrganization
 	invalid := identity.InvalidInputError{Field: "reference_http_organization"}
-	if owner == nil || c.Organization == nil || c.Session == nil || shared == nil || c.HTTPRate == nil || (!h.Create && !h.Update && !h.Get && !h.MemberList && !h.MemberAdd && !h.MemberUpdate && !h.MemberRemove && !h.MemberLeave && !h.InvitationGet && !h.InvitationListMine && !h.InvitationList && !h.InvitationSend && !h.InvitationAccept && !h.InvitationResend && !h.InvitationCancel && !h.InvitationReject && !h.SlugAvailable && !h.List) || (h.InvitationGet || h.InvitationListMine || h.InvitationList || h.InvitationSend || h.InvitationAccept || h.InvitationResend || h.InvitationCancel || h.InvitationReject) && owner.invitations == nil {
+	if owner == nil || c.Organization == nil || c.Session == nil || shared == nil || c.HTTPRate == nil || (!h.Create && !h.Update && !h.Get && !h.MemberList && !h.MemberAdd && !h.MemberUpdate && !h.MemberRemove && !h.MemberLeave && !h.OwnerTransfer && !h.InvitationGet && !h.InvitationListMine && !h.InvitationList && !h.InvitationSend && !h.InvitationAccept && !h.InvitationResend && !h.InvitationCancel && !h.InvitationReject && !h.SlugAvailable && !h.List) || (h.InvitationGet || h.InvitationListMine || h.InvitationList || h.InvitationSend || h.InvitationAccept || h.InvitationResend || h.InvitationCancel || h.InvitationReject) && owner.invitations == nil || h.OwnerTransfer && (owner.transferProofs == nil || owner.transferAudience == "") {
 		return nil, invalid
 	}
 	out = &organizationHTTPState{config: h}
@@ -99,7 +100,7 @@ func composeOrganizationHTTP(c StoreConfiguration, owner *organizationState, sha
 			return out, invalid
 		}
 	}
-	if h.Create || h.Update || h.MemberAdd || h.MemberUpdate || h.MemberRemove || h.InvitationSend || h.InvitationResend || h.InvitationCancel {
+	if h.Create || h.Update || h.MemberAdd || h.MemberUpdate || h.MemberRemove || h.InvitationSend || h.InvitationResend || h.InvitationCancel || h.OwnerTransfer {
 		out.admin, err = organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{Shared: shared.backend, Namespace: h.AdminNamespace, Key: h.AdminKey, Now: time.Now, Denied: h.Denied, MaximumDuration: c.HTTPRate.MaximumDuration})
 		if err != nil {
 			return out, invalid
@@ -124,7 +125,7 @@ func (s *Server) organizationFeature(network identityhttp.NetworkConfig) (*ident
 		return nil, identity.InvalidInputError{Field: "reference_http_organization"}
 	}
 	selected := h.config
-	feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: organizationhttp.Config{Network: network, Sessions: f.session.reader, Service: n.operations, SlugAvailability: n.operations, OrganizationLister: n.operations, MemberLeaver: n.operations, MetadataUpdater: n.operations, MemberUpdater: n.operations, Invitations: n.invitations, InvitationLister: n.invitations, InvitationSender: n.sender, InvitationResender: n.sender, InvitationCanceller: n.invitations, InvitationRejecter: n.invitations, InvitationAccepter: n.invitations, InvitationProofLimits: n.limits, SafeRate: h.safe, AdminRate: h.admin, SecretRate: h.secret, Now: time.Now, MaximumDuration: n.maximum}, Create: selected.Create, Update: selected.Update, Get: selected.Get, MemberList: selected.MemberList, MemberAdd: selected.MemberAdd, MemberUpdate: selected.MemberUpdate, MemberRemove: selected.MemberRemove, MemberLeave: selected.MemberLeave, InvitationGet: selected.InvitationGet, InvitationListMine: selected.InvitationListMine, InvitationList: selected.InvitationList, InvitationSend: selected.InvitationSend, InvitationAccept: selected.InvitationAccept, InvitationResend: selected.InvitationResend, InvitationCancel: selected.InvitationCancel, InvitationReject: selected.InvitationReject, SlugAvailable: selected.SlugAvailable, List: selected.List})
+	feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: organizationhttp.Config{Network: network, Sessions: f.session.reader, Service: n.operations, SlugAvailability: n.operations, OrganizationLister: n.operations, MemberLeaver: n.operations, OwnerTransferer: n.operations, OwnerTransferProofs: n.transferProofs, OwnerTransferAudience: n.transferAudience, MetadataUpdater: n.operations, MemberUpdater: n.operations, Invitations: n.invitations, InvitationLister: n.invitations, InvitationSender: n.sender, InvitationResender: n.sender, InvitationCanceller: n.invitations, InvitationRejecter: n.invitations, InvitationAccepter: n.invitations, InvitationProofLimits: n.limits, SafeRate: h.safe, AdminRate: h.admin, SecretRate: h.secret, Now: time.Now, MaximumDuration: n.maximum}, Create: selected.Create, Update: selected.Update, Get: selected.Get, MemberList: selected.MemberList, MemberAdd: selected.MemberAdd, MemberUpdate: selected.MemberUpdate, MemberRemove: selected.MemberRemove, MemberLeave: selected.MemberLeave, OwnerTransfer: selected.OwnerTransfer, InvitationGet: selected.InvitationGet, InvitationListMine: selected.InvitationListMine, InvitationList: selected.InvitationList, InvitationSend: selected.InvitationSend, InvitationAccept: selected.InvitationAccept, InvitationResend: selected.InvitationResend, InvitationCancel: selected.InvitationCancel, InvitationReject: selected.InvitationReject, SlugAvailable: selected.SlugAvailable, List: selected.List})
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,11 @@
 
 ## Optional organization backend
 
+Ownership transfer is independently selected with `Organization.OwnerTransfer`
+and, for HTTP, `HTTPOrganization.OwnerTransfer`. It composes the existing
+password-action proof, native atomic role transition and original-key recovery;
+see [configuration and request contract](ORGANIZATION.md#ownership-transfer).
+
 `HTTPOrganization.InvitationList` independently selects current owner-only
 invitation pages with shared safe rates and explicit limit1..100. The guarded
 `OrganizationInvitationService.List` exposes the same native read. See

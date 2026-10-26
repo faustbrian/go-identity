@@ -39,13 +39,52 @@ existing explicit bounded external seams.
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
 `InvitationListMine`, `InvitationList`, `InvitationSend`, `InvitationResend`, `InvitationCancel`,
-`InvitationReject`, `SlugAvailable`, `List`, `MemberLeave` and `InvitationAccept`.
+`InvitationReject`, `SlugAvailable`, `List`, `MemberLeave`, `OwnerTransfer` and `InvitationAccept`.
 Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
 safe/admin/secret namespaces and keys. The degradation and administrative-denial
 callbacks retain the transport's bounded synchronous contracts: administrative
 denials must be durably audited, without secrets. Namespace/key changes affect
 rate budgets and require coordinated rollout, not per-request rotation.
+
+## Ownership transfer
+
+Select `Organization.OwnerTransfer` with an
+`OrganizationOwnerTransferConfiguration`. Its `Primary` uses the existing
+password adapter's `ActionPrimaryConfig`: exact action
+`identity.organization.owner-transfer`, a target audience already allowed by
+`PasswordVerification.Native.Targets`, a bounded `MaximumAge` and
+`session.CredentialBearer` without CSRF keys. Leave
+`Organization.Core.OwnerTransferAudience` empty; the graph injects that same
+primary audience. The existing verified single-factor password profile is
+required. There is no password fallback from an MFA or other primary profile.
+
+Native selection exposes guarded `Organizations().OwnerTransfer`, not HTTP.
+Independently select `HTTPOrganization.OwnerTransfer` for strict-bearer HTTPS
+`POST /v1/organization/owner-transfer`; this requires shared administrative
+rate admission and the selected real password-proof owner. Obtain `proofID`
+through the selected password-verification workflow for the exact action and
+audience. The bearer HTTP verification profile also needs its genuine signed
+browser-device correlation cookie from pre-auth issuance; that cookie is not
+session authentication. Transfer itself accepts only the bearer, required
+`Idempotency-Key` and JSON `organizationID`, `targetUserID`,
+`organizationVersion`, `sourceVersion`, `targetVersion`, `proofID`.
+
+Apply Reference `Check/Plan/Apply` before enabling transfer. Selection reuses
+the existing native action-proof consumption history in
+`identity_username_actions` at version21 even when username is not selected;
+installed history is neither copied nor rewritten. No new organization table,
+request journal or application contributor is required. Native authority owns
+proof signature/freshness/once-only consumption, both membership transitions,
+scoped authority, audit and outbox in the existing transaction.
+
+Keep the original key, versions and proof ID for matching historical retries.
+They recover the original outcome under current authority, including a fresh
+session after transfer, rather than consuming a new proof or granting another
+mutation. Changed intent conflicts. Safe original recovery metadata survives
+known-commit late failures; unknown outcomes never authorize automatic replay.
+Logout or withdrawn disclosure authority denies history. Unsupported profiles
+and disabled HTTP selection fail closed without advertised routes.
 
 ## Owner-only invitation listing
 

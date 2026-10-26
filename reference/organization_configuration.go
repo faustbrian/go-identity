@@ -13,6 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
+	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -24,7 +25,8 @@ import (
 
 // OrganizationConfiguration opts into native explicit-organization membership
 // over this graph's current verified-password bearer sessions. It enables no
-// HTTP, teams, domain proofs, ownership transfer or archive/restore. Core.Clock
+// HTTP, teams, domain proofs or archive/restore. OwnerTransfer independently
+// selects the native password-proof profile, never its HTTP route. Core.Clock
 // must be nil; the graph supplies its system clock. Counters selects protected
 // PostgreSQL command admission in the existing risk schema, not a replacement
 // risk evaluator. Custody retains the native original-key encryption profile.
@@ -38,6 +40,16 @@ type OrganizationConfiguration struct {
 	ConfigurationID      string
 	SelectOrganizationID func(context.Context) (organization.ID, error)
 	Invitations          *OrganizationInvitationConfiguration
+	OwnerTransfer        *OrganizationOwnerTransferConfiguration
+}
+
+// OrganizationOwnerTransferConfiguration selects native ownership transfer
+// using this graph's real password-verification owner. Primary must select
+// identity.organization.owner-transfer, an existing issuance audience and bearer
+// transport with no CSRF keys. Its audience is injected into Core; callers must
+// leave Core.OwnerTransferAudience empty to avoid competing configuration.
+type OrganizationOwnerTransferConfiguration struct {
+	Primary passwordpg.ActionPrimaryConfig
 }
 
 // OrganizationInvitationConfiguration additionally selects genuine intended-
@@ -91,15 +103,17 @@ func (OrganizationInvitationConfiguration) MarshalText() ([]byte, error) {
 }
 
 type organizationState struct {
-	operations  *organizationpg.OperationService
-	invitations *organizationpg.InvitationService
-	sender      *organizationpg.InvitationOperationService
-	limits      capability.Limits
-	maximum     time.Duration
-	provider    uint64
+	operations       *organizationpg.OperationService
+	invitations      *organizationpg.InvitationService
+	sender           *organizationpg.InvitationOperationService
+	limits           capability.Limits
+	maximum          time.Duration
+	provider         uint64
+	transferAudience string
+	transferProofs   *passwordpg.Repository
 }
 
-func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, queue *deliverypg.EnqueueService) (*organizationState, error) {
+func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, queue *deliverypg.EnqueueService, proofs *passwordVerificationState) (*organizationState, error) {
 	if c.Organization == nil {
 		return nil, nil
 	}
@@ -132,6 +146,17 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 		lookup[digest.KeyVersion] = key
 	}
 	admission := organizationpg.ContributorConfig{Session: e.Repository, Profile: *selection.Verified, LookupKeys: lookup, PolicyID: n.Core.PolicyID, PolicyVersion: n.Core.PolicyVersion, MaximumMembers: n.Core.MaximumMembers, MaximumPerUser: n.Core.MaximumPerUser, MaximumPerTenant: n.Core.MaximumPerTenant}
+	if n.OwnerTransfer != nil {
+		primary := n.OwnerTransfer.Primary
+		if proofs == nil || proofs.native == nil || proofs.proofs == nil || primary.Action != string(organization.OwnerTransfer) || primary.Transport != session.CredentialBearer || len(primary.CSRFKeys) != 0 {
+			return nil, identity.InvalidInputError{Field: "reference_organization_transfer"}
+		}
+		admission.OwnerTransferPrimary, err = passwordpg.NewActionPrimarySource(proofs.native, primary)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_organization_transfer_primary"}
+		}
+		n.Core.OwnerTransferAudience = primary.Audience
+	}
 	repository, err := organizationpg.NewRepository(d.PostgreSQL, n.Repository)
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_organization_repository"}
@@ -177,6 +202,9 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 		return nil, identity.InvalidInputError{Field: "reference_organization_operations"}
 	}
 	state := &organizationState{operations: operations, maximum: n.Core.MaximumDuration}
+	if n.OwnerTransfer != nil {
+		state.transferAudience, state.transferProofs = n.Core.OwnerTransferAudience, proofs.proofs
+	}
 	if n.Invitations == nil {
 		return state, nil
 	}

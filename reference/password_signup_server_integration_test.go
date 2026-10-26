@@ -280,6 +280,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	organization          bool
 	organizationUpgrade   bool
+	organizationTransfer  bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -578,6 +579,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
 		changeScreens = configureReferencePasswordProtection(t, &c, origin)
+	}
+	if extensions.organizationTransfer {
+		configureReferenceOrganizationTransfer(t, &c, origin)
 	}
 	if extensions.passkey {
 		configureReferencePasskey(t, &c)
@@ -1090,6 +1094,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		proveReferencePasskeyDeletionSelection(t, selected, deps)
 	}
 	var organizationUpgrade *reference.StoreConfiguration
+	if extensions.organizationTransfer {
+		proveReferenceOrganizationTransferSelection(t, c, deps)
+	}
 	if extensions.organizationUpgrade {
 		successor := c
 		organizationUpgrade = &successor
@@ -1234,6 +1241,7 @@ END $$`); err != nil {
 			{"slug-available", c.HTTPOrganization.SlugAvailable},
 			{"list", c.HTTPOrganization.List},
 			{"member.leave", c.HTTPOrganization.MemberLeave},
+			{"owner-transfer", c.HTTPOrganization.OwnerTransfer},
 		} {
 			if selected.on {
 				wantOperations++
@@ -1442,6 +1450,12 @@ END $$`); err != nil {
 			t.Fatal("selected protected password routes missing")
 		}
 	}
+	if extensions.organizationTransfer {
+		wantOperations++
+		if !seen["identity.password.verify"] || seen["identity.password.change"] {
+			t.Fatal("transfer selected unrelated password transport")
+		}
+	}
 	if extensions.disableHTTP {
 		wantOperations++
 		if !seen["identity.mfa.disable"] {
@@ -1619,7 +1633,7 @@ END $$`); err != nil {
 		}
 	}
 	if extensions.organization {
-		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
 			selected, selectedConfig := features, c
 			if organizationUpgrade != nil {
 				// Before the explicit operator upgrade, neither advertised metadata
@@ -1652,7 +1666,11 @@ END $$`); err != nil {
 				next := upgraded.Handler()
 				organizationHandler.Store(&next)
 			}
-			proveReferenceOrganizationHTTPS(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf)
+			if extensions.organizationTransfer {
+				proveReferenceOrganizationTransfer(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
+			} else {
+				proveReferenceOrganizationHTTPS(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf)
+			}
 		}
 	}
 	if extensions.passkey {

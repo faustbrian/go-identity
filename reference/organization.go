@@ -130,6 +130,21 @@ func (f *OrganizationService) UpdateMember(ctx context.Context, r organization.U
 	return n.operations.UpdateMember(w, r, network)
 }
 
+// OwnerTransfer delegates the selected native password-proof transfer. Original
+// keyed history is recovery, never another grant; graph lifetime/tenant guards
+// apply before reaching the native current-authority and atomic effect owners.
+func (f *OrganizationService) OwnerTransfer(ctx context.Context, r organization.OwnerTransferOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.OwnerTransfer(w, r, network)
+}
+
 // AddMember preserves exact target/version intent and original-key recovery.
 func (f *OrganizationService) AddMember(ctx context.Context, r organization.AddMemberOperationRequest, network string) (organization.StoreResult, error) {
 	if f == nil {

@@ -525,7 +525,11 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.singleSessionRevocation = sessionOwner != nil
-	organizationOwner, err := composeOrganization(c, d, sessionOwner, deliveryOwner)
+	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
+	if err != nil {
+		return err
+	}
+	organizationOwner, err := composeOrganization(c, d, sessionOwner, deliveryOwner, passwordVerificationOwner)
 	if err != nil {
 		return err
 	}
@@ -538,10 +542,6 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpOrganization.close()
 		}
 	}()
-	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
-	if err != nil {
-		return err
-	}
 	var signupEvaluation risk.Evaluator
 	if c.Passkey != nil && c.Passkey.Signup != nil {
 		protected := c.Passkey.Protected.CommandCounters

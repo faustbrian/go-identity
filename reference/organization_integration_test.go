@@ -61,6 +61,12 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 		if c.Request.Action == authorization.Action(organization.LeaveMember) && (c.Request.Resource.Type == "organization" || c.Request.Resource.Type == "identity.user") {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
+		if c.Request.Action == authorization.Action(organization.OwnerTransfer) && (c.Request.Resource.Type == "organization" || c.Request.Resource.Type == "identity.user" || c.Request.Resource.Type == "identity.request-admission" && c.Request.Resource.ID == authorization.ResourceID(organization.OwnerTransfer)) {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
+		if c.Request.Action == "identity.organization.owner-transfer.recover" && c.Request.Resource.Type == "identity.user" {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
 		// Invitation owners read delivery metadata whose resource is the
 		// intended recipient. The native invitation reader checks ownership;
 		// requiring self-ID equality here would hide an already committed send.

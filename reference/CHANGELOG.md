@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose native original-key ownership transfer through guarded handles and
+  independently selected bearer HTTP. The existing password-verification owner
+  authenticates and atomically consumes the action proof; current owner policy,
+  exact versions and singleton effects remain native-owned. Current-session
+  original recovery does not renew a proof or grant another transfer. Apply the
+  reused native action-proof history before selection; disabled routes remain
+  absent and existing organization histories are unchanged.
+
 - Compose owner-only invitation listing through guarded native handles and
   independently selected bearer HTTP. Explicit organization/limit and ID
   continuation retain current owner policy, safe-rate admission and bounded
