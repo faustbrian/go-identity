@@ -100,7 +100,7 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 			var retry time.Duration
 			var admitted bool
 			var err error
-			if selectedMutation(op) {
+			if selectedMutation(op) && op != organization.InvitationReject {
 				var result AdminRateResult
 				result, err = c.AdminRate.Admit(r.Context(), in.facts, op, in.actor)
 				admitted, retry = result.Allowed, result.RetryAfter
@@ -145,12 +145,23 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out = resend.StoreResult
 				case organization.InvitationCancel:
 					out, err = c.InvitationCanceller.Cancel(r.Context(), in.cancel(), in.facts.ClientIP().String())
+				case organization.InvitationReject:
+					out, err = c.InvitationRejecter.Reject(r.Context(), in.reject(), in.facts.ClientIP().String())
 				case organization.InvitationAccept:
 					if nilService(in.acceptance) {
 						reject(w, r, identityhttp.ErrUnavailable)
 						return
 					}
 					out, err = in.acceptance.Execute(r.Context())
+				}
+				if op == organization.InvitationReject {
+					status, response := invitationRejectResponse(in, out, err)
+					if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+						status, response.Error = 503, "unavailable"
+						response.State = ""
+					}
+					writeJSON(w, status, response)
+					return
 				}
 				if op == organization.InvitationCancel {
 					status, response := invitationCancelResponse(in, out, err)

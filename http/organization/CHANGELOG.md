@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected intended-recipient rejection with exact versions,
+  current bearer session and canonical safe-rate admission. The native owner
+  retains recipient policy, atomic rejection and natural-repeat original
+  recovery; no manager, membership, proof, key or caller command is accepted.
+  Responses expose validated original terminal metadata without membership or
+  delivery projections; disabled selection exposes no route or metadata.
+
 - Add independently selected strict-bearer invitation cancellation. Exact
   organization/invitation versions reach the native natural-repeat owner;
   Idempotency-Key and caller command/proof overrides are forbidden. Shared

@@ -52,10 +52,14 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		mutationFields["deliveryState"] = map[string]any{"type": "string", "enum": []string{"queued", "attempting", "accepted", "delivered", "rejected", "bounced", "cancelled", "unknown", "retry_wait", "expired", "exhausted", "superseded", "transient_failure"}, "description": "Authorized observation of this original command's delivery, not the latest successor. Queued is local admission, accepted is provider acceptance, neither confirms delivery. Absent on observation failure; unknown never authorizes redispatch."}
 		mutationRequired = []string{"commandID", "organizationID", "invitationID", "beforeVersion", "afterVersion", "recovery", "deliveryState"}
 	}
-	if op == organization.InvitationCancel {
+	if op == organization.InvitationCancel || op == organization.InvitationReject {
 		delete(mutationFields, "memberID")
 		mutationFields["invitationID"] = id
-		mutationFields["state"] = map[string]any{"type": "string", "const": "cancelled"}
+		state := "cancelled"
+		if op == organization.InvitationReject {
+			state = "rejected"
+		}
+		mutationFields["state"] = map[string]any{"type": "string", "const": state}
 		mutationRequired = []string{"commandID", "organizationID", "invitationID", "beforeVersion", "afterVersion", "recovery", "state"}
 	}
 	mutation := object([]string{"committed", "commitOutcome"}, mutationFields)
@@ -85,8 +89,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	description := "Explicit bearer-only organization profile. Exactly one Authorization Bearer credential; cookies never supply fallback authority. Exact HTTPS host-mapped tenant and trusted full client IP; closed bounded JSON/query and no identity, tenant, actor or command override. Current native authorization/protected effects remain with the organization owner. No invitation acceptance, teams, browser workflow or active organization selection. "
 	if op == organization.InvitationAccept {
 		description = "Explicit bearer-only one-time invitation acceptance. Exactly one Authorization Bearer session and HTTPS mapped tenant are mandatory; ambient cookies provide no authority. Current native recipient/session/verified identifier, exact invitation/organization versions and signed original capability are required. Canonical rate.secret charges trusted IP10/10m, authenticated subject10/10m and original challenge5/signed lifetime before the same native preparation executes. Membership, one-use proof, scoped authority, audit and lifecycle effects commit atomically. Preserve the caller-known original command ID. Re-posting a consumed proof is not original-outcome recovery; use the safe returned binding and organization through the direct current-authorized native recovery API. A bare command ID is insufficient after complete response loss. No automatic retry, recovery route, refreshed validity, credential or delivery is provided. "
-	} else if selectedMutation(op) {
+	} else if selectedMutation(op) && op != organization.InvitationReject {
 		description += "Canonical shared rate.admin atomically charges actor30/minute, tenant100/minute and trustedIP60/minute; denial/outage fails closed with mandatory secret-free auditing. "
+	} else if op == organization.InvitationReject {
+		description = "Explicit bearer-only intended-recipient rejection with canonical rate.safe admission. Exact HTTPS host-mapped tenant, current verified recipient/session and exact organization/invitation versions are mandatory. IP100/minute and tenant-scoped subject300/minute counters are shared with other safe routes; known shared-store unavailability retains the canonical bounded IP20/minute emergency policy with required degradation recording. No manager, membership, proof or organization-read permission substitutes for recipient authority. "
 	} else {
 		description += "Canonical rate.safe applies before the current authorized primary read; no session refresh or positive authority cache. "
 	}
@@ -111,6 +117,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}
 			description += "Exact verified recipient selection, never a submitted email address or claimed actor. The native owner allocates invitation/command IDs and atomically queues encrypted proof delivery. Matching keys recover original metadata only. A successful current read returns invitation and delivery status; if that read fails, the original committed outcome remains explicit without current metadata. No proof or delivery effect ID is exported. "
+		} else if op == organization.InvitationReject {
+			required = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "invitationID": id, "invitationVersion": requestVersion(1)}
+			description += "The native owner allocates and atomically commits the original rejection command. Natural repeats recover only actual original metadata under current recipient/session authority, never inferred from a terminal or absent row. Unknown outcomes require reconciliation, never automatic redispatch. No caller command, key, proof, membership or delivery projection is accepted or issued. "
 		} else if op == organization.InvitationCancel {
 			required = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "invitationID": id, "invitationVersion": requestVersion(1)}

@@ -2,7 +2,7 @@
 
 Optional **bearer-only** HTTP integration for native organization creation,
 explicit organization reads, metadata/role updates, member listing, admission/removal and original-key
-invitation sending/resend, cancellation and once-only acceptance. Omit its
+invitation sending/resend, cancellation/rejection and once-only acceptance. Omit its
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
@@ -53,6 +53,20 @@ original committed history; terminal or absent rows alone never prove success.
 The response contains safe original correlation and `state: "cancelled"` only
 for validated successful commitment, never membership or delivery projections.
 Unknown outcomes remain explicit and do not authorize automatic redispatch.
+
+Invitation rejection is independently opt-in through `InvitationReject`.
+Supply the actual native `InvitationService` as `Config.InvitationRejecter`,
+current `Sessions` and the shared canonical `SafeRate`; no `Service`,
+`Invitations`, `AdminRate` or `SecretRate` is needed. Install the independent
+`InvitationRejectOperationMigrationSource` before selecting it. The exact four
+organization/invitation ID/version fields select a naturally repeatable native
+rejection, without a key, caller command or proof. Only the current verified
+intended recipient has authority; membership and manager/read permissions are
+neither required nor substitutes. The safe-rate budget is shared with other
+safe routes, including its existing bounded, recorded emergency policy.
+Matching retries return actual original metadata; terminal/absent rows alone
+never prove success. `state: "rejected"` is present only for validated successful
+commitment, with no membership or delivery projection. Unknown stays explicit.
 
 Invitation acceptance is independently opt-in through `InvitationAccept`.
 Supply the actual native `InvitationService` as `Config.InvitationAccepter`,

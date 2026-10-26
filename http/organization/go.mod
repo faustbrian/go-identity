@@ -8,10 +8,10 @@ require (
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
 	github.com/faustbrian/go-identity v0.0.0-20261025171642-473945c93248
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
-	github.com/faustbrian/go-identity/http v0.0.0-20261026065327-ef0d98f14c05
+	github.com/faustbrian/go-identity/http v0.0.0-20261026084927-ad5ae29bd4ae
 	github.com/faustbrian/go-identity/session v0.0.0-20261024134726-e9528953435b
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
-	github.com/faustbrian/go-organization v0.0.0-20261026062125-27730f417492
+	github.com/faustbrian/go-organization v0.0.0-20261026081927-2a35021c29b6
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/felixge/httpsnoop v1.1.0
 )
