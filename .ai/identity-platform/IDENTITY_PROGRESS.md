@@ -1,6 +1,30 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 09:18 UTC
+## Current TL;DR — 2026-10-26 10:51 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
+  closed.** Additional delivered profiles do not close whole rows. Full 67-unit
+  qualification is still unproved; no new qualified unit is claimed.
+- **Latest delivered behavior:** consented OIDC UserInfo reads the current
+  native display name. The same access token observes two real committed profile
+  changes; ID tokens stay minimized and unconsented names stay omitted. Native
+  `6ad14b9` is independently reviewed, main-pushed and Required40310196432 green.
+  Its actual authenticated downloaded module passes PostgreSQL/race104.511s,
+  including mixed snapshots, schema mismatch, late withdrawal and expiry denial.
+  This closes the name profile, not full M31 or HTTP/reference composition.
+- **Also delivered:** intended-recipient invitation rejection/retry through
+  native PostgreSQL, HTTP and the downloaded Reference backend (`bb8415d`),
+  independently reviewed and main/CI-green.
+- **Active implementation:** organization advisory slug availability, followed
+  by its native and opt-in HTTP/Reference path. The root worker is running the
+  first RED; primary owns public pins, integration and acceptance.
+- **Remaining:** 29 open/unassessed roadmap rows, substantial partial work,
+  broader social/federation/provisioning and full platform qualification.
+  No user decision blocks implementation. Earlier combined OIDC race failure
+  remains failed; named retained partitions subsequently passed, without a
+  claimed timing/root-cause fix. No deployment or release is claimed.
+
+## Retained checkpoint — 2026-10-26 09:18 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 explicitly closed rows.**
   Correction: the earlier 11/39 claim was not supported by the outcome table.
@@ -2936,7 +2960,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M28 | Authorized SCIM discovery/User CRUD/filter/PATCH/pagination: scim, scim/postgres | Closure not reassessed |
 | M29 | SCIM Groups, organization reconciliation and deprovisioning effects: scim/organization and organization owners | Closure not reassessed |
 | M30 | OAuth client/consent, authorization-code/S256 grants and refresh rotation: oauth-server, oauth-server/postgres | Selected native configured public/confidential code/S256, consent, refresh, revocation and owning-client introspection delivered. Dynamic client/consent management and complete HTTP/reference remain; full row not closed. |
-| M31 | OIDC discovery/JWKS/ID-token/userinfo consumers: oauth-server/oidc | Closure not reassessed |
+| M31 | OIDC discovery/JWKS/ID-token/userinfo consumers: oauth-server/oidc | Consented native profile/name UserInfo is delivered: root/child `baa3ff6`, native `6ad14b9`, independent complete-diff reviews and exact green CI. The actual authenticated downloaded native passes PostgreSQL/race104.511s: unchanged independently validated ID token and same access token across two real committed name changes; unconsented/absent name omission, schema/source/mixed-snapshot/late-withdrawal/exclusive-expiry denial. Existing email/phone/pairwise paths retain their selected proofs; failed combined run remains failed and named retained partitions separately pass. Full OIDC catalog and HTTP/reference composition keep the whole row open; unit qualification remains separate. |
 | M32 | Workload client-credentials issuance, introspection and revocation: OAuth server owners | Configured access-only native machine profile delivered as `28444ed`, green CI and downloaded-native PostgreSQL/race consumer. Full row qualification/composition not closed. |
 | M33 | Restricted token exchange with lineage/non-expanding authority and bounded cache validity: OAuth server, authentication, API-key and organization owners; SI-01 through SI-10 | Native Basic workload-only opaque exchange is delivered through OAuth `9969c9d` / native `5c597f4`, independently approved and final exact-CI green. Downloaded-public PostgreSQL/race consumer passes five journeys (44.086s), including reusable sources, original pending recovery and withdrawal after preflight. Human/API-key/organization sources, HTTP/reference and cached shared-issuer profiles keep the full row open. |
 | M34 | Device authorization to issuance/expiry/denial: oauth-server/device, optional native PostgreSQL composition | Closure not reassessed |

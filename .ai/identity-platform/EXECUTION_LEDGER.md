@@ -1,5 +1,89 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 10:51 UTC: OIDC consented native profile/name outcome CLOSED.
+Reviewed/main-pushed6ad14b9 Required40310196432 SUCCESS. Actual authenticated
+downloaded native profile/schema/config and all14late/mixed cases under real
+PostgreSQL/race1336 terminal0 package104.511s (late93.78s/schema4.08s/RP4.97s).
+The independent RP verifies the unchanged minimized ID token, same sub and
+unchanged access token before/after two genuine ProfileService commitments;
+no image/custom claim leak, source/authority replacement or expiry renewal.
+Reviewed source identity and public module sums below remain exact. Current
+native untagged race/vet/tidy/modverify/retained-phone proof retained; no broad
+rerun or historical failure rewritten. Public name profile is closed promptly;
+full M31/67 qualification and OAuth HTTP/reference remain open. Overall10/39
+unchanged. Heavy slot released to organization_slug_available for its root RED.
+Disposable OIDC PostgreSQL cluster stopped and its exact owned fixture/cache
+cohort removed; cleanup58923 terminal0. No source or consumer fixtures remain.
+
+2026-10-26 10:49 UTC: native OIDC name source6ad14b9c1060fc6d1bdfaa440882954aa45ef853
+is committed and origin/main exact; committed patch equals reviewed684e64.
+oidc_profile_native_resume_review complete final diff APPROVE, no findings;
+native report distinguishes supplied prior profile executions from today's raw
+hygiene/phone output. Required40310196432 pending. Actual authenticated native
+v0.0.0-20261026104700-6ad14b9c1060 has exact origin6ad14b9/Subdirpostgres,
+Sumh1:Dw1o5eYVDyz8SBtkH3ksFXKkAD9WjO8xXo2yMwDMNBc=,
+GoModSumh1:DkirCitn7GpnK5b4H6YhPZL2SwHlOrAukYr7i00i33U=.
+All12 changed native source/test/docs/manifests match the downloaded module.
+Actual downloaded profile-only PG/race is live1336, unchanged budgets; public
+consumer closure and cleanup remain pending. Slug worker root boundary approved;
+minimal unchanged-default policy_test.go constructor hook added to its scope.
+It has no live Go run and yields heavy slot until1336 terminates.
+
+2026-10-26 10:45 UTC: independent M22 advisory slug-availability lane frozen.
+Owner organization_slug_available; organization main e86a92be61a09552e527af15459506ac070a4c74,
+existing authentication/authorization/session contracts and genuine native
+organization consumers retained. Public session-authenticated candidate read,
+no membership requirement; return only availability in the authenticated tenant,
+never an organization ID or reservation. Use existing validSlug and the actual
+UNIQUE(tenant_id,slug) occupancy rule, including archived rows. Other tenants
+do not collide. Validate current session, explicit policy and original freshness;
+storage/authority/cancellation failures deny, never report fabricated availability.
+Worker owns root slug_available.go/test, root README/CHANGELOG; after reviewed
+public root publication, postgres/slug_available.go/test and focused native
+integration tests/README/CHANGELOG. Root compatibility must remain additive;
+no private auth/SQL authority or new migration. Primary owns manifests/pins,
+Git and required opt-in HTTP/Reference composition. Existing public native
+consumers prove creation/uniqueness/current sessions; focused root TDD/race,
+native real PostgreSQL tenant/archive/competing-create/withdrawal cases, then
+public HTTP/Reference consumer and one final review per coherent owner batch.
+Full M22 and 67-unit qualification remain excluded from finite-profile closure.
+Worker has no Git/children and must coordinate the one heavy-test slot.
+
+2026-10-26 10:43 UTC: primary resumed the frozen native OIDC name slice;
+no implementation worker or Go run survived the interruption. Candidate remains
+the same 13 staged paths on OAuth main baa3ff6, patch684e64a5a4bece0bfb872823687b538f691046813ca0797516094eabbb1be15d.
+Earlier genuine RP RED2.365s/GREEN1.462s, profile ordinary17.919s and focused
+profile race85.054s remain evidence for unchanged runtime/test/selected inputs.
+The combined race549.639s remains FAILED; retained email/transaction/pairwise
+isolations passed, while phone/public required another discriminator. Today
+immutable pre-change phone/public race passed11.719s and the exact candidate
+passed7.840s, without code/budget/authority changes. This clears the selected
+current partition, not a demonstrated root-cause fix or a passing combined run.
+Final native untagged race1.237s, tagged vet0, tidy-diff0/modverifyall and staged
+secret check pass. Independent complete-diff review is pending with
+oidc_profile_native_resume_review; publication/actual downloaded-native proof
+remain. Primary owns this lane and Git; no milestone/unit closure is claimed.
+
+2026-10-26 10:00 UTC: OIDC native profile/name lane UNLOCKED to
+oidc_profile_name. Root custody a0d4936 and child baa3ff6 final reviews APPROVE;
+child R1 public-composition oracle fixed and complete R2 APPROVE. Final child
+whole race1.277s covers the exact final test fixture; three bounded disposable
+counterfactuals fail for lost name, email overwrite and partial late output.
+Current main baa3ff6 Required40303140296 SUCCESS clears the checksum-only
+tidy failure on predecessor40300373676; that original failure stays failed.
+Actual public root/child v0.0.0-20261026095351-baa3ff6f2bf5 have exact origin
+baa3ff6/Subdiroidc for child. All root/child Go/manifests byte-match reviewed
+source, comparison16164 terminal0. Root Sumh1:v9B0IjnvkPujK5rlPSAblteu+uNcYstwL+B3/aRfwP8=;
+child Sumh1:HL8OSpgH5jYwsiz31XsZU20KhRnpJuNLjTajzNUPvBw=.
+Primary updated native manifest/sums to both immutable public pins. No local
+replacement or new protocol engine is adopted. Worker may now implement only
+its frozen native config/profile paths and real mutation/RP consumer, beginning
+with actual unchanged-token behavioral RED. Native behavior is not accepted
+yet; full M31/67 remain open. Heavy slot and cleanup owned by worker. Its exact
+disposable PG18.6 fixture is127.0.0.1:52900, useroidc_profile/dbpostgres,
+/private/tmp/oidc-profile-name.GasWry/pgdata; cohort also owns build/modules/tmp.
+Root/child source stays frozen. Primary owns pins/Git and identity composition.
+
 2026-10-26 09:18 UTC: natural-repeat intended-recipient rejection CLOSED.
 Native19bf740/public consumere86a92b/shared HTTPad5ae29/leaf72bdd64/Reference
 bb8415d are reviewed, main-pushed and exact Required green (40294939682,
@@ -49,6 +133,24 @@ adoption. Focused TDD/race and genuine native profile mutation/consent/OIDC RP
 consumer, scoped secrets and independent final review; public-source consumer
 proof before closure. No worker Git or children. Local heavy slot is primary's
 until downloaded rejection Reference35143 terminates; coding/review may overlap.
+09:25 scope clarification: allow worker test-only changes to
+postgres/identity_fixture_test.go and identity_fixture_graph_test.go for an
+optional profile-compatible signup schema; keep existing callers unchanged.
+The current immutable fixture reserves custom field name, which GetProfile
+rightly rejects; do not relabel existing users or weaken schema admission.
+Primary selected the native-consumed public identity2eaf for root/child pins.
+Additional worker doc ownership: docs/selected-oidc-profile.md, selected name
+profile alignment only. Root additive custody prerequisite a0d4936 reviewed
+five paths APPROVE and main-pushed; normal public root race1.514s/vet0/
+modverifyall. Child public core pin follows its authenticated published source.
+Root CI40300373676 failed tidy-check only: unused old identity checksums.
+The exact checksum-only fix is staged with child; root/child tidy-diff0,
+normal-public child race1.286s/vet0/modverifyall. Root source/selected graph
+unchanged; failed CI is not claimed cleared. Child review R1 APPROVE with one
+in-scope action: exercise public UserInfo name/email/phone assembly and zero
+partial output after a later selected claim denies. Worker added that focused
+regression and demonstrated three actual disposable counterfactual failures;
+complete final-diff re-review/publication and genuine native acceptance pending.
 
 2026-10-26 08:24 UTC: native recipient-rejection lane UNLOCKED. Root2a35021
 reviewed four paths APPROVE, exact main/Required40291477753 green. Root whole
