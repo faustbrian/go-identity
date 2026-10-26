@@ -2,6 +2,13 @@
 
 ## Optional organization backend
 
+Local archive/restore is selected through `Organization.Lifecycle` and independent
+`HTTPOrganization.Archive`/`Restore` flags. Actual password action proofs and the
+native original-key lifecycle owner enforce authority; restored organizations
+never revive terminal grants. See [local lifecycle](ORGANIZATION.md#local-archive-and-restore)
+for native discovery, request and forward-migration boundaries. External cascade
+completion and hard deletion are not claimed.
+
 Invitation expiry is independently selected with
 `HTTPOrganization.InvitationExpire` after configuring native registered reasons
 and applying its owned migration. See [expiry](ORGANIZATION.md#invitation-expiry)

@@ -282,6 +282,7 @@ type signupGraphExtensions struct {
 	organizationUpgrade   bool
 	organizationTransfer  bool
 	organizationExpiry    bool
+	organizationLifecycle bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -587,6 +588,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.organizationTransfer {
 		configureReferenceOrganizationTransfer(t, &c, origin)
+	}
+	if extensions.organizationLifecycle {
+		configureReferenceOrganizationLifecycle(t, &c, origin)
 	}
 	if extensions.passkey {
 		configureReferencePasskey(t, &c)
@@ -1102,6 +1106,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organizationTransfer {
 		proveReferenceOrganizationTransferSelection(t, c, deps)
 	}
+	if extensions.organizationLifecycle {
+		proveReferenceOrganizationLifecycleSelection(t, c, deps)
+	}
 	if extensions.organizationUpgrade {
 		successor := c
 		organizationUpgrade = &successor
@@ -1248,6 +1255,7 @@ END $$`); err != nil {
 			{"list", c.HTTPOrganization.List},
 			{"member.leave", c.HTTPOrganization.MemberLeave},
 			{"owner-transfer", c.HTTPOrganization.OwnerTransfer},
+			{"archive", c.HTTPOrganization.Archive}, {"restore", c.HTTPOrganization.Restore},
 		} {
 			if selected.on {
 				wantOperations++
@@ -1462,6 +1470,12 @@ END $$`); err != nil {
 			t.Fatal("transfer selected unrelated password transport")
 		}
 	}
+	if extensions.organizationLifecycle {
+		wantOperations++
+		if !seen["identity.password.verify"] || seen["identity.password.change"] {
+			t.Fatal("lifecycle selected unrelated password transport")
+		}
+	}
 	if extensions.disableHTTP {
 		wantOperations++
 		if !seen["identity.mfa.disable"] {
@@ -1672,7 +1686,9 @@ END $$`); err != nil {
 				next := upgraded.Handler()
 				organizationHandler.Store(&next)
 			}
-			if extensions.organizationExpiry {
+			if extensions.organizationLifecycle {
+				proveReferenceOrganizationLifecycle(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
+			} else if extensions.organizationExpiry {
 				proveReferenceOrganizationExpiry(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationTransfer {
 				proveReferenceOrganizationTransfer(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)

@@ -25,8 +25,8 @@ import (
 
 // OrganizationConfiguration opts into native explicit-organization membership
 // over this graph's current verified-password bearer sessions. It enables no
-// HTTP, teams, domain proofs or archive/restore. OwnerTransfer independently
-// selects the native password-proof profile, never its HTTP route. Core.Clock
+// HTTP, teams or domain proofs. OwnerTransfer and Lifecycle independently
+// select their native password-proof profiles, never HTTP routes. Core.Clock
 // must be nil; the graph supplies its system clock. Counters selects protected
 // PostgreSQL command admission in the existing risk schema, not a replacement
 // risk evaluator. Custody retains the native original-key encryption profile.
@@ -41,6 +41,30 @@ type OrganizationConfiguration struct {
 	SelectOrganizationID func(context.Context) (organization.ID, error)
 	Invitations          *OrganizationInvitationConfiguration
 	OwnerTransfer        *OrganizationOwnerTransferConfiguration
+	Lifecycle            *OrganizationLifecycleConfiguration
+}
+
+// OrganizationLifecycleConfiguration selects the local native archive/restore
+// profile using distinct real password action sources. Both must use the same
+// explicit audience, bearer transport and no CSRF keys. Leave Core.Lifecycle
+// zero; the graph injects its matching policy. No external cascade is selected.
+type OrganizationLifecycleConfiguration struct {
+	Archive, Restore passwordpg.ActionPrimaryConfig
+}
+
+// Format redacts retained primary configuration and keys.
+func (OrganizationLifecycleConfiguration) Format(s fmt.State, _ rune) {
+	io.WriteString(s, "reference.OrganizationLifecycleConfiguration(redacted)")
+}
+
+// MarshalJSON rejects export of deployment custody.
+func (OrganizationLifecycleConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, organization.ErrSensitiveSerialization
+}
+
+// MarshalText rejects implicit export of deployment custody.
+func (OrganizationLifecycleConfiguration) MarshalText() ([]byte, error) {
+	return nil, organization.ErrSensitiveSerialization
 }
 
 // OrganizationOwnerTransferConfiguration selects native ownership transfer
@@ -103,14 +127,17 @@ func (OrganizationInvitationConfiguration) MarshalText() ([]byte, error) {
 }
 
 type organizationState struct {
-	operations       *organizationpg.OperationService
-	invitations      *organizationpg.InvitationService
-	sender           *organizationpg.InvitationOperationService
-	limits           capability.Limits
-	maximum          time.Duration
-	provider         uint64
-	transferAudience string
-	transferProofs   *passwordpg.Repository
+	operations        *organizationpg.OperationService
+	invitations       *organizationpg.InvitationService
+	sender            *organizationpg.InvitationOperationService
+	limits            capability.Limits
+	maximum           time.Duration
+	provider          uint64
+	transferAudience  string
+	transferProofs    *passwordpg.Repository
+	lifecycle         *organizationpg.Service
+	lifecycleProofs   *passwordpg.Repository
+	lifecycleAudience string
 }
 
 func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, queue *deliverypg.EnqueueService, proofs *passwordVerificationState) (*organizationState, error) {
@@ -119,7 +146,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	}
 	n := *c.Organization
 	invalid := identity.InvalidInputError{Field: "reference_organization"}
-	if c.OTP == nil || c.PasswordSignin == nil || sessions == nil || d.PostgreSQL == nil || c.Delivery == nil || queue == nil || n.Core.Clock != nil || n.Core.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || n.Counters.PolicyVersion != n.Core.PolicyVersion || n.Counters.Schema != c.Velocity.Schema || n.Counters.CommandCounters == nil || !n.Counters.EnforceLockouts || n.Repository.MaximumDuration > n.Core.MaximumDuration || n.Core.Teams.MaximumTeams != 0 || n.Core.Domains.MaximumClaims != 0 || n.Core.DynamicRoles.Version != 0 || n.Core.Lifecycle.Version != 0 || n.Core.OwnerTransferAudience != "" {
+	if c.OTP == nil || c.PasswordSignin == nil || sessions == nil || d.PostgreSQL == nil || c.Delivery == nil || queue == nil || n.Core.Clock != nil || n.Core.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || n.Counters.PolicyVersion != n.Core.PolicyVersion || n.Counters.Schema != c.Velocity.Schema || n.Counters.CommandCounters == nil || !n.Counters.EnforceLockouts || n.Repository.MaximumDuration > n.Core.MaximumDuration || n.Core.Teams.MaximumTeams != 0 || n.Core.Domains.MaximumClaims != 0 || n.Core.DynamicRoles.Version != 0 || n.Core.Lifecycle != (organization.LifecycleConfig{}) || n.Core.OwnerTransferAudience != "" {
 		return nil, invalid
 	}
 	// The native organization contributor currently admits this exact profile;
@@ -156,6 +183,22 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 			return nil, identity.InvalidInputError{Field: "reference_organization_transfer_primary"}
 		}
 		n.Core.OwnerTransferAudience = primary.Audience
+	}
+	if n.Lifecycle != nil {
+		archive, restore := n.Lifecycle.Archive, n.Lifecycle.Restore
+		if proofs == nil || proofs.native == nil || proofs.proofs == nil || archive.Action != string(organization.Archive) || restore.Action != string(organization.Restore) || archive.Audience != restore.Audience || archive.Transport != session.CredentialBearer || restore.Transport != session.CredentialBearer || len(archive.CSRFKeys) != 0 || len(restore.CSRFKeys) != 0 {
+			return nil, identity.InvalidInputError{Field: "reference_organization_lifecycle"}
+		}
+		admission.ArchivePrimary, err = passwordpg.NewActionPrimarySource(proofs.native, archive)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_organization_archive_primary"}
+		}
+		admission.RestorePrimary, err = passwordpg.NewActionPrimarySource(proofs.native, restore)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_organization_restore_primary"}
+		}
+		n.Core.Lifecycle = organization.LifecycleConfig{Version: 1, ProofAudience: archive.Audience}
+		admission.Lifecycle = n.Core.Lifecycle
 	}
 	repository, err := organizationpg.NewRepository(d.PostgreSQL, n.Repository)
 	if err != nil {
@@ -202,6 +245,9 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 		return nil, identity.InvalidInputError{Field: "reference_organization_operations"}
 	}
 	state := &organizationState{operations: operations, maximum: n.Core.MaximumDuration}
+	if n.Lifecycle != nil {
+		state.lifecycle, state.lifecycleProofs, state.lifecycleAudience = service, proofs.proofs, n.Core.Lifecycle.ProofAudience
+	}
 	if n.OwnerTransfer != nil {
 		state.transferAudience, state.transferProofs = n.Core.OwnerTransferAudience, proofs.proofs
 	}

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose native local archive/restore and current owner-only lifecycle discovery
+  through guarded handles and independently selected bearer HTTP. Real distinct
+  password action proofs, original keys and current authority remain mandatory.
+  Install the native forward lifecycle history before enabling writers; restore
+  never revives terminal grants. No external cascade completion is claimed.
+
 - Compose natural invitation expiry through guarded native handles and opt-in
   bearer HTTP with shared administrative admission and registered reasons.
   Current manager policy, atomic proof invalidation, original-history recovery

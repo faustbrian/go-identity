@@ -3,8 +3,49 @@
 This selected backend profile connects real registration, verification and
 password signin to organization creation, metadata/role updates, scoped reads, member admission and
 removal, encrypted invitation delivery/resend, cancellation/rejection/expiry and once-only acceptance.
-It does not implement an administrative UI or claim full organization lifecycle,
-teams, dynamic roles, domain ownership, archive/restore or other login profiles.
+Optional local archive/restore is described below. This is not an administrative
+UI or full organization/external lifecycle, teams, dynamic roles, domain ownership
+or another login profile.
+
+## Local archive and restore
+
+Select `Organization.Lifecycle` with distinct native password `Archive` and
+`Restore` action-primary configurations. Both use bearer transport, the same
+explicit issuance audience, bounded maximum age and no cookie CSRF keys. Add
+both exact actions to the real `PasswordVerification.Native.Targets`; leave
+`Organization.Core.Lifecycle` zero for graph injection. Missing or mismatched
+proof owners reject construction. The current profile requires genuinely
+known-empty MFA state; it never silently falls back from enrolled factors.
+
+Native handles expose `Archive`, `Restore` and owner-only `GetLifecycle` for
+current archived-version discovery. Independently select `HTTPOrganization`
+`Archive` and/or `Restore` to enable strict-bearer HTTPS POSTs under
+`/v1/organization/archive` and `/v1/organization/restore`. Each requires the
+original `Idempotency-Key`, exact `organizationID`, `organizationVersion`,
+1..64 visible-ASCII `reason` and retained `proofID`. Current owner/action/session
+authority and one-use proof consumption remain native. Matching-key recovery
+does not issue or renew a proof and may use a fresh current session. Ordinary
+reads deny archived organizations; no post-transition active read is used to
+declare a command successful.
+
+Archive atomically denies local organization authority and cancels pending
+invitations. Restore admits surviving local rights but does not revive terminal
+invitations, removed memberships or revoked grants. Receipts prove local command
+outcome, not asynchronous external cascade completion, external application
+write disablement or hard deletion. External SSO/SCIM/integration links remain
+unselected; those broader lifecycle obligations are not completed by this profile.
+
+The graph installs native lifecycle migration13 after the unchanged complete
+organization/invitation prefix1..12. If invitation workflows are off, their
+physical prefix is still installed before lifecycle so later selection cannot
+overwrite its cancellation constraint; no invitation route/owner is enabled by
+storage. Install before enabling lifecycle writers in a bounded maintenance
+window: native table/constraint changes may block writes and reject unsafe
+existing state. Action consumption reuses the physical action21 prefix and
+native lifecycle28 only when a newer selected anonymous/passkey suffix does not
+already retain both purposes. Newer installed storage selections must remain in
+the graph even with their HTTP handlers off; older consumption SQL is never
+scheduled over those histories. No previous migration bytes are rewritten.
 
 ## Explicit configuration
 

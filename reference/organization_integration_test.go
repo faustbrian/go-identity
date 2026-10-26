@@ -67,6 +67,12 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 		if c.Request.Action == "identity.organization.owner-transfer.recover" && c.Request.Resource.Type == "identity.user" {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
+		if (c.Request.Action == authorization.Action(organization.Archive) || c.Request.Action == authorization.Action(organization.Restore)) && (c.Request.Resource.Type == "organization" || c.Request.Resource.Type == "identity.user" || c.Request.Resource.Type == "identity.request-admission" && c.Request.Resource.ID == authorization.ResourceID(c.Request.Action)) {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
+		if (c.Request.Action == "identity.organization.archive.recover" || c.Request.Action == "identity.organization.restore.recover") && c.Request.Resource.Type == "identity.user" {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
 		if (c.Request.Action == authorization.Action(organization.InvitationExpire) || c.Request.Action == "identity.organization.invitation.expire.recover") && (c.Request.Resource.Type == "organization" || c.Request.Resource.Type == "identity.user") {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}

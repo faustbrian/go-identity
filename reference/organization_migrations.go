@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
-	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
@@ -19,25 +18,11 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 	if s.state.features == nil || s.state.features.organization == nil {
 		return catalog, nil
 	}
-	if s.state.features.organization.transferProofs != nil && !slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == "identity_username_actions" }) {
-		// Action proof consumption already has one native physical history.
-		// Reuse its stable allocation even when username/phone/passkeys are not
-		// selected; enabling transfer must not duplicate or rewrite that history.
-		var passwordHistory []migrations.Migration
-		for _, history := range catalog {
-			for _, step := range history.history {
-				if history.owners[step.Version()] == "identity/password/postgres" {
-					passwordHistory = append(passwordHistory, step)
-				}
-			}
-		}
-		steps, err := (passwordpg.ActionReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory), Version: 21}).Load(ctx)
-		if err != nil {
-			return nil, err
-		}
-		catalog = append(catalog, migrationHistory{namespace: "identity_username_actions", history: steps[len(steps)-1:], owners: map[migrations.Version]ModuleID{21: "identity/password/postgres"}, guards: []migrationGuard{{version: 21, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.username.update"}}})
-	}
 	var err error
+	catalog, err = s.organizationActionMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
 	catalog, err = counterPreparationMigrationCatalog(ctx, catalog)
 	if err != nil {
 		return nil, err
@@ -75,7 +60,10 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 	if err := appendNative(organizationpg.OperationLookupTransactionalMigrationSource{Version: 2}, migrationGuard{version: 2, schema: "organization", tables: []string{"organization_repeat_removal"}}); err != nil {
 		return nil, err
 	}
-	if s.state.features.organization.invitations != nil {
+	if s.state.features.organization.invitations != nil || s.state.features.organization.lifecycle != nil {
+		// Lifecycle's native migration changes invitation cancellation constraints.
+		// Reserve their complete physical prefix even if invitation workflows are
+		// off, so later invitation selection cannot overwrite that constraint.
 		// Invitations own issuance and consumption even without signup, reset
 		// or another capability workflow. Reuse their native physical history.
 		if !slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == "identity_capability" }) {
@@ -120,6 +108,11 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 			if err := appendNative(suffix.source, suffix.guard); err != nil {
 				return nil, err
 			}
+		}
+	}
+	if s.state.features.organization.lifecycle != nil {
+		if err := appendNative(organizationpg.LifecycleMigrationSource{Version: 13}, migrationGuard{version: 13, schema: "organization", columns: []string{"organizations.lifecycle_reason", "organizations.lifecycle_changed_at"}, constraints: []string{"organizations.organization_lifecycle_metadata"}}); err != nil {
+			return nil, err
 		}
 	}
 	// A separate native lookup history lets deployments enable invitations

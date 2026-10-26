@@ -145,6 +145,50 @@ func (f *OrganizationService) OwnerTransfer(ctx context.Context, r organization.
 	return n.operations.OwnerTransfer(w, r, network)
 }
 
+// Archive delegates original-key local archive without claiming external cascade
+// closure. The native owner retains current owner/action-proof and atomic effects.
+func (f *OrganizationService) Archive(ctx context.Context, r organization.LifecycleOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.Archive(w, r, network)
+}
+
+// Restore delegates distinct-proof native restore, never reviving terminal grants.
+func (f *OrganizationService) Restore(ctx context.Context, r organization.LifecycleOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.Restore(w, r, network)
+}
+
+// GetLifecycle discovers current active/archived metadata only under the actual
+// native owner's current-session/owner policy; ordinary reads still deny archive.
+func (f *OrganizationService) GetLifecycle(ctx context.Context, r organization.ReadRequest) (organization.View, error) {
+	if f == nil {
+		return organization.View{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.View{}, err
+	}
+	defer done()
+	if n.lifecycle == nil {
+		return organization.View{}, organization.ErrForbidden
+	}
+	return n.lifecycle.GetLifecycle(w, r)
+}
+
 // AddMember preserves exact target/version intent and original-key recovery.
 func (f *OrganizationService) AddMember(ctx context.Context, r organization.AddMemberOperationRequest, network string) (organization.StoreResult, error) {
 	if f == nil {
