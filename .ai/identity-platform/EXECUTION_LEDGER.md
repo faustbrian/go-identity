@@ -1,5 +1,65 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 07:36 UTC: natural-repeat invitation cancellation profile CLOSED.
+Native23a8d96/public-consumerdcbe737/sharedHTTPef0d98f/leaf5ede003/Referenceae30528
+are exact main/Required green (40282499695/40283737895/40282498931/40283887221/
+40285951460). Independent final native R2, six-path consumer, shared policy,
+eleven-path leaf and ten-path Reference reviews APPROVE. Native R1 org:Get
+coupling reproduced and corrected; consumer withdrawal oracle strengthened.
+Actual normal public native PG/race19.979s, affected withdrawal9.347s; Reference
+local real PG/HTTPS/race10.597s, module race5.771s/command7.086s/taggedvet0.
+Authenticated downloaded Reference v0.0.0-20261026072748-ae30528fd84e, origin
+exactae30528/Subdirreference, Sumh1:aTxSP4UgaxV0a6pX3ngEv4DkYeYVlXYREr0O+n/KhsM=,
+GoModSumh1:LQD0ZajpoSV0u/tnxTGdqeo3zZdACC2CRw9lZinyeVQ=; all ten reviewed
+source/manifests/docs match. Its actual fresh/populated-identity PG/HTTPS/race
+36084 PASS12.766s(5.62/5.51), no workspace/replacement. Proves real original
+cancellation/retry, admissible predecessor rejection, singleton effects without
+membership, reconstructed recovery and revoked-manager denial. Optional native
+migration10 extends unchanged1..9; no recipient, transaction or journal owner
+duplicated. Whole M22/67-unit qualification remains open; 10/39 rows unchanged.
+Cancellation cluster/cache/scratch is obsolete and must now be cleaned exactly.
+
+2026-10-26 06:46 UTC: primary cancellation transport continuation frozen.
+Owning native candidate consumes public root27730f4 and passes actual genuine
+PG consumer31266 2.701s, genuine PG/race37149 12.431s, retained raw cancellation
+PG/race31190 11.622s; native race90210 1.358s/vet0/modverifyall. Independent
+complete ten-path native review is running; no native delivery claim yet.
+Primary writes only shared HTTP exact Cancel bearer-policy prerequisite and
+organization leaf/Reference composition, never native worker paths. Neutral
+request contract root277 is delivered/proven; actual native adoption waits
+reviewed main/public pin. Selected route requires exact Authorization bearer,
+HTTPS mapped tenant, four closed org/inv/version fields and NO Idempotency-Key,
+shared admin admission on every attempt, current native manager authority and
+validated original receipt. No membership or delivery projection is invented.
+Disabled selection exposes no routes/metadata, cookie policies unchanged.
+Prove malformed/foreign/version/withdrawal/unknown responses, rendered wire and
+genuine Reference cancellation/reconstructed repeat/predecessor rejection in
+the existing organization journey. Reject/expire HTTP siblings remain excluded.
+
+2026-10-26 06:35 UTC: cancellation native lane unlocked. Root27730f417492
+is exact main/Required40279351705 green; independent four-path APPROVE.
+Authenticated public root v0.0.0-20261026062125-27730f417492, origin exact277,
+Sumh1:2kWTMupR4366cc5QOc2fbkJPLLvrATT65B9LosXefI8= and
+GoModSumh1:HFX7AoFO6dLYTNcIeleKAEgiV9m19mXlH0q4L/K/rpA=; request/test/mod
+bytes match and downloaded external cancellation tests PASS0.210s.
+Bounded mapping confirms generic kernel observations expose no original domain
+fields; cancellation effects omit original organization version. Permit one
+nullable correlation column and partial lookup index on the existing effects,
+new forward migration and private initiating-cancel marker, preserving raw
+cancel and old histories without requiring the optional migration. No new table,
+journal, request-key engine or kernel API. NULL legacy correlation fails closed.
+Worker organization_lifecycle_native owns new native facade/unit/migration,
+minimal invitation_phase.go/invitation_apply.go changes and native README/
+CHANGELOG. Primary owns consumer profile/dispatch/manifests and HTTP/Reference.
+Reuse current manager authentication and Recover; never resolve recipient.
+Original committed repeats disclose only matching actual history. Unknown
+execution returns immediately, never a second attempt in that call; do not
+claim uncommitted-original recovery from an effect lookup. Exact pending/version
+transaction fences must prevent duplicate commits under competing fresh calls.
+Acceptance additionally includes legacy NULL denial, rollback/COMMIT-loss,
+same-selector and acceptance contention, changed selector/actor denial and
+recipient withdrawal. Existing recovery final current-authority fences retained.
+
 2026-10-26 06:11 UTC: original-key invitation resend selected profile CLOSED.
 Reference4c4fcb72704449b16ae42460dbe927762a98e525 exact origin/main,
 Required40277830315 success; independent complete10path reference review APPROVE

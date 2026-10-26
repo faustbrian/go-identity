@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 06:11 UTC
+## Current TL;DR — 2026-10-26 07:36 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 explicitly closed rows.**
   Correction: the earlier 11/39 claim was not supported by the outcome table.
@@ -50,10 +50,19 @@
   authenticated downloaded Reference passes both fresh/populated PostgreSQL/
   HTTPS/race journeys (8.583s), without replacements. Reference also adopts the
   HIBP correction. Existing native authority and migration histories are retained.
-- **Next:** reconstruction-safe natural-repeat invitation cancellation. The
-  parallel worker's neutral request contract/focused tests are ready locally;
-  native implementation waits its reviewed committed contract. Rejection remains
-  a later profile, not another simultaneously open primary slice.
+- **Cancellation advances:** reviewed native23a8d96 and public-consumerdcbe737
+  are on main/CI-green. Actual public/no-replace PostgreSQL/race passes19.979s;
+  strengthened late-withdrawal cases pass9.347s. Natural retries preserve original
+  metadata, old proofs fail, rollback/COMMIT-loss/contention and recipient
+  withdrawal are covered. Review caught and fixed unrelated org:read coupling.
+  HTTP leaf5ede003 and Referenceae30528 are reviewed/main/CI-green. The actual
+  downloaded Reference passes both genuine fresh/populated-identity PostgreSQL/
+  HTTPS/race journeys12.766s, including admissible prepared-proof rejection,
+  singleton terminal/no-membership effects, reconstructed original recovery
+  and logout denial. **Cancellation profile CLOSED**, not full M22/67 units.
+- **Next:** naturally repeatable recipient rejection. A parallel source-feasibility
+  check identified user-owned legacy digest import/verify/revoke as a candidate;
+  its exact consumed public contracts need confirmation before implementation.
 - **Remaining:** 29 open/unassessed consumer milestone rows, with substantial partial work;
   full 67-unit qualification, broader social/federation/provisioning and
   cross-cutting journeys. Counts are not effort percentages. No user decision
