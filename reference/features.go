@@ -85,6 +85,8 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	organization                 *organizationState
+	httpOrganization             *organizationHTTPState
 	passkey                      *passkeyState
 	anonymous                    *anonymousState
 	httpAnonymous                *anonymousHTTPState
@@ -523,6 +525,19 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.singleSessionRevocation = sessionOwner != nil
+	organizationOwner, err := composeOrganization(c, d, sessionOwner, deliveryOwner)
+	if err != nil {
+		return err
+	}
+	httpOrganization, err := composeOrganizationHTTP(c, organizationOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			httpOrganization.close()
+		}
+	}()
 	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
 	if err != nil {
 		return err
@@ -881,6 +896,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		s.features.verificationSessionLineage = c.PasswordSignup.VerificationSessionLineage
 	}
 	s.features.session = sessionOwner
+	s.features.organization = organizationOwner
+	s.features.httpOrganization = httpOrganization
 	s.features.passwordVerification = passwordVerificationOwner
 	s.features.anonymous = anonymousOwner
 	s.features.httpAnonymous = httpAnonymous
@@ -1000,6 +1017,9 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 	}
 	for tenant := range s.tenants {
+		if n := f.organization; n != nil && n.invitations != nil && !seen[tenant][n.provider] {
+			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
+		}
 		if p := f.phonePasswordReset; p != nil && (!seen[tenant][p.provider] || !seen[tenant][p.linkProvider]) {
 			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 		}

@@ -38,6 +38,10 @@ type ReferenceDependencies struct {
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
+	// Organization selects explicit verified-password bearer organization owners.
+	Organization *OrganizationConfiguration
+	// HTTPOrganization independently selects organization routes and metadata.
+	HTTPOrganization *HTTPOrganizationConfiguration
 	// Passkey explicitly selects native existing-account passkey workflows.
 	// Nil exposes no passkey handle, route or method; HTTP stays independent.
 	Passkey *PasskeyConfiguration
@@ -226,6 +230,9 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
+	if c.Organization != nil && (c.OTP == nil || c.Session == nil || c.PasswordSignin == nil) || c.HTTPOrganization != nil && c.Organization == nil {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_organization"}
+	}
 	migrationPolicy, err := copyMigrationApplyPolicy(c.Migrations)
 	if err != nil {
 		return StoreSet{}, err
@@ -475,6 +482,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	state.mu.Lock()
 	state.closed = true
 	state.cancel()
+	if state.features != nil {
+		state.features.httpOrganization.close()
+	}
 	if state.features != nil && state.features.httpAnonymous != nil {
 		state.features.httpAnonymous.close()
 	}

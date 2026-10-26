@@ -278,6 +278,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	organization          bool
+	organizationUpgrade   bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -474,6 +476,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	if extensions.organization {
+		selectedAuthorization = referenceOrganizationPolicy{}
+	}
 	if extensions.emailSignin == "changed" {
 		selectedAuthorization = &otpSigninFactorChangePolicy{pool: f.pool}
 	}
@@ -514,6 +519,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectedAuthorization = f.adminEmailGrant
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
+	if extensions.organization {
+		configureReferenceOrganization(t, &c, origin)
+	}
 	if extensions.administrativeEmailQueries {
 		c.Email = &reference.EmailConfiguration{Addresses: referenceEmailQueryConfiguration()}
 		c.Email.Addresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{MaximumDuration: time.Second}
@@ -1081,6 +1089,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		proveReferencePasskeyDeletionSelection(t, selected, deps)
 	}
+	var organizationUpgrade *reference.StoreConfiguration
+	if extensions.organizationUpgrade {
+		successor := c
+		organizationUpgrade = &successor
+		c.Organization, c.HTTPOrganization = nil, nil
+	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		var invalid identity.InvalidInputError
@@ -1102,6 +1116,20 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Fatal(err)
 	}
 	workerConfigs := []deliverypg.WorkerConfig{worker}
+	if extensions.organization {
+		if c.Organization != nil {
+			if _, err := reference.ComposeWorkers(stores, providers, worker); err == nil {
+				t.Fatal("organization graph accepted missing selected invitation worker")
+			}
+		}
+		invitationWorker := worker
+		selected := c.Organization
+		if organizationUpgrade != nil {
+			selected = organizationUpgrade.Organization
+		}
+		invitationWorker.ProviderConfigVersion = selected.Invitations.ProviderVersion
+		workerConfigs = append(workerConfigs, invitationWorker)
+	}
 	if extensions.phoneEnrollment {
 		if _, err := reference.ComposeWorkers(stores, providers, worker); err == nil {
 			t.Fatal("phone graph accepted no selected SMS worker")
@@ -1122,6 +1150,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Fatal(err)
 	}
 	modules := []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/password/postgres", "identity/mfa/postgres", "capability/postgres/identity"}
+	if c.Organization != nil {
+		modules = append(modules, "organization/postgres")
+	}
 	if c.Passkey != nil {
 		modules = append(modules, "passkey/postgres", "webauthn/postgres")
 	}
@@ -1185,6 +1216,14 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPOrganization != nil {
+		wantOperations += 9
+		for _, op := range []string{"create", "get", "member.list", "member.add", "member.remove", "invitation-send", "invitation.get", "invitation.list-mine", "invitation.accept"} {
+			if !seen["identity.organization."+op] {
+				t.Fatal("selected organization route missing", op)
+			}
+		}
+	}
 	if c.HTTPPasskey != nil {
 		wantOperations += 5
 		for _, operation := range []string{"register-options", "register-verify", "signin-options", "signin-verify", "list"} {
@@ -1424,6 +1463,14 @@ END $$`); err != nil {
 		t.Fatal("selected public registration routes missing")
 	}
 	network.Config.Handler = server.Handler()
+	var organizationHandler atomic.Pointer[http.Handler]
+	if extensions.organization {
+		initial := server.Handler()
+		organizationHandler.Store(&initial)
+		network.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			(*organizationHandler.Load()).ServeHTTP(w, r)
+		})
+	}
 	var phoneChangeHandler atomic.Pointer[http.Handler]
 	if extensions.phoneChange {
 		initial := server.Handler()
@@ -1550,6 +1597,43 @@ END $$`); err != nil {
 			f.afterManagedChangeConfirmation = func(r email.ChangeConfirmRequest, token string) {
 				proveSelectedEmailChangeConfirmation(t, ctx, client, network.URL, origin, r, token)
 			}
+		}
+	}
+	if extensions.organization {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			selected, selectedConfig := features, c
+			if organizationUpgrade != nil {
+				// Before the explicit operator upgrade, neither advertised metadata
+				// nor the actual route may expose the unselected native feature.
+				for _, op := range server.OpenAPI().Operations() {
+					if strings.HasPrefix(op.Record.OperationID, "identity.organization.") {
+						t.Fatal("unselected organization route advertised")
+					}
+				}
+				probe, err := http.NewRequestWithContext(ctx, http.MethodGet, network.URL+"/v1/organization/invitation/list-mine", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				response, err := client.Do(probe)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, readErr := io.Copy(io.Discard, io.LimitReader(response.Body, 16385))
+				closeErr := response.Body.Close()
+				if response.StatusCode != http.StatusNotFound || readErr != nil || closeErr != nil {
+					t.Fatal("unselected organization route exposed", response.StatusCode)
+				}
+				selectedConfig = *organizationUpgrade
+				upgradeModules := append(append([]reference.ModuleID(nil), modules...), "organization/postgres")
+				selected = upgradeReferenceEmailGraph(t, ctx, f, selectedConfig, deps, worker, upgradeModules, user, migrationRequest, workerConfigs[1:]...)
+				upgraded, err := reference.NewServer(config, deps, selected)
+				if err != nil {
+					t.Fatal("organization upgrade HTTP composition", err)
+				}
+				next := upgraded.Handler()
+				organizationHandler.Store(&next)
+			}
+			proveReferenceOrganizationHTTPS(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf)
 		}
 	}
 	if extensions.passkey {

@@ -1,5 +1,13 @@
 # Identity reference composition
 
+## Optional organization backend
+
+Select native `Organization` and independently select each `HTTPOrganization`
+operation for verified-password bearer sessions, durable membership and
+intended-recipient invitations. See [configuration, migrations and the complete
+consumer journey](ORGANIZATION.md). Disabled selections expose no organization
+routes or metadata; native selection alone enables no HTTP.
+
 ## Optional native passkey backend
 
 `Passkey.TOTP` selects original UV-passkey plus independent confirmed-TOTP

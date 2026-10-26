@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose opt-in native organization membership and intended-recipient
+  invitations over verified-password bearer sessions, with independently
+  selected HTTP operations, encrypted delivery, once-only acceptance and
+  original-outcome recovery. Add forward-only migration histories for fresh
+  and populated backends; transactional index builds require a bounded
+  maintenance window. Disabled selections expose no organization HTTP surface.
+
 - Document and exercise opt-in HTTP resident-key removal from completed
   passkey/TOTP sessions. Require fresh UV and another usable key, invalidate
   prior sessions, then require surviving-key TOTP before original metadata
