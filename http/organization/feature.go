@@ -47,6 +47,15 @@ type OrganizationLister interface {
 	ListOrganizations(context.Context, organization.ListOrganizationsRequest) (organization.ListOrganizationsResult, error)
 }
 
+// MemberLeaver owns naturally repeatable authenticated self-leave. It must
+// derive the target from current verified session authority, protect the last
+// owner, and atomically commit the existing risk/membership/lifecycle effects.
+// Repeats disclose actual original receipts, never infer success from absence
+// or remove a readmitted membership. Calls honor ctx and support concurrency.
+type MemberLeaver interface {
+	LeaveMember(context.Context, organization.LeaveMemberOperationRequest, string) (organization.StoreResult, error)
+}
+
 // MetadataUpdater replaces metadata at an exact organization version using
 // original-key native custody. It owns current administrator authority,
 // protected risk and atomic effects; matching retries recover only the original
@@ -128,6 +137,8 @@ type InvitationAccepter interface {
 // no membership, Service or administrator-rate owner is required.
 // List requires OrganizationLister, Sessions and shared SafeRate only; the
 // authenticated subject is never selected by a caller-supplied user ID.
+// MemberLeave requires MemberLeaver, Sessions and shared SafeRate only; neither
+// administrative admission nor a post-departure membership read is required.
 // Now is trusted, prompt and concurrency-safe. MaximumDuration is 1ms..30s;
 // inbound earlier deadlines win. Construction performs no owner reads or IO.
 type Config struct {
@@ -136,6 +147,7 @@ type Config struct {
 	Service             Service
 	SlugAvailability    SlugAvailabilityReader
 	OrganizationLister  OrganizationLister
+	MemberLeaver        MemberLeaver
 	MetadataUpdater     MetadataUpdater
 	MemberUpdater       MemberUpdater
 	Invitations         InvitationReader
@@ -169,6 +181,7 @@ type FeatureConfig struct {
 	InvitationReject                                 bool
 	SlugAvailable                                    bool
 	List                                             bool
+	MemberLeave                                      bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -180,14 +193,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationReject && !c.SlugAvailable && !c.List {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}} {
 		if !selected.on {
 			continue
 		}
@@ -218,7 +231,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "organization", Operations: operations})
 }
 func selectedMutation(op organization.Operation) bool {
-	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend || op == organization.InvitationCancel || op == organization.InvitationReject
+	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.LeaveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend || op == organization.InvitationCancel || op == organization.InvitationReject
 }
 func nilService(service any) bool {
 	if service == nil {

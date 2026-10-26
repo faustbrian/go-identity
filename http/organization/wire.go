@@ -95,10 +95,12 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	description := "Explicit bearer-only organization profile. Exactly one Authorization Bearer credential; cookies never supply fallback authority. Exact HTTPS host-mapped tenant and trusted full client IP; closed bounded JSON/query and no identity, tenant, actor or command override. Current native authorization/protected effects remain with the organization owner. No invitation acceptance, teams, browser workflow or active organization selection. "
 	if op == organization.InvitationAccept {
 		description = "Explicit bearer-only one-time invitation acceptance. Exactly one Authorization Bearer session and HTTPS mapped tenant are mandatory; ambient cookies provide no authority. Current native recipient/session/verified identifier, exact invitation/organization versions and signed original capability are required. Canonical rate.secret charges trusted IP10/10m, authenticated subject10/10m and original challenge5/signed lifetime before the same native preparation executes. Membership, one-use proof, scoped authority, audit and lifecycle effects commit atomically. Preserve the caller-known original command ID. Re-posting a consumed proof is not original-outcome recovery; use the safe returned binding and organization through the direct current-authorized native recovery API. A bare command ID is insufficient after complete response loss. No automatic retry, recovery route, refreshed validity, credential or delivery is provided. "
-	} else if selectedMutation(op) && op != organization.InvitationReject {
+	} else if selectedMutation(op) && op != organization.InvitationReject && op != organization.LeaveMember {
 		description += "Canonical shared rate.admin atomically charges actor30/minute, tenant100/minute and trustedIP60/minute; denial/outage fails closed with mandatory secret-free auditing. "
 	} else if op == organization.InvitationReject {
 		description = "Explicit bearer-only intended-recipient rejection with canonical rate.safe admission. Exact HTTPS host-mapped tenant, current verified recipient/session and exact organization/invitation versions are mandatory. IP100/minute and tenant-scoped subject300/minute counters are shared with other safe routes; known shared-store unavailability retains the canonical bounded IP20/minute emergency policy with required degradation recording. No manager, membership, proof or organization-read permission substitutes for recipient authority. "
+	} else if op == organization.LeaveMember {
+		description += "Canonical rate.safe applies before the native protected self-leave mutation; no post-departure membership read, session refresh or positive authority cache. "
 	} else {
 		description += "Canonical rate.safe applies before the current authorized primary read; no session refresh or positive authority cache. "
 	}
@@ -119,6 +121,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		} else if op == organization.Update {
 			required = []string{"organizationID", "organizationVersion", "name", "slug"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "name": text(1, 256), "slug": map[string]any{"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"}}
+		} else if op == organization.LeaveMember {
+			required = []string{"organizationID", "organizationVersion"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1)}
+			description += "Naturally repeatable self-leave uses shared rate.safe admission, never administrator admission. The current verified human is the target; no user, member version, command ID, key or proof override is accepted. Native current policy, last-owner protection and atomic effects remain authoritative. Matching repeats return actual original metadata after departure, never infer success from absence or remove a readmitted membership. An unknown outcome requires reconciliation, not automatic replay. No post-leave membership read or HTTP recovery route is added. "
 		} else if op == organization.InvitationSend {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}

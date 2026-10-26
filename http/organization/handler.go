@@ -100,7 +100,7 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 			var retry time.Duration
 			var admitted bool
 			var err error
-			if selectedMutation(op) && op != organization.InvitationReject {
+			if selectedMutation(op) && op != organization.InvitationReject && op != organization.LeaveMember {
 				var result AdminRateResult
 				result, err = c.AdminRate.Admit(r.Context(), in.facts, op, in.actor)
 				admitted, retry = result.Allowed, result.RetryAfter
@@ -138,6 +138,8 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out, err = c.MemberUpdater.UpdateMember(r.Context(), in.updateMember(), in.facts.ClientIP().String())
 				case organization.RemoveMember:
 					out, err = c.Service.RemoveMember(r.Context(), in.remove(), in.facts.ClientIP().String())
+				case organization.LeaveMember:
+					out, err = c.MemberLeaver.LeaveMember(r.Context(), in.leave(), in.facts.ClientIP().String())
 				case organization.InvitationSend:
 					out, err = c.InvitationSender.Send(r.Context(), in.send(), in.facts.ClientIP().String())
 				case organization.InvitationResend:

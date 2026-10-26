@@ -6,6 +6,21 @@ invitation sending/resend, cancellation/rejection and once-only acceptance. Omit
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
+Self-leave is independently opt-in through `MemberLeave`. Supply the actual
+native `OperationService` as `Config.MemberLeaver`, current `Sessions` and the
+shared `SafeRate`; no five-method `Service`, invitations or `AdminRate` is
+required. `POST /v1/organization/member/leave` accepts exactly organization ID
+and its positive advanceable `organizationVersion`. No target user/member
+version, key, command or proof is accepted. The native owner derives self,
+protects the last owner and atomically removes membership with scoped authority,
+risk, audit and lifecycle effects. Natural repeats reconcile only actual
+original metadata after departure; old intent cannot remove a readmitted
+membership. No post-leave membership read or HTTP recovery route is added.
+Preserve the returned safe recovery binding for current-authorized direct
+native `RecoverOperation`; unknown never authorizes automatic redispatch.
+Install the native self-leave lookup migration before selection. Disabled
+selection exposes neither route nor metadata.
+
 Current-user organization listing is independently opt-in through `List`.
 Supply the native `OperationService` as `Config.OrganizationLister`, current
 `Sessions` and shared `SafeRate`; no five-method `Service` or `AdminRate` is
@@ -162,6 +177,7 @@ session, protected risk, membership and atomic commit fences.
 | Add member | `POST /v1/organization/member/add` | JSON `organizationID`, target `userID`, `role`, `organizationVersion`, `memberVersion`; required original key |
 | Update member role | `POST /v1/organization/member/update` | Same fields as add, with positive exact organization/member versions; required original key |
 | Remove member | `POST /v1/organization/member/remove` | JSON `organizationID`, target `userID`, exact positive organization/member versions; **no key** |
+| Leave organization | `POST /v1/organization/member/leave` | JSON `organizationID`, exact positive advanceable `organizationVersion`; self only, **no key** |
 | Accept invitation | `POST /v1/organization/invitation/accept` | JSON original `commandID`, `organizationID`, `invitationID`, exact positive `organizationVersion`, `invitationVersion`, private `token`; **no key** |
 | Send invitation | `POST /v1/organization/invitation-send` | JSON `organizationID`, exact positive `organizationVersion`, target `recipientUserID`, existing verified `recipientIdentifierID`; required original key |
 | Resend invitation | `POST /v1/organization/invitation/resend` | JSON `organizationID`, exact positive read-only `organizationVersion`, `invitationID`, `invitationVersion` 1..MaxUint64-2; required original key |

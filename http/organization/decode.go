@@ -58,6 +58,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/member/update", http.MethodPost
 	case organization.RemoveMember:
 		return "/v1/organization/member/remove", http.MethodPost
+	case organization.LeaveMember:
+		return "/v1/organization/member/leave", http.MethodPost
 	case organization.InvitationSend:
 		return "/v1/organization/invitation-send", http.MethodPost
 	case organization.InvitationAccept:
@@ -98,6 +100,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	missingRate := selectedMutation(op) && !c.AdminRate.Configured() || !selectedMutation(op) && !c.SafeRate.Configured()
 	if op == organization.InvitationReject {
 		missingOwner, missingRate = nilService(c.InvitationRejecter), !c.SafeRate.Configured()
+	}
+	if op == organization.LeaveMember {
+		missingOwner, missingRate = nilService(c.MemberLeaver), !c.SafeRate.Configured()
 	}
 	if op == organization.InvitationAccept {
 		missingOwner, missingRate = nilService(c.InvitationAccepter), !c.SecretRate.Configured()
@@ -252,6 +257,8 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		names = []string{"name", "slug"}
 	} else if in.op == organization.Update {
 		names = []string{"organizationID", "organizationVersion", "name", "slug"}
+	} else if in.op == organization.LeaveMember {
+		names = []string{"organizationID", "organizationVersion"}
 	} else if in.op == organization.InvitationSend {
 		names = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 	} else if in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
@@ -278,6 +285,10 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		}
 	} else if in.op == organization.Update {
 		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("name", &in.name) || !decode("slug", &in.slug) {
+			return identityhttp.ErrInvalidInput
+		}
+	} else if in.op == organization.LeaveMember {
+		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) {
 			return identityhttp.ErrInvalidInput
 		}
 	} else if in.op == organization.InvitationSend {
@@ -310,6 +321,8 @@ func (in *requestInput) validate() error {
 		return in.updateMember().Validate()
 	case organization.RemoveMember:
 		return in.remove().Validate()
+	case organization.LeaveMember:
+		return in.leave().Validate()
 	case organization.InvitationSend:
 		return in.send().Validate()
 	case organization.InvitationAccept:
@@ -337,6 +350,10 @@ func (in *requestInput) add() organization.AddMemberOperationRequest {
 }
 func (in *requestInput) remove() organization.RemoveMemberOperationRequest {
 	return organization.RemoveMemberOperationRequest{Authentication: in.auth, OrganizationID: in.org, UserID: in.user, OrganizationVersion: in.orgVersion, MemberVersion: in.memberVersion, CorrelationID: in.correlation}
+}
+
+func (in *requestInput) leave() organization.LeaveMemberOperationRequest {
+	return organization.LeaveMemberOperationRequest{Authentication: in.auth, OrganizationID: in.org, OrganizationVersion: in.orgVersion, CorrelationID: in.correlation}
 }
 func (in *requestInput) read() organization.ReadRequest {
 	return organization.ReadRequest{Authentication: in.auth, OrganizationID: in.org, Cursor: in.cursor, Limit: in.limit, CorrelationID: in.correlation}

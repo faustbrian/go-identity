@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected bearer-only self-leave with exact organization
+  version and shared safe-rate admission. The native owner derives self and
+  retains last-owner protection, atomic effects and natural-repeat history.
+  No target, key, caller command, proof or post-leave membership lookup is
+  accepted. Unknown outcomes retain original correlation; disabled selection
+  exposes no route or metadata.
+
 - Add independently selected current-user organization listing with explicit
   bounded pagination, strict bearer/HTTPS tenant binding and shared safe rates.
   Configure `OrganizationLister` without extending the existing Service port.

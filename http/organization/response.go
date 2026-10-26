@@ -111,7 +111,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 		return status, out
 	}
 	target := in.user
-	if in.op == organization.Create || in.op == organization.Update || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
+	if in.op == organization.Create || in.op == organization.Update || in.op == organization.LeaveMember || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
 		target = in.actor
 	}
 	if in.op == organization.InvitationResend {
@@ -130,6 +130,13 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 		validRecord = result.InvitationID == in.invitationID && b.RecordID == string(in.invitationID) && result.OrganizationID == in.org
 	}
 	if b.ValidateFor(in.op.Descriptor()) != nil || b.TenantID != in.auth.TenantID || b.ActorKind != authorization.SubjectUser || b.ActorID != identity.ActorID(in.actor) || b.UserID != target || result.MemberID != b.UserID || !validRecord {
+		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
+	}
+	// The binding does not contain the organization epoch. A committed leave
+	// for another epoch cannot establish this request's original correlation;
+	// reject it before exporting metadata. Genuine unknown receipts have no
+	// committed versions and retain their validated binding for reconciliation.
+	if in.op == organization.LeaveMember && r.Outcome == identity.CommitOutcomeCommitted && (r.Feature == nil || r.Feature.BeforeVersion != in.orgVersion || r.Feature.AfterVersion != in.orgVersion+1) {
 		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
 	}
 	out.CommandID, out.OrganizationID, out.MemberID = b.CommandID, result.OrganizationID, result.MemberID
