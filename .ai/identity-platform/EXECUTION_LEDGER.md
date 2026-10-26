@@ -1,5 +1,111 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 17:06 UTC: owner invitation-list profile CLOSED. Leaf3f18f79
+(review85fefde) and Referenceb88f815 (finalreviewbc56c029) pushed exactreviewed
+source with Required40361536390/40363791500 SUCCESS. Actual downloaded b88
+bothjourneys42032 FAILED admin429 during extra fixture setup, not production
+rate/authority failure. Existing AdminRate actor30/tokenbucketminute plus three
+new setup HTTP attempts made success depend on refill timing. Test-only two-path
+3dab6bf6 correction uses existing guarded native Send/Add/Update for setup,
+samehumans/keys/versions/protectedrisk/coordinator; allownerlistassertions remain
+actualHTTPS. No sleeps/budget reset/productionlimit or policy change. Fresh+
+populated55906 PASS13.341s/taggedvet0; invitation_list_fixture_review APPROVE,
+9b674496a8f20f8d8aebb846ccf1a614c71f71b3 pushedexact; Required40365143801
+SUCCESS. AuthenticatedpublicReferencev0.0.0-20261026170404-9b674496a8f2,
+originexact/Subdirreference/SumJoVjoHJPD3RB9eFtNHe2vfAPf0D+Mv83ZgUI6APFJT4=,
+GoModSumKIFsthrUv6jOw7K/vUxXSZyOqW7KuEXD+UMNK9hnnS8=; all11 changed
+filesbyte-match, actualdownloaded39459 fresh+populated PG/HTTPS/race terminal0
+PASS12.927s. Genuine two-IDpages/end, reconstructedList, configuredtenant,
+ownerwithdrawal/newowner/logout and typedclosedhandle denial proven. Prior
+ordinaryproduction/dependencychecks retained at unchanged inputs, no wholeunit
+qualificationclaim. Stopped ownedPG69993/53974 and removedexact cohort
+/private/tmp/organization-invitation-list.cueLns (93315 terminal0).
+
+Parallel owner-transfer root8b72f854aa29706b3fdf1f87b3c9ed494813685b delivered:
+six-pathe6f9ba35 owner_transfer_operation_root_review APPROVE, exact
+Required40363752859 SUCCESS; authenticatedpublicrootv0.0.0-20261026165516-
+8b72f854aa29 originsixfilesmatch/SumgAMe0QEI+4oR8dpfQ+kOaBiQqC4pFKL5GuJOrc45wK8=.
+RootREDmissingAPI/recoveryallowlist -> focused0.209s/fullrace1.330s/vet0/
+155625fuzzexec3.313s, ownrootcohortremoved. Primaryadoptedpublicrootpin in
+postgres/go.mod normally; nativeworker solewriter in assigned source/tests.
+NativeRED16647 realPGmissingmethod, GREEN54776 exposed mapping-only recovery
+opt-in missingOwnerTransfer and same-key candidate-preparation race after actor
+demotion; diagnostics55315 mapping1/claims0/journals0/proofunusedtrue, not a
+permit to replay. Approved narrowly service.go mapped-original opt-in and
+OwnerTransfer-only operation_service.go metadata-read reconciliation through
+existing public ReadPreparedRequestKey/restore/Recover, no newexecution/store.
+Native tests/review/publication/genuineconsumer remain pending. Worker owns
+PG57743/53975 and /tmp/organization-owner-transfer-native.tKaOrW; heavy slot
+returned after primary publicproof. Othergroups notclaimedready, overall10/39
+and~25%lowconfidence unchanged; no userdecisionblocks implementation.
+
+2026-10-26 16:47 UTC: owner invitation-list leaf3f18f790 reviewed exact six-path
+85fefdebc3ccfa0adca35f7e39475f50ecc5777adec0de3b5ee549cd8cb18d68,
+invitation_list_leaf_review APPROVE; exact Required40361536390 SUCCESS, remote
+main confirmed. Missing-public-API RED83838 -> focused82125/50741/4495 PASS;
+fullleaf race13.665s/vet0/fuzz19768exec3.264s/tidyverify0 (75298).
+Authenticated leafv0.0.0-20261026164122-3f18f790b454 originexact and sixchanged
+files byte-match; Reference normal pin, no replacements. DirectReferenceList
+missing-method RED61690 -> guarded GREEN0.411s. Integration first missingold
+leaf type56090, then realownerempty40338115 identified an omitted exact fixture
+InvitationList action grant; no production policy relaxation. Corrected genuine
+fresh PG/HTTPS/race7222 PASS7.335s; distinctpopulated33071 PASS8.239s; ordinary
+Reference/cmd race5.335s/10.264s, taggedvet/tidy/verify0. Eleven-path Reference
+7789f9f2ec2ee47922bbbf5b47b988a75eb915964bc4195658d23cac551b7802 under
+independent invitation_list_reference_review. Twoactualinvitations/C-order
+pages, directreconstruction, configuredtenant, actualdemotion/newowner and
+actualsessionlogout are exercised; not yet Referencepublic/main-delivered.
+Owned PG53974 and cachecohort organization-invitation-list.cueLns await final
+publicproof/cleanup. Paralleltransfer worker has serialroot heavy slot; primary
+does not compile concurrently. Its scopeadditions narrowly include recovery
+OwnerTransfer allowlist, two stale unsupported-operation tests (now Delete),
+and unique consumerharness dispatch; no permission/schema/legacyrecover change.
+
+2026-10-26 16:44 UTC: dependency-ready parallel native owner-transfer lane,
+owner organization_transfer_operation, in go-organization mainfd71a90. Worker
+owns new root operation_owner_transfer.go + matching test; new postgres/
+operation_owner_transfer.go and *_test.go; postgres/consumer/operation_owner_
+transfer_consumer_integration_test.go; owner-transfer documentation/Unreleased
+entries only. No shared kernels, HTTP/Reference, manifests/Go pins, Git, other
+operation helpers or migrations without primary coordination. Consume existing
+PrepareOwnerTransfer/Execute, operation custody and actual password action-proof
+owner at committed root6d7d32d/native96076bc and current unchanged public pins;
+existing native owner-transfer PG/race and genuine identity/password authority
+are retained prerequisite evidence, not full-unit qualification.
+Outcome: original-key natural native owner-transfer into an existing active
+member, using actual fresh action-bound password proof, current human/session,
+both versions and existing atomic role/authority/audit/outbox effects. Matching
+retry must classify original command under native current disclosure policy;
+changed intent conflicts, no replacement proof/command or private receipt store.
+Keep old preparation API compatible. Prove real owner->member transfer, self/
+foreign/nonowner/stale/last-owner constraints, exact proof/session authority,
+contention/rollback/lost-ack/reconstruction and genuine public signup/password
+consumer. HTTP/Reference stays primary-owned future integration, not claimed.
+One bounded consumed-contract pass then code; root prerequisite boundary is
+handed to primary for independent review/publication before native adoption.
+Worker no children/Git/Go-heavy runs until primary serializes the slot; primary
+continues invitation-list delivery without waiting. Named finite scope, not all
+M22/M23 and not a rewrite of implemented transfer/proof engines.
+
+2026-10-26 16:35 UTC: frozen M22 owner invitation-list composition profile.
+Primary owns http/organization and reference only, adopting mainbdc6927 /
+organization native96076bc/root6d7d32d already committed/public/proven invitation
+List (owner-only, current primary metadata, C-order exclusive ID cursor1..100).
+Add independently selectable GET /v1/organization/invitation/list and guarded
+Reference List, not broaden existing InvitationReader implementers. Query only
+organizationID/cursor/limit; required canonical limit1..100, optional bounded ID
+cursor; strict bearer/HTTPS/current session/shared safe admission. No addresses,
+proof, delivery custody or arbitrary target actor. Validate whole native page,
+scope/order/continuation before export; no partial disclosure on error/expiry.
+Finite acceptance: empty/bounded pages/end, Get/ListMine coexistence, current
+owner-only denial after role/membership withdrawal and logout, wrong tenant/org,
+malformed query/owner response, rate/late authority, absent selection metadata.
+Native source unchanged unless a concrete runtime defect disproves its contract.
+Focused leaf RED/GREEN/fullrace/vet/hostile fuzz/tidy; actual Reference fresh and
+populated PG/HTTPS/race, direct handle lifetime/tenant, independent final reviews,
+ordinary main publication/exact CI and actual public Reference consumer. No new
+migration, domain store, evidence engine or neighboring lifecycle variant.
+
 2026-10-26 16:27 UTC: natural self-leave profile CLOSED. Composition reviewer
 self_leave_composition_review APPROVE consumer5b6ab1 + Reference4d1571, no
 findings. Consumerfd71a90 and Reference39b0145 committed/pushed exact reviewed

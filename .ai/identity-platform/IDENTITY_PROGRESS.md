@@ -1,11 +1,20 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 16:27 UTC
+## Current TL;DR — 2026-10-26 17:06 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
   qualification is still unproved; no new qualified unit is claimed.
-- **Latest complete consumer profile: natural self-leave.** Real signup-issued
+- **Latest complete consumer profile: owner invitation listing.** Current owners
+  page safe invitation metadata through opt-in HTTP or guarded native handles;
+  actual role withdrawal, replacement ownership, reconstruction, logout and
+  closed-handle denial are proven. HTTP `3f18f79`, Reference `b88f815` and its
+  bounded fixture correction `9b67449` are independently reviewed, main-pushed
+  and CI-green. The actual downloaded Reference passes both fresh/populated
+  PostgreSQL/HTTPS/race journeys (12.927s). The earlier public test hit the
+  unchanged admin budget; setup now uses existing guarded native commands,
+  not raised limits or fake authority. This closes the profile, not full M22.
+- **Also complete: natural self-leave.** Real signup-issued
   sessions can leave through native APIs or opt-in HTTP, repeat/recover the
   original receipt after departure, reject old leave intent after readmission,
   preserve last-owner safety and lose recovery on actual logout. Native
@@ -33,7 +42,11 @@
   intended-recipient invitation rejection (`bb8415d`), with their public-module
   PostgreSQL/race proofs. Existing registration/verification/signin/session,
   reset/change, MFA/passkey and organization profiles are detailed below.
-- **Next:** remaining organization lifecycle composition, adopting these public
+- **Current parallel lane:** original-key native ownership transfer. Its request
+  contract `8b72f85` is reviewed/main/CI-green; the worker is proving existing
+  transfer effects and exact original recovery under contention/commit ambiguity.
+  Native workflow and Reference integration are not yet delivered.
+- **Next:** remaining organization lifecycle composition, adopting public
   owners without restarting delivered profiles. A bounded SCIM readiness check
   identified missing connection/provider-bound provisioning authority and atomic
   identity-command composition; generic CRUD/parsers cannot substitute for it.
