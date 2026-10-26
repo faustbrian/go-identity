@@ -142,15 +142,18 @@ type InvitationAccepter interface {
 // Now is trusted, prompt and concurrency-safe. MaximumDuration is 1ms..30s;
 // inbound earlier deadlines win. Construction performs no owner reads or IO.
 type Config struct {
-	Network             identityhttp.NetworkConfig
-	Sessions            *session.SessionService
-	Service             Service
-	SlugAvailability    SlugAvailabilityReader
-	OrganizationLister  OrganizationLister
-	MemberLeaver        MemberLeaver
-	MetadataUpdater     MetadataUpdater
-	MemberUpdater       MemberUpdater
-	Invitations         InvitationReader
+	Network            identityhttp.NetworkConfig
+	Sessions           *session.SessionService
+	Service            Service
+	SlugAvailability   SlugAvailabilityReader
+	OrganizationLister OrganizationLister
+	MemberLeaver       MemberLeaver
+	MetadataUpdater    MetadataUpdater
+	MemberUpdater      MemberUpdater
+	Invitations        InvitationReader
+	// InvitationLister independently selects owner-only organization pages;
+	// it does not require the recipient/Get port or administrator admission.
+	InvitationLister    InvitationLister
 	InvitationSender    InvitationSender
 	InvitationResender  InvitationResender
 	InvitationCanceller InvitationCanceller
@@ -171,17 +174,17 @@ type Config struct {
 // Invitation reads and mutations are independently selectable. No team,
 // browser or active-organization workflow is selected.
 type FeatureConfig struct {
-	Config                                           Config
-	Create, Get, MemberList, MemberAdd, MemberRemove bool
-	Update, MemberUpdate                             bool
-	InvitationGet, InvitationListMine                bool
-	InvitationSend, InvitationAccept                 bool
-	InvitationResend                                 bool
-	InvitationCancel                                 bool
-	InvitationReject                                 bool
-	SlugAvailable                                    bool
-	List                                             bool
-	MemberLeave                                      bool
+	Config                                            Config
+	Create, Get, MemberList, MemberAdd, MemberRemove  bool
+	Update, MemberUpdate                              bool
+	InvitationGet, InvitationListMine, InvitationList bool
+	InvitationSend, InvitationAccept                  bool
+	InvitationResend                                  bool
+	InvitationCancel                                  bool
+	InvitationReject                                  bool
+	SlugAvailable                                     bool
+	List                                              bool
+	MemberLeave                                       bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -193,19 +196,19 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationList && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationList, c.InvitationList}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}} {
 		if !selected.on {
 			continue
 		}
 		constructor := newHandler
-		if selected.op == organization.InvitationGet || selected.op == organization.InvitationListMine {
+		if selected.op == organization.InvitationGet || selected.op == organization.InvitationListMine || selected.op == organization.InvitationList {
 			constructor = newInvitationHandler
 		}
 		h, err := constructor(c.Config, selected.op, m)
@@ -216,7 +219,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}
-		if selected.op == organization.InvitationGet || selected.op == organization.InvitationListMine {
+		if selected.op == organization.InvitationGet || selected.op == organization.InvitationListMine || selected.op == organization.InvitationList {
 			op.Wire = invitationWire(selected.op)
 		} else if selected.op == organization.InvitationSend {
 			op.Wire = invitationSendWire()

@@ -24,6 +24,22 @@ type InvitationReader interface {
 	ListMine(context.Context, organization.InvitationListMineRequest) (organization.InvitationListMineResult, error)
 }
 
+// InvitationLister owns current organization-owner authorization and a bounded
+// invitation-ID keyset page. It must honor ctx, support concurrent calls and
+// return no partial page on failure. A cursor is not authority or a snapshot.
+// This separate port preserves existing InvitationReader implementations.
+type InvitationLister interface {
+	List(context.Context, organization.InvitationReadRequest) (organization.InvitationPage, error)
+}
+
+// InvitationListResponse contains safe organization-scoped invitation metadata.
+// NextCursor is the last returned ID when more rows exist; reuse it unchanged
+// with the same organization. Every request rechecks current owner authority.
+type InvitationListResponse struct {
+	Invitations []InvitationView `json:"invitations"`
+	NextCursor  organization.ID  `json:"nextCursor,omitempty"`
+}
+
 // InvitationView is explicit safe metadata, never an address, delivery custody,
 // capability or permission to accept. Status is a closed lowercase lifecycle.
 type InvitationView struct {
@@ -87,11 +103,18 @@ func invitationPath(op organization.Operation) string {
 	if op == organization.InvitationListMine {
 		return "/v1/organization/invitation/list-mine"
 	}
+	if op == organization.InvitationList {
+		return "/v1/organization/invitation/list"
+	}
 	return ""
 }
 func newInvitationHandler(c Config, op organization.Operation, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
 	path := invitationPath(op)
-	if path == "" || nilService(c.Invitations) || !c.Sessions.Configured() || !c.SafeRate.Configured() || c.Now == nil {
+	missingOwner := nilService(c.Invitations)
+	if op == organization.InvitationList {
+		missingOwner = nilService(c.InvitationLister)
+	}
+	if path == "" || missingOwner || !c.Sessions.Configured() || !c.SafeRate.Configured() || c.Now == nil {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
@@ -140,7 +163,7 @@ func newInvitationHandler(c Config, op organization.Operation, m []identityhttp.
 			}
 			in := &invitationInput{facts: facts, auth: organization.Authentication{TenantID: facts.TenantID(), Bearer: bearer}}
 			for k := range query {
-				if op == organization.InvitationGet && k != "organizationID" && k != "invitationID" || op == organization.InvitationListMine && k != "cursor" && k != "limit" {
+				if op == organization.InvitationGet && k != "organizationID" && k != "invitationID" || op == organization.InvitationListMine && k != "cursor" && k != "limit" || op == organization.InvitationList && k != "organizationID" && k != "cursor" && k != "limit" {
 					return zero, identityhttp.ErrInvalidInput
 				}
 			}
@@ -149,6 +172,17 @@ func newInvitationHandler(c Config, op organization.Operation, m []identityhttp.
 				if !boundedID(string(in.org)) || !boundedID(string(in.id)) {
 					return zero, identityhttp.ErrInvalidInput
 				}
+			} else if op == organization.InvitationList {
+				in.org = organization.ID(query.Get("organizationID"))
+				in.cursor = organization.InvitationCursor(query.Get("cursor"))
+				n, e := strconv.ParseUint(query.Get("limit"), 10, 32)
+				if !boundedID(string(in.org)) || e != nil || n < 1 || n > 100 || strconv.FormatUint(n, 10) != query.Get("limit") {
+					return zero, identityhttp.ErrInvalidInput
+				}
+				if _, present := query["cursor"]; present && !boundedID(string(in.cursor)) {
+					return zero, identityhttp.ErrInvalidInput
+				}
+				in.limit = uint32(n)
 			} else {
 				in.limit = 100
 				if values, present := query["limit"]; present {
@@ -220,6 +254,12 @@ func newInvitationHandler(c Config, op organization.Operation, m []identityhttp.
 					var view InvitationView
 					view, err = invitationView(in, out.Invitation, false)
 					response = InvitationReadResponse{Invitation: view}
+				}
+			} else if op == organization.InvitationList {
+				var out organization.InvitationPage
+				out, err = c.InvitationLister.List(r.Context(), organization.InvitationReadRequest{Authentication: in.auth, OrganizationID: in.org, Cursor: organization.ID(in.cursor), Limit: in.limit, CorrelationID: in.correlation})
+				if err == nil {
+					response, err = ownerInvitationPage(in, out)
 				}
 			} else {
 				var out organization.InvitationListMineResult
@@ -308,4 +348,29 @@ func invitationPage(in *invitationInput, page organization.InvitationListMineRes
 		views[n], previous = v, i.ID
 	}
 	return InvitationListMineResponse{Invitations: views, NextCursor: page.NextCursor}, nil
+}
+
+func ownerInvitationPage(in *invitationInput, page organization.InvitationPage) (InvitationListResponse, error) {
+	var zero InvitationListResponse
+	if _, err := readResponse(&requestInput{auth: in.auth, org: in.org, actor: in.actor}, organization.View{Organization: page.Organization, Actor: page.Actor}); err != nil || page.Actor.Role != organization.RoleOwner || len(page.Invitations) > int(in.limit) {
+		return zero, organization.ErrUnavailable
+	}
+	views := make([]InvitationView, len(page.Invitations))
+	previous := organization.ID(in.cursor)
+	for n, item := range page.Invitations {
+		if item.Invitation.ID <= previous {
+			return zero, organization.ErrUnavailable
+		}
+		scoped := *in
+		scoped.id = item.Invitation.ID
+		view, err := invitationView(&scoped, item.Invitation, false)
+		if err != nil {
+			return zero, err
+		}
+		views[n], previous = view, item.Invitation.ID
+	}
+	if page.NextCursor != "" && (len(views) != int(in.limit) || page.NextCursor != previous) {
+		return zero, organization.ErrUnavailable
+	}
+	return InvitationListResponse{Invitations: views, NextCursor: page.NextCursor}, nil
 }

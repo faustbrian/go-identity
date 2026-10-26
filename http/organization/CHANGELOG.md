@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected owner-only invitation listing through the narrow
+  `InvitationLister` port without changing existing read implementations.
+  Explicit organization and limit1..100 select current-state safe metadata;
+  ID continuation, strict bearer/HTTPS and shared safe rates retain native
+  owner authorization. Malformed or failed pages disclose no partial data;
+  disabled selection exposes neither route nor metadata.
+
 - Add independently selected bearer-only self-leave with exact organization
   version and shared safe-rate admission. The native owner derives self and
   retains last-owner protection, atomic effects and natural-repeat history.

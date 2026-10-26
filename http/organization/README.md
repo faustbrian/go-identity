@@ -55,6 +55,20 @@ with current `Sessions` and shared `AdminRate`. Neither selection requires
 compatible. Native current authority, exact versions and last-owner protection
 are not replaced by HTTP admission.
 
+Owner-only invitation listing is independently opt-in through `InvitationList`.
+Supply native `InvitationService` as `Config.InvitationLister`, current
+`Sessions` and shared `SafeRate`; neither `Invitations`, `Service` nor
+`AdminRate` is required. `GET /v1/organization/invitation/list` accepts only
+`organizationID`, required canonical decimal `limit`1..100 and optional
+exclusive invitation-ID `cursor` (1..128 bytes). This is not ListMine's opaque
+subject-bound cursor. Return the last ID unchanged with the same organization;
+pages are current state, not snapshots, so restart to see earlier additions.
+Each request requires a current organization owner. Responses contain only
+safe invitation views and optional continuation, never recipient addresses,
+proofs or delivery custody; errors withhold the entire page. Disabled selection
+exposes no route or metadata. No new migrations are needed beyond the selected
+native invitation owner.
+
 Invitation reads are independently opt-in through `InvitationGet` and
 `InvitationListMine`. Supply the actual native invitation owner through
 `Config.Invitations`; it implements the narrow `InvitationReader` port directly.
@@ -183,6 +197,7 @@ session, protected risk, membership and atomic commit fences.
 | Resend invitation | `POST /v1/organization/invitation/resend` | JSON `organizationID`, exact positive read-only `organizationVersion`, `invitationID`, `invitationVersion` 1..MaxUint64-2; required original key |
 | Cancel invitation | `POST /v1/organization/invitation/cancel` | JSON `organizationID`, `invitationID`, exact versions 1..MaxUint64-1; **no key**; native-allocated original command and natural-repeat recovery |
 | Get invitation | `GET /v1/organization/invitation/get` | Required query `organizationID`, `invitationID`; native **owner-only** authorization |
+| List organization invitations | `GET /v1/organization/invitation/list` | Required `organizationID`, `limit`1..100; optional exclusive invitation-ID `cursor`; native **owner-only** authorization |
 | List my invitations | `GET /v1/organization/invitation/list-mine` | Optional opaque `cursor`, `limit` 1..200 (default100); current verified recipient, no membership required |
 
 Every request requires exactly one syntactically strict Authorization Bearer
