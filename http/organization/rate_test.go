@@ -56,7 +56,7 @@ func TestAdminRateUsesOneAtomicCanonicalSharedBudget(t *testing.T) {
 	if _, err := f.c.AdminRate.Admit(t.Context(), identityhttp.NetworkFacts{}, organization.Create, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 2 {
 		t.Fatal("unproven network reached backend")
 	}
-	for _, op := range []organization.Operation{organization.Update, organization.UpdateMember, organization.Archive, organization.Restore, organization.CreateTeam, organization.UpdateTeam, organization.DeleteTeam} {
+	for _, op := range []organization.Operation{organization.Update, organization.UpdateMember, organization.Archive, organization.Restore, organization.CreateTeam, organization.UpdateTeam, organization.DeleteTeam, organization.CreateDynamicRole, organization.UpdateDynamicRole, organization.DeleteDynamicRole} {
 		if out, err := f.c.AdminRate.Admit(t.Context(), facts, op, "user-a"); err != nil || !out.Allowed {
 			t.Fatal("selected update lost shared administrative admission", err)
 		}
@@ -66,13 +66,13 @@ func TestAdminRateUsesOneAtomicCanonicalSharedBudget(t *testing.T) {
 			}
 		}
 	}
-	if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.GetTeam, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 9 {
+	if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.GetTeam, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 12 {
 		t.Fatal("unselected admin operation bypassed finite owner")
 	}
 	if err := f.c.AdminRate.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Create, "user-a"); err == nil || f.rate.calls != 9 {
+	if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Create, "user-a"); err == nil || f.rate.calls != 12 {
 		t.Fatal("closed owner dispatched again")
 	}
 }

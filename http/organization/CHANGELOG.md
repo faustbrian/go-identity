@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected strict-bearer custom-role create/get/list/update/
+  delete using native typed statements, original keys, exact epochs and terminal
+  deletion recovery. Shared rates, current manager/session authority and native
+  permission policy remain mandatory; failed reads disclose no partial result.
+  Disabled selections expose no routes or metadata. Existing Service ports remain
+  compatible, and bindings/permission checks stay native-only.
+
 - Add independently selected bearer team create/update/delete and manager-only
   team pagination through narrow native ports. Original keys, exact epochs and
   natural terminal history remain native-owned; no caller command, revived team

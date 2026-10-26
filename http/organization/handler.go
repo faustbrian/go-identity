@@ -128,6 +128,12 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				var resend organization.InvitationResendOperationResult
 				var err error
 				switch op {
+				case organization.CreateDynamicRole:
+					out, err = c.RoleCreator.CreateDynamicRole(r.Context(), in.createRole(), in.facts.ClientIP().String())
+				case organization.UpdateDynamicRole:
+					out, err = c.RoleUpdater.UpdateDynamicRole(r.Context(), in.updateRole(), in.facts.ClientIP().String())
+				case organization.DeleteDynamicRole:
+					out, err = c.RoleDeleter.DeleteDynamicRole(r.Context(), in.deleteRole(), in.facts.ClientIP().String())
 				case organization.Create:
 					out, err = c.Service.Create(r.Context(), in.create(), in.facts.ClientIP().String())
 				case organization.Update:
@@ -260,6 +266,27 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					return
 				}
 				writeJSON(w, 200, SlugAvailableResponse{Available: out.Available})
+				return
+			}
+			if roleReadOperation(op) {
+				var view organization.View
+				var err error
+				if op == organization.GetDynamicRole {
+					view, err = c.RoleGetter.GetDynamicRole(r.Context(), in.readRole())
+				} else {
+					view, err = c.RoleLister.ListDynamicRoles(r.Context(), in.readRole())
+				}
+				if err != nil {
+					status, code := domainFailure(err)
+					reject(w, r, requestFailure{status: status, code: code})
+					return
+				}
+				response, err := roleReadResponse(in, view)
+				if err != nil || r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				writeJSON(w, 200, response)
 				return
 			}
 			if teamPageRead(op) {

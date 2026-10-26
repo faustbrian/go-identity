@@ -116,7 +116,7 @@ func decodeTeamQuery(in *requestInput, q url.Values) error {
 	}
 	return nil
 }
-func validTeamReadView(in *requestInput, v organization.View) bool {
+func validScopedReadView(in *requestInput, v organization.View) bool {
 	return v.Organization.ID == in.org && v.Organization.TenantID == in.auth.TenantID && v.Organization.Active && v.Organization.Version > 0 && v.Actor.OrganizationID == in.org && v.Actor.TenantID == in.auth.TenantID && v.Actor.UserID == in.actor && validMember(v.Actor)
 }
 func validTeamMetadata(in *requestInput, team organization.Team) bool {
@@ -135,7 +135,7 @@ func teamListResponse(in *requestInput, v organization.View) (TeamListResponse, 
 	var zero TeamListResponse
 	// Native ListTeams returns only current static managers; list-mine may
 	// return ordinary members. An incoherent snapshot is not a partial page.
-	if !validTeamReadView(in, v) || len(v.Teams) > int(in.limit) || in.op == organization.ListTeams && v.Actor.Role != organization.RoleOwner && v.Actor.Role != organization.RoleAdministrator {
+	if !validScopedReadView(in, v) || len(v.Teams) > int(in.limit) || in.op == organization.ListTeams && v.Actor.Role != organization.RoleOwner && v.Actor.Role != organization.RoleAdministrator {
 		return zero, identityhttp.ErrUnavailable
 	}
 	out := TeamListResponse{OrganizationVersion: v.Organization.Version, Teams: make([]TeamView, len(v.Teams)), NextCursor: v.NextTeamCursor}
@@ -152,7 +152,7 @@ func teamListResponse(in *requestInput, v organization.View) (TeamListResponse, 
 }
 func teamMembersResponse(in *requestInput, v organization.View) (TeamMemberListResponse, error) {
 	var zero TeamMemberListResponse
-	if !validTeamReadView(in, v) || !validTeamMetadata(in, v.Team) || v.Team.ID != in.team || len(v.TeamMembers) > int(in.limit) {
+	if !validScopedReadView(in, v) || !validTeamMetadata(in, v.Team) || v.Team.ID != in.team || len(v.TeamMembers) > int(in.limit) {
 		return zero, identityhttp.ErrUnavailable
 	}
 	out := TeamMemberListResponse{OrganizationVersion: v.Organization.Version, TeamVersion: v.Team.Version, Members: make([]TeamMemberView, len(v.TeamMembers)), NextCursor: v.NextTeamCursor}

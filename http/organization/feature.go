@@ -192,6 +192,13 @@ type Config struct {
 	TeamUpdater       TeamUpdater
 	TeamDeleter       TeamDeleter
 	TeamLister        TeamLister
+	// Custom-role mutations select their own native owner and shared AdminRate;
+	// catalog membership and actual current role authority remain native-owned.
+	RoleCreator DynamicRoleCreator
+	RoleUpdater DynamicRoleUpdater
+	RoleDeleter DynamicRoleDeleter
+	RoleGetter  DynamicRoleGetter
+	RoleLister  DynamicRoleLister
 	// OwnerTransfer requires these settings, Sessions and AdminRate, not Service.
 	// Proof lookup supplies the original record, not new transport authority.
 	OwnerTransferer       OwnerTransferer
@@ -246,6 +253,8 @@ type FeatureConfig struct {
 	Archive, Restore                                              bool
 	TeamMemberAdd, TeamMemberRemove, TeamListMine, TeamMemberList bool
 	TeamCreate, TeamUpdate, TeamDelete, TeamList                  bool
+	RoleCreate, RoleUpdate, RoleDelete                            bool
+	RoleGet, RoleList                                             bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -257,14 +266,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationList && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationExpire && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave && !c.OwnerTransfer && !c.Archive && !c.Restore && !c.TeamMemberAdd && !c.TeamMemberRemove && !c.TeamListMine && !c.TeamMemberList && !c.TeamCreate && !c.TeamUpdate && !c.TeamDelete && !c.TeamList {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationList && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationExpire && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave && !c.OwnerTransfer && !c.Archive && !c.Restore && !c.TeamMemberAdd && !c.TeamMemberRemove && !c.TeamListMine && !c.TeamMemberList && !c.TeamCreate && !c.TeamUpdate && !c.TeamDelete && !c.TeamList && !c.RoleCreate && !c.RoleUpdate && !c.RoleDelete && !c.RoleGet && !c.RoleList {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationList, c.InvitationList}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationExpire, c.InvitationExpire}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}, {organization.OwnerTransfer, c.OwnerTransfer}, {organization.Archive, c.Archive}, {organization.Restore, c.Restore}, {organization.AddTeamMember, c.TeamMemberAdd}, {organization.RemoveTeamMember, c.TeamMemberRemove}, {organization.ListMyTeams, c.TeamListMine}, {organization.ListTeamMembers, c.TeamMemberList}, {organization.CreateTeam, c.TeamCreate}, {organization.UpdateTeam, c.TeamUpdate}, {organization.DeleteTeam, c.TeamDelete}, {organization.ListTeams, c.TeamList}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationList, c.InvitationList}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationExpire, c.InvitationExpire}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}, {organization.OwnerTransfer, c.OwnerTransfer}, {organization.Archive, c.Archive}, {organization.Restore, c.Restore}, {organization.AddTeamMember, c.TeamMemberAdd}, {organization.RemoveTeamMember, c.TeamMemberRemove}, {organization.ListMyTeams, c.TeamListMine}, {organization.ListTeamMembers, c.TeamMemberList}, {organization.CreateTeam, c.TeamCreate}, {organization.UpdateTeam, c.TeamUpdate}, {organization.DeleteTeam, c.TeamDelete}, {organization.ListTeams, c.TeamList}, {organization.CreateDynamicRole, c.RoleCreate}, {organization.UpdateDynamicRole, c.RoleUpdate}, {organization.DeleteDynamicRole, c.RoleDelete}, {organization.GetDynamicRole, c.RoleGet}, {organization.ListDynamicRoles, c.RoleList}} {
 		if !selected.on {
 			continue
 		}
@@ -295,7 +304,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "organization", Operations: operations})
 }
 func selectedMutation(op organization.Operation) bool {
-	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.LeaveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend || op == organization.InvitationCancel || op == organization.InvitationExpire || op == organization.InvitationReject || op == organization.OwnerTransfer || lifecycleOperation(op) || teamMembershipMutation(op) || teamCRUDMutation(op)
+	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.LeaveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend || op == organization.InvitationCancel || op == organization.InvitationExpire || op == organization.InvitationReject || op == organization.OwnerTransfer || lifecycleOperation(op) || teamMembershipMutation(op) || teamCRUDMutation(op) || roleCRUDMutation(op)
 }
 func nilService(service any) bool {
 	if service == nil {

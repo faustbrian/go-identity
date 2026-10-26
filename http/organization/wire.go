@@ -27,6 +27,8 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	org := object([]string{"id", "name", "slug", "version"}, map[string]any{"id": id, "name": text(1, 256), "slug": text(1, 63), "version": version(1)})
 	readFields := map[string]any{"organization": org, "membership": member}
 	readRequired := []string{"organization", "membership"}
+	roleStatements := map[string]any{"type": "array", "maxItems": 64, "uniqueItems": true, "items": object([]string{"permissionID", "resourceID", "effect"}, map[string]any{"permissionID": id, "resourceID": id, "effect": map[string]any{"type": "string", "enum": []string{"allow", "deny"}}})}
+	role := object([]string{"id", "name", "version", "statements"}, map[string]any{"id": id, "name": text(1, 256), "version": version(1), "statements": roleStatements})
 	if op == organization.ListMembers {
 		readRequired = append(readRequired, "members")
 		readFields["members"] = map[string]any{"type": "array", "maxItems": 100, "items": member}
@@ -35,7 +37,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	scope := object([]string{"commandID", "tenantID", "userID", "actorID", "actorKind", "operationID", "recordID", "policyID", "policyVersion", "schemaID", "schemaVersion", "correlationID"}, map[string]any{"commandID": command, "tenantID": id, "userID": id, "actorID": id, "actorKind": map[string]any{"const": "user"}, "operationID": map[string]any{"const": string(op)}, "recordID": id, "policyID": id, "policyVersion": version(1), "schemaID": id, "schemaVersion": version(1), "correlationID": id})
 	mutationFields := map[string]any{"committed": map[string]any{"type": "boolean"}, "commitOutcome": map[string]any{"enum": []string{"none", "committed", "not_committed", "unknown", "conflict", "in_progress"}, "type": "string"}, "commandID": command, "organizationID": id, "memberID": id, "beforeVersion": version(0), "afterVersion": version(1), "recovery": scope, "error": errorCode}
 	mutationRequired := []string{"commandID", "organizationID", "memberID", "afterVersion", "recovery"}
-	if teamCRUDMutation(op) {
+	if teamCRUDMutation(op) || roleCRUDMutation(op) {
 		delete(mutationFields, "memberID")
 		mutationRequired = []string{"commandID", "organizationID", "beforeVersion", "afterVersion", "recovery"}
 	}
@@ -73,6 +75,12 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	failure := any(errorSchema)
 	success := object(readRequired, readFields)
+	if op == organization.GetDynamicRole {
+		success = object([]string{"organizationVersion", "role"}, map[string]any{"organizationVersion": version(1), "role": role})
+	}
+	if op == organization.ListDynamicRoles {
+		success = object([]string{"organizationVersion", "roles"}, map[string]any{"organizationVersion": version(1), "roles": map[string]any{"type": "array", "maxItems": 100, "items": role}, "nextCursor": id})
+	}
 	if op == organization.SlugAvailable {
 		success = object([]string{"available"}, map[string]any{"available": map[string]any{"type": "boolean"}})
 	}
@@ -121,7 +129,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember || teamCRUDKeyed(op) {
+	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember || teamCRUDKeyed(op) || roleCRUDKeyed(op) {
 		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
@@ -130,7 +138,20 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	if selectedMutation(op) {
 		var fields map[string]any
 		var required []string
-		if teamCRUDMutation(op) {
+		if roleCRUDMutation(op) {
+			required = []string{"organizationID", "roleID", "organizationVersion"}
+			fields = map[string]any{"organizationID": id, "roleID": id, "organizationVersion": requestVersion(1)}
+			if op != organization.CreateDynamicRole {
+				required = append(required, "roleVersion")
+				fields["roleVersion"] = requestVersion(1)
+			}
+			if op != organization.DeleteDynamicRole {
+				required = append(required, "name", "statements")
+				fields["name"] = text(1, 256)
+				fields["statements"] = map[string]any{"type": "array", "maxItems": 64, "uniqueItems": true, "items": object([]string{"permissionID", "resourceID", "effect"}, map[string]any{"permissionID": id, "resourceID": id, "effect": map[string]any{"type": "string", "enum": []string{"allow", "deny"}}}), "description": "Complete ordered statements; empty grants nothing. Native canonical encoding is bounded to 8192 bytes and the native catalog rejects unknown permissions. Conditions and wildcards are not selected."}
+			}
+			description += "Custom-role creation/replacement preserve the original key and exact organization/role epochs. Natural terminal deletion requires actual original correlated history, not absence. Native current manager/role-write/query authority, immutable permission catalog, deny precedence and atomic effects remain authoritative. Statement effects are explicit allow/deny, never default or numeric grants. Receipt epochs describe the organization policy transition, not role versions or current authority; no membership projection is invented. Unknown never permits redispatch. "
+		} else if teamCRUDMutation(op) {
 			required = []string{"organizationID", "teamID", "organizationVersion"}
 			fields = map[string]any{"organizationID": id, "teamID": id, "organizationVersion": requestVersion(1)}
 			if op != organization.CreateTeam {
@@ -207,6 +228,14 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		if op == organization.RemoveMember {
 			description += "Removal is naturally repeatable at exact organization/member versions, not keyed. Only an actual matching original durable effect and current-authorized native receipt prove a prior removal; absence or a tombstone alone is never success. Last-owner denial is distinct. "
 		}
+	} else if roleReadOperation(op) {
+		parameters = append(parameters, map[string]any{"name": "organizationID", "in": "query", "required": true, "schema": id})
+		if op == organization.GetDynamicRole {
+			parameters = append(parameters, map[string]any{"name": "roleID", "in": "query", "required": true, "schema": id})
+		} else {
+			parameters = append(parameters, map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}, "description": "Required canonical unsigned decimal; no default, leading zeros, sign or exponent."}, map[string]any{"name": "cursor", "in": "query", "required": false, "schema": id})
+		}
+		description += "Current native manager/role-read/session authority governs exact custom-role metadata or a bounded ID-keyset page. Statements preserve native order and explicit allow/deny effects; empty grants nothing. Static roles, target binding discovery and arbitrary actor/tenant selection are not exposed. Organization and role epochs are observed metadata, never grants or reusable authority. No partial page, cached allow, session refresh or post-dispatch authority renewal. "
 	} else if teamPageRead(op) {
 		parameters = append(parameters, map[string]any{"name": "organizationID", "in": "query", "required": true, "schema": id}, map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}, "description": "Required canonical unsigned decimal; no default, leading zeros, sign or exponent."}, map[string]any{"name": "cursor", "in": "query", "required": false, "schema": id})
 		if op == organization.ListTeamMembers {

@@ -1,5 +1,44 @@
 # go-identity/http/organization
 
+Custom-role CRUD is independently opt-in through `RoleCreate`, `RoleUpdate`,
+`RoleDelete`, `RoleGet` and `RoleList`. Supply only the corresponding narrow
+`RoleCreator`, `RoleUpdater`, `RoleDeleter`, `RoleGetter` or `RoleLister` owner,
+current sessions and shared administrative (writes) or safe (reads) admission.
+The existing `Service` interface is unchanged. All routes require a tenant-bound
+verified bearer session over HTTPS; disabled flags expose no route or metadata.
+
+`POST /v1/organization/role/create` requires the original `Idempotency-Key` and
+exactly `organizationID`, caller-chosen canonical `roleID`, positive advanceable
+`organizationVersion`, `name` (1..256 UTF-8 bytes) and `statements`.
+`/v1/organization/role/update` additionally requires positive advanceable
+`roleVersion`; its original key identifies a complete name/statement replacement.
+Statements are an ordered array of at most 64 objects, each containing exactly
+`permissionID`, `resourceID` and `effect` (`"allow"` or `"deny"`). The native
+encoding budget is 8192 bytes; configure transport byte/field limits large enough
+for the intended bounded profile. Empty statements grant nothing. Permission
+registration, policy, deny precedence and mutation authorization stay native-owned;
+wildcards, conditions, static-role IDs and duplicate exact statements are rejected.
+
+`POST /v1/organization/role/delete` accepts only both IDs and their exact positive
+advanceable versions, without a key or caller command. Deletion terminally retires
+the role ID; retained bindings cannot revive it. Matching retries recover actual
+original history under current action/query authority. Missing state never proves
+success and unknown outcomes never authorize automatic redispatch. Receipts carry
+organization epochs, not role/member versions or a current authorization grant.
+
+`GET /v1/organization/role/get` requires exactly `organizationID` and `roleID`.
+`/v1/organization/role/list` requires `organizationID`, canonical decimal `limit`
+1..100 and optionally a nonempty exclusive ID `cursor`. Current manager/read
+authority owns these snapshots; malformed or late results withhold the entire
+result. Responses preserve ordered statement effects and empty arrays. Direct
+and team binding APIs and permission checks remain native-only in this profile.
+
+This transport adopts root organization `895ac99` and native `6bcfd9e` contracts:
+the trusted authentication/actor/command envelope is derived by its owners, not
+accepted in request JSON. The historical generic `StatementIDs` shape is replaced
+here by the actual typed inline `RoleStatement` values referencing the immutable
+native permission catalog; there is no separate statement store or policy engine.
+
 Team creation/lifecycle is independently opt-in through `TeamCreate`,
 `TeamUpdate`, `TeamDelete` and `TeamList`, using only its matching native
 `TeamCreator`, `TeamUpdater`, `TeamDeleter` or `TeamLister` port, current

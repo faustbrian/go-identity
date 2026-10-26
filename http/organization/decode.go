@@ -44,10 +44,24 @@ type requestInput struct {
 	team                          organization.ID
 	teamVersion, orgMemberVersion uint64
 	teamCursor                    string
+	dynamicRole                   organization.ID
+	roleVersion                   uint64
+	roleCursor                    string
+	statements                    []organization.RoleStatement
 }
 
 func operationPath(op organization.Operation) (string, string) {
 	switch op {
+	case organization.GetDynamicRole:
+		return "/v1/organization/role/get", http.MethodGet
+	case organization.ListDynamicRoles:
+		return "/v1/organization/role/list", http.MethodGet
+	case organization.CreateDynamicRole:
+		return "/v1/organization/role/create", http.MethodPost
+	case organization.UpdateDynamicRole:
+		return "/v1/organization/role/update", http.MethodPost
+	case organization.DeleteDynamicRole:
+		return "/v1/organization/role/delete", http.MethodPost
 	case organization.Create:
 		return "/v1/organization/create", http.MethodPost
 	case organization.Update:
@@ -109,6 +123,16 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	path, method := operationPath(op)
 	missingOwner := nilService(c.Service)
 	switch op {
+	case organization.GetDynamicRole:
+		missingOwner = nilService(c.RoleGetter)
+	case organization.ListDynamicRoles:
+		missingOwner = nilService(c.RoleLister)
+	case organization.CreateDynamicRole:
+		missingOwner = nilService(c.RoleCreator)
+	case organization.UpdateDynamicRole:
+		missingOwner = nilService(c.RoleUpdater)
+	case organization.DeleteDynamicRole:
+		missingOwner = nilService(c.RoleDeleter)
 	case organization.CreateTeam:
 		missingOwner = nilService(c.TeamCreator)
 	case organization.UpdateTeam:
@@ -195,7 +219,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			return zero, requestFailure{status: 405, code: "method_not_allowed", allow: method}
 		}
 		requirement := identityhttp.HeaderForbidden
-		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember || teamCRUDKeyed(op) {
+		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember || teamCRUDKeyed(op) || roleCRUDKeyed(op) {
 			requirement = identityhttp.HeaderRequired
 		}
 		key, _, err := decoder.IdempotencyKey(r, requirement)
@@ -243,7 +267,11 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			if err != nil {
 				return zero, identityhttp.ErrInvalidInput
 			}
-			if teamPageRead(op) {
+			if roleReadOperation(op) {
+				if err := decodeRoleQuery(input, query); err != nil {
+					return zero, err
+				}
+			} else if teamPageRead(op) {
 				if err := decodeTeamQuery(input, query); err != nil {
 					return zero, err
 				}
@@ -315,6 +343,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	}, nil
 }
 func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
+	if roleCRUDMutation(in.op) {
+		return decodeRoleMutation(in, body)
+	}
 	var names []string
 	if teamCRUDMutation(in.op) {
 		names = []string{"organizationID", "teamID", "organizationVersion"}
@@ -410,6 +441,12 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 }
 func (in *requestInput) validate() error {
 	switch in.op {
+	case organization.CreateDynamicRole:
+		return in.createRole().Validate()
+	case organization.UpdateDynamicRole:
+		return in.updateRole().Validate()
+	case organization.DeleteDynamicRole:
+		return in.deleteRole().Validate()
 	case organization.CreateTeam:
 		return in.createTeam().Validate()
 	case organization.UpdateTeam:
