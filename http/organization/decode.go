@@ -45,6 +45,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/update", http.MethodPost
 	case organization.Get:
 		return "/v1/organization/get", http.MethodGet
+	case organization.SlugAvailable:
+		return "/v1/organization/slug-available", http.MethodGet
 	case organization.ListMembers:
 		return "/v1/organization/member/list", http.MethodGet
 	case organization.AddMember:
@@ -69,6 +71,9 @@ func operationPath(op organization.Operation) (string, string) {
 func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State, error), error) {
 	path, method := operationPath(op)
 	missingOwner := nilService(c.Service)
+	if op == organization.SlugAvailable {
+		missingOwner = nilService(c.SlugAvailability)
+	}
 	if op == organization.Update {
 		missingOwner = nilService(c.MetadataUpdater)
 	}
@@ -168,27 +173,34 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			if err != nil {
 				return zero, identityhttp.ErrInvalidInput
 			}
-			for k := range query {
-				if k != "organizationID" && (op != organization.ListMembers || k != "cursor" && k != "limit") {
+			if op == organization.SlugAvailable {
+				if len(query) != 1 || len(query["slug"]) != 1 || !validSlugCandidate(query.Get("slug")) {
 					return zero, identityhttp.ErrInvalidInput
 				}
-			}
-			input.org = organization.ID(query.Get("organizationID"))
-			if !boundedID(string(input.org)) {
-				return zero, identityhttp.ErrInvalidInput
-			}
-			if op == organization.ListMembers {
-				input.limit = 100
-				if values, present := query["limit"]; present {
-					n, err := strconv.ParseUint(values[0], 10, 32)
-					if err != nil || n == 0 || n > 100 || strconv.FormatUint(n, 10) != values[0] {
+				input.slug = query.Get("slug")
+			} else {
+				for k := range query {
+					if k != "organizationID" && (op != organization.ListMembers || k != "cursor" && k != "limit") {
 						return zero, identityhttp.ErrInvalidInput
 					}
-					input.limit = uint32(n)
 				}
-				input.cursor = identity.UserID(query.Get("cursor"))
-				if _, present := query["cursor"]; present && !boundedID(string(input.cursor)) {
+				input.org = organization.ID(query.Get("organizationID"))
+				if !boundedID(string(input.org)) {
 					return zero, identityhttp.ErrInvalidInput
+				}
+				if op == organization.ListMembers {
+					input.limit = 100
+					if values, present := query["limit"]; present {
+						n, err := strconv.ParseUint(values[0], 10, 32)
+						if err != nil || n == 0 || n > 100 || strconv.FormatUint(n, 10) != values[0] {
+							return zero, identityhttp.ErrInvalidInput
+						}
+						input.limit = uint32(n)
+					}
+					input.cursor = identity.UserID(query.Get("cursor"))
+					if _, present := query["cursor"]; present && !boundedID(string(input.cursor)) {
+						return zero, identityhttp.ErrInvalidInput
+					}
 				}
 			}
 		}
@@ -301,6 +313,25 @@ func (in *requestInput) remove() organization.RemoveMemberOperationRequest {
 }
 func (in *requestInput) read() organization.ReadRequest {
 	return organization.ReadRequest{Authentication: in.auth, OrganizationID: in.org, Cursor: in.cursor, Limit: in.limit, CorrelationID: in.correlation}
+}
+
+func (in *requestInput) slugAvailable() organization.SlugAvailableRequest {
+	return organization.SlugAvailableRequest{Authentication: in.auth, Slug: in.slug, CorrelationID: in.correlation}
+}
+
+// Match the public create/update candidate grammar before authority work;
+// parsing a valid candidate does not establish occupancy or reserve a name.
+func validSlugCandidate(value string) bool {
+	if len(value) < 1 || len(value) > 63 || value[0] == '-' || value[len(value)-1] == '-' {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 func (in *requestInput) send() organization.InvitationSendOperationRequest {

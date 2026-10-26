@@ -6,6 +6,19 @@ invitation sending/resend, cancellation/rejection and once-only acceptance. Omit
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
+Slug availability is independently opt-in through `SlugAvailable`. Supply the
+native organization `Service` as `Config.SlugAvailability`, current `Sessions`
+and shared `SafeRate`; the five-method `Service` and `AdminRate` are not needed.
+`GET /v1/organization/slug-available?slug=candidate` accepts exactly one bounded
+lowercase ASCII slug query and one strict bearer header at the mapped HTTPS
+tenant. Bodies, request keys and identity/organization overrides are forbidden.
+The response is only `{"available":true}` or `{"available":false}`: advisory
+tenant-local occupancy, including retained archived names, not a reservation or
+promise that create/update will succeed. Membership is not required; current
+candidate policy/session authority remains native-owned. Expiry, cancellation,
+rate/source failure and denied authority disclose no availability. Disabling
+the option exposes neither its route nor OpenAPI metadata.
+
 Metadata replacement (`Update`) and static member-role replacement
 (`MemberUpdate`) are independently selected. Supply the actual native
 `OperationService` as `Config.MetadataUpdater` and/or `Config.MemberUpdater`,

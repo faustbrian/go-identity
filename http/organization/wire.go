@@ -66,6 +66,9 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	failure := any(errorSchema)
 	success := object(readRequired, readFields)
+	if op == organization.SlugAvailable {
+		success = object([]string{"available"}, map[string]any{"available": map[string]any{"type": "boolean"}})
+	}
 	if selectedMutation(op) {
 		failure = map[string]any{"oneOf": []any{errorSchema, mutation}}
 		success = map[string]any{"allOf": []any{
@@ -148,6 +151,9 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		if op == organization.RemoveMember {
 			description += "Removal is naturally repeatable at exact organization/member versions, not keyed. Only an actual matching original durable effect and current-authorized native receipt prove a prior removal; absence or a tombstone alone is never success. Last-owner denial is distinct. "
 		}
+	} else if op == organization.SlugAvailable {
+		parameters = append(parameters, map[string]any{"name": "slug", "in": "query", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"}})
+		description += "An authenticated human may check one tenant-local candidate without organization membership or management permission. Returns only advisory availability, including retained archived occupancy; no reservation or later create/update guarantee, organization ID or metadata. "
 	} else {
 		parameters = append(parameters, map[string]any{"name": "organizationID", "in": "query", "required": true, "schema": id})
 		if op == organization.ListMembers {

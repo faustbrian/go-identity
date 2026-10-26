@@ -207,6 +207,20 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				writeJSON(w, status, response)
 				return
 			}
+			if op == organization.SlugAvailable {
+				out, err := c.SlugAvailability.SlugAvailable(r.Context(), in.slugAvailable())
+				if err != nil {
+					status, code := domainFailure(err)
+					reject(w, r, requestFailure{status: status, code: code})
+					return
+				}
+				if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				writeJSON(w, 200, SlugAvailableResponse{Available: out.Available})
+				return
+			}
 			var out organization.View
 			var err error
 			if op == organization.Get {

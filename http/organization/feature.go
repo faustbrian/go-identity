@@ -31,6 +31,14 @@ type Service interface {
 	RemoveMember(context.Context, organization.RemoveMemberOperationRequest, string) (organization.StoreResult, error)
 }
 
+// SlugAvailabilityReader owns the authenticated tenant-local advisory read.
+// It must enforce current session/candidate policy and original freshness,
+// including archived occupancy, without requiring membership or reserving names.
+// Implementations honor ctx and support concurrent independent requests.
+type SlugAvailabilityReader interface {
+	SlugAvailable(context.Context, organization.SlugAvailableRequest) (organization.SlugAvailableResult, error)
+}
+
 // MetadataUpdater replaces metadata at an exact organization version using
 // original-key native custody. It owns current administrator authority,
 // protected risk and atomic effects; matching retries recover only the original
@@ -108,12 +116,15 @@ type InvitationAccepter interface {
 // Rejection requires InvitationRejecter and SafeRate, never AdminRate or a
 // manager/read owner. It projects only the native original rejection receipt.
 // Share each rate owner across its selected routes/requests.
+// SlugAvailable requires SlugAvailability, Sessions and shared SafeRate only;
+// no membership, Service or administrator-rate owner is required.
 // Now is trusted, prompt and concurrency-safe. MaximumDuration is 1ms..30s;
 // inbound earlier deadlines win. Construction performs no owner reads or IO.
 type Config struct {
 	Network             identityhttp.NetworkConfig
 	Sessions            *session.SessionService
 	Service             Service
+	SlugAvailability    SlugAvailabilityReader
 	MetadataUpdater     MetadataUpdater
 	MemberUpdater       MemberUpdater
 	Invitations         InvitationReader
@@ -145,6 +156,7 @@ type FeatureConfig struct {
 	InvitationResend                                 bool
 	InvitationCancel                                 bool
 	InvitationReject                                 bool
+	SlugAvailable                                    bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -156,14 +168,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationReject {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationReject && !c.SlugAvailable {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationReject, c.InvitationReject}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}} {
 		if !selected.on {
 			continue
 		}

@@ -43,6 +43,12 @@ type MutationResponse struct {
 	Error          string             `json:"error,omitempty"`
 }
 
+// SlugAvailableResponse is advisory tenant-local occupancy, not a reservation.
+// No organization identity, membership or reusable authority is disclosed.
+type SlugAvailableResponse struct {
+	Available bool `json:"available"`
+}
+
 // OrganizationView discloses selected organization metadata, no authority vector.
 type OrganizationView struct {
 	ID      organization.ID `json:"id"`

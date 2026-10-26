@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected strict-bearer advisory slug availability with a
+  closed candidate-only GET query, shared safe-rate admission and mapped HTTPS
+  tenant. Configure the narrow `SlugAvailability` owner without extending the
+  existing Service interface. Responses contain only a boolean, never an
+  organization identity or reservation; disabled selection exposes no route
+  or metadata and late failure withholds availability.
+
 - Add independently selected intended-recipient rejection with exact versions,
   current bearer session and canonical safe-rate admission. The native owner
   retains recipient policy, atomic rejection and natural-repeat original
