@@ -14,7 +14,7 @@ import (
 func TestCanonicalOrganizationSelectsOnlyExactBearerMutationPolicies(t *testing.T) {
 	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	bearer := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}
-	for _, operation := range []string{"identity.organization.create", "identity.organization.member.add", "identity.organization.member.remove", "identity.organization.invitation-send", "identity.organization.invitation.accept"} {
+	for _, operation := range []string{"identity.organization.create", "identity.organization.update", "identity.organization.member.add", "identity.organization.member.update", "identity.organization.member.remove", "identity.organization.invitation-send", "identity.organization.invitation.accept"} {
 		t.Run(operation, func(t *testing.T) {
 			config := identityhttp.CanonicalOperationConfig{Owner: "organization", OperationID: operation, Handler: handler, CSRF: bearer, MaximumSerializedBytes: 16384}
 			selected, err := identityhttp.NewCanonicalOperation(config)
@@ -45,7 +45,7 @@ func TestCanonicalOrganizationSelectsOnlyExactBearerMutationPolicies(t *testing.
 			}
 		})
 	}
-	for _, operation := range []string{"identity.organization.archive", "identity.organization.owner-transfer", "identity.organization.invitation.reject", "identity.organization.member.update"} {
+	for _, operation := range []string{"identity.organization.archive", "identity.organization.owner-transfer", "identity.organization.invitation.reject", "identity.organization.role.update"} {
 		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "organization", OperationID: operation, Handler: handler, CSRF: bearer, MaximumSerializedBytes: 16384}); err == nil {
 			t.Fatal("bearer exception leaked to unselected operation", operation)
 		}

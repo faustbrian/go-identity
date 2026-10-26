@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit explicitly selected strict-bearer organization metadata and member-role
+  updates. Original cookie-CSRF protection remains unchanged; no other operation
+  gains a bearer policy or route from this selection.
+
 - Permit an explicitly selected strict-bearer invitation-acceptance policy.
   The original cookie protection and once-only command semantics are unchanged;
   selection alone enables no route, proof consumption or authority.

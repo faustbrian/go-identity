@@ -19,7 +19,7 @@ import (
 // for strict bearer custody or SessionState with a configured valid header,
 // zero independent token age and denied Referer fallback for native protected
 // cookie custody. Factories own enforcement; selection issues no CSRF token.
-// Organization create/member-add/member-remove and invitation send/accept
+// Organization create/update/member-add/member-update/member-remove and invitation send/accept
 // additionally admit None only for explicitly selected strict bearer handlers
 // that ignore ambient cookies.
 // Other organization mutations retain their canonical policy.
