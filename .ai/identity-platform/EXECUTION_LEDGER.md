@@ -1,5 +1,99 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 09:18 UTC: natural-repeat intended-recipient rejection CLOSED.
+Native19bf740/public consumere86a92b/shared HTTPad5ae29/leaf72bdd64/Reference
+bb8415d are reviewed, main-pushed and exact Required green (40294939682,
+40295956829,40294974033,40296562858,40297597295). Native and consumer reviews
+APPROVE; leaf review's disabled-operation assertion corrected and final full
+diff APPROVE; Reference ten-path review APPROVE. Real native PG/race public
+consumer36.664s; native race1.435s/vet0/modverifyall. Leaf full race19.433s,
+corrected focused race1.852s, active fuzz6exec3.339s, vet0/modverifyall.
+Reference normal-public actual PG/HTTPS/race13.177s, ordinary race5.362s/
+command6.336s/taggedvet0/modverifyall. Actual authenticated downloaded Reference
+v0.0.0-20261026091039-bb8415d653e2 has origin exactbb8415d/Subdirreference,
+Sumh1:d1QcjRyI3v0sn6AuESHc0MWEF2jSQC9nuuY51gvwhy8=,
+GoModSumh1:YOo7IyrqW4fHURoQGtBsUahq8xJLX+hR52uBuOGJDmU=; all ten reviewed
+source/docs/manifests byte-match. Its actual fresh/populated PG/HTTPS/race
+35143 PASS16.749s(6.93/8.02), no workspace/replacements. Proves intended
+recipient authority without membership/manager/Get, actual original retries,
+admissible prepared/HTTP predecessor denial, singleton rejection/event without
+membership, reconstructed original recovery and logout denial. Native proof
+also covers late actual identifier withdrawal, rollback, COMMIT loss, contention
+and populated NULL legacy history. Native migration11 appends unchanged1..10.
+This closes the finite profile, not full M22/67 qualification; 10/39 unchanged.
+Heavy slot released to oidc_profile_name. Rejection cluster PID91965 stopped;
+owned cohort/cache /private/tmp/identity-invitation-reject.KlHSSh removed,
+cleanup8433 terminal0. No package qualification or deployment is claimed.
+
+2026-10-26 09:14 UTC: independent M31 profile/name lane frozen, owner
+oidc_profile_name, go-oauth-server main ed2b1a36ee452b370bdabfa553090121209f9e20.
+Existing OIDC discovery/JWKS/ID-token/UserInfo is retained, not reimplemented.
+Consumed contracts: root da702529f68e, OIDC8f25462211e0, native kernel
+c9d9dd761138 GetProfile/ProfileSchemaRef and current profile mutation/read;
+session2eafc2592af0/nativecf1f8c1d8e20. Existing genuine OIDC RP/code/S256/
+consent/withdrawal consumers are prerequisite leads; confirm their retained
+focused proof and current profile-schema readiness before production adoption.
+Outcome: explicitly enabled openid/profile consent -> unchanged validated ID
+token -> current native display name in same-sub UserInfo; disabled/unconsented
+name omitted, no other fields exposed. Profile change appears on next call;
+schema/source/snapshot/consent/grant/subject/credential/lifetime failure gives
+zero claims without renewed validity. Use existing authoritative profile reads,
+not caller claims, raw-table readers, new authority or migrations. Other profile
+claims, private exchange, HTTP/Reference and full M31/67 qualification excluded.
+Worker owns only root oidc.go and focused OIDC tests/root changelog; oidc/
+service.go, profile.go, focused profile tests/docs/changelog; postgres/config.go,
+oidc.go, oidc_profile.go and focused profile consumer/fence tests/docs/changelog.
+Primary owns manifests/pins, integration/Git and all go-identity paths. Root/
+child prerequisites require reviewed committed public contracts before native
+adoption. Focused TDD/race and genuine native profile mutation/consent/OIDC RP
+consumer, scoped secrets and independent final review; public-source consumer
+proof before closure. No worker Git or children. Local heavy slot is primary's
+until downloaded rejection Reference35143 terminates; coding/review may overlap.
+
+2026-10-26 08:24 UTC: native recipient-rejection lane UNLOCKED. Root2a35021
+reviewed four paths APPROVE, exact main/Required40291477753 green. Root whole
+tests0.266s/vet0/modverifyall/activefuzz125335exec3.282s, no custody leaks.
+Actual authenticated public root v0.0.0-20261026081927-2a35021c29b6 originexact2a,
+Sumh1:GMXTNVBQbxWVH9K/sY5LC2xhQHhiV8Lpe+wWUg9BLLA=; request/test/mod bytes
+match, downloaded external request tests0.251s. Primary updated native/consumer
+public root pins. Worker may now write only its frozen native paths (not consumer
+or manifests), optional InvitationRejectOperationMigrationSource version7011.
+Primary authored genuine consumer/withdrawal profiles; each late withdrawal uses
+a fresh real recipient, never resetting identity security epochs. Go heavy slot
+belongs to worker next; primary owns final cleanup of borrowed bounded cohort
+/private/tmp/identity-invitation-reject.KlHSSh. No root-only worker cache remains.
+
+2026-10-26 07:49 UTC: recipient-rejection finite profile OPEN, one bounded pass.
+Native owner organization_lifecycle_native, go-organization main dcbe737.
+Consume proven public root277/native23a8 and retained raw Reject/Recover,
+real directory/session/authorization/risk/audit/outbox owners. Writable worker
+scope: new root invitation_reject_operation.go/_test.go and root README/CHANGELOG;
+then new postgres initiating Reject facade/unit/correlation migration/unit,
+minimal private marker/effect INSERT in invitation_phase.go/invitation_apply.go,
+native README/CHANGELOG. Primary owns manifests/pins, actual consumer tests,
+HTTP/Reference and Git. Root DTO must be reviewed/committed/public before native
+adoption; no permanent replacements or new journal/authority.
+Outcome: current verified intended recipient (no membership/admin/proof) rejects
+an exact invitation/org version; old and prepared acceptance deny; matching
+natural retry/reconstruction yields only actual original metadata under current
+recipient/session/identifier policy. No key/caller command; CorrelationID diagnostic.
+Reuse root syntax/redaction helpers and retain both positive below-Max versions.
+Existing effects omit original org epoch for Reject: permit one nullable
+reject_organization_version and exact partial lookup index in a new optional
+forward migration, marker-gated insert so raw/legacy installations stay intact.
+Never infer original correlation from terminal state; NULL legacy fails closed.
+No org:Get/membership/manager gate for recipient. Unknown returns without a
+second execution in the call; pending/version transaction fences arbitrate
+same-selector and acceptance contention. Preserve final native recovery fences.
+Acceptance: genuine registration/session/delivery/proof -> reject/retry -> old
+prepared/HTTP acceptance denial, changed selector/recipient denial, recipient
+and session withdrawal (including callbacks), audit/outbox rollback, actual
+COMMIT-loss, singleton contention, legacy populated migration and original
+recovery after org epoch advancement. Root/native focused tests; real PG/race
+consumer; HTTP closed four-field strict bearer selection with rate.safe (NOT
+admin/secret), original receipt only; actual Reference fresh/upgrade journey.
+Cancel remains closed; its test cluster/cache was stopped/removed, terminal79612=0.
+
 2026-10-26 07:36 UTC: natural-repeat invitation cancellation profile CLOSED.
 Native23a8d96/public-consumerdcbe737/sharedHTTPef0d98f/leaf5ede003/Referenceae30528
 are exact main/Required green (40282499695/40283737895/40282498931/40283887221/
