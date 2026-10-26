@@ -337,6 +337,16 @@ func (c *Client) Check(ctx context.Context, request CheckRequest) (CheckResult, 
 		if f.err != nil {
 			return failure(r, f.err)
 		}
+		now, valid = c.observe()
+		c.mu.Lock()
+		fresh := valid && !now.Before(f.at) && c.lastNow.Before(f.at.Add(c.config.CacheTTL))
+		c.mu.Unlock()
+		if e := ctx.Err(); e != nil {
+			return failure(r, e)
+		}
+		if !fresh {
+			return failure(r, ErrProviderUnavailable)
+		}
 		r.CheckedAt = f.at
 		r.ProviderValidUntil = f.at.Add(c.config.CacheTTL)
 		return matched(r, f.data, derived.suffix), nil
@@ -393,7 +403,19 @@ func (c *Client) fetch(ctx context.Context, prefix [5]byte, f *flight) {
 		<-c.slots
 	case <-ctx.Done():
 	}
+	clockValid := false
+	if err == nil {
+		// TTL starts at the original observation, not response completion. A
+		// clock change during IO must not publish or cache already-stale facts.
+		now, valid := c.observe()
+		clockValid = valid && !now.Before(f.at)
+	}
 	c.mu.Lock()
+	// Overlapping callbacks may complete out of order. Expiry uses the greatest
+	// trusted observation under the publication lock, not an older valid sample.
+	if err == nil && (!clockValid || !c.lastNow.Before(f.at.Add(c.config.CacheTTL))) {
+		data, err = rangeData{}, ErrProviderUnavailable
+	}
 	// read includes deferred body cleanup; expiry there or while awaiting mu
 	// must not publish or cache success after the bounded provider operation.
 	// Compare the monotonic deadline too: its cancellation timer may run later.

@@ -192,6 +192,9 @@ Eviction releases references rather than clearing data concurrent waiters use.
 Clock regression fails closed. Each checker has an isolated cache/coalescing
 namespace. Deadlines include queueing; there are no automatic retries. Individual
 cancellation leaves other waiters intact; the last caller cancels shared work.
+Shared publication and each returning waiter recheck the trusted clock, rejecting
+clock regression and ranges already at their original expiry without renewing
+the observation or caching invalid provider data.
 Expiry during response-body cleanup or before result publication also discards
 the range and cannot populate the cache or produce clean neutral evidence.
 Callers and cancellation-draining flights are bounded. `(*Client).Close(ctx)`

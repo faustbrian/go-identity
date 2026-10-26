@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reject shared-flight evidence when the trusted clock regresses or reaches
+  the original provider expiry during IO or before a waiter returns. Keep the
+  original observation and prevent invalid provider data from entering the cache.
+
 - Discard provider responses when the bounded request expires during body
   cleanup or before publication, rather than return or cache usable screening
   evidence after that deadline. Neutral risk signals remain unavailable.
