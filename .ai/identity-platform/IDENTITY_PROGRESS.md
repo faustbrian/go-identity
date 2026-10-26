@@ -1,22 +1,32 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-25 23:33 UTC
+## Current TL;DR — 2026-10-26 02:04 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 11/39 full milestones closed.**
   The completed profiles below do not close the full M16/M22/M33 rows.
   No additional fully qualified release unit is claimed.
-- **Latest delivered:** once-only HTTP invitation acceptance (`5378a50`) and
-  its native retained-preparation/recovery port (`caf870e`). Both are independently
-  reviewed, on main with required CI green. The authenticated downloaded HTTP
-  module passes its real PostgreSQL/HTTPS acceptance journey and module race suite.
+- **Latest delivered:** the standard Reference organization backend (`96f1823`):
+  real PostgreSQL bootstrap -> registration/verification/signin -> organization
+  creation, scoped get/member list/add/remove -> original-key invitation send ->
+  encrypted delivery -> once-only acceptance -> fresh-owner recovery and logout
+  denial. Independently reviewed, on main, Required40256277888 green. Its actual
+  authenticated downloaded module passes fresh/populated-upgrade PG/HTTPS/race
+  journeys (12.563s), with no local replacements or missing application stores.
+  The required paired outbox phase is on main/CI-green (`e03d696`).
 - **Working invitation path:** HTTP original-key send -> encrypted delivery ->
   once-only HTTP recipient acceptance -> authorized HTTP membership/invitation
   reads -> explicit fresh-native-owner original-outcome recovery. Reposting a
   consumed proof is not recovery; no HTTP recovery route is claimed. This closes
   the selected profile, not full M22.
-- **Next:** organization Reference composition. A separate native lane can add
-  genuine original-key archive/restore using the already implemented proof-aware
-  lifecycle owner; external cascade closure remains distinct. SSO needs atomic
+- **Pending:** native original-key archive/restore source is reviewed, on main
+  and CI-green (`e7ab7d0`); its local genuine consumer passes rollback, COMMIT loss,
+  contention and withdrawal (13.097s). Final normal-public-pin consumer proof is
+  not closed: two attempts failed during the older fixture's bounded migration
+  bootstrap before the lifecycle API. The fixture gives the entire Apply ten
+  seconds; classify its state/deadline/receipts before changing behavior. No
+  authentication budget or production check was weakened. Finish this check and
+  deliver its consumer pin before expanding the lane. External cascades remain
+  separate. SSO needs atomic
   challenge/proof composition before a
   DNS verifier can safely grant organization proof; it is not being substituted
   with parser-only scaffolding.

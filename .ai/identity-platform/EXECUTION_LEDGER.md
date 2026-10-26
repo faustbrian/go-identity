@@ -1,5 +1,136 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 02:04 UTC: selected M22 Reference organization profile CLOSED.
+go-identity96f18236a5d1696ada3a1ed21e2c37c631dd2e32 exact origin/main,
+Required40256277888 success. Independent reference_organization_final R2 APPROVE;
+R1 F1 independently selected atomic HTTP-rate migration, F2 native invitation
+capability history, and A1 actual member-list proof all resolved. Focused
+metadata regressions: F1 REDadmin/secret missing0/1; F2 valid-base counterfactual
+REDomittedcapability0.649s, restored GREENrace1.542s. Public dependencies final
+fresh/populated/baseline PG/HTTPS/race12.515s, module race5.319s/cmd7.196s,
+taggedvet0/modverifyall. Actual authenticated downloaded Reference96f1823
+v0.0.0-20261026015109-96f18236a5d1, Sum
+h1:E5Ps80s0OwQPbyDhu2PjgvEa41x8DoT09bbRquPlXVY=, origin exact96f1823,
+passes fresh/populated PG/HTTPS/race12.563s without replacements. Consumers can
+bootstrap and execute the complete frozen profile; no full M22/unit closure.
+Outbox prerequisite e03d6969b19b121e7158ed4617ca8ff809fa907f main/Required
+40253563914 success on exact-source existing CI carrier, then ordinary main
+advance. Preserved all newer passkey phases; paired oldf438 body unchanged.
+Module race1.241s, actual consent second-event rollback/unknown/contention
+20.260s, independent outbox_paired_final APPROVE. First CI40252629730 failed
+only obsolete go.sum entries; normal tidy pruned them, no gate bypass.
+Native lifecycle source e7ab7d0b6d541f7ba0f57d914b1717c6ae8166e9 main,
+Required40254342253 success; organization_lifecycle_native_final APPROVE.
+Actual old-public adapter REDmissingports1.641s -> native focused0.263s,
+module race1.333s/vet0/modverifyall, selected new PG/race13.097s plus unchanged
+explicit/direct profiles. Consumer public pin followup remains uncommitted:
+normal-public executions81012/73144 failed in earlier Reference migration Apply
+before changed API (66.46s/16.78s); do not claim them passing. Source/cache/SumDB
+match exact nativee7; successful local replacement had identical manifest.
+The old consumer fixture bounds all Apply to10s and final cleanup to1s. Added
+safe state/deadline/cancelled/receipt-count diagnostic before another run.
+Host load exceeded190; no proof/transaction timeout weakened. Investigate actual
+state rather than blame load or add speculative retries. Full goal remains active.
+
+2026-10-26 00:52 UTC: resumed after explicit pause/reactivation; prior turn
+made implementation progress. Native lifecycle neutral prerequisite delivered
+go-organization 7a0316d2cbc1a05b4e57ee40642eb7db89bce7a5, exact origin/main,
+Required40250953011 success; independent organization_lifecycle_request_final
+APPROVE after one README wording correction. Root behavioral RED0.282s,
+focused GREEN0.390s/module0.115s/fuzz270389exec5.643s/vet0/modverifyall.
+Archive/restore native execution remains open; authored consumer tests retained.
+Reference fresh/populated journeys reach real create/member add/remove and
+send/delivery/list-mine; once acceptance503 none/unavailable remains RED.
+Safe diagnostic preparation+admission succeed, Execute fails before SQL.
+Task-owned instrumented dependency copies localized kernel feature_execution.go
+456: current outboxe45 lacks OrganizationInvitationLifecycleContributor;
+proven old consumer uses f438's paired phase. No authority/schema check relaxed.
+Restore the existing paired invitation/consent phases additively on e45 while
+preserving newer passkey/session phases, then prove Reference fresh/populated.
+Owning main candidate is an isolated task-owned outbox clone: canonical checkout
+is an unrelated branch and local main diverges; both were preserved. No history
+rewrite/branch switch. No final Reference delivery or milestone closure claimed.
+
+2026-10-25 23:55 UTC: M22 selected Reference organization profile OPEN.
+Prior goal turn was status-only (no progress); current repositories are clean
+main at identity d3186a2 / organization caf870e and required CI is green.
+Outcome: configured real Reference PostgreSQL bootstrap -> verified password
+bearer sessions -> organization create/read/member admission/removal -> original-
+key invitation send/encrypted delivery -> once recipient acceptance/current reads
+and explicit native original recovery. Disabled features expose no routes.
+Preserve native current authority, original rate facts, atomic proof/effects,
+tenant isolation, late withdrawal, shutdown and populated migration history.
+Exclude other authentication profiles, invitation resend/reject and external
+lifecycle cascades; this does not close full M22 or qualify all 67 units.
+Concrete prerequisite: Reference is imported only by native/HTTP consumer tests,
+creating reverse module dependencies before production Reference composition.
+Isolate those existing genuine tests in same-repository nested consumer modules;
+retain their assertions and public authenticated pins, no replace/fake authority.
+Primary owns HTTP consumer separation, both root inventories, Reference/migration
+composition, dependency integration and Git. organization_invitation_reads owns
+only organization postgres consumer test relocation, exact helper extraction,
+module-local manifests/docs; no Git, production API or root-manifest edits.
+Consumed contracts: root65f8517/nativecaf870e/HTTPleaf5378a50; original real
+PG/HTTPS/race acceptance17.729s and downloaded acceptance7.173s retained.
+Checks: moved test package compilation and focused genuine PG/race journeys,
+ordinary affected module tests/vet/mod verify; Reference genuine fresh/populated
+upgrade HTTPS journey, disabled/missing-selection and lifetime denials. One
+independent complete-final-diff review per coherent owning-repository checkpoint,
+ordinary main delivery/CI and authenticated public consumer; no new machinery.
+
+00:00 checkpoint: HTTP consumer isolation delivered identity f3f20d2 main;
+independent organization_http_consumer_isolation_final APPROVE after workspace
+registration and explicit GOWORK=off docs were reconciled. Ordinary leaf race
+8.370s/vet/modverify and retained three-profile realPG/HTTPS/race17.552s pass;
+published structural gates and path-aware secret scan pass. Native worker's
+22 moves and 24 extracted helper declarations match original bytes except
+external package names; all24entrypoints compile, native race1.329s and retained
+lifecycle helper PG3.572s pass. Relocated five genuine profiles PG/race61.728s
+pass, taggedvet/modverifyall. Native final review/delivery pending affected docs.
+Reference behavior RED73938 is genuine: actual registration/delivery/verification/
+password signin succeeds, then expected organization create returns404 (1.963s).
+No production Reference organization implementation existed before this RED.
+
+00:04 native parallel assignment: organization_invitation_reads owns the finite
+original-key archive/restore native profile on organization main93358d0, after
+the independently reviewed consumer isolation checkpoint was pushed. Writable
+paths: root neutral lifecycle initiating DTO/recovery contracts and matching
+native operation/lifecycle codec/facade/test/docs paths, including the consumer
+lifecycle operation test; no primary-owned Reference/HTTP, other repos, root
+inventories/CI or Git. Consume existing proof-aware PrepareArchive/PrepareRestore,
+same kernel request-key owner/custody and genuine lifecycle consumer. Acceptance:
+original-key archive -> warm/current admission denial and canceled invitation ->
+fresh action-bound restore -> surviving rights/current read and exact original
+recovery; changed intent, withdrawn/stale proof/session, real rollback/COMMIT loss
+and contention deny or classify original outcome without renewal/duplicates.
+Retain native action-primary admission, not generic session-only reconstruction.
+Exclude external asynchronous cascade closure/hard-delete/new HTTP routes; full
+M22 remains open. Root/native focused red-green, genuine PG/race consumer,
+affected ordinary tests/vet/modverify; primary owns heavy token and integration.
+
+00:15 Reference bootstrap reached actual native admission after correcting the
+new composer's use of intentionally stripped sessionState.config; it now reads
+the original configuration only during construction, native owners copy it.
+Real migration RED71933 statePending/zero receipts traced to pinned native
+go-migrations CommandRequest validator command_wire.go:164: command batches must
+be transactional. Organization's two concurrent index sources use ModeNone.
+Do not weaken/replace that atomic migration owner. Immediate upstream adapter
+prerequisite: additive explicit transactional index sources, unchanged default
+concurrent sources/checksums. Worker owns this finite fix before archive source
+work; bounded operator timeouts retain lock cancellation. Real Reference Apply
+and fresh/populated journey remain the acceptance oracle, not a source check.
+
+00:25 native transactional-index prerequisite delivered b2b887824c4ae21a5e26508268c710e385b0bb4d,
+exact main/Required40248950167 success. Fivepath independent reviewer
+organization_transactional_indexes_final APPROVE; original concurrent source
+bytes unchanged. Native source unit0.294s/module race1.332s/vet/modverify pass;
+actual PG durable-command rollback/retry/index identity race1.577s +taggedvet0.
+Two earlier PG failures were fixture oidvector lower-bound comparison, not SQL
+failures; normalized actual collation array oracle then passed unchanged source.
+Reference consumes normal authenticated public nativeb2b pin and selects owned
+transactional sources; no SQL rewrite, runner change or weakened atomic contract.
+Reference composition/complete consumer remains in progress, not delivered.
+
 2026-10-25 23:33 UTC: M22 selected HTTP invitation-acceptance profile CLOSED.
 Delivered leaf5378a50da37858cb30ff617ecf6c9ec48f61333d exact origin/main,
 Required40245032163 success. Actual HTTP send -> encrypted delivery -> once HTTP
