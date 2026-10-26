@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 03:39 UTC
+## Current TL;DR — 2026-10-26 06:11 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 explicitly closed rows.**
   Correction: the earlier 11/39 claim was not supported by the outcome table.
@@ -9,6 +9,14 @@
   The completed profiles below do not close the full M16/M22/M33 rows.
   Full 67-unit qualification remains unproved; no additional fully qualified
   release unit is claimed. Milestone counts are not integrated/verified unit counts.
+- **Resend profile CLOSED:** reviewed native organization8638dae/public consumer
+  e0e077b, HTTP leaf41bd437 and Reference4c4fcb7 are on main with green CI.
+  The actual downloaded Reference passes fresh and populated-identity PostgreSQL/
+  HTTPS/race (10.142s): original-key send/resend/retry, fixed expiry/role,
+  predecessor denial, encrypted successor delivery/once acceptance, reconstructed
+  original recovery and logout denial. Earlier standalone instrumented startup
+  failures remain failures. This closes the finite profile, not another whole
+  roadmap row or fully qualified unit.
 - **Newly delivered:** original-key native organization archive/restore and
   its normal public/no-replace genuine PostgreSQL/race consumer (12.530s).
   Native source `e7ab7d0` and consumer `381ac2a` are independently reviewed, main-pushed,
@@ -42,10 +50,10 @@
   authenticated downloaded Reference passes both fresh/populated PostgreSQL/
   HTTPS/race journeys (8.583s), without replacements. Reference also adopts the
   HIBP correction. Existing native authority and migration histories are retained.
-- **Next:** complete original-key invitation resend through its existing native
-  successor/proof/delivery owner. The missing initiating facade must be completed
-  before HTTP/Reference adoption. Cancel/reject additionally need genuine
-  reconstruction-safe natural-repeat initiation, not repeated preparation.
+- **Next:** reconstruction-safe natural-repeat invitation cancellation. The
+  parallel worker's neutral request contract/focused tests are ready locally;
+  native implementation waits its reviewed committed contract. Rejection remains
+  a later profile, not another simultaneously open primary slice.
 - **Remaining:** 29 open/unassessed consumer milestone rows, with substantial partial work;
   full 67-unit qualification, broader social/federation/provisioning and
   cross-cutting journeys. Counts are not effort percentages. No user decision
@@ -2900,7 +2908,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
-| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. The integrated HTTP/Reference backend now includes exact-version metadata/static-role updates, current privilege changes, last-owner safety, encrypted invitation send/once acceptance and original recovery. Leaf `bfa6dda` and Reference `7fd4def` are reviewed/main/CI-green; the actual downloaded Reference passes fresh/populated PostgreSQL/HTTPS/race journeys (8.583s). Native original-key archive/restore `e7ab7d0` with public consumer `381ac2a` is reviewed/main/CI-green and passes its actual public PostgreSQL/race journey (12.530s). Invitation resend/repeat initiation and remaining HTTP mutations, external lifecycle cascades and active-selection variants keep the full row open; unit qualification remains separately outstanding. |
+| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. The integrated HTTP/Reference backend includes exact-version metadata/static-role updates, current privilege changes, last-owner safety, encrypted invitation send/resend/once acceptance and original recovery. Resend native `8638dae`, public consumer `e0e077b`, HTTP leaf `41bd437` and Reference `4c4fcb7` are reviewed/main/CI-green; the actual downloaded Reference passes fresh/populated-identity PostgreSQL/HTTPS/race journeys (10.142s), including predecessor denial, fixed expiry/role, successor acceptance, reconstruction recovery and logout. Native original-key archive/restore `e7ab7d0` with public consumer `381ac2a` retains its public PostgreSQL/race proof (12.530s). Natural-repeat cancellation/rejection initiation and remaining HTTP mutations, external lifecycle cascades and active-selection variants keep the full row open; unit qualification remains separately outstanding. |
 | M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native team creation/membership/read/update/terminal deletion delivered through `dc12ee7`, with green CI and downloaded-native genuine-session PostgreSQL/race proof. Dynamic roles/permissions and HTTP/reference remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
 | M25 | Verified domain/provider registration and federation policy: sso, sso/domain-verification, sso/postgres | Closure not reassessed |

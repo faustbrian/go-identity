@@ -1,5 +1,160 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 06:11 UTC: original-key invitation resend selected profile CLOSED.
+Reference4c4fcb72704449b16ae42460dbe927762a98e525 exact origin/main,
+Required40277830315 success; independent complete10path reference review APPROVE
+(stageddiff80da964d703a7d645d8f3900ace2e2b07558249ba7424422e6775312bac5b34b).
+Actual authenticated downloaded Reference v0.0.0-20261026060530-4c4fcb727044,
+origin exact4c4/Subdirreference, Sumh1:RWLyRaA1Xp5/TIt9GsQCAHbuH7QVb5QdFsrNyr5LEuk=,
+GoModSumh1:nK0xYCWFpPHdgk/UHuPip5FoVfhjVfpqOK55YbdJ84o=; all ten reviewed
+source/manifests/docs byte-match. Genuine downloaded-module fresh and populated-
+identity PostgreSQL/HTTPS/race8722 PASS10.142s(3.86/4.68), no workspace/replacement.
+Frozen acceptance is delivered: real bootstrap/registration/verification/signin,
+original-key send/resend/retry, fixed expiry/role, old-proof denial, successor
+delivery/onceacceptance, singleton effects, fresh graph original recovery and
+logout denial. Native/HTTP/Reference owners and migrations remain sole authorities.
+No neighboring variants added before closure. Earlier standalone instrumented
+signin failures remain failed; full M22/67 qualification remains separate.
+Owned resend PostgreSQL/cache/scratch cohort is now obsolete and scheduled for
+immediate exact cleanup after this durable checkpoint. Cancellation root DTO
+worker has finished focused external RED/GREEN0.248s and cleaned its separate
+cache; downstream cancellation native implementation still waits contract delivery.
+
+2026-10-26 06:03 UTC: dependency-ready parallel native cancellation lane OPEN.
+Owner organization_lifecycle_native; repository go-organization main e0e077b.
+Writable scope: new root invitation_cancel_operation.go/_test.go; then new
+postgres initiating-cancel facade/unit and consumer profile, minimal existing
+consumer dispatch and module-local docs/changelog/manifests. Primary owns Git,
+shared dependency decisions and later HTTP/Reference integration; no overlap
+with current Reference resend final review. Consume committed raw root/native
+cancel lifecycle retained in e0e077b, kernel9ccf9a6 and native current session/
+organization/proof/risk/audit/outbox authority; do not replace those owners.
+Outcome: real verified actor -> native-allocated cancel at exact invitation/
+organization selection -> predecessor unusable -> reconstruction-safe matching
+natural repeat returns actual original metadata under current authority.
+No Idempotency-Key or caller command ID; no success from terminal state alone,
+no reexecution/new audit/risk effects on repeat, no new journal/request authority.
+Cancellation must remain possible after recipient withdrawal. Preserve tenant/
+actor/manager/version fences, rollback/unknown recovery and no secret export.
+First stop is coherent root neutral contract+external validation tests for review/
+commit/public pin; downstream native writes wait that prerequisite. Worker maps
+existing natural-repeat removal once and reports concrete missing authority;
+no speculative table or DTO redesign. Focused root/native tests, genuine PG
+journey and scoped race where relevant, one independent final review, normal
+public proof/main CI. Reject/expire and HTTP siblings excluded from this lane.
+Local heavy checks require serialized slot and separate task-owned caches.
+
+2026-10-26 05:58 UTC: native and HTTP resend prerequisites delivered; Reference
+integration is LOCAL and in independent final review. Native8638dae and genuine
+public-consumere0e077b both exact main/Required green (40271870987/40273362471).
+Native public/no-replace PG consumer55.787s/taggedvet0/modverifyall; independent
+native R2 and consumer followup APPROVE. Earlier standalone instrumented startup
+failures remain failed. HTTP leaf41bd43734e78fd86d59f44d0fd0481ded25c8245 main,
+Required40274188476 success; independent complete12path APPROVE. Leaf race21.882s,
+vet0/modverifyall/fuzz220exec6.693s/renderedwire+disabled+lateexpiry/bounds tests pass.
+Reference consumes public root867/native8638/sharedHTTPcf52/leaf41 (no replace).
+New facade lifetime RED87596 missingResend -> GREEN0.453s. Fresh and populated-
+IDENTITY upgrade actual PG/HTTPS journey58308 PASS10.394s; current instrumented
+pair49076 PASS19.865s (7.88/9.96s). Full Reference ordinary race5.393s, command
+race6.190s, taggedvet0/modverifyall. The journey proves actual send/resend/retry,
+predecessor denial, successor delivery/onceacceptance, native original recovery
+after graph reconstruction/acceptance, singleton effects and logout denial.
+Native migration suffixes6..9 follow unchanged1..5; no sibling HTTP mutations.
+Ten Reference paths frozen for invitation_resend_reference_final; public-source
+commit/CI/downloaded-Reference proof pending. No fullM22/67 qualification claim.
+
+2026-10-26 05:07 UTC: native keyed resend prerequisite is on main8638daecd2d7
+with Required40271870987 success and independent R2 complete-diff APPROVE.
+F1 focused real withdrawal GREEN12.293s; expanded full real consumer45.775s;
+postfix native module race1.709s/vet0. Public authenticated native version
+v0.0.0-20261026045920-8638daecd2d7 matches exact origin/source/manifests, Sum
+h1:65Qu5KB02PqudbSyujuDw/7o8gRx8OEGDS78P09meac=. Normal public/no-replace
+genuine consumer71633 PASS55.787s, taggedvet0/modverifyall. Consumer followup
+six paths (same reviewed behavioral tests + actual public pins/README) awaits
+bounded final review/commit/CI. Instrumented full journey's earlier signin
+failures remain failed; no whole-unit qualification or HTTP profile closure.
+Primary now adopts implemented/proven committed native contract and root867/
+sharedHTTPcf52 into the independent HTTP resender port. No Get fallback for
+administrator resend or latest-successor metadata; original native state only.
+
+2026-10-26 04:53 UTC: actual native resend acceptance advances, profile still OPEN.
+Focused genuine org-Max RED6979 conflict1.851s; resend-only guard correction
+GREEN36931 uninstrumented19.455s, acceptance overflow still rejected. Full
+genuine uninstrumented45312 PASS25.793s, all10 subcases including original21s
+mapping expiry/refusal, actual rollback/final COMMIT-loss and pre-retry contention.
+Postguard native module race1.356s/vet0/modverifyall. Instrumented full journey
+36931 still FAILS earlier password signin(registration1,2.599s,not_committed),
+not a pass. Independent invitation_resend_native_final R1 REQUEST_CHANGES:
+F1 final recipient fence missing after delivery-status callback; F2 original-key
+after-acceptance coverage. Primary adds F2 and genuine F1 timing regressions;
+F1 RED66741 both initial+retry return nilerr after actual identifier withdrawal,
+package4.341s. Native worker fixes only facade final output fence using existing
+recipient/security authority; no extra engine or shared explicit-API expansion.
+Known committed receipt must survive; late-denied delivery state must be zero.
+Native/public/HTTP/Reference delivery and full unit qualification remain unclaimed.
+
+2026-10-26 04:38 UTC: resend native/consumer implementation is LOCAL, not delivered.
+Native worker's absent-facade RED0.259s -> GREEN0.302s; expanded codec/intent/
+projection+legacy Send0.259s, native ordinary race1.355s/vet0/fuzz6.338s/modverifyall.
+Primary inspected first public boundary and owns genuine consumer+minimal dispatch;
+worker owns native source/unit/docs. Primary consumer covers original/successor/
+acceptance/retry, authority/config/recipient/expiry denial, rollback, mapping-only
+and final-COMMIT loss, original-expiry refusal and pre-retry singleton contention.
+First genuine run33286 FAILED before resend at existing password signin503,
+not_committed/unavailable; package30.588s. Machine load169 then173 then184;
+lightweight shell reads also delayed. Environmental pressure is a plausible
+contributor, not a proved product root cause. No repeated service runs or timeout/
+authority changes. Native org-Max guard stays unchanged until real regression;
+no native runtime acceptance, commit, public pin or HTTP/Reference adoption claimed.
+Shared HTTP exact-bearer prerequisite cf52d3d846fa168a922f5d4432bddcce058a59a8
+is independently reviewed complete5paths APPROVE (README action resolved),
+exact origin/main/Required40268770525 success. Focused RED0.246s/GREEN0.257s,
+HTTP module2.027s/vet0/modverifyall. Overall count remains10/39, about25%.
+
+2026-10-26 04:17 UTC: resend root prerequisite delivered at organization8674669.
+Independent invitation_resend_contract_final APPROVE complete4paths, root
+tests0.225s/vet0/modverifyall/fuzz251391exec6.226s. Exact origin/main8674669,
+Required40268117178 success. Authenticated public root v0.0.0-20261026041513-
+8674669d13cb matches source/manifests; public request regression0.251s.
+Primary adopts this pin in native+consumer manifests. Native worker explicitly
+unlocked: new keyed-resend facade/codec/tests+minimal consumer dispatch/docs;
+Send wire identity unchanged, no Git/shared HTTP/Reference edits. Tests serialized
+in new owned identity-invitation-resend.4sAgpY cohort; old PG55485 is removed.
+Native execution and HTTP/Reference consumer profile are still OPEN.
+Primary also owns the shared HTTP prerequisite for this same profile: admit
+only identity.organization.invitation.resend's explicit strict-bearer policy,
+retaining cookie-CSRF and unrelated-operation denial. Existing canonical catalog
+and route authority remain unchanged. Constructor regression first; focused
+HTTP module/vet then independent final diff before public pin adoption.
+
+2026-10-26 03:58 UTC: M22 original-key invitation resend profile OPEN.
+Primary owns root neutral DTO/result, HTTP/Reference wiring/bootstrap/pins and
+Git; organization_lifecycle_native will own native keyed resend after the root
+contract is committed/proven. Consumed source: organization main381ac2a/root7a
+and retained native resenda20a7b9, genuine consumer15.617s; identity main94425c8
+with concrete Reference7fd. Existing send/capability/delivery/kernel owners remain
+sole authorities; no new journal, token engine, grant or arbitrary callback.
+Outcome: exact original Idempotency-Key -> successor rotation at fixed recipient,
+role and original exclusive expiry -> predecessor denial -> one encrypted
+successor delivery/acceptance -> original retry/recovery without reexecution.
+Root InvitationResendOperationRequest carries authentication/key, organization
+and invitation IDs, exact positive versions and correlation, no client command,
+address/role/expiry/proof. OrganizationVersion is read-only (MaxUint64 allowed);
+InvitationVersion must leave room for successor and terminal versions (<Max-1).
+Neutral result retains StoreResult plus observed original DeliveryState; zero
+means no authorized observation, never queued. Native existing result types stay
+unchanged. HTTP has a narrow optional resender port, required key/admin rate,
+bounded JSON, current bearer and original safe outcome; no effect ID/proof export.
+Acceptance: retries/restart/changed intent, stale/withdrawn manager/recipient,
+exclusive expiry, one successor/queue/audit, rollback/real COMMIT-loss/contention,
+original delivery despite later resends, late status-read error retains known
+commit, disabled route/OpenAPI absent, real fresh/populated Reference consumer.
+Checks: root validation/redaction + bounded fuzz; native affected module/race/vet
+and genuine PG consumers with retained send controls; HTTP boundary/fuzz and
+fresh/populated Reference PG/HTTPS; one coherent independent review per owning
+public prerequisite/delivery, normal authenticated public pins, main/CI/public
+consumer. Cancel/reject natural-repeat initiation and other profiles excluded.
+
 2026-10-26 03:39 UTC: metadata/static-role HTTP+Reference profile CLOSED.
 Shared HTTP7fa445b, leafbfa6ddada2affc06c400b483c1f8da09536b4220 and Reference
 7fd4def17ea2e229a11fe10f5e69723d94bdcaa5 all exact-source main/Required green
