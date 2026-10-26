@@ -1,5 +1,96 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 03:39 UTC: metadata/static-role HTTP+Reference profile CLOSED.
+Shared HTTP7fa445b, leafbfa6ddada2affc06c400b483c1f8da09536b4220 and Reference
+7fd4def17ea2e229a11fe10f5e69723d94bdcaa5 all exact-source main/Required green
+(40261505086/40264192777/40264727019). Independent organization_update_final
+complete leaf+Reference APPROVE, then final9path Reference/public-pin APPROVE;
+native reports retained in session.
+Final leaf module race11.991s/vet0/modverifyall/fuzz119407exec5.276s. Final
+Reference normal-public-dependency fresh/populated PG/HTTPS/race8.719s,
+module race5.120s/cmd5.611s/taggedvet0/modverifyall. Actual authenticated downloaded
+Reference7fd v0.0.0-20261026033410-7fd4def17ea2, Sum
+h1:s1sPjPypqwqwIcdlIRy22jc9/QIJUMlUxCxXcgDEOfI=, origin exact7fd, byte-matching
+source/manifests; both fresh/populated PG/HTTPS/race8.583s, no replacements.
+Reference incorporates HIBP4e correction; no private authority/journal/migrations,
+auth budget, proof policy or mandatory gate weakened. Local development modfile
+is obsolete and will be removed with the bounded cohort's owned cluster/cache.
+Finite source delivery closes immediately; full M22/67 qualification is not claimed.
+
+2026-10-26 03:21 UTC: native archive/restore selected profile CLOSED.
+Normal authenticated public e7 consumer57966 PG/race12.530s exit0, no workspace
+or replacement. Reviewer organization_lifecycle_native_final complete3path
+APPROVE. Followup381ac2a1579744fee89878788d16c23a3ed40791 on exact origin/main,
+Required40262479151 green; clean organization repository. Prior failed runs stay
+failed; after host load dropped66->3.46 the bounded unchanged profile passed,
+but load is not asserted as proved rootcause. No authentication budget changed.
+HIBP4e0bab3755d58928fe076dbb28c4ce519d2f1855 on identity main, Required40262351315
+green; independent hibp_flight_final_review APPROVE after R1 overlap finding.
+Original direct expiry/regression RED93077, overlap RED82193; final10733 module
+race4.659s/overlap25x2.234s/vet0/modverifyall. Failed50991 repeat exposed one
+Secret owner borrowed concurrently in a new fixture; separate identical-byte
+candidate owners preserve same-prefix overlap, no product policy weakened.
+Actual authenticated downloaded HIBP4e source/manifests match, example+freshness
+race1.312s; no full unit-qualification claim. Worker caches removed; primary
+cohort cache remains for current Reference composition.
+Shared HTTP policy7fa445b is independently approved, main/Required40261505086
+green. Current metadata/role leaf full module race11.991s, vet0/modverifyall,
+hostile-boundary fuzz119407exec5.276s. Actual Reference fresh/populated PG/HTTPS/
+race9.019s with only development leaf substituted in ownedmodfile; no committed
+replace. Initial Referencecompile fixturevariable collision fixed, then old
+fixed9-route assertion replaced by exact selected-operation assertions; no
+acceptance weakened. Leaf/Reference finalreview and normal public adoption are
+pending. Progress count corrected to10 explicitly closed rows; earlier11 was
+unsupported by the actual39-row table, not a newly removed delivery.
+
+2026-10-26 02:44 UTC: Reference organization baseline remains CLOSED at96f1823.
+Native keyed archive/restore public-consumer followup is PARKED, not accepted:
+81451/44473 signin503; 97899 reached organization creation then deadline;
+normal public11337 failed earlier Reference router construction. Safe diagnostics
+now decode error responses before status branching and print only allowlisted
+codes/outcomes and presence/counts. Source/cache/native manifests match; no
+deadline, authority or retry relaxed. Router has a separate5s document-construction
+budget; its expiration is not yet proved to explain11337. Stop blind reruns.
+
+Primary finite M22 continuation: independently selected metadata Update and
+static-role UpdateMember through leaf HTTP and Reference on identity main176cefe.
+Consumed committed native metadata2cbf261/member-rolea80d336 contracts, retained
+in nativeb2b8878/root65f8517 currently pinned by Reference/HTTP. Owners/writes:
+http/organization/{feature,decode,handler,response,wire,rate} and matching tests,
+module-local docs/changelog; reference organization config/facades/migration
+selection/tests/docs plus its public dependency pin. No native-domain changes,
+new journals or migration histories. Preserve existing Service implementers by
+adding narrow optional updater ports rather than widening their interface.
+Acceptance: verified-password bearer -> original-key exact-version metadata/
+role update -> matching retry/read -> changed intent/stale version/unauthorized
+role/last-owner denial; no-cookie/alternate-key/unknown-field rejection, shared
+admin-rate and current-session fences, original known outcome after late errors,
+disabled routes/OpenAPI absent; actual fresh/populated Reference journeys.
+Checks: affected HTTP unit/race+tagged-vet, existing genuine native/public cases
+reused where inputs match, Reference fresh/populated realPG/HTTPS; one complete
+independent review, ordinary main delivery/CI and actual public consumer.
+HTTP leaf is delivered before the Reference public pin; no permanent replace.
+Concrete first-test finding: the shared HTTP constructor admits only the older
+finite bearer operations. Extend its closed whitelist for these exact two IDs,
+retaining cookie CSRF and unrelated-operation denial; shared HTTP source/tests/
+changelog are primary-owned prerequisite paths for this same consumer outcome.
+Reference final promotion also adopts the separately delivered HIBP4e0bab3
+freshness correction; its public example/regression proof is retained above.
+Archive public gate stays explicitly open and is not reopened as a new feature.
+
+Parallel leaf assignment: hibp_completion owns only risk/hibp/**, retaining public
+75e10d9 implementation and its currently committed manifests. Finite outcome:
+finish demonstrated behavioral/qualification gaps for the standalone bounded,
+privacy-preserving public checker; preserve the already-delivered B2/B3 native
+composition, APIs, provider policy and original validity. Read the complete HIBP
+goal; report exact remaining unit gates, not another evidence framework. Named
+risks: range/candidate secrecy, cancellation/deadline, shared-flight cleanup,
+original cache freshness, required audit and provider-failure classification.
+No Reference/HTTP/password/risk/shared-contract/root-inventory/CI/Git writes.
+No local Go/service-heavy checks until primary grants the serialized test slot;
+lightweight contract/source inspection and bounded test edits can overlap.
+Primary owns independent final review, integration, main delivery and progress.
+
 2026-10-26 02:04 UTC: selected M22 Reference organization profile CLOSED.
 go-identity96f18236a5d1696ada3a1ed21e2c37c631dd2e32 exact origin/main,
 Required40256277888 success. Independent reference_organization_final R2 APPROVE;
