@@ -20,7 +20,7 @@ import (
 // zero independent token age and denied Referer fallback for native protected
 // cookie custody. Factories own enforcement; selection issues no CSRF token.
 // Organization create/update/member-add/member-update/member-remove and
-// invitation send/accept/resend/cancel
+// invitation send/accept/resend/cancel/reject
 // additionally admit None only for explicitly selected strict bearer handlers
 // that ignore ambient cookies.
 // Other organization mutations retain their canonical policy.

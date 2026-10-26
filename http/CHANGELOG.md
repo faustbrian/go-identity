@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit an explicitly selected strict-bearer recipient-rejection policy.
+  Canonical safe-rate, natural-repeat and cookie-CSRF requirements remain
+  unchanged; selection alone enables no route or recipient authority.
+
 - Permit an explicitly selected strict-bearer invitation-cancellation policy.
   Natural-repeat semantics and cookie-CSRF protection remain unchanged;
   selection alone enables no route, revocation or authority.

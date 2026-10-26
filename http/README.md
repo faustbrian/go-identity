@@ -1,7 +1,7 @@
 # Identity HTTP transport
 
 Organization creation/metadata updates, member admission/role updates/removal
-and invitation sending/acceptance/resend/cancellation may select `CSRFNone` only
+and invitation sending/acceptance/resend/cancellation/rejection may select `CSRFNone` only
 for strict-bearer feature handlers that ignore ambient cookies.
 This is not a cookie fallback or a general organization exemption:
 the canonical cookie profile and all other operation policies remain unchanged.
