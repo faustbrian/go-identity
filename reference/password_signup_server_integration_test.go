@@ -1229,6 +1229,7 @@ END $$`); err != nil {
 			{"invitation.accept", c.HTTPOrganization.InvitationAccept},
 			{"invitation.resend", c.HTTPOrganization.InvitationResend},
 			{"invitation.cancel", c.HTTPOrganization.InvitationCancel},
+			{"invitation.reject", c.HTTPOrganization.InvitationReject},
 		} {
 			if selected.on {
 				wantOperations++

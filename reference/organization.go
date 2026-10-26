@@ -239,6 +239,20 @@ func (f *OrganizationInvitationService) Cancel(ctx context.Context, r organizati
 	return n.invitations.Cancel(w, r, network)
 }
 
+// Reject retains native intended-recipient authority, natural-repeat original
+// outcome recovery and atomic rejection without manager or membership authority.
+func (f *OrganizationInvitationService) Reject(ctx context.Context, r organization.InvitationRejectOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, true)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.invitations.Reject(w, r, network)
+}
+
 // Get retains native owner-only current invitation disclosure.
 func (f *OrganizationInvitationService) Get(ctx context.Context, r organization.InvitationReadRequest) (organization.InvitationDelivery, error) {
 	if f == nil {

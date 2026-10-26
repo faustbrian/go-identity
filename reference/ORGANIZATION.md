@@ -2,7 +2,7 @@
 
 This selected backend profile connects real registration, verification and
 password signin to organization creation, metadata/role updates, scoped reads, member admission and
-removal, encrypted invitation delivery/resend, cancellation and once-only acceptance.
+removal, encrypted invitation delivery/resend, cancellation/rejection and once-only acceptance.
 It does not implement an administrative UI or claim full organization lifecycle,
 teams, dynamic roles, domain ownership, archive/restore or other login profiles.
 
@@ -38,7 +38,7 @@ existing explicit bounded external seams.
 
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
-`InvitationListMine`, `InvitationSend`, `InvitationResend`, `InvitationCancel`
+`InvitationListMine`, `InvitationSend`, `InvitationResend`, `InvitationCancel`, `InvitationReject`
 and `InvitationAccept`.
 Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
@@ -61,6 +61,9 @@ Natural cancellation adds the native original-epoch correlation migration at10,
 without rewriting versions1..9. Apply it before enabling `InvitationCancel`.
 Existing raw cancellation stays usable without that optional native migration;
 legacy cancellation effects never gain invented original-version correlation.
+Natural recipient rejection appends its independent original-epoch correlation
+at11 without rewriting versions1..10. Apply it before selecting `InvitationReject`;
+legacy rejection history remains NULL and cannot fabricate original recovery.
 
 Reference deliberately selects the adapter's **transactional index variants**
 because durable migration commands require atomic histories. These builds can
@@ -74,7 +77,7 @@ into this history without an explicit supported migration plan.
 After initialization, `FeatureSet.Organizations()` exposes native create,
 metadata replacement, add/update/remove member, scoped get/list and original operation recovery.
 `OrganizationInvitations()` exposes original-key send/resend, owner-only get, authenticated-recipient
-discovery, natural-repeat cancellation, retained acceptance preparation and
+discovery, natural-repeat cancellation/rejection, retained acceptance preparation and
 explicit original recovery.
 Handles share graph initialization, tenant and shutdown guards; they do not own
 another lifetime or authority system.
@@ -114,6 +117,16 @@ after graph reconstruction; absence/terminal state alone is not success.
 Unknown remains an explicit reconciliation outcome, not automatic reexecution.
 The response exposes neither membership nor delivery projections. Session
 revocation denies both future mutation and protected original-history recovery.
+
+Recipient rejection independently selects `InvitationReject`, current sessions
+and shared safe-rate admission, not administrative or secret admission. Its
+exact four ID/version fields forbid a key, caller command and proof. Only the
+current verified intended recipient may act; neither manager privileges nor
+membership substitute. The native transaction terminally rejects the invitation
+and fences old/prepared acceptance. Matching natural retries and reconstructed
+handles disclose only actual original history under current authority. Success
+projects `state: "rejected"`, never membership or delivery. Unknown remains
+explicit; logout denies future rejection and original-outcome recovery.
 
 ## Reproduce the complete profile
 

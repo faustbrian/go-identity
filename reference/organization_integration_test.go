@@ -53,7 +53,7 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		switch c.Request.Action {
-		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.update", "identity.organization.update.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.update", "identity.organization.member.update.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.resend", "identity.organization.invitation.resend.recover", "identity.organization.invitation.cancel", "identity.organization.invitation.cancel.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
+		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.update", "identity.organization.update.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.update", "identity.organization.member.update.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.resend", "identity.organization.invitation.resend.recover", "identity.organization.invitation.cancel", "identity.organization.invitation.cancel.recover", "identity.organization.invitation.reject", "identity.organization.invitation.reject.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -93,7 +93,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 	issuer.Audience, issuer.Crypto.Clock, preparation.Clock = "organization-invitation", nil, nil
 	issuer.Crypto.Limits.MaxLifetime = 15 * time.Minute
 	c.Organization.Invitations = &reference.OrganizationInvitationConfiguration{Policy: organization.InvitationConfig{Audience: issuer.Audience, Lifetime: 15 * time.Minute, MaximumPending: 100}, Issuer: issuer, Preparation: preparation, ConfigurationID: "reference-organization-invitation-v1", SelectInvitationID: selectID, TemplateID: "organization-invitation", TemplateVersion: 1, PolicyVersion: 2, ProviderVersion: 2, LocaleChain: []string{"en"}, Endpoint: origin + "/invitation", ScopeKey: [32]byte{144}}
-	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, InvitationResend: true, InvitationCancel: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
+	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, InvitationResend: true, InvitationCancel: true, InvitationReject: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
 		// This success-path fixture does not expect a rate denial. Failing the
 		// callback cannot permit a denied request or fake successful auditing.
 		t.Error("unexpected organization administrative denial")
@@ -425,6 +425,72 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
  (SELECT count(*) FROM organization.memberships WHERE tenant_id=$3 AND organization_id=$4 AND user_id=$5 AND state='active')`, string(cancelSent.InvitationID), string(cancelled.CommandID), string(otpTenant), string(third.OrganizationID), string(recipient.user)).Scan(&cancelEffects, &cancelEvents, &cancelMembers); err != nil || cancelEffects != 1 || cancelEvents != 1 || cancelMembers != 0 {
 		t.Fatal("Reference cancellation failed atomic singleton/no-membership effects", err)
 	}
+	// A separate pending invitation proves rejection rather than inferring
+	// revocation from an already accepted/consumed predecessor.
+	fourth := create("reference-reject-organization", "reference-reject-original-create")
+	rejectSend := map[string]any{"organizationID": fourth.OrganizationID, "organizationVersion": uint64(1), "recipientUserID": recipient.user, "recipientIdentifierID": recipient.identifier}
+	code, wire = call(owner, http.MethodPost, "/v1/organization/invitation-send", rejectSend, "reference-reject-original-send")
+	var rejectSent organizationhttp.InvitationSendResponse
+	if code != 200 || json.Unmarshal(wire, &rejectSent) != nil || !rejectSent.Committed || rejectSent.InvitationID == "" {
+		t.Fatal("Reference rejection invitation not issued", code)
+	}
+	if _, err := workers.ProcessDeliveryOne(ctx, 1); err != nil {
+		t.Fatal("Reference rejection proof delivery", err)
+	}
+	var rejectLink string
+	select {
+	case rejectLink = <-messages:
+	case <-ctx.Done():
+		t.Fatal("rejection invitation delivery absent")
+	}
+	parsedRejectLink, err := url.Parse(rejectLink)
+	if err != nil || parsedRejectLink.Query().Get("token") == "" {
+		t.Fatal("rejection proof absent")
+	}
+	rejectProof := parsedRejectLink.Query().Get("token")
+	parsedRejectProof, err := capability.ParseProof(rejectProof, c.Organization.Invitations.Issuer.Crypto.Limits)
+	if err != nil {
+		t.Fatal("delivered rejection predecessor proof invalid")
+	}
+	beforeReject, err := features.OrganizationInvitations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptBeforeReject, err := beforeReject.PrepareAcceptance(ctx, organization.InvitationAcceptRequest{Authentication: recipient.auth, CommandID: commandIDForReference(t), OrganizationID: fourth.OrganizationID, ID: rejectSent.InvitationID, OrganizationVersion: 1, InvitationVersion: 1, Proof: parsedRejectProof, CorrelationID: "before-reference-reject"}, "127.0.0.1")
+	if err != nil {
+		t.Fatal("actual rejection predecessor was not admissible", err)
+	}
+	rejectBody := map[string]any{"organizationID": fourth.OrganizationID, "organizationVersion": uint64(1), "invitationID": rejectSent.InvitationID, "invitationVersion": uint64(1)}
+	if code, _ := call(recipient, http.MethodPost, "/v1/organization/invitation/reject", rejectBody, "forbidden-key"); code != 400 {
+		t.Fatal("natural rejection accepted a client key", code)
+	}
+	if code, _ := call(owner, http.MethodPost, "/v1/organization/invitation/reject", rejectBody, ""); code != 403 {
+		t.Fatal("manager obtained intended-recipient rejection authority", code)
+	}
+	code, wire = call(recipient, http.MethodPost, "/v1/organization/invitation/reject", rejectBody, "")
+	var rejected organizationhttp.InvitationRejectResponse
+	if code != 200 || json.Unmarshal(wire, &rejected) != nil || !rejected.Committed || rejected.State != "rejected" || rejected.InvitationID != rejectSent.InvitationID || rejected.BeforeVersion != 1 || rejected.AfterVersion != 2 || rejected.Recovery == nil || rejected.MemberID != "" || bytes.Contains(wire, []byte(rejectProof)) {
+		t.Fatal("Reference natural rejection did not commit", code, rejected.CommitOutcome, rejected.Error)
+	}
+	code, wire = call(recipient, http.MethodPost, "/v1/organization/invitation/reject", rejectBody, "")
+	var rejectedRetry organizationhttp.InvitationRejectResponse
+	if code != 200 || json.Unmarshal(wire, &rejectedRetry) != nil || rejectedRetry.CommandID != rejected.CommandID || rejectedRetry.State != "rejected" {
+		t.Fatal("Reference rejection repeat replaced original history", code)
+	}
+	if out, err := acceptBeforeReject.Execute(ctx); err == nil || out.Receipt.Outcome == identity.CommitOutcomeCommitted {
+		t.Fatal("already-prepared acceptance survived rejection")
+	}
+	rejectAccept := map[string]any{"commandID": commandIDForReference(t), "organizationID": fourth.OrganizationID, "invitationID": rejectSent.InvitationID, "organizationVersion": uint64(1), "invitationVersion": uint64(1), "token": rejectProof}
+	if code, _ := call(recipient, http.MethodPost, "/v1/organization/invitation/accept", rejectAccept, ""); code == 200 {
+		t.Fatal("rejected proof accepted through HTTP")
+	}
+	var rejectEffects, rejectEvents, rejectMembers int
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT
+ (SELECT count(*) FROM organization.command_effects WHERE invitation_id=$1 AND operation='identity.organization.invitation.reject'),
+ (SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$2 AND topic='invitation.rejected.v1'),
+ (SELECT count(*) FROM organization.memberships WHERE tenant_id=$3 AND organization_id=$4 AND user_id=$5 AND state='active')`, string(rejectSent.InvitationID), string(rejected.CommandID), string(otpTenant), string(fourth.OrganizationID), string(recipient.user)).Scan(&rejectEffects, &rejectEvents, &rejectMembers); err != nil || rejectEffects != 1 || rejectEvents != 1 || rejectMembers != 0 {
+		t.Fatal("Reference rejection failed atomic singleton/no-membership effects", err)
+	}
 	rebuilt, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		t.Fatal("reconstruct Reference organization graph", err)
@@ -476,7 +542,18 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err != nil || cancelRecovered.Receipt.Outcome != identity.CommitOutcomeCommitted || cancelRecovered.Receipt.Binding.CommandID != cancelled.CommandID || cancelRecovered.Receipt.Feature == nil || cancelRecovered.Receipt.Feature.BeforeVersion != 1 || cancelRecovered.Receipt.Feature.AfterVersion != 2 {
 		t.Fatal("fresh Reference cancellation did not recover original history", err)
 	}
+	rejectRequest := organization.InvitationRejectOperationRequest{Authentication: recipient.auth, OrganizationID: fourth.OrganizationID, InvitationID: rejectSent.InvitationID, OrganizationVersion: 1, InvitationVersion: 1, CorrelationID: "reconstructed-rejection"}
+	rejectRecovered, err := invitationsOwner.Reject(ctx, rejectRequest, "127.0.0.1")
+	if err != nil || rejectRecovered.Receipt.Outcome != identity.CommitOutcomeCommitted || rejectRecovered.Receipt.Binding.CommandID != rejected.CommandID || rejectRecovered.Receipt.Feature == nil || rejectRecovered.Receipt.Feature.BeforeVersion != 1 || rejectRecovered.Receipt.Feature.AfterVersion != 2 {
+		t.Fatal("fresh Reference rejection did not recover original history", err)
+	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
+	if _, err := invitationsOwner.Reject(ctx, rejectRequest, "127.0.0.1"); err == nil {
+		t.Fatal("revoked recipient recovered original rejection")
+	}
+	if code, _ := call(recipient, http.MethodPost, "/v1/organization/invitation/reject", rejectBody, ""); code == 200 {
+		t.Fatal("revoked recipient repeated HTTP rejection")
+	}
 	if _, err := invitationsOwner.RecoverAccept(ctx, recovery); err == nil {
 		t.Fatal("revoked recipient recovered protected history")
 	}

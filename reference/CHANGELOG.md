@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose independently selected natural-repeat recipient rejection with
+  shared safe-rate admission and native graph lifetime guards. Only the current
+  verified intended recipient may reject or recover an exact original outcome;
+  manager or membership authority cannot substitute. Append native correlation
+  migration11 after the unchanged invitation history before enabling rejection.
+  Existing raw rejection stays compatible; no separate workflow is introduced.
+
 - Compose naturally repeatable invitation cancellation through independently
   selected HTTP and native graph handles. Exact original versions reconcile
   actual committed metadata after reconstruction without client keys, recipient
