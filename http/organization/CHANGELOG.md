@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add independently selected current-user organization listing with explicit
+  bounded pagination, strict bearer/HTTPS tenant binding and shared safe rates.
+  Configure `OrganizationLister` without extending the existing Service port.
+  Native current membership/policy owns filtering and cursor authority; errors
+  withhold the entire page and disabled selection exposes no route or metadata.
+
 - Add independently selected strict-bearer advisory slug availability with a
   closed candidate-only GET query, shared safe-rate admission and mapped HTTPS
   tenant. Configure the narrow `SlugAvailability` owner without extending the

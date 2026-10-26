@@ -29,6 +29,7 @@ type requestInput struct {
 	role                      organization.Role
 	orgVersion, memberVersion uint64
 	cursor                    identity.UserID
+	organizationsCursor       organization.OrganizationCursor
 	limit                     uint32
 	commandID                 identity.CommandID
 	invitationID              organization.ID
@@ -47,6 +48,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/get", http.MethodGet
 	case organization.SlugAvailable:
 		return "/v1/organization/slug-available", http.MethodGet
+	case organization.ListOrganizations:
+		return "/v1/organization/list", http.MethodGet
 	case organization.ListMembers:
 		return "/v1/organization/member/list", http.MethodGet
 	case organization.AddMember:
@@ -73,6 +76,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	missingOwner := nilService(c.Service)
 	if op == organization.SlugAvailable {
 		missingOwner = nilService(c.SlugAvailability)
+	}
+	if op == organization.ListOrganizations {
+		missingOwner = nilService(c.OrganizationLister)
 	}
 	if op == organization.Update {
 		missingOwner = nilService(c.MetadataUpdater)
@@ -178,6 +184,27 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 					return zero, identityhttp.ErrInvalidInput
 				}
 				input.slug = query.Get("slug")
+			} else if op == organization.ListOrganizations {
+				for key := range query {
+					if key != "limit" && key != "cursor" {
+						return zero, identityhttp.ErrInvalidInput
+					}
+				}
+				values := query["limit"]
+				if len(values) != 1 {
+					return zero, identityhttp.ErrInvalidInput
+				}
+				n, err := strconv.ParseUint(values[0], 10, 32)
+				if err != nil || n < 1 || n > 200 || strconv.FormatUint(n, 10) != values[0] {
+					return zero, identityhttp.ErrInvalidInput
+				}
+				input.limit = uint32(n)
+				if values, present := query["cursor"]; present {
+					if len(values) != 1 || !boundedOrganizationCursor(values[0]) {
+						return zero, identityhttp.ErrInvalidInput
+					}
+					input.organizationsCursor = organization.OrganizationCursor(values[0])
+				}
 			} else {
 				for k := range query {
 					if k != "organizationID" && (op != organization.ListMembers || k != "cursor" && k != "limit") {
@@ -317,6 +344,26 @@ func (in *requestInput) read() organization.ReadRequest {
 
 func (in *requestInput) slugAvailable() organization.SlugAvailableRequest {
 	return organization.SlugAvailableRequest{Authentication: in.auth, Slug: in.slug, CorrelationID: in.correlation}
+}
+
+func (in *requestInput) listOrganizations() organization.ListOrganizationsRequest {
+	return organization.ListOrganizationsRequest{Authentication: in.auth, Cursor: in.organizationsCursor, Limit: in.limit, CorrelationID: in.correlation}
+}
+
+// The root list contract uses an opaque <=512-byte base64url locator. Only
+// bound its transport alphabet here; the native owner validates its canonical
+// shape and tenant/subject/policy binding under current authority.
+func boundedOrganizationCursor(value string) bool {
+	if len(value) < 1 || len(value) > 512 {
+		return false
+	}
+	for i := range value {
+		c := value[i]
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // Match the public create/update candidate grammar before authority work;

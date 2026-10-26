@@ -57,6 +57,29 @@ type OrganizationView struct {
 	Version uint64          `json:"version"`
 }
 
+// OrganizationListResponse is the current subject's bounded metadata page.
+// Organizations is always an array. NextCursor is an optional non-authoritative
+// native continuation, not an active organization or reusable membership proof.
+type OrganizationListResponse struct {
+	Organizations []OrganizationView              `json:"organizations"`
+	NextCursor    organization.OrganizationCursor `json:"nextCursor,omitempty"`
+}
+
+func organizationListResponse(in *requestInput, result organization.ListOrganizationsResult) (OrganizationListResponse, error) {
+	var zero OrganizationListResponse
+	if len(result.Organizations) > int(in.limit) || result.NextCursor != "" && (!boundedOrganizationCursor(string(result.NextCursor)) || len(result.Organizations) == 0) {
+		return zero, identityhttp.ErrUnavailable
+	}
+	out := OrganizationListResponse{Organizations: make([]OrganizationView, len(result.Organizations)), NextCursor: result.NextCursor}
+	for i, org := range result.Organizations {
+		if org.TenantID != in.auth.TenantID || !org.Active || org.Version == 0 || !boundedID(string(org.ID)) || len(org.Name) < 1 || len(org.Name) > 256 || !utf8.ValidString(org.Name) || !validSlugCandidate(org.Slug) || i > 0 && result.Organizations[i-1].ID >= org.ID {
+			return zero, identityhttp.ErrUnavailable
+		}
+		out.Organizations[i] = OrganizationView{ID: org.ID, Name: org.Name, Slug: org.Slug, Version: org.Version}
+	}
+	return out, nil
+}
+
 // MemberView contains current safe membership metadata, never reusable authority.
 type MemberView struct {
 	UserID  identity.UserID   `json:"userID"`

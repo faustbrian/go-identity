@@ -207,6 +207,21 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				writeJSON(w, status, response)
 				return
 			}
+			if op == organization.ListOrganizations {
+				out, err := c.OrganizationLister.ListOrganizations(r.Context(), in.listOrganizations())
+				if err != nil {
+					status, code := domainFailure(err)
+					reject(w, r, requestFailure{status: status, code: code})
+					return
+				}
+				response, err := organizationListResponse(in, out)
+				if err != nil || r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				writeJSON(w, 200, response)
+				return
+			}
 			if op == organization.SlugAvailable {
 				out, err := c.SlugAvailability.SlugAvailable(r.Context(), in.slugAvailable())
 				if err != nil {

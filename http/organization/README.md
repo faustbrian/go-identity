@@ -6,6 +6,19 @@ invitation sending/resend, cancellation/rejection and once-only acceptance. Omit
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
+Current-user organization listing is independently opt-in through `List`.
+Supply the native `OperationService` as `Config.OrganizationLister`, current
+`Sessions` and shared `SafeRate`; no five-method `Service` or `AdminRate` is
+needed. `GET /v1/organization/list?limit=20` requires a canonical decimal limit
+1..200 with no default. Continue with the unchanged optional returned `cursor`
+(at most512 bytes). No user, tenant or organization selector, body or key is
+accepted. Responses contain `organizations` (an array, including empty) of
+safe ID/name/slug/version views and optional `nextCursor`, never membership or
+authority. Native current membership and per-organization policy filter the
+page in bytewise ID order; earlier additions require restarting, not a snapshot.
+Authority failures disclose no partial page. Disabling `List` exposes neither
+its route nor OpenAPI metadata.
+
 Slug availability is independently opt-in through `SlugAvailable`. Supply the
 native organization `Service` as `Config.SlugAvailability`, current `Sessions`
 and shared `SafeRate`; the five-method `Service` and `AdminRate` are not needed.
@@ -144,6 +157,7 @@ session, protected risk, membership and atomic commit fences.
 | Create | `POST /v1/organization/create` | JSON `name`, `slug`; required original `Idempotency-Key` |
 | Update | `POST /v1/organization/update` | JSON `organizationID`, exact `organizationVersion`, `name`, `slug`; required original key |
 | Get | `GET /v1/organization/get` | Required query `organizationID` |
+| List my organizations | `GET /v1/organization/list` | Required `limit`1..200 (no default), optional unchanged opaque `cursor`; no target selector |
 | List members | `GET /v1/organization/member/list` | Query `organizationID`, optional exclusive `cursor`, `limit` 1..100 (default100) |
 | Add member | `POST /v1/organization/member/add` | JSON `organizationID`, target `userID`, `role`, `organizationVersion`, `memberVersion`; required original key |
 | Update member role | `POST /v1/organization/member/update` | Same fields as add, with positive exact organization/member versions; required original key |
