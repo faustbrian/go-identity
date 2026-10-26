@@ -40,6 +40,7 @@ type requestInput struct {
 	transferProofID           auth.ProofID
 	sourceVersion             uint64
 	expireReason              identity.PolicyReason
+	lifecycleReason           string
 }
 
 func operationPath(op organization.Operation) (string, string) {
@@ -66,6 +67,10 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/member/leave", http.MethodPost
 	case organization.OwnerTransfer:
 		return "/v1/organization/owner-transfer", http.MethodPost
+	case organization.Archive:
+		return "/v1/organization/archive", http.MethodPost
+	case organization.Restore:
+		return "/v1/organization/restore", http.MethodPost
 	case organization.InvitationSend:
 		return "/v1/organization/invitation-send", http.MethodPost
 	case organization.InvitationAccept:
@@ -98,6 +103,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	}
 	if op == organization.OwnerTransfer {
 		missingOwner = nilService(c.OwnerTransferer) || nilService(c.OwnerTransferProofs) || !canonicalProofText(c.OwnerTransferAudience, 1, 128)
+	}
+	if lifecycleOperation(op) {
+		missingOwner = nilService(c.LifecycleProofs) || !canonicalProofText(c.LifecycleAudience, 1, 128) || op == organization.Archive && nilService(c.Archiver) || op == organization.Restore && nilService(c.Restorer)
 	}
 	if op == organization.InvitationSend {
 		missingOwner = nilService(c.InvitationSender) || nilService(c.Invitations)
@@ -150,7 +158,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			return zero, requestFailure{status: 405, code: "method_not_allowed", allow: method}
 		}
 		requirement := identityhttp.HeaderForbidden
-		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer {
+		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) {
 			requirement = identityhttp.HeaderRequired
 		}
 		key, _, err := decoder.IdempotencyKey(r, requirement)
@@ -275,6 +283,8 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		names = []string{"organizationID", "organizationVersion"}
 	} else if in.op == organization.OwnerTransfer {
 		names = []string{"organizationID", "targetUserID", "organizationVersion", "sourceVersion", "targetVersion", "proofID"}
+	} else if lifecycleOperation(in.op) {
+		names = []string{"organizationID", "organizationVersion", "reason", "proofID"}
 	} else if in.op == organization.InvitationSend {
 		names = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 	} else if in.op == organization.InvitationExpire {
@@ -311,6 +321,10 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		}
 	} else if in.op == organization.OwnerTransfer {
 		if !decode("organizationID", &in.org) || !decode("targetUserID", &in.user) || !decode("organizationVersion", &in.orgVersion) || !decode("sourceVersion", &in.sourceVersion) || !decode("targetVersion", &in.memberVersion) || !decode("proofID", &in.transferProofID) {
+			return identityhttp.ErrInvalidInput
+		}
+	} else if lifecycleOperation(in.op) {
+		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("reason", &in.lifecycleReason) || !decode("proofID", &in.transferProofID) {
 			return identityhttp.ErrInvalidInput
 		}
 	} else if in.op == organization.InvitationSend {
@@ -351,6 +365,11 @@ func (in *requestInput) validate() error {
 		return in.leave().Validate()
 	case organization.OwnerTransfer:
 		if !boundedID(string(in.org)) || !boundedID(string(in.user)) || !canonicalProofText(string(in.transferProofID), 22, 128) || in.orgVersion == 0 || in.orgVersion == ^uint64(0) || in.sourceVersion == 0 || in.sourceVersion == ^uint64(0) || in.memberVersion == 0 || in.memberVersion == ^uint64(0) {
+			return identityhttp.ErrInvalidInput
+		}
+		return nil
+	case organization.Archive, organization.Restore:
+		if !boundedID(string(in.org)) || in.orgVersion == 0 || in.orgVersion == ^uint64(0) || !canonicalProofText(string(in.transferProofID), 22, 128) || !canonicalProofText(in.lifecycleReason, 1, 64) {
 			return identityhttp.ErrInvalidInput
 		}
 		return nil

@@ -1,5 +1,23 @@
 # go-identity/http/organization
 
+Archive and restore are independently opt-in through `Archive` and `Restore`.
+Supply only the matching native `Archiver`/`Restorer`, the original password
+`LifecycleProofs`, its exact `LifecycleAudience`, sessions and shared AdminRate.
+The strict-bearer HTTPS POST routes `/v1/organization/archive` and `/restore`
+require one unchanged `Idempotency-Key` and closed `organizationID`,
+`organizationVersion`, `reason` (1..64 visible ASCII), `proofID` JSON. Obtain
+distinct fresh native password proofs for the respective canonical actions.
+Proof lookup never creates or renews authority; the native owner authenticates
+and atomically consumes it only for new work. Matching-key history may use a
+fresh current session and retained original proof. Preserve unknown receipts;
+never automatically redispatch. Current owners may use native `GetLifecycle`
+to discover an archived version; ordinary reads continue denying archive.
+This is the native local lifecycle profile, not asynchronous external cascade
+completion, external application write disablement or hard deletion. External
+SSO/SCIM/integration links remain unselected. Restore does not revive canceled
+invitations or any other terminal grants. Disabled selections expose no routes
+or metadata, and do not require either lifecycle port or proof configuration.
+
 Optional **bearer-only** HTTP integration for native organization creation,
 explicit organization reads, metadata/role updates, member listing, admission/removal and original-key
 invitation sending/resend, cancellation/rejection and once-only acceptance. Omit its

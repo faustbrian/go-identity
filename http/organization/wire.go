@@ -109,7 +109,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer {
+	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) {
 		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated organization/command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
@@ -132,6 +132,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 			required = []string{"organizationID", "targetUserID", "organizationVersion", "sourceVersion", "targetVersion", "proofID"}
 			fields = map[string]any{"organizationID": id, "targetUserID": id, "organizationVersion": requestVersion(1), "sourceVersion": requestVersion(1), "targetVersion": requestVersion(1), "proofID": map[string]any{"type": "string", "minLength": 22, "maxLength": 128, "pattern": "^[!-~]+$", "writeOnly": true}}
 			description += "Current authenticated owner transfers to an existing active member using an original action-bound password proof. ProofID selects the retained native record, not a submitted proof projection. Native current/fresh first-use and factor policy, atomic one-use proof/role/authority/audit effects and last-owner safety are mandatory. Original-key retries may use a fresh current session and retained original proof without renewing mutation authority; preserve safe original recovery metadata on unknown outcomes. No source actor, command or tenant override, automatic retry or post-transfer read is added. "
+		} else if lifecycleOperation(op) {
+			required = []string{"organizationID", "organizationVersion", "reason", "proofID"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "reason": map[string]any{"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[!-~]+$"}, "proofID": map[string]any{"type": "string", "minLength": 22, "maxLength": 128, "pattern": "^[!-~]+$", "writeOnly": true}}
+			description += "Current owner and native signed password reauthentication for this exact archive or restore action are required for fresh execution. ProofID selects an original retained record, never a submitted proof projection. Original-key retries recover only original history under current authority and may use a fresh session without renewing the proof. Archive atomically denies local organization authority and cancels pending invitations; fresh restore admits surviving local rights without reviving terminal grants. The receipt proves only local command outcome, not asynchronous external cascade completion, application write disablement or hard deletion. External SSO/SCIM/integration links are not selected by this profile. No automatic retry, HTTP recovery route or post-transition active-organization read is added. "
 		} else if op == organization.InvitationSend {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}

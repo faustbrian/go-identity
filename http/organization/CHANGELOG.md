@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add independently selected strict-bearer archive/restore using exact original
+  keys and native signed action proofs. Current owner authority and atomic local
+  lifecycle effects stay native-owned; terminal grants never revive. Receipts
+  retain original/unknown outcomes, not external cascade completion.
+
 - Add independently selected bearer-only invitation expiry with exact versions
   and an original registered reason. Shared administrative admission and native
   manager policy retain atomic proof invalidation and natural-repeat recovery.
