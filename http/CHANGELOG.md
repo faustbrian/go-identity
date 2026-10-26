@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit exact independently selected strict-bearer team member-add/remove
+  policies. Canonical team-write, administrative-rate, keyed-add/natural-remove
+  and cookie-CSRF contracts remain unchanged. Selection does not grant team
+  authority or enable handlers.
+
 - Admit explicitly selected strict-bearer archive/restore policies while
   preserving canonical fresh-owner, keyed and administrative-rate contracts.
   Cookie handlers retain their CSRF protection. Selection grants no lifecycle
