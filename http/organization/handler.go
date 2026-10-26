@@ -149,6 +149,8 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out = resend.StoreResult
 				case organization.InvitationCancel:
 					out, err = c.InvitationCanceller.Cancel(r.Context(), in.cancel(), in.facts.ClientIP().String())
+				case organization.InvitationExpire:
+					out, err = c.InvitationExpirer.Expire(r.Context(), in.expire(), in.facts.ClientIP().String())
 				case organization.InvitationReject:
 					out, err = c.InvitationRejecter.Reject(r.Context(), in.reject(), in.facts.ClientIP().String())
 				case organization.InvitationAccept:
@@ -163,6 +165,14 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
 						status, response.Error = 503, "unavailable"
 						response.State = ""
+					}
+					writeJSON(w, status, response)
+					return
+				}
+				if op == organization.InvitationExpire {
+					status, response := invitationExpireResponse(in, out, err)
+					if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+						status, response.Error, response.State = 503, "unavailable", ""
 					}
 					writeJSON(w, status, response)
 					return

@@ -106,6 +106,14 @@ type InvitationCanceller interface {
 	Cancel(context.Context, organization.InvitationCancelOperationRequest, string) (organization.StoreResult, error)
 }
 
+// InvitationExpirer owns naturally repeatable exact-version manager expiry.
+// Registered reasons, current authority, atomic proof invalidation/effects and
+// actual original-history disclosure remain native-owned. Unknown is never
+// permission to execute again. Calls honor ctx and support concurrency.
+type InvitationExpirer interface {
+	Expire(context.Context, organization.InvitationExpireOperationRequest, string) (organization.StoreResult, error)
+}
+
 // InvitationRejecter owns naturally repeatable exact-version rejection by the
 // current verified intended recipient. Membership, manager authority and an
 // invitation proof are not substitutes. Actual original receipts and final
@@ -139,6 +147,8 @@ type InvitationAccepter interface {
 // SafeRate: its native result owns the original command's delivery observation.
 // Cancellation requires InvitationCanceller and AdminRate only; it never reads
 // a recipient, delivery state or membership projection.
+// Expiry requires InvitationExpirer and AdminRate only; the native owner alone
+// validates registered reasons and original history, without recipient reads.
 // Rejection requires InvitationRejecter and SafeRate, never AdminRate or a
 // manager/read owner. It projects only the native original rejection receipt.
 // Share each rate owner across its selected routes/requests.
@@ -171,6 +181,7 @@ type Config struct {
 	InvitationSender    InvitationSender
 	InvitationResender  InvitationResender
 	InvitationCanceller InvitationCanceller
+	InvitationExpirer   InvitationExpirer
 	InvitationRejecter  InvitationRejecter
 	InvitationAccepter  InvitationAccepter
 	// InvitationProofLimits must match the selected issuer's bounded parsing
@@ -195,6 +206,7 @@ type FeatureConfig struct {
 	InvitationSend, InvitationAccept                  bool
 	InvitationResend                                  bool
 	InvitationCancel                                  bool
+	InvitationExpire                                  bool
 	InvitationReject                                  bool
 	SlugAvailable                                     bool
 	List                                              bool
@@ -211,14 +223,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationList && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave && !c.OwnerTransfer {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationList && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationExpire && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave && !c.OwnerTransfer {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationList, c.InvitationList}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}, {organization.OwnerTransfer, c.OwnerTransfer}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationList, c.InvitationList}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationExpire, c.InvitationExpire}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}, {organization.OwnerTransfer, c.OwnerTransfer}} {
 		if !selected.on {
 			continue
 		}
@@ -249,7 +261,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "organization", Operations: operations})
 }
 func selectedMutation(op organization.Operation) bool {
-	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.LeaveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend || op == organization.InvitationCancel || op == organization.InvitationReject || op == organization.OwnerTransfer
+	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.LeaveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend || op == organization.InvitationCancel || op == organization.InvitationExpire || op == organization.InvitationReject || op == organization.OwnerTransfer
 }
 func nilService(service any) bool {
 	if service == nil {

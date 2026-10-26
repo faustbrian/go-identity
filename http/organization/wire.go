@@ -52,12 +52,15 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		mutationFields["deliveryState"] = map[string]any{"type": "string", "enum": []string{"queued", "attempting", "accepted", "delivered", "rejected", "bounced", "cancelled", "unknown", "retry_wait", "expired", "exhausted", "superseded", "transient_failure"}, "description": "Authorized observation of this original command's delivery, not the latest successor. Queued is local admission, accepted is provider acceptance, neither confirms delivery. Absent on observation failure; unknown never authorizes redispatch."}
 		mutationRequired = []string{"commandID", "organizationID", "invitationID", "beforeVersion", "afterVersion", "recovery", "deliveryState"}
 	}
-	if op == organization.InvitationCancel || op == organization.InvitationReject {
+	if op == organization.InvitationCancel || op == organization.InvitationReject || op == organization.InvitationExpire {
 		delete(mutationFields, "memberID")
 		mutationFields["invitationID"] = id
 		state := "cancelled"
 		if op == organization.InvitationReject {
 			state = "rejected"
+		}
+		if op == organization.InvitationExpire {
+			state = "expired"
 		}
 		mutationFields["state"] = map[string]any{"type": "string", "const": state}
 		mutationRequired = []string{"commandID", "organizationID", "invitationID", "beforeVersion", "afterVersion", "recovery", "state"}
@@ -133,6 +136,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}
 			description += "Exact verified recipient selection, never a submitted email address or claimed actor. The native owner allocates invitation/command IDs and atomically queues encrypted proof delivery. Matching keys recover original metadata only. A successful current read returns invitation and delivery status; if that read fails, the original committed outcome remains explicit without current metadata. No proof or delivery effect ID is exported. "
+		} else if op == organization.InvitationExpire {
+			required = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion", "reason"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "invitationID": id, "invitationVersion": requestVersion(1), "reason": text(1, 64)}
+			description += "Expiry is naturally repeatable for exact original organization/invitation versions and a reason registered by the native owner. Current manager/session/action policy, atomic proof invalidation, audit and outbox remain native. No client key, caller command or recipient proof is accepted. Only actual matching original history proves a previous expiry; terminal state alone is not success. Unknown never authorizes automatic redispatch. The safe terminal state is absent on errors, including late known commitment. "
 		} else if op == organization.InvitationReject {
 			required = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "invitationID": id, "invitationVersion": requestVersion(1)}

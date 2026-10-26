@@ -111,7 +111,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 		return status, out
 	}
 	target := in.user
-	if in.op == organization.Create || in.op == organization.Update || in.op == organization.LeaveMember || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
+	if in.op == organization.Create || in.op == organization.Update || in.op == organization.LeaveMember || in.op == organization.InvitationCancel || in.op == organization.InvitationReject || in.op == organization.InvitationExpire {
 		target = in.actor
 	}
 	if in.op == organization.InvitationResend {
@@ -126,7 +126,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	if in.op == organization.InvitationAccept {
 		validRecord = result.InvitationID == in.invitationID && b.RecordID == string(in.invitationID) && result.OrganizationID == in.org && b.CommandID == in.commandID && b.CorrelationID == in.correlation
 	}
-	if in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
+	if in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject || in.op == organization.InvitationExpire {
 		validRecord = result.InvitationID == in.invitationID && b.RecordID == string(in.invitationID) && result.OrganizationID == in.org
 	}
 	if b.ValidateFor(in.op.Descriptor()) != nil || b.TenantID != in.auth.TenantID || b.ActorKind != authorization.SubjectUser || b.ActorID != identity.ActorID(in.actor) || b.UserID != target || result.MemberID != b.UserID || !validRecord {
@@ -139,8 +139,13 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	if (in.op == organization.LeaveMember || in.op == organization.OwnerTransfer) && r.Outcome == identity.CommitOutcomeCommitted && (r.Feature == nil || r.Feature.BeforeVersion != in.orgVersion || r.Feature.AfterVersion != in.orgVersion+1) {
 		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
 	}
+	// Native expiry receipts advance the invitation epoch, not the organization
+	// epoch. Withhold another intent's binding before exporting correlation.
+	if in.op == organization.InvitationExpire && r.Outcome == identity.CommitOutcomeCommitted && (r.Feature == nil || r.Feature.Operation != in.op.Descriptor() || r.Feature.BeforeVersion != in.invitationVersion || r.Feature.AfterVersion != in.invitationVersion+1) {
+		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
+	}
 	out.CommandID, out.OrganizationID, out.MemberID = b.CommandID, result.OrganizationID, result.MemberID
-	if in.op == organization.InvitationSend || in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
+	if in.op == organization.InvitationSend || in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject || in.op == organization.InvitationExpire {
 		out.MemberID = "" // These invitation transitions do not create membership.
 	}
 	out.Recovery = &CommandScope{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID, PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion, SchemaID: b.SchemaID, SchemaVersion: b.SchemaVersion, CorrelationID: b.CorrelationID}
@@ -158,7 +163,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	if in.op == organization.Create || in.op == organization.InvitationSend {
 		expectedBefore = 0
 	}
-	if in.op == organization.InvitationAccept || in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
+	if in.op == organization.InvitationAccept || in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject || in.op == organization.InvitationExpire {
 		expectedBefore = in.invitationVersion
 	}
 	if r.Outcome == identity.CommitOutcomeCommitted && (r.Feature.BeforeVersion != expectedBefore || r.Feature.AfterVersion != expectedBefore+1) {

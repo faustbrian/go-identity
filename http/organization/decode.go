@@ -39,6 +39,7 @@ type requestInput struct {
 	acceptance                organization.PreparedInvitationAcceptance
 	transferProofID           auth.ProofID
 	sourceVersion             uint64
+	expireReason              identity.PolicyReason
 }
 
 func operationPath(op organization.Operation) (string, string) {
@@ -73,6 +74,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/invitation/resend", http.MethodPost
 	case organization.InvitationCancel:
 		return "/v1/organization/invitation/cancel", http.MethodPost
+	case organization.InvitationExpire:
+		return "/v1/organization/invitation/expire", http.MethodPost
 	case organization.InvitationReject:
 		return "/v1/organization/invitation/reject", http.MethodPost
 	}
@@ -104,6 +107,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	}
 	if op == organization.InvitationCancel {
 		missingOwner = nilService(c.InvitationCanceller)
+	}
+	if op == organization.InvitationExpire {
+		missingOwner = nilService(c.InvitationExpirer)
 	}
 	missingRate := selectedMutation(op) && !c.AdminRate.Configured() || !selectedMutation(op) && !c.SafeRate.Configured()
 	if op == organization.InvitationReject {
@@ -271,6 +277,8 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		names = []string{"organizationID", "targetUserID", "organizationVersion", "sourceVersion", "targetVersion", "proofID"}
 	} else if in.op == organization.InvitationSend {
 		names = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
+	} else if in.op == organization.InvitationExpire {
+		names = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion", "reason"}
 	} else if in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
 		names = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
 	} else {
@@ -307,6 +315,10 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		}
 	} else if in.op == organization.InvitationSend {
 		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("recipientUserID", &in.user) || !decode("recipientIdentifierID", &in.recipientIdentifier) {
+			return identityhttp.ErrInvalidInput
+		}
+	} else if in.op == organization.InvitationExpire {
+		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("invitationID", &in.invitationID) || !decode("invitationVersion", &in.invitationVersion) || !decode("reason", &in.expireReason) {
 			return identityhttp.ErrInvalidInput
 		}
 	} else if in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
@@ -350,6 +362,8 @@ func (in *requestInput) validate() error {
 		return in.resend().Validate()
 	case organization.InvitationCancel:
 		return in.cancel().Validate()
+	case organization.InvitationExpire:
+		return in.expire().Validate()
 	case organization.InvitationReject:
 		return in.reject().Validate()
 	}
@@ -427,6 +441,10 @@ func (in *requestInput) resend() organization.InvitationResendOperationRequest {
 
 func (in *requestInput) cancel() organization.InvitationCancelOperationRequest {
 	return organization.InvitationCancelOperationRequest{Authentication: in.auth, OrganizationID: in.org, OrganizationVersion: in.orgVersion, InvitationID: in.invitationID, InvitationVersion: in.invitationVersion, CorrelationID: in.correlation}
+}
+
+func (in *requestInput) expire() organization.InvitationExpireOperationRequest {
+	return organization.InvitationExpireOperationRequest{Authentication: in.auth, OrganizationID: in.org, OrganizationVersion: in.orgVersion, InvitationID: in.invitationID, InvitationVersion: in.invitationVersion, Reason: in.expireReason, CorrelationID: in.correlation}
 }
 
 func (in *requestInput) reject() organization.InvitationRejectOperationRequest {

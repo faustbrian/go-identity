@@ -128,6 +128,25 @@ The response contains safe original correlation and `state: "cancelled"` only
 for validated successful commitment, never membership or delivery projections.
 Unknown outcomes remain explicit and do not authorize automatic redispatch.
 
+Invitation expiry is independently opt-in through `InvitationExpire`. Supply
+the real native `InvitationService` as `Config.InvitationExpirer`, current
+`Sessions` and shared `AdminRate`; no five-method `Service`, invitation reader
+or `SafeRate` is required. Install the native
+`InvitationExpireOperationMigrationSource` and configure its registered
+`ExpirationReasons` before selection. Strict-bearer HTTPS
+`POST /v1/organization/invitation/expire` accepts exactly `organizationID`,
+`organizationVersion`, `invitationID`, `invitationVersion` and `reason`.
+Versions are positive advanceable exact integers; reason is a non-secret code
+of1..64 bytes accepted by the native policy. No client request key, caller
+command, proof, actor or tenant override is accepted. Current managers expire
+and invalidate proofs atomically with required effects, without recipient or
+organization-read permission. Matching natural repeats recover only actual
+original history; terminal state or absent rows alone never establish success.
+The response carries safe original correlation and `state: "expired"` only on
+error-free validated commitment; late errors retain known commitment without
+that success state. Unknown never authorizes redispatch. Disabled selection
+exposes neither route nor metadata.
+
 Invitation rejection is independently opt-in through `InvitationReject`.
 Supply the actual native `InvitationService` as `Config.InvitationRejecter`,
 current `Sessions` and the shared canonical `SafeRate`; no `Service`,

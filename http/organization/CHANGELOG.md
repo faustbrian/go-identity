@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected bearer-only invitation expiry with exact versions
+  and an original registered reason. Shared administrative admission and native
+  manager policy retain atomic proof invalidation and natural-repeat recovery.
+  No client key, caller command or recipient proof is accepted; malformed native
+  receipts disclose no unrelated correlation. Unknown and late outcomes retain
+  safe commitment without inventing successful terminal state.
+
 - Add independently selected bearer-only ownership transfer with a required
   original request key, exact organization/member versions and an original
   password-action proof ID. Narrow native/proof ports retain atomic proof
