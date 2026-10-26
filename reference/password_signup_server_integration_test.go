@@ -1217,10 +1217,22 @@ END $$`); err != nil {
 	}
 	wantOperations := 8
 	if c.HTTPOrganization != nil {
-		wantOperations += 9
-		for _, op := range []string{"create", "get", "member.list", "member.add", "member.remove", "invitation-send", "invitation.get", "invitation.list-mine", "invitation.accept"} {
-			if !seen["identity.organization."+op] {
-				t.Fatal("selected organization route missing", op)
+		for _, selected := range []struct {
+			op string
+			on bool
+		}{
+			{"create", c.HTTPOrganization.Create}, {"update", c.HTTPOrganization.Update},
+			{"get", c.HTTPOrganization.Get}, {"member.list", c.HTTPOrganization.MemberList},
+			{"member.add", c.HTTPOrganization.MemberAdd}, {"member.update", c.HTTPOrganization.MemberUpdate},
+			{"member.remove", c.HTTPOrganization.MemberRemove}, {"invitation-send", c.HTTPOrganization.InvitationSend},
+			{"invitation.get", c.HTTPOrganization.InvitationGet}, {"invitation.list-mine", c.HTTPOrganization.InvitationListMine},
+			{"invitation.accept", c.HTTPOrganization.InvitationAccept},
+		} {
+			if selected.on {
+				wantOperations++
+			}
+			if seen["identity.organization."+selected.op] != selected.on {
+				t.Fatal("organization route selection mismatch", selected.op)
 			}
 		}
 	}

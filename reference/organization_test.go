@@ -39,4 +39,10 @@ func TestOrganizationSelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	if _, err := handle.Get(ctx, organization.ReadRequest{Authentication: organization.Authentication{TenantID: "tenant"}}); !errors.As(err, &unavailable) {
 		t.Fatal("retained closed handle reached native owner", err)
 	}
+	if _, err := handle.Update(ctx, organization.UpdateOperationRequest{Authentication: organization.Authentication{TenantID: "tenant"}}, "127.0.0.1"); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed metadata handle reached native owner", err)
+	}
+	if _, err := handle.UpdateMember(ctx, organization.UpdateMemberOperationRequest{Authentication: organization.Authentication{TenantID: "tenant"}}, "127.0.0.1"); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed member-update handle reached native owner", err)
+	}
 }

@@ -1,7 +1,7 @@
 # Organization composition
 
 This selected backend profile connects real registration, verification and
-password signin to organization creation, scoped reads, member admission and
+password signin to organization creation, metadata/role updates, scoped reads, member admission and
 removal, encrypted invitation delivery and once-only recipient acceptance.
 It does not implement an administrative UI or claim full organization lifecycle,
 teams, dynamic roles, domain ownership, archive/restore or other login profiles.
@@ -37,7 +37,7 @@ missing workers prevent feature composition. Templates and senders remain the
 existing explicit bounded external seams.
 
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
-`Create`, `Get`, `MemberList`, `MemberAdd`, `MemberRemove`, `InvitationGet`,
+`Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
 `InvitationListMine`, `InvitationSend` and `InvitationAccept`. Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
 safe/admin/secret namespaces and keys. The degradation and administrative-denial
@@ -63,14 +63,20 @@ into this history without an explicit supported migration plan.
 ## Consumer operations and recovery
 
 After initialization, `FeatureSet.Organizations()` exposes native create,
-add/remove member, scoped get/list and original operation recovery.
+metadata replacement, add/update/remove member, scoped get/list and original operation recovery.
 `OrganizationInvitations()` exposes send, owner-only get, authenticated-recipient
 discovery, retained acceptance preparation and explicit original recovery.
 Handles share graph initialization, tenant and shutdown guards; they do not own
 another lifetime or authority system.
 
-HTTP send requires `Idempotency-Key`; retry the exact original request/key.
-Deliver the resulting encrypted intent through the selected worker. Only the
+HTTP create, metadata update, member admission/role update and invitation send
+require `Idempotency-Key`; retry the exact original request/key. Metadata updates
+carry the exact organization version, name and slug. Member-role updates carry
+both exact organization and member versions; administrator/owner transitions
+and last-owner safety remain native decisions. Retry recovery never grants a
+removed administrator continuing access or turns changed intent into a new write.
+
+For invitation sending, deliver the encrypted intent through the selected worker. Only the
 intended current verified recipient can accept its purpose-bound proof. Preserve
 the returned safe original binding for native `RecoverAccept` after an ambiguous
 outcome or process reconstruction. Reposting a consumed proof is not recovery;

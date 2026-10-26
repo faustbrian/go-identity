@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Adopt the HIBP checker's original-expiry fence across shared publication and
+  returning waiters, including overlapping clock observations. Existing provider
+  policy and password-screening failure handling remain unchanged.
+
+- Independently select organization metadata and static member-role updates
+  through the native original-key owner and shared administrative HTTP rates.
+  Preserve exact versions, current role authority, last-owner safety and
+  metadata-only retries; existing organization migration histories are unchanged.
+
 - Compose opt-in native organization membership and intended-recipient
   invitations over verified-password bearer sessions, with independently
   selected HTTP operations, encrypted delivery, once-only acceptance and

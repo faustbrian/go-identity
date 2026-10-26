@@ -102,6 +102,34 @@ func (f *OrganizationService) Create(ctx context.Context, r organization.CreateO
 	return n.operations.Create(w, r, network)
 }
 
+// Update replaces exact-version metadata under native current administrator
+// authority, preserving original-key recovery and graph lifetime guards.
+func (f *OrganizationService) Update(ctx context.Context, r organization.UpdateOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.Update(w, r, network)
+}
+
+// UpdateMember delegates exact-version static-role replacement and native
+// last-owner protection without renewing original command or authority custody.
+func (f *OrganizationService) UpdateMember(ctx context.Context, r organization.UpdateMemberOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.UpdateMember(w, r, network)
+}
+
 // AddMember preserves exact target/version intent and original-key recovery.
 func (f *OrganizationService) AddMember(ctx context.Context, r organization.AddMemberOperationRequest, network string) (organization.StoreResult, error) {
 	if f == nil {

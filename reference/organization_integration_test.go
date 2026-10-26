@@ -52,7 +52,7 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		switch c.Request.Action {
-		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
+		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.update", "identity.organization.update.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.update", "identity.organization.member.update.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -92,7 +92,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 	issuer.Audience, issuer.Crypto.Clock, preparation.Clock = "organization-invitation", nil, nil
 	issuer.Crypto.Limits.MaxLifetime = 15 * time.Minute
 	c.Organization.Invitations = &reference.OrganizationInvitationConfiguration{Policy: organization.InvitationConfig{Audience: issuer.Audience, Lifetime: 15 * time.Minute, MaximumPending: 100}, Issuer: issuer, Preparation: preparation, ConfigurationID: "reference-organization-invitation-v1", SelectInvitationID: selectID, TemplateID: "organization-invitation", TemplateVersion: 1, PolicyVersion: 2, ProviderVersion: 2, LocaleChain: []string{"en"}, Endpoint: origin + "/invitation", ScopeKey: [32]byte{144}}
-	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Get: true, MemberList: true, MemberAdd: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
+	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
 		// This success-path fixture does not expect a rate denial. Failing the
 		// callback cannot permit a denied request or fake successful auditing.
 		t.Error("unexpected organization administrative denial")
@@ -172,9 +172,31 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		}
 		return out
 	}
-	read(owner, first.OrganizationID, 200)
+	mutate := func(h organizationTestHuman, path string, body any, key string, want int) organizationhttp.MutationResponse {
+		t.Helper()
+		code, wire := call(h, http.MethodPost, path, body, key)
+		var out organizationhttp.MutationResponse
+		if code != want || json.Unmarshal(wire, &out) != nil || want == 200 && (!out.Committed || out.Recovery == nil) {
+			t.Fatal("Reference organization update", path, code, want)
+		}
+		return out
+	}
+	metadata := map[string]any{"organizationID": first.OrganizationID, "organizationVersion": uint64(1), "name": "Updated reference", "slug": "updated-reference"}
+	updated := mutate(owner, "/v1/organization/update", metadata, "reference-original-metadata-update", 200)
+	retried := mutate(owner, "/v1/organization/update", metadata, "reference-original-metadata-update", 200)
+	if updated.CommandID != retried.CommandID || updated.BeforeVersion != 1 || updated.AfterVersion != 2 {
+		t.Fatal("Reference metadata retry replaced original command or version")
+	}
+	metadata["name"] = "Changed original intent"
+	mutate(owner, "/v1/organization/update", metadata, "reference-original-metadata-update", 409)
+	metadata["name"], metadata["organizationVersion"] = "Updated reference", uint64(2)
+	mutate(recipient, "/v1/organization/update", metadata, "reference-foreign-metadata-update", 403)
+	currentOrganization := read(owner, first.OrganizationID, 200)
+	if currentOrganization.Organization.Name != "Updated reference" || currentOrganization.Organization.Slug != "updated-reference" || currentOrganization.Organization.Version != 2 {
+		t.Fatal("Reference metadata update was not current or repeated its effect")
+	}
 	read(recipient, first.OrganizationID, 403)
-	add := map[string]any{"organizationID": first.OrganizationID, "userID": recipient.user, "role": "member", "organizationVersion": uint64(1), "memberVersion": uint64(0)}
+	add := map[string]any{"organizationID": first.OrganizationID, "userID": recipient.user, "role": "member", "organizationVersion": currentOrganization.Organization.Version, "memberVersion": uint64(0)}
 	code, wire := call(owner, http.MethodPost, "/v1/organization/member/add", add, "reference-member-original-add")
 	var added organizationhttp.MutationResponse
 	if code != 200 || json.Unmarshal(wire, &added) != nil || !added.Committed {
@@ -193,6 +215,31 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if seenMembers[owner.user] != organization.RoleOwner || seenMembers[recipient.user] != organization.RoleMember {
 		t.Fatal("Reference membership page lost actual owner/member")
 	}
+	role := map[string]any{"organizationID": first.OrganizationID, "userID": recipient.user, "role": "administrator", "organizationVersion": member.Organization.Version, "memberVersion": member.Membership.Version}
+	promoted := mutate(owner, "/v1/organization/member/update", role, "reference-original-role-update", 200)
+	repeatedRole := mutate(owner, "/v1/organization/member/update", role, "reference-original-role-update", 200)
+	if repeatedRole.CommandID != promoted.CommandID || promoted.BeforeVersion != 3 || promoted.AfterVersion != 4 {
+		t.Fatal("Reference role retry replaced original command or version")
+	}
+	role["role"] = "member"
+	mutate(owner, "/v1/organization/member/update", role, "reference-original-role-update", 409)
+	member = read(recipient, first.OrganizationID, 200)
+	if member.Membership.Role != organization.RoleAdministrator || member.Membership.Version != 2 {
+		t.Fatal("Reference role update did not advance current membership")
+	}
+	metadata["organizationVersion"], metadata["name"] = member.Organization.Version, "Administrator update"
+	mutate(recipient, "/v1/organization/update", metadata, "reference-administrator-metadata-update", 200)
+	member = read(recipient, first.OrganizationID, 200)
+	role["organizationVersion"], role["memberVersion"] = member.Organization.Version, member.Membership.Version
+	mutate(owner, "/v1/organization/member/update", role, "reference-original-role-demotion", 200)
+	member = read(recipient, first.OrganizationID, 200)
+	if member.Membership.Role != organization.RoleMember || member.Membership.Version != 3 {
+		t.Fatal("Reference role demotion retained old member authority")
+	}
+	metadata["organizationVersion"] = member.Organization.Version
+	mutate(recipient, "/v1/organization/update", metadata, "reference-withdrawn-administrator", 403)
+	lastOwner := map[string]any{"organizationID": first.OrganizationID, "userID": owner.user, "role": "member", "organizationVersion": member.Organization.Version, "memberVersion": uint64(1)}
+	mutate(owner, "/v1/organization/member/update", lastOwner, "reference-last-owner-role-denial", 409)
 	remove := map[string]any{"organizationID": first.OrganizationID, "userID": recipient.user, "organizationVersion": member.Organization.Version, "memberVersion": member.Membership.Version}
 	code, wire = call(owner, http.MethodPost, "/v1/organization/member/remove", remove, "")
 	var removed organizationhttp.MutationResponse
