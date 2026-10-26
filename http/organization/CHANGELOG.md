@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected bearer team create/update/delete and manager-only
+  team pagination through narrow native ports. Original keys, exact epochs and
+  natural terminal history remain native-owned; no caller command, revived team
+  identity or fabricated membership is exposed. Shared rates and current sessions
+  apply; unknown/late receipts retain safe outcome and failed pages disclose no
+  partial data. Exact team reads remain native-only.
+
 - Add independently selected bearer team admission, exact-binding removal,
   current-user teams and team-member pagination through narrow native ports.
   Exact intent, current authorization and atomic effects remain native-owned;

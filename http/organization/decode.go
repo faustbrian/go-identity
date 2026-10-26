@@ -76,6 +76,14 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/restore", http.MethodPost
 	case organization.AddTeamMember:
 		return "/v1/organization/team/member-add", http.MethodPost
+	case organization.CreateTeam:
+		return "/v1/organization/team/create", http.MethodPost
+	case organization.UpdateTeam:
+		return "/v1/organization/team/update", http.MethodPost
+	case organization.DeleteTeam:
+		return "/v1/organization/team/delete", http.MethodPost
+	case organization.ListTeams:
+		return "/v1/organization/team/list", http.MethodGet
 	case organization.RemoveTeamMember:
 		return "/v1/organization/team/member-remove", http.MethodPost
 	case organization.ListMyTeams:
@@ -101,6 +109,14 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	path, method := operationPath(op)
 	missingOwner := nilService(c.Service)
 	switch op {
+	case organization.CreateTeam:
+		missingOwner = nilService(c.TeamCreator)
+	case organization.UpdateTeam:
+		missingOwner = nilService(c.TeamUpdater)
+	case organization.DeleteTeam:
+		missingOwner = nilService(c.TeamDeleter)
+	case organization.ListTeams:
+		missingOwner = nilService(c.TeamLister)
 	case organization.AddTeamMember:
 		missingOwner = nilService(c.TeamMemberAdder)
 	case organization.RemoveTeamMember:
@@ -179,7 +195,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			return zero, requestFailure{status: 405, code: "method_not_allowed", allow: method}
 		}
 		requirement := identityhttp.HeaderForbidden
-		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember {
+		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember || teamCRUDKeyed(op) {
 			requirement = identityhttp.HeaderRequired
 		}
 		key, _, err := decoder.IdempotencyKey(r, requirement)
@@ -227,7 +243,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			if err != nil {
 				return zero, identityhttp.ErrInvalidInput
 			}
-			if teamMembershipRead(op) {
+			if teamPageRead(op) {
 				if err := decodeTeamQuery(input, query); err != nil {
 					return zero, err
 				}
@@ -300,7 +316,15 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 }
 func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 	var names []string
-	if teamMembershipMutation(in.op) {
+	if teamCRUDMutation(in.op) {
+		names = []string{"organizationID", "teamID", "organizationVersion"}
+		if in.op != organization.CreateTeam {
+			names = append(names, "teamVersion")
+		}
+		if in.op != organization.DeleteTeam {
+			names = append(names, "name")
+		}
+	} else if teamMembershipMutation(in.op) {
 		names = []string{"organizationID", "teamID", "userID", "organizationVersion", "teamVersion", "organizationMemberVersion", "membershipVersion"}
 	} else if in.op == organization.Create {
 		names = []string{"name", "slug"}
@@ -334,7 +358,11 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		}
 	}
 	decode := func(name string, target any) bool { return json.Unmarshal(body[name], target) == nil }
-	if teamMembershipMutation(in.op) {
+	if teamCRUDMutation(in.op) {
+		if !decode("organizationID", &in.org) || !decode("teamID", &in.team) || !decode("organizationVersion", &in.orgVersion) || in.op != organization.CreateTeam && !decode("teamVersion", &in.teamVersion) || in.op != organization.DeleteTeam && !decode("name", &in.name) {
+			return identityhttp.ErrInvalidInput
+		}
+	} else if teamMembershipMutation(in.op) {
 		if !decode("organizationID", &in.org) || !decode("teamID", &in.team) || !decode("userID", &in.user) || !decode("organizationVersion", &in.orgVersion) || !decode("teamVersion", &in.teamVersion) || !decode("organizationMemberVersion", &in.orgMemberVersion) || !decode("membershipVersion", &in.memberVersion) {
 			return identityhttp.ErrInvalidInput
 		}
@@ -382,6 +410,12 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 }
 func (in *requestInput) validate() error {
 	switch in.op {
+	case organization.CreateTeam:
+		return in.createTeam().Validate()
+	case organization.UpdateTeam:
+		return in.updateTeam().Validate()
+	case organization.DeleteTeam:
+		return in.deleteTeam().Validate()
 	case organization.AddTeamMember:
 		return in.teamAdd().Validate()
 	case organization.RemoveTeamMember:

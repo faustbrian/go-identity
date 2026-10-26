@@ -111,7 +111,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 		return status, out
 	}
 	target := in.user
-	if in.op == organization.Create || in.op == organization.Update || in.op == organization.LeaveMember || in.op == organization.InvitationCancel || in.op == organization.InvitationReject || in.op == organization.InvitationExpire || lifecycleOperation(in.op) {
+	if in.op == organization.Create || in.op == organization.Update || in.op == organization.LeaveMember || in.op == organization.InvitationCancel || in.op == organization.InvitationReject || in.op == organization.InvitationExpire || lifecycleOperation(in.op) || teamCRUDMutation(in.op) {
 		target = in.actor
 	}
 	if in.op == organization.InvitationResend {
@@ -136,7 +136,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	// for another epoch cannot establish this request's original correlation;
 	// reject it before exporting metadata. Genuine unknown receipts have no
 	// committed versions and retain their validated binding for reconciliation.
-	if (in.op == organization.LeaveMember || in.op == organization.OwnerTransfer || lifecycleOperation(in.op) || teamMembershipMutation(in.op)) && r.Outcome == identity.CommitOutcomeCommitted && (r.Feature == nil || r.Feature.BeforeVersion != in.orgVersion || r.Feature.AfterVersion != in.orgVersion+1) {
+	if (in.op == organization.LeaveMember || in.op == organization.OwnerTransfer || lifecycleOperation(in.op) || teamMembershipMutation(in.op) || teamCRUDMutation(in.op)) && r.Outcome == identity.CommitOutcomeCommitted && (r.Feature == nil || r.Feature.BeforeVersion != in.orgVersion || r.Feature.AfterVersion != in.orgVersion+1) {
 		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
 	}
 	// Native expiry receipts advance the invitation epoch, not the organization
@@ -145,6 +145,9 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
 	}
 	out.CommandID, out.OrganizationID, out.MemberID = b.CommandID, result.OrganizationID, result.MemberID
+	if teamCRUDMutation(in.op) {
+		out.MemberID = "" // Team CRUD does not create or replace organization membership.
+	}
 	if in.op == organization.InvitationSend || in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject || in.op == organization.InvitationExpire {
 		out.MemberID = "" // These invitation transitions do not create membership.
 	}

@@ -136,6 +136,12 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out, err = c.Service.AddMember(r.Context(), in.add(), in.facts.ClientIP().String())
 				case organization.AddTeamMember:
 					out, err = c.TeamMemberAdder.AddTeamMember(r.Context(), in.teamAdd(), in.facts.ClientIP().String())
+				case organization.CreateTeam:
+					out, err = c.TeamCreator.CreateTeam(r.Context(), in.createTeam(), in.facts.ClientIP().String())
+				case organization.UpdateTeam:
+					out, err = c.TeamUpdater.UpdateTeam(r.Context(), in.updateTeam(), in.facts.ClientIP().String())
+				case organization.DeleteTeam:
+					out, err = c.TeamDeleter.DeleteTeam(r.Context(), in.deleteTeam(), in.facts.ClientIP().String())
 				case organization.RemoveTeamMember:
 					out, err = c.TeamMemberRemover.RemoveTeamMember(r.Context(), in.teamRemove(), in.facts.ClientIP().String())
 				case organization.UpdateMember:
@@ -256,11 +262,13 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				writeJSON(w, 200, SlugAvailableResponse{Available: out.Available})
 				return
 			}
-			if teamMembershipRead(op) {
+			if teamPageRead(op) {
 				var view organization.View
 				var err error
 				if op == organization.ListMyTeams {
 					view, err = c.MyTeamLister.ListMyTeams(r.Context(), in.teamRead())
+				} else if op == organization.ListTeams {
+					view, err = c.TeamLister.ListTeams(r.Context(), in.teamRead())
 				} else {
 					view, err = c.TeamMemberLister.ListTeamMembers(r.Context(), in.teamRead())
 				}
@@ -273,8 +281,8 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					reject(w, r, identityhttp.ErrUnavailable)
 					return
 				}
-				if op == organization.ListMyTeams {
-					page, err := myTeamsResponse(in, view)
+				if op == organization.ListMyTeams || op == organization.ListTeams {
+					page, err := teamListResponse(in, view)
 					if err != nil {
 						reject(w, r, err)
 						return

@@ -46,7 +46,7 @@ type TeamView struct {
 	Version uint64          `json:"version"`
 }
 
-// TeamListResponse is a current subject's bounded team page. The organization
+// TeamListResponse is an authorized bounded team page. The organization
 // epoch is observed native state, not a lease. Cursor is an exclusive locator.
 type TeamListResponse struct {
 	OrganizationVersion uint64     `json:"organizationVersion"`
@@ -74,8 +74,8 @@ type TeamMemberListResponse struct {
 func teamMembershipMutation(op organization.Operation) bool {
 	return op == organization.AddTeamMember || op == organization.RemoveTeamMember
 }
-func teamMembershipRead(op organization.Operation) bool {
-	return op == organization.ListMyTeams || op == organization.ListTeamMembers
+func teamPageRead(op organization.Operation) bool {
+	return op == organization.ListMyTeams || op == organization.ListTeamMembers || op == organization.ListTeams
 }
 func (in *requestInput) teamAdd() organization.AddTeamMemberOperationRequest {
 	return organization.AddTeamMemberOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, OrganizationID: in.org, TeamID: in.team, UserID: in.user, OrganizationVersion: in.orgVersion, TeamVersion: in.teamVersion, OrganizationMemberVersion: in.orgMemberVersion, MembershipVersion: in.memberVersion, CorrelationID: in.correlation}
@@ -131,9 +131,11 @@ func validTeamMetadata(in *requestInput, team organization.Team) bool {
 	}
 	return true
 }
-func myTeamsResponse(in *requestInput, v organization.View) (TeamListResponse, error) {
+func teamListResponse(in *requestInput, v organization.View) (TeamListResponse, error) {
 	var zero TeamListResponse
-	if !validTeamReadView(in, v) || len(v.Teams) > int(in.limit) {
+	// Native ListTeams returns only current static managers; list-mine may
+	// return ordinary members. An incoherent snapshot is not a partial page.
+	if !validTeamReadView(in, v) || len(v.Teams) > int(in.limit) || in.op == organization.ListTeams && v.Actor.Role != organization.RoleOwner && v.Actor.Role != organization.RoleAdministrator {
 		return zero, identityhttp.ErrUnavailable
 	}
 	out := TeamListResponse{OrganizationVersion: v.Organization.Version, Teams: make([]TeamView, len(v.Teams)), NextCursor: v.NextTeamCursor}

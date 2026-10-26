@@ -1,5 +1,34 @@
 # go-identity/http/organization
 
+Team creation/lifecycle is independently opt-in through `TeamCreate`,
+`TeamUpdate`, `TeamDelete` and `TeamList`, using only its matching native
+`TeamCreator`, `TeamUpdater`, `TeamDeleter` or `TeamLister` port, current
+sessions and shared administrative (writes) or safe (list) admission. The
+existing five-method `Service` remains unchanged. All routes are strict-bearer,
+tenant-bound HTTPS; cookies never supply fallback authority.
+
+`POST /v1/organization/team/create` requires the unchanged `Idempotency-Key`
+and exactly `organizationID`, caller-chosen canonical `teamID`,
+`organizationVersion` and bounded `name`. `/v1/organization/team/update`
+additionally requires exact positive `teamVersion` and uses the original key.
+`/v1/organization/team/delete` accepts exactly the two IDs and their positive
+advanceable organization/team versions: no key, replacement name or command.
+Native current manager/action/query authority and atomic effects remain the
+owners. Rename preserves bindings; deletion terminally retires the team ID and
+denies retained bindings without per-member fan-out. The native lifecycle
+profile/migration and optional natural-delete lookup must be installed first.
+
+Receipts report original organization policy epochs, not team/member versions
+or current authorization, and do not fabricate a member projection. A matching
+key/delete selector recovers only actual original history. Absence does not
+prove deletion; unknown never authorizes redispatch. Preserve the safe original
+binding and key/intent for current-authorized native recovery. To discover
+current team versions, `GET /v1/organization/team/list` requires exactly
+`organizationID`, canonical decimal `limit` 1..100 and optional nonempty exclusive
+ID `cursor`. Actual native manager/team-read policy owns its safe bounded page;
+errors withhold the entire page. Exact `GetTeam` remains native-only, with no
+invented HTTP route. Disabled flags expose neither routes nor metadata.
+
 Team membership is independently opt-in through `TeamMemberAdd`,
 `TeamMemberRemove`, `TeamListMine` and `TeamMemberList`. Supply only the
 corresponding native `TeamMemberAdder`, `TeamMemberRemover`, `MyTeamLister` or
@@ -26,8 +55,9 @@ required canonical decimal `limit` 1..100 and optional nonempty exclusive ID
 No caller-selected actor/tenant, body or key is accepted. Responses contain
 safe current teams or exact active binding metadata, observed versions and
 optional continuation, never authorization grants. Failure withholds the whole
-page. Disabled selections expose neither routes nor metadata. This profile
-does not expose HTTP team creation, rename, deletion or dynamic-role APIs.
+page. Disabled selections expose neither routes nor metadata. Membership flags
+do not implicitly enable the separately selected team CRUD routes; dynamic-role
+and active-team APIs remain unselected.
 
 Archive and restore are independently opt-in through `Archive` and `Restore`.
 Supply only the matching native `Archiver`/`Restorer`, the original password

@@ -35,6 +35,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	scope := object([]string{"commandID", "tenantID", "userID", "actorID", "actorKind", "operationID", "recordID", "policyID", "policyVersion", "schemaID", "schemaVersion", "correlationID"}, map[string]any{"commandID": command, "tenantID": id, "userID": id, "actorID": id, "actorKind": map[string]any{"const": "user"}, "operationID": map[string]any{"const": string(op)}, "recordID": id, "policyID": id, "policyVersion": version(1), "schemaID": id, "schemaVersion": version(1), "correlationID": id})
 	mutationFields := map[string]any{"committed": map[string]any{"type": "boolean"}, "commitOutcome": map[string]any{"enum": []string{"none", "committed", "not_committed", "unknown", "conflict", "in_progress"}, "type": "string"}, "commandID": command, "organizationID": id, "memberID": id, "beforeVersion": version(0), "afterVersion": version(1), "recovery": scope, "error": errorCode}
 	mutationRequired := []string{"commandID", "organizationID", "memberID", "afterVersion", "recovery"}
+	if teamCRUDMutation(op) {
+		delete(mutationFields, "memberID")
+		mutationRequired = []string{"commandID", "organizationID", "beforeVersion", "afterVersion", "recovery"}
+	}
 	if op == organization.InvitationSend {
 		delete(mutationFields, "memberID")
 		mutationFields["invitationID"] = id
@@ -75,7 +79,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	if op == organization.ListOrganizations {
 		success = object([]string{"organizations"}, map[string]any{"organizations": map[string]any{"type": "array", "maxItems": 200, "items": org}, "nextCursor": map[string]any{"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$"}})
 	}
-	if op == organization.ListMyTeams {
+	if op == organization.ListMyTeams || op == organization.ListTeams {
 		team := object([]string{"id", "name", "version"}, map[string]any{"id": id, "name": text(1, 256), "version": version(1)})
 		success = object([]string{"organizationVersion", "teams"}, map[string]any{"organizationVersion": version(1), "teams": map[string]any{"type": "array", "maxItems": 100, "items": team}, "nextCursor": id})
 	}
@@ -103,7 +107,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		responses[status] = map[string]any{"description": "Bounded no-store JSON. Original command outcome and safe recovery correlation grant no authority; no credentials or redirects are issued.", "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
 	}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"description": "Bounded ceiling seconds for a known audited rate rejection; no automatic retry.", "schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}}}
-	description := "Explicit bearer-only organization profile. Exactly one Authorization Bearer credential; cookies never supply fallback authority. Exact HTTPS host-mapped tenant and trusted full client IP; closed bounded JSON/query and no identity, tenant, actor or command override. Current native authorization/protected effects remain with the organization owner. No invitation acceptance, teams, browser workflow or active organization selection. "
+	description := "Explicit bearer-only organization profile. Exactly one Authorization Bearer credential; cookies never supply fallback authority. Exact HTTPS host-mapped tenant and trusted full client IP; closed bounded JSON/query and no identity, tenant, actor or command override. Current native authorization/protected effects remain with the organization owner. Features are independently selected; no browser workflow or active organization/team selection. "
 	if op == organization.InvitationAccept {
 		description = "Explicit bearer-only one-time invitation acceptance. Exactly one Authorization Bearer session and HTTPS mapped tenant are mandatory; ambient cookies provide no authority. Current native recipient/session/verified identifier, exact invitation/organization versions and signed original capability are required. Canonical rate.secret charges trusted IP10/10m, authenticated subject10/10m and original challenge5/signed lifetime before the same native preparation executes. Membership, one-use proof, scoped authority, audit and lifecycle effects commit atomically. Preserve the caller-known original command ID. Re-posting a consumed proof is not original-outcome recovery; use the safe returned binding and organization through the direct current-authorized native recovery API. A bare command ID is insufficient after complete response loss. No automatic retry, recovery route, refreshed validity, credential or delivery is provided. "
 	} else if selectedMutation(op) && op != organization.InvitationReject && op != organization.LeaveMember {
@@ -117,8 +121,8 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember {
-		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated organization/command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
+	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember || teamCRUDKeyed(op) {
+		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
 		description += "Idempotency-Key and all alternate request-key channels are forbidden. "
@@ -126,7 +130,19 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	if selectedMutation(op) {
 		var fields map[string]any
 		var required []string
-		if teamMembershipMutation(op) {
+		if teamCRUDMutation(op) {
+			required = []string{"organizationID", "teamID", "organizationVersion"}
+			fields = map[string]any{"organizationID": id, "teamID": id, "organizationVersion": requestVersion(1)}
+			if op != organization.CreateTeam {
+				required = append(required, "teamVersion")
+				fields["teamVersion"] = requestVersion(1)
+			}
+			if op != organization.DeleteTeam {
+				required = append(required, "name")
+				fields["name"] = text(1, 256)
+			}
+			description += "Team creation and bounded-name replacement preserve the caller's original key and exact native IDs/epochs. Terminal deletion is naturally repeatable only from original correlated effects and receipts, never inferred from an absent team. Current native manager/team-write/query authority and atomic effects remain mandatory. Rename preserves membership; deletion retires the team ID and denies retained bindings without per-member fan-out. Receipt versions are organization policy epochs, not team/binding versions; no member projection or post-mutation read is invented. Unknown never permits redispatch. "
+		} else if teamMembershipMutation(op) {
 			minimum := uint64(0)
 			if op == organization.RemoveTeamMember {
 				minimum = 1
@@ -191,12 +207,12 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		if op == organization.RemoveMember {
 			description += "Removal is naturally repeatable at exact organization/member versions, not keyed. Only an actual matching original durable effect and current-authorized native receipt prove a prior removal; absence or a tombstone alone is never success. Last-owner denial is distinct. "
 		}
-	} else if teamMembershipRead(op) {
+	} else if teamPageRead(op) {
 		parameters = append(parameters, map[string]any{"name": "organizationID", "in": "query", "required": true, "schema": id}, map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}, "description": "Required canonical unsigned decimal; no default, leading zeros, sign or exponent."}, map[string]any{"name": "cursor", "in": "query", "required": false, "schema": id})
 		if op == organization.ListTeamMembers {
 			parameters = append(parameters, map[string]any{"name": "teamID", "in": "query", "required": true, "schema": id})
 		}
-		description += "Current native team/member policy and exact active organization admission govern every page. List-mine derives the user only from the verified session; member-list requires the selected exact team. Bytewise ID cursor is an exclusive locator, never authority or a snapshot. No user override, partial page on authority failure, session refresh or positive grant cache. "
+		description += "Current native team/member policy and exact active organization admission govern every page. List requires current manager/team-read authority; list-mine derives the user only from the verified session; member-list requires the selected exact team. Bytewise ID cursor is an exclusive locator, never authority or a snapshot. No user override, partial page on authority failure, session refresh or positive grant cache. "
 	} else if op == organization.ListOrganizations {
 		parameters = append(parameters,
 			map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 200}, "description": "Required canonical unsigned decimal; no default, leading zeros, sign or exponent."},
