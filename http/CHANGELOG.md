@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit explicitly selected strict-bearer archive/restore policies while
+  preserving canonical fresh-owner, keyed and administrative-rate contracts.
+  Cookie handlers retain their CSRF protection. Selection grants no lifecycle
+  authority; the feature must retain actual native action-proof admission.
+
 - Admit the exact independently selected bearer-only invitation-expiry policy.
   Cookie handlers retain their canonical CSRF protection; unrelated operations
   and mixed bearer/cookie policies remain rejected. Construction grants neither
