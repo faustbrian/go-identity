@@ -3,9 +3,81 @@
 This selected backend profile connects real registration, verification and
 password signin to organization creation, metadata/role updates, scoped reads, member admission and
 removal, encrypted invitation delivery/resend, cancellation/rejection/expiry and once-only acceptance.
-Optional local archive/restore and team membership/lifecycle are described below.
+Optional local archive/restore, teams and custom roles are described below.
 This is not an administrative UI or full organization/external lifecycle,
-dynamic roles, domain ownership or another login profile.
+domain ownership or another login profile.
+
+## Custom roles and effective permissions
+
+Select a bounded immutable `Organization.Core.DynamicRoles` catalog explicitly:
+
+```go
+organization.DynamicRoleConfig{
+    Version: 1, MaximumRoles: 10,
+    Catalog: []organization.Permission{
+        {ID: "document-read", Action: "document.read", ResourceType: "document"},
+    },
+}
+```
+
+Zero disables this profile. Native services copy the catalog; changing its
+semantics requires the deployment policy/configuration epoch, not a mutable
+permission registry. Wildcards, conditions and custom organization-management
+permissions are not supported. Static owner/admin roles grant management, not
+implicit application access. `OrganizationService` exposes guarded
+`CreateDynamicRole`, `GetDynamicRole`, `ListDynamicRoles`, `UpdateDynamicRole`,
+`DeleteDynamicRole` and `CheckPermission`. Reads/checks require a nonempty
+`CorrelationID`; checks apply to the authenticated member at an exact current
+organization epoch. A snapshot or allow is never a reusable authority lease.
+
+Apply the operator plan with `organization/postgres` before enabling writers.
+It appends separate `identity_organization_roles` history: unchanged native
+`DynamicRoleMigrationSource` at1 and nullable original-delete correlation at2.
+The latter's transactional index requires a bounded maintenance window and
+operator lock/transaction budgets. No existing organization/team/invitation
+history is rewritten, and legacy effects are not backfilled. Retain native
+storage selection when disabling HTTP so original history stays owned.
+
+For team inheritance, additionally select `DynamicRoles.TeamBindingsVersion: 1`
+and `Teams.LifecycleVersion: 1` with complete bounded team configuration. The
+unchanged native team-role migration appends role history3 after terminal team
+identities. Direct and team assignments remain existing native organization
+APIs, not HTTP endpoints in this selected CRUD profile. Revoking membership or
+deleting a role/team invalidates derived permission; retained bindings never
+revive terminal identities. Explicit deny overrides allow.
+
+Independently opt into `HTTPOrganization.RoleCreate`, `RoleGet`, `RoleList`,
+`RoleUpdate` and `RoleDelete`. Strict tenant-mapped bearer HTTPS is required.
+Create/update share administrative rates and require an unchanged
+`Idempotency-Key`; natural delete forbids keys. Their closed JSON includes
+`organizationID`, `roleID`, positive advanceable `organizationVersion`, plus
+`roleVersion` for update/delete. Create/update also require `name` (1..256 UTF-8
+bytes) and ordered `statements`, each exactly `permissionID`, `resourceID` and
+`effect` (`allow`/`deny`). Empty arrays grant nothing; limits are64 statements
+and8192 native encoded bytes. Configure transport field/byte bounds for the
+desired bounded profile. Native catalog membership remains mandatory.
+
+Routes are `/v1/organization/role/create`, `/update`, `/delete`, `/get` and
+`/list`, with the same prefix. Get accepts exactly `organizationID`/`roleID`;
+list accepts `organizationID`, canonical decimal `limit`1..100 and optional
+exclusive nonempty ID `cursor`. Reads share safe rates, require current manager
+authority and withhold an entire failed result. Disabled flags expose neither
+routes nor metadata. Caller actor/tenant/command envelopes and historical
+generic `StatementIDs` are not request fields: this composes published native
+root`895ac99`/adapter`6bcfd9e` typed statements, not a second policy store.
+
+Retain original keys, selectors and safe receipt/recovery metadata. Matching
+retries recover actual original outcomes under current write/query authority;
+missing rows do not prove success, and unknown outcomes never permit automatic
+redispatch. Role deletion terminally retires its ID. Fresh-session and rebuilt
+graph recovery retains the original receipt; actual logout denies history.
+
+`TestReferencePostgresOrganizationRolesHTTPS` and its `PopulatedUpgradeHTTPS`
+counterpart exercise real signup/session -> role HTTP CRUD -> direct permission,
+revocation and team-only permission -> deny precedence -> terminal deletion ->
+reconstructed originals/logout. The populated case starts with real native
+teams, an active binding and original receipts before selecting roles. Required
+outbox failure proves rollback; no grants, sessions or domain stores are faked.
 
 ## Team membership
 

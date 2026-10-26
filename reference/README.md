@@ -2,6 +2,13 @@
 
 ## Optional organization backend
 
+Custom roles are explicitly selected with `Organization.Core.DynamicRoles` and
+its immutable native permission catalog. Guarded create/get/list/update/delete
+and effective permission checks retain native current authority. Five independent
+`HTTPOrganization.Role*` flags opt into the bearer CRUD/read routes; native
+selection alone exposes no HTTP. See [custom-role composition](ORGANIZATION.md#custom-roles-and-effective-permissions)
+for original keys, terminal IDs, optional team inheritance and forward histories.
+
 Teams are selected explicitly through `Organization.Core.Teams`; native APIs
 remain graph-guarded. Independently opt-in bearer HTTP routes support team
 creation/listing, rename/deletion and membership. Native lifecycle version1

@@ -154,5 +154,5 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 		}
 		catalog = append(catalog, history)
 	}
-	return catalog, nil
+	return s.organizationRoleMigrationCatalog(ctx, catalog)
 }

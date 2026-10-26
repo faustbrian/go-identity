@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose custom-role CRUD/read and effective permission checks through guarded
+  native handles, with independently selected bearer HTTP create/get/list/update/
+  delete. Native catalog, exact epochs, original keys and terminal deletion stay
+  authoritative. Separate role history preserves installed organization/team
+  prefixes; optional team bindings require native team lifecycle. No binding or
+  permission HTTP endpoint is enabled by this profile.
+
 - Compose opt-in team creation, manager listing, rename and terminal deletion
   HTTP with the existing native owners. Guarded exact team reads stay native.
   Select `Core.Teams.LifecycleVersion: 1` for rename/delete and append native

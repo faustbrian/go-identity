@@ -287,6 +287,7 @@ type signupGraphExtensions struct {
 	organizationLifecycle bool
 	organizationTeams     bool
 	organizationTeamCRUD  bool
+	organizationRoles     bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -489,6 +490,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organizationTeams {
 		selectedAuthorization = referenceOrganizationTeamsPolicy{}
 	}
+	if extensions.organizationRoles {
+		selectedAuthorization = referenceOrganizationRolesPolicy{}
+	}
 	if extensions.emailSignin == "changed" {
 		selectedAuthorization = &otpSigninFactorChangePolicy{pool: f.pool}
 	}
@@ -541,6 +545,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Organization.Core.Teams.LifecycleVersion = 1
 		c.HTTPOrganization.TeamCreate, c.HTTPOrganization.TeamUpdate = true, true
 		c.HTTPOrganization.TeamDelete, c.HTTPOrganization.TeamList = true, true
+	}
+	if extensions.organizationRoles {
+		c.Organization.Core.Teams = organization.TeamConfig{Version: 1, MaximumTeams: 10, MaximumMembers: 100, LifecycleVersion: 1}
+		c.Organization.Core.DynamicRoles = organization.DynamicRoleConfig{Version: 1, MaximumRoles: 10, TeamBindingsVersion: 1, Catalog: []organization.Permission{{ID: "document-read", Action: "document.read", ResourceType: "document"}}}
+		c.HTTPOrganization.RoleCreate, c.HTTPOrganization.RoleUpdate, c.HTTPOrganization.RoleDelete, c.HTTPOrganization.RoleGet, c.HTTPOrganization.RoleList = true, true, true, true, true
 	}
 	if extensions.organizationExpiry {
 		c.Organization.Invitations.Policy.ExpirationReasons = []identity.PolicyReason{"security-withdrawal", "administrative-cleanup"}
@@ -1126,6 +1135,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organizationTeamCRUD {
 		proveReferenceOrganizationTeamCRUDSelection(t, c, deps)
 	}
+	if extensions.organizationRoles {
+		proveReferenceOrganizationRolesSelection(t, c, deps)
+	}
 	if extensions.organizationTransfer {
 		proveReferenceOrganizationTransferSelection(t, c, deps)
 	}
@@ -1135,7 +1147,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organizationUpgrade {
 		successor := c
 		organizationUpgrade = &successor
-		if extensions.organizationTeamCRUD {
+		if extensions.organizationRoles {
+			org, transport := *c.Organization, *c.HTTPOrganization
+			c.Organization, c.HTTPOrganization = &org, &transport
+			org.Core.DynamicRoles = organization.DynamicRoleConfig{}
+			transport.RoleCreate, transport.RoleUpdate, transport.RoleDelete, transport.RoleGet, transport.RoleList = false, false, false, false, false
+		} else if extensions.organizationTeamCRUD {
 			// Upgrade actual installed team membership, preserving its histories,
 			// live binding and original command custody under lifecycle steps3/4.
 			org, transport := *c.Organization, *c.HTTPOrganization
@@ -1293,6 +1310,7 @@ END $$`); err != nil {
 			{"team.list-mine", c.HTTPOrganization.TeamListMine}, {"team.member-list", c.HTTPOrganization.TeamMemberList},
 			{"team.create", c.HTTPOrganization.TeamCreate}, {"team.update", c.HTTPOrganization.TeamUpdate},
 			{"team.delete", c.HTTPOrganization.TeamDelete}, {"team.list", c.HTTPOrganization.TeamList},
+			{"role.create", c.HTTPOrganization.RoleCreate}, {"role.update", c.HTTPOrganization.RoleUpdate}, {"role.delete", c.HTTPOrganization.RoleDelete}, {"role.get", c.HTTPOrganization.RoleGet}, {"role.list", c.HTTPOrganization.RoleList},
 		} {
 			if selected.on {
 				wantOperations++
@@ -1694,7 +1712,7 @@ END $$`); err != nil {
 			selected, selectedConfig := features, c
 			if organizationUpgrade != nil {
 				var installed *referenceTeamUpgrade
-				if extensions.organizationTeamCRUD {
+				if extensions.organizationTeamCRUD || extensions.organizationRoles {
 					populated := prepareReferenceTeamUpgrade(t, ctx, features, cookies, csrf)
 					installed = &populated
 				}
@@ -1702,7 +1720,9 @@ END $$`); err != nil {
 				// nor the actual route may expose the unselected native feature.
 				for _, op := range server.OpenAPI().Operations() {
 					forbidden := strings.HasPrefix(op.Record.OperationID, "identity.organization.")
-					if extensions.organizationTeamCRUD {
+					if extensions.organizationRoles {
+						forbidden = slices.Contains([]string{string(organization.CreateDynamicRole), string(organization.UpdateDynamicRole), string(organization.DeleteDynamicRole), string(organization.GetDynamicRole), string(organization.ListDynamicRoles)}, op.Record.OperationID)
+					} else if extensions.organizationTeamCRUD {
 						forbidden = slices.Contains([]string{string(organization.CreateTeam), string(organization.UpdateTeam), string(organization.DeleteTeam), string(organization.ListTeams)}, op.Record.OperationID)
 					}
 					if forbidden {
@@ -1712,6 +1732,9 @@ END $$`); err != nil {
 				probePath := "/v1/organization/invitation/list-mine"
 				if extensions.organizationTeamCRUD {
 					probePath = "/v1/organization/team/list"
+				}
+				if extensions.organizationRoles {
+					probePath = "/v1/organization/role/list"
 				}
 				probe, err := http.NewRequestWithContext(ctx, http.MethodGet, network.URL+probePath, nil)
 				if err != nil {
@@ -1742,7 +1765,9 @@ END $$`); err != nil {
 					installed.prove(t, ctx, selected)
 				}
 			}
-			if extensions.organizationTeamCRUD {
+			if extensions.organizationRoles {
+				proveReferenceOrganizationRoles(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
+			} else if extensions.organizationTeamCRUD {
 				proveReferenceOrganizationTeamCRUD(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationTeams {
 				proveReferenceOrganizationTeams(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
