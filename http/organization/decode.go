@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
@@ -36,6 +37,8 @@ type requestInput struct {
 	invitationVersion         uint64
 	proof                     capability.Proof
 	acceptance                organization.PreparedInvitationAcceptance
+	transferProofID           auth.ProofID
+	sourceVersion             uint64
 }
 
 func operationPath(op organization.Operation) (string, string) {
@@ -60,6 +63,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/member/remove", http.MethodPost
 	case organization.LeaveMember:
 		return "/v1/organization/member/leave", http.MethodPost
+	case organization.OwnerTransfer:
+		return "/v1/organization/owner-transfer", http.MethodPost
 	case organization.InvitationSend:
 		return "/v1/organization/invitation-send", http.MethodPost
 	case organization.InvitationAccept:
@@ -87,6 +92,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	}
 	if op == organization.UpdateMember {
 		missingOwner = nilService(c.MemberUpdater)
+	}
+	if op == organization.OwnerTransfer {
+		missingOwner = nilService(c.OwnerTransferer) || nilService(c.OwnerTransferProofs) || !canonicalProofText(c.OwnerTransferAudience, 1, 128)
 	}
 	if op == organization.InvitationSend {
 		missingOwner = nilService(c.InvitationSender) || nilService(c.Invitations)
@@ -136,7 +144,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			return zero, requestFailure{status: 405, code: "method_not_allowed", allow: method}
 		}
 		requirement := identityhttp.HeaderForbidden
-		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend {
+		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer {
 			requirement = identityhttp.HeaderRequired
 		}
 		key, _, err := decoder.IdempotencyKey(r, requirement)
@@ -259,6 +267,8 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		names = []string{"organizationID", "organizationVersion", "name", "slug"}
 	} else if in.op == organization.LeaveMember {
 		names = []string{"organizationID", "organizationVersion"}
+	} else if in.op == organization.OwnerTransfer {
+		names = []string{"organizationID", "targetUserID", "organizationVersion", "sourceVersion", "targetVersion", "proofID"}
 	} else if in.op == organization.InvitationSend {
 		names = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 	} else if in.op == organization.InvitationResend || in.op == organization.InvitationCancel || in.op == organization.InvitationReject {
@@ -289,6 +299,10 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		}
 	} else if in.op == organization.LeaveMember {
 		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) {
+			return identityhttp.ErrInvalidInput
+		}
+	} else if in.op == organization.OwnerTransfer {
+		if !decode("organizationID", &in.org) || !decode("targetUserID", &in.user) || !decode("organizationVersion", &in.orgVersion) || !decode("sourceVersion", &in.sourceVersion) || !decode("targetVersion", &in.memberVersion) || !decode("proofID", &in.transferProofID) {
 			return identityhttp.ErrInvalidInput
 		}
 	} else if in.op == organization.InvitationSend {
@@ -323,6 +337,11 @@ func (in *requestInput) validate() error {
 		return in.remove().Validate()
 	case organization.LeaveMember:
 		return in.leave().Validate()
+	case organization.OwnerTransfer:
+		if !boundedID(string(in.org)) || !boundedID(string(in.user)) || !canonicalProofText(string(in.transferProofID), 22, 128) || in.orgVersion == 0 || in.orgVersion == ^uint64(0) || in.sourceVersion == 0 || in.sourceVersion == ^uint64(0) || in.memberVersion == 0 || in.memberVersion == ^uint64(0) {
+			return identityhttp.ErrInvalidInput
+		}
+		return nil
 	case organization.InvitationSend:
 		return in.send().Validate()
 	case organization.InvitationAccept:

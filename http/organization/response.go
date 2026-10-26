@@ -136,7 +136,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	// for another epoch cannot establish this request's original correlation;
 	// reject it before exporting metadata. Genuine unknown receipts have no
 	// committed versions and retain their validated binding for reconciliation.
-	if in.op == organization.LeaveMember && r.Outcome == identity.CommitOutcomeCommitted && (r.Feature == nil || r.Feature.BeforeVersion != in.orgVersion || r.Feature.AfterVersion != in.orgVersion+1) {
+	if (in.op == organization.LeaveMember || in.op == organization.OwnerTransfer) && r.Outcome == identity.CommitOutcomeCommitted && (r.Feature == nil || r.Feature.BeforeVersion != in.orgVersion || r.Feature.AfterVersion != in.orgVersion+1) {
 		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
 	}
 	out.CommandID, out.OrganizationID, out.MemberID = b.CommandID, result.OrganizationID, result.MemberID

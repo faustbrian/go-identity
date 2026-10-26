@@ -22,8 +22,8 @@ github.com/faustbrian/go-identity v0.0.0-20261025171642-473945c93248 h1:Q82qa1WL
 github.com/faustbrian/go-identity v0.0.0-20261025171642-473945c93248/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
 github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053 h1:XFlSTdRmnTbUMrVY1nRcwFUCtNR19cqP9XUoKqreHd0=
 github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053/go.mod h1:gbHmgfef5iSUtki7ZEa7HnqngXCugftiOgDlPQGwYx0=
-github.com/faustbrian/go-identity/http v0.0.0-20261026160045-b9742f82fc6f h1:T+R/LxuQbcQ6qeHBt/pqnC5WFyhAM8me1KZCDtAHRDI=
-github.com/faustbrian/go-identity/http v0.0.0-20261026160045-b9742f82fc6f/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261026174504-ad5c422490a2 h1:8qVdeWiyvjxOsMGWCGrcn7swU2U1cCszRTS/qlIst8o=
+github.com/faustbrian/go-identity/http v0.0.0-20261026174504-ad5c422490a2/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/session v0.0.0-20261024134726-e9528953435b h1:9kMC66zleZywuUGFJ8YcgrQwhZt260cL/EYlunHHRcI=
 github.com/faustbrian/go-identity/session v0.0.0-20261024134726-e9528953435b/go.mod h1:4881V+LxKRjNfZ8KZn7Xne258cP8IZZUPZGZd4TU/uc=
 github.com/faustbrian/go-json-schema/v2 v2.0.0 h1:88kzwDCcP8Xo3SaDyUzc6oWtl83id9P6uY/gjgyQ/74=
@@ -32,8 +32,8 @@ github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEW
 github.com/faustbrian/go-jsonrpc v1.1.1/go.mod h1:thOSBE3KGGNbPHY/OcreIcDPwusQ273v61n6TlmJdxE=
 github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820 h1:/5nveXXAZ0rYYsxG8uJbQDxkC9rse6kIEOeq2yGr2C8=
 github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820/go.mod h1:BpEy2DPz/YR5C9gcBcKAxkG4fO+jo6WLwjNDy075MYY=
-github.com/faustbrian/go-organization v0.0.0-20261026153900-6d7d32dfcbec h1:1pCu2d5PqxE0uTXq38DIxx8RUcTBozkvYracdFFRPeg=
-github.com/faustbrian/go-organization v0.0.0-20261026153900-6d7d32dfcbec/go.mod h1:HFX7AoFO6dLYTNcIeleKAEgiV9m19mXlH0q4L/K/rpA=
+github.com/faustbrian/go-organization v0.0.0-20261026165516-8b72f854aa29 h1:gAMe0QEI+4oR8dpfQ+kOaBiQqC4pFKL5GuJOrc45wK8=
+github.com/faustbrian/go-organization v0.0.0-20261026165516-8b72f854aa29/go.mod h1:HFX7AoFO6dLYTNcIeleKAEgiV9m19mXlH0q4L/K/rpA=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff h1:8BIB469appqyn79T6j/sJQAS3dN6+budadfpPLwtqIg=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff/go.mod h1:Tqc83xc8RVAsi6JAW3dkKM1OFVos7cfayeNHBbWstsA=
 github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1 h1:wClLzW8mUPmV7ilNALEIP0wJZ8LFWjb0nmGKh7LmDGw=

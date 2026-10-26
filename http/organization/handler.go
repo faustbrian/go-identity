@@ -140,6 +140,8 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out, err = c.Service.RemoveMember(r.Context(), in.remove(), in.facts.ClientIP().String())
 				case organization.LeaveMember:
 					out, err = c.MemberLeaver.LeaveMember(r.Context(), in.leave(), in.facts.ClientIP().String())
+				case organization.OwnerTransfer:
+					out, err = dispatchOwnerTransfer(r.Context(), c, in)
 				case organization.InvitationSend:
 					out, err = c.InvitationSender.Send(r.Context(), in.send(), in.facts.ClientIP().String())
 				case organization.InvitationResend:

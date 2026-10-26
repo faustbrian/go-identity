@@ -106,7 +106,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend {
+	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer {
 		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated organization/command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
@@ -125,6 +125,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 			required = []string{"organizationID", "organizationVersion"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1)}
 			description += "Naturally repeatable self-leave uses shared rate.safe admission, never administrator admission. The current verified human is the target; no user, member version, command ID, key or proof override is accepted. Native current policy, last-owner protection and atomic effects remain authoritative. Matching repeats return actual original metadata after departure, never infer success from absence or remove a readmitted membership. An unknown outcome requires reconciliation, not automatic replay. No post-leave membership read or HTTP recovery route is added. "
+		} else if op == organization.OwnerTransfer {
+			required = []string{"organizationID", "targetUserID", "organizationVersion", "sourceVersion", "targetVersion", "proofID"}
+			fields = map[string]any{"organizationID": id, "targetUserID": id, "organizationVersion": requestVersion(1), "sourceVersion": requestVersion(1), "targetVersion": requestVersion(1), "proofID": map[string]any{"type": "string", "minLength": 22, "maxLength": 128, "pattern": "^[!-~]+$", "writeOnly": true}}
+			description += "Current authenticated owner transfers to an existing active member using an original action-bound password proof. ProofID selects the retained native record, not a submitted proof projection. Native current/fresh first-use and factor policy, atomic one-use proof/role/authority/audit effects and last-owner safety are mandatory. Original-key retries may use a fresh current session and retained original proof without renewing mutation authority; preserve safe original recovery metadata on unknown outcomes. No source actor, command or tenant override, automatic retry or post-transfer read is added. "
 		} else if op == organization.InvitationSend {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}

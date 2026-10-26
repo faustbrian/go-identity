@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add independently selected bearer-only ownership transfer with a required
+  original request key, exact organization/member versions and an original
+  password-action proof ID. Narrow native/proof ports retain atomic proof
+  consumption, current authority and original-outcome recovery without
+  extending existing Service implementations or exposing proof custody.
+  Shared administrative rates apply; disabled selection exposes no route or
+  metadata, and malformed or expired transport authority cannot mutate roles.
+
 - Add independently selected owner-only invitation listing through the narrow
   `InvitationLister` port without changing existing read implementations.
   Explicit organization and limit1..100 select current-state safe metadata;

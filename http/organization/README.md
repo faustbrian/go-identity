@@ -6,6 +6,25 @@ invitation sending/resend, cancellation/rejection and once-only acceptance. Omit
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
+Ownership transfer is independently opt-in through `OwnerTransfer`. Supply the
+native `OperationService` as `Config.OwnerTransferer`, its original
+`ReauthenticationSource` as `OwnerTransferProofs`, the configured
+`OwnerTransferAudience`, current `Sessions` and shared `AdminRate`; neither
+`Service` nor `SafeRate` is required. Strict-bearer HTTPS
+`POST /v1/organization/owner-transfer` requires `Idempotency-Key` and exactly
+`organizationID`, `targetUserID`, `organizationVersion`, `sourceVersion`,
+`targetVersion` and `proofID` in JSON. Obtain that proof through the actual
+password-verification owner for the owner-transfer action and audience.
+The native owner authenticates original proof custody, freshness and current
+authority, atomically consumes it with the role transition and protects the
+last owner. HTTP never mints or renews a proof. Matching original-key history
+can use the retained original proof with a fresh current session, even after
+its first-use deadline; this is recovery, not another grant. Changed intent
+does not execute. Preserve safe outcome/recovery metadata on unknown or late
+failure; never automatically redispatch. Disabled selection exposes neither
+route nor metadata. Configure the native action-proof and keyed-operation
+migrations before selection.
+
 Self-leave is independently opt-in through `MemberLeave`. Supply the actual
 native `OperationService` as `Config.MemberLeaver`, current `Sessions` and the
 shared `SafeRate`; no five-method `Service`, invitations or `AdminRate` is
