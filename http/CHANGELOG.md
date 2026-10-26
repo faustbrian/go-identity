@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit exact opt-in strict-bearer team create/update/delete policies without
+  changing their canonical team-write, rate, original-key/natural-repeat or
+  cookie-CSRF contracts. Selection alone enables no handler or authority.
+
 - Admit exact independently selected strict-bearer team member-add/remove
   policies. Canonical team-write, administrative-rate, keyed-add/natural-remove
   and cookie-CSRF contracts remain unchanged. Selection does not grant team
