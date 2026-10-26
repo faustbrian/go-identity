@@ -64,6 +64,14 @@ type InvitationResender interface {
 	Resend(context.Context, organization.InvitationResendOperationRequest, string) (organization.InvitationResendOperationResult, error)
 }
 
+// InvitationCanceller owns exact-version manager cancellation and natural-repeat
+// original-outcome recovery. It must retain current authority and atomic effects,
+// without requiring recipient credentials or inferring success from row absence.
+// Calls honor ctx and support concurrent independent requests.
+type InvitationCanceller interface {
+	Cancel(context.Context, organization.InvitationCancelOperationRequest, string) (organization.StoreResult, error)
+}
+
 // InvitationAccepter acquires the actual native preparation and authenticated
 // original issuance facts. HTTP admission retains it until Handle executes the
 // identical preparation. Final current authority and atomic one-use effects
@@ -87,19 +95,22 @@ type InvitationAccepter interface {
 // update selection needs AdminRate but neither Service nor SafeRate.
 // Resend requires InvitationResender and AdminRate, not Service, Invitations or
 // SafeRate: its native result owns the original command's delivery observation.
+// Cancellation requires InvitationCanceller and AdminRate only; it never reads
+// a recipient, delivery state or membership projection.
 // Share each rate owner across its selected routes/requests.
 // Now is trusted, prompt and concurrency-safe. MaximumDuration is 1ms..30s;
 // inbound earlier deadlines win. Construction performs no owner reads or IO.
 type Config struct {
-	Network            identityhttp.NetworkConfig
-	Sessions           *session.SessionService
-	Service            Service
-	MetadataUpdater    MetadataUpdater
-	MemberUpdater      MemberUpdater
-	Invitations        InvitationReader
-	InvitationSender   InvitationSender
-	InvitationResender InvitationResender
-	InvitationAccepter InvitationAccepter
+	Network             identityhttp.NetworkConfig
+	Sessions            *session.SessionService
+	Service             Service
+	MetadataUpdater     MetadataUpdater
+	MemberUpdater       MemberUpdater
+	Invitations         InvitationReader
+	InvitationSender    InvitationSender
+	InvitationResender  InvitationResender
+	InvitationCanceller InvitationCanceller
+	InvitationAccepter  InvitationAccepter
 	// InvitationProofLimits must match the selected issuer's bounded parsing
 	// profile. Zero uses capability.DefaultLimits; parsing grants no authority.
 	InvitationProofLimits capability.Limits
@@ -112,8 +123,8 @@ type Config struct {
 
 // FeatureConfig opts into exactly the selected operations. Empty selection is
 // invalid; omission from FeatureServices exposes neither routes nor metadata.
-// Invitation reads, original-key send and once-only acceptance are independently
-// selectable. No team/browser/active-organization workflow is selected.
+// Invitation reads and mutations are independently selectable. No team,
+// browser or active-organization workflow is selected.
 type FeatureConfig struct {
 	Config                                           Config
 	Create, Get, MemberList, MemberAdd, MemberRemove bool
@@ -121,6 +132,7 @@ type FeatureConfig struct {
 	InvitationGet, InvitationListMine                bool
 	InvitationSend, InvitationAccept                 bool
 	InvitationResend                                 bool
+	InvitationCancel                                 bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -132,14 +144,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}} {
 		if !selected.on {
 			continue
 		}
@@ -170,7 +182,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "organization", Operations: operations})
 }
 func selectedMutation(op organization.Operation) bool {
-	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend
+	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend || op == organization.InvitationCancel
 }
 func nilService(service any) bool {
 	if service == nil {

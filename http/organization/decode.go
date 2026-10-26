@@ -59,6 +59,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/invitation/accept", http.MethodPost
 	case organization.InvitationResend:
 		return "/v1/organization/invitation/resend", http.MethodPost
+	case organization.InvitationCancel:
+		return "/v1/organization/invitation/cancel", http.MethodPost
 	}
 	return "", ""
 }
@@ -76,6 +78,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	}
 	if op == organization.InvitationResend {
 		missingOwner = nilService(c.InvitationResender)
+	}
+	if op == organization.InvitationCancel {
+		missingOwner = nilService(c.InvitationCanceller)
 	}
 	missingRate := selectedMutation(op) && !c.AdminRate.Configured() || !selectedMutation(op) && !c.SafeRate.Configured()
 	if op == organization.InvitationAccept {
@@ -205,7 +210,7 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		names = []string{"organizationID", "organizationVersion", "name", "slug"}
 	} else if in.op == organization.InvitationSend {
 		names = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
-	} else if in.op == organization.InvitationResend {
+	} else if in.op == organization.InvitationResend || in.op == organization.InvitationCancel {
 		names = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
 	} else {
 		names = []string{"organizationID", "userID", "organizationVersion", "memberVersion"}
@@ -235,7 +240,7 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("recipientUserID", &in.user) || !decode("recipientIdentifierID", &in.recipientIdentifier) {
 			return identityhttp.ErrInvalidInput
 		}
-	} else if in.op == organization.InvitationResend {
+	} else if in.op == organization.InvitationResend || in.op == organization.InvitationCancel {
 		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("invitationID", &in.invitationID) || !decode("invitationVersion", &in.invitationVersion) {
 			return identityhttp.ErrInvalidInput
 		}
@@ -267,6 +272,8 @@ func (in *requestInput) validate() error {
 		return in.accept().Validate()
 	case organization.InvitationResend:
 		return in.resend().Validate()
+	case organization.InvitationCancel:
+		return in.cancel().Validate()
 	}
 	return nil
 }
@@ -295,6 +302,10 @@ func (in *requestInput) send() organization.InvitationSendOperationRequest {
 
 func (in *requestInput) resend() organization.InvitationResendOperationRequest {
 	return organization.InvitationResendOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, OrganizationID: in.org, OrganizationVersion: in.orgVersion, InvitationID: in.invitationID, InvitationVersion: in.invitationVersion, CorrelationID: in.correlation}
+}
+
+func (in *requestInput) cancel() organization.InvitationCancelOperationRequest {
+	return organization.InvitationCancelOperationRequest{Authentication: in.auth, OrganizationID: in.org, OrganizationVersion: in.orgVersion, InvitationID: in.invitationID, InvitationVersion: in.invitationVersion, CorrelationID: in.correlation}
 }
 
 // The root organization's safeID contract is 1..128 UTF-8 bytes excluding

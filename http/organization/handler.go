@@ -143,12 +143,23 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				case organization.InvitationResend:
 					resend, err = c.InvitationResender.Resend(r.Context(), in.resend(), in.facts.ClientIP().String())
 					out = resend.StoreResult
+				case organization.InvitationCancel:
+					out, err = c.InvitationCanceller.Cancel(r.Context(), in.cancel(), in.facts.ClientIP().String())
 				case organization.InvitationAccept:
 					if nilService(in.acceptance) {
 						reject(w, r, identityhttp.ErrUnavailable)
 						return
 					}
 					out, err = in.acceptance.Execute(r.Context())
+				}
+				if op == organization.InvitationCancel {
+					status, response := invitationCancelResponse(in, out, err)
+					if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+						status, response.Error = 503, "unavailable"
+						response.State = ""
+					}
+					writeJSON(w, status, response)
+					return
 				}
 				if op == organization.InvitationResend {
 					status, response := invitationResendResponse(in, resend, err)

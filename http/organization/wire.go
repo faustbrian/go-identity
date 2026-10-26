@@ -52,6 +52,12 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		mutationFields["deliveryState"] = map[string]any{"type": "string", "enum": []string{"queued", "attempting", "accepted", "delivered", "rejected", "bounced", "cancelled", "unknown", "retry_wait", "expired", "exhausted", "superseded", "transient_failure"}, "description": "Authorized observation of this original command's delivery, not the latest successor. Queued is local admission, accepted is provider acceptance, neither confirms delivery. Absent on observation failure; unknown never authorizes redispatch."}
 		mutationRequired = []string{"commandID", "organizationID", "invitationID", "beforeVersion", "afterVersion", "recovery", "deliveryState"}
 	}
+	if op == organization.InvitationCancel {
+		delete(mutationFields, "memberID")
+		mutationFields["invitationID"] = id
+		mutationFields["state"] = map[string]any{"type": "string", "const": "cancelled"}
+		mutationRequired = []string{"commandID", "organizationID", "invitationID", "beforeVersion", "afterVersion", "recovery", "state"}
+	}
 	mutation := object([]string{"committed", "commitOutcome"}, mutationFields)
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	failure := any(errorSchema)
@@ -105,6 +111,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}
 			description += "Exact verified recipient selection, never a submitted email address or claimed actor. The native owner allocates invitation/command IDs and atomically queues encrypted proof delivery. Matching keys recover original metadata only. A successful current read returns invitation and delivery status; if that read fails, the original committed outcome remains explicit without current metadata. No proof or delivery effect ID is exported. "
+		} else if op == organization.InvitationCancel {
+			required = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "invitationID": id, "invitationVersion": requestVersion(1)}
+			description += "Cancellation requires current native owner or administrator invitation permission, not recipient credentials or organization-read permission. The native owner allocates the original command and atomically terminally revokes the exact pending invitation. Matching natural repeats disclose only actual original metadata under current authority; missing or cancelled rows alone never prove success. Original committed state is returned without a membership, recipient or delivery read. Unknown outcomes require reconciliation, never automatic redispatch. "
 		} else if op == organization.InvitationResend {
 			required = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "invitationID": id, "invitationVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 2, "description": "Exact advanceable invitation version leaving room for successor issuance and its terminal transition. Fractions, exponent notation and overflow are rejected."}}

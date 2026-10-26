@@ -2,7 +2,7 @@
 
 Optional **bearer-only** HTTP integration for native organization creation,
 explicit organization reads, metadata/role updates, member listing, admission/removal and original-key
-invitation sending/resend and once-only acceptance. Omit its
+invitation sending/resend, cancellation and once-only acceptance. Omit its
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
@@ -40,6 +40,19 @@ The returned delivery state belongs to the original command, even after later
 resends or acceptance. No owner-only current-invitation read is substituted for
 administrator recovery. A late observation error retains known commitment but
 withholds delivery state; queued/accepted do not establish confirmed delivery.
+
+Invitation cancellation is independently opt-in through `InvitationCancel`.
+Supply the actual native `InvitationService` as `Config.InvitationCanceller`,
+current `Sessions` and shared `AdminRate`; neither `Service`, `Invitations` nor
+`SafeRate` is needed. Install its `InvitationCancelOperationMigrationSource`
+before selection, in the native owner's bounded migration window. The request
+has exact organization/invitation IDs and versions, with no Idempotency-Key,
+caller command, recipient credential or proof. Current managers need invitation
+permission, not organization-read permission. Natural repeats recover matching
+original committed history; terminal or absent rows alone never prove success.
+The response contains safe original correlation and `state: "cancelled"` only
+for validated successful commitment, never membership or delivery projections.
+Unknown outcomes remain explicit and do not authorize automatic redispatch.
 
 Invitation acceptance is independently opt-in through `InvitationAccept`.
 Supply the actual native `InvitationService` as `Config.InvitationAccepter`,
@@ -111,6 +124,7 @@ session, protected risk, membership and atomic commit fences.
 | Accept invitation | `POST /v1/organization/invitation/accept` | JSON original `commandID`, `organizationID`, `invitationID`, exact positive `organizationVersion`, `invitationVersion`, private `token`; **no key** |
 | Send invitation | `POST /v1/organization/invitation-send` | JSON `organizationID`, exact positive `organizationVersion`, target `recipientUserID`, existing verified `recipientIdentifierID`; required original key |
 | Resend invitation | `POST /v1/organization/invitation/resend` | JSON `organizationID`, exact positive read-only `organizationVersion`, `invitationID`, `invitationVersion` 1..MaxUint64-2; required original key |
+| Cancel invitation | `POST /v1/organization/invitation/cancel` | JSON `organizationID`, `invitationID`, exact versions 1..MaxUint64-1; **no key**; native-allocated original command and natural-repeat recovery |
 | Get invitation | `GET /v1/organization/invitation/get` | Required query `organizationID`, `invitationID`; native **owner-only** authorization |
 | List my invitations | `GET /v1/organization/invitation/list-mine` | Optional opaque `cursor`, `limit` 1..200 (default100); current verified recipient, no membership required |
 

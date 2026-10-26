@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected strict-bearer invitation cancellation. Exact
+  organization/invitation versions reach the native natural-repeat owner;
+  Idempotency-Key and caller command/proof overrides are forbidden. Shared
+  administrative admission and current authority apply to every attempt.
+  Responses retain validated original commitment/recovery without inventing
+  membership or delivery state; disabled selection exposes no route/metadata.
+
 - Add independently selected strict-bearer invitation resend with the original
   required Idempotency-Key and exact invitation/organization versions. Preserve
   native recipient, role, exclusive expiry and original delivery observation;
