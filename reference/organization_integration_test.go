@@ -46,6 +46,9 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 		return authorization.Decision{}, err
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
+		if c.Request.Action == authorization.Action(organization.SlugAvailable) && c.Request.Resource.Type == "organization.slug" {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
 		// Invitation owners read delivery metadata whose resource is the
 		// intended recipient. The native invitation reader checks ownership;
 		// requiring self-ID equality here would hide an already committed send.
@@ -93,7 +96,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 	issuer.Audience, issuer.Crypto.Clock, preparation.Clock = "organization-invitation", nil, nil
 	issuer.Crypto.Limits.MaxLifetime = 15 * time.Minute
 	c.Organization.Invitations = &reference.OrganizationInvitationConfiguration{Policy: organization.InvitationConfig{Audience: issuer.Audience, Lifetime: 15 * time.Minute, MaximumPending: 100}, Issuer: issuer, Preparation: preparation, ConfigurationID: "reference-organization-invitation-v1", SelectInvitationID: selectID, TemplateID: "organization-invitation", TemplateVersion: 1, PolicyVersion: 2, ProviderVersion: 2, LocaleChain: []string{"en"}, Endpoint: origin + "/invitation", ScopeKey: [32]byte{144}}
-	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, InvitationResend: true, InvitationCancel: true, InvitationReject: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
+	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, InvitationResend: true, InvitationCancel: true, InvitationReject: true, SlugAvailable: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
 		// This success-path fixture does not expect a rate denial. Failing the
 		// callback cannot permit a denied request or fake successful auditing.
 		t.Error("unexpected organization administrative denial")
@@ -145,6 +148,17 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		}
 		return response.StatusCode, payload
 	}
+	slugAvailable := func(h organizationTestHuman, slug string, want bool) {
+		t.Helper()
+		code, wire := call(h, http.MethodGet, "/v1/organization/slug-available?slug="+slug, nil, "")
+		var fields map[string]bool
+		decodeErr := json.Unmarshal(wire, &fields)
+		available, present := fields["available"]
+		if code != 200 || decodeErr != nil || len(fields) != 1 || !present || available != want {
+			t.Fatal("genuine Reference advisory occupancy unavailable or disclosed metadata", code)
+		}
+	}
+	slugAvailable(recipient, "reference-member-organization", true)
 	create := func(slug, key string) organizationhttp.MutationResponse {
 		t.Helper()
 		value := map[string]string{"name": "Reference organization", "slug": slug}
@@ -161,6 +175,7 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		return out
 	}
 	first := create("reference-member-organization", "reference-organization-original-create")
+	slugAvailable(recipient, "reference-member-organization", false)
 	read := func(h organizationTestHuman, id organization.ID, want int) organizationhttp.ReadResponse {
 		t.Helper()
 		code, wire := call(h, http.MethodGet, "/v1/organization/get?organizationID="+string(id), nil, "")
@@ -197,6 +212,8 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		t.Fatal("Reference metadata update was not current or repeated its effect")
 	}
 	read(recipient, first.OrganizationID, 403)
+	slugAvailable(recipient, "reference-member-organization", true)
+	slugAvailable(recipient, "updated-reference", false)
 	add := map[string]any{"organizationID": first.OrganizationID, "userID": recipient.user, "role": "member", "organizationVersion": currentOrganization.Organization.Version, "memberVersion": uint64(0)}
 	code, wire := call(owner, http.MethodPost, "/v1/organization/member/add", add, "reference-member-original-add")
 	var added organizationhttp.MutationResponse
@@ -517,6 +534,19 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err := current.Initialize(ctx); err != nil {
 		t.Fatal("fresh Reference initialization", err)
 	}
+	currentOrganizations, err := current.Organizations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	slugRead := organization.SlugAvailableRequest{Authentication: recipient.auth, Slug: "updated-reference", CorrelationID: "reconstructed-slug"}
+	if out, err := currentOrganizations.SlugAvailable(ctx, slugRead); err != nil || out.Available {
+		t.Fatal("reconstructed Reference lost current occupied slug", err)
+	}
+	foreignSlugRead := slugRead
+	foreignSlugRead.Authentication.TenantID = "unconfigured-tenant"
+	if out, err := currentOrganizations.SlugAvailable(ctx, foreignSlugRead); err == nil || out.Available {
+		t.Fatal("Reference slug handle crossed configured tenant boundary")
+	}
 	invitationsOwner, err := current.OrganizationInvitations()
 	if err != nil {
 		t.Fatal(err)
@@ -548,6 +578,13 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		t.Fatal("fresh Reference rejection did not recover original history", err)
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
+	if code, _ := call(recipient, http.MethodGet, "/v1/organization/slug-available?slug=after-logout", nil, ""); code == 200 {
+		t.Fatal("revoked recipient retained advisory read")
+	}
+	if _, err := currentOrganizations.SlugAvailable(ctx, slugRead); err == nil {
+		t.Fatal("revoked recipient retained reconstructed slug read")
+	}
+	slugAvailable(owner, "after-logout", true)
 	if _, err := invitationsOwner.Reject(ctx, rejectRequest, "127.0.0.1"); err == nil {
 		t.Fatal("revoked recipient recovered original rejection")
 	}

@@ -38,14 +38,38 @@ existing explicit bounded external seams.
 
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
-`InvitationListMine`, `InvitationSend`, `InvitationResend`, `InvitationCancel`, `InvitationReject`
-and `InvitationAccept`.
+`InvitationListMine`, `InvitationSend`, `InvitationResend`, `InvitationCancel`,
+`InvitationReject`, `SlugAvailable` and `InvitationAccept`.
 Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
 safe/admin/secret namespaces and keys. The degradation and administrative-denial
 callbacks retain the transport's bounded synchronous contracts: administrative
 denials must be durably audited, without secrets. Namespace/key changes affect
 rate budgets and require coordinated rollout, not per-request rotation.
+
+## Advisory slug availability
+
+Independently select `HTTPOrganization.SlugAvailable`, with `SafeNamespace`,
+`EmergencyMaximumKeys` and the bounded `Degraded` callback. It needs neither
+invitations nor administrative-rate selection. Configure explicit
+`identity.organization.slug-available` authorization for the authenticated human
+and `organization.slug` candidate resource; membership is not a prerequisite.
+The ordinary native organization/session/policy graph remains the sole owner.
+
+Call `GET /v1/organization/slug-available?slug=candidate` with exactly one native
+bearer credential at the configured HTTPS tenant host. A successful response is
+only `{"available":true}` or `{"available":false}`. No body, key, tenant/user or
+organization override is accepted. The same read is available directly through
+`OrganizationService.SlugAvailable`, obtained from `FeatureSet.Organizations()`,
+with its typed request and graph lifetime guards. Native selection alone adds no
+HTTP route.
+
+Availability is advisory, not a reservation: another create/update may win
+immediately afterward. Retained archived rows still occupy their tenant's
+unique name. Rename releases the prior name only once the owner commits it.
+Current session/candidate policy and shared safe admission apply on each call;
+logout, expiry, unavailable authority or source failure returns no availability.
+This addition uses existing migration history unchanged.
 
 ## Bootstrap and populated upgrades
 

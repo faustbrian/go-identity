@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose native advisory slug availability through graph-owned direct handles
+  and an independently selected bearer HTTP route. Current tenant/session and
+  candidate policy plus shared safe-rate admission protect a boolean-only read
+  without membership or reservation; retained handles honor graph drain and
+  logout. No new migration or application store/handler is needed.
+
 - Compose independently selected natural-repeat recipient rejection with
   shared safe-rate admission and native graph lifetime guards. Only the current
   verified intended recipient may reject or recover an exact original outcome;

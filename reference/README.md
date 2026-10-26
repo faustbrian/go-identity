@@ -8,6 +8,12 @@ intended-recipient invitations. See [configuration, migrations and the complete
 consumer journey](ORGANIZATION.md). Disabled selections expose no organization
 routes or metadata; native selection alone enables no HTTP.
 
+`HTTPOrganization.SlugAvailable` separately selects the tenant-local advisory
+candidate read with the shared safe-rate owner. `FeatureSet.Organizations()`
+also exposes its guarded native method. Neither requires membership or reserves
+a name; current policy/session authority applies and responses contain only a
+boolean. See the [slug walkthrough](ORGANIZATION.md#advisory-slug-availability).
+
 ## Optional native passkey backend
 
 `Passkey.TOTP` selects original UV-passkey plus independent confirmed-TOTP

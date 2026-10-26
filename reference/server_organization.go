@@ -27,6 +27,7 @@ type HTTPOrganizationConfiguration struct {
 	InvitationResend                                 bool
 	InvitationCancel                                 bool
 	InvitationReject                                 bool
+	SlugAvailable                                    bool
 	SafeNamespace                                    string
 	EmergencyMaximumKeys                             int
 	Degraded                                         func(context.Context, identityhttp.SafeRateEvent) error
@@ -80,7 +81,7 @@ func composeOrganizationHTTP(c StoreConfiguration, owner *organizationState, sha
 	}
 	h := *c.HTTPOrganization
 	invalid := identity.InvalidInputError{Field: "reference_http_organization"}
-	if owner == nil || c.Organization == nil || c.Session == nil || shared == nil || c.HTTPRate == nil || (!h.Create && !h.Update && !h.Get && !h.MemberList && !h.MemberAdd && !h.MemberUpdate && !h.MemberRemove && !h.InvitationGet && !h.InvitationListMine && !h.InvitationSend && !h.InvitationAccept && !h.InvitationResend && !h.InvitationCancel && !h.InvitationReject) || (h.InvitationGet || h.InvitationListMine || h.InvitationSend || h.InvitationAccept || h.InvitationResend || h.InvitationCancel || h.InvitationReject) && owner.invitations == nil {
+	if owner == nil || c.Organization == nil || c.Session == nil || shared == nil || c.HTTPRate == nil || (!h.Create && !h.Update && !h.Get && !h.MemberList && !h.MemberAdd && !h.MemberUpdate && !h.MemberRemove && !h.InvitationGet && !h.InvitationListMine && !h.InvitationSend && !h.InvitationAccept && !h.InvitationResend && !h.InvitationCancel && !h.InvitationReject && !h.SlugAvailable) || (h.InvitationGet || h.InvitationListMine || h.InvitationSend || h.InvitationAccept || h.InvitationResend || h.InvitationCancel || h.InvitationReject) && owner.invitations == nil {
 		return nil, invalid
 	}
 	out = &organizationHTTPState{config: h}
@@ -90,7 +91,7 @@ func composeOrganizationHTTP(c StoreConfiguration, owner *organizationState, sha
 			out = nil
 		}
 	}()
-	if h.Get || h.MemberList || h.InvitationGet || h.InvitationListMine || h.InvitationReject {
+	if h.Get || h.MemberList || h.InvitationGet || h.InvitationListMine || h.InvitationReject || h.SlugAvailable {
 		out.safe, err = identityhttp.NewSafeRateLimiter(identityhttp.SafeRateConfig{Shared: shared.backend, Namespace: h.SafeNamespace, Now: time.Now, Degraded: h.Degraded, MaximumDuration: c.HTTPRate.MaximumDuration, EmergencyMaximumKeys: h.EmergencyMaximumKeys})
 		if err != nil {
 			return out, invalid
@@ -121,7 +122,7 @@ func (s *Server) organizationFeature(network identityhttp.NetworkConfig) (*ident
 		return nil, identity.InvalidInputError{Field: "reference_http_organization"}
 	}
 	selected := h.config
-	feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: organizationhttp.Config{Network: network, Sessions: f.session.reader, Service: n.operations, MetadataUpdater: n.operations, MemberUpdater: n.operations, Invitations: n.invitations, InvitationSender: n.sender, InvitationResender: n.sender, InvitationCanceller: n.invitations, InvitationRejecter: n.invitations, InvitationAccepter: n.invitations, InvitationProofLimits: n.limits, SafeRate: h.safe, AdminRate: h.admin, SecretRate: h.secret, Now: time.Now, MaximumDuration: n.maximum}, Create: selected.Create, Update: selected.Update, Get: selected.Get, MemberList: selected.MemberList, MemberAdd: selected.MemberAdd, MemberUpdate: selected.MemberUpdate, MemberRemove: selected.MemberRemove, InvitationGet: selected.InvitationGet, InvitationListMine: selected.InvitationListMine, InvitationSend: selected.InvitationSend, InvitationAccept: selected.InvitationAccept, InvitationResend: selected.InvitationResend, InvitationCancel: selected.InvitationCancel, InvitationReject: selected.InvitationReject})
+	feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: organizationhttp.Config{Network: network, Sessions: f.session.reader, Service: n.operations, SlugAvailability: n.operations, MetadataUpdater: n.operations, MemberUpdater: n.operations, Invitations: n.invitations, InvitationSender: n.sender, InvitationResender: n.sender, InvitationCanceller: n.invitations, InvitationRejecter: n.invitations, InvitationAccepter: n.invitations, InvitationProofLimits: n.limits, SafeRate: h.safe, AdminRate: h.admin, SecretRate: h.secret, Now: time.Now, MaximumDuration: n.maximum}, Create: selected.Create, Update: selected.Update, Get: selected.Get, MemberList: selected.MemberList, MemberAdd: selected.MemberAdd, MemberUpdate: selected.MemberUpdate, MemberRemove: selected.MemberRemove, InvitationGet: selected.InvitationGet, InvitationListMine: selected.InvitationListMine, InvitationSend: selected.InvitationSend, InvitationAccept: selected.InvitationAccept, InvitationResend: selected.InvitationResend, InvitationCancel: selected.InvitationCancel, InvitationReject: selected.InvitationReject, SlugAvailable: selected.SlugAvailable})
 	if err != nil {
 		return nil, err
 	}

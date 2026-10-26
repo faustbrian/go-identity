@@ -19,7 +19,7 @@ type OrganizationService struct{ state *storeState }
 // share immutable configuration; independent calls are concurrent-safe.
 type OrganizationInvitationService struct{ state *storeState }
 
-// Organizations returns the selected explicit-organization membership owner.
+// Organizations returns the selected authenticated organization owner.
 // It performs no IO and never enables HTTP.
 func (f FeatureSet) Organizations() (*OrganizationService, error) {
 	if err := organizationSelected(f.state, false); err != nil {
@@ -154,6 +154,21 @@ func (f *OrganizationService) RemoveMember(ctx context.Context, r organization.R
 	}
 	defer done()
 	return n.operations.RemoveMember(w, r, network)
+}
+
+// SlugAvailable reads advisory tenant-local occupancy through the actual native
+// owner, preserving graph initialization, tenant and drain guards. It requires
+// no membership and reserves no name; create/update uniqueness remains final.
+func (f *OrganizationService) SlugAvailable(ctx context.Context, r organization.SlugAvailableRequest) (organization.SlugAvailableResult, error) {
+	if f == nil {
+		return organization.SlugAvailableResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.SlugAvailableResult{}, err
+	}
+	defer done()
+	return n.operations.SlugAvailable(w, r)
 }
 
 // Get reads current explicitly scoped organization metadata.
