@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit an explicitly selected strict-bearer invitation-resend policy. Original
+  keyed semantics and cookie-CSRF protection remain unchanged; selection alone
+  enables no route, proof rotation, delivery or authority.
+
 - Permit explicitly selected strict-bearer organization metadata and member-role
   updates. Original cookie-CSRF protection remains unchanged; no other operation
   gains a bearer policy or route from this selection.
