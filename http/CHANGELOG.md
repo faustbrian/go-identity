@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit the exact independently selected bearer-only invitation-expiry policy.
+  Cookie handlers retain their canonical CSRF protection; unrelated operations
+  and mixed bearer/cookie policies remain rejected. Construction grants neither
+  manager authority nor expiry execution.
+
 - Permit explicitly selected strict-bearer ownership transfer while retaining
   canonical fresh-owner authorization, original-key and administrative-rate
   contracts. Cookie CSRF protection is unchanged. Selection alone enables
