@@ -94,6 +94,7 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 			{organizationpg.InvitationRejectionMigrationSource{Version: 7}, migrationGuard{version: 7, schema: "organization", columns: []string{"invitations.rejected_at"}}},
 			{organizationpg.InvitationExpiryMigrationSource{Version: 8}, migrationGuard{version: 8, schema: "organization", columns: []string{"invitations.expired_at", "invitations.expiry_reason"}}},
 			{organizationpg.InvitationResendMigrationSource{Version: 9}, migrationGuard{version: 9, schema: "organization", columns: []string{"invitations.issued_version", "command_effects.delivery_effect_id"}, constraints: []string{"invitations.invitations_lifecycle", "command_effects.organization_resend_delivery_scope"}}},
+			{organizationpg.InvitationCancelOperationMigrationSource{Version: 10}, migrationGuard{version: 10, schema: "organization", columns: []string{"command_effects.cancel_organization_version"}, tables: []string{"organization_repeat_invitation_cancel"}, constraints: []string{"command_effects.organization_cancel_operation_scope"}}},
 		} {
 			if err := appendNative(suffix.source, suffix.guard); err != nil {
 				return nil, err

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose naturally repeatable invitation cancellation through independently
+  selected HTTP and native graph handles. Exact original versions reconcile
+  actual committed metadata after reconstruction without client keys, recipient
+  proof or invented terminal success. Append the native correlation migration
+  after the unchanged invitation history; apply it before enabling cancellation.
+  Current manager/session checks and atomic revocation remain native-owned.
+
 - Compose original-key invitation resend through independently selected HTTP
   and native graph handles. Preserve recipient, role, original expiry and
   original delivery recovery after successor acceptance. Append the native

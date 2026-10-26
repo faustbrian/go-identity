@@ -14,6 +14,7 @@ import (
 
 	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -52,7 +53,7 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		switch c.Request.Action {
-		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.update", "identity.organization.update.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.update", "identity.organization.member.update.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.resend", "identity.organization.invitation.resend.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
+		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.update", "identity.organization.update.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.update", "identity.organization.member.update.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.resend", "identity.organization.invitation.resend.recover", "identity.organization.invitation.cancel", "identity.organization.invitation.cancel.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -92,7 +93,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 	issuer.Audience, issuer.Crypto.Clock, preparation.Clock = "organization-invitation", nil, nil
 	issuer.Crypto.Limits.MaxLifetime = 15 * time.Minute
 	c.Organization.Invitations = &reference.OrganizationInvitationConfiguration{Policy: organization.InvitationConfig{Audience: issuer.Audience, Lifetime: 15 * time.Minute, MaximumPending: 100}, Issuer: issuer, Preparation: preparation, ConfigurationID: "reference-organization-invitation-v1", SelectInvitationID: selectID, TemplateID: "organization-invitation", TemplateVersion: 1, PolicyVersion: 2, ProviderVersion: 2, LocaleChain: []string{"en"}, Endpoint: origin + "/invitation", ScopeKey: [32]byte{144}}
-	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, InvitationResend: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
+	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, InvitationResend: true, InvitationCancel: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
 		// This success-path fixture does not expect a rate denial. Failing the
 		// callback cannot permit a denied request or fake successful auditing.
 		t.Error("unexpected organization administrative denial")
@@ -358,6 +359,72 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FILTER (WHERE topic='invitation.accepted.v1'), count(*) FILTER (WHERE topic='membership.created.v1') FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1`, string(original)).Scan(&invitationEvents, &membershipEvents); err != nil || invitationEvents != 1 || membershipEvents != 1 {
 		t.Fatal("acceptance lost distinct atomic invitation/membership events", err)
 	}
+	// A separate pending invitation proves cancellation rather than inferring
+	// revocation from an already accepted/consumed predecessor.
+	third := create("reference-cancel-organization", "reference-cancel-original-create")
+	cancelSend := map[string]any{"organizationID": third.OrganizationID, "organizationVersion": uint64(1), "recipientUserID": recipient.user, "recipientIdentifierID": recipient.identifier}
+	code, wire = call(owner, http.MethodPost, "/v1/organization/invitation-send", cancelSend, "reference-cancel-original-send")
+	var cancelSent organizationhttp.InvitationSendResponse
+	if code != 200 || json.Unmarshal(wire, &cancelSent) != nil || !cancelSent.Committed || cancelSent.InvitationID == "" {
+		t.Fatal("Reference cancellation invitation not issued", code)
+	}
+	if _, err := workers.ProcessDeliveryOne(ctx, 1); err != nil {
+		t.Fatal("Reference cancellation proof delivery", err)
+	}
+	var cancelLink string
+	select {
+	case cancelLink = <-messages:
+	case <-ctx.Done():
+		t.Fatal("cancellation invitation delivery absent")
+	}
+	parsedCancelLink, err := url.Parse(cancelLink)
+	if err != nil || parsedCancelLink.Query().Get("token") == "" {
+		t.Fatal("cancellation proof absent")
+	}
+	cancelProof := parsedCancelLink.Query().Get("token")
+	parsedProof, err := capability.ParseProof(cancelProof, c.Organization.Invitations.Issuer.Crypto.Limits)
+	if err != nil {
+		t.Fatal("delivered cancellation predecessor proof invalid")
+	}
+	beforeCancel, err := features.OrganizationInvitations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptBeforeCancel, err := beforeCancel.PrepareAcceptance(ctx, organization.InvitationAcceptRequest{Authentication: recipient.auth, CommandID: commandIDForReference(t), OrganizationID: third.OrganizationID, ID: cancelSent.InvitationID, OrganizationVersion: 1, InvitationVersion: 1, Proof: parsedProof, CorrelationID: "before-reference-cancel"}, "127.0.0.1")
+	if err != nil {
+		t.Fatal("actual cancellation predecessor was not admissible", err)
+	}
+	cancelBody := map[string]any{"organizationID": third.OrganizationID, "organizationVersion": uint64(1), "invitationID": cancelSent.InvitationID, "invitationVersion": uint64(1)}
+	if code, _ := call(owner, http.MethodPost, "/v1/organization/invitation/cancel", cancelBody, "forbidden-key"); code != 400 {
+		t.Fatal("natural cancellation accepted a client key", code)
+	}
+	if code, _ := call(recipient, http.MethodPost, "/v1/organization/invitation/cancel", cancelBody, ""); code != 403 {
+		t.Fatal("recipient obtained manager cancellation authority", code)
+	}
+	code, wire = call(owner, http.MethodPost, "/v1/organization/invitation/cancel", cancelBody, "")
+	var cancelled organizationhttp.InvitationCancelResponse
+	if code != 200 || json.Unmarshal(wire, &cancelled) != nil || !cancelled.Committed || cancelled.State != "cancelled" || cancelled.InvitationID != cancelSent.InvitationID || cancelled.BeforeVersion != 1 || cancelled.AfterVersion != 2 || cancelled.Recovery == nil || cancelled.MemberID != "" || bytes.Contains(wire, []byte(cancelProof)) {
+		t.Fatal("Reference natural cancellation did not commit", code, cancelled.CommitOutcome, cancelled.Error)
+	}
+	code, wire = call(owner, http.MethodPost, "/v1/organization/invitation/cancel", cancelBody, "")
+	var cancelledRetry organizationhttp.InvitationCancelResponse
+	if code != 200 || json.Unmarshal(wire, &cancelledRetry) != nil || cancelledRetry.CommandID != cancelled.CommandID || cancelledRetry.State != "cancelled" {
+		t.Fatal("Reference cancellation repeat replaced original history", code)
+	}
+	if out, err := acceptBeforeCancel.Execute(ctx); err == nil || out.Receipt.Outcome == identity.CommitOutcomeCommitted {
+		t.Fatal("already-prepared acceptance survived cancellation")
+	}
+	cancelAccept := map[string]any{"commandID": commandIDForReference(t), "organizationID": third.OrganizationID, "invitationID": cancelSent.InvitationID, "organizationVersion": uint64(1), "invitationVersion": uint64(1), "token": cancelProof}
+	if code, _ := call(recipient, http.MethodPost, "/v1/organization/invitation/accept", cancelAccept, ""); code == 200 {
+		t.Fatal("cancelled proof accepted through HTTP")
+	}
+	var cancelEffects, cancelEvents, cancelMembers int
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT
+ (SELECT count(*) FROM organization.command_effects WHERE invitation_id=$1 AND operation='identity.organization.invitation.cancel'),
+ (SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$2 AND topic='invitation.cancelled.v1'),
+ (SELECT count(*) FROM organization.memberships WHERE tenant_id=$3 AND organization_id=$4 AND user_id=$5 AND state='active')`, string(cancelSent.InvitationID), string(cancelled.CommandID), string(otpTenant), string(third.OrganizationID), string(recipient.user)).Scan(&cancelEffects, &cancelEvents, &cancelMembers); err != nil || cancelEffects != 1 || cancelEvents != 1 || cancelMembers != 0 {
+		t.Fatal("Reference cancellation failed atomic singleton/no-membership effects", err)
+	}
 	rebuilt, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		t.Fatal("reconstruct Reference organization graph", err)
@@ -404,6 +471,11 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err != nil || resendRecovered.Receipt.Outcome != identity.CommitOutcomeCommitted || resendRecovered.Receipt.Binding.CommandID != resent.CommandID || resendRecovered.Receipt.Feature == nil || resendRecovered.Receipt.Feature.BeforeVersion != 1 || resendRecovered.Receipt.Feature.AfterVersion != 2 || resendRecovered.DeliveryState != delivery.StateAccepted {
 		t.Fatal("fresh Reference original resend recovery after acceptance", err)
 	}
+	cancelRequest := organization.InvitationCancelOperationRequest{Authentication: owner.auth, OrganizationID: third.OrganizationID, InvitationID: cancelSent.InvitationID, OrganizationVersion: 1, InvitationVersion: 1, CorrelationID: "reconstructed-cancellation"}
+	cancelRecovered, err := invitationsOwner.Cancel(ctx, cancelRequest, "127.0.0.1")
+	if err != nil || cancelRecovered.Receipt.Outcome != identity.CommitOutcomeCommitted || cancelRecovered.Receipt.Binding.CommandID != cancelled.CommandID || cancelRecovered.Receipt.Feature == nil || cancelRecovered.Receipt.Feature.BeforeVersion != 1 || cancelRecovered.Receipt.Feature.AfterVersion != 2 {
+		t.Fatal("fresh Reference cancellation did not recover original history", err)
+	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
 	if _, err := invitationsOwner.RecoverAccept(ctx, recovery); err == nil {
 		t.Fatal("revoked recipient recovered protected history")
@@ -415,6 +487,18 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if _, err := invitationsOwner.Resend(ctx, resendRequest, "127.0.0.1"); err == nil {
 		t.Fatal("revoked manager recovered original resend")
 	}
+	if _, err := invitationsOwner.Cancel(ctx, cancelRequest, "127.0.0.1"); err == nil {
+		t.Fatal("revoked manager recovered original cancellation")
+	}
+}
+
+func commandIDForReference(t testing.TB) identity.CommandID {
+	t.Helper()
+	id, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 type organizationTestHuman struct {

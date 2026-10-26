@@ -224,6 +224,21 @@ func (f *OrganizationInvitationService) Resend(ctx context.Context, r organizati
 	return n.sender.Resend(w, r, network)
 }
 
+// Cancel uses native exact-version manager cancellation and original natural-
+// repeat recovery. It requires no recipient credential or proof. Graph lifetime
+// and tenant guards remain separate from current native action authority.
+func (f *OrganizationInvitationService) Cancel(ctx context.Context, r organization.InvitationCancelOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, true)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.invitations.Cancel(w, r, network)
+}
+
 // Get retains native owner-only current invitation disclosure.
 func (f *OrganizationInvitationService) Get(ctx context.Context, r organization.InvitationReadRequest) (organization.InvitationDelivery, error) {
 	if f == nil {
