@@ -1,23 +1,23 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 10:51 UTC
+## Current TL;DR — 2026-10-26 14:44 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
   qualification is still unproved; no new qualified unit is claimed.
-- **Latest delivered behavior:** consented OIDC UserInfo reads the current
-  native display name. The same access token observes two real committed profile
-  changes; ID tokens stay minimized and unconsented names stay omitted. Native
-  `6ad14b9` is independently reviewed, main-pushed and Required40310196432 green.
-  Its actual authenticated downloaded module passes PostgreSQL/race104.511s,
-  including mixed snapshots, schema mismatch, late withdrawal and expiry denial.
-  This closes the name profile, not full M31 or HTTP/reference composition.
-- **Also delivered:** intended-recipient invitation rejection/retry through
-  native PostgreSQL, HTTP and the downloaded Reference backend (`bb8415d`),
-  independently reviewed and main/CI-green.
-- **Active implementation:** organization advisory slug availability, followed
-  by its native and opt-in HTTP/Reference path. The root worker is running the
-  first RED; primary owns public pins, integration and acceptance.
+- **Latest complete consumer profile: advisory organization slug availability.**
+  A signup-issued nonmember session can check a tenant-local candidate through
+  native APIs or opt-in HTTP, observe actual create/rename occupancy and lose
+  access on logout. No reservation or organization metadata is returned.
+  Reference `0cebe9e` is reviewed/main/CI-green; its authenticated downloaded
+  module passes fresh/populated PostgreSQL/HTTPS/race12.648s. Native/HTTP and
+  genuine public consumer are also reviewed, main-pushed and CI-green.
+- **Also delivered:** consented OIDC current display names (`6ad14b9`) and
+  intended-recipient invitation rejection (`bb8415d`), with their public-module
+  PostgreSQL/race proofs. Existing registration/verification/signin/session,
+  reset/change, MFA/passkey and organization profiles are detailed below.
+- **Next:** current-user organization listing through the HTTP/Reference
+  backend, adopting the existing core/native list rather than restarting it.
 - **Remaining:** 29 open/unassessed roadmap rows, substantial partial work,
   broader social/federation/provisioning and full platform qualification.
   No user decision blocks implementation. Earlier combined OIDC race failure
@@ -2951,7 +2951,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
-| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. The integrated HTTP/Reference backend includes exact-version metadata/static-role updates, current privilege changes, last-owner safety, encrypted invitation send/resend/once acceptance and original recovery. Resend native `8638dae`, public consumer `e0e077b`, HTTP leaf `41bd437` and Reference `4c4fcb7` are reviewed/main/CI-green; the actual downloaded Reference passes fresh/populated-identity PostgreSQL/HTTPS/race journeys (10.142s), including predecessor denial, fixed expiry/role, successor acceptance, reconstruction recovery and logout. Native original-key archive/restore `e7ab7d0` with public consumer `381ac2a` retains its public PostgreSQL/race proof (12.530s). Natural-repeat cancellation (Reference `ae30528`) and recipient rejection (Reference `bb8415d`) are now reviewed/main/CI-green with genuine downloaded-public PostgreSQL/HTTPS/race proof. Remaining HTTP mutations, external lifecycle cascades and active-selection variants keep the full row open; unit qualification remains separately outstanding. |
+| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. The integrated HTTP/Reference backend includes exact-version metadata/static-role updates, current privilege changes, last-owner safety, encrypted invitation send/resend/once acceptance and original recovery. Resend native `8638dae`, public consumer `e0e077b`, HTTP leaf `41bd437` and Reference `4c4fcb7` are reviewed/main/CI-green; the actual downloaded Reference passes fresh/populated-identity PostgreSQL/HTTPS/race journeys (10.142s), including predecessor denial, fixed expiry/role, successor acceptance, reconstruction recovery and logout. Native original-key archive/restore `e7ab7d0` with public consumer `381ac2a` retains its public PostgreSQL/race proof (12.530s). Natural-repeat cancellation (Reference `ae30528`) and recipient rejection (Reference `bb8415d`) are now reviewed/main/CI-green with genuine downloaded-public PostgreSQL/HTTPS/race proof. Advisory slug availability is delivered through root `c39b1e6`, native `4c16fb9`, HTTP `5d1e06d`, genuine consumer `ef179f3` and Reference `0cebe9e`; the downloaded Reference passes fresh/populated PostgreSQL/HTTPS/race12.648s, including nonmember reads, actual create/rename changes, reconstruction and logout denial. Remaining HTTP mutations, external lifecycle cascades and active-selection variants keep the full row open; unit qualification remains separately outstanding. |
 | M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native team creation/membership/read/update/terminal deletion delivered through `dc12ee7`, with green CI and downloaded-native genuine-session PostgreSQL/race proof. Dynamic roles/permissions and HTTP/reference remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
 | M25 | Verified domain/provider registration and federation policy: sso, sso/domain-verification, sso/postgres | Closure not reassessed |

@@ -1,5 +1,75 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 14:44 UTC: advisory slug outcome CLOSED end to end. Rootc39b1e6,
+native4c16fb9, HTTP5d1e06d, genuine consumeref179f3 and Reference0cebe9e are
+reviewed/main-pushed; exact Required40330813923/40335228070/40335230064/
+40340525934/40340527757 SUCCESS. slug_composition_final_review APPROVE exact
+consumer2ce085d/Reference6dbc826, no findings. Genuine consumer ordinary2.163s/
+race6.866s/taggedvet/tidy/modverify0; Reference own-method RED then GREEN0.507s,
+ordinary race9.341s/command11.715s/taggedvet/tidy/modverify0. First fresh journey
+failed its expected-operation list (missing new flag); exact row was added,
+not a weakened count/budget/authority. Fresh rerun6.238s passed; earlier failure
+stays failed. Actual authenticated downloaded Reference
+v0.0.0-20261026143215-0cebe9e185b1 originexact0cebe9e/Subdirreference,
+Sumh1:zRC9coodh7e2BHNn1NeAEoV/pnYRpEljKYsjbz/02A0=,
+GoModSumh1:8SMcMiXBZZpoFFVYBPJDmxEnG5DQKTysB89JbkFa6K0=;
+all10 reviewed files byte-match. Actual downloaded fresh/populated PG/HTTPS/race
+1084 terminal0 package12.648s (5.37s/5.70s): genuine nonmember free/taken,
+committed create/rename, guarded reconstruction/tenant denial, actual logout
+denial and independent surviving owner. No workspace/replacement/app store.
+Cluster69479 stopped and exact owned /private/tmp/organization-slug-pg.ZX4nxc
+and /private/tmp/organization-slug-delivery.iMNBOF removed; cleanup59522 terminal0.
+No live worker or Go run; full M22/67 qualification stays open, overall10/39.
+Next finite candidate is existing current-user organization list composition;
+do not restart root/native list or requalify the unchanged slug outcome.
+
+2026-10-26 14:03 UTC: native4c16fb9/HTTP5d1e06d are reviewed/main-pushed,
+Required40335228070/40335230064 SUCCESS. Combined reviewer
+slug_native_http_final_review APPROVE exact nativeadee687/HTTPc68b422;
+all source/test/manifest bytes equal authenticated public downloads. Actual
+downloaded native PG/race32922 PASS3.357s; downloaded HTTP23176 PASS1.466s.
+Native final race3.718s/ordinary0.263s/taggedvet/tidy/modverify0; HTTP whole
+race12.748s/vet0/fuzz6329exec4.312s/finaltidy/modverify0 retained. Root c39
+and native4c16 public pins unlock the worker's approved genuine signup consumer;
+first coherent normal-public run37618 PASS2.163s, not yet independently reviewed.
+Primary Reference scope frozen: existing organization graph/facade + independent
+SlugAvailable HTTP flag/shared safe-rate, no new store/migration/authority.
+Consume public rootc39/native4c16/HTTP5d1; preserve nil/tenant/drain guards.
+Prove actual fresh/populated signup/verification/signin, nonmember free/taken
+and renamed occupancy, reconstructed direct read, logout denial and surviving
+independent session. First own-method RED, affected ordinary/race/real HTTPS
+journeys, then one combined independent composition review with genuine native
+consumer before publication. No full M22/unit closure until all remaining scope.
+
+2026-10-26 13:34 UTC: primary owns the same slug outcome's HTTP integration.
+Consume reviewed/public rootc39b1e6; canonical catalog already specifies
+GET /v1/organization/slug-available, session/none, read/rate.safe. Add a narrow
+optional SlugAvailability port and independent feature flag, without extending
+existing five-method Service. Closed single slug query; strict bearer, mapped
+HTTPS tenant, no body/key/identity overrides, shared safe-rate and original
+session expiry before/after domain call. Return only available:boolean or the
+existing secret-free error envelope; disabled route/metadata absent. Focused
+TDD/race, hostile query/header cases and bounded fuzz, wire/selected-router
+behavior, then one complete final-diff review. Genuine native and Reference
+journeys remain necessary before closing the full slug profile.
+
+2026-10-26 13:30 UTC: slug native lane UNLOCKED after rootc39b1e64476e222fd0dee6fd4394d1e2809aa34c
+reviewed five-path patch2545d11 APPROVE by organization_slug_root_review,
+main/origin exact and Required40330813923 SUCCESS. Root ordinary0.244s,
+focused race1.244s/vet/tidy-diff/modverify retained; reconstruction runtime RED
+precedes correction. Actual authenticated public root
+v0.0.0-20261026132754-c39b1e64476e has exact origin and source/test/docs/manifests
+byte equality, Sumh1:yG1wnvVCQ10k/P2+WAfl7F745jtXJn39Haeix776QGw=,
+GoModSumh1:HFX7AoFO6dLYTNcIeleKAEgiV9m19mXlH0q4L/K/rpA=;
+actual downloaded external race94714 terminal0 package1.265s. Primary selected
+that public root in native manifest/sums. Worker may implement frozen native
+Service delegation/Repository occupancy and real-session PostgreSQL tests.
+No new authority/migration/state filter or member requirement. Parent retains
+genuine signup/public-consumer and HTTP/Reference composition. Shared bounded
+cohort /private/tmp/organization-slug-delivery.iMNBOF is primary-owned through
+native public proof; heavy slot released to worker, who must report owned PG
+coordinates before tests. Public root alone does not close the full slug outcome.
+
 2026-10-26 10:51 UTC: OIDC consented native profile/name outcome CLOSED.
 Reviewed/main-pushed6ad14b9 Required40310196432 SUCCESS. Actual authenticated
 downloaded native profile/schema/config and all14late/mixed cases under real
