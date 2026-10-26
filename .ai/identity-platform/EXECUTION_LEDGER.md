@@ -1,5 +1,131 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 20:12 UTC: native team-membership consumer profile CLOSED at
+fc61ccd3328c1189148145b5fc20f2d1679d8abc main/remoteexact, Required40393138600
+SUCCESS. Fivepath7e177f84 team_membership_consumer_review APPROVE nofindings.
+Actual public/no-replace rootcb1/native4a005 consumed through real signup/
+verification/password sessions; 38465PG/race all15subtests PASS10.458s,
+taggedvet0. Teamwrite-only actualpolicy explicitlydeniesorgGet; actualadmission/
+memberreads/naturalremoval/reconstruction succeed, readmissioncannotreviveold
+teamrights, rollback/COMMITloss/contention and realSignOut/lateauthoritydeny.
+Naturalqueryhook arms after second managementdecision, actualfinalqueryfence;
+singletonepochs/effects asserted beforeany contentionrepair. Finaltidy/verify
+80862 zero afterexact4obsoletechecksums removed, runtimeinputs unchanged.
+PrimaryownedPG54028 stopped and exactcachecohortEDEgBM removed (88432 terminal0).
+Worker stopped ownPG54027 and removed exactcohorthNYVXD (68059 terminal0,
+directoryabsent/no listener). No live task-owned service/cache remains from
+these closed lanes. No HTTP/Reference teammembership or fullM23/67 claim.
+Root/native/http/reference sourcepins and precedingchecks remain retained;
+no history-only fullreverification. Wholeestimate~25%lowconfidence,10/39 rows.
+
+2026-10-26 20:01 UTC: primary local archive/restore profile CLOSED. Reference
+e586fd428e2f4e6410b44409ff8b38560aaa6d1b main/remoteexact,
+Required40391329642 SUCCESS; fifteen-path22609117 lifecycle_reference_review
+APPROVE no findings. Source59065 four fresh/populated lifecycle+legacy org
+PG/HTTPS/race PASS21.629s, ordinaryReference/cmd5.191/5.697s, taggedvet0.
+Final39897 tidy/verify0 after exact4obsoletebase/leafchecksums removed;
+newcatalog guard/race31368 PASS1.754s, isolatedcatalog-input fix68842 PASS1.565s.
+Actual authenticated publicReference
+v0.0.0-20261026195707-e586fd428e2f exactorigin/Subdirreference/all15filesmatch,
+Sum1rNPIyLtI13znz6WSMvalMDC4zNbcAigoLsRWA3eKtQ=,
+GoModSumr37UyOgLsytAZWk9+1jMwX6ifLyxwJBImmkJX9u7jb4=.
+Actual downloaded76030 fresh/populated PG/HTTPS/race PASS10.464s
+(4.17/4.65s), no replacements/application stores. Native predecessor proof
+381ac2a reused, not rerun. Local rollback, distinct action, archive denial,
+no revived invitation, freshsession/reconstructedhistory/logout proven. External
+async cascades/harddelete remain unselected/fullgoal obligations, not claimed.
+
+Parallel native teammembership4a005aa5643cc0942bf02776626af0b0ad149599 main/
+Required40391328765 SUCCESS. Round2 eleven-pathe8e8b17f reviewer
+team_membership_native_final_review APPROVE no findings; F1 actualorgread
+dependency corrected with invocation-only actualteamaction+currentadmission
+pre/postcallback fences; rawlegacyRecover unchanged. Corrected35866 focusedF1
+PG/race2.616s, allaffected+legacyteam/callbackfences17.982s, ordinaryrace1.369s,
+ordinary/taggedvet0. Publicnative
+v0.0.0-20261026195707-4a005aa5643c exactorigin/Subdirpostgres/all11filesmatch,
+SumujtxHpXemyCbJDorl/LWaWn2El8oy9clthUWxEOafe0=,
+GoModSumG9A4XuERKNPcEfFod70C7dcEeDnZWtZ41m+jNZtJyVM=.
+Consumer normalrootcb1/native4a005 pins adopted, genuinepublic
+TestOrganizationGenuineTeamMemberOperationConsumer assignedheavy slot;
+not yet accepted/committed. Worker PG54027/cohorthNYVXD until finiteclosure.
+Primary PG54028/cohortEDEgBM cleanup immediately next. No new whole row/unit
+claim; ~25% lowconfidence and10/39 whole rows unchanged. Fullgoal active.
+
+2026-10-26 19:48 UTC: primary lifecycle HTTP baseca84156/leaf03992e2 pushedmain,
+Required40385771373/40387010646 SUCCESS. Independent lifecycle_http_policy_review
+e100aba2/lifecycle_http_leaf_review af085d52 APPROVE, no findings. Leaf RED53770
+missing API -> focused90074 PASS.342s; original fullrace10008 failed obsolete
+Archive-unsupported rate testcase, corrected to assert both selected lifecycle
+actions share exact buckets and reject GetTeam. Intermediate test typoDelete
+notcompiled, correctedonlytest. Final59966 fullleafrace16.253s/vet/fuzz14exec
+3.270s; tidyonly2obsoleteoldbasechecksums removed, finaltidy/verify0 (c1cb58
+laterGitcwd error unrelatedGo; correctedrootstaginga718f1). Actualdownloaded
+leafv0.0.0-20261026192800-03992e22930a exactorigin/Subdirhttp/organization,
+SumUvx71NVdJD6WLysjZkplC/fahpbF75iTKpT/Ciob4+o=,
+GoModSum61mhZDOH2ZnZhM4bLRdewZhfm4t8A/cKYfUNmyZCSfc=, all12filesmatch.
+Reference nativefacade RED8221 -> guards/neweractionhistory92895 PASS.459s;
+newer anonymous/passkey native suffixes alreadyretain lifecyclepurposes, so
+never schedule older lifecycle28 over their consumed records. Physical
+invitationprefix reserved before lifecycle13 evenwheninvitationflowsunselected,
+preserving laterenablement. Actual freshPG/HTTPS29267 PASS1.455s after test-only
+two routecountentries were missing (86485 failure); full fresh/populated+legacy
+race59065 running, not yet reviewed or delivered Reference outcome.
+
+Parallel root teammembershipcb1b12b main/Required40386823450 SUCCESS;
+sixpath623c7ec9 team_membership_root_review APPROVE. Adjacent preexisting root
+operation_requests_test.go FuzzDirectOperationRequestValidation rejects valid
+OwnerTransfer with mode8/valueexactop/versions1; oracle correction retained as
+separate pending work, not newteam rootdefect or verifiedunitclaim.
+Native11path ec3b7b77 reviewround1 REQUEST_CHANGES: original helper imposed
+organization.Get on teamwrite-only manager, also recovery via core.Get. Actual
+threecase85522 REDForbidden proves initial removal, keyedadd recovery and
+naturalremove recovery. Worker correcting exactfacade-only actualaction/current
+membership admission with pre/postcallback fences; legacyrawRecover unchanged.
+Earlier mapping-only loss44183 RED -> serviceguardAddTeamMember fixed, 32031
+newPG/race5.067s/ordinaryrace1.375s/vets0 remain earlierinput evidence, not final
+F1 verification. Primarytidy/verify84336 zero, exact2oldrootsumsremoved only.
+Worker owns PG54027/cachehNYVXD; primary owns PG54028/cacheEDEgBM. No new unit
+or wholeM22/M23 closure claim; fullgoalactive, no userdecisionneeded.
+
+2026-10-26 19:16 UTC: frozen next primary M22 local archive/restore composition.
+Own go-identity http canonical bearer admission, http/organization leaf and
+reference composition; consume actual public root4894322/native0807be0, which
+include reviewed lifecycle e7ab7d0 and genuineconsumer381ac2a PG/race12.530s.
+Strict bearer HTTPS POST /v1/organization/archive and /restore, exact original
+header key, closed orgID/version/reason/proofID only; distinct native action
+proof sources via existing password owner. No callercommand/proofprojection,
+tenant/actor override, renewed proof, implicit retry or private lifecycle engine.
+Shared admin admission; native currentowner/factor/session, atomic local archive
+and invitation cancellation, fresh restore without reviving terminal grants.
+Expose guarded native GetLifecycle for current archived version discovery;
+HTTP receipts report command outcome, never asynchronous cascade completion.
+This profile has no external SSO/SCIM integration links; broader lifecycle and
+hard deletion stay required later, not claimed by this composition. Prove exact
+intent and receipt epoch binding before metadata, unknown/late commitment,
+disabled omission and opt-in bootstrap dependency failure. Genuine signup/
+verification/signin -> password proof -> archive -> denied read/invitation ->
+distinct restore proof -> active surviving membership/no revived invitation ->
+fresh signin/reconstruction original recovery -> logout/closed denial, fresh+
+populatedPG/HTTPS. Focused red/green/race/vet/fuzz, one independent finaldiff
+review per dependency publication, ordinarymain/CI/publicconsumer, cleanup.
+
+Parallel next finite M23 team-membership lane, new worker team_membership:
+owns go-organization new team_member_operation*.go/tests, postgres/
+operation_team_member*.go/tests and consumer/team_member_operation*test plus
+unique existing harness dispatch, relevant module README/CHANGELOG additions.
+Consume root a68570a/nativeed693c9/genuine1703cc5 (all main/CIgreen, public
+consumerPG/race8.252s), existing real PrepareAddTeamMember/RemoveTeamMember,
+ListMyTeams/ListTeamMembers and native authority. Outcome keyed exact team
+admission then natural exact-binding removal, original recovery/reconstruction,
+current organization membership required; leave/readmission cannot revive old
+team binding. No substitute authority, role engine, HTTP/Reference or team
+rename/delete work. Shared production hunks/index changes require concrete
+agreement; primary owns pins/Git/reviews/integration. Worker must inspect exact
+catalog semantics once before productionwrite, report first boundary, serialize
+Go-heavy runs by grant. Frozen tests cover real public signup/admission/read/
+removal, changed intent, isolation/current authority, last known epoch, rollback,
+contention, COMMITloss and logout; no broad package qualification restart.
+
 2026-10-26 19:14 UTC: invitation-expiry composition CLOSED. Exact reviewed
 HTTP policy37710d3/leaf745c248/Reference8c1c37f pushedmain, Required40379108287/
 40380972494/40383384588 SUCCESS. Native expiry0807be0/c000e1d proof retained.

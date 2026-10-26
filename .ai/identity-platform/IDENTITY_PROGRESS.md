@@ -1,11 +1,29 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 19:14 UTC
+## Current TL;DR — 2026-10-26 20:12 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
   qualification is still unproved; no new qualified unit is claimed.
-- **Latest complete consumer profile: invitation expiry.** Verified signup-issued
+- **Latest complete profile: local archive/restore.** Real signup/password
+  action proofs -> opt-in HTTP archive -> ordinary authority denial -> distinct
+  fresh-proof restore without revived invitations -> reconstructed original
+  recovery -> logout denial. Base HTTP `ca84156`, leaf `03992e2` and Reference
+  `e586fd4` are independently reviewed, main-pushed and CI-green. The actual
+  downloaded Reference passes fresh/populated PostgreSQL/HTTPS/race (10.464s).
+  This closes the selected local profile, not external SSO/SCIM cascade closure,
+  hard deletion, full M22 or another fully qualified unit.
+- **Parallel team membership:** root `cb1b12b` and native `4a005aa` are reviewed,
+  main-pushed and CI-green. Keyed admission and natural exact-binding removal
+  retain actual current team-write/query authority without requiring unrelated
+  organization reads. The permission-partition regression was demonstrated and
+  corrected before publication; final affected native PostgreSQL/race17.982s.
+  Genuine public signup/session consumer `fc61ccd` is independently reviewed,
+  main-pushed and CI-green: all 15 PostgreSQL/race scenarios pass (10.458s),
+  including actual logout, late authority withdrawal, rollback and COMMIT loss.
+  This closes the native membership profile. Team HTTP/Reference and dynamic
+  roles remain unfinished; no full M23 or unit qualification is claimed.
+- **Also complete: invitation expiry.** Verified signup-issued
   sessions expire pending invitations through guarded native APIs or opt-in
   bearer HTTP. Expiry invalidates acceptance, retains original history, rejects
   changed intent and denies history after logout. HTTP `745c248` and Reference
@@ -77,7 +95,7 @@
   and domain COMMIT loss. Consumer `1e1f7ff` is independently reviewed,
   main-pushed and CI-green. HTTP/Reference transfer is now delivered above;
   no full M22 or additional qualified unit is claimed.
-- **Next:** archive/restore HTTP/Reference and remaining organization lifecycle composition,
+- **Next:** team composition and the concrete domain-challenge admission prerequisite for federation,
   adopting public owners without restarting delivered profiles. A bounded SCIM readiness check
   identified missing connection/provider-bound provisioning authority and atomic
   identity-command composition; generic CRUD/parsers cannot substitute for it.
@@ -86,6 +104,8 @@
   No user decision blocks implementation. Earlier combined OIDC race failure
   remains failed; named retained partitions subsequently passed, without a
   claimed timing/root-cause fix. No deployment or release is claimed.
+  Hosted Required checks prove their declared structure/secrets checks; the
+  named local PostgreSQL/HTTPS/race results supply the runtime proof.
 
 ## Retained checkpoint — 2026-10-26 09:18 UTC
 
