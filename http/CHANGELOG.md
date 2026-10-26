@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Permit an explicitly selected strict-bearer self-leave policy. The canonical
+  safe-rate and natural-repeat contracts remain unchanged; cookie handlers
+  retain synchronizer CSRF protection. Selection alone enables no route or
+  membership mutation.
+
 - Permit an explicitly selected strict-bearer recipient-rejection policy.
   Canonical safe-rate, natural-repeat and cookie-CSRF requirements remain
   unchanged; selection alone enables no route or recipient authority.

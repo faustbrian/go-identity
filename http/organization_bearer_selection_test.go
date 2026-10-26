@@ -14,7 +14,7 @@ import (
 func TestCanonicalOrganizationSelectsOnlyExactBearerMutationPolicies(t *testing.T) {
 	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	bearer := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}
-	for _, operation := range []string{"identity.organization.create", "identity.organization.update", "identity.organization.member.add", "identity.organization.member.update", "identity.organization.member.remove", "identity.organization.invitation-send", "identity.organization.invitation.accept", "identity.organization.invitation.resend", "identity.organization.invitation.cancel", "identity.organization.invitation.reject"} {
+	for _, operation := range []string{"identity.organization.create", "identity.organization.update", "identity.organization.member.add", "identity.organization.member.update", "identity.organization.member.remove", "identity.organization.member.leave", "identity.organization.invitation-send", "identity.organization.invitation.accept", "identity.organization.invitation.resend", "identity.organization.invitation.cancel", "identity.organization.invitation.reject"} {
 		t.Run(operation, func(t *testing.T) {
 			config := identityhttp.CanonicalOperationConfig{Owner: "organization", OperationID: operation, Handler: handler, CSRF: bearer, MaximumSerializedBytes: 16384}
 			selected, err := identityhttp.NewCanonicalOperation(config)
