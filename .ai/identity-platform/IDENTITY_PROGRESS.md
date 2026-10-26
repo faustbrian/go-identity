@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 22:36 UTC
+## Current TL;DR — 2026-10-26 22:50 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** The new team lifecycle is a usable delivery within M23, not another
@@ -20,14 +20,18 @@
   The same review exposed and fixed history-disclosure defects in role deletion,
   team deletion and team-member removal; Reference now pins that corrected native
   owner. Use `6bcfd9e` rather than predecessor team recovery implementations.
-  Genuine public role-consumer acceptance is not yet closed: its combined fixture
-  reached the unchanged privileged-action limit. Two fresh-database cohorts retain
-  the same policy and all cases; their rerun/review remains pending.
+  Genuine public consumer `e0e1cd7` is independently reviewed, main-pushed and
+  CI-green: PostgreSQL/race17.214s covers 23 failure/authority cases plus complete
+  signup/CRUD/permission/history journeys in two fresh-database cohorts, under
+  the unchanged abuse policy. That native profile is closed; role HTTP/backend
+  composition remains unfinished.
 - **Still open:** dynamic roles, remaining identity/federation/provisioning and
   shared-issuer profiles, plus whole-unit qualification. Existing evidence is
   retained; no baseline restart or Tools programme is underway.
-- **Next:** close public role-consumer acceptance, then compose its HTTP/backend
-  profile. No baseline restart, Tools programme or user decision is needed.
+- **Current:** primary is composing role HTTP/backend; the exact bearer-policy
+  prerequisite is committed as `56253b2`. An independent worker is adding the
+  direct role-assignment/revocation workflow over existing native authority.
+  No baseline restart, Tools programme or user decision is needed.
 
 ## Retained checkpoint — 2026-10-26 20:12 UTC
 

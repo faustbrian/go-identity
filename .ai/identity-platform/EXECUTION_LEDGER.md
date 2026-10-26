@@ -1,5 +1,68 @@
 # Identity Implementation — Current Milestone
 
+Frozen primary M23 role CRUD composition: primary owns go-identity baseHTTP
+exact3rolemutation bearerpolicy prerequisite, http/organization and reference,
+pins/Git/migration composition. Consume publicroot895/native6bc, actual native
+PG/race40.238s and genuine publicconsumer17541 17.214s (23cases, sameproduction
+riskpolicy in2freshDBcohorts; consumer e0e1cd7 main/CIgreen). Root/native
+main/CIgreen; no stub/dependencywall. Outcome real signup/session -> opt-in
+rolecreate/get/list/update/delete -> actualdirect/team permission changes and
+denyprecedence through nativebinding setup -> terminalroleID/bindingdenial ->
+fresh/reconstructedoriginalCRUDhistory/logout, fresh/populatedPG. Strictbearer,
+closedexact IDs/org+roleepochs, keyedcreate/update/naturaldelete, orderedbounded
+64statements/8192encodedbytes, nativepermissioncatalog and currentrolewrite/read/
+queryauthority. Safe/adminsharedrates, no calleractor/tenant/command override,
+no cachelease/freshnessrenewal/unknownredispatch. GuardnativeCheckPermission
+directonly; no inventedHTTPpermission/bindingrows. Consumeexistingnative role/
+optionalteambinding/correlateddelete migrations in independentforwardhistory,
+preserveinstalledprefixes. FocusedTDD/race/vet/hostilefuzz, realpublicReference
+journeys, oneindependentcompletefinaldiff percoherentmodule, main/CI/public
+adoption/cleanup. No active-role/team, conditions/wildcards/custompolicy or
+wholeM23/67-unit claim. Prior workerconsumerlane is now closed below.
+
+Frozen independent worker direct_role_binding: team_membership principal owns
+go-organization NEW role_binding_operation*.go/tests plus exact Assign/Revoke
+nonself recoverywhitelist and additiveREADME/CHANGELOG; then NEW postgres/
+operation_role_binding*.go/tests/migration and genuineconsumer uniquehelper/
+harnessmode/docs. Consume publicroot895/native6bc and acceptedgenuineconsumer
+e0e1cd7 (PG/race17.214s, main/Required40414613368 SUCCESS), rawdirect+team
+permissionproof alreadyretained; no newpermissionsengine. Complete original-key
+directroleassignment -> actualtargetpermission -> naturalexact-bindingrevoke ->
+denial/tombstone/reassignment/neworgadmissionfencing -> originalcurrent-authorized
+fresh/reconstructedhistory/logout. Target GetDynamicRole readalreadyexists.
+Freeze actualroot/native intent/target/version shapes once; no callercommand,
+forgedactor/query, renewedadmission, missingbinding=success or unknownredispatch.
+Nativecurrentrolewrite/query/session ownership, exactorg/role/member/binding
+epochs, existingkeycustody/effects/risk/audit/outbox remainsoleauthorities.
+Preserve rawpositive-only OrgMemberVersion (includingMax): itisobserved, not
+incremented. Org/role/binding retainexistingincrementabilitybounds.
+Approvedsharedhunks: facade-only exactAssign/Revoke recoveryadmission/mapping,
+private naturalrevoke marker/effectbranch, nullableoriginalselectors+partial
+uniqueepoch index inexistingcommand_effects. No newjournal/backfill; legacyraw
+API/schema behaviorpreserved. Retainoriginaladmission acrossqueryclassification/
+finalbindingIO usingcorrected6bc pattern. Namedchecks TDD/race/vet, populated
+nullableupgrade/lockrollback, required-effectrollback/COMMITloss/contention,
+querydeny+changedselectors/latewithdrawal/expiry and realpublicconsumer. Keep
+unchangedriskbudgets; freshDBcohorts ifneeded. Rootphaseonly untilreviewed
+publication; primaryownspins/Git/sharedHTTP/Reference/migrationcomposition.
+No teambindingfacades/HTTP/active-role/condition/wildcard/custompolicy/fullM23
+claim inthisprofile; nextteambindingoutcome followsitsactualdependency.
+
+2026-10-26 22:50 UTC: native roleCRUD/genuineconsumerprofile CLOSED.
+Consumere0e1cd78cb15 main/remoteexact; Required40414613368 SUCCESS.
+Complete5path8a03bb5c dynamic_role_consumer_review APPROVE; original17541
+twofreshDB/signup cohorts retainunchangedriskpolicy/all23cases/commonjourney,
+PG/racePASS17.214s, taggedvet71829 0. Final73275 tidy silent/modulesverified0
+after4obsolete sums removed; no runtimeinputs changedbythatcleanup. Native
+cohort /tmp/dynamic-role-native.YlLIhD exactPG54032 stopped anddirectory/listener
+absent64787 terminal0. No newprofiledata/cache retained fromthatclosedrun.
+PrimarynextroleHTTPpolicy prerequisite56253b26455f main/remoteexact;
+Required40415095939 SUCCESS. Complete4path01b32124 role_crud_http_policy_review
+APPROVE. RED69931 exact3roleIDs invalidinput; GREEN5469 focusedrace1.310s/
+fullHTTPmodule5.650s, vet/tidy/verify0. CurrentroleHTTPcohort
+/private/tmp/organization-role-http.YoZapk ownsitsseparatecache; leaf/Reference
+compositionpending. No fullM23/67qualification claimed.
+
 2026-10-26 22:16 UTC: team CRUD HTTP leaf CLOSED. Complete13path review
 team_crud_http_leaf_review APPROVE on patch0308368d; 13160 focusedrace2.185s,
 fullleafrace16.908s, vet0, boundedfuzz7031exec PASS2.669s. Final61702b
@@ -33,7 +96,7 @@ preserve all installedprefixes. FocusedTDD/race/vet/boundedinputfuzz, one
 independent finaldiff per coherent module, main/CI/publicReference proof.
 No dynamic-role/active-team/browser/wholeM23 claim in this primaryprofile.
 
-Frozen independent worker dynamic_role_CRUD: team_membership principal owns
+Completed frozen independent worker dynamic_role_CRUD: team_membership principal owns
 go-organization NEW dynamic_role_operation*.go/tests plus exact CRUD selfactor
 recoverywhitelist and additive rootdocs; then NEW postgres/operation_dynamic_role*
 source/tests/migration and genuineconsumer helper/uniqueharnessmode/docs. Consume
