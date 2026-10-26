@@ -21,7 +21,7 @@ import (
 // cookie custody. Factories own enforcement; selection issues no CSRF token.
 // Organization create/update/member-add/member-update/member-remove/member-leave,
 // owner-transfer, archive/restore, team create/update/delete/member-add/member-remove
-// and invitation send/accept/resend/cancel/reject/expire
+// role create/update/delete and invitation send/accept/resend/cancel/reject/expire
 // additionally admit None only for explicitly selected strict bearer handlers
 // that ignore ambient cookies. Owner-transfer retains its native fresh proof.
 // Other organization mutations retain their canonical policy.

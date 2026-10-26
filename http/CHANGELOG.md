@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit exact opt-in strict-bearer role create/update/delete policies while
+  preserving canonical role-write, administrative-rate, keyed/natural-repeat
+  and cookie-CSRF contracts. Selection enables no handler or native authority.
+
 - Admit exact opt-in strict-bearer team create/update/delete policies without
   changing their canonical team-write, rate, original-key/natural-repeat or
   cookie-CSRF contracts. Selection alone enables no handler or authority.
