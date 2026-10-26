@@ -83,6 +83,22 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 		if err := appendNative(organizationpg.InvitationRecipientIndexTransactionalMigrationSource{Version: 5}, migrationGuard{version: 5, schema: "organization", tables: []string{"organization_invitation_recipient_page"}}); err != nil {
 			return nil, err
 		}
+		// Keep the installed five-step prefix unchanged. Resend's native
+		// lifecycle extends cancellation/rejection/expiry in that order; these
+		// suffixes own the existing table constraints, not another workflow.
+		for _, suffix := range []struct {
+			source migrations.Source
+			guard  migrationGuard
+		}{
+			{organizationpg.InvitationCancellationMigrationSource{Version: 6}, migrationGuard{version: 6, schema: "organization", columns: []string{"invitations.cancelled_at"}}},
+			{organizationpg.InvitationRejectionMigrationSource{Version: 7}, migrationGuard{version: 7, schema: "organization", columns: []string{"invitations.rejected_at"}}},
+			{organizationpg.InvitationExpiryMigrationSource{Version: 8}, migrationGuard{version: 8, schema: "organization", columns: []string{"invitations.expired_at", "invitations.expiry_reason"}}},
+			{organizationpg.InvitationResendMigrationSource{Version: 9}, migrationGuard{version: 9, schema: "organization", columns: []string{"invitations.issued_version", "command_effects.delivery_effect_id"}, constraints: []string{"invitations.invitations_lifecycle", "command_effects.organization_resend_delivery_scope"}}},
+		} {
+			if err := appendNative(suffix.source, suffix.guard); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return append(catalog, history), nil
 }

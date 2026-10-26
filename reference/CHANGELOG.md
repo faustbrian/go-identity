@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose original-key invitation resend through independently selected HTTP
+  and native graph handles. Preserve recipient, role, original expiry and
+  original delivery recovery after successor acceptance. Append the native
+  cancellation/rejection/expiry/resend migration suffixes after the unchanged
+  invitation prefix; apply these forward histories before selecting resend.
+  No cancellation/rejection HTTP routes are enabled by those prerequisites.
+
 - Adopt the HIBP checker's original-expiry fence across shared publication and
   returning waiters, including overlapping clock observations. Existing provider
   policy and password-screening failure handling remain unchanged.

@@ -1227,6 +1227,7 @@ END $$`); err != nil {
 			{"member.remove", c.HTTPOrganization.MemberRemove}, {"invitation-send", c.HTTPOrganization.InvitationSend},
 			{"invitation.get", c.HTTPOrganization.InvitationGet}, {"invitation.list-mine", c.HTTPOrganization.InvitationListMine},
 			{"invitation.accept", c.HTTPOrganization.InvitationAccept},
+			{"invitation.resend", c.HTTPOrganization.InvitationResend},
 		} {
 			if selected.on {
 				wantOperations++

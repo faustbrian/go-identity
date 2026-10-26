@@ -208,6 +208,22 @@ func (f *OrganizationInvitationService) Send(ctx context.Context, r organization
 	return n.sender.Send(w, r, network)
 }
 
+// Resend retains the original initiating key, recipient and exclusive deadline
+// through the existing native successor/delivery owner. Matching retries return
+// original metadata only, including after later resends or acceptance. Graph
+// lifetime and tenant guards do not replace native current security checks.
+func (f *OrganizationInvitationService) Resend(ctx context.Context, r organization.InvitationResendOperationRequest, network string) (organization.InvitationResendOperationResult, error) {
+	if f == nil {
+		return organization.InvitationResendOperationResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, true)
+	if err != nil {
+		return organization.InvitationResendOperationResult{}, err
+	}
+	defer done()
+	return n.sender.Resend(w, r, network)
+}
+
 // Get retains native owner-only current invitation disclosure.
 func (f *OrganizationInvitationService) Get(ctx context.Context, r organization.InvitationReadRequest) (organization.InvitationDelivery, error) {
 	if f == nil {

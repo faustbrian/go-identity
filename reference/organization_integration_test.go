@@ -52,7 +52,7 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		switch c.Request.Action {
-		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.update", "identity.organization.update.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.update", "identity.organization.member.update.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
+		case "identity.organization.create", "identity.organization.create.recover", "identity.organization.update", "identity.organization.update.recover", "identity.organization.get", "identity.organization.member.list", "identity.organization.member.add", "identity.organization.member.add.recover", "identity.organization.member.update", "identity.organization.member.update.recover", "identity.organization.member.remove", "identity.organization.member.remove.recover", "identity.organization.invitation-send", "identity.organization.invitation-send.recover", "identity.organization.invitation.accept", "identity.organization.invitation.accept.recover", "identity.organization.invitation.resend", "identity.organization.invitation.resend.recover", "identity.organization.invitation.get", "identity.organization.invitation.list-mine":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -92,7 +92,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 	issuer.Audience, issuer.Crypto.Clock, preparation.Clock = "organization-invitation", nil, nil
 	issuer.Crypto.Limits.MaxLifetime = 15 * time.Minute
 	c.Organization.Invitations = &reference.OrganizationInvitationConfiguration{Policy: organization.InvitationConfig{Audience: issuer.Audience, Lifetime: 15 * time.Minute, MaximumPending: 100}, Issuer: issuer, Preparation: preparation, ConfigurationID: "reference-organization-invitation-v1", SelectInvitationID: selectID, TemplateID: "organization-invitation", TemplateVersion: 1, PolicyVersion: 2, ProviderVersion: 2, LocaleChain: []string{"en"}, Endpoint: origin + "/invitation", ScopeKey: [32]byte{144}}
-	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
+	c.HTTPOrganization = &reference.HTTPOrganizationConfiguration{Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true, InvitationGet: true, InvitationListMine: true, InvitationSend: true, InvitationAccept: true, InvitationResend: true, SafeNamespace: "reference-organization-safe", EmergencyMaximumKeys: 64, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }, SecretNamespace: "reference-organization-secret", SecretKey: [32]byte{143}, AdminNamespace: "reference-organization", AdminKey: [32]byte{142}, Denied: func(ctx context.Context, _ organizationhttp.AdminRateEvent) error {
 		// This success-path fixture does not expect a rate denial. Failing the
 		// callback cannot permit a denied request or fake successful auditing.
 		t.Error("unexpected organization administrative denial")
@@ -279,6 +279,50 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if proof == "" {
 		t.Fatal("invitation proof missing")
 	}
+	resendBody := map[string]any{"organizationID": second.OrganizationID, "organizationVersion": uint64(1), "invitationID": sent.InvitationID, "invitationVersion": uint64(1)}
+	code, wire = call(owner, http.MethodPost, "/v1/organization/invitation/resend", resendBody, "reference-original-invitation-resend")
+	var resent organizationhttp.InvitationResendResponse
+	if code != 200 || json.Unmarshal(wire, &resent) != nil || !resent.Committed || resent.InvitationID != sent.InvitationID || resent.BeforeVersion != 1 || resent.AfterVersion != 2 || resent.DeliveryState != "queued" {
+		t.Fatal("Reference original-key invitation resend", code, resent.CommitOutcome, resent.Error)
+	}
+	code, wire = call(owner, http.MethodPost, "/v1/organization/invitation/resend", resendBody, "reference-original-invitation-resend")
+	var resentRetry organizationhttp.InvitationResendResponse
+	if code != 200 || json.Unmarshal(wire, &resentRetry) != nil || resentRetry.CommandID != resent.CommandID || resentRetry.BeforeVersion != 1 || resentRetry.AfterVersion != 2 || resentRetry.DeliveryState != "queued" {
+		t.Fatal("HTTP resend retry replaced original outcome", code)
+	}
+	predecessorCommand, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	predecessor := map[string]any{"commandID": predecessorCommand, "organizationID": second.OrganizationID, "invitationID": sent.InvitationID, "organizationVersion": uint64(1), "invitationVersion": uint64(2), "token": proof}
+	if code, _ := call(recipient, http.MethodPost, "/v1/organization/invitation/accept", predecessor, ""); code == 200 {
+		t.Fatal("superseded invitation proof accepted through HTTP")
+	}
+	if _, err := workers.ProcessDeliveryOne(ctx, 1); err != nil {
+		t.Fatal("actual Reference successor delivery", err)
+	}
+	select {
+	case link = <-messages:
+	case <-ctx.Done():
+		t.Fatal("successor delivery absent")
+	}
+	successorLink, err := url.Parse(link)
+	if err != nil || successorLink.Query().Get("token") == "" || successorLink.Query().Get("token") == proof {
+		t.Fatal("successor proof absent or predecessor reused")
+	}
+	proof = successorLink.Query().Get("token")
+	code, wire = call(owner, http.MethodGet, "/v1/organization/invitation/get?organizationID="+string(second.OrganizationID)+"&invitationID="+string(sent.InvitationID), nil, "")
+	var currentInvitation organizationhttp.InvitationReadResponse
+	if code != 200 || json.Unmarshal(wire, &currentInvitation) != nil || currentInvitation.Invitation.Version != 2 || sent.Invitation == nil || !currentInvitation.Invitation.ExpiresAt.Equal(sent.Invitation.ExpiresAt) || currentInvitation.Invitation.Role != sent.Invitation.Role {
+		t.Fatal("Reference resend renewed expiry, changed role or lost successor", code)
+	}
+	var resendEffects, resendDeliveries, resendEvents int
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT
+ (SELECT count(*) FROM organization.command_effects WHERE command_id=$1),
+ (SELECT count(*) FROM organization.command_effects e JOIN identity.delivery_intents d ON d.effect_id=e.delivery_effect_id AND d.tenant_id=e.tenant_id WHERE e.command_id=$1),
+ (SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic='invitation.resent.v1')`, string(resent.CommandID)).Scan(&resendEffects, &resendDeliveries, &resendEvents); err != nil || resendEffects != 1 || resendDeliveries != 1 || resendEvents != 1 {
+		t.Fatal("Reference keyed resend did not conserve singleton effects", err)
+	}
 	code, wire = call(recipient, http.MethodGet, "/v1/organization/invitation/list-mine", nil, "")
 	var invitations organizationhttp.InvitationListMineResponse
 	if code != 200 || json.Unmarshal(wire, &invitations) != nil || len(invitations.Invitations) != 1 || invitations.Invitations[0].ID != sent.InvitationID || bytes.Contains(wire, []byte(proof)) {
@@ -292,7 +336,7 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err != nil {
 		t.Fatal(err)
 	}
-	accept := map[string]any{"commandID": original, "organizationID": second.OrganizationID, "invitationID": sent.InvitationID, "organizationVersion": uint64(1), "invitationVersion": uint64(1), "token": proof}
+	accept := map[string]any{"commandID": original, "organizationID": second.OrganizationID, "invitationID": sent.InvitationID, "organizationVersion": uint64(1), "invitationVersion": uint64(2), "token": proof}
 	if code, _ := call(owner, http.MethodPost, "/v1/organization/invitation/accept", accept, ""); code != 403 {
 		t.Fatal("foreign invitation recipient accepted", code)
 	}
@@ -351,6 +395,15 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err != nil || recovered.Receipt.Outcome != identity.CommitOutcomeCommitted || recovered.Receipt.Binding != binding || recovered.InvitationID != sent.InvitationID {
 		t.Fatal("fresh Reference original acceptance recovery", err)
 	}
+	resendKey, err := identity.NewIdempotencyKey([]byte("reference-original-invitation-resend"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resendRequest := organization.InvitationResendOperationRequest{Authentication: owner.auth, IdempotencyKey: resendKey, OrganizationID: second.OrganizationID, InvitationID: sent.InvitationID, OrganizationVersion: 1, InvitationVersion: 1, CorrelationID: "reconstructed-resend"}
+	resendRecovered, err := invitationsOwner.Resend(ctx, resendRequest, "127.0.0.1")
+	if err != nil || resendRecovered.Receipt.Outcome != identity.CommitOutcomeCommitted || resendRecovered.Receipt.Binding.CommandID != resent.CommandID || resendRecovered.Receipt.Feature == nil || resendRecovered.Receipt.Feature.BeforeVersion != 1 || resendRecovered.Receipt.Feature.AfterVersion != 2 || resendRecovered.DeliveryState != delivery.StateAccepted {
+		t.Fatal("fresh Reference original resend recovery after acceptance", err)
+	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
 	if _, err := invitationsOwner.RecoverAccept(ctx, recovery); err == nil {
 		t.Fatal("revoked recipient recovered protected history")
@@ -358,6 +411,9 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, owner.cookies, owner.csrf, owner.sessionID, f, features)
 	if code, _ := call(owner, http.MethodGet, "/v1/organization/get?organizationID="+string(second.OrganizationID), nil, ""); code == 200 {
 		t.Fatal("revoked owner retained organization access")
+	}
+	if _, err := invitationsOwner.Resend(ctx, resendRequest, "127.0.0.1"); err == nil {
+		t.Fatal("revoked manager recovered original resend")
 	}
 }
 

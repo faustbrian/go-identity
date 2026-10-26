@@ -46,3 +46,24 @@ func TestOrganizationSelectionAndRetainedHandlesFailClosed(t *testing.T) {
 		t.Fatal("retained closed member-update handle reached native owner", err)
 	}
 }
+
+func TestOrganizationResendHandlesRetainGraphLifetimeGuards(t *testing.T) {
+	var absent *OrganizationInvitationService
+	var unavailable identity.UnavailableError
+	request := organization.InvitationResendOperationRequest{Authentication: organization.Authentication{TenantID: "tenant"}}
+	if _, err := absent.Resend(t.Context(), request, "127.0.0.1"); !errors.As(err, &unavailable) {
+		t.Fatal("absent invitation handle reached native owner", err)
+	}
+	lifetime, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	drained := make(chan struct{})
+	close(drained)
+	state := &storeState{durable: true, lifetime: lifetime, cancel: cancel, drained: drained, tenants: map[string]*tenantRecovery{"tenant": {}}, features: &featureState{composed: true, ready: true, timeout: time.Second, organization: &organizationState{}}}
+	handle := &OrganizationInvitationService{state: state}
+	if err := (StoreSet{state: state}).Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := handle.Resend(t.Context(), request, "127.0.0.1"); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed invitation handle reached native owner", err)
+	}
+}

@@ -2,7 +2,7 @@
 
 This selected backend profile connects real registration, verification and
 password signin to organization creation, metadata/role updates, scoped reads, member admission and
-removal, encrypted invitation delivery and once-only recipient acceptance.
+removal, encrypted invitation delivery/resend and once-only recipient acceptance.
 It does not implement an administrative UI or claim full organization lifecycle,
 teams, dynamic roles, domain ownership, archive/restore or other login profiles.
 
@@ -38,7 +38,8 @@ existing explicit bounded external seams.
 
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
-`InvitationListMine`, `InvitationSend` and `InvitationAccept`. Each requires its
+`InvitationListMine`, `InvitationSend`, `InvitationResend` and `InvitationAccept`.
+Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
 safe/admin/secret namespaces and keys. The degradation and administrative-denial
 callbacks retain the transport's bounded synchronous contracts: administrative
@@ -52,6 +53,9 @@ Use the normal `Check`, `Plan` and `Apply` flow before feature initialization;
 the runtime does not migrate implicitly. Organization and prerequisite histories
 append independently without rewriting installed baseline/session/risk prefixes.
 Invitation migrations follow membership migrations, allowing later opt-in.
+The original organization/invitation versions1..5 remain unchanged. The native
+cancellation, rejection, expiry and resend histories append at6..9; migrate
+before selecting resend. These prerequisites enable no sibling HTTP routes.
 
 Reference deliberately selects the adapter's **transactional index variants**
 because durable migration commands require atomic histories. These builds can
@@ -64,12 +68,12 @@ into this history without an explicit supported migration plan.
 
 After initialization, `FeatureSet.Organizations()` exposes native create,
 metadata replacement, add/update/remove member, scoped get/list and original operation recovery.
-`OrganizationInvitations()` exposes send, owner-only get, authenticated-recipient
+`OrganizationInvitations()` exposes original-key send/resend, owner-only get, authenticated-recipient
 discovery, retained acceptance preparation and explicit original recovery.
 Handles share graph initialization, tenant and shutdown guards; they do not own
 another lifetime or authority system.
 
-HTTP create, metadata update, member admission/role update and invitation send
+HTTP create, metadata update, member admission/role update and invitation send/resend
 require `Idempotency-Key`; retry the exact original request/key. Metadata updates
 carry the exact organization version, name and slug. Member-role updates carry
 both exact organization and member versions; administrator/owner transitions
@@ -82,6 +86,17 @@ the returned safe original binding for native `RecoverAccept` after an ambiguous
 outcome or process reconstruction. Reposting a consumed proof is not recovery;
 there is no added HTTP recovery endpoint. Recovery never renews proof, authority
 or command custody. Revoked sessions cannot read protected history.
+
+Resend accepts only the original key, organization/invitation IDs and their
+exact versions. Recipient, member role and original exclusive expiry remain
+native-owned. The organization epoch is read-only; the invitation version must
+leave room for successor and terminal transitions. Its transaction supersedes
+the predecessor proof and queues one encrypted successor. After delivery, only
+the successor can be accepted. Matching-key recovery returns the original
+receipt and authorized original delivery observation even after acceptance;
+it does not regenerate proof, renew validity or redispatch. Late observation
+failure retains known commitment without delivery state. Queue/provider
+acceptance is not confirmed delivery. No proof or delivery-effect ID is exported.
 
 ## Reproduce the complete profile
 
