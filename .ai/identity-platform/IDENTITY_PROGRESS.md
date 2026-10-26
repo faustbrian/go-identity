@@ -1,29 +1,33 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 21:17 UTC
+## Current TL;DR — 2026-10-26 22:36 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
-  closed.** The new team profiles are usable deliveries within M23, not another
+  closed.** The new team lifecycle is a usable delivery within M23, not another
   whole row or a newly qualified unit out of 67.
-- **New complete profile: team membership backend.** Real signup-issued sessions
-  create empty teams through guarded native APIs, then admit/list/remove team
-  members through opt-in HTTPS. Exact original recovery, organization readmission
-  fencing, reconstructed fresh-session recovery and logout denial are proven.
-  HTTP `2f1fd58` and Reference `a8103f1` are independently reviewed, main-pushed
-  and CI-green. The actual downloaded Reference passes fresh/populated
-  PostgreSQL/HTTPS/race journeys (10.412s), without replacements or fake stores.
-- **Parallel native rename/delete:** root `775f9cb` and native `2694a7c` are
-  reviewed, main-pushed and CI-green. The genuine public signup/session consumer
-  `6990acb` is also independently reviewed, main-pushed and CI-green. Its actual
-  public-dependency PostgreSQL/race proof passes (10.839s), including rollback,
-  commit loss, contention, late permission withdrawal and logout. This native
-  profile is closed; HTTP/Reference team creation/lifecycle remains unfinished.
+- **New complete profile: team lifecycle backend.** Real signup sessions create,
+  list, rename and terminally delete teams through opt-in HTTPS. Members observe
+  renamed teams without losing bindings; retired IDs cannot revive. Fresh and
+  reconstructed original recovery, rollback and logout denial are proven.
+  HTTP `8151bbb` and Reference `8f6b3c1` are independently reviewed, main-pushed
+  and CI-green. The actual public Reference passes fresh/populated PostgreSQL/
+  HTTPS/race journeys (13.053s). The populated upgrade starts with real teams,
+  active bindings and original receipts before applying native lifecycle steps3/4.
+  Existing membership journeys also pass (10.274s). No substitute stores are used.
+- **Parallel native roles:** root `895ac99` and native `6bcfd9e` are reviewed,
+  main-pushed and CI-green. Actual role CRUD, permission changes, rollback,
+  contention, COMMIT loss and current-authority recovery pass PostgreSQL/race.
+  The same review exposed and fixed history-disclosure defects in role deletion,
+  team deletion and team-member removal; Reference now pins that corrected native
+  owner. Use `6bcfd9e` rather than predecessor team recovery implementations.
+  Genuine public role-consumer acceptance is not yet closed: its combined fixture
+  reached the unchanged privileged-action limit. Two fresh-database cohorts retain
+  the same policy and all cases; their rerun/review remains pending.
 - **Still open:** dynamic roles, remaining identity/federation/provisioning and
   shared-issuer profiles, plus whole-unit qualification. Existing evidence is
   retained; no baseline restart or Tools programme is underway.
-- **Next:** complete team creation/lifecycle HTTP/Reference and the remaining
-  dynamic-role enforcement. The latter is getting one bounded dependency check
-  before an independent implementation lane; no user decision is required.
+- **Next:** close public role-consumer acceptance, then compose its HTTP/backend
+  profile. No baseline restart, Tools programme or user decision is needed.
 
 ## Retained checkpoint — 2026-10-26 20:12 UTC
 

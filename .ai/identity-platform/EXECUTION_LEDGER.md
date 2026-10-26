@@ -1,5 +1,85 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 22:16 UTC: team CRUD HTTP leaf CLOSED. Complete13path review
+team_crud_http_leaf_review APPROVE on patch0308368d; 13160 focusedrace2.185s,
+fullleafrace16.908s, vet0, boundedfuzz7031exec PASS2.669s. Final61702b
+tidy-diff silent/modulesverified0 after4obsolete sums. Main8151bbb3a52e
+remoteexact; Required40410302080 SUCCESS. Actualpublicleaf version
+v0.0.0-20261026220953-8151bbb3a52e exactOrigin/Subdir/all13filesmatch;
+Sum7rqWeOqoyL5X1g2eFhrqW6mNFtP1mWRxjgdy3O/PFeM=,
+GoModSumFlNritPzzK0SkZ+jwyI2dQ98dFA+NVqFRy10zOFG1Z8=.
+Reference34747 RED expectedmissingGetTeam/ListTeams/teamLifecycle; nowcoding
+guardedfacades/4HTTPflags/native3/4suffix and fresh/populatedreal-teamupgrade
+journeys. Publicnative2694 currently selected for compilation only; adopt
+corrected successor before acceptance. Dynamic-role native ROUND1 reviewer
+REQUEST_CHANGES: query-denied selectorclassification and post-fence IO.
+Worker15701 reproduced both classes in roledelete/teamdelete/teamremove;
+approved exact3helper corrections retaining originaladmission/no newauthority.
+No wholeM23 or additional67-unit qualification claimed.
+
+Completed frozen primary M23 team CRUD composition: owner primary, writable go-identity
+http/{selection.go,compose.go,organization_bearer_selection_test.go,CHANGELOG.md},
+http/organization and reference; pins only primary. Consume publicroot775/
+native2694/genuineconsumer6990 (PG/race10.839s, main/CIgreen), existingHTTP2f1
+andReferencea810 (downloadedPG/race10.412s). Complete signup/session -> opt-in
+HTTPteam create/list/update/delete -> currentmember observesrename/preserves
+binding -> terminalretiredID/readdenial -> originalfresh/reconstructedrecovery/
+logout; fresh+populatedPG. ExactGetTeam stays guarded native (existingHTTP
+catalog defines create/list/update/delete, no new GetTeam route is invented).
+StrictbearerHTTPS/closedfields/keys/exactepochs, sharedadmin/safe rates, sole
+nativeauthz/risk/transactions/history, no renewedfreshness/unknownredispatch.
+Append team lifecycle/delete lookup native steps3/4 after existingteam1/2;
+preserve all installedprefixes. FocusedTDD/race/vet/boundedinputfuzz, one
+independent finaldiff per coherent module, main/CI/publicReference proof.
+No dynamic-role/active-team/browser/wholeM23 claim in this primaryprofile.
+
+Frozen independent worker dynamic_role_CRUD: team_membership principal owns
+go-organization NEW dynamic_role_operation*.go/tests plus exact CRUD selfactor
+recoverywhitelist and additive rootdocs; then NEW postgres/operation_dynamic_role*
+source/tests/migration and genuineconsumer helper/uniqueharnessmode/docs. Consume
+committed raw role APIs and prior genuine direct/team proofs7.277/7.588s once;
+root775/native2694/main6990, no kernel/policy supplier gap. Originalkey create/
+update -> rawdirect/team bindingsetup -> currentmember permission changes with
+deny precedence -> natural exactterminaldelete -> fresh/reconstructed original
+history/logout. DTOintrinsicbounds64statements/8192encodedbytes; actualcatalog
+ceiling staysnative. Shared nativehunks approved: facade-only CRUD admission
+snapshot/currentactualroleaction+query/prepostfences, keyedmapped create/update,
+private naturaldelete marker + optional correlatedeffectinsert only. Nullable
+roleID/version/allpresentbounds/partialuniqueoriginalepoch, no backfill/newjournal;
+rawlegacybehavior preserved. FocusedTDD/race/vet/newvalidationfuzz, required-effect
+rollback/COMMITloss/initialcontention and lateauthority proof, independentreview/
+main/CI/publicconsumer. Primary owns pins/Git/HTTP/Reference/kernel. Rootphase
+only until publication; no nativeheavy/PG without serializedslot. No assign/
+revoke facade, HTTP, conditions/wildcards/custommanagement/wholeM23 claim.
+
+2026-10-26 22:36 UTC: primaryteamCRUD CLOSED. Reference8f6b3c1b1268
+main/remoteexact; Required40413116675 SUCCESS. Complete13path97573c81
+team_crud_reference_review APPROVE. Source2956 fresh/populated PG/HTTPS/race
+PASS13.049s; 23178 legacyfresh/populated PG/race PASS10.274s, ordinaryRef/cmd
+5.225/6.089s, taggedvet0; final22107 tidy silent/modulesverified0 after10obsolete
+sums. ActualpublicReferencev0.0.0-20261026223132-8f6b3c1b1268 exactOrigin/
+Subdir/all13filesmatch, Sumv4cuh089RBE088oBGYYGAOpQ9XH+QVNoPS09t7JlnH0=,
+GoModSumoyJKVc0drVUUhtpu2MS0y5a2cpORUcrvY8ITZQY1rYY=; downloaded13769
+fresh4.49s/populated6.98s packagePASS13.053s. Populatedcase starts genuine
+team+activebinding+originalreceipt before native3/4; all surviveinstallation.
+Real signup/session→HTTPcreate/list/rename/delete→memberrename/bindingpreserved→
+retiredID/readdenial→fresh/reconstructedoriginalhistory/logout, plus native
+exactGetTeamonly. PrimaryPG54033 stopped9b3478; cache/PGdirsremoved1438 terminal0.
+
+Parallelroot895ac990b203 Required40405182802 SUCCESS; native6bcfd9e13379
+Required40411988102 SUCCESS, bothmain/remoteexact. ROUND2 complete17path
+132d4c1b dynamic_role_native_round2_review APPROVE after ROUND1 actualquery-
+denial/post-final-IO findings. Regression15701 RED; 90387 all24natural3helper
+partitions GREEN PG/race12.370s; final6576 affectedrole/team PG/race40.238s,
+ordinary33942 1.446s, bothvets0; final41105 tidy silent/modulesverified0.
+Actualpublicnativev0.0.0-20261026222246-6bcfd9e13379 exactOrigin/Subdir/all17match,
+SumFTVW48lfticHnz6P3cndRokKx1MZLH281lGfFl+vKNM=,
+GoModSumwFYq9IYLWCoDsmcUmEywBFOBeVV/iIoq2J8D1IWrYnk=.
+Genuineconsumer51891/60780 failedlatefixture setup: actualmember.add native
+riskcounter allowed=false/peak21 againstunchangedPrivilegedLimit20, notrole
+runtimefailure. ApprovedtwofreshDBcohorts retainreal signup/samepolicy/allcases;
+worker rerunning, notyetaccepted. No productionpolicy/counterrefund changes.
+
 Completed frozen primary M23 profile: guarded native team creation/setup plus opt-in
 HTTP team member-add/member-remove/list-mine/member-list. Primary owns
 go-identity http canonical selection, http/organization and reference only;
