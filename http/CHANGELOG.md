@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Permit explicitly selected strict-bearer ownership transfer while retaining
+  canonical fresh-owner authorization, original-key and administrative-rate
+  contracts. Cookie CSRF protection is unchanged. Selection alone enables
+  neither a route nor transfer authority; the feature owns real proof admission.
+
 - Permit an explicitly selected strict-bearer self-leave policy. The canonical
   safe-rate and natural-repeat contracts remain unchanged; cookie handlers
   retain synchronizer CSRF protection. Selection alone enables no route or

@@ -19,10 +19,10 @@ import (
 // for strict bearer custody or SessionState with a configured valid header,
 // zero independent token age and denied Referer fallback for native protected
 // cookie custody. Factories own enforcement; selection issues no CSRF token.
-// Organization create/update/member-add/member-update/member-remove/member-leave and
-// invitation send/accept/resend/cancel/reject
+// Organization create/update/member-add/member-update/member-remove/member-leave,
+// owner-transfer and invitation send/accept/resend/cancel/reject
 // additionally admit None only for explicitly selected strict bearer handlers
-// that ignore ambient cookies.
+// that ignore ambient cookies. Owner-transfer retains its native fresh proof.
 // Other organization mutations retain their canonical policy.
 // MaximumSerializedBytes
 // bounds each schema summary (1..16MiB); it is not response-size enforcement.

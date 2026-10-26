@@ -414,8 +414,9 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		// handlers (identity/http's bearer profile), which must ignore ambient
 		// cookies. Only their explicit None profile is admitted; cookie handlers
 		// retain the canonical synchronizer requirement and no other operation
-		// gains an exemption. The feature factory owns actual authentication.
-		if (r.OperationID == "identity.organization.create" || r.OperationID == "identity.organization.update" || r.OperationID == "identity.organization.member.add" || r.OperationID == "identity.organization.member.update" || r.OperationID == "identity.organization.member.remove" || r.OperationID == "identity.organization.member.leave" || r.OperationID == "identity.organization.invitation-send" || r.OperationID == "identity.organization.invitation.accept" || r.OperationID == "identity.organization.invitation.resend" || r.OperationID == "identity.organization.invitation.cancel" || r.OperationID == "identity.organization.invitation.reject") && r.CSRFOrigin.Mode == CSRFNone {
+		// gains an exemption. The feature factory owns actual authentication;
+		// owner-transfer additionally retains its native fresh action proof.
+		if (r.OperationID == "identity.organization.create" || r.OperationID == "identity.organization.update" || r.OperationID == "identity.organization.member.add" || r.OperationID == "identity.organization.member.update" || r.OperationID == "identity.organization.member.remove" || r.OperationID == "identity.organization.member.leave" || r.OperationID == "identity.organization.invitation-send" || r.OperationID == "identity.organization.invitation.accept" || r.OperationID == "identity.organization.invitation.resend" || r.OperationID == "identity.organization.invitation.cancel" || r.OperationID == "identity.organization.invitation.reject" || r.OperationID == "identity.organization.owner-transfer") && r.CSRFOrigin.Mode == CSRFNone {
 			csrfMatches = true
 		}
 		// A selected pre-auth-only integration may narrow the canonical union.
