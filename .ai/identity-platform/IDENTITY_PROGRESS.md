@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 17:06 UTC
+## Current TL;DR — 2026-10-26 17:24 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
@@ -42,12 +42,15 @@
   intended-recipient invitation rejection (`bb8415d`), with their public-module
   PostgreSQL/race proofs. Existing registration/verification/signin/session,
   reset/change, MFA/passkey and organization profiles are detailed below.
-- **Current parallel lane:** original-key native ownership transfer. Its request
-  contract `8b72f85` is reviewed/main/CI-green; the worker is proving existing
-  transfer effects and exact original recovery under contention/commit ambiguity.
-  Native workflow and Reference integration are not yet delivered.
-- **Next:** remaining organization lifecycle composition, adopting public
-  owners without restarting delivered profiles. A bounded SCIM readiness check
+- **Native ownership transfer:** root `8b72f85` and adapter `34d70e4` are reviewed,
+  main-pushed and CI-green. The genuine public consumer passes PostgreSQL/race
+  (10.110s): actual signup/verification/signin/action proof -> transfer -> new
+  signin/reconstructed original recovery -> logout denial, including mapping
+  and domain COMMIT loss. Consumer `1e1f7ff` is independently reviewed,
+  main-pushed and CI-green. HTTP/Reference transfer composition remains
+  unfinished; no full M22 or additional qualified unit is claimed.
+- **Next:** ownership-transfer and remaining organization lifecycle composition,
+  adopting public owners without restarting delivered profiles. A bounded SCIM readiness check
   identified missing connection/provider-bound provisioning authority and atomic
   identity-command composition; generic CRUD/parsers cannot substitute for it.
 - **Remaining:** 29 open/unassessed roadmap rows, substantial partial work,

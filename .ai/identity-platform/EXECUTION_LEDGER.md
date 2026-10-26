@@ -1,5 +1,49 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 17:24 UTC: native original-key owner-transfer delivered at34d70e4f2aae8c22256e2512b9c8e69b5966c5d2,
+reviewer owner_transfer_operation_native_review APPROVE final8path34fd8c7aa45c5076dfe98a962bd1118bdf61ebd980be57964d83f590284579e6,
+exactRequired40367232767 SUCCESS. Focused38741 10.815s was ordinary NOT race
+(correcting parentpromptlabel); combinedlegacy+new5460 PG/race114.506s,
+ordinarynative77509 race1.353s/taggedvet0. Tidy-diff initially identified only
+twoobsolete6drootchecksums, removed; finaltidydiff/modverify0, selectedversions
+unchanged (19463 later Gitrelativepathfailure corrected, not a Go failure).
+Publicnativev0.0.0-20261026171721-34d70e4f2aae originexact/Subdirpostgres,
+SumQRyytxndXMkz0BXnuB2CWjiWK2Bzsm0RA6gIR4+Co9k=,
+GoModSumyDB0X4tSqZXdDJwEsw4aFJqviH+eF20/GFSNdHMgylk=; sevennative-module
+changedfilesbyte-match. Consumer normally adopts root8b72/native34d70, no
+replacements or private sibling imports. Genuine publicconsumer52303 terminal0
+PG/race10.110s/test8.53s, mappingloss0.74s/domainloss0.78s; actual signup/
+verification/passwordsignin and originalsigned actionproof -> atomictransfer,
+freshsignin+facadereconstruction sameoriginal, changedintent/lastowner/former
+owner newgrant denial, realSignOut historydenial and independentnewowneralive.
+Proof source/domain stores/session authority are actual publicowners. Consumer
+taggedvet/tidydiff63317 terminal0; modverifyallverified. Five-pathc912c71d62dbce13753e2d1e847c2e1d372ee66650e0aec98be5f29b5ce71154
+owner_transfer_operation_consumer_review APPROVE; exactreviewedconsumer
+1e1f7ff6d9a11858fdf7c61338333d1e663fd871 pushed origin/main, Required40368325099
+SUCCESS. Native outcome CLOSED; not HTTP/Reference integration or fullM22/67.
+StoppedownedPG57743/53975 and removed pgdata/socket/log (f8fb75 terminal0),
+then after source review removedexact owned cachecohort
+/tmp/organization-owner-transfer-native.tKaOrW (68069 terminal0). No live
+worker or Go/service run remains; primary retains next Reference integration.
+
+2026-10-26 17:11 UTC: final invitation-list reportingce412721 main/remoteexact,
+Required40365771005 SUCCESS; no runtime rerun for reporting-only SHA.
+Native transfer focused38741 GREEN10.815s after sole evidenced service.go
+OwnerTransfer mapped-original opt-in. Important correction: same-key diagnostics
+55315 did NOT enter candidate p.failure branch. Initial ReadPreparedRequestKey
+fallback hypothesis was falsified; speculative helper and operation_service.go
+branch fully removed (zero diff), not a retained feature or required fix.
+In-flight disclosure may be original-bindingUnknown/no-outcomeForbidden while
+winner changes currentauthority. Post-join matching retry is byte-identical
+committed original with singleton effects/version, no permanent denial or
+newexecution. Worker frozen native eight-pathe87762f99bb2450f4583aa52ee9c355c12e26493f20183ec2db7f829355abdcc
+at base8b72f854, under owner_transfer_operation_native_review; selected legacy+
+new native PG/race5460 and ordinary/vet stillpending. Consumer sources prepared
+but excluded from stage/review and stillpinoldpublicnative. Primary owns pins,
+Git/review/delivery; worker owns live PG57743/53975/cohort tKaOrW until finite
+native+consumer proof and cleanup. No new kernel/helper/authority or permission
+change is authorized by the falsified candidate-failure hypothesis.
+
 2026-10-26 17:06 UTC: owner invitation-list profile CLOSED. Leaf3f18f79
 (review85fefde) and Referenceb88f815 (finalreviewbc56c029) pushed exactreviewed
 source with Required40361536390/40363791500 SUCCESS. Actual downloaded b88
