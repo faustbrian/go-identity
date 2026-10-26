@@ -1226,6 +1226,7 @@ END $$`); err != nil {
 			{"member.add", c.HTTPOrganization.MemberAdd}, {"member.update", c.HTTPOrganization.MemberUpdate},
 			{"member.remove", c.HTTPOrganization.MemberRemove}, {"invitation-send", c.HTTPOrganization.InvitationSend},
 			{"invitation.get", c.HTTPOrganization.InvitationGet}, {"invitation.list-mine", c.HTTPOrganization.InvitationListMine},
+			{"invitation.list", c.HTTPOrganization.InvitationList},
 			{"invitation.accept", c.HTTPOrganization.InvitationAccept},
 			{"invitation.resend", c.HTTPOrganization.InvitationResend},
 			{"invitation.cancel", c.HTTPOrganization.InvitationCancel},

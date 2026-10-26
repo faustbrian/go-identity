@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose owner-only invitation listing through guarded native handles and
+  independently selected bearer HTTP. Explicit organization/limit and ID
+  continuation retain current owner policy, safe-rate admission and bounded
+  safe metadata; role withdrawal and logout deny subsequent reads. No new
+  migration or application invitation reader is needed.
+
 - Compose native natural-repeat self-leave and exact self-history recovery
   through guarded handles and independently selected safe-rate bearer HTTP.
   Departed users recover original metadata under current explicit authority;

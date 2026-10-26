@@ -311,6 +311,21 @@ func (f *OrganizationInvitationService) Get(ctx context.Context, r organization.
 	return n.invitations.Get(w, r)
 }
 
+// List reads current safe invitation metadata for the authenticated organization
+// owner. Limit and exclusive invitation-ID cursor retain the native contract;
+// graph lifetime, configured tenant and initialization guards remain enforced.
+func (f *OrganizationInvitationService) List(ctx context.Context, r organization.InvitationReadRequest) (organization.InvitationPage, error) {
+	if f == nil {
+		return organization.InvitationPage{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, true)
+	if err != nil {
+		return organization.InvitationPage{}, err
+	}
+	defer done()
+	return n.invitations.List(w, r)
+}
+
 // ListMine reads the authenticated verified recipient's bounded invitations.
 func (f *OrganizationInvitationService) ListMine(ctx context.Context, r organization.InvitationListMineRequest) (organization.InvitationListMineResult, error) {
 	if f == nil {

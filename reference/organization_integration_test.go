@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -52,6 +53,9 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		if c.Request.Action == authorization.Action(organization.ListOrganizations) && c.Request.Resource.Type == "organization" {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
+		if c.Request.Action == authorization.Action(organization.InvitationList) && c.Request.Resource.Type == "organization" {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		if c.Request.Action == authorization.Action(organization.LeaveMember) && (c.Request.Resource.Type == "organization" || c.Request.Resource.Type == "identity.user") {
@@ -111,6 +115,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 		return ctx.Err()
 	}}
 	c.HTTPOrganization.List, c.HTTPOrganization.MemberLeave = true, true
+	c.HTTPOrganization.InvitationList = true
 }
 
 func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, features reference.FeatureSet, workers reference.WorkerSet, workerConfigs []deliverypg.WorkerConfig, client *http.Client, base, origin string, messages <-chan string, cookies []*http.Cookie, csrf string) {
@@ -230,6 +235,9 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		return out
 	}
 	first := create("reference-member-organization", "reference-organization-original-create")
+	if code, wire := call(owner, http.MethodGet, "/v1/organization/invitation/list?organizationID="+string(first.OrganizationID)+"&limit=1", nil, ""); code != 200 || !bytes.Contains(wire, []byte(`"invitations":[]`)) {
+		t.Fatal("new organization owner page was not empty", code)
+	}
 	listOrganizations(owner, 1, first.OrganizationID)
 	listOrganizations(recipient, 1)
 	slugAvailable(recipient, "reference-member-organization", false)
@@ -658,7 +666,15 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err != nil || rejectRecovered.Receipt.Outcome != identity.CommitOutcomeCommitted || rejectRecovered.Receipt.Binding.CommandID != rejected.CommandID || rejectRecovered.Receipt.Feature == nil || rejectRecovered.Receipt.Feature.BeforeVersion != 1 || rejectRecovered.Receipt.Feature.AfterVersion != 2 {
 		t.Fatal("fresh Reference rejection did not recover original history", err)
 	}
+	proveReferenceOwnerInvitationList(t, ctx, invitationsOwner, owner, recipient, third.OrganizationID, cancelSent.InvitationID, workers, messages, call)
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
+	ownerListRead := organization.InvitationReadRequest{Authentication: recipient.auth, OrganizationID: third.OrganizationID, Limit: 1, CorrelationID: "signed-out-owner-list"}
+	if out, err := invitationsOwner.List(ctx, ownerListRead); err == nil || len(out.Invitations) != 0 {
+		t.Fatal("signed-out replacement owner listed invitations")
+	}
+	if code, _ := call(recipient, http.MethodGet, "/v1/organization/invitation/list?organizationID="+string(third.OrganizationID)+"&limit=1", nil, ""); code == 200 {
+		t.Fatal("signed-out replacement owner retained HTTP list")
+	}
 	if out, err := currentOrganizations.RecoverOperation(ctx, selfLeaveRecovery); err == nil || out.Receipt.Outcome == identity.CommitOutcomeCommitted {
 		t.Fatal("signed-out recipient recovered historical self-leave")
 	}
@@ -694,6 +710,15 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	}
 	if _, err := invitationsOwner.Cancel(ctx, cancelRequest, "127.0.0.1"); err == nil {
 		t.Fatal("revoked manager recovered original cancellation")
+	}
+	// Retain an actually selected handle before closing its reconstructed
+	// graph. A missing native invitation owner cannot mask this lifetime test.
+	if err := rebuilt.Close(ctx); err != nil {
+		t.Fatal("close reconstructed invitation graph", err)
+	}
+	var unavailable identity.UnavailableError
+	if _, err := invitationsOwner.List(ctx, ownerListRead); !errors.As(err, &unavailable) {
+		t.Fatal("retained invitation list handle reached native owner after close", err)
 	}
 }
 

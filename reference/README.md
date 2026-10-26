@@ -2,6 +2,11 @@
 
 ## Optional organization backend
 
+`HTTPOrganization.InvitationList` independently selects current owner-only
+invitation pages with shared safe rates and explicit limit1..100. The guarded
+`OrganizationInvitationService.List` exposes the same native read. See
+[owner invitation listing](ORGANIZATION.md#owner-only-invitation-listing).
+
 `HTTPOrganization.MemberLeave` separately selects natural-repeat self-leave
 with shared safe admission. Guarded `OrganizationService.LeaveMember` and
 `RecoverOperation` preserve current self authority and original metadata after

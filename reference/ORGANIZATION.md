@@ -38,7 +38,7 @@ existing explicit bounded external seams.
 
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
-`InvitationListMine`, `InvitationSend`, `InvitationResend`, `InvitationCancel`,
+`InvitationListMine`, `InvitationList`, `InvitationSend`, `InvitationResend`, `InvitationCancel`,
 `InvitationReject`, `SlugAvailable`, `List`, `MemberLeave` and `InvitationAccept`.
 Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
@@ -46,6 +46,33 @@ safe/admin/secret namespaces and keys. The degradation and administrative-denial
 callbacks retain the transport's bounded synchronous contracts: administrative
 denials must be durably audited, without secrets. Namespace/key changes affect
 rate budgets and require coordinated rollout, not per-request rotation.
+
+## Owner-only invitation listing
+
+Select native `Organization.Invitations`, then independently opt into
+`HTTPOrganization.InvitationList` with the shared safe-rate configuration.
+No administrator/secret limiter is needed for list-only HTTP selection.
+`GET /v1/organization/invitation/list?organizationID=ID&limit=20` requires one
+strict bearer session at the mapped HTTPS tenant. The only query fields are
+organization ID, required canonical decimal limit1..100 and optional exclusive
+invitation-ID cursor1..128 bytes. This cursor differs from `ListMine`'s opaque
+recipient cursor. Pages use current bytewise invitation-ID order, not snapshots;
+restart to see earlier additions. Return `nextCursor` unchanged with the same
+organization. Empty pages contain `invitations: []`.
+
+Native current owner/session and configured action policy must allow
+`identity.organization.invitation.list`; knowing an invitation, being its
+recipient or possessing an old cursor grants no access. Role withdrawal and
+logout deny later reads. Responses contain only safe invitation ID,
+organization ID, role, status, version and expiry, never addresses, proofs,
+delivery custody or internal authority. Any failed or malformed page is withheld
+in full. Disabled selection exposes neither route nor metadata.
+
+`FeatureSet.OrganizationInvitations()` also provides direct `List` using
+`organization.InvitationReadRequest`, with the native exact bounds and current
+owner policy. Retained handles preserve initialization, tenant, cancellation,
+drain and closed-graph guards. Existing invitation migrations suffice; this
+selection adds no schema or alternate store.
 
 ## Self-leave and original-outcome recovery
 

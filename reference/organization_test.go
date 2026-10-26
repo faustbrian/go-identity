@@ -18,6 +18,11 @@ func TestOrganizationSelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	if owner, err := (FeatureSet{}).OrganizationInvitations(); err == nil || owner != nil {
 		t.Fatal("zero graph exposed invitation owner")
 	}
+	var absentInvitations *OrganizationInvitationService
+	var unavailableList identity.UnavailableError
+	if _, err := absentInvitations.List(ctx, organization.InvitationReadRequest{}); !errors.As(err, &unavailableList) {
+		t.Fatal("nil invitation list handle admitted")
+	}
 	for _, c := range []StoreConfiguration{{Organization: &OrganizationConfiguration{}}, {HTTPOrganization: &HTTPOrganizationConfiguration{Create: true}}} {
 		if graph, err := ComposeStores(c, ReferenceDependencies{}); err == nil || graph.state != nil {
 			t.Fatal("selected organization accepted missing native owners")
