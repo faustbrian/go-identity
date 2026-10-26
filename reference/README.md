@@ -2,6 +2,13 @@
 
 ## Optional organization backend
 
+Native membership-only teams are selected explicitly through
+`Organization.Core.Teams`; creation and membership APIs remain graph-guarded.
+Four independently opt-in bearer HTTP routes support team admission/removal,
+current-user teams and team-member pages, without selecting HTTP team creation
+or lifecycle. See [team composition](ORGANIZATION.md#team-membership) for exact
+versions, original recovery and the separate forward migration history.
+
 Local archive/restore is selected through `Organization.Lifecycle` and independent
 `HTTPOrganization.Archive`/`Restore` flags. Actual password action proofs and the
 native original-key lifecycle owner enforce authority; restored organizations

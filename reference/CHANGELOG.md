@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose native empty-team creation, exact original-key admission, natural
+  binding removal and scoped team pages through guarded handles. Four optional
+  bearer HTTP routes retain shared rate admission and current native authority.
+  Install the separate native team/removal history before use; existing
+  organization/invitation/lifecycle histories remain unchanged. Organization
+  readmission never revives old team bindings. No HTTP team lifecycle is enabled.
+
 - Compose native local archive/restore and current owner-only lifecycle discovery
   through guarded handles and independently selected bearer HTTP. Real distinct
   password action proofs, original keys and current authority remain mandatory.

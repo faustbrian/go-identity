@@ -45,6 +45,7 @@ import (
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	organization "github.com/faustbrian/go-organization"
 	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"
@@ -283,6 +284,7 @@ type signupGraphExtensions struct {
 	organizationTransfer  bool
 	organizationExpiry    bool
 	organizationLifecycle bool
+	organizationTeams     bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -482,6 +484,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
+	if extensions.organizationTeams {
+		selectedAuthorization = referenceOrganizationTeamsPolicy{}
+	}
 	if extensions.emailSignin == "changed" {
 		selectedAuthorization = &otpSigninFactorChangePolicy{pool: f.pool}
 	}
@@ -524,6 +529,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
+	}
+	if extensions.organizationTeams {
+		c.Organization.Core.Teams = organization.TeamConfig{Version: 1, MaximumTeams: 10, MaximumMembers: 100}
+		c.HTTPOrganization.TeamMemberAdd, c.HTTPOrganization.TeamMemberRemove = true, true
+		c.HTTPOrganization.TeamListMine, c.HTTPOrganization.TeamMemberList = true, true
 	}
 	if extensions.organizationExpiry {
 		c.Organization.Invitations.Policy.ExpirationReasons = []identity.PolicyReason{"security-withdrawal", "administrative-cleanup"}
@@ -1103,6 +1113,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		proveReferencePasskeyDeletionSelection(t, selected, deps)
 	}
 	var organizationUpgrade *reference.StoreConfiguration
+	if extensions.organizationTeams {
+		proveReferenceOrganizationTeamsSelection(t, c, deps)
+	}
 	if extensions.organizationTransfer {
 		proveReferenceOrganizationTransferSelection(t, c, deps)
 	}
@@ -1256,6 +1269,8 @@ END $$`); err != nil {
 			{"member.leave", c.HTTPOrganization.MemberLeave},
 			{"owner-transfer", c.HTTPOrganization.OwnerTransfer},
 			{"archive", c.HTTPOrganization.Archive}, {"restore", c.HTTPOrganization.Restore},
+			{"team.member-add", c.HTTPOrganization.TeamMemberAdd}, {"team.member-remove", c.HTTPOrganization.TeamMemberRemove},
+			{"team.list-mine", c.HTTPOrganization.TeamListMine}, {"team.member-list", c.HTTPOrganization.TeamMemberList},
 		} {
 			if selected.on {
 				wantOperations++
@@ -1686,7 +1701,9 @@ END $$`); err != nil {
 				next := upgraded.Handler()
 				organizationHandler.Store(&next)
 			}
-			if extensions.organizationLifecycle {
+			if extensions.organizationTeams {
+				proveReferenceOrganizationTeams(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
+			} else if extensions.organizationLifecycle {
 				proveReferenceOrganizationLifecycle(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationExpiry {
 				proveReferenceOrganizationExpiry(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)

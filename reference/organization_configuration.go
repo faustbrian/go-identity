@@ -25,7 +25,9 @@ import (
 
 // OrganizationConfiguration opts into native explicit-organization membership
 // over this graph's current verified-password bearer sessions. It enables no
-// HTTP, teams or domain proofs. OwnerTransfer and Lifecycle independently
+// HTTP or domain proofs. Core.Teams explicitly selects native membership-only
+// teams (LifecycleVersion must remain zero); it grants no organization role.
+// OwnerTransfer and Lifecycle independently
 // select their native password-proof profiles, never HTTP routes. Core.Clock
 // must be nil; the graph supplies its system clock. Counters selects protected
 // PostgreSQL command admission in the existing risk schema, not a replacement
@@ -138,6 +140,7 @@ type organizationState struct {
 	lifecycle         *organizationpg.Service
 	lifecycleProofs   *passwordpg.Repository
 	lifecycleAudience string
+	teams             bool
 }
 
 func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, queue *deliverypg.EnqueueService, proofs *passwordVerificationState) (*organizationState, error) {
@@ -146,7 +149,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	}
 	n := *c.Organization
 	invalid := identity.InvalidInputError{Field: "reference_organization"}
-	if c.OTP == nil || c.PasswordSignin == nil || sessions == nil || d.PostgreSQL == nil || c.Delivery == nil || queue == nil || n.Core.Clock != nil || n.Core.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || n.Counters.PolicyVersion != n.Core.PolicyVersion || n.Counters.Schema != c.Velocity.Schema || n.Counters.CommandCounters == nil || !n.Counters.EnforceLockouts || n.Repository.MaximumDuration > n.Core.MaximumDuration || n.Core.Teams.MaximumTeams != 0 || n.Core.Domains.MaximumClaims != 0 || n.Core.DynamicRoles.Version != 0 || n.Core.Lifecycle != (organization.LifecycleConfig{}) || n.Core.OwnerTransferAudience != "" {
+	if c.OTP == nil || c.PasswordSignin == nil || sessions == nil || d.PostgreSQL == nil || c.Delivery == nil || queue == nil || n.Core.Clock != nil || n.Core.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || n.Counters.PolicyVersion != n.Core.PolicyVersion || n.Counters.Schema != c.Velocity.Schema || n.Counters.CommandCounters == nil || !n.Counters.EnforceLockouts || n.Repository.MaximumDuration > n.Core.MaximumDuration || n.Core.Teams.Validate() != nil || n.Core.Teams.LifecycleVersion != 0 || n.Core.Domains.MaximumClaims != 0 || n.Core.DynamicRoles.Version != 0 || n.Core.Lifecycle != (organization.LifecycleConfig{}) || n.Core.OwnerTransferAudience != "" {
 		return nil, invalid
 	}
 	// The native organization contributor currently admits this exact profile;
@@ -173,6 +176,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 		lookup[digest.KeyVersion] = key
 	}
 	admission := organizationpg.ContributorConfig{Session: e.Repository, Profile: *selection.Verified, LookupKeys: lookup, PolicyID: n.Core.PolicyID, PolicyVersion: n.Core.PolicyVersion, MaximumMembers: n.Core.MaximumMembers, MaximumPerUser: n.Core.MaximumPerUser, MaximumPerTenant: n.Core.MaximumPerTenant}
+	admission.Teams = n.Core.Teams
 	if n.OwnerTransfer != nil {
 		primary := n.OwnerTransfer.Primary
 		if proofs == nil || proofs.native == nil || proofs.proofs == nil || primary.Action != string(organization.OwnerTransfer) || primary.Transport != session.CredentialBearer || len(primary.CSRFKeys) != 0 {
@@ -244,7 +248,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_organization_operations"}
 	}
-	state := &organizationState{operations: operations, maximum: n.Core.MaximumDuration}
+	state := &organizationState{operations: operations, maximum: n.Core.MaximumDuration, teams: n.Core.Teams.MaximumTeams != 0}
 	if n.Lifecycle != nil {
 		state.lifecycle, state.lifecycleProofs, state.lifecycleAudience = service, proofs.proofs, n.Core.Lifecycle.ProofAudience
 	}

@@ -122,5 +122,19 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 		return nil, err
 	}
 	leave := migrationHistory{namespace: "identity_organization_leave", history: leaveSteps, owners: map[migrations.Version]ModuleID{1: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", tables: []string{"organization_repeat_leave"}}}}
-	return append(catalog, history, leave), nil
+	catalog = append(catalog, history, leave)
+	if s.state.features.organization.teams {
+		// Keep teams in a separate forward history: enabling them after local
+		// lifecycle or invitations must not insert into either installed prefix.
+		teams, err := (organizationpg.TeamMigrationSource{Version: 1}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		lookup, err := (organizationpg.TeamMemberOperationLookupMigrationSource{Version: 2}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_organization_teams", history: append(teams, lookup...), owners: map[migrations.Version]ModuleID{1: "organization/postgres", 2: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", tables: []string{"teams", "team_memberships", "organization_team_mine"}}, {version: 2, schema: "organization", columns: []string{"command_effects.remove_team_id", "command_effects.remove_team_version", "command_effects.remove_org_member_version", "command_effects.remove_membership_version"}, tables: []string{"organization_repeat_team_member_removal"}, constraints: []string{"command_effects.organization_team_member_removal_scope"}}}})
+	}
+	return catalog, nil
 }

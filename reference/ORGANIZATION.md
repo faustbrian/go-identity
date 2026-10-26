@@ -3,9 +3,67 @@
 This selected backend profile connects real registration, verification and
 password signin to organization creation, metadata/role updates, scoped reads, member admission and
 removal, encrypted invitation delivery/resend, cancellation/rejection/expiry and once-only acceptance.
-Optional local archive/restore is described below. This is not an administrative
-UI or full organization/external lifecycle, teams, dynamic roles, domain ownership
-or another login profile.
+Optional local archive/restore and membership-only teams are described below.
+This is not an administrative UI or full organization/external lifecycle,
+team lifecycle, dynamic roles, domain ownership or another login profile.
+
+## Team membership
+
+Set `Organization.Core.Teams` explicitly, for example:
+
+```go
+organization.TeamConfig{Version: 1, MaximumTeams: 100, MaximumMembers: 1000}
+```
+
+Zero disables teams; quotas have no defaults and `LifecycleVersion` must remain
+zero in this composition. Apply the operator migration plan before enabling
+team writers. It adds independent `identity_organization_teams` history: native
+`TeamMigrationSource` at version1 followed by
+`TeamMemberOperationLookupMigrationSource` at version2. Previous organization,
+invitation, local lifecycle and self-leave histories are unchanged. The native
+transactional lookup index blocks writes: use a bounded maintenance window and
+operator lock/transaction timeouts. Existing effects retain NULL correlation;
+there is no backfill or second outcome journal. Retain this storage selection
+when disabling HTTP so installed histories and original recovery remain owned.
+
+The guarded `OrganizationService` exposes original-key `CreateTeam` (empty
+team), `AddTeamMember`, naturally repeated `RemoveTeamMember`, `ListMyTeams`
+and `ListTeamMembers`. Supply canonical caller-selected team IDs to native
+creation. Teams grant no organization roles or standalone permissions. Native
+current manager/action/query/session authority and atomic effects remain the
+only owners; configured-tenant, initialization and shutdown guards also apply.
+
+HTTP is separately selected through `HTTPOrganization.TeamMemberAdd`,
+`TeamMemberRemove`, `TeamListMine` and `TeamMemberList`. All use strict bearer
+sessions over tenant-mapped HTTPS. Writes share existing administrative budgets;
+reads share safe budgets. No HTTP team-creation, rename, deletion, dynamic-role
+or active-team route is enabled.
+
+- `POST /v1/organization/team/member-add` requires one original
+  `Idempotency-Key`; `/v1/organization/team/member-remove` forbids it.
+  Both require exactly `organizationID`, `teamID`, `userID`,
+  `organizationVersion`, `teamVersion`, `organizationMemberVersion` and
+  `membershipVersion`. First admission uses zero binding version; subsequent
+  admission uses the retained tombstone version. Removal requires its current
+  positive binding version. Native APIs validate these observations against
+  current authority; caller versions are not grants.
+- `GET /v1/organization/team/list-mine?organizationID=...&limit=20` selects
+  only the current human's live teams. `/v1/organization/team/member-list`
+  additionally requires `teamID`; native team authorization filters current
+  bindings. Both require canonical decimal limit1..100 and accept an optional
+  exclusive ID `cursor`. No caller actor/tenant, body or key is accepted.
+  Safe response arrays and observed epochs grant no authority; errors withhold
+  the entire page, not a partial result.
+
+Matching retries return actual original receipts, not another mutation.
+Natural removal cannot infer success from absence. Receipt before/after epochs
+are organization policy epochs, not team/binding versions. Retain unknown
+outcomes and safe original recovery binding; never automatically redispatch.
+Organization departure/readmission cannot revive old team bindings, and an old
+removal cannot affect a newer admission. New admission must explicitly name the
+new organization membership and retained team-binding versions. Logout denies
+history even when the original receipt exists. Disabled flags expose neither
+routes nor OpenAPI metadata.
 
 ## Local archive and restore
 
