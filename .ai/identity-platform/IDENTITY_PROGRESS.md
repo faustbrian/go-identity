@@ -1,10 +1,19 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 22:50 UTC
+## Current TL;DR — 2026-10-26 23:55 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
-  closed.** The new team lifecycle is a usable delivery within M23, not another
+  closed.** The new role and team profiles are usable deliveries within M23, not another
   whole row or a newly qualified unit out of 67.
+- **New complete profile: role-management backend.** Real signup sessions
+  create/read/list/update/delete custom roles through opt-in HTTP. Actual direct
+  permissions, direct revocation, team-only inheritance, deny precedence,
+  terminal IDs, fresh/rebuilt original recovery and logout denial are proven.
+  Leaf `76d8e92` and Reference `da32006` are independently reviewed, main-pushed
+  and CI-green. The downloaded public Reference passes fresh/populated
+  PostgreSQL/HTTPS/race journeys (12.475s); populated upgrade preserves real
+  team membership and original history. Its temporary PostgreSQL/cache are
+  removed. Binding HTTP, broader role profiles and full M23 remain unfinished.
 - **New complete profile: team lifecycle backend.** Real signup sessions create,
   list, rename and terminally delete teams through opt-in HTTPS. Members observe
   renamed teams without losing bindings; retired IDs cannot revive. Fresh and
@@ -23,15 +32,28 @@
   Genuine public consumer `e0e1cd7` is independently reviewed, main-pushed and
   CI-green: PostgreSQL/race17.214s covers 23 failure/authority cases plus complete
   signup/CRUD/permission/history journeys in two fresh-database cohorts, under
-  the unchanged abuse policy. That native profile is closed; role HTTP/backend
-  composition remains unfinished.
+  the unchanged abuse policy. That native profile and selected role CRUD backend
+  are closed; binding HTTP and broader role profiles remain unfinished.
 - **Still open:** dynamic roles, remaining identity/federation/provisioning and
   shared-issuer profiles, plus whole-unit qualification. Existing evidence is
   retained; no baseline restart or Tools programme is underway.
-- **Current:** primary is composing role HTTP/backend; the exact bearer-policy
-  prerequisite is committed as `56253b2`. An independent worker is adding the
-  direct role-assignment/revocation workflow over existing native authority.
+- **Current:** primary next composes direct role-binding HTTP/backend over the
+  proven native owner. The independent worker is adding team-role assignment/
+  revocation; its new typed prerequisite `4f99657` is reviewed and main-pushed,
+  and CI-green. Neither needs another baseline restart.
   No baseline restart, Tools programme or user decision is needed.
+
+- **New native direct-binding profile closed:** real password-issued sessions
+  assign roles, gain actual permissions, revoke exact bindings and recover only
+  current-authorized original history. Reassignment/readmission, rollback,
+  contention, lost commit acknowledgements and logout are proven against the
+  public owners. Native `0d454b7` and consumer `90c71d5` are independently
+  reviewed, main-pushed and CI-green; public-consumer PostgreSQL/race17.558s.
+  Its task-owned PostgreSQL/cache are removed. No whole M23/unit closure yet.
+- The initial retained-team combined run failed during HTTP construction. Its
+  cause is unproved; it is not reported fixed. The isolated test and subsequent
+  complete four-profile affected run pass unchanged source (21.209s), alongside
+  ordinary Reference/command race tests and tagged vet. No gate is waived.
 
 ## Retained checkpoint — 2026-10-26 20:12 UTC
 
