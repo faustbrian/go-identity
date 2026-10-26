@@ -1,5 +1,85 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 18:24 UTC: owner-transfer selected Reference profile CLOSED.
+HTTPbbd515b/Reference410045f main/remoteexact and Required40374592276/
+40377079971 SUCCESS; fourteen-path5ae347e owner_transfer_reference_review
+APPROVE with no findings. PublicReference
+v0.0.0-20261026182146-410045f39233 authenticated exactorigin/subdir, all14
+changedfiles byte-identical, Sum6yTUyrnuHVP4VCPoszCUvPGl5viA4Wa8C24Y7r3LlDE=,
+GoModSumrojEE1Ho5jbImsdk+Iko8q/9n+/p6a2wGJZQL1ho5Uk=.
+Actual downloaded publicfresh+populated PG/HTTPS/race73239 PASS9.802s
+(3.78s/4.38s). No local replacements or application proof/domain stores.
+Native8b72/34d70 and genuineconsumer1e1f7ff proof retained, not rerun.
+Parallel native natural expiry profile CLOSED at0807be0/c000e1d, exactmain/
+Required40374966799/40377207404 SUCCESS. Consumerfinalreview18e836d
+invitation_expire_consumer_final_review APPROVE, correctedfinalcallback
+oracle71032 PG/race11.822s/taggedvet; finaltidy62782/verify0. Actualpublicnative
+v0.0.0-20261026180731-0807be09f1a1 originexact/all11sourcefilesmatch,
+SumQ/7SJjt+INGXpoAfsGgdwU7jMEoUD98YaNQcQ7B/yKY=,
+GoModSumdNc0N77yPcnsZfM90KRtwCxe/gMZImFzLJEZaacQjmA=.
+ExpiryHTTP/Reference remains next, archive/restore/team/domain variants later.
+Whole39/67 estimate unchanged~25%,10/39 whole rows; no new fullyqualifiedunit.
+No activeworker/Go run; primary owns next composition and resourcecleanup.
+
+2026-10-26 18:19 UTC: transfer HTTP leaf bbd515b reviewed (owner_transfer_leaf_review,
+complete11path f79fd02e), pushed exact main, Required40374592276 SUCCESS.
+Focused71335 .286s/full-leaf race14.132s/vet/fuzz3.278s45exec/tidyverify pass;
+actual authenticated public leaf/baseline HTTP files byte-match adoption.
+Reference real password-action composition now locally passes fresh+populated
+PG/HTTPS/race62613 9.804s, ordinaryReference/cmd race50715 5.262s/6.283s,
+taggedvet and finaltidy/verify41896. Fourteen-path5ae347e under independent
+owner_transfer_reference_review; not delivered/closed yet. Initial403 was the
+test policy's missing exact request-admission grant, not a production bypass;
+only fixture grant changed. No unrelated native transfer engine rerun.
+Parallel natural expiry native0807be0 is reviewed, exactmain/Required40374966799
+SUCCESS. Genuine public/no-replace consumer initially passed62640 11.322s;
+review identified early query-withdrawal oracle. Hook now arms after management
+snapshot and observes final query; affected71032 PG/race11.822s/taggedvet pass.
+Six-path18e836d under invitation_expire_consumer_final_review; consumer delivery
+and cleanup pending, no HTTP/Reference expiry or wholeM22/67 qualification claim.
+
+2026-10-26 17:34 UTC: frozen M22 owner-transfer HTTP/Reference profile, primary
+hands-on in go-identity main479be3f. Consume public root8b72/native34d70 with
+genuinepublicconsumer1e1f7ff PG/race10.110s and exact greenCI; do not rerun their
+unchanged ownership/proof engine. Select narrow OwnerTransferer and original
+auth.ReauthenticationSource, strictbearerHTTPS POST /v1/organization/owner-transfer,
+required original headerkey, closed org/target/threeversions/proofID JSON. No
+callercommand/sourceactor/tenant/proofprojection/session override. Existing
+password-verify issues realaction-bound proof; HTTP fetches retained original
+record, never creates/renews proof. Native owns fresh first-use vs historical
+same-key recovery from a fresh current session, atomic roles/authority/proof/
+audit/outbox; shared admin rate and current transport-session freshness apply.
+Reference opt-in adds actual ActionPrimarySource from existing password owner,
+bearer profile only, guarded native facade and minimal owned action migrations;
+no fake proof/store or localreplace. Native selection alone adds no HTTP.
+Success: real signup/verify/signin -> bearer passwordverification -> transfer
+-> newowner read/last-owner safety -> exactkey recovery incl freshsignin ->
+logout denial. Deny wrong/stale/other-session proof, foreigntenant/actor, unknown
+or changedkeyintent and lateauthority; preserve knowncommit/unknownmetadata.
+Finite tests: leaf closedparse/selection/rates/proofsource/receipt/fuzz/race/vet;
+Reference realPG/HTTPS fresh+populated and guardedhandle/newpublicconsumer,
+independent finaldiff review, main/CI and cleanup. Teams/domain/lifecycle/MFA
+transfer variants and other operations remain later profiles, not fullM22.
+
+Parallel next native lane: organization_expire_operation in go-organization
+main1e1f7ff, own new root invitation_expire_operation.go/test; postgres/
+invitation_expire_operation*.go and owned tests, new publicconsumer helper
+plus unique existing harness dispatch, relevant README/changelog docs only.
+Source consumed existing root/native PrepareExpire/Execute/Recover, privilege
+risk, invitation/capability/delivery owners (root8b72/native34d70 committed).
+Outcome natural-repeat manager expiry for exactpendinginvitation/version and
+registeredreason, actualproofrevocation/audit identity.organization.expire_invitation,
+singleeffects, originalrecovery under currentmanagerauthority. No invented
+identity/store/capability or successfromterminalrow. Additional originalepoch/
+reason correlation uses existing atomic effect, additive owned migration/index
+only if required; shared invitation phase/apply/service hunks require primary
+agreement after concrete map. Primary owns manifest pins/Git/reviews/HTTP/
+Reference. Worker no children/Git/sharedkernels and no Go-heavy until grant;
+one bounded map then root RED/code boundary. Prove realpublicexpiry/repeat,
+changedreason/conflict, legacy/missinghistory denial, replayproof rejection,
+rollback/contention/lostack/currentwithdrawal and cleanpublicconsumer; not
+fullM22 or Referenceintegration. No all-package or speculative work.
+
 2026-10-26 17:24 UTC: native original-key owner-transfer delivered at34d70e4f2aae8c22256e2512b9c8e69b5966c5d2,
 reviewer owner_transfer_operation_native_review APPROVE final8path34fd8c7aa45c5076dfe98a962bd1118bdf61ebd980be57964d83f590284579e6,
 exactRequired40367232767 SUCCESS. Focused38741 10.815s was ordinary NOT race
