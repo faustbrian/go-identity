@@ -57,6 +57,8 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/invitation-send", http.MethodPost
 	case organization.InvitationAccept:
 		return "/v1/organization/invitation/accept", http.MethodPost
+	case organization.InvitationResend:
+		return "/v1/organization/invitation/resend", http.MethodPost
 	}
 	return "", ""
 }
@@ -71,6 +73,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	}
 	if op == organization.InvitationSend {
 		missingOwner = nilService(c.InvitationSender) || nilService(c.Invitations)
+	}
+	if op == organization.InvitationResend {
+		missingOwner = nilService(c.InvitationResender)
 	}
 	missingRate := selectedMutation(op) && !c.AdminRate.Configured() || !selectedMutation(op) && !c.SafeRate.Configured()
 	if op == organization.InvitationAccept {
@@ -105,7 +110,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			return zero, requestFailure{status: 405, code: "method_not_allowed", allow: method}
 		}
 		requirement := identityhttp.HeaderForbidden
-		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend {
+		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend {
 			requirement = identityhttp.HeaderRequired
 		}
 		key, _, err := decoder.IdempotencyKey(r, requirement)
@@ -200,6 +205,8 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		names = []string{"organizationID", "organizationVersion", "name", "slug"}
 	} else if in.op == organization.InvitationSend {
 		names = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
+	} else if in.op == organization.InvitationResend {
+		names = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
 	} else {
 		names = []string{"organizationID", "userID", "organizationVersion", "memberVersion"}
 		if in.op == organization.AddMember || in.op == organization.UpdateMember {
@@ -228,6 +235,10 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("recipientUserID", &in.user) || !decode("recipientIdentifierID", &in.recipientIdentifier) {
 			return identityhttp.ErrInvalidInput
 		}
+	} else if in.op == organization.InvitationResend {
+		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("invitationID", &in.invitationID) || !decode("invitationVersion", &in.invitationVersion) {
+			return identityhttp.ErrInvalidInput
+		}
 	} else {
 		if !decode("organizationID", &in.org) || !decode("userID", &in.user) || !decode("organizationVersion", &in.orgVersion) || !decode("memberVersion", &in.memberVersion) {
 			return identityhttp.ErrInvalidInput
@@ -254,6 +265,8 @@ func (in *requestInput) validate() error {
 		return in.send().Validate()
 	case organization.InvitationAccept:
 		return in.accept().Validate()
+	case organization.InvitationResend:
+		return in.resend().Validate()
 	}
 	return nil
 }
@@ -278,6 +291,10 @@ func (in *requestInput) read() organization.ReadRequest {
 
 func (in *requestInput) send() organization.InvitationSendOperationRequest {
 	return organization.InvitationSendOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, OrganizationID: in.org, OrganizationVersion: in.orgVersion, RecipientUserID: in.user, RecipientIdentifierID: in.recipientIdentifier, CorrelationID: in.correlation}
+}
+
+func (in *requestInput) resend() organization.InvitationResendOperationRequest {
+	return organization.InvitationResendOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, OrganizationID: in.org, OrganizationVersion: in.orgVersion, InvitationID: in.invitationID, InvitationVersion: in.invitationVersion, CorrelationID: in.correlation}
 }
 
 // The root organization's safeID contract is 1..128 UTF-8 bytes excluding

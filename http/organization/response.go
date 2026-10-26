@@ -85,6 +85,11 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	if in.op == organization.Create || in.op == organization.Update {
 		target = in.actor
 	}
+	if in.op == organization.InvitationResend {
+		// The recipient is fixed by the exact native invitation, not a new
+		// transport selector. Validate its native receipt without inventing one.
+		target = result.MemberID
+	}
 	validRecord := result.OrganizationID == organization.ID(b.RecordID) && (in.op == organization.Create || organization.ID(b.RecordID) == in.org)
 	if in.op == organization.InvitationSend {
 		validRecord = boundedID(string(result.InvitationID)) && result.InvitationID == organization.ID(b.RecordID) && result.OrganizationID == in.org
@@ -92,11 +97,14 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	if in.op == organization.InvitationAccept {
 		validRecord = result.InvitationID == in.invitationID && b.RecordID == string(in.invitationID) && result.OrganizationID == in.org && b.CommandID == in.commandID && b.CorrelationID == in.correlation
 	}
+	if in.op == organization.InvitationResend {
+		validRecord = result.InvitationID == in.invitationID && b.RecordID == string(in.invitationID) && result.OrganizationID == in.org
+	}
 	if b.ValidateFor(in.op.Descriptor()) != nil || b.TenantID != in.auth.TenantID || b.ActorKind != authorization.SubjectUser || b.ActorID != identity.ActorID(in.actor) || b.UserID != target || result.MemberID != b.UserID || !validRecord {
 		return 503, MutationResponse{CommitOutcome: "none", Error: "unavailable"}
 	}
 	out.CommandID, out.OrganizationID, out.MemberID = b.CommandID, result.OrganizationID, result.MemberID
-	if in.op == organization.InvitationSend {
+	if in.op == organization.InvitationSend || in.op == organization.InvitationResend {
 		out.MemberID = "" // Sending creates an invitation, not a membership.
 	}
 	out.Recovery = &CommandScope{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID, PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion, SchemaID: b.SchemaID, SchemaVersion: b.SchemaVersion, CorrelationID: b.CorrelationID}
@@ -114,7 +122,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 	if in.op == organization.Create || in.op == organization.InvitationSend {
 		expectedBefore = 0
 	}
-	if in.op == organization.InvitationAccept {
+	if in.op == organization.InvitationAccept || in.op == organization.InvitationResend {
 		expectedBefore = in.invitationVersion
 	}
 	if r.Outcome == identity.CommitOutcomeCommitted && (r.Feature.BeforeVersion != expectedBefore || r.Feature.AfterVersion != expectedBefore+1) {

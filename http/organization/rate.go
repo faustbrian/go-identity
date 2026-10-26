@@ -64,7 +64,7 @@ type adminRateState struct {
 // identity-platform API_OPERATIONS.md rate.admin row owns actor30/minute,
 // tenant100/minute and trusted full-IP60/minute, atomic shared fail-closed
 // admission plus mandatory secret-free denial auditing. Only this finite
-// organization's create/update/member-add/update/remove/invitation-send profile is
+// organization's create/update/member-add/update/remove/invitation-send/resend profile is
 // selected here.
 func NewAdminRateLimiter(c AdminRateConfig) (out *AdminRateLimiter, err error) {
 	defer func() {

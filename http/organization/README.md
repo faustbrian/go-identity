@@ -2,7 +2,7 @@
 
 Optional **bearer-only** HTTP integration for native organization creation,
 explicit organization reads, metadata/role updates, member listing, admission/removal and original-key
-invitation sending and once-only acceptance. Omit its
+invitation sending/resend and once-only acceptance. Omit its
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
 
@@ -28,6 +28,18 @@ shared `AdminRate`, trusted network/clock and timeout configuration. A send-only
 selection requires neither `Service` nor `SafeRate`. Install the existing native
 request-key/preparation/expiry-fence and invitation/capability/delivery migrations
 before selecting it. No application workflow or transaction adapter is required.
+
+Invitation resend is independently opt-in through `InvitationResend`. Supply
+the actual native `InvitationOperationService` as `Config.InvitationResender`,
+current `Sessions` and shared `AdminRate`. Neither `Service`, `Invitations` nor
+`SafeRate` is needed. Install the native resend and retained request-key/expiry
+histories first. The recipient, role and original exclusive expiry are fixed;
+the request cannot choose an address, proof, command or new deadline. Native
+current owner/administrator and recipient security remain authoritative.
+The returned delivery state belongs to the original command, even after later
+resends or acceptance. No owner-only current-invitation read is substituted for
+administrator recovery. A late observation error retains known commitment but
+withholds delivery state; queued/accepted do not establish confirmed delivery.
 
 Invitation acceptance is independently opt-in through `InvitationAccept`.
 Supply the actual native `InvitationService` as `Config.InvitationAccepter`,
@@ -98,6 +110,7 @@ session, protected risk, membership and atomic commit fences.
 | Remove member | `POST /v1/organization/member/remove` | JSON `organizationID`, target `userID`, exact positive organization/member versions; **no key** |
 | Accept invitation | `POST /v1/organization/invitation/accept` | JSON original `commandID`, `organizationID`, `invitationID`, exact positive `organizationVersion`, `invitationVersion`, private `token`; **no key** |
 | Send invitation | `POST /v1/organization/invitation-send` | JSON `organizationID`, exact positive `organizationVersion`, target `recipientUserID`, existing verified `recipientIdentifierID`; required original key |
+| Resend invitation | `POST /v1/organization/invitation/resend` | JSON `organizationID`, exact positive read-only `organizationVersion`, `invitationID`, `invitationVersion` 1..MaxUint64-2; required original key |
 | Get invitation | `GET /v1/organization/invitation/get` | Required query `organizationID`, `invitationID`; native **owner-only** authorization |
 | List my invitations | `GET /v1/organization/invitation/list-mine` | Optional opaque `cursor`, `limit` 1..200 (default100); current verified recipient, no membership required |
 
@@ -116,7 +129,7 @@ and body/query limits come from the base bounded decoder. IDs remain
 case-sensitive; names and slugs retain the root module's validation. Caller
 correlation and command IDs are not accepted; the owner supplies correlation.
 
-Create/update/add/member-update/send forward the **single unchanged original key** to the actual native
+Create/update/add/member-update/send/resend forward the **single unchanged original key** to the actual native
 owner. Matching retries recover that original command; changed intent conflicts.
 The transport never reconstructs an old bearer, refreshes original evidence,
 chooses another command ID, retries automatically or interprets a timeout as

@@ -125,6 +125,7 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 			}
 			if selectedMutation(op) {
 				var out organization.StoreResult
+				var resend organization.InvitationResendOperationResult
 				var err error
 				switch op {
 				case organization.Create:
@@ -139,12 +140,24 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out, err = c.Service.RemoveMember(r.Context(), in.remove(), in.facts.ClientIP().String())
 				case organization.InvitationSend:
 					out, err = c.InvitationSender.Send(r.Context(), in.send(), in.facts.ClientIP().String())
+				case organization.InvitationResend:
+					resend, err = c.InvitationResender.Resend(r.Context(), in.resend(), in.facts.ClientIP().String())
+					out = resend.StoreResult
 				case organization.InvitationAccept:
 					if nilService(in.acceptance) {
 						reject(w, r, identityhttp.ErrUnavailable)
 						return
 					}
 					out, err = in.acceptance.Execute(r.Context())
+				}
+				if op == organization.InvitationResend {
+					status, response := invitationResendResponse(in, resend, err)
+					if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+						status, response.Error = 503, "unavailable"
+						response.DeliveryState = ""
+					}
+					writeJSON(w, status, response)
+					return
 				}
 				if op == organization.InvitationAccept {
 					status, response := invitationAcceptResponse(in, out, err)

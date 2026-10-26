@@ -55,6 +55,15 @@ type InvitationSender interface {
 	Send(context.Context, organization.InvitationSendOperationRequest, string) (organization.StoreResult, error)
 }
 
+// InvitationResender owns original-key successor rotation and original delivery
+// observation under current native manager/recipient authority. It preserves the
+// fixed recipient, role and deadline, never reconstructs execution on retry, and
+// retains a known receipt if later disclosure fails. Calls honor ctx and support
+// concurrent independent requests. No separate current-invitation read is used.
+type InvitationResender interface {
+	Resend(context.Context, organization.InvitationResendOperationRequest, string) (organization.InvitationResendOperationResult, error)
+}
+
 // InvitationAccepter acquires the actual native preparation and authenticated
 // original issuance facts. HTTP admission retains it until Handle executes the
 // identical preparation. Final current authority and atomic one-use effects
@@ -76,6 +85,8 @@ type InvitationAccepter interface {
 // InvitationAccepter and SecretRate, not Service, Invitations or AdminRate.
 // Update requires MetadataUpdater; MemberUpdate requires MemberUpdater. Each
 // update selection needs AdminRate but neither Service nor SafeRate.
+// Resend requires InvitationResender and AdminRate, not Service, Invitations or
+// SafeRate: its native result owns the original command's delivery observation.
 // Share each rate owner across its selected routes/requests.
 // Now is trusted, prompt and concurrency-safe. MaximumDuration is 1ms..30s;
 // inbound earlier deadlines win. Construction performs no owner reads or IO.
@@ -87,6 +98,7 @@ type Config struct {
 	MemberUpdater      MemberUpdater
 	Invitations        InvitationReader
 	InvitationSender   InvitationSender
+	InvitationResender InvitationResender
 	InvitationAccepter InvitationAccepter
 	// InvitationProofLimits must match the selected issuer's bounded parsing
 	// profile. Zero uses capability.DefaultLimits; parsing grants no authority.
@@ -108,6 +120,7 @@ type FeatureConfig struct {
 	Update, MemberUpdate                             bool
 	InvitationGet, InvitationListMine                bool
 	InvitationSend, InvitationAccept                 bool
+	InvitationResend                                 bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -119,14 +132,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}} {
 		if !selected.on {
 			continue
 		}
@@ -157,7 +170,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "organization", Operations: operations})
 }
 func selectedMutation(op organization.Operation) bool {
-	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.InvitationSend || op == organization.InvitationAccept
+	return op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.RemoveMember || op == organization.InvitationSend || op == organization.InvitationAccept || op == organization.InvitationResend
 }
 func nilService(service any) bool {
 	if service == nil {

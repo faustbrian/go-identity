@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add independently selected strict-bearer invitation resend with the original
+  required Idempotency-Key and exact invitation/organization versions. Preserve
+  native recipient, role, exclusive expiry and original delivery observation;
+  late observation failure retains known commitment without exposing delivery
+  state. No current-invitation read, proof or effect ID is exported.
+
 - Add independently selected exact-version metadata and static member-role
   updates through native original-key owners and shared administrative rates.
   Configure the narrow MetadataUpdater/MemberUpdater ports; existing Service

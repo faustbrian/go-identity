@@ -46,6 +46,12 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		mutationFields["invitationID"] = id
 		mutationRequired = append(mutationRequired, "invitationID")
 	}
+	if op == organization.InvitationResend {
+		delete(mutationFields, "memberID")
+		mutationFields["invitationID"] = id
+		mutationFields["deliveryState"] = map[string]any{"type": "string", "enum": []string{"queued", "attempting", "accepted", "delivered", "rejected", "bounced", "cancelled", "unknown", "retry_wait", "expired", "exhausted", "superseded", "transient_failure"}, "description": "Authorized observation of this original command's delivery, not the latest successor. Queued is local admission, accepted is provider acceptance, neither confirms delivery. Absent on observation failure; unknown never authorizes redispatch."}
+		mutationRequired = []string{"commandID", "organizationID", "invitationID", "beforeVersion", "afterVersion", "recovery", "deliveryState"}
+	}
 	mutation := object([]string{"committed", "commitOutcome"}, mutationFields)
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	failure := any(errorSchema)
@@ -80,7 +86,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend {
+	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend {
 		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated organization/command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
@@ -99,6 +105,10 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}
 			description += "Exact verified recipient selection, never a submitted email address or claimed actor. The native owner allocates invitation/command IDs and atomically queues encrypted proof delivery. Matching keys recover original metadata only. A successful current read returns invitation and delivery status; if that read fails, the original committed outcome remains explicit without current metadata. No proof or delivery effect ID is exported. "
+		} else if op == organization.InvitationResend {
+			required = []string{"organizationID", "organizationVersion", "invitationID", "invitationVersion"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "invitationID": id, "invitationVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 2, "description": "Exact advanceable invitation version leaving room for successor issuance and its terminal transition. Fractions, exponent notation and overflow are rejected."}}
+			description += "Resend requires current native owner or administrator authority for the exact pending invitation; recipient, member role and original exclusive expiry cannot be overridden or renewed. The sole native command atomically supersedes the predecessor proof and enqueues one encrypted successor. Matching keys never reprepare, regenerate or redispatch, including unknown outcomes. Returns the original command's authorized delivery state, not a latest-invitation read; status/authority failure retains known commitment without delivery observation. No proof, delivery effect identity, address or new command selector is accepted or exported. "
 		} else if op == organization.InvitationAccept {
 			required = []string{"commandID", "organizationID", "invitationID", "organizationVersion", "invitationVersion", "token"}
 			fields = map[string]any{"commandID": command, "organizationID": id, "invitationID": id, "organizationVersion": version(1), "invitationVersion": version(1), "token": map[string]any{"type": "string", "minLength": 32, "maxLength": 4096, "writeOnly": true}}
