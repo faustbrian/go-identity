@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit an explicitly selected strict-bearer invitation-cancellation policy.
+  Natural-repeat semantics and cookie-CSRF protection remain unchanged;
+  selection alone enables no route, revocation or authority.
+
 - Permit an explicitly selected strict-bearer invitation-resend policy. Original
   keyed semantics and cookie-CSRF protection remain unchanged; selection alone
   enables no route, proof rotation, delivery or authority.
