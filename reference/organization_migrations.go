@@ -134,7 +134,25 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 		if err != nil {
 			return nil, err
 		}
-		catalog = append(catalog, migrationHistory{namespace: "identity_organization_teams", history: append(teams, lookup...), owners: map[migrations.Version]ModuleID{1: "organization/postgres", 2: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", tables: []string{"teams", "team_memberships", "organization_team_mine"}}, {version: 2, schema: "organization", columns: []string{"command_effects.remove_team_id", "command_effects.remove_team_version", "command_effects.remove_org_member_version", "command_effects.remove_membership_version"}, tables: []string{"organization_repeat_team_member_removal"}, constraints: []string{"command_effects.organization_team_member_removal_scope"}}}})
+		history := migrationHistory{namespace: "identity_organization_teams", history: append(teams, lookup...), owners: map[migrations.Version]ModuleID{1: "organization/postgres", 2: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", tables: []string{"teams", "team_memberships", "organization_team_mine"}}, {version: 2, schema: "organization", columns: []string{"command_effects.remove_team_id", "command_effects.remove_team_version", "command_effects.remove_org_member_version", "command_effects.remove_membership_version"}, tables: []string{"organization_repeat_team_member_removal"}, constraints: []string{"command_effects.organization_team_member_removal_scope"}}}}
+		if s.state.features.organization.teamLifecycle {
+			for _, suffix := range []struct {
+				source migrations.Source
+				guard  migrationGuard
+			}{
+				{organizationpg.TeamLifecycleMigrationSource{Version: 3}, migrationGuard{version: 3, schema: "organization", tables: []string{"team_identities"}, functions: []string{"guard_team_identity_insert"}, constraints: []string{"teams.organization_team_identity", "team_memberships.organization_team_member_identity"}}},
+				{organizationpg.TeamDeleteOperationLookupMigrationSource{Version: 4}, migrationGuard{version: 4, schema: "organization", columns: []string{"command_effects.delete_team_id", "command_effects.delete_team_version"}, tables: []string{"organization_repeat_team_delete"}, constraints: []string{"command_effects.organization_team_delete_operation_scope"}}},
+			} {
+				steps, err := suffix.source.Load(ctx)
+				if err != nil {
+					return nil, err
+				}
+				history.history = append(history.history, steps...)
+				history.owners[suffix.guard.version] = "organization/postgres"
+				history.guards = append(history.guards, suffix.guard)
+			}
+		}
+		catalog = append(catalog, history)
 	}
 	return catalog, nil
 }

@@ -33,7 +33,7 @@ type referenceOrganizationTeamsPolicy struct{}
 
 func proveReferenceOrganizationTeamsSelection(t *testing.T, c reference.StoreConfiguration, deps reference.ReferenceDependencies) {
 	t.Helper()
-	for _, mode := range []string{"no-native-teams", "no-limit", "no-version", "unselected-lifecycle"} {
+	for _, mode := range []string{"no-native-teams", "no-limit", "no-version", "unknown-lifecycle"} {
 		candidate, org := c, *c.Organization
 		candidate.Organization = &org
 		switch mode {
@@ -43,8 +43,8 @@ func proveReferenceOrganizationTeamsSelection(t *testing.T, c reference.StoreCon
 			org.Core.Teams.MaximumMembers = 0
 		case "no-version":
 			org.Core.Teams.Version = 0
-		case "unselected-lifecycle":
-			org.Core.Teams.LifecycleVersion = 1
+		case "unknown-lifecycle":
+			org.Core.Teams.LifecycleVersion = 2
 		}
 		if graph, err := reference.ComposeStores(candidate, deps); err == nil {
 			bounded, stop := context.WithTimeout(context.Background(), time.Second)

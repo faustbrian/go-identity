@@ -23,6 +23,69 @@ func (f *OrganizationService) CreateTeam(ctx context.Context, r organization.Cre
 	return n.operations.CreateTeam(w, r, network)
 }
 
+// UpdateTeam delegates original-key exact-epoch rename without changing team
+// bindings. Native current action/session/query authority and transaction
+// ownership remain authoritative; calls retain graph tenant/lifetime guards.
+func (f *OrganizationService) UpdateTeam(ctx context.Context, r organization.UpdateTeamOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.UpdateTeam(w, r, network)
+}
+
+// DeleteTeam delegates naturally repeated exact-version terminal deletion.
+// Only native original history proves prior success; retired IDs and bindings
+// cannot revive. Current authority and graph guards apply to every recovery.
+func (f *OrganizationService) DeleteTeam(ctx context.Context, r organization.DeleteTeamOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.DeleteTeam(w, r, network)
+}
+
+// GetTeam returns the selected exact manager-only native snapshot. It exposes
+// no HTTP route or reusable authority. Native team-read/session/lifecycle
+// policy and graph initialization, tenant, cancellation and drain guards apply.
+func (f *OrganizationService) GetTeam(ctx context.Context, r organization.TeamReadRequest) (organization.View, error) {
+	if f == nil {
+		return organization.View{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.View{}, err
+	}
+	defer done()
+	return n.operations.GetTeam(w, r)
+}
+
+// ListTeams returns a bounded current manager-only native page, not a cached
+// authorization lease. Current team-read policy and graph tenant/lifetime
+// guards remain required; failures disclose no partial page.
+func (f *OrganizationService) ListTeams(ctx context.Context, r organization.TeamReadRequest) (organization.View, error) {
+	if f == nil {
+		return organization.View{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.View{}, err
+	}
+	defer done()
+	if n.teamsNative == nil {
+		return organization.View{}, identity.UnavailableError{}
+	}
+	return n.teamsNative.ListTeams(w, r)
+}
+
 // AddTeamMember delegates exact original-key admission through the selected
 // native owner. Current team-write/session authority and protected effects stay
 // native-owned; matching recovery never renews authority or executes again.

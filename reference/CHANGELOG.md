@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose opt-in team creation, manager listing, rename and terminal deletion
+  HTTP with the existing native owners. Guarded exact team reads stay native.
+  Select `Core.Teams.LifecycleVersion: 1` for rename/delete and append native
+  lifecycle/delete-lookup steps3/4 to the separate team history. Existing team
+  bindings and original receipts survive upgrade; retired IDs cannot revive.
+
 - Compose native empty-team creation, exact original-key admission, natural
   binding removal and scoped team pages through guarded handles. Four optional
   bearer HTTP routes retain shared rate admission and current native authority.

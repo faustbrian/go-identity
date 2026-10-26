@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -285,6 +286,7 @@ type signupGraphExtensions struct {
 	organizationExpiry    bool
 	organizationLifecycle bool
 	organizationTeams     bool
+	organizationTeamCRUD  bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -534,6 +536,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Organization.Core.Teams = organization.TeamConfig{Version: 1, MaximumTeams: 10, MaximumMembers: 100}
 		c.HTTPOrganization.TeamMemberAdd, c.HTTPOrganization.TeamMemberRemove = true, true
 		c.HTTPOrganization.TeamListMine, c.HTTPOrganization.TeamMemberList = true, true
+	}
+	if extensions.organizationTeamCRUD {
+		c.Organization.Core.Teams.LifecycleVersion = 1
+		c.HTTPOrganization.TeamCreate, c.HTTPOrganization.TeamUpdate = true, true
+		c.HTTPOrganization.TeamDelete, c.HTTPOrganization.TeamList = true, true
 	}
 	if extensions.organizationExpiry {
 		c.Organization.Invitations.Policy.ExpirationReasons = []identity.PolicyReason{"security-withdrawal", "administrative-cleanup"}
@@ -1116,6 +1123,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organizationTeams {
 		proveReferenceOrganizationTeamsSelection(t, c, deps)
 	}
+	if extensions.organizationTeamCRUD {
+		proveReferenceOrganizationTeamCRUDSelection(t, c, deps)
+	}
 	if extensions.organizationTransfer {
 		proveReferenceOrganizationTransferSelection(t, c, deps)
 	}
@@ -1125,7 +1135,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organizationUpgrade {
 		successor := c
 		organizationUpgrade = &successor
-		c.Organization, c.HTTPOrganization = nil, nil
+		if extensions.organizationTeamCRUD {
+			// Upgrade actual installed team membership, preserving its histories,
+			// live binding and original command custody under lifecycle steps3/4.
+			org, transport := *c.Organization, *c.HTTPOrganization
+			c.Organization, c.HTTPOrganization = &org, &transport
+			org.Core.Teams.LifecycleVersion = 0
+			transport.TeamCreate, transport.TeamUpdate = false, false
+			transport.TeamDelete, transport.TeamList = false, false
+		} else {
+			c.Organization, c.HTTPOrganization = nil, nil
+		}
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
@@ -1271,6 +1291,8 @@ END $$`); err != nil {
 			{"archive", c.HTTPOrganization.Archive}, {"restore", c.HTTPOrganization.Restore},
 			{"team.member-add", c.HTTPOrganization.TeamMemberAdd}, {"team.member-remove", c.HTTPOrganization.TeamMemberRemove},
 			{"team.list-mine", c.HTTPOrganization.TeamListMine}, {"team.member-list", c.HTTPOrganization.TeamMemberList},
+			{"team.create", c.HTTPOrganization.TeamCreate}, {"team.update", c.HTTPOrganization.TeamUpdate},
+			{"team.delete", c.HTTPOrganization.TeamDelete}, {"team.list", c.HTTPOrganization.TeamList},
 		} {
 			if selected.on {
 				wantOperations++
@@ -1671,14 +1693,27 @@ END $$`); err != nil {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
 			selected, selectedConfig := features, c
 			if organizationUpgrade != nil {
+				var installed *referenceTeamUpgrade
+				if extensions.organizationTeamCRUD {
+					populated := prepareReferenceTeamUpgrade(t, ctx, features, cookies, csrf)
+					installed = &populated
+				}
 				// Before the explicit operator upgrade, neither advertised metadata
 				// nor the actual route may expose the unselected native feature.
 				for _, op := range server.OpenAPI().Operations() {
-					if strings.HasPrefix(op.Record.OperationID, "identity.organization.") {
+					forbidden := strings.HasPrefix(op.Record.OperationID, "identity.organization.")
+					if extensions.organizationTeamCRUD {
+						forbidden = slices.Contains([]string{string(organization.CreateTeam), string(organization.UpdateTeam), string(organization.DeleteTeam), string(organization.ListTeams)}, op.Record.OperationID)
+					}
+					if forbidden {
 						t.Fatal("unselected organization route advertised")
 					}
 				}
-				probe, err := http.NewRequestWithContext(ctx, http.MethodGet, network.URL+"/v1/organization/invitation/list-mine", nil)
+				probePath := "/v1/organization/invitation/list-mine"
+				if extensions.organizationTeamCRUD {
+					probePath = "/v1/organization/team/list"
+				}
+				probe, err := http.NewRequestWithContext(ctx, http.MethodGet, network.URL+probePath, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1692,7 +1727,10 @@ END $$`); err != nil {
 					t.Fatal("unselected organization route exposed", response.StatusCode)
 				}
 				selectedConfig = *organizationUpgrade
-				upgradeModules := append(append([]reference.ModuleID(nil), modules...), "organization/postgres")
+				upgradeModules := append([]reference.ModuleID(nil), modules...)
+				if !slices.Contains(upgradeModules, "organization/postgres") {
+					upgradeModules = append(upgradeModules, "organization/postgres")
+				}
 				selected = upgradeReferenceEmailGraph(t, ctx, f, selectedConfig, deps, worker, upgradeModules, user, migrationRequest, workerConfigs[1:]...)
 				upgraded, err := reference.NewServer(config, deps, selected)
 				if err != nil {
@@ -1700,8 +1738,13 @@ END $$`); err != nil {
 				}
 				next := upgraded.Handler()
 				organizationHandler.Store(&next)
+				if installed != nil {
+					installed.prove(t, ctx, selected)
+				}
 			}
-			if extensions.organizationTeams {
+			if extensions.organizationTeamCRUD {
+				proveReferenceOrganizationTeamCRUD(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
+			} else if extensions.organizationTeams {
 				proveReferenceOrganizationTeams(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationLifecycle {
 				proveReferenceOrganizationLifecycle(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)

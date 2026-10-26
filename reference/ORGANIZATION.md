@@ -3,9 +3,9 @@
 This selected backend profile connects real registration, verification and
 password signin to organization creation, metadata/role updates, scoped reads, member admission and
 removal, encrypted invitation delivery/resend, cancellation/rejection/expiry and once-only acceptance.
-Optional local archive/restore and membership-only teams are described below.
+Optional local archive/restore and team membership/lifecycle are described below.
 This is not an administrative UI or full organization/external lifecycle,
-team lifecycle, dynamic roles, domain ownership or another login profile.
+dynamic roles, domain ownership or another login profile.
 
 ## Team membership
 
@@ -15,8 +15,9 @@ Set `Organization.Core.Teams` explicitly, for example:
 organization.TeamConfig{Version: 1, MaximumTeams: 100, MaximumMembers: 1000}
 ```
 
-Zero disables teams; quotas have no defaults and `LifecycleVersion` must remain
-zero in this composition. Apply the operator migration plan before enabling
+Zero disables teams; quotas have no defaults. Leave `LifecycleVersion` zero
+for membership-only composition, or select version1 as described below.
+Apply the operator migration plan before enabling
 team writers. It adds independent `identity_organization_teams` history: native
 `TeamMigrationSource` at version1 followed by
 `TeamMemberOperationLookupMigrationSource` at version2. Previous organization,
@@ -36,8 +37,8 @@ only owners; configured-tenant, initialization and shutdown guards also apply.
 HTTP is separately selected through `HTTPOrganization.TeamMemberAdd`,
 `TeamMemberRemove`, `TeamListMine` and `TeamMemberList`. All use strict bearer
 sessions over tenant-mapped HTTPS. Writes share existing administrative budgets;
-reads share safe budgets. No HTTP team-creation, rename, deletion, dynamic-role
-or active-team route is enabled.
+reads share safe budgets. These four flags do not enable team creation,
+rename/deletion, dynamic-role or active-team routes.
 
 - `POST /v1/organization/team/member-add` requires one original
   `Idempotency-Key`; `/v1/organization/team/member-remove` forbids it.
@@ -64,6 +65,52 @@ removal cannot affect a newer admission. New admission must explicitly name the
 new organization membership and retained team-binding versions. Logout denies
 history even when the original receipt exists. Disabled flags expose neither
 routes nor OpenAPI metadata.
+
+## Team creation and terminal lifecycle
+
+`HTTPOrganization.TeamCreate` and `TeamList` independently select empty-team
+creation and manager-only listing with any valid native team policy. Select
+`Organization.Core.Teams.LifecycleVersion = 1` before enabling `TeamUpdate`
+or `TeamDelete`. Native selection never enables HTTP automatically. Apply the
+operator check/plan/apply workflow before activation: the existing independent
+team history appends `TeamLifecycleMigrationSource` at version3 and
+`TeamDeleteOperationLookupMigrationSource` at version4. Steps1/2 and all other
+histories retain their installed identity and bytes. Native step3 preserves
+live IDs and bindings; step4 leaves legacy command correlation NULL. The
+transactional lookup index requires bounded write-blocking maintenance and
+operator lock/transaction timeouts. Keep the native policy when disabling HTTP
+so migration and original-recovery ownership remain available.
+
+After genuine registration, verification and password signin, use the issued
+bearer session and a current organization to perform this journey:
+
+1. `POST /v1/organization/team/create` accepts exactly `organizationID`,
+   `teamID`, `organizationVersion` and `name`, plus one `Idempotency-Key`.
+   Supply a canonical team ID; success creates an empty team at version1.
+2. `GET /v1/organization/team/list?organizationID=...&limit=20` is manager-only,
+   uses safe rates, requires canonical limit1..100 and accepts an exclusive
+   optional ID `cursor`. Membership admits no permission to list every team.
+3. `POST /v1/organization/team/update` accepts the create fields plus exact
+   `teamVersion` and one original key. Read current versions after any member
+   change; rename advances organization/team epochs without changing bindings.
+4. `POST /v1/organization/team/delete` accepts exactly `organizationID`,
+   `teamID`, `organizationVersion` and `teamVersion`, with no key. Deletion is
+   terminal, removes the live team and denies old binding reads. A new key
+   cannot revive the retired ID.
+
+All writes share the existing administrative budget. Current native manager,
+action, session and outcome-query authority remain required. Mutations return
+organization before/after epochs and original recovery metadata, not a member
+projection or an independent authority grant. Repeat exact keys/input or the
+same natural deletion to recover original history; retain Unknown outcomes
+without automatic reexecution. Logout denies both direct and HTTP recovery.
+
+The guarded handle additionally exposes `UpdateTeam`, `DeleteTeam`, `ListTeams`
+and exact manager-only `GetTeam`. There is deliberately no new GetTeam HTTP
+route. The fresh and populated-upgrade `TestReferencePostgresOrganizationTeamCRUD*`
+journeys exercise actual signup sessions, HTTP mutations/reads, preserved
+bindings and original receipts, reconstruction and logout. The populated case
+starts with actual membership-only teams and active bindings before steps3/4.
 
 ## Local archive and restore
 
