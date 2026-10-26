@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -47,6 +49,9 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
 		if c.Request.Action == authorization.Action(organization.SlugAvailable) && c.Request.Resource.Type == "organization.slug" {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
+		if c.Request.Action == authorization.Action(organization.ListOrganizations) && c.Request.Resource.Type == "organization" {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 		// Invitation owners read delivery metadata whose resource is the
@@ -102,6 +107,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 		t.Error("unexpected organization administrative denial")
 		return ctx.Err()
 	}}
+	c.HTTPOrganization.List = true
 }
 
 func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, features reference.FeatureSet, workers reference.WorkerSet, workerConfigs []deliverypg.WorkerConfig, client *http.Client, base, origin string, messages <-chan string, cookies []*http.Cookie, csrf string) {
@@ -158,6 +164,52 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 			t.Fatal("genuine Reference advisory occupancy unavailable or disclosed metadata", code)
 		}
 	}
+	listOrganizations := func(h organizationTestHuman, limit int, expected ...organization.ID) {
+		t.Helper()
+		want := append([]organization.ID(nil), expected...)
+		sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+		var got []organization.ID
+		cursor := ""
+		seen := make(map[string]bool)
+		for page := 0; ; page++ {
+			if page > len(want)+1 {
+				t.Fatal("organization list did not reach its observed end")
+			}
+			path := "/v1/organization/list?limit=" + strconv.Itoa(limit)
+			if cursor != "" {
+				path += "&cursor=" + url.QueryEscape(cursor)
+			}
+			code, wire := call(h, http.MethodGet, path, nil, "")
+			var out organizationhttp.OrganizationListResponse
+			if code != 200 || json.Unmarshal(wire, &out) != nil || out.Organizations == nil || len(out.Organizations) > limit {
+				t.Fatal("Reference current-user page unavailable or unbounded", code)
+			}
+			for _, org := range out.Organizations {
+				if org.ID == "" || org.Name == "" || org.Slug == "" || org.Version == 0 {
+					t.Fatal("Reference page lost current organization metadata")
+				}
+				got = append(got, org.ID)
+			}
+			cursor = string(out.NextCursor)
+			if cursor == "" {
+				break
+			}
+			if seen[cursor] || len(out.Organizations) == 0 {
+				t.Fatal("Reference returned a repeated or empty-page cursor")
+			}
+			seen[cursor] = true
+		}
+		if len(got) != len(want) {
+			t.Fatal("Reference listing exposed missing or foreign memberships")
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatal("Reference listing lost self-only bytewise pagination")
+			}
+		}
+	}
+	listOrganizations(owner, 1)
+	listOrganizations(recipient, 1)
 	slugAvailable(recipient, "reference-member-organization", true)
 	create := func(slug, key string) organizationhttp.MutationResponse {
 		t.Helper()
@@ -175,6 +227,8 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		return out
 	}
 	first := create("reference-member-organization", "reference-organization-original-create")
+	listOrganizations(owner, 1, first.OrganizationID)
+	listOrganizations(recipient, 1)
 	slugAvailable(recipient, "reference-member-organization", false)
 	read := func(h organizationTestHuman, id organization.ID, want int) organizationhttp.ReadResponse {
 		t.Helper()
@@ -221,6 +275,7 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		t.Fatal("Reference member admission", code)
 	}
 	member := read(recipient, first.OrganizationID, 200)
+	listOrganizations(recipient, 1, first.OrganizationID)
 	code, wire = call(owner, http.MethodGet, "/v1/organization/member/list?organizationID="+string(first.OrganizationID)+"&limit=10", nil, "")
 	var listed organizationhttp.ReadResponse
 	if code != 200 || json.Unmarshal(wire, &listed) != nil || listed.Organization.ID != first.OrganizationID || listed.Members == nil || len(*listed.Members) != 2 {
@@ -265,9 +320,20 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		t.Fatal("Reference member removal", code)
 	}
 	read(recipient, first.OrganizationID, 403)
+	listOrganizations(recipient, 1)
 	// A separate organization demonstrates never-member recipient acceptance,
 	// independently of the direct admission/removal profile above.
 	second := create("reference-invitation-organization", "reference-invitation-original-create")
+	listOrganizations(owner, 1, first.OrganizationID, second.OrganizationID)
+	listOrganizations(recipient, 1)
+	pageCode, pageWire := call(owner, http.MethodGet, "/v1/organization/list?limit=1", nil, "")
+	var ownerPage organizationhttp.OrganizationListResponse
+	if pageCode != 200 || json.Unmarshal(pageWire, &ownerPage) != nil || ownerPage.NextCursor == "" {
+		t.Fatal("genuine owner page did not produce a continuation", pageCode)
+	}
+	if code, _ := call(recipient, http.MethodGet, "/v1/organization/list?limit=1&cursor="+url.QueryEscape(string(ownerPage.NextCursor)), nil, ""); code != 400 {
+		t.Fatal("another subject reused the owner's scope-bound continuation", code)
+	}
 	sentBody := map[string]any{"organizationID": second.OrganizationID, "organizationVersion": uint64(1), "recipientUserID": recipient.user, "recipientIdentifierID": recipient.identifier}
 	code, wire = call(owner, http.MethodPost, "/v1/organization/invitation-send", sentBody, "reference-original-invitation-send")
 	var sent organizationhttp.InvitationSendResponse
@@ -538,6 +604,17 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err != nil {
 		t.Fatal(err)
 	}
+	listRead := organization.ListOrganizationsRequest{Authentication: recipient.auth, Limit: 200, CorrelationID: "reconstructed-list"}
+	if out, err := currentOrganizations.ListOrganizations(ctx, listRead); err != nil || len(out.Organizations) != 1 || out.Organizations[0].ID != second.OrganizationID || out.NextCursor != "" {
+		t.Fatal("reconstructed Reference lost actual current memberships", err)
+	}
+	foreignList := listRead
+	foreignList.Authentication.TenantID = "unconfigured-tenant"
+	if out, err := currentOrganizations.ListOrganizations(ctx, foreignList); err == nil || len(out.Organizations) != 0 || out.NextCursor != "" {
+		t.Fatal("Reference list crossed configured tenant boundary")
+	}
+	listOrganizations(owner, 1, first.OrganizationID, second.OrganizationID, third.OrganizationID, fourth.OrganizationID)
+	listOrganizations(recipient, 1, second.OrganizationID)
 	slugRead := organization.SlugAvailableRequest{Authentication: recipient.auth, Slug: "updated-reference", CorrelationID: "reconstructed-slug"}
 	if out, err := currentOrganizations.SlugAvailable(ctx, slugRead); err != nil || out.Available {
 		t.Fatal("reconstructed Reference lost current occupied slug", err)
@@ -578,6 +655,13 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		t.Fatal("fresh Reference rejection did not recover original history", err)
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
+	if code, _ := call(recipient, http.MethodGet, "/v1/organization/list?limit=1", nil, ""); code == 200 {
+		t.Fatal("revoked recipient retained current-user listing")
+	}
+	if out, err := currentOrganizations.ListOrganizations(ctx, listRead); err == nil || len(out.Organizations) != 0 || out.NextCursor != "" {
+		t.Fatal("revoked recipient retained reconstructed current-user page")
+	}
+	listOrganizations(owner, 200, first.OrganizationID, second.OrganizationID, third.OrganizationID, fourth.OrganizationID)
 	if code, _ := call(recipient, http.MethodGet, "/v1/organization/slug-available?slug=after-logout", nil, ""); code == 200 {
 		t.Fatal("revoked recipient retained advisory read")
 	}

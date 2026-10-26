@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose current-user organization pages through guarded native handles and
+  independently selected bearer HTTP. Explicit bounded limit/opaque cursor,
+  current membership/policy and shared safe rates protect self-only metadata;
+  errors withhold partial pages and disabled selection exposes no route or
+  metadata. No new migration or application reader is needed.
+
 - Compose native advisory slug availability through graph-owned direct handles
   and an independently selected bearer HTTP route. Current tenant/session and
   candidate policy plus shared safe-rate admission protect a boolean-only read

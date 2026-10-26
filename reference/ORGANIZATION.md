@@ -39,13 +39,39 @@ existing explicit bounded external seams.
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
 `InvitationListMine`, `InvitationSend`, `InvitationResend`, `InvitationCancel`,
-`InvitationReject`, `SlugAvailable` and `InvitationAccept`.
+`InvitationReject`, `SlugAvailable`, `List` and `InvitationAccept`.
 Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
 safe/admin/secret namespaces and keys. The degradation and administrative-denial
 callbacks retain the transport's bounded synchronous contracts: administrative
 denials must be durably audited, without secrets. Namespace/key changes affect
 rate budgets and require coordinated rollout, not per-request rotation.
+
+## Current-user organization listing
+
+Independently select `HTTPOrganization.List` with `SafeNamespace`,
+`EmergencyMaximumKeys` and the bounded `Degraded` callback. No invitation,
+administrator-rate or secret-rate owner is required. Authorize
+`identity.organization.list` for the current human and each `organization`
+resource; explicit policy denials filter candidates. Native current primary
+membership and organization-scoped authority remain mandatory.
+
+Call `GET /v1/organization/list?limit=20` with the strict bearer credential at
+the configured HTTPS tenant host. `limit` is required canonical decimal1..200,
+with no default. A successful response contains `organizations`, including an
+empty array at an empty observed end, with ID/name/slug/version views only.
+If present, send the exact `nextCursor` unchanged as the optional `cursor` on
+the next request. No user, tenant, organization override, request key or body
+is accepted. Disabling `List` exposes neither route nor metadata.
+
+The opaque cursor (at most512 bytes) binds tenant, authenticated subject and
+deployed policy, not a snapshot or authority grant. Results use bytewise ID
+order; earlier additions require restarting. Every call checks current session,
+membership and policy; removal/logout/outage never falls back to old positive
+authority or a partial page. The direct `OrganizationService.ListOrganizations`
+method, obtained from `FeatureSet.Organizations()`, retains graph initialization,
+tenant and active-call drain guards. No new migration or application reader
+is required. The existing maximum-per-user cap bounds native scan work.
 
 ## Advisory slug availability
 

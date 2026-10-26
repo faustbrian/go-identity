@@ -14,6 +14,12 @@ also exposes its guarded native method. Neither requires membership or reserves
 a name; current policy/session authority applies and responses contain only a
 boolean. See the [slug walkthrough](ORGANIZATION.md#advisory-slug-availability).
 
+`HTTPOrganization.List` independently selects current-user organization pages
+with shared safe rates and an explicit limit1..200 (no default). The same
+bounded, current-membership/policy-filtered native API is available through
+`OrganizationService.ListOrganizations`, retaining graph tenant/drain guards.
+See [listing and continuation](ORGANIZATION.md#current-user-organization-listing).
+
 ## Optional native passkey backend
 
 `Passkey.TOTP` selects original UV-passkey plus independent confirmed-TOTP

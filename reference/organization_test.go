@@ -37,6 +37,13 @@ func TestOrganizationSelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	}
 	var unavailable identity.UnavailableError
 	var absent *OrganizationService
+	list := organization.ListOrganizationsRequest{Authentication: organization.Authentication{TenantID: "tenant"}, Limit: 1, CorrelationID: "list"}
+	if _, err := absent.ListOrganizations(ctx, list); !errors.As(err, &unavailable) {
+		t.Fatal("absent list handle reached native owner", err)
+	}
+	if _, err := handle.ListOrganizations(ctx, list); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed list handle reached native owner", err)
+	}
 	if _, err := absent.SlugAvailable(ctx, organization.SlugAvailableRequest{Authentication: organization.Authentication{TenantID: "tenant"}, Slug: "candidate", CorrelationID: "slug"}); !errors.As(err, &unavailable) {
 		t.Fatal("absent slug handle reached native owner", err)
 	}

@@ -171,6 +171,21 @@ func (f *OrganizationService) SlugAvailable(ctx context.Context, r organization.
 	return n.operations.SlugAvailable(w, r)
 }
 
+// ListOrganizations returns the current authenticated subject's bounded native
+// page. The native owner retains membership/policy filtering, explicit limit
+// and cursor semantics; graph initialization, tenant and drain guards apply.
+func (f *OrganizationService) ListOrganizations(ctx context.Context, r organization.ListOrganizationsRequest) (organization.ListOrganizationsResult, error) {
+	if f == nil {
+		return organization.ListOrganizationsResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.ListOrganizationsResult{}, err
+	}
+	defer done()
+	return n.operations.ListOrganizations(w, r)
+}
+
 // Get reads current explicitly scoped organization metadata.
 func (f *OrganizationService) Get(ctx context.Context, r organization.ReadRequest) (organization.View, error) {
 	if f == nil {
