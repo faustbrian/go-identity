@@ -110,7 +110,9 @@ func TestOrganizationActualResponsesConformToConcreteWire(t *testing.T) {
 		mode       int
 	}{
 		{"/v1/organization/create", `{"name":"Name","slug":"slug"}`, true, 0},
+		{"/v1/organization/update", `{"organizationID":"organization-a","organizationVersion":3,"name":"Name","slug":"slug"}`, true, 0},
 		{"/v1/organization/member/add", `{"organizationID":"organization-a","userID":"target-user","role":"member","organizationVersion":3,"memberVersion":0}`, true, 0},
+		{"/v1/organization/member/update", `{"organizationID":"organization-a","userID":"target-user","role":"administrator","organizationVersion":3,"memberVersion":1}`, true, 0},
 		{"/v1/organization/member/remove", `{"organizationID":"organization-a","userID":"target-user","organizationVersion":4,"memberVersion":1}`, false, 0},
 		{"/v1/organization/get?organizationID=organization-a", "", false, 0},
 		{"/v1/organization/member/list?organizationID=organization-a", "", false, 0},
@@ -125,7 +127,7 @@ func TestOrganizationActualResponsesConformToConcreteWire(t *testing.T) {
 		if tc.mode == 2 {
 			f.port.outcome = 3
 		}
-		feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: f.c, Create: true, Get: true, MemberList: true, MemberAdd: true, MemberRemove: true})
+		feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: f.c, Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,25 +176,27 @@ func FuzzOrganizationHTTPBoundary(f *testing.F) {
 	f.Add(`{"organizationID":"organization-a","userID":"target-user","role":"member","organizationVersion":3,"memberVersion":0}`, "valid", "", uint8(1))
 	f.Add(`{"organizationID":"organization-a","userID":"target-user","organizationVersion":4,"memberVersion":1}`, "valid", "", uint8(2))
 	f.Add("", "valid", "organizationID=organization-a", uint8(3))
+	f.Add(`{"organizationID":"organization-a","organizationVersion":3,"name":"Name","slug":"slug"}`, "valid", "", uint8(4))
+	f.Add(`{"organizationID":"organization-a","userID":"target-user","role":"administrator","organizationVersion":3,"memberVersion":1}`, "valid", "", uint8(5))
 	f.Add(`{"name":"Name","Name":"duplicate","slug":"slug"}`, "Bearer  malformed", "tenantID=other", uint8(0))
 	f.Fuzz(func(t *testing.T, body, auth, query string, kind uint8) {
 		if len(body) > 16384 || len(auth) > 8192 || len(query) > 4096 {
 			return
 		}
-		paths := []string{"/v1/organization/create", "/v1/organization/member/add", "/v1/organization/member/remove", "/v1/organization/get"}
-		mode := kind % 4
+		paths := []string{"/v1/organization/create", "/v1/organization/member/add", "/v1/organization/member/remove", "/v1/organization/get", "/v1/organization/update", "/v1/organization/member/update"}
+		mode := kind % 6
 		if mode == 3 {
 			body = ""
 		}
-		r := request(fixture, paths[mode], body, mode < 2)
+		r := request(fixture, paths[mode], body, mode < 2 || mode >= 4)
 		r.URL.RawQuery = query
 		if auth != "valid" {
 			r.Header.Set("Authorization", auth)
 		}
-		if kind&4 != 0 {
+		if kind&8 != 0 {
 			r.Header.Add("authorization", r.Header.Get("Authorization"))
 		}
-		if kind&8 != 0 {
+		if kind&16 != 0 {
 			ctx, cancel := context.WithCancel(r.Context())
 			cancel()
 			r = r.WithContext(ctx)

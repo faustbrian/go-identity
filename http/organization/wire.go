@@ -80,7 +80,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.AddMember || op == organization.InvitationSend {
+	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend {
 		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated organization/command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
@@ -92,6 +92,9 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		if op == organization.Create {
 			required = []string{"name", "slug"}
 			fields = map[string]any{"name": text(1, 256), "slug": map[string]any{"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"}}
+		} else if op == organization.Update {
+			required = []string{"organizationID", "organizationVersion", "name", "slug"}
+			fields = map[string]any{"organizationID": id, "organizationVersion": requestVersion(1), "name": text(1, 256), "slug": map[string]any{"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"}}
 		} else if op == organization.InvitationSend {
 			required = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 			fields = map[string]any{"organizationID": id, "organizationVersion": version(1), "recipientUserID": id, "recipientIdentifierID": id}
@@ -102,11 +105,11 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		} else {
 			required = []string{"organizationID", "userID", "organizationVersion", "memberVersion"}
 			minimum := uint64(0)
-			if op == organization.RemoveMember {
+			if op == organization.RemoveMember || op == organization.UpdateMember {
 				minimum = 1
 			}
 			fields = map[string]any{"organizationID": id, "userID": id, "organizationVersion": requestVersion(1), "memberVersion": requestVersion(minimum)}
-			if op == organization.AddMember {
+			if op == organization.AddMember || op == organization.UpdateMember {
 				required = append(required, "role")
 				fields["role"] = map[string]any{"type": "string", "enum": []string{"owner", "administrator", "member"}}
 			}

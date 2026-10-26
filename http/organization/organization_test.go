@@ -206,6 +206,8 @@ func newFixture(t testing.TB) *fixture {
 	}
 	t.Cleanup(func() { admin.Close() })
 	f.c = organizationhttp.Config{Network: identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 2048, MaximumBodyBytes: 4096, MaximumDecodedBytes: 4096, MaximumFields: 32, MaximumDepth: 4}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: "tenant.example", TenantID: "tenant-a"}}}, Sessions: sessions, Service: f.port, SafeRate: safe, AdminRate: admin, Now: func() time.Time { return f.now }, MaximumDuration: 2 * time.Second}
+	updates := &updatePort{nativePort: f.port}
+	f.c.MetadataUpdater, f.c.MemberUpdater = updates, updates
 	return f
 }
 func request(f *fixture, path, body string, keyed bool) *http.Request {
@@ -231,7 +233,7 @@ func request(f *fixture, path, body string, keyed bool) *http.Request {
 }
 func handler(t testing.TB, f *fixture) http.Handler {
 	t.Helper()
-	feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: f.c, Create: true, Get: true, MemberList: true, MemberAdd: true, MemberRemove: true})
+	feature, err := organizationhttp.NewFeature(organizationhttp.FeatureConfig{Config: f.c, Create: true, Update: true, Get: true, MemberList: true, MemberAdd: true, MemberUpdate: true, MemberRemove: true})
 	if err != nil {
 		t.Fatal(err)
 	}

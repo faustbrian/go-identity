@@ -82,7 +82,7 @@ func mutationResponse(in *requestInput, result organization.StoreResult, err err
 		return status, out
 	}
 	target := in.user
-	if in.op == organization.Create {
+	if in.op == organization.Create || in.op == organization.Update {
 		target = in.actor
 	}
 	validRecord := result.OrganizationID == organization.ID(b.RecordID) && (in.op == organization.Create || organization.ID(b.RecordID) == in.org)

@@ -129,8 +129,12 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				switch op {
 				case organization.Create:
 					out, err = c.Service.Create(r.Context(), in.create(), in.facts.ClientIP().String())
+				case organization.Update:
+					out, err = c.MetadataUpdater.Update(r.Context(), in.update(), in.facts.ClientIP().String())
 				case organization.AddMember:
 					out, err = c.Service.AddMember(r.Context(), in.add(), in.facts.ClientIP().String())
+				case organization.UpdateMember:
+					out, err = c.MemberUpdater.UpdateMember(r.Context(), in.updateMember(), in.facts.ClientIP().String())
 				case organization.RemoveMember:
 					out, err = c.Service.RemoveMember(r.Context(), in.remove(), in.facts.ClientIP().String())
 				case organization.InvitationSend:

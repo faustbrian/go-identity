@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add independently selected exact-version metadata and static member-role
+  updates through native original-key owners and shared administrative rates.
+  Configure the narrow MetadataUpdater/MemberUpdater ports; existing Service
+  implementations remain compatible. Matching retries recover original outcomes,
+  while native authority and last-owner protection remain mandatory.
+
 - Keep genuine PostgreSQL/HTTPS consumer journeys in the explicit nested
   `consumer` test module. The transport module no longer depends on Reference
   or persistence adapters just to compile its tests, allowing Reference to

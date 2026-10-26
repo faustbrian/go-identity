@@ -41,12 +41,16 @@ func operationPath(op organization.Operation) (string, string) {
 	switch op {
 	case organization.Create:
 		return "/v1/organization/create", http.MethodPost
+	case organization.Update:
+		return "/v1/organization/update", http.MethodPost
 	case organization.Get:
 		return "/v1/organization/get", http.MethodGet
 	case organization.ListMembers:
 		return "/v1/organization/member/list", http.MethodGet
 	case organization.AddMember:
 		return "/v1/organization/member/add", http.MethodPost
+	case organization.UpdateMember:
+		return "/v1/organization/member/update", http.MethodPost
 	case organization.RemoveMember:
 		return "/v1/organization/member/remove", http.MethodPost
 	case organization.InvitationSend:
@@ -59,6 +63,12 @@ func operationPath(op organization.Operation) (string, string) {
 func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State, error), error) {
 	path, method := operationPath(op)
 	missingOwner := nilService(c.Service)
+	if op == organization.Update {
+		missingOwner = nilService(c.MetadataUpdater)
+	}
+	if op == organization.UpdateMember {
+		missingOwner = nilService(c.MemberUpdater)
+	}
 	if op == organization.InvitationSend {
 		missingOwner = nilService(c.InvitationSender) || nilService(c.Invitations)
 	}
@@ -95,7 +105,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			return zero, requestFailure{status: 405, code: "method_not_allowed", allow: method}
 		}
 		requirement := identityhttp.HeaderForbidden
-		if op == organization.Create || op == organization.AddMember || op == organization.InvitationSend {
+		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend {
 			requirement = identityhttp.HeaderRequired
 		}
 		key, _, err := decoder.IdempotencyKey(r, requirement)
@@ -186,11 +196,13 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 	var names []string
 	if in.op == organization.Create {
 		names = []string{"name", "slug"}
+	} else if in.op == organization.Update {
+		names = []string{"organizationID", "organizationVersion", "name", "slug"}
 	} else if in.op == organization.InvitationSend {
 		names = []string{"organizationID", "organizationVersion", "recipientUserID", "recipientIdentifierID"}
 	} else {
 		names = []string{"organizationID", "userID", "organizationVersion", "memberVersion"}
-		if in.op == organization.AddMember {
+		if in.op == organization.AddMember || in.op == organization.UpdateMember {
 			names = append(names, "role")
 		}
 	}
@@ -208,6 +220,10 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		if !decode("name", &in.name) || !decode("slug", &in.slug) {
 			return identityhttp.ErrInvalidInput
 		}
+	} else if in.op == organization.Update {
+		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("name", &in.name) || !decode("slug", &in.slug) {
+			return identityhttp.ErrInvalidInput
+		}
 	} else if in.op == organization.InvitationSend {
 		if !decode("organizationID", &in.org) || !decode("organizationVersion", &in.orgVersion) || !decode("recipientUserID", &in.user) || !decode("recipientIdentifierID", &in.recipientIdentifier) {
 			return identityhttp.ErrInvalidInput
@@ -216,7 +232,7 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		if !decode("organizationID", &in.org) || !decode("userID", &in.user) || !decode("organizationVersion", &in.orgVersion) || !decode("memberVersion", &in.memberVersion) {
 			return identityhttp.ErrInvalidInput
 		}
-		if in.op == organization.AddMember && !decode("role", &in.role) {
+		if (in.op == organization.AddMember || in.op == organization.UpdateMember) && !decode("role", &in.role) {
 			return identityhttp.ErrInvalidInput
 		}
 	}
@@ -226,8 +242,12 @@ func (in *requestInput) validate() error {
 	switch in.op {
 	case organization.Create:
 		return in.create().Validate()
+	case organization.Update:
+		return in.update().Validate()
 	case organization.AddMember:
 		return in.add().Validate()
+	case organization.UpdateMember:
+		return in.updateMember().Validate()
 	case organization.RemoveMember:
 		return in.remove().Validate()
 	case organization.InvitationSend:
@@ -239,6 +259,12 @@ func (in *requestInput) validate() error {
 }
 func (in *requestInput) create() organization.CreateOperationRequest {
 	return organization.CreateOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, Name: in.name, Slug: in.slug, CorrelationID: in.correlation}
+}
+func (in *requestInput) update() organization.UpdateOperationRequest {
+	return organization.UpdateOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, OrganizationID: in.org, OrganizationVersion: in.orgVersion, Name: in.name, Slug: in.slug, CorrelationID: in.correlation}
+}
+func (in *requestInput) updateMember() organization.UpdateMemberOperationRequest {
+	return organization.UpdateMemberOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, OrganizationID: in.org, UserID: in.user, Role: in.role, OrganizationVersion: in.orgVersion, MemberVersion: in.memberVersion, CorrelationID: in.correlation}
 }
 func (in *requestInput) add() organization.AddMemberOperationRequest {
 	return organization.AddMemberOperationRequest{Authentication: in.auth, IdempotencyKey: in.key, OrganizationID: in.org, UserID: in.user, Role: in.role, OrganizationVersion: in.orgVersion, MemberVersion: in.memberVersion, CorrelationID: in.correlation}

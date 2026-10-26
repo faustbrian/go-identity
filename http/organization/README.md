@@ -1,10 +1,18 @@
 # go-identity/http/organization
 
 Optional **bearer-only** HTTP integration for native organization creation,
-explicit organization reads, member listing, admission/removal and original-key
+explicit organization reads, metadata/role updates, member listing, admission/removal and original-key
 invitation sending and once-only acceptance. Omit its
 feature contribution to expose no organization routes or metadata. It imports
 only transport-neutral organization contracts, never PostgreSQL.
+
+Metadata replacement (`Update`) and static member-role replacement
+(`MemberUpdate`) are independently selected. Supply the actual native
+`OperationService` as `Config.MetadataUpdater` and/or `Config.MemberUpdater`,
+with current `Sessions` and shared `AdminRate`. Neither selection requires
+`Service` or `SafeRate`; existing five-method Service implementations remain
+compatible. Native current authority, exact versions and last-owner protection
+are not replaced by HTTP admission.
 
 Invitation reads are independently opt-in through `InvitationGet` and
 `InvitationListMine`. Supply the actual native invitation owner through
@@ -82,9 +90,11 @@ session, protected risk, membership and atomic commit fences.
 | Operation | Exact route | Request |
 | --- | --- | --- |
 | Create | `POST /v1/organization/create` | JSON `name`, `slug`; required original `Idempotency-Key` |
+| Update | `POST /v1/organization/update` | JSON `organizationID`, exact `organizationVersion`, `name`, `slug`; required original key |
 | Get | `GET /v1/organization/get` | Required query `organizationID` |
 | List members | `GET /v1/organization/member/list` | Query `organizationID`, optional exclusive `cursor`, `limit` 1..100 (default100) |
 | Add member | `POST /v1/organization/member/add` | JSON `organizationID`, target `userID`, `role`, `organizationVersion`, `memberVersion`; required original key |
+| Update member role | `POST /v1/organization/member/update` | Same fields as add, with positive exact organization/member versions; required original key |
 | Remove member | `POST /v1/organization/member/remove` | JSON `organizationID`, target `userID`, exact positive organization/member versions; **no key** |
 | Accept invitation | `POST /v1/organization/invitation/accept` | JSON original `commandID`, `organizationID`, `invitationID`, exact positive `organizationVersion`, `invitationVersion`, private `token`; **no key** |
 | Send invitation | `POST /v1/organization/invitation-send` | JSON `organizationID`, exact positive `organizationVersion`, target `recipientUserID`, existing verified `recipientIdentifierID`; required original key |
@@ -106,7 +116,7 @@ and body/query limits come from the base bounded decoder. IDs remain
 case-sensitive; names and slugs retain the root module's validation. Caller
 correlation and command IDs are not accepted; the owner supplies correlation.
 
-Create/add/send forward the **single unchanged original key** to the actual native
+Create/update/add/member-update/send forward the **single unchanged original key** to the actual native
 owner. Matching retries recover that original command; changed intent conflicts.
 The transport never reconstructs an old bearer, refreshes original evidence,
 chooses another command ID, retries automatically or interprets a timeout as
