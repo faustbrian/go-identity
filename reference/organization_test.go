@@ -37,6 +37,13 @@ func TestOrganizationSelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	}
 	var unavailable identity.UnavailableError
 	var absent *OrganizationService
+	leave := organization.LeaveMemberOperationRequest{Authentication: organization.Authentication{TenantID: "tenant"}, OrganizationID: "organization", OrganizationVersion: 1, CorrelationID: "leave"}
+	if _, err := absent.LeaveMember(ctx, leave, "127.0.0.1"); !errors.As(err, &unavailable) {
+		t.Fatal("absent self-leave handle reached native owner", err)
+	}
+	if _, err := handle.LeaveMember(ctx, leave, "127.0.0.1"); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed self-leave handle reached native owner", err)
+	}
 	list := organization.ListOrganizationsRequest{Authentication: organization.Authentication{TenantID: "tenant"}, Limit: 1, CorrelationID: "list"}
 	if _, err := absent.ListOrganizations(ctx, list); !errors.As(err, &unavailable) {
 		t.Fatal("absent list handle reached native owner", err)

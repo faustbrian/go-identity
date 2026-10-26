@@ -156,6 +156,21 @@ func (f *OrganizationService) RemoveMember(ctx context.Context, r organization.R
 	return n.operations.RemoveMember(w, r, network)
 }
 
+// LeaveMember delegates naturally repeatable self-leave at the exact original
+// organization version. Native current authority, last-owner safety and original
+// outcome recovery remain native-owned; graph tenant/drain guards apply.
+func (f *OrganizationService) LeaveMember(ctx context.Context, r organization.LeaveMemberOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, false)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.operations.LeaveMember(w, r, network)
+}
+
 // SlugAvailable reads advisory tenant-local occupancy through the actual native
 // owner, preserving graph initialization, tenant and drain guards. It requires
 // no membership and reserves no name; create/update uniqueness remains final.

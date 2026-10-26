@@ -102,5 +102,12 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 			}
 		}
 	}
-	return append(catalog, history), nil
+	// A separate native lookup history lets deployments enable invitations
+	// later without inserting their versions3..11 into an applied prefix.
+	leaveSteps, err := (organizationpg.LeaveOperationLookupTransactionalMigrationSource{Version: 1}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	leave := migrationHistory{namespace: "identity_organization_leave", history: leaveSteps, owners: map[migrations.Version]ModuleID{1: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", tables: []string{"organization_repeat_leave"}}}}
+	return append(catalog, history, leave), nil
 }

@@ -2,6 +2,12 @@
 
 ## Optional organization backend
 
+`HTTPOrganization.MemberLeave` separately selects natural-repeat self-leave
+with shared safe admission. Guarded `OrganizationService.LeaveMember` and
+`RecoverOperation` preserve current self authority and original metadata after
+departure; old requests cannot remove readmitted membership. See
+[self-leave and recovery](ORGANIZATION.md#self-leave-and-original-outcome-recovery).
+
 Select native `Organization` and independently select each `HTTPOrganization`
 operation for verified-password bearer sessions, durable membership and
 intended-recipient invitations. See [configuration, migrations and the complete

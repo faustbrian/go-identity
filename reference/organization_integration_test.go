@@ -54,6 +54,9 @@ func (referenceOrganizationPolicy) Decide(ctx context.Context, c authorization.D
 		if c.Request.Action == authorization.Action(organization.ListOrganizations) && c.Request.Resource.Type == "organization" {
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
+		if c.Request.Action == authorization.Action(organization.LeaveMember) && (c.Request.Resource.Type == "organization" || c.Request.Resource.Type == "identity.user") {
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
 		// Invitation owners read delivery metadata whose resource is the
 		// intended recipient. The native invitation reader checks ownership;
 		// requiring self-ID equality here would hide an already committed send.
@@ -107,7 +110,7 @@ func configureReferenceOrganization(t *testing.T, c *reference.StoreConfiguratio
 		t.Error("unexpected organization administrative denial")
 		return ctx.Err()
 	}}
-	c.HTTPOrganization.List = true
+	c.HTTPOrganization.List, c.HTTPOrganization.MemberLeave = true, true
 }
 
 func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, features reference.FeatureSet, workers reference.WorkerSet, workerConfigs []deliverypg.WorkerConfig, client *http.Client, base, origin string, messages <-chan string, cookies []*http.Cookie, csrf string) {
@@ -615,6 +618,7 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	}
 	listOrganizations(owner, 1, first.OrganizationID, second.OrganizationID, third.OrganizationID, fourth.OrganizationID)
 	listOrganizations(recipient, 1, second.OrganizationID)
+	selfLeaveRecovery := proveReferenceOrganizationSelfLeave(t, ctx, currentOrganizations, owner, recipient, first.OrganizationID, member.Membership.Version+1, call)
 	slugRead := organization.SlugAvailableRequest{Authentication: recipient.auth, Slug: "updated-reference", CorrelationID: "reconstructed-slug"}
 	if out, err := currentOrganizations.SlugAvailable(ctx, slugRead); err != nil || out.Available {
 		t.Fatal("reconstructed Reference lost current occupied slug", err)
@@ -655,6 +659,9 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 		t.Fatal("fresh Reference rejection did not recover original history", err)
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
+	if out, err := currentOrganizations.RecoverOperation(ctx, selfLeaveRecovery); err == nil || out.Receipt.Outcome == identity.CommitOutcomeCommitted {
+		t.Fatal("signed-out recipient recovered historical self-leave")
+	}
 	if code, _ := call(recipient, http.MethodGet, "/v1/organization/list?limit=1", nil, ""); code == 200 {
 		t.Fatal("revoked recipient retained current-user listing")
 	}

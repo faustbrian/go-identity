@@ -39,13 +39,46 @@ existing explicit bounded external seams.
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
 `InvitationListMine`, `InvitationSend`, `InvitationResend`, `InvitationCancel`,
-`InvitationReject`, `SlugAvailable`, `List` and `InvitationAccept`.
+`InvitationReject`, `SlugAvailable`, `List`, `MemberLeave` and `InvitationAccept`.
 Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
 safe/admin/secret namespaces and keys. The degradation and administrative-denial
 callbacks retain the transport's bounded synchronous contracts: administrative
 denials must be durably audited, without secrets. Namespace/key changes affect
 rate budgets and require coordinated rollout, not per-request rotation.
+
+## Self-leave and original-outcome recovery
+
+Independently select `HTTPOrganization.MemberLeave` with the shared safe-rate
+namespace/degradation configuration; no invitation, administrator-rate or secret
+owner is required. `POST /v1/organization/member/leave` accepts exactly
+`organizationID` and its positive advanceable `organizationVersion` under the
+current strict bearer/HTTPS tenant. There is no key, target, command, member
+version or proof override. Native policy authorizes `identity.organization.member.leave`
+for the actual human and organization; last-owner denial remains distinct.
+
+The existing native transaction removes only self and advances scoped authority
+with protected risk/audit/outbox effects. Natural matching repeats disclose an
+actual original receipt even after departure; missing membership alone cannot
+prove success. Save the safe returned recovery binding for direct
+`OrganizationService.RecoverOperation` through `FeatureSet.Organizations()`.
+Current verified self/session and explicit disclosure policy still apply. A
+manager cannot recover another human's self-history. Unknown outcomes require
+reconciliation of that original binding, never automatic replay.
+
+Readmission never makes old leave intent actionable: natural old requests
+conflict, while explicit original metadata recovery remains history-only.
+`OrganizationService.LeaveMember` and recovery retain configured-tenant,
+initialization and drain guards. No HTTP recovery route or post-leave membership
+read is added; disabled HTTP selection exposes neither route nor metadata.
+
+Before using native self-leave, apply the independent
+`identity_organization_leave` migration history in the normal operator flow.
+It selects `LeaveOperationLookupTransactionalMigrationSource` for the bounded
+exact-epoch partial index without inserting steps into the existing organization/
+invitation prefix. This transactional build blocks command-effect writes:
+use a bounded maintenance window/lock budget. The native concurrent alternative
+remains available to other compositions with explicit invalid-build recovery.
 
 ## Current-user organization listing
 

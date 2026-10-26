@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose native natural-repeat self-leave and exact self-history recovery
+  through guarded handles and independently selected safe-rate bearer HTTP.
+  Departed users recover original metadata under current explicit authority;
+  last-owner protection, readmission safety and atomic effects remain native.
+  Apply the independent transactional self-leave lookup history before use;
+  existing organization/invitation prefixes are unchanged.
+
 - Compose current-user organization pages through guarded native handles and
   independently selected bearer HTTP. Explicit bounded limit/opaque cursor,
   current membership/policy and shared safe rates protect self-only metadata;
