@@ -11,20 +11,32 @@ import (
 	"sort"
 	"testing"
 
+	identity "github.com/faustbrian/go-identity"
 	organizationhttp "github.com/faustbrian/go-identity/http/organization"
 	"github.com/faustbrian/go-identity/reference"
 	organization "github.com/faustbrian/go-organization"
 )
 
 // Uses the actual invitation owner after graph reconstruction, genuine humans
-// and HTTP role transitions. Nothing seeds invitation or membership storage.
-func proveReferenceOwnerInvitationList(t *testing.T, ctx context.Context, native *reference.OrganizationInvitationService, owner, recipient organizationTestHuman, org, existing organization.ID, workers reference.WorkerSet, messages <-chan string, call func(organizationTestHuman, string, string, any, string) (int, []byte)) {
+// and guarded native role transitions. Nothing seeds invitation or membership storage.
+func proveReferenceOwnerInvitationList(t *testing.T, ctx context.Context, native *reference.OrganizationInvitationService, organizations *reference.OrganizationService, owner, recipient organizationTestHuman, org, existing organization.ID, workers reference.WorkerSet, messages <-chan string, call func(organizationTestHuman, string, string, any, string) (int, []byte)) {
 	t.Helper()
-	send := map[string]any{"organizationID": org, "organizationVersion": uint64(1), "recipientUserID": recipient.user, "recipientIdentifierID": recipient.identifier}
-	code, wire := call(owner, http.MethodPost, "/v1/organization/invitation-send", send, "reference-owner-list-second-invitation")
-	var sent organizationhttp.InvitationSendResponse
-	if code != 200 || json.Unmarshal(wire, &sent) != nil || !sent.Committed || sent.InvitationID == "" || sent.InvitationID == existing {
-		t.Fatal("owner-list second real invitation", code)
+	key := func(value string) identity.IdempotencyKey {
+		t.Helper()
+		out, err := identity.NewIdempotencyKey([]byte(value))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	// Send/member HTTP paths already have their own assertions in this journey.
+	// Prepare this read profile through the supported guarded native commands,
+	// retaining their real risk/authority/transaction owners. Adding setup HTTP
+	// attempts to the accumulated admin budget made success depend on refill
+	// timing (30 actor attempts/minute), not on invitation-list correctness.
+	sent, err := native.Send(ctx, organization.InvitationSendOperationRequest{Authentication: owner.auth, IdempotencyKey: key("reference-owner-list-second-invitation"), OrganizationID: org, OrganizationVersion: 1, RecipientUserID: recipient.user, RecipientIdentifierID: recipient.identifier, CorrelationID: "owner-list-second-invitation"}, "127.0.0.1")
+	if err != nil || sent.Receipt.Outcome != identity.CommitOutcomeCommitted || sent.InvitationID == "" || sent.InvitationID == existing {
+		t.Fatal("owner-list second real invitation", err)
 	}
 	if _, err := workers.ProcessDeliveryOne(ctx, 1); err != nil {
 		t.Fatal(err)
@@ -37,6 +49,8 @@ func proveReferenceOwnerInvitationList(t *testing.T, ctx context.Context, native
 	path := "/v1/organization/invitation/list?organizationID=" + url.QueryEscape(string(org)) + "&limit=1"
 	var got []organization.ID
 	cursor := ""
+	var code int
+	var wire []byte
 	for n := 0; n < 2; n++ {
 		selected := path
 		if cursor != "" {
@@ -78,15 +92,13 @@ func proveReferenceOwnerInvitationList(t *testing.T, ctx context.Context, native
 	}
 	// Actual role withdrawal changes authority; a previous successful page or
 	// continuation is never sufficient to authorize another read.
-	code, wire = call(owner, http.MethodPost, "/v1/organization/member/add", map[string]any{"organizationID": org, "organizationVersion": uint64(1), "userID": recipient.user, "memberVersion": uint64(0), "role": "owner"}, "reference-owner-list-new-owner")
-	var added organizationhttp.MutationResponse
-	if code != 200 || json.Unmarshal(wire, &added) != nil || !added.Committed {
-		t.Fatal("second owner admission", code)
+	added, err := organizations.AddMember(ctx, organization.AddMemberOperationRequest{Authentication: owner.auth, IdempotencyKey: key("reference-owner-list-new-owner"), OrganizationID: org, OrganizationVersion: 1, UserID: recipient.user, Role: organization.RoleOwner, CorrelationID: "owner-list-new-owner"}, "127.0.0.1")
+	if err != nil || added.Receipt.Outcome != identity.CommitOutcomeCommitted || added.Receipt.Feature == nil {
+		t.Fatal("second owner admission", err)
 	}
-	code, wire = call(owner, http.MethodPost, "/v1/organization/member/update", map[string]any{"organizationID": org, "organizationVersion": added.AfterVersion, "userID": owner.user, "memberVersion": uint64(1), "role": "member"}, "reference-owner-list-withdraw-owner")
-	var demoted organizationhttp.MutationResponse
-	if code != 200 || json.Unmarshal(wire, &demoted) != nil || !demoted.Committed {
-		t.Fatal("actual owner withdrawal", code)
+	demoted, err := organizations.UpdateMember(ctx, organization.UpdateMemberOperationRequest{Authentication: owner.auth, IdempotencyKey: key("reference-owner-list-withdraw-owner"), OrganizationID: org, OrganizationVersion: added.Receipt.Feature.AfterVersion, UserID: owner.user, MemberVersion: 1, Role: organization.RoleMember, CorrelationID: "owner-list-withdraw-owner"}, "127.0.0.1")
+	if err != nil || demoted.Receipt.Outcome != identity.CommitOutcomeCommitted {
+		t.Fatal("actual owner withdrawal", err)
 	}
 	if code, _ := call(owner, http.MethodGet, path+"&cursor="+url.QueryEscape(string(want[0])), nil, ""); code != 403 {
 		t.Fatal("old continuation retained owner authority", code)

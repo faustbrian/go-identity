@@ -666,7 +666,7 @@ func proveReferenceOrganizationHTTPS(t *testing.T, ctx context.Context, f liveSt
 	if err != nil || rejectRecovered.Receipt.Outcome != identity.CommitOutcomeCommitted || rejectRecovered.Receipt.Binding.CommandID != rejected.CommandID || rejectRecovered.Receipt.Feature == nil || rejectRecovered.Receipt.Feature.BeforeVersion != 1 || rejectRecovered.Receipt.Feature.AfterVersion != 2 {
 		t.Fatal("fresh Reference rejection did not recover original history", err)
 	}
-	proveReferenceOwnerInvitationList(t, ctx, invitationsOwner, owner, recipient, third.OrganizationID, cancelSent.InvitationID, workers, messages, call)
+	proveReferenceOwnerInvitationList(t, ctx, invitationsOwner, currentOrganizations, owner, recipient, third.OrganizationID, cancelSent.InvitationID, workers, messages, call)
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, recipient.cookies, recipient.csrf, recipient.sessionID, f, features)
 	ownerListRead := organization.InvitationReadRequest{Authentication: recipient.auth, OrganizationID: third.OrganizationID, Limit: 1, CorrelationID: "signed-out-owner-list"}
 	if out, err := invitationsOwner.List(ctx, ownerListRead); err == nil || len(out.Invitations) != 0 {
