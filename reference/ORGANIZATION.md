@@ -2,7 +2,7 @@
 
 This selected backend profile connects real registration, verification and
 password signin to organization creation, metadata/role updates, scoped reads, member admission and
-removal, encrypted invitation delivery/resend, cancellation/rejection and once-only acceptance.
+removal, encrypted invitation delivery/resend, cancellation/rejection/expiry and once-only acceptance.
 It does not implement an administrative UI or claim full organization lifecycle,
 teams, dynamic roles, domain ownership, archive/restore or other login profiles.
 
@@ -39,13 +39,47 @@ existing explicit bounded external seams.
 Native selection enables no HTTP. Independently opt into `HTTPOrganization`
 `Create`, `Update`, `Get`, `MemberList`, `MemberAdd`, `MemberUpdate`, `MemberRemove`, `InvitationGet`,
 `InvitationListMine`, `InvitationList`, `InvitationSend`, `InvitationResend`, `InvitationCancel`,
-`InvitationReject`, `SlugAvailable`, `List`, `MemberLeave`, `OwnerTransfer` and `InvitationAccept`.
+`InvitationReject`, `InvitationExpire`, `SlugAvailable`, `List`, `MemberLeave`, `OwnerTransfer` and `InvitationAccept`.
 Each requires its
 actual native owner and the shared strong HTTP rate backend. Configure stable
 safe/admin/secret namespaces and keys. The degradation and administrative-denial
 callbacks retain the transport's bounded synchronous contracts: administrative
 denials must be durably audited, without secrets. Namespace/key changes affect
 rate budgets and require coordinated rollout, not per-request rotation.
+
+## Invitation expiry
+
+Configure nonempty registered `Organization.Invitations.Policy.ExpirationReasons`
+before selecting `HTTPOrganization.InvitationExpire`. It needs the existing
+native invitation owner and shared administrative rate configuration, not a new
+application store, recipient proof or organization reader. Native selection
+alone exposes no HTTP. `OrganizationInvitations().Expire` is the guarded direct
+native API with the same exact original intent and graph lifetime/tenant guards.
+
+Strict-bearer HTTPS `POST /v1/organization/invitation/expire` accepts only
+`organizationID`, `organizationVersion`, `invitationID`, `invitationVersion` and
+`reason`. Expected versions are positive advanceable integers; the non-secret
+reason code must be1..64 bytes and registered by the native policy. Client keys,
+caller commands, proofs and actor/tenant overrides are rejected. Current managers
+expire without recipient credentials or organization-read permission. Proof
+invalidation and required audit/lifecycle effects commit in the same transaction.
+
+Reference `Check/Plan/Apply` appends the owned
+`InvitationExpireOperationMigrationSource` at version12 in `identity_organization`.
+Versions1..11 retain their bytes. The additive nullable original-epoch/reason
+columns never backfill legacy history. Its transactional partial unique index
+blocks writes: use a bounded maintenance window and lock/transaction timeouts,
+then enable the endpoint. Raw native explicit expiry remains compatible without
+the optional correlation migration; this guarded natural-repeat API requires it.
+
+Matching repeats recover only an actual original receipt under current manager
+and session authority, including after graph reconstruction or fresh signin.
+Changed reason/epoch conflicts; a terminal row alone never proves an original.
+Successful replies expose safe correlation and `state: "expired"`, without
+membership, recipient address or delivery projections. Errors/unknown replies
+have no successful terminal state. A late error retains known commitment, and
+unknown never authorizes automatic redispatch. Logout denies original history;
+disabled HTTP selection exposes neither route nor OpenAPI metadata.
 
 ## Ownership transfer
 

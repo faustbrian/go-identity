@@ -284,6 +284,21 @@ func (f *OrganizationInvitationService) Resend(ctx context.Context, r organizati
 	return n.sender.Resend(w, r, network)
 }
 
+// Expire uses native exact-version manager expiry and original-history
+// reconciliation. Registered reasons, current manager/session authority and
+// atomic proof invalidation remain native; graph tenant/lifetime guards apply.
+func (f *OrganizationInvitationService) Expire(ctx context.Context, r organization.InvitationExpireOperationRequest, network string) (organization.StoreResult, error) {
+	if f == nil {
+		return organization.StoreResult{}, identity.UnavailableError{}
+	}
+	w, done, n, err := enterOrganization(ctx, f.state, r.Authentication.TenantID, true)
+	if err != nil {
+		return organization.StoreResult{}, err
+	}
+	defer done()
+	return n.invitations.Expire(w, r, network)
+}
+
 // Cancel uses native exact-version manager cancellation and original natural-
 // repeat recovery. It requires no recipient credential or proof. Graph lifetime
 // and tenant guards remain separate from current native action authority.

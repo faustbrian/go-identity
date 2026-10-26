@@ -2,6 +2,11 @@
 
 ## Optional organization backend
 
+Invitation expiry is independently selected with
+`HTTPOrganization.InvitationExpire` after configuring native registered reasons
+and applying its owned migration. See [expiry](ORGANIZATION.md#invitation-expiry)
+for the request, natural-repeat recovery and maintenance boundary.
+
 Ownership transfer is independently selected with `Organization.OwnerTransfer`
 and, for HTTP, `HTTPOrganization.OwnerTransfer`. It composes the existing
 password-action proof, native atomic role transition and original-key recovery;

@@ -281,6 +281,7 @@ type signupGraphExtensions struct {
 	organization          bool
 	organizationUpgrade   bool
 	organizationTransfer  bool
+	organizationExpiry    bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -522,6 +523,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
+	}
+	if extensions.organizationExpiry {
+		c.Organization.Invitations.Policy.ExpirationReasons = []identity.PolicyReason{"security-withdrawal", "administrative-cleanup"}
+		c.HTTPOrganization.InvitationExpire = true
 	}
 	if extensions.administrativeEmailQueries {
 		c.Email = &reference.EmailConfiguration{Addresses: referenceEmailQueryConfiguration()}
@@ -1237,6 +1242,7 @@ END $$`); err != nil {
 			{"invitation.accept", c.HTTPOrganization.InvitationAccept},
 			{"invitation.resend", c.HTTPOrganization.InvitationResend},
 			{"invitation.cancel", c.HTTPOrganization.InvitationCancel},
+			{"invitation.expire", c.HTTPOrganization.InvitationExpire},
 			{"invitation.reject", c.HTTPOrganization.InvitationReject},
 			{"slug-available", c.HTTPOrganization.SlugAvailable},
 			{"list", c.HTTPOrganization.List},
@@ -1666,7 +1672,9 @@ END $$`); err != nil {
 				next := upgraded.Handler()
 				organizationHandler.Store(&next)
 			}
-			if extensions.organizationTransfer {
+			if extensions.organizationExpiry {
+				proveReferenceOrganizationExpiry(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
+			} else if extensions.organizationTransfer {
 				proveReferenceOrganizationTransfer(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else {
 				proveReferenceOrganizationHTTPS(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf)

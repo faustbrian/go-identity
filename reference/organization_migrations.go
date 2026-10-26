@@ -115,6 +115,7 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 			{organizationpg.InvitationResendMigrationSource{Version: 9}, migrationGuard{version: 9, schema: "organization", columns: []string{"invitations.issued_version", "command_effects.delivery_effect_id"}, constraints: []string{"invitations.invitations_lifecycle", "command_effects.organization_resend_delivery_scope"}}},
 			{organizationpg.InvitationCancelOperationMigrationSource{Version: 10}, migrationGuard{version: 10, schema: "organization", columns: []string{"command_effects.cancel_organization_version"}, tables: []string{"organization_repeat_invitation_cancel"}, constraints: []string{"command_effects.organization_cancel_operation_scope"}}},
 			{organizationpg.InvitationRejectOperationMigrationSource{Version: 11}, migrationGuard{version: 11, schema: "organization", columns: []string{"command_effects.reject_organization_version"}, tables: []string{"organization_repeat_invitation_reject"}, constraints: []string{"command_effects.organization_reject_operation_scope"}}},
+			{organizationpg.InvitationExpireOperationMigrationSource{Version: 12}, migrationGuard{version: 12, schema: "organization", columns: []string{"command_effects.expire_organization_version", "command_effects.expire_reason"}, tables: []string{"organization_repeat_invitation_expire"}, constraints: []string{"command_effects.organization_expire_operation_scope"}}},
 		} {
 			if err := appendNative(suffix.source, suffix.guard); err != nil {
 				return nil, err
@@ -122,7 +123,7 @@ func (s StoreSet) organizationMigrationCatalog(ctx context.Context, catalog []mi
 		}
 	}
 	// A separate native lookup history lets deployments enable invitations
-	// later without inserting their versions3..11 into an applied prefix.
+	// later without inserting their versions3..12 into an applied prefix.
 	leaveSteps, err := (organizationpg.LeaveOperationLookupTransactionalMigrationSource{Version: 1}).Load(ctx)
 	if err != nil {
 		return nil, err

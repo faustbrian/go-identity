@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose natural invitation expiry through guarded native handles and opt-in
+  bearer HTTP with shared administrative admission and registered reasons.
+  Current manager policy, atomic proof invalidation, original-history recovery
+  and required audit/outbox effects remain native. Append native expiry
+  correlation migration12 after the unchanged invitation prefix; its index
+  build requires bounded write-blocking operator maintenance before use.
+
 - Compose native original-key ownership transfer through guarded handles and
   independently selected bearer HTTP. The existing password-verification owner
   authenticates and atomically consumes the action proof; current owner policy,
