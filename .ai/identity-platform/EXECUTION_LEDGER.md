@@ -1,5 +1,59 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 15:20 UTC: current-user organization-list outcome CLOSED. Reference
+ff448e55cbf1a09c543227ccd8fef1016754d6a2 committed/pushed exact reviewed
+ten-path3d5cd337; organization_list_reference_review APPROVE/no findings.
+Required40348109203 SUCCESS. Actual authenticated public Reference
+v0.0.0-20261026151849-ff448e55cbf1 originexact/Subdirreference,
+Sumh1:jTpwvfN42Zf12BzLkxfn40fy/5+atW6pSFPhScJqgW0=,
+GoModSumh1:gpWWWaRsaWGUkc+nNah5MeZtPQ/SEa/+ZduVvebWVPQ=;
+all ten changed files byte-match. Downloaded fresh/populated PG/HTTPS/race35580
+terminal0 PASS13.121s (5.34s/6.15s): genuine signup sessions -> self-only empty/
+bounded pages/end; actual admission/removal; cross-subject cursor denial;
+reconstructed graph/configured-tenant denial; real logout denial and surviving
+independent owner. Public native/HTTP owners and required CI retained above.
+No new store/migration/authority, full M22/unit qualification still open,
+overall10/39/~25% low confidence unchanged. Stopped owned PG29723/52931 and
+removed exact /private/tmp/organization-list-delivery.nLSV41 (77381 terminal0).
+Next read-only self-leave readiness does not reopen this accepted outcome.
+
+2026-10-26 15:15 UTC: current-user list native22f2800 and HTTP092e043
+independently reviewed (organization_list_native_http_review APPROVE), main
+pushed, Required40346509828 attempt2/40346513621 SUCCESS. Native attempt1
+scanner-startup timeout remains failed; unchanged retry passed, no scanner
+or deadline change. Native missing-method RED -> real PG facade race3.243s,
+ordinary0.267s/vet/tidy/verify0; actual authenticated downloaded native
+v0.0.0-20261026150906-22f2800fb856 facade PG/race3.300s, changed bytes match.
+HTTP missing-API RED -> focused0.287s/fullrace13.248s/vet0/fuzz5823exec4.262s/
+tidy/verify0. Actual public HTTPv0.0.0-20261026150908-092e0438e51c bytes match.
+Reference adopts only these two public pins; direct-method RED40406 ->
+GREEN0.451s, fresh/populated actual PG/HTTPS/race6.896s/7.464s, ordinary
+race Reference5.209s/command6.828s, taggedvet/tidy/verify0. Ten-path composition
+candidate3d5cd337 is frozen under independent organization_list_reference_review;
+publication/CI/downloaded Reference proof pending. No new qualified unit/fullM22
+claim. Primary owns composition; prior worker is read-only mapping native
+self-leave operation-facade readiness, no new source or heavy run authorized.
+
+2026-10-26 14:50 UTC: M22 current-user organization-list outcome frozen.
+Adopt existing core/rootc39 and native4c16 lists (current main consumeref179),
+including bounded scope-bound cursor, explicit limit1..200/no default,
+current membership/scoped authority and per-organization policy filtering.
+Existing genuine consumer exercises creation, paging, membership removal/
+readmission and tenant denial; do not rewrite these owners. Reassign existing
+organization_slug_available worker to native OperationService.ListOrganizations
+forwarding only, its new focused facade tests and native README/CHANGELOG.
+No prior slug/consumer write authority remains. Primary owns manifests/Git and
+HTTP/Reference: independently select GET /v1/organization/list with shared safe
+rate, required canonical limit and optional opaque cursor; no user/tenant/org
+override or body/key/cookie fallback. Return bounded current organization views
+and exact continuation, never membership/authority secrets or partial errors.
+Prove genuine self-only paging/empty/end/withdrawal/reconstruction/logout and
+disabled route/metadata through public owners and Reference. Focused TDD/race,
+query fuzz and affected real PostgreSQL/HTTPS consumer, one final review per
+coherent owner batch, main/CI/public proof; no new migration or authority engine.
+Worker owns new disposable native cohort/loopback PG, shared with primary
+through public proof. One heavy Go/service run at a time; all67/fullM22 remain.
+
 2026-10-26 14:44 UTC: advisory slug outcome CLOSED end to end. Rootc39b1e6,
 native4c16fb9, HTTP5d1e06d, genuine consumeref179f3 and Reference0cebe9e are
 reviewed/main-pushed; exact Required40330813923/40335228070/40335230064/

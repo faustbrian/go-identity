@@ -1,11 +1,20 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 14:44 UTC
+## Current TL;DR — 2026-10-26 15:20 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
   qualification is still unproved; no new qualified unit is claimed.
-- **Latest complete consumer profile: advisory organization slug availability.**
+- **Latest complete consumer profile: current-user organization listing.**
+  Genuine signup-issued sessions can page their current organizations through
+  opt-in HTTP or guarded native Reference handles. Explicit limit1..200,
+  self-only scope-bound continuation, membership removal, reconstruction and
+  logout are proven. Native `22f2800`, HTTP `092e043` and Reference `ff448e5`
+  are independently reviewed, main-pushed and CI-green. The actual downloaded
+  Reference passes fresh/populated PostgreSQL/HTTPS/race13.121s, without local
+  replacements or application stores. This closes the selected profile, not
+  full M22 or another qualified unit.
+- **Also complete: advisory organization slug availability.**
   A signup-issued nonmember session can check a tenant-local candidate through
   native APIs or opt-in HTTP, observe actual create/rename occupancy and lose
   access on logout. No reservation or organization metadata is returned.
@@ -16,8 +25,9 @@
   intended-recipient invitation rejection (`bb8415d`), with their public-module
   PostgreSQL/race proofs. Existing registration/verification/signin/session,
   reset/change, MFA/passkey and organization profiles are detailed below.
-- **Next:** current-user organization listing through the HTTP/Reference
-  backend, adopting the existing core/native list rather than restarting it.
+- **Next:** existing native self-leave operation-facade readiness is being
+  checked once; continue remaining organization lifecycle composition from
+  these public owners, without restarting delivered profiles.
 - **Remaining:** 29 open/unassessed roadmap rows, substantial partial work,
   broader social/federation/provisioning and full platform qualification.
   No user decision blocks implementation. Earlier combined OIDC race failure
