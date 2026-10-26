@@ -75,6 +75,14 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	if op == organization.ListOrganizations {
 		success = object([]string{"organizations"}, map[string]any{"organizations": map[string]any{"type": "array", "maxItems": 200, "items": org}, "nextCursor": map[string]any{"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$"}})
 	}
+	if op == organization.ListMyTeams {
+		team := object([]string{"id", "name", "version"}, map[string]any{"id": id, "name": text(1, 256), "version": version(1)})
+		success = object([]string{"organizationVersion", "teams"}, map[string]any{"organizationVersion": version(1), "teams": map[string]any{"type": "array", "maxItems": 100, "items": team}, "nextCursor": id})
+	}
+	if op == organization.ListTeamMembers {
+		binding := object([]string{"userID", "version", "organizationMemberVersion"}, map[string]any{"userID": id, "version": version(1), "organizationMemberVersion": version(1)})
+		success = object([]string{"organizationVersion", "teamVersion", "members"}, map[string]any{"organizationVersion": version(1), "teamVersion": version(1), "members": map[string]any{"type": "array", "maxItems": 100, "items": binding}, "nextCursor": id})
+	}
 	if selectedMutation(op) {
 		failure = map[string]any{"oneOf": []any{errorSchema, mutation}}
 		success = map[string]any{"allOf": []any{
@@ -109,7 +117,7 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	}
 	parameters := []any{}
 	definition := map[string]any{"operationId": string(op), "security": []any{map[string]any{"OrganizationBearer": []string{}}}, "responses": responses}
-	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) {
+	if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember {
 		description += "Exactly one unchanged Idempotency-Key header is required. Owner-allocated organization/command identity and original keyed recovery never rebuild authority, renew deadlines or resubmit unknown work. "
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~A-Za-z0-9-]+$", "writeOnly": true}})
 	} else {
@@ -118,7 +126,15 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	if selectedMutation(op) {
 		var fields map[string]any
 		var required []string
-		if op == organization.Create {
+		if teamMembershipMutation(op) {
+			minimum := uint64(0)
+			if op == organization.RemoveTeamMember {
+				minimum = 1
+			}
+			required = []string{"organizationID", "teamID", "userID", "organizationVersion", "teamVersion", "organizationMemberVersion", "membershipVersion"}
+			fields = map[string]any{"organizationID": id, "teamID": id, "userID": id, "organizationVersion": requestVersion(1), "teamVersion": requestVersion(1), "organizationMemberVersion": version(1), "membershipVersion": requestVersion(minimum)}
+			description += "Team membership uses exact organization/team/admission/binding versions and current native team-write authority, not an unrelated organization-read permission. Add is original-keyed; remove is naturally repeatable only from actual original correlated history, never an absent binding. Organization readmission cannot revive old team rights. The receipt before/after versions are organization policy epochs, not team/binding epochs; it is historical outcome, not current authority. Unknown never authorizes redispatch; no post-mutation read is performed. "
+		} else if op == organization.Create {
 			required = []string{"name", "slug"}
 			fields = map[string]any{"name": text(1, 256), "slug": map[string]any{"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"}}
 		} else if op == organization.Update {
@@ -175,6 +191,12 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		if op == organization.RemoveMember {
 			description += "Removal is naturally repeatable at exact organization/member versions, not keyed. Only an actual matching original durable effect and current-authorized native receipt prove a prior removal; absence or a tombstone alone is never success. Last-owner denial is distinct. "
 		}
+	} else if teamMembershipRead(op) {
+		parameters = append(parameters, map[string]any{"name": "organizationID", "in": "query", "required": true, "schema": id}, map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}, "description": "Required canonical unsigned decimal; no default, leading zeros, sign or exponent."}, map[string]any{"name": "cursor", "in": "query", "required": false, "schema": id})
+		if op == organization.ListTeamMembers {
+			parameters = append(parameters, map[string]any{"name": "teamID", "in": "query", "required": true, "schema": id})
+		}
+		description += "Current native team/member policy and exact active organization admission govern every page. List-mine derives the user only from the verified session; member-list requires the selected exact team. Bytewise ID cursor is an exclusive locator, never authority or a snapshot. No user override, partial page on authority failure, session refresh or positive grant cache. "
 	} else if op == organization.ListOrganizations {
 		parameters = append(parameters,
 			map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 200}, "description": "Required canonical unsigned decimal; no default, leading zeros, sign or exponent."},

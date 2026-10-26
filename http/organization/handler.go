@@ -134,6 +134,10 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					out, err = c.MetadataUpdater.Update(r.Context(), in.update(), in.facts.ClientIP().String())
 				case organization.AddMember:
 					out, err = c.Service.AddMember(r.Context(), in.add(), in.facts.ClientIP().String())
+				case organization.AddTeamMember:
+					out, err = c.TeamMemberAdder.AddTeamMember(r.Context(), in.teamAdd(), in.facts.ClientIP().String())
+				case organization.RemoveTeamMember:
+					out, err = c.TeamMemberRemover.RemoveTeamMember(r.Context(), in.teamRemove(), in.facts.ClientIP().String())
 				case organization.UpdateMember:
 					out, err = c.MemberUpdater.UpdateMember(r.Context(), in.updateMember(), in.facts.ClientIP().String())
 				case organization.RemoveMember:
@@ -250,6 +254,40 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 					return
 				}
 				writeJSON(w, 200, SlugAvailableResponse{Available: out.Available})
+				return
+			}
+			if teamMembershipRead(op) {
+				var view organization.View
+				var err error
+				if op == organization.ListMyTeams {
+					view, err = c.MyTeamLister.ListMyTeams(r.Context(), in.teamRead())
+				} else {
+					view, err = c.TeamMemberLister.ListTeamMembers(r.Context(), in.teamRead())
+				}
+				if err != nil {
+					status, code := domainFailure(err)
+					reject(w, r, requestFailure{status: status, code: code})
+					return
+				}
+				if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				if op == organization.ListMyTeams {
+					page, err := myTeamsResponse(in, view)
+					if err != nil {
+						reject(w, r, err)
+						return
+					}
+					writeJSON(w, 200, page)
+				} else {
+					page, err := teamMembersResponse(in, view)
+					if err != nil {
+						reject(w, r, err)
+						return
+					}
+					writeJSON(w, 200, page)
+				}
 				return
 			}
 			var out organization.View

@@ -1,5 +1,34 @@
 # go-identity/http/organization
 
+Team membership is independently opt-in through `TeamMemberAdd`,
+`TeamMemberRemove`, `TeamListMine` and `TeamMemberList`. Supply only the
+corresponding native `TeamMemberAdder`, `TeamMemberRemover`, `MyTeamLister` or
+`TeamMemberLister`, current sessions and shared administrative (writes) or
+safe (reads) rate admission. Existing `Service` implementations need no new
+methods. All four routes require a tenant-bound bearer session over HTTPS.
+
+`POST /v1/organization/team/member-add` requires one unchanged
+`Idempotency-Key`; `/v1/organization/team/member-remove` forbids keys and
+naturally reconciles only original exact-binding history. Both accept exactly
+`organizationID`, `teamID`, `userID`, `organizationVersion`, `teamVersion`,
+`organizationMemberVersion` and `membershipVersion`. Versions are native
+compare-and-swap observations, not authority. First admission uses membership
+version zero; removal requires the exact positive binding version. Native
+current team-write/query policy, organization admission and atomic effects
+remain authoritative; absence does not prove removal, and readmission never
+revives an old binding. Preserve safe unknown/recovery receipts without
+automatic redispatch. Receipt before/after versions are organization policy
+epochs, not team or membership versions.
+
+`GET /v1/organization/team/list-mine` accepts exactly `organizationID`,
+required canonical decimal `limit` 1..100 and optional nonempty exclusive ID
+`cursor`. `/v1/organization/team/member-list` additionally requires `teamID`.
+No caller-selected actor/tenant, body or key is accepted. Responses contain
+safe current teams or exact active binding metadata, observed versions and
+optional continuation, never authorization grants. Failure withholds the whole
+page. Disabled selections expose neither routes nor metadata. This profile
+does not expose HTTP team creation, rename, deletion or dynamic-role APIs.
+
 Archive and restore are independently opt-in through `Archive` and `Restore`.
 Supply only the matching native `Archiver`/`Restorer`, the original password
 `LifecycleProofs`, its exact `LifecycleAudience`, sessions and shared AdminRate.

@@ -16,31 +16,34 @@ import (
 )
 
 type requestInput struct {
-	op                        organization.Operation
-	facts                     identityhttp.NetworkFacts
-	auth                      organization.Authentication
-	key                       identity.IdempotencyKey
-	actor                     identity.UserID
-	observed                  session.GetResult
-	correlation               string
-	name, slug                string
-	org                       organization.ID
-	user                      identity.UserID
-	recipientIdentifier       identity.IdentifierID
-	role                      organization.Role
-	orgVersion, memberVersion uint64
-	cursor                    identity.UserID
-	organizationsCursor       organization.OrganizationCursor
-	limit                     uint32
-	commandID                 identity.CommandID
-	invitationID              organization.ID
-	invitationVersion         uint64
-	proof                     capability.Proof
-	acceptance                organization.PreparedInvitationAcceptance
-	transferProofID           auth.ProofID
-	sourceVersion             uint64
-	expireReason              identity.PolicyReason
-	lifecycleReason           string
+	op                            organization.Operation
+	facts                         identityhttp.NetworkFacts
+	auth                          organization.Authentication
+	key                           identity.IdempotencyKey
+	actor                         identity.UserID
+	observed                      session.GetResult
+	correlation                   string
+	name, slug                    string
+	org                           organization.ID
+	user                          identity.UserID
+	recipientIdentifier           identity.IdentifierID
+	role                          organization.Role
+	orgVersion, memberVersion     uint64
+	cursor                        identity.UserID
+	organizationsCursor           organization.OrganizationCursor
+	limit                         uint32
+	commandID                     identity.CommandID
+	invitationID                  organization.ID
+	invitationVersion             uint64
+	proof                         capability.Proof
+	acceptance                    organization.PreparedInvitationAcceptance
+	transferProofID               auth.ProofID
+	sourceVersion                 uint64
+	expireReason                  identity.PolicyReason
+	lifecycleReason               string
+	team                          organization.ID
+	teamVersion, orgMemberVersion uint64
+	teamCursor                    string
 }
 
 func operationPath(op organization.Operation) (string, string) {
@@ -71,6 +74,14 @@ func operationPath(op organization.Operation) (string, string) {
 		return "/v1/organization/archive", http.MethodPost
 	case organization.Restore:
 		return "/v1/organization/restore", http.MethodPost
+	case organization.AddTeamMember:
+		return "/v1/organization/team/member-add", http.MethodPost
+	case organization.RemoveTeamMember:
+		return "/v1/organization/team/member-remove", http.MethodPost
+	case organization.ListMyTeams:
+		return "/v1/organization/team/list-mine", http.MethodGet
+	case organization.ListTeamMembers:
+		return "/v1/organization/team/member-list", http.MethodGet
 	case organization.InvitationSend:
 		return "/v1/organization/invitation-send", http.MethodPost
 	case organization.InvitationAccept:
@@ -89,6 +100,16 @@ func operationPath(op organization.Operation) (string, string) {
 func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State, error), error) {
 	path, method := operationPath(op)
 	missingOwner := nilService(c.Service)
+	switch op {
+	case organization.AddTeamMember:
+		missingOwner = nilService(c.TeamMemberAdder)
+	case organization.RemoveTeamMember:
+		missingOwner = nilService(c.TeamMemberRemover)
+	case organization.ListMyTeams:
+		missingOwner = nilService(c.MyTeamLister)
+	case organization.ListTeamMembers:
+		missingOwner = nilService(c.TeamMemberLister)
+	}
 	if op == organization.SlugAvailable {
 		missingOwner = nilService(c.SlugAvailability)
 	}
@@ -158,7 +179,7 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			return zero, requestFailure{status: 405, code: "method_not_allowed", allow: method}
 		}
 		requirement := identityhttp.HeaderForbidden
-		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) {
+		if op == organization.Create || op == organization.Update || op == organization.AddMember || op == organization.UpdateMember || op == organization.InvitationSend || op == organization.InvitationResend || op == organization.OwnerTransfer || lifecycleOperation(op) || op == organization.AddTeamMember {
 			requirement = identityhttp.HeaderRequired
 		}
 		key, _, err := decoder.IdempotencyKey(r, requirement)
@@ -206,7 +227,11 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			if err != nil {
 				return zero, identityhttp.ErrInvalidInput
 			}
-			if op == organization.SlugAvailable {
+			if teamMembershipRead(op) {
+				if err := decodeTeamQuery(input, query); err != nil {
+					return zero, err
+				}
+			} else if op == organization.SlugAvailable {
 				if len(query) != 1 || len(query["slug"]) != 1 || !validSlugCandidate(query.Get("slug")) {
 					return zero, identityhttp.ErrInvalidInput
 				}
@@ -275,7 +300,9 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 }
 func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 	var names []string
-	if in.op == organization.Create {
+	if teamMembershipMutation(in.op) {
+		names = []string{"organizationID", "teamID", "userID", "organizationVersion", "teamVersion", "organizationMemberVersion", "membershipVersion"}
+	} else if in.op == organization.Create {
 		names = []string{"name", "slug"}
 	} else if in.op == organization.Update {
 		names = []string{"organizationID", "organizationVersion", "name", "slug"}
@@ -307,7 +334,11 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 		}
 	}
 	decode := func(name string, target any) bool { return json.Unmarshal(body[name], target) == nil }
-	if in.op == organization.Create {
+	if teamMembershipMutation(in.op) {
+		if !decode("organizationID", &in.org) || !decode("teamID", &in.team) || !decode("userID", &in.user) || !decode("organizationVersion", &in.orgVersion) || !decode("teamVersion", &in.teamVersion) || !decode("organizationMemberVersion", &in.orgMemberVersion) || !decode("membershipVersion", &in.memberVersion) {
+			return identityhttp.ErrInvalidInput
+		}
+	} else if in.op == organization.Create {
 		if !decode("name", &in.name) || !decode("slug", &in.slug) {
 			return identityhttp.ErrInvalidInput
 		}
@@ -351,6 +382,10 @@ func decodeMutation(in *requestInput, body map[string]json.RawMessage) error {
 }
 func (in *requestInput) validate() error {
 	switch in.op {
+	case organization.AddTeamMember:
+		return in.teamAdd().Validate()
+	case organization.RemoveTeamMember:
+		return in.teamRemove().Validate()
 	case organization.Create:
 		return in.create().Validate()
 	case organization.Update:

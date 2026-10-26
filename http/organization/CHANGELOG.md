@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected bearer team admission, exact-binding removal,
+  current-user teams and team-member pagination through narrow native ports.
+  Exact intent, current authorization and atomic effects remain native-owned;
+  keyed admission and natural removal retain original receipts without reviving
+  bindings after organization readmission. Shared rate admission applies, failed
+  pages disclose no partial data and disabled selections expose no metadata.
+
 - Add independently selected strict-bearer archive/restore using exact original
   keys and native signed action proofs. Current owner authority and atomic local
   lifecycle effects stay native-owned; terminal grants never revive. Receipts
