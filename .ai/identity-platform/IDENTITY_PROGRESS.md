@@ -1,6 +1,31 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 20:12 UTC
+## Current TL;DR — 2026-10-26 21:17 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
+  closed.** The new team profiles are usable deliveries within M23, not another
+  whole row or a newly qualified unit out of 67.
+- **New complete profile: team membership backend.** Real signup-issued sessions
+  create empty teams through guarded native APIs, then admit/list/remove team
+  members through opt-in HTTPS. Exact original recovery, organization readmission
+  fencing, reconstructed fresh-session recovery and logout denial are proven.
+  HTTP `2f1fd58` and Reference `a8103f1` are independently reviewed, main-pushed
+  and CI-green. The actual downloaded Reference passes fresh/populated
+  PostgreSQL/HTTPS/race journeys (10.412s), without replacements or fake stores.
+- **Parallel native rename/delete:** root `775f9cb` and native `2694a7c` are
+  reviewed, main-pushed and CI-green. The genuine public signup/session consumer
+  `6990acb` is also independently reviewed, main-pushed and CI-green. Its actual
+  public-dependency PostgreSQL/race proof passes (10.839s), including rollback,
+  commit loss, contention, late permission withdrawal and logout. This native
+  profile is closed; HTTP/Reference team creation/lifecycle remains unfinished.
+- **Still open:** dynamic roles, remaining identity/federation/provisioning and
+  shared-issuer profiles, plus whole-unit qualification. Existing evidence is
+  retained; no baseline restart or Tools programme is underway.
+- **Next:** complete team creation/lifecycle HTTP/Reference and the remaining
+  dynamic-role enforcement. The latter is getting one bounded dependency check
+  before an independent implementation lane; no user decision is required.
+
+## Retained checkpoint — 2026-10-26 20:12 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
@@ -3035,7 +3060,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
 | M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. The integrated HTTP/Reference backend includes exact-version metadata/static-role updates, current privilege changes, last-owner safety, encrypted invitation send/resend/once acceptance and original recovery. Resend native `8638dae`, public consumer `e0e077b`, HTTP leaf `41bd437` and Reference `4c4fcb7` are reviewed/main/CI-green; the actual downloaded Reference passes fresh/populated-identity PostgreSQL/HTTPS/race journeys (10.142s), including predecessor denial, fixed expiry/role, successor acceptance, reconstruction recovery and logout. Native original-key archive/restore `e7ab7d0` with public consumer `381ac2a` retains its public PostgreSQL/race proof (12.530s). Natural-repeat cancellation (Reference `ae30528`) and recipient rejection (Reference `bb8415d`) are now reviewed/main/CI-green with genuine downloaded-public PostgreSQL/HTTPS/race proof. Advisory slug availability is delivered through root `c39b1e6`, native `4c16fb9`, HTTP `5d1e06d`, genuine consumer `ef179f3` and Reference `0cebe9e`; the downloaded Reference passes fresh/populated PostgreSQL/HTTPS/race12.648s, including nonmember reads, actual create/rename changes, reconstruction and logout denial. Remaining HTTP mutations, external lifecycle cascades and active-selection variants keep the full row open; unit qualification remains separately outstanding. |
-| M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native team creation/membership/read/update/terminal deletion delivered through `dc12ee7`, with green CI and downloaded-native genuine-session PostgreSQL/race proof. Dynamic roles/permissions and HTTP/reference remain; full row not closed. |
+| M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native empty-team creation and exact membership operations retain their genuine public consumer proofs. Optional team member-add/member-remove/list-mine/member-list HTTP `2f1fd58` and Reference `a8103f1` are independently reviewed, main-pushed and CI-green; the actual downloaded Reference passes fresh/populated PostgreSQL/HTTPS/race10.412s with real signup/session, readmission, reconstruction and logout. Original-key rename and natural terminal deletion root `775f9cb` / native `2694a7c` and genuine public consumer `6990acb` are independently reviewed/main/CI-green; public-dependency PostgreSQL/race10.839s proves preserved bindings, retired IDs, original recovery, actual logout and required-effect failures. Dynamic roles/permissions, HTTP/Reference team creation/lifecycle and full-unit qualification remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
 | M25 | Verified domain/provider registration and federation policy: sso, sso/domain-verification, sso/postgres | Closure not reassessed |
 | M26 | Enterprise OIDC/OAuth federation, mapping/JIT/linking and session: sso/oidc, sso/oauth2 | Closure not reassessed |

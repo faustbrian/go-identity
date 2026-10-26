@@ -1,5 +1,79 @@
 # Identity Implementation — Current Milestone
 
+Completed frozen primary M23 profile: guarded native team creation/setup plus opt-in
+HTTP team member-add/member-remove/list-mine/member-list. Primary owns
+go-identity http canonical selection, http/organization and reference only;
+consume public rootcb1/native4a005/genuineconsumerfc61ccd, PG/race10.458s and
+exactmain/CIgreen. Existing organization/session/risk/transaction owners stay
+authoritative. Select explicit bounded Core.Teams policy, own native team and
+natural-removal migrations in a separate forward namespace, preserve all prior
+organization/lifecycle histories. Narrow optional ports, strictbearerHTTPS,
+closed exact IDs/epochs/keyedadd/naturalremove and safe scoped pages, shared
+admin/safe rates; no callercommand/actor/tenant override, private store or replay.
+Validate receipt/epoch/scope before metadata; unknown/latecommit remains honest.
+Prove real signup -> native team setup -> HTTP admission/read/removal -> old
+binding denial -> original history/reconstruction/logout, fresh/populatedPG.
+No HTTP teamcreate/rename/delete, dynamic roles, active-team or wholeM23 claim.
+Focused TDD/race/vet/fuzz, independent finaldiff/main/CI/publicconsumer, cleanup.
+
+Completed bounded worker team_lifecycle (team_membership principal) owned
+go-organization new team_lifecycle_operation*.go/tests, postgres/
+operation_team_lifecycle*.go/tests and genuine consumer helper/harness mode,
+additive README/CHANGELOG only. Consume current committed raw GetTeam/
+PrepareUpdateTeam/PrepareDeleteTeam/Execute/Recover and team migration contracts;
+check their existing focused native/public-consumer proof once before writes.
+Outcome exact-key rename then natural exact-version terminal delete, unchanged
+surviving membership on rename and no revived bindings/team identity on delete;
+original recovery, current teamwrite/query isolation, rollback/COMMITloss/races/
+logout. Reuse sole coordinator/effects; any optional correlation and shared
+recovery/apply hunks need concrete owner agreement. Sweep actual published
+CreateTeam recovery's general-orgread dependency while selecting new team
+facades; preserve raw legacy recovery. Primary owns pins/Git/integration.
+No HTTP/Reference/dynamicrole/domain/SSO work; no Go-heavy without serialized
+grant, no children/reverts. No package-wide qualification restart.
+
+Retained enterprise prerequisite confirmed by current source: kernel
+postgres/plan_capability.go validateCapabilityPlan has a closed operation list
+without domain verification, and native organization DomainEvidenceService has
+no capability participant. Current DomainProof authority is usable, but the
+SSO challenge must consume atomically with proof admission, not via a second
+transaction/store. No SSO worker is unlocked by its planned interfaces alone.
+
+2026-10-26 21:17 UTC: team membership composition and native lifecycle profiles
+CLOSED. HTTP2f1fd58082cd main/remoteexact Required40400050451 SUCCESS;
+11pathc528e47c team_membership_http_leaf_review APPROVE. Leafrace89041
+PASS16.352s; focusedrace71561 PASS2.382s, vet0, boundedfuzz22exec PASS3.167s;
+finaltidy/verify0 after4obsolete sums removed. Referencea8103f15f51d
+main/remoteexact Required40401775760 SUCCESS; 12pathcd2d6a71
+team_membership_reference_review APPROVE. Source84998 four new+legacy
+fresh/populated PG/HTTPS/race PASS21.610s; ordinaryRef/cmd5.202/5.972s,
+taggedvet0; final84536 tidy/verify0 after8obsolete sums removed. Actualpublic
+Referencev0.0.0-20261026210803-a8103f15f51d exactOrigin/Subdir/all12filesmatch,
+Sum7KgaIkFvPG44lFKI54mIvr6GDiiY+DLu/RVWiN0UGso=,
+GoModSumtOlPKUcz/MsMUPbi3z/Kj2tt9C9GS57G2V0wqkwULzE=;
+downloaded81891 fresh/populated teams PG/HTTPS/race PASS10.412s.
+Real signup -> native emptyteam -> HTTPadd/read/remove -> orgreadmission
+oldbindingdenial -> explicitnewbinding -> fresh/reconstructedhistory/logout.
+The Reference readmission case starts from removed binding; active-oldbinding
+readmission remains proven by pinned native team integration, not relabeled.
+Workerroot775f9cba97ad Required40397557880 SUCCESS and native2694a7cc921e
+Required40401283564 SUCCESS are independently reviewed, main/remoteexact.
+Native14path36e714bc team_lifecycle_native_review APPROVE; final57562
+affectedPG/race14.267s, ordinary1.263s, vets0. Actualpublicnative2694 origin/
+Subdir/all14filesmatch; genuineconsumer6990acb672f9 main/remoteexact,
+Required40402591484 SUCCESS. Fivepathafe56d07 team_lifecycle_consumer_review
+APPROVE; raw69853 all15PG/race scenarios PASS10.839s, taggedvet0;
+final35052 tidy/verify0 after4obsolete sums removed. Originalrename preserves
+bindings, naturalterminaldelete retiresID, actualteamwrite/query notgeneral
+orgread, rollback/COMMITloss/initialcontention/lateauthority/SignOut are proven.
+PrimaryPG54032 stopped, exacttaskcohortsPaOEI removed26711 terminal0;
+workerPG54031 stopped and exactcohortuBmCon removed40850 terminal0.
+No task-owned service/cache remains from either closed profile. No new
+wholeM23/67qualification: estimate~25%lowconfidence,10/39whole rows.
+Nextprimary: complete team creation/lifecycle transport and Reference from
+these published contracts. Worker performs only one bounded dynamic-role
+dependency check before a finite next assignment; no preflight/tooling restart.
+
 2026-10-26 20:12 UTC: native team-membership consumer profile CLOSED at
 fc61ccd3328c1189148145b5fc20f2d1679d8abc main/remoteexact, Required40393138600
 SUCCESS. Fivepath7e177f84 team_membership_consumer_review APPROVE nofindings.
