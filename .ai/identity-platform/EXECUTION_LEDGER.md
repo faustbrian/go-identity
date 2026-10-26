@@ -1,5 +1,67 @@
 # Identity Implementation — Current Milestone
 
+2026-10-26 19:14 UTC: invitation-expiry composition CLOSED. Exact reviewed
+HTTP policy37710d3/leaf745c248/Reference8c1c37f pushedmain, Required40379108287/
+40380972494/40383384588 SUCCESS. Native expiry0807be0/c000e1d proof retained.
+Reference final12path dbdabecd reviewer invitation_expire_reference_review
+APPROVE; source fresh/populated PG/HTTPS/race60583 PASS20.873s including legacy
+organization journeys, ordinary Reference/cmd5.211s/5.870s, taggedvet/finaltidy/
+verify60087 zero. Authenticated publicReference
+v0.0.0-20261026190400-8c1c37fe4c79 exactorigin/Subdirreference, all12filesmatch,
+SumuWB5ykkxIJj5pDpz4Qt56OFqrkqw4xGd0Zz4kH9B7V0=,
+GoModSumS3haffDB/ISZIUI9ij5uo51UO7oWFIsXpb5x3XEhcJA=.
+Old publicproof73417 handle missing/result unrecoverable after continuation;
+focused actualdownload90182 PASS9.327s (fresh3.63/populated4.21), no localreplace
+or application authority. Real encrypted invitation -> expire/repeat -> proof
+denial/no membership, rollback, reconstructed history, tenant/logout/closed
+denial proven. Sourcebaseline and nativeowner engines not rerun.
+
+Parallel native teamcreation sourcea68570a/ed693c9 exactmain/CIgreen;
+rootreview402e8e/native2e8700ce APPROVE. Actual publicnative
+v0.0.0-20261026185654-ed693c983ba1 exactorigin/all8filesmatch,
+Sum6Z0ixtGqJu1pMP/EbMzarMmDA4Noptf3m7vQIhW6/sI=,
+GoModSumBbIpHWwKjjvqj97JtcTuOhKnqLF6ok3J4hBN+X57HbE=.
+Genuine consumer85485 TestOrganizationGenuineCreateTeamOperationConsumer
+PG/race PASS8.252s/all8subtests; original rawoutput directly inspected by
+team_create_consumer_review, final5path1fe62c15 APPROVE no findings. Taggedvet
+and finaltidy/verify31095 zero. Consumer1703cc5 pushedexactmain, Required40384581621
+SUCCESS. Parent prompt's TeamCreate selector typo was not executed; original
+CreateTeam output proves selectedtest ran. This is native teamcreation only,
+not HTTP/Reference or fullM23/67. Both owned PG53978/53979 stopped;
+no next worker launched. Wholeestimate~25%,10/39 unchanged, no new qualifiedunit.
+
+2026-10-26 18:30 UTC: frozen next primary M22 invitation-expiry composition.
+Owner primary, go-identity main78f5024; consume actual public root4894322/
+native0807be0 and genuineconsumer c000e1d (PG/race11.822s, exactmain/CIgreen).
+Strict bearer HTTPS POST /v1/organization/invitation/expire, independently
+selected InvitationExpire/narrow Expirer, exact org/invitation IDs+versions and
+registered reason. No headerkey/callercommand/proof/actor override. Existing
+shared AdminRate and actual verified session, native currentmanager/action
+authority, atomic proof invalidation/audit/outbox, natural original recovery.
+Validate binding and committed invitation epoch before exporting safe metadata;
+unknown/late failure never invents terminal state or automatic retry. Add exact
+bearer policy admission, closed wire schemas, facade/opt-in Reference and native
+nullable correlation migration12 after unchanged invitation11. Public genuine
+signup/send/expire/repeat/reconstruction/logout fresh+populatedPG/HTTPS proof;
+focused hostile-input/red/green/race/vet/fuzz, independent finaldiff review,
+ordinarymain/CI/publicconsumer and resourcecleanup. No new native engine or
+other invitation/organization variants; selected profile not wholeM22/67.
+
+Parallel finite M23 native keyed team-creation lane: worker team_create_operation
+owns go-organization new team_create_operation.go/test, postgres/
+operation_team_create*.go/tests and consumer new team_create_operation helper,
+unique existing consumer harness mode, additive relevant README/CHANGELOG only.
+Consume c000e1d existing real PrepareCreateTeam/Execute/Recover, team.go and
+genuine team_consumer integration (no substitute authority). Outcome one exact
+key+chosen canonical teamID/orgversion/name creates actual empty team, matching
+fresh-session/reconstructed retry returns original, changedintent/unauthorized/
+limits/staleversion deny, rollback/commitloss/contention/logout retain sole
+native history. Exclude teammember/lifecycle/dynamic-role/HTTPReference work.
+One bounded mapping before first productionwrite; use existing keyed custody,
+no new replay/store. Shared existing files require exact-hunk agreement; primary
+owns manifests/pins/Git/integration. Worker no children/Git/otherpaths. Focused
+root/native/genuinepublic PG/race/vet; serialized heavy slot on primary request.
+
 2026-10-26 18:24 UTC: owner-transfer selected Reference profile CLOSED.
 HTTPbbd515b/Reference410045f main/remoteexact and Required40374592276/
 40377079971 SUCCESS; fourteen-path5ae347e owner_transfer_reference_review

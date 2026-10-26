@@ -1,11 +1,25 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 18:24 UTC
+## Current TL;DR — 2026-10-26 19:14 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** Additional delivered profiles do not close whole rows. Full 67-unit
   qualification is still unproved; no new qualified unit is claimed.
-- **Latest complete consumer profile: ownership transfer.** Genuine verified
+- **Latest complete consumer profile: invitation expiry.** Verified signup-issued
+  sessions expire pending invitations through guarded native APIs or opt-in
+  bearer HTTP. Expiry invalidates acceptance, retains original history, rejects
+  changed intent and denies history after logout. HTTP `745c248` and Reference
+  `8c1c37f` are independently reviewed, main-pushed and CI-green. The actual
+  downloaded Reference passes fresh/populated PostgreSQL/HTTPS/race (9.327s).
+  This closes the selected expiry profile, not the whole M22 row.
+- **Parallel team-creation profile:** root `a68570a` and native `ed693c9` are
+  reviewed, main-pushed and CI-green. The genuine public consumer proves real
+  signup/signin -> keyed empty-team creation -> original recovery, including
+  rollback, lost acknowledgement, contention, late authority withdrawal and
+  logout (PostgreSQL/race8.252s). Five-file independent review approved with no
+  findings; consumer `1703cc5` is main-pushed and exact CI-green.
+  Team HTTP/Reference, memberships and dynamic roles remain unfinished.
+- **Also complete: ownership transfer.** Genuine verified
   password sessions obtain an action-bound proof, transfer ownership once,
   retain last-owner safety and recover the original outcome after fresh signin
   and reconstruction; logout denies history. Native/root/consumer checkpoints
@@ -13,12 +27,12 @@
   reviewed, main-pushed and CI-green. The actual downloaded Reference passes
   fresh/populated PostgreSQL/HTTPS/race (9.802s), without replacements or
   application stores. This closes the selected SFA profile, not full M22.
-- **Parallel native expiry profile delivered:** native `0807be0` and genuine
+- **Native expiry profile delivered:** native `0807be0` and genuine
   consumer `c000e1d` are reviewed, main-pushed and CI-green. Real signup-issued
   sessions expire an invitation, invalidate its proof and recover only actual
   original history; contention, rollback, lost acknowledgement, late authority
   withdrawal and actual logout are proven (public consumer race11.822s).
-  HTTP/Reference expiry composition is next; it is not complete yet.
+  HTTP/Reference expiry composition is now delivered above.
 - **Also complete: owner invitation listing.** Current owners
   page safe invitation metadata through opt-in HTTP or guarded native handles;
   actual role withdrawal, replacement ownership, reconstruction, logout and
@@ -63,7 +77,7 @@
   and domain COMMIT loss. Consumer `1e1f7ff` is independently reviewed,
   main-pushed and CI-green. HTTP/Reference transfer is now delivered above;
   no full M22 or additional qualified unit is claimed.
-- **Next:** invitation-expiry HTTP/Reference and remaining organization lifecycle composition,
+- **Next:** archive/restore HTTP/Reference and remaining organization lifecycle composition,
   adopting public owners without restarting delivered profiles. A bounded SCIM readiness check
   identified missing connection/provider-bound provisioning authority and atomic
   identity-command composition; generic CRUD/parsers cannot substitute for it.
