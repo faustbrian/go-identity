@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose guarded direct role assignment/revocation behind explicit
+  `Organization.DirectRoleBindings`, with independent native lookup history
+  that does not prevent later team-role upgrades. Separately opt into bearer
+  `HTTPOrganization.PermissionCheck` for exact-epoch current-member allow/deny
+  decisions. Existing native authority, original keys, terminal-role denial,
+  recovery and shared safe rates remain authoritative; no binding mutation
+  HTTP route or reusable access lease is introduced.
+
 - Compose custom-role CRUD/read and effective permission checks through guarded
   native handles, with independently selected bearer HTTP create/get/list/update/
   delete. Native catalog, exact epochs, original keys and terminal deletion stay

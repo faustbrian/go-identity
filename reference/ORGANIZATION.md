@@ -30,6 +30,34 @@ implicit application access. `OrganizationService` exposes guarded
 `CorrelationID`; checks apply to the authenticated member at an exact current
 organization epoch. A snapshot or allow is never a reusable authority lease.
 
+`Organization.DirectRoleBindings: true` additionally selects guarded
+`AssignDynamicRole` and `RevokeDynamicRole`. Assignment retains the original
+idempotency key and exact organization/role/member/binding epochs. Revocation
+takes no key or caller command, and only the actual current-authorized original
+receipt establishes a successful repeat. Discover binding epochs using native
+`GetDynamicRole` with `TargetUserID`. Reassignment/readmission cannot be reached
+by stale revocation intent. Original binding revocation remains denied after
+terminal role deletion; its tombstone does not create disclosure authority.
+
+Apply the separate `identity_organization_direct_bindings` version1 history
+before selecting these handles. It contains the unchanged native
+`RoleBindingRevokeOperationLookupMigrationSource`, including its nullable
+selectors and transactional index. Use a bounded write-blocking maintenance
+window. This independent history permits later selection of optional team-role
+version3 without inserting a skipped migration into an installed prefix.
+
+`HTTPOrganization.PermissionCheck: true` independently enables
+`GET /v1/organization/permission-check`. It needs the native dynamic-role catalog,
+current sessions and shared safe rates, not role-read or administrative grants.
+The query is exactly `organizationID`, canonical positive decimal
+`organizationVersion`, `action`, `resourceType`, `resourceID`. A read accepts the
+terminal uint64 epoch because it does not advance it. Only the authenticated
+current member is evaluated; no body, key, actor, tenant, wildcard or arbitrary
+context is accepted. The result is explicit `allow`/`deny` plus the matching
+`organizationVersion`; stale authority, failures or native revision mismatches
+expose no decision. Disabled selection exposes neither route nor OpenAPI metadata.
+Binding mutations remain native SDK operations, not HTTP endpoints.
+
 Apply the operator plan with `organization/postgres` before enabling writers.
 It appends separate `identity_organization_roles` history: unchanged native
 `DynamicRoleMigrationSource` at1 and nullable original-delete correlation at2.

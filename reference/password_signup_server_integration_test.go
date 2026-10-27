@@ -288,6 +288,7 @@ type signupGraphExtensions struct {
 	organizationTeams     bool
 	organizationTeamCRUD  bool
 	organizationRoles     bool
+	organizationBindings  bool
 	passkey               bool
 	passkeyUpgrade        bool
 	passkeyDiscovery      bool
@@ -550,6 +551,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Organization.Core.Teams = organization.TeamConfig{Version: 1, MaximumTeams: 10, MaximumMembers: 100, LifecycleVersion: 1}
 		c.Organization.Core.DynamicRoles = organization.DynamicRoleConfig{Version: 1, MaximumRoles: 10, TeamBindingsVersion: 1, Catalog: []organization.Permission{{ID: "document-read", Action: "document.read", ResourceType: "document"}}}
 		c.HTTPOrganization.RoleCreate, c.HTTPOrganization.RoleUpdate, c.HTTPOrganization.RoleDelete, c.HTTPOrganization.RoleGet, c.HTTPOrganization.RoleList = true, true, true, true, true
+		c.Organization.DirectRoleBindings = extensions.organizationBindings
+		c.HTTPOrganization.PermissionCheck = extensions.organizationBindings
 	}
 	if extensions.organizationExpiry {
 		c.Organization.Invitations.Policy.ExpirationReasons = []identity.PolicyReason{"security-withdrawal", "administrative-cleanup"}
@@ -1151,6 +1154,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			org, transport := *c.Organization, *c.HTTPOrganization
 			c.Organization, c.HTTPOrganization = &org, &transport
 			org.Core.DynamicRoles = organization.DynamicRoleConfig{}
+			org.DirectRoleBindings = false
+			transport.PermissionCheck = false
 			transport.RoleCreate, transport.RoleUpdate, transport.RoleDelete, transport.RoleGet, transport.RoleList = false, false, false, false, false
 		} else if extensions.organizationTeamCRUD {
 			// Upgrade actual installed team membership, preserving its histories,
@@ -1311,6 +1316,7 @@ END $$`); err != nil {
 			{"team.create", c.HTTPOrganization.TeamCreate}, {"team.update", c.HTTPOrganization.TeamUpdate},
 			{"team.delete", c.HTTPOrganization.TeamDelete}, {"team.list", c.HTTPOrganization.TeamList},
 			{"role.create", c.HTTPOrganization.RoleCreate}, {"role.update", c.HTTPOrganization.RoleUpdate}, {"role.delete", c.HTTPOrganization.RoleDelete}, {"role.get", c.HTTPOrganization.RoleGet}, {"role.list", c.HTTPOrganization.RoleList},
+			{"permission-check", c.HTTPOrganization.PermissionCheck},
 		} {
 			if selected.on {
 				wantOperations++
@@ -1721,7 +1727,7 @@ END $$`); err != nil {
 				for _, op := range server.OpenAPI().Operations() {
 					forbidden := strings.HasPrefix(op.Record.OperationID, "identity.organization.")
 					if extensions.organizationRoles {
-						forbidden = slices.Contains([]string{string(organization.CreateDynamicRole), string(organization.UpdateDynamicRole), string(organization.DeleteDynamicRole), string(organization.GetDynamicRole), string(organization.ListDynamicRoles)}, op.Record.OperationID)
+						forbidden = slices.Contains([]string{string(organization.CreateDynamicRole), string(organization.UpdateDynamicRole), string(organization.DeleteDynamicRole), string(organization.GetDynamicRole), string(organization.ListDynamicRoles), string(organization.CheckPermission)}, op.Record.OperationID)
 					} else if extensions.organizationTeamCRUD {
 						forbidden = slices.Contains([]string{string(organization.CreateTeam), string(organization.UpdateTeam), string(organization.DeleteTeam), string(organization.ListTeams)}, op.Record.OperationID)
 					}
@@ -1735,6 +1741,9 @@ END $$`); err != nil {
 				}
 				if extensions.organizationRoles {
 					probePath = "/v1/organization/role/list"
+				}
+				if extensions.organizationBindings {
+					probePath = "/v1/organization/permission-check"
 				}
 				probe, err := http.NewRequestWithContext(ctx, http.MethodGet, network.URL+probePath, nil)
 				if err != nil {

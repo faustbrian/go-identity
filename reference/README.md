@@ -2,6 +2,13 @@
 
 ## Optional organization backend
 
+`Organization.DirectRoleBindings` selects guarded original-key
+`AssignDynamicRole` and natural exact-binding `RevokeDynamicRole` after native
+dynamic-role selection and its independent forward lookup migration. Separately
+select `HTTPOrganization.PermissionCheck` for current-member exact-epoch
+allow/deny decisions over strict bearer HTTPS and shared safe rates. Neither
+selection enables binding mutation HTTP or creates a cached access lease.
+
 Custom roles are explicitly selected with `Organization.Core.DynamicRoles` and
 its immutable native permission catalog. Guarded create/get/list/update/delete
 and effective permission checks retain native current authority. Five independent

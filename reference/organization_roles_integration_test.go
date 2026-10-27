@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,14 @@ func TestReferencePostgresOrganizationRolesHTTPS(t *testing.T) {
 }
 func TestReferencePostgresOrganizationRolesPopulatedUpgradeHTTPS(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{organization: true, organizationRoles: true, organizationUpgrade: true, postgresBaseline: true})
+}
+
+func TestReferencePostgresOrganizationDirectBindingsHTTPS(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{organization: true, organizationRoles: true, organizationBindings: true, postgresBaseline: true})
+}
+
+func TestReferencePostgresOrganizationDirectBindingsPopulatedUpgradeHTTPS(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{organization: true, organizationRoles: true, organizationBindings: true, organizationUpgrade: true, postgresBaseline: true})
 }
 
 type referenceOrganizationRolesPolicy struct{}
@@ -152,6 +161,40 @@ func proveReferenceOrganizationRoles(t *testing.T, ctx context.Context, f liveSt
 	if err != nil {
 		t.Fatal(err)
 	}
+	rebuild := func() *reference.OrganizationService {
+		t.Helper()
+		stores, err := reference.ComposeStores(c, deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			bounded, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := stores.Close(bounded); err != nil {
+				t.Error(err)
+			}
+		})
+		providers, err := reference.ComposeProviders(stores)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runners, err := reference.ComposeWorkers(stores, providers, workerConfigs...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		selected, err := reference.ComposeFeatures(stores, providers, runners)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := selected.Initialize(ctx); err != nil {
+			t.Fatal(err)
+		}
+		out, err := selected.Organizations()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
 	newID := func() organization.ID {
 		id, err := identity.NewSubjectID()
 		if err != nil {
@@ -251,12 +294,31 @@ func proveReferenceOrganizationRoles(t *testing.T, ctx context.Context, f liveSt
 	if err != nil {
 		t.Fatal(err)
 	}
-	commit(source.PrepareAssignDynamicRole(ctx, organization.RoleBindingRequest{Authentication: owner.auth, CommandID: id, OrganizationID: org, RoleID: role, UserID: member.user, OrganizationVersion: 3, RoleVersion: 1, OrganizationMemberVersion: 1, CorrelationID: "roles-direct"}, "127.0.0.1"))
+	assign := organization.AssignDynamicRoleOperationRequest{Authentication: owner.auth, IdempotencyKey: teamCRUDKey(t, "roles-direct"), OrganizationID: org, RoleID: role, UserID: member.user, OrganizationVersion: 3, RoleVersion: 1, OrganizationMemberVersion: 1, CorrelationID: "roles-direct"}
+	var assigned, revoked organization.StoreResult
+	if c.Organization.DirectRoleBindings {
+		assigned, err = port.AssignDynamicRole(ctx, assign, "127.0.0.1")
+		if err != nil || assigned.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("native facade assignment", err)
+		}
+		if out, err := port.AssignDynamicRole(ctx, assign, "127.0.0.1"); err != nil || out.Receipt.Binding != assigned.Receipt.Binding {
+			t.Fatal("original assignment retry", err)
+		}
+	} else {
+		commit(source.PrepareAssignDynamicRole(ctx, organization.RoleBindingRequest{Authentication: owner.auth, CommandID: id, OrganizationID: org, RoleID: role, UserID: member.user, OrganizationVersion: 3, RoleVersion: 1, OrganizationMemberVersion: 1, CorrelationID: "roles-direct"}, "127.0.0.1"))
+	}
 	permission := func(epoch uint64, want authorization.Outcome) {
 		t.Helper()
 		out, err := port.CheckPermission(ctx, organization.PermissionCheckRequest{Authentication: member.auth, OrganizationID: org, OrganizationVersion: epoch, Action: "document.read", ResourceType: "document", ResourceID: "one", CorrelationID: "roles-check"})
 		if err != nil || out.Outcome != want {
 			t.Fatal("actual role permission", out.Outcome, err)
+		}
+		if c.Organization.DirectRoleBindings {
+			code, wire := call(member, http.MethodGet, "/v1/organization/permission-check?organizationID="+string(org)+"&organizationVersion="+strconv.FormatUint(epoch, 10)+"&action=document.read&resourceType=document&resourceID=one", nil, "")
+			var response organizationhttp.PermissionCheckResponse
+			if code != 200 || json.Unmarshal(wire, &response) != nil || response.Decision != want.String() || response.OrganizationVersion != epoch {
+				t.Fatal("HTTP effective permission differs from native", code)
+			}
 		}
 	}
 	permission(4, authorization.Allow)
@@ -264,8 +326,38 @@ func proveReferenceOrganizationRoles(t *testing.T, ctx context.Context, f liveSt
 	if err != nil {
 		t.Fatal(err)
 	}
-	commit(source.PrepareRevokeDynamicRole(ctx, organization.RoleBindingRequest{Authentication: owner.auth, CommandID: id, OrganizationID: org, RoleID: role, UserID: member.user, OrganizationVersion: 4, RoleVersion: 1, OrganizationMemberVersion: 1, BindingVersion: 1, CorrelationID: "roles-direct-revoke"}, "127.0.0.1"))
+	revoke := organization.RevokeDynamicRoleOperationRequest{Authentication: owner.auth, OrganizationID: org, RoleID: role, UserID: member.user, OrganizationVersion: 4, RoleVersion: 1, OrganizationMemberVersion: 1, BindingVersion: 1, CorrelationID: "roles-direct-revoke"}
+	if c.Organization.DirectRoleBindings {
+		revoked, err = port.RevokeDynamicRole(ctx, revoke, "127.0.0.1")
+		if err != nil || revoked.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("native facade revocation", err)
+		}
+		if out, err := port.RevokeDynamicRole(ctx, revoke, "127.0.0.1"); err != nil || out.Receipt.Binding != revoked.Receipt.Binding {
+			t.Fatal("original revocation retry", err)
+		}
+		changed := revoke
+		changed.BindingVersion++
+		if _, err := port.RevokeDynamicRole(ctx, changed, "127.0.0.1"); !errors.Is(err, organization.ErrConflict) {
+			t.Fatal("changed original revocation accepted", err)
+		}
+	} else {
+		commit(source.PrepareRevokeDynamicRole(ctx, organization.RoleBindingRequest{Authentication: owner.auth, CommandID: id, OrganizationID: org, RoleID: role, UserID: member.user, OrganizationVersion: 4, RoleVersion: 1, OrganizationMemberVersion: 1, BindingVersion: 1, CorrelationID: "roles-direct-revoke"}, "127.0.0.1"))
+	}
 	permission(5, authorization.Deny)
+	if c.Organization.DirectRoleBindings {
+		freshCookies, freshCSRF := fresh()
+		human := organizationHumanFromSession(t, ctx, sessions, freshCookies, freshCSRF)
+		restored := rebuild()
+		assignment, revocation := assign, revoke
+		assignment.Authentication, revocation.Authentication = human.auth, human.auth
+		if out, err := restored.AssignDynamicRole(ctx, assignment, "127.0.0.1"); err != nil || out.Receipt.Binding.CommandID != assigned.Receipt.Binding.CommandID {
+			t.Fatal("fresh reconstructed original assignment", err)
+		}
+		if out, err := restored.RevokeDynamicRole(ctx, revocation, "127.0.0.1"); err != nil || out.Receipt.Binding.CommandID != revoked.Receipt.Binding.CommandID {
+			t.Fatal("fresh reconstructed original revocation", err)
+		}
+		permission(5, authorization.Deny)
+	}
 	teamCreated, err := port.CreateTeam(ctx, organization.CreateTeamOperationRequest{Authentication: owner.auth, IdempotencyKey: teamCRUDKey(t, "roles-team"), OrganizationID: org, OrganizationVersion: 5, TeamID: team, Name: "Readers", CorrelationID: "roles-team"}, "127.0.0.1")
 	if err != nil || teamCreated.Receipt.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("role team setup", err)
@@ -314,35 +406,17 @@ func proveReferenceOrganizationRoles(t *testing.T, ctx context.Context, f liveSt
 	}
 	currentCookies, currentCSRF := fresh()
 	current := organizationHumanFromSession(t, ctx, sessions, currentCookies, currentCSRF)
-	rebuilt, err := reference.ComposeStores(c, deps)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		bounded, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := rebuilt.Close(bounded); err != nil {
-			t.Error(err)
+	restored := rebuild()
+	if c.Organization.DirectRoleBindings {
+		assign.Authentication, revoke.Authentication = current.auth, current.auth
+		if out, err := restored.AssignDynamicRole(ctx, assign, "127.0.0.1"); err != nil || out.Receipt.Binding.CommandID != assigned.Receipt.Binding.CommandID {
+			t.Fatal("reconstructed original assignment", err)
 		}
-	})
-	providers, err := reference.ComposeProviders(rebuilt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	runners, err := reference.ComposeWorkers(rebuilt, providers, workerConfigs...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected, err := reference.ComposeFeatures(rebuilt, providers, runners)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := selected.Initialize(ctx); err != nil {
-		t.Fatal(err)
-	}
-	restored, err := selected.Organizations()
-	if err != nil {
-		t.Fatal(err)
+		// Native readDynamicRole denies retired roles even for original binding
+		// recovery. Verify that terminal-role fence rather than weakening it.
+		if out, err := restored.RevokeDynamicRole(ctx, revoke, "127.0.0.1"); !errors.Is(err, organization.ErrForbidden) || out.Receipt.Binding.CommandID != "" {
+			t.Fatal("retired role revocation history disclosed", err)
+		}
 	}
 	cr := organization.CreateDynamicRoleOperationRequest{Authentication: current.auth, IdempotencyKey: teamCRUDKey(t, "roles-create"), OrganizationID: org, RoleID: role, OrganizationVersion: 2, Name: "Reader", Statements: []organization.RoleStatement{{PermissionID: "document-read", ResourceID: "one", Effect: authorization.Allow}}, CorrelationID: "roles-reconstruction"}
 	if out, err := restored.CreateDynamicRole(ctx, cr, "127.0.0.1"); err != nil || out.Receipt.Binding.CommandID != original.CommandID {
@@ -357,6 +431,14 @@ func proveReferenceOrganizationRoles(t *testing.T, ctx context.Context, f liveSt
 		t.Fatal("reconstructed deletion original", err)
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, current.cookies, current.csrf, current.sessionID, f, features)
+	if c.Organization.DirectRoleBindings {
+		if out, err := restored.AssignDynamicRole(ctx, assign, "127.0.0.1"); err == nil || out.Receipt.Binding.CommandID != "" {
+			t.Fatal("logged-out assignment history disclosed")
+		}
+		if out, err := restored.RevokeDynamicRole(ctx, revoke, "127.0.0.1"); err == nil || out.Receipt.Binding.CommandID != "" {
+			t.Fatal("logged-out revocation history disclosed")
+		}
+	}
 	if code, out := mutate(current, "delete", remove, ""); code != 403 || out.Committed || out.Recovery != nil {
 		t.Fatal("logged-out role history disclosed", code)
 	}

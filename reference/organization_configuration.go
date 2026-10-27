@@ -48,6 +48,10 @@ type OrganizationConfiguration struct {
 	Invitations          *OrganizationInvitationConfiguration
 	OwnerTransfer        *OrganizationOwnerTransferConfiguration
 	Lifecycle            *OrganizationLifecycleConfiguration
+	// DirectRoleBindings selects native keyed assignment/natural revocation and
+	// its independent optional migration history. Core.DynamicRoles is required;
+	// neither team bindings nor HTTP binding mutations are enabled by this flag.
+	DirectRoleBindings bool
 }
 
 // OrganizationLifecycleConfiguration selects the local native archive/restore
@@ -133,22 +137,23 @@ func (OrganizationInvitationConfiguration) MarshalText() ([]byte, error) {
 }
 
 type organizationState struct {
-	operations        *organizationpg.OperationService
-	invitations       *organizationpg.InvitationService
-	sender            *organizationpg.InvitationOperationService
-	limits            capability.Limits
-	maximum           time.Duration
-	provider          uint64
-	transferAudience  string
-	transferProofs    *passwordpg.Repository
-	lifecycle         *organizationpg.Service
-	lifecycleProofs   *passwordpg.Repository
-	lifecycleAudience string
-	teams             bool
-	teamLifecycle     bool
-	teamsNative       *organizationpg.Service
-	dynamicRoles      bool
-	teamRoleBindings  bool
+	operations         *organizationpg.OperationService
+	invitations        *organizationpg.InvitationService
+	sender             *organizationpg.InvitationOperationService
+	limits             capability.Limits
+	maximum            time.Duration
+	provider           uint64
+	transferAudience   string
+	transferProofs     *passwordpg.Repository
+	lifecycle          *organizationpg.Service
+	lifecycleProofs    *passwordpg.Repository
+	lifecycleAudience  string
+	teams              bool
+	teamLifecycle      bool
+	teamsNative        *organizationpg.Service
+	dynamicRoles       bool
+	teamRoleBindings   bool
+	directRoleBindings bool
 }
 
 func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, queue *deliverypg.EnqueueService, proofs *passwordVerificationState) (*organizationState, error) {
@@ -157,6 +162,9 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	}
 	n := *c.Organization
 	invalid := identity.InvalidInputError{Field: "reference_organization"}
+	if n.DirectRoleBindings && n.Core.DynamicRoles.Version == 0 {
+		return nil, invalid
+	}
 	if c.OTP == nil || c.PasswordSignin == nil || sessions == nil || d.PostgreSQL == nil || c.Delivery == nil || queue == nil || n.Core.Clock != nil || n.Core.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || n.Counters.PolicyVersion != n.Core.PolicyVersion || n.Counters.Schema != c.Velocity.Schema || n.Counters.CommandCounters == nil || !n.Counters.EnforceLockouts || n.Repository.MaximumDuration > n.Core.MaximumDuration || n.Core.Teams.Validate() != nil || n.Core.Domains.MaximumClaims != 0 || n.Core.DynamicRoles.Validate() != nil || n.Core.DynamicRoles.TeamBindingsVersion != 0 && n.Core.Teams.LifecycleVersion != 1 || n.Core.Lifecycle != (organization.LifecycleConfig{}) || n.Core.OwnerTransferAudience != "" {
 		return nil, invalid
 	}
@@ -259,6 +267,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	}
 	state := &organizationState{operations: operations, maximum: n.Core.MaximumDuration, teams: n.Core.Teams.MaximumTeams != 0}
 	state.dynamicRoles, state.teamRoleBindings = n.Core.DynamicRoles.Version != 0, n.Core.DynamicRoles.TeamBindingsVersion == 1
+	state.directRoleBindings = n.DirectRoleBindings
 	if state.teams {
 		state.teamsNative, state.teamLifecycle = service, n.Core.Teams.LifecycleVersion == 1
 	}

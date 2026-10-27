@@ -37,5 +37,15 @@ func (s StoreSet) organizationRoleMigrationCatalog(ctx context.Context, catalog 
 		history.owners[suffix.guard.version] = "organization/postgres"
 		history.guards = append(history.guards, suffix.guard)
 	}
-	return append(catalog, history), nil
+	catalog = append(catalog, history)
+	if s.state.features.organization.directRoleBindings {
+		// Keep this independent of optional team version 3: selecting direct
+		// bindings first must not prevent a later team-role upgrade.
+		steps, err := (organizationpg.RoleBindingRevokeOperationLookupMigrationSource{Version: 1}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_organization_direct_bindings", history: steps, owners: map[migrations.Version]ModuleID{1: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", columns: []string{"command_effects.revoke_role_id", "command_effects.revoke_role_version", "command_effects.revoke_member_version", "command_effects.revoke_binding_version"}, tables: []string{"organization_repeat_role_revoke"}, constraints: []string{"command_effects.organization_role_binding_revoke_scope"}}}})
+	}
+	return catalog, nil
 }
