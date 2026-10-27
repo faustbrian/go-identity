@@ -1,5 +1,77 @@
 # Identity Implementation — Current Milestone
 
+2026-10-27 00:40 UTC — selected direct-binding backend and native team-binding
+profiles CLOSED; full M23/67-unit qualification remains open.
+
+- Native team bindings: d1f72f54441c, reviewed 15-path patch38931363;
+  Required40425971899 SUCCESS. Actual public origin/subdir/all15files match.
+  Genuine public consumer f2782368a640, reviewed 5-path patch87842139;
+  Required40427428649 SUCCESS. Original95959 PG/race18.411s, vet53622 and
+  final tidy80e10e/verify57157 exit0. Four obsolete sums removed, no changed
+  selected inputs. Worker-owned PG54036/PID39449 and Zcqxw0 cohort removed.
+- Permission HTTP: b1f1fed03d25, reviewed 8-path patchc24989bb;
+  Required40426233119 SUCCESS. Actual public origin/subdir/all8files match.
+  RED63906; final99413 focused/full race1.517s/18.418s, vet0 and bounded fuzz
+  5seeds/8exec2.598s; metadata94587 exit0.
+- Reference: aaf3669b112e, reviewed 12-path patch5868c6c6;
+  Required40427711922 SUCCESS. Native root4f996/adapter0d454/HTTPb1f1fed
+  public pins, no replacements. Facade RED45295/d2ee3f; HTTP RED34605.
+  First95207 failed fixture route count and an invalid expectation of revoke
+  recovery after role retirement; actual native readDynamicRole forbids it.
+  Corrected tests retain pre-deletion fresh/reconstructed recovery and explicit
+  terminal denial; native policy unchanged. Source91146 PG/race14.901s;
+  final54282 ordinary Reference/cmd race5.283s/6.989s, tagged vet0, six retained
+  team/role PG profiles39.357s. Metadata24247 tidy silent/modules verified0
+  after six obsolete sums removed; runtime inputs unchanged.
+- Public Reference v0.0.0-20261027003833-aaf3669b112e: exact origin/subdir/
+  all12files match; Sum ERcFIb5AsheqV6nDY2bkq6xdnjKq9p2Ydcd4pAS02ss=,
+  GoModSum PTN6WLHVNkQfc0bWx2TXHjEDrW0TiPsOq2EaelEcVbM=. Actual downloaded
+  module59794 fresh5.32s/populated8.04s, PG/HTTPS/race PASS15.008s, exit0.
+  Primary-owned PG54037/PID58320 stopped; cohort removal48010 exit0. Exact
+  directory, listener and PID absent; all owned primary caches removed.
+  Next finite profile is guarded team-binding Reference SDK composition;
+  canonical catalogs have no binding mutation HTTP rows. No new lane active yet.
+
+2026-10-27 00:07 UTC: next primarypermissionleaf in development, NOTdelivered.
+63906/964efd RED missingConfig.PermissionChecker/FeatureConfig.PermissionCheck;
+27309/8d5995 focusedraceGREEN1.285s. Currentlocal newpermission_check.go/test
+anddecode/feature/handler/wire wiring implements exactquery/nativeAllowDeny/
+sameepoch/finalobservationfence; negative/wire/fuzz/docs/review andReference
+binding/permissionjourney remain. No sourcequalifiedorwholeprofileclosed claim.
+Taskowned /tmp/identity-permission-http.ldHP6i/go.sh suppliesGo1.27.2 andits
+ownbuild/modules/tmp; noPG. Goheavyslotreturnedworker after27309terminal.
+Workerfirstteamnative88465permission/retry proofPG/race2.325s afteractual
+missingexistingidentity.request_key_namespaces fixture correction; broadnative
+failure/authority/migration andpublicconsumer stillpending, no productionfix
+forfixtureabsence. Workerowns /tmp/team-role-binding.Zcqxw0/PG54036.
+
+Frozen primary next M23 directbinding/permission consumer: primaryowns
+go-identity http/organization + reference +pins/Git; consume actualpublicroot
+4f996 (additivecurrentmain), native0d454/genuineconsumer90c71 (reviewed/main/
+CIgreen, PG/race17.558s), leaf76d8/Referenceda320 (publicPG/race12.475s).
+Complete real signup/session -> guardedReference original-keydirectAssign ->
+canonicaloptinGET /v1/organization/permission-check memberallow -> natural
+exactbindingRevoke -> explicitdeny -> reassignment/readmissionfences -> actual
+fresh/reconstructedoriginalhistory/logout, fresh/populatedPG. NativeGetDynamicRole
+TargetUserID suppliesexactbinding/member/role/orgepoch discovery. Currentcatalog
+containspermission-check but NO role.assign/revoke HTTProws: keepbinding
+mutations supportednativeSDK-only here, do notinventroutes orcallercustody.
+HTTPfiniteexact-resourceprofile: closedorganizationID/organizationVersion/action/
+resourceType/resourceID, trustedhost/sessiontenantandselfactor, SafeRate, no
+body/key/actor/tenant/arbitrarycontextoverrides; explicitallow/denyonly atrequested
+currentnativepolicyepoch, noimplicitstaticroleaccess/renewedfreshness/cachedallow.
+Use existingnativecatalog/evaluator andoriginalrecovery/effects, not another
+authorization/receiptengine. GuardReference Assign/Revoke; appenddirect-revoke
+lookup underindependentnativehistorywithoutreorderingpublishedrole/teamsteps.
+Native20secobservation/postcallbackfences/unknownnoredispatch remainmandatory.
+FocusedTDD/race/vet/hostilequeryfuzz, body/responseOpenAPIchecks, actualpublic
+ReferencePG/HTTPS journey andrequiredfailure/rollback/currentauthoritycases,
+oneindependentcompletefinaldiff percoherentmodule, main/CI/publicproof/cleanup.
+No team-bindingfacades/HTTP, active-role/team, conditions/customcontexts,
+wildcards/custommanagement/wholeM23/67unitclaim; retainedgoalsstillrequiretheir
+eventualseparateprofiles. Workerowns teamnativeconcurrently; Goheavyworkeruntil
+slotreturned, primarymaycodeonlyaftertestslotandactualRED.
+
 2026-10-26 23:55 UTC: primary role CRUD backend profile CLOSED.
 Leaf76d8e929a744/Reference da32006d86b2 reviewed/main-pushed/exactRequiredgreen
 (40421089438/40422538215). Complete14pathfd99ad17 role_crud_reference_review

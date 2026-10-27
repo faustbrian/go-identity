@@ -1,10 +1,27 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-26 23:55 UTC
+## Current TL;DR — 2026-10-27 00:40 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
   closed.** The new role and team profiles are usable deliveries within M23, not another
   whole row or a newly qualified unit out of 67.
+- **New delivered prerequisites:** native team-role assignment/revocation
+  `d1f72f5` and member permission-check HTTP `b1f1fed` are independently
+  reviewed, main-pushed and CI-green. Their downloaded public modules match
+  the reviewed source. Neither alone closes a backend profile or whole row.
+- **New backend profile closed:** real signup/session -> guarded
+  direct role assignment -> HTTP permission allow -> exact revocation -> HTTP
+  deny -> fresh/reconstructed original recovery, terminal-role denial and
+  logout. Reference `aaf3669` is independently reviewed, main-pushed and CI-green.
+  The downloaded public Reference passes fresh/populated PostgreSQL/HTTPS/race
+  (15.008s); affected retained team/role profiles pass (39.357s), alongside
+  ordinary race tests and tagged vet. This closes the selected backend profile,
+  not whole M23 or another fully qualified unit.
+- **Parallel native team-binding profile closed:** genuine signup/session ->
+  team grant -> actual permissions -> revocation -> deny, reconstructed recovery,
+  readmission/terminal-team isolation, rollback, contention, lost acknowledgements
+  and logout. Public consumer `f278236` is independently reviewed, main-pushed
+  and CI-green; PostgreSQL/race18.411s. Its temporary database/cache are removed.
 - **New complete profile: role-management backend.** Real signup sessions
   create/read/list/update/delete custom roles through opt-in HTTP. Actual direct
   permissions, direct revocation, team-only inheritance, deny precedence,
@@ -37,11 +54,11 @@
 - **Still open:** dynamic roles, remaining identity/federation/provisioning and
   shared-issuer profiles, plus whole-unit qualification. Existing evidence is
   retained; no baseline restart or Tools programme is underway.
-- **Current:** primary next composes direct role-binding HTTP/backend over the
-  proven native owner. The independent worker is adding team-role assignment/
-  revocation; its new typed prerequisite `4f99657` is reviewed and main-pushed,
-  and CI-green. Neither needs another baseline restart.
-  No baseline restart, Tools programme or user decision is needed.
+- **Next:** compose the delivered team-binding owner into guarded Reference SDK
+  calls and the existing permission HTTP journey. Binding mutations stay native
+  SDK-only: the canonical catalog has no assignment/revocation HTTP rows, and
+  none are invented here. No baseline restart, Tools programme or user decision
+  is needed.
 
 - **New native direct-binding profile closed:** real password-issued sessions
   assign roles, gain actual permissions, revoke exact bindings and recover only
