@@ -30,7 +30,7 @@ func (s *SessionService) CacheAdmission(result GetResult, maximumAge time.Durati
 	if s == nil || issuerNil(s.config.Clock) || maximumAge < time.Millisecond || maximumAge > 5*time.Minute {
 		return out, ErrInvalidInput
 	}
-	if result.validity == nil || result.validity.owner != s {
+	if result.validity == nil || result.validity.owner != s || !s.admitsTransport(result.Session, result.validity.transport) {
 		return out, ErrUnauthenticated
 	}
 	now := s.config.Clock.Now()
@@ -79,7 +79,7 @@ func (s *SessionService) GetCached(ctx context.Context, request GetRequest, cach
 		}
 		if p != nil && p.owner == s && p.transport == request.Credential.kind && entry.ValidateAt(now) == nil {
 			spec, e := entry.Session.Bindings()
-			if e == nil && spec.TenantID == request.TenantID && spec.Audience == s.config.Audience && s.admitsMethod(spec.Authentication.Kind) {
+			if e == nil && spec.TenantID == request.TenantID && spec.Audience == s.config.Audience && s.admitsMethod(spec.Authentication.Kind) && s.admitsTransport(entry.Session, request.Credential.kind) {
 				matched := 0
 				for _, key := range s.config.LookupKeys {
 					if key.state != nil && key.state.version == spec.Lookup.KeyVersion {

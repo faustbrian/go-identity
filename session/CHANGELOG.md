@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an explicit organization-bearer reader profile without changing existing
+  constructors or unselected cookie behavior. Selected cookie/CSRF records deny
+  in fresh and cached admission; encrypted cache context binds the restriction.
+  Current native organization/member authority and original expiry remain required.
+
 - Add neutral exact-session active-organization set/clear command construction.
   Preserve authentication, credential continuation and original lifetime while
   advancing only session/selection authority; clear obsolete CSRF state. This

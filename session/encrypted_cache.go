@@ -333,6 +333,9 @@ func (c *EncryptedCacheCodec) additionalData(tenant identity.TenantID) (envelope
 	if c.service.cacheProfile != "" {
 		fields["admission-profile"] = c.service.cacheProfile
 	}
+	if c.service.organizationBearerOnly {
+		fields["organization-transport"] = "bearer-only-v1"
+	}
 	return envelope.NewContext(fields)
 }
 func cacheCryptoError(ctx context.Context, e error) error {

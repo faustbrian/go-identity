@@ -1,5 +1,20 @@
 # Session
 
+## Explicit organization-bearer admission
+
+`NewOrganizationBearerProfileSessionService` retains the selected-method reader
+contract, but organization-bearing records require bearer transport and cannot
+retain cookie-bound CSRF state. Ordinary unselected cookie/bearer admission and
+existing constructors are unchanged. Use this profile when the native owner
+has not composed selection with browser-state replacement.
+
+The restriction applies to fresh, same-process cached and encrypted-cache
+admission. Encrypted context binds it, so an older permissive reader's positive
+cannot cross into the restricted profile. Matching cached evidence keeps its
+original exclusive deadline; copying, retries and refresh attempts cannot extend
+it. The owned reader still must enforce every current organization/member and
+primary authority. This factory does not issue, select or grant an organization.
+
 ## Exact-session organization selection intent
 
 `NewOrganizationSelectionCommand` freezes one self-session set/clear CAS for

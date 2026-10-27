@@ -133,11 +133,12 @@ type ServiceConfig struct {
 // goroutines, transactions or authorization engine. Get is authentication only;
 // callers must separately authorize each protected action with current policy.
 type SessionService struct {
-	reader       SessionReader
-	config       ServiceConfig
-	method       AuthenticationKind
-	methods      uint8
-	cacheProfile string
+	reader                 SessionReader
+	config                 ServiceConfig
+	method                 AuthenticationKind
+	methods                uint8
+	cacheProfile           string
+	organizationBearerOnly bool
 }
 
 // NewSelectedProfileSessionService freezes an explicit nonempty subset of
@@ -165,6 +166,41 @@ func NewSelectedProfileSessionService(reader SessionReader, config ServiceConfig
 	}
 	s.methods, s.cacheProfile = selected, strings.Clone(cacheProfile)
 	return s, nil
+}
+
+// NewOrganizationBearerProfileSessionService selects the same explicit method
+// set as NewSelectedProfileSessionService, with organization-bearing records
+// restricted to bearer transport and no cookie-bound CSRF state. Unselected
+// records retain existing cookie/bearer behavior. The owned reader still checks
+// every applicable current authority; this restriction grants no membership or
+// permission and does not enable selection, issuance or browser replacement.
+//
+// The restriction is immutable and authenticated in encrypted-cache context.
+// A permissive profile's cache cannot bypass it, and promotion cannot renew
+// original freshness. Existing constructors remain unchanged. Construction
+// performs no IO; dependencies remain borrowed with the usual concurrency rules.
+func NewOrganizationBearerProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string) (*SessionService, error) {
+	s, err := NewSelectedProfileSessionService(reader, config, methods, cacheProfile)
+	if err != nil {
+		return nil, err
+	}
+	s.organizationBearerOnly = true
+	return s, nil
+}
+
+func (s *SessionService) admitsTransport(record Session, kind CredentialKind) bool {
+	if !s.organizationBearerOnly {
+		return true
+	}
+	spec, err := record.Bindings()
+	if err != nil {
+		return false
+	}
+	vector, err := spec.Authority.Bindings()
+	if err != nil {
+		return false
+	}
+	return !vector.Organization.Present || kind == CredentialBearer && record.CSRFState().state == nil
 }
 
 func sessionMethodBit(kind AuthenticationKind) uint8 {
@@ -366,7 +402,7 @@ func (s *SessionService) Get(ctx context.Context, request GetRequest) (out GetRe
 	if err != nil {
 		return GetResult{}, ErrUnavailable
 	}
-	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || !s.admitsMethod(spec.Authentication.Kind) {
+	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || !s.admitsMethod(spec.Authentication.Kind) || !s.admitsTransport(observed.Session, request.Credential.kind) {
 		return GetResult{}, nil
 	}
 	matched := 0
