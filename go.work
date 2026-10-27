@@ -4,6 +4,7 @@ use (
 	.
 	./anonymous
 	./anonymous/postgres
+	./apikey
 	./delivery
 	./delivery/postgres
 	./email
