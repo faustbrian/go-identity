@@ -42,7 +42,7 @@
         "package_selection": {"github.com/faustbrian/go-identity/apikey":"Experimental modern user-key contracts; native current-owner, persistence and consumer composition remain required."},
         "lifecycle_status": "active",
         "maturity": "experimental",
-        "construction_styles": ["new-config", "validated-value", "plain-function"],
+        "construction_styles": ["new-config", "plain-function", "validated-value"],
         "lifecycle_styles": ["stateless"],
         "ownership": {"configuration":"caller","mutable_inputs":["borrow","copy"],"runtime_resources":"none","background_work":"none"},
         "optional_owned_dependencies": [],
