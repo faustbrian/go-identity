@@ -43,6 +43,10 @@ type RevokeOneExecutorConfig struct {
 	// MFAPasskey retains independent RP mapping and confirmed TOTP authority
 	// for both caller and target. The identical profile must read Sessions.
 	MFAPasskey *MFAPasskeySessionAdmission
+	// OrganizationPassword selects the same owned current organization/member
+	// fence as Sessions for single-factor password bearer callers/targets.
+	// Nil retains rejection of selected sessions; cookie/MFA profiles deny.
+	OrganizationPassword *OrganizationPasswordSessionAdmission
 }
 
 // RevokeOneExecutor owns kernel/native/audit/outbox composition. It accepts no
@@ -122,6 +126,13 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 			return nil, session.ErrInvalidInput
 		}
 		owned.native.revokeMFAPasskey = &mfaPasskeySessionSelection{freezePasskeyProfile(p.Profile), p.Authority}
+	}
+	if p := c.OrganizationPassword; p != nil {
+		if !p.valid() || p.Profile != IdentifierAdmissionConfig(c.Execution.Profile) {
+			return nil, session.ErrInvalidInput
+		}
+		copied := *p
+		owned.native.revokeOrganizationPassword = &copied
 	}
 	return &RevokeOneExecutor{owned, c.Sessions}, nil
 }

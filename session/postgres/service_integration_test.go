@@ -179,6 +179,7 @@ func testNativeSessionAuthentication(t *testing.T, ctx context.Context, pool *da
 	if _, err = pool.Raw().Exec(ctx, `UPDATE session_store.sessions SET record=$1 WHERE tenant_id='session-read'`, payload); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("selected organization owner", func(t *testing.T) { testOrganizationPasswordReader(t, ctx, pool, config, original, request, now) })
 	// Four trusted samples: core call start, native read start, native finish,
 	// core finish. A delayed response must retain the original source window.
 	delayedConfig := config

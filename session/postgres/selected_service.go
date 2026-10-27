@@ -24,6 +24,9 @@ type SelectedSessionAdmissionConfig struct {
 	// MFAPasskey independently selects original passkey plus confirmed TOTP.
 	// It cannot fall back to the known-empty Passkey selection or password MFA.
 	MFAPasskey *MFAPasskeySessionAdmission
+	// OrganizationPassword retains current organization/member authority for
+	// selected single-factor password sessions. Nil continues to reject them.
+	OrganizationPassword *OrganizationPasswordSessionAdmission
 }
 
 // SelectedSessionServiceConfig retains the native repository and validation
@@ -36,6 +39,20 @@ type SelectedSessionServiceConfig struct {
 }
 
 func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.AuthenticationKind, string, error) {
+	if p := c.OrganizationPassword; p != nil {
+		if !p.valid() || c.SingleFactor.Verified != nil && *c.SingleFactor.Verified != p.Profile {
+			return nil, "", session.ErrInvalidInput
+		}
+		prior := c
+		prior.OrganizationPassword = nil
+		profile := p.Profile
+		prior.SingleFactor.Verified = &profile
+		methods, previous, err := selectedSessionAdmission(prior)
+		if err != nil {
+			return nil, "", err
+		}
+		return methods, nativeAdmissionCacheProfile("native-selected-organization-password-v1", previous), nil
+	}
 	if c.MFAPasskey != nil {
 		p := c.MFAPasskey.Profile
 		if !p.valid() || nilIssueDependency(c.MFAPasskey.Authority) || c.Passkey != nil && c.Passkey.Profile != p {
@@ -207,7 +224,7 @@ func NewSelectedSessionService(pool *database.Pool, c SelectedSessionServiceConf
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, c.Admission.MFAPasskey, methods, profile)
+	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, c.Admission.MFAPasskey, c.Admission.OrganizationPassword, methods, profile)
 }
 
 // Format redacts deployment, profile and key configuration.

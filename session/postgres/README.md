@@ -1,5 +1,40 @@
 # PostgreSQL session storage
 
+## Organization-selected password sessions
+
+Selection is a logical organization operation, not a second session command.
+`OrganizationSelectionFields` freezes the exact original session, explicit
+organization/clear and exclusive admission deadline. Its inverse reconstructs
+structure only, never bearer custody, permission or renewed authority.
+
+Install `OrganizationSelectionMigrationSource` at an unused permanent version
+after the session history. `NewOrganizationSelectionEffect` lets the native
+organization participant enlist one exact session CAS in its original Work:
+authenticate the bearer, call `Lock` before organization/member locks, require
+the target's actual active membership and policy, call `Apply`, then call `Check`
+from its final commit phase. Declare `session.organization_changed.v1` with the
+exact source/successor session versions and required protected
+`identity.organization.change_active` audit. The existing coordinator owns the
+sole command, transaction and required audit/outbox. Recovery delegates the
+session participant's vote to `Recover`; it never replays the mutation.
+
+The organization PostgreSQL owner must supply `OrganizationSessionAuthority`:
+derive a canonical tenant-plus-organization key, use its aggregate authority
+epoch (not a member epoch), require current active membership, and fence both in
+the same Work. Configure identical `OrganizationPasswordSessionAdmission` in
+`SelectedSessionAdmissionConfig.OrganizationPassword` and
+`RevokeOneExecutorConfig.OrganizationPassword`. Ordinary readers remain opted
+out. Selected reads retain every original primary dimension and the earliest
+contributing evidence deadline, at most20 seconds; removal/archive, changed
+epochs, missing authority and expiry deny without stale or unselected fallback.
+
+Only single-factor password/bearer selection is enabled by this adapter profile.
+Cookie, MFA and passkey selection require their own explicit owner composition;
+they are not downgraded. A selector changes only one session version/vector;
+token, family, original authentication, activity and expiry remain unchanged.
+This module supplies the session-owned effect and authority seam, not a complete
+organization selector endpoint or an application-written membership store.
+
 ## Passkey primary with confirmed TOTP
 
 `MFAPasskeySessionAdmission` explicitly selects RP mapping plus the MFA owner's

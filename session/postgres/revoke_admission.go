@@ -12,13 +12,14 @@ import (
 )
 
 type revokeRecordAuthority struct {
-	directory  kernel.DirectoryAuthorityAdmission
-	credential *kernel.CredentialAdmission
-	identifier *kernel.VerifiedIdentifierAdmission
-	policy     kernel.UserAuthorizationAdmission
-	factor     *session.MFAAuthenticationSpec
-	passkey    bool
-	mfaPasskey bool
+	directory    kernel.DirectoryAuthorityAdmission
+	credential   *kernel.CredentialAdmission
+	identifier   *kernel.VerifiedIdentifierAdmission
+	policy       kernel.UserAuthorizationAdmission
+	factor       *session.MFAAuthenticationSpec
+	passkey      bool
+	mfaPasskey   bool
+	organization bool
 }
 
 func copySingleFactorAdmission(c SingleFactorSessionAdmissionConfig) SingleFactorSessionAdmissionConfig {
@@ -48,6 +49,19 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 	}
 	if s.Authentication.Kind == session.AuthenticationVerified {
 		vector, _ := s.Authority.Bindings()
+		if vector.Organization.Present {
+			if r.revokeOrganizationPassword == nil {
+				return deny()
+			}
+			if _, err := record.CSRFState().Bindings(); err == nil {
+				return deny()
+			}
+			directory, credential, policy, err := OriginalOrganizationPasswordSessionAdmission(r.revokeOrganizationPassword.Profile, record, b)
+			if err != nil {
+				return deny()
+			}
+			return revokeRecordAuthority{directory: directory, credential: &credential, policy: policy, organization: true}, nil
+		}
 		if s.Authentication.Proof.Method == "passkey" || vector.Passkey.Present {
 			if record.MFAAuthentication() != (session.MFAAuthentication{}) {
 				if r.revokeMFAPasskey == nil {
@@ -149,6 +163,23 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 
 func (r *Repository) requireRevokeRecordAuthority(ctx context.Context, w kernel.Work, record session.Session, b identity.CommandBinding) error {
 	return r.requireRevokeRecordAuthorityFor(ctx, w, r, record, b)
+}
+
+// Called only after the family/session locks, retaining the selection owner's
+// lock order rather than acquiring organization locks during key derivation.
+func (r *Repository) requireRevokeOrganization(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, original session.Session) error {
+	s, err := original.Bindings()
+	if err != nil {
+		return err
+	}
+	v, _ := s.Authority.Bindings()
+	if !v.Organization.Present {
+		return nil
+	}
+	if r.revokeOrganizationPassword == nil {
+		return identity.ForbiddenError{}
+	}
+	return r.revokeOrganizationPassword.Authority.RequireOrganizationSession(ctx, w, owner, original)
 }
 
 func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session, b identity.CommandBinding) error {

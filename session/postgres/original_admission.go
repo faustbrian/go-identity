@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	authentication "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -36,6 +37,36 @@ func OriginalSessionAdmission(profile IdentifierAdmissionConfig, original sessio
 		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
 	}
 	return sessionAdmissionBindings(profile, original, binding, s.SessionID, s.Version)
+}
+
+// OriginalOrganizationPasswordSessionAdmission derives the exact original
+// directory, password and user-policy expectations without dropping a selected
+// organization. Both selected and explicitly unselected single-factor password
+// records are supported; MFA, passkey and other authentication methods deny.
+// This does not broaden OriginalSessionAdmission or prove organization authority.
+//
+// The caller must independently authenticate bearer possession, fence this same
+// session/family and all returned owner expectations, and require the original
+// organization/membership through its native owner in the same protected Work.
+// Organization removal or archive must deny, not erase the original dimension.
+// No IO, permission decision, mutation or renewal of freshness occurs. Invalid
+// inputs return zero expectations and redacted Forbidden. Immutable concurrent
+// reads are safe; the trusted profile must not be mutated concurrently.
+func OriginalOrganizationPasswordSessionAdmission(profile IdentifierAdmissionConfig, original session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	s, err := original.Bindings()
+	if err != nil || profile.AuthenticationMethod != "password" || profile.CredentialKind != identity.CredentialPassword || profile.CredentialOwner != "identity/password" || original.MFAAuthentication() != (session.MFAAuthentication{}) {
+		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+	}
+	vector, err := s.Authority.Bindings()
+	if err != nil {
+		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+	}
+	if vector.Organization.Present {
+		if _, err := original.CSRFState().Bindings(); err == nil {
+			return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+		}
+	}
+	return credentialSessionAdmissionBindingsWithOrganization(profile, original, binding, s.SessionID, s.Version, session.OptionalAuthorityBinding{}, session.OptionalAuthorityBinding{}, vector.Organization, authentication.AssuranceSingleFactor)
 }
 
 // OriginalMFAPasswordSessionAdmission derives the exact original password and

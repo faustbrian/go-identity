@@ -579,6 +579,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 			testNativeSingleRevocation(t, ctx, pool, executor, makeIssued)
 			testNativeSetRevocation(t, ctx, pool, executor, makeIssued)
 			t.Run("OIDC exact source owner", func(t *testing.T) { testOIDCEndSessionEffect(t, ctx, pool, ownedConfig, executor, makeIssued) })
+			t.Run("organization exact session owner", func(t *testing.T) { testOrganizationSelectionEffect(t, ctx, pool, ownedConfig, makeIssued) })
 		})
 		t.Run("core issuer delivers only after native commit", func(t *testing.T) {
 			candidate := prepare(t)

@@ -101,22 +101,24 @@ func nativeAdmissionCacheProfile(fields ...string) string {
 
 // Kept private: consumers configure the factory, not arbitrary owner readers.
 type primarySessionReader struct {
-	native            *Repository
-	domain            *kernel.Repository
-	policy            *authority.AuthorityStore
-	profile           IdentifierAdmissionConfig
-	clock             session.IssuerClock
-	otp               *OTPAdmissionConfig
-	magicLink         *MagicLinkAdmissionConfig
-	mfaMagicLink      *MagicLinkAdmissionConfig
-	mfaFactors        *mfapg.TOTPSessionFactorReader
-	mfaOTPFactors     *mfapg.OTPSessionFactorReader
-	mfaPassword       bool
-	mfaPasswordReader *primarySessionReader
-	passkey           *passkeySessionSelection
-	passkeyReader     *primarySessionReader
-	mfaPasskey        *mfaPasskeySessionSelection
-	mfaPasskeyReader  *primarySessionReader
+	native                     *Repository
+	domain                     *kernel.Repository
+	policy                     *authority.AuthorityStore
+	profile                    IdentifierAdmissionConfig
+	clock                      session.IssuerClock
+	otp                        *OTPAdmissionConfig
+	magicLink                  *MagicLinkAdmissionConfig
+	mfaMagicLink               *MagicLinkAdmissionConfig
+	mfaFactors                 *mfapg.TOTPSessionFactorReader
+	mfaOTPFactors              *mfapg.OTPSessionFactorReader
+	mfaPassword                bool
+	mfaPasswordReader          *primarySessionReader
+	passkey                    *passkeySessionSelection
+	passkeyReader              *primarySessionReader
+	mfaPasskey                 *mfaPasskeySessionSelection
+	mfaPasskeyReader           *primarySessionReader
+	organizationPassword       *OrganizationPasswordSessionAdmission
+	organizationPasswordReader *primarySessionReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -164,6 +166,9 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	spec, err := stored.Session.Bindings()
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnavailable
+	}
+	if r.organizationPasswordReader != nil && spec.Authentication.Kind == session.AuthenticationVerified && spec.Authentication.Proof.Method == "password" && stored.Session.MFAAuthentication() == (session.MFAAuthentication{}) {
+		return r.organizationPasswordReader.observeCredential(bounded, stored, start)
 	}
 	// MFA is an additional immutable dimension, not another authentication
 	// kind. Dispatch it first: no single-factor reader may erase that dimension,
@@ -231,6 +236,9 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	if r.mfaPasskey != nil {
 		directory, credential, policy, err = passkeyMFASessionAdmission(r.mfaPasskey.profile, stored.Session, binding)
 	}
+	if r.organizationPassword != nil {
+		directory, credential, policy, err = OriginalOrganizationPasswordSessionAdmission(r.organizationPassword.Profile, stored.Session, binding)
+	}
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
@@ -259,6 +267,14 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	var factorVersion uint64
 	var passkeyObserved PasskeySessionAuthorityObservation
 	var mfaPasskeyObserved MFAPasskeySessionAuthorityObservation
+	var organizationObserved OrganizationSessionAuthorityObservation
+	originalVector, _ := spec.Authority.Bindings()
+	if r.organizationPassword != nil && originalVector.Organization.Present {
+		organizationObserved, err = r.organizationPassword.Authority.ObserveOrganizationSession(bounded, stored.Session)
+		if err != nil {
+			return session.SessionObservation{}, observationError(err)
+		}
+	}
 	if r.passkey != nil {
 		passkeyObserved, err = r.passkey.authority.ObservePasskeySession(bounded, r.passkey.profile.RPNamespace, stored.Session)
 		if err != nil {
@@ -323,6 +339,17 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 		return session.SessionObservation{}, session.ErrUnavailable
 	}
 	until := start.Add(20 * time.Second)
+	if r.organizationPassword != nil && originalVector.Organization.Present {
+		start, until, err = organizationSessionObservationBounds(stored.Session, organizationObserved, start, now)
+		if err != nil {
+			return session.SessionObservation{}, err
+		}
+		vector.Organization.Binding.Version = organizationObserved.Authority.Version
+		current, err = session.NewAuthoritySnapshot(vector)
+		if err != nil {
+			return session.SessionObservation{}, session.ErrUnavailable
+		}
+	}
 	if r.passkey != nil {
 		var err error
 		start, until, err = passkeyObservationBounds(passkeyObserved, start, now)

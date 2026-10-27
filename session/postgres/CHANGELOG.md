@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add explicit single-factor password organization authority for selected native
+  session reads and bearer revocation. Preserve every original primary owner
+  and the earliest non-renewable evidence deadline; legacy readers still deny
+  selected records. Supply the owned organization's current membership fence.
+- Enlist exact-session organization selection/clear CAS inside the organization
+  participant's existing transaction, preserving authentication, family, token
+  and lifetime. Install `OrganizationSelectionMigrationSource` before opting
+  in. Required audit/outbox, target permission, original bearer authentication
+  and public workflow composition remain the organization's responsibility;
+  cookies, MFA and passkey selection are not enabled by this profile.
+
 - Expose original completed-passkey/TOTP session authority for protected native
   credential management without adopting a new factor generation or weakening
   the ordinary known-empty profile. Native callers retain live factor, mapping,

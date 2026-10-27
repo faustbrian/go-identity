@@ -77,6 +77,12 @@ func (r *Repository) applySingleSessionRevocation(ctx context.Context, w kernel.
 	if err = r.requireRevokeRecordAuthorityFor(bounded, w, owner, original, b); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	vector, _ := spec.Authority.Bindings()
+	if vector.Organization.Present {
+		if err := r.requireIssueFamily(bounded, w, spec, true); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	// Acquire the mutation lock before the shared record admission, so two
 	// revokers cannot both hold SHARE then deadlock upgrading the same target.
 	rows, err := w.Query(bounded, `SELECT record::text FROM `+r.schema+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND version=$4::numeric AND state='active' FOR UPDATE`, string(b.TenantID), string(b.UserID), b.RecordID, strconv.FormatUint(spec.Version, 10))
@@ -93,6 +99,9 @@ func (r *Repository) applySingleSessionRevocation(ctx context.Context, w kernel.
 	// Family share locks prevent concurrent family revocation from crossing the
 	// transition; no family or sibling version is advanced by this operation.
 	if err = RequireSession(bounded, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, original); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	if err := r.requireRevokeOrganization(bounded, w, owner, original); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	payload, _, err := encodeRecord(original)

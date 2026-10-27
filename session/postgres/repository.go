@@ -45,20 +45,21 @@ type StoredSession struct {
 // issuance checks current owners and uses the protected proof-bearing profile;
 // complete bearer delivery and rotation remain pending.
 type Repository struct {
-	pool                *database.Pool
-	schema              string
-	maximumDuration     time.Duration
-	identifierAdmission *IdentifierAdmissionConfig
-	privacyAdmission    *PrivacyExportAdmissionConfig
-	issueAdmission      *IssueAdmissionConfig
-	cleanupBatch        uint32
-	preAuthIssue        *preAuthIssueProfile
-	cookieRevoke        *revokeCSRFInput
-	revokeAdmission     *SingleFactorSessionAdmissionConfig
-	revokeMFAMagicLink  *MagicLinkAdmissionConfig
-	revokeMFAPassword   *IdentifierAdmissionConfig
-	revokePasskey       *passkeySessionSelection
-	revokeMFAPasskey    *mfaPasskeySessionSelection
+	pool                       *database.Pool
+	schema                     string
+	maximumDuration            time.Duration
+	identifierAdmission        *IdentifierAdmissionConfig
+	privacyAdmission           *PrivacyExportAdmissionConfig
+	issueAdmission             *IssueAdmissionConfig
+	cleanupBatch               uint32
+	preAuthIssue               *preAuthIssueProfile
+	cookieRevoke               *revokeCSRFInput
+	revokeAdmission            *SingleFactorSessionAdmissionConfig
+	revokeMFAMagicLink         *MagicLinkAdmissionConfig
+	revokeMFAPassword          *IdentifierAdmissionConfig
+	revokePasskey              *passkeySessionSelection
+	revokeMFAPasskey           *mfaPasskeySessionSelection
+	revokeOrganizationPassword *OrganizationPasswordSessionAdmission
 }
 
 // NewRepository validates configuration without IO. The database must already

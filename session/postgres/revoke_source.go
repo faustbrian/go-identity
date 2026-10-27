@@ -182,6 +182,15 @@ func (r *Repository) requireRevokeSource(ctx context.Context, w kernel.Work, b i
 		return err
 	}
 	destination, _ := target.Bindings()
+	sourceVector, _ := spec.Authority.Bindings()
+	targetVector, _ := destination.Authority.Bindings()
+	if sourceVector.Organization.Present || targetVector.Organization.Present {
+		for _, original := range []session.SessionSpec{spec, destination} {
+			if err := r.requireIssueFamily(ctx, w, original, true); err != nil {
+				return err
+			}
+		}
+	}
 	// Lock both session rows in one deterministic order before any shared source
 	// lock. Cross-revocation must not hold A SHARE while waiting for B UPDATE.
 	rows, err := w.Query(ctx, `SELECT session_id FROM `+r.schema+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND session_id IN ($3,$4) ORDER BY session_id FOR UPDATE`, string(b.TenantID), string(b.UserID), spec.SessionID, destination.SessionID)
@@ -211,6 +220,9 @@ func (r *Repository) requireRevokeSource(ctx context.Context, w kernel.Work, b i
 		return identity.ForbiddenError{}
 	}
 	if err = RequireSession(ctx, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, source.record); err != nil {
+		return err
+	}
+	if err := r.requireRevokeOrganization(ctx, w, r, source.record); err != nil {
 		return err
 	}
 	now, err := w.DatabaseTime(ctx)
