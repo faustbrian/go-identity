@@ -47,5 +47,12 @@ func (s StoreSet) organizationRoleMigrationCatalog(ctx context.Context, catalog 
 		}
 		catalog = append(catalog, migrationHistory{namespace: "identity_organization_direct_bindings", history: steps, owners: map[migrations.Version]ModuleID{1: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", columns: []string{"command_effects.revoke_role_id", "command_effects.revoke_role_version", "command_effects.revoke_member_version", "command_effects.revoke_binding_version"}, tables: []string{"organization_repeat_role_revoke"}, constraints: []string{"command_effects.organization_role_binding_revoke_scope"}}}})
 	}
+	if s.state.features.organization.teamRoleOperations {
+		steps, err := (organizationpg.TeamRoleBindingRevokeOperationLookupMigrationSource{Version: 1}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_organization_team_bindings", history: steps, owners: map[migrations.Version]ModuleID{1: "organization/postgres"}, guards: []migrationGuard{{version: 1, schema: "organization", columns: []string{"command_effects.revoke_team_role_id", "command_effects.revoke_team_role_version", "command_effects.revoke_team_id", "command_effects.revoke_team_version", "command_effects.revoke_team_binding_version"}, tables: []string{"organization_repeat_team_role_revoke"}, constraints: []string{"command_effects.organization_team_role_revoke_scope"}}}})
+	}
 	return catalog, nil
 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose guarded native team-role assignment and exact revocation behind
+  `Organization.TeamRoleBindings`, independently of direct binding operations.
+  A separate native lookup history preserves installed role/team/direct prefixes.
+  Genuine member permission checks retain original-key recovery, readmission
+  fences and terminal team identity; no binding mutation HTTP is introduced.
+
 - Compose guarded direct role assignment/revocation behind explicit
   `Organization.DirectRoleBindings`, with independent native lookup history
   that does not prevent later team-role upgrades. Separately opt into bearer

@@ -52,6 +52,10 @@ type OrganizationConfiguration struct {
 	// its independent optional migration history. Core.DynamicRoles is required;
 	// neither team bindings nor HTTP binding mutations are enabled by this flag.
 	DirectRoleBindings bool
+	// TeamRoleBindings selects native keyed team assignment/natural revocation
+	// and its separate lookup history. Core.DynamicRoles.TeamBindingsVersion 1
+	// is required. Direct binding operations and HTTP mutations stay independent.
+	TeamRoleBindings bool
 }
 
 // OrganizationLifecycleConfiguration selects the local native archive/restore
@@ -154,6 +158,7 @@ type organizationState struct {
 	dynamicRoles       bool
 	teamRoleBindings   bool
 	directRoleBindings bool
+	teamRoleOperations bool
 }
 
 func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, queue *deliverypg.EnqueueService, proofs *passwordVerificationState) (*organizationState, error) {
@@ -163,6 +168,9 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	n := *c.Organization
 	invalid := identity.InvalidInputError{Field: "reference_organization"}
 	if n.DirectRoleBindings && n.Core.DynamicRoles.Version == 0 {
+		return nil, invalid
+	}
+	if n.TeamRoleBindings && n.Core.DynamicRoles.TeamBindingsVersion != 1 {
 		return nil, invalid
 	}
 	if c.OTP == nil || c.PasswordSignin == nil || sessions == nil || d.PostgreSQL == nil || c.Delivery == nil || queue == nil || n.Core.Clock != nil || n.Core.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || n.Counters.PolicyVersion != n.Core.PolicyVersion || n.Counters.Schema != c.Velocity.Schema || n.Counters.CommandCounters == nil || !n.Counters.EnforceLockouts || n.Repository.MaximumDuration > n.Core.MaximumDuration || n.Core.Teams.Validate() != nil || n.Core.Domains.MaximumClaims != 0 || n.Core.DynamicRoles.Validate() != nil || n.Core.DynamicRoles.TeamBindingsVersion != 0 && n.Core.Teams.LifecycleVersion != 1 || n.Core.Lifecycle != (organization.LifecycleConfig{}) || n.Core.OwnerTransferAudience != "" {
@@ -268,6 +276,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	state := &organizationState{operations: operations, maximum: n.Core.MaximumDuration, teams: n.Core.Teams.MaximumTeams != 0}
 	state.dynamicRoles, state.teamRoleBindings = n.Core.DynamicRoles.Version != 0, n.Core.DynamicRoles.TeamBindingsVersion == 1
 	state.directRoleBindings = n.DirectRoleBindings
+	state.teamRoleOperations = n.TeamRoleBindings
 	if state.teams {
 		state.teamsNative, state.teamLifecycle = service, n.Core.Teams.LifecycleVersion == 1
 	}

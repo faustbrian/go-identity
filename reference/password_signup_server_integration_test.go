@@ -280,50 +280,51 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
-	organization          bool
-	organizationUpgrade   bool
-	organizationTransfer  bool
-	organizationExpiry    bool
-	organizationLifecycle bool
-	organizationTeams     bool
-	organizationTeamCRUD  bool
-	organizationRoles     bool
-	organizationBindings  bool
-	passkey               bool
-	passkeyUpgrade        bool
-	passkeyDiscovery      bool
-	passkeySessionHTTP    bool
-	passkeyKeyed          bool
-	passkeyHTTP           bool
-	passkeyManagement     bool
-	passkeyDeletion       bool
-	passkeySignup         bool
-	passkeySignupHTTP     bool
-	passkeyTOTP           bool
-	passkeyTOTPManagement bool
-	passkeyTOTPEnrollment bool
-	passkeyTOTPDeletion   bool
-	mfaOTPDisable         bool
-	mfaOTPDisableAll      bool
-	mfaOTPActiveCase      string
-	mfaOTPManage          bool
-	mfaOTPRemoval         bool
-	mfaOTPRemovalRace     bool
-	mfaOTPActive          bool
-	mfaOTPEnrollment      bool
-	mfaOTPEnrollmentOnly  bool
-	mfaOTPListing         bool
-	mfaOTPListingHTTP     bool
-	phoneEnrollment       bool
-	phonePassword         bool
-	phoneTOTP             bool
-	phoneTOTPOnly         bool
-	phonePasswordReset    bool
-	phoneResetRollback    bool
-	phoneTOTPRollback     bool
-	phoneOTP              string
-	phoneRemoval          string
-	phoneChange           bool
+	organization             bool
+	organizationUpgrade      bool
+	organizationTransfer     bool
+	organizationExpiry       bool
+	organizationLifecycle    bool
+	organizationTeams        bool
+	organizationTeamCRUD     bool
+	organizationRoles        bool
+	organizationBindings     bool
+	organizationTeamBindings bool
+	passkey                  bool
+	passkeyUpgrade           bool
+	passkeyDiscovery         bool
+	passkeySessionHTTP       bool
+	passkeyKeyed             bool
+	passkeyHTTP              bool
+	passkeyManagement        bool
+	passkeyDeletion          bool
+	passkeySignup            bool
+	passkeySignupHTTP        bool
+	passkeyTOTP              bool
+	passkeyTOTPManagement    bool
+	passkeyTOTPEnrollment    bool
+	passkeyTOTPDeletion      bool
+	mfaOTPDisable            bool
+	mfaOTPDisableAll         bool
+	mfaOTPActiveCase         string
+	mfaOTPManage             bool
+	mfaOTPRemoval            bool
+	mfaOTPRemovalRace        bool
+	mfaOTPActive             bool
+	mfaOTPEnrollment         bool
+	mfaOTPEnrollmentOnly     bool
+	mfaOTPListing            bool
+	mfaOTPListingHTTP        bool
+	phoneEnrollment          bool
+	phonePassword            bool
+	phoneTOTP                bool
+	phoneTOTPOnly            bool
+	phonePasswordReset       bool
+	phoneResetRollback       bool
+	phoneTOTPRollback        bool
+	phoneOTP                 string
+	phoneRemoval             string
+	phoneChange              bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -552,7 +553,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Organization.Core.DynamicRoles = organization.DynamicRoleConfig{Version: 1, MaximumRoles: 10, TeamBindingsVersion: 1, Catalog: []organization.Permission{{ID: "document-read", Action: "document.read", ResourceType: "document"}}}
 		c.HTTPOrganization.RoleCreate, c.HTTPOrganization.RoleUpdate, c.HTTPOrganization.RoleDelete, c.HTTPOrganization.RoleGet, c.HTTPOrganization.RoleList = true, true, true, true, true
 		c.Organization.DirectRoleBindings = extensions.organizationBindings
-		c.HTTPOrganization.PermissionCheck = extensions.organizationBindings
+		c.Organization.TeamRoleBindings = extensions.organizationTeamBindings
+		c.HTTPOrganization.PermissionCheck = extensions.organizationBindings || extensions.organizationTeamBindings
 	}
 	if extensions.organizationExpiry {
 		c.Organization.Invitations.Policy.ExpirationReasons = []identity.PolicyReason{"security-withdrawal", "administrative-cleanup"}
@@ -1153,8 +1155,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if extensions.organizationRoles {
 			org, transport := *c.Organization, *c.HTTPOrganization
 			c.Organization, c.HTTPOrganization = &org, &transport
-			org.Core.DynamicRoles = organization.DynamicRoleConfig{}
+			if !extensions.organizationTeamBindings {
+				org.Core.DynamicRoles = organization.DynamicRoleConfig{}
+			}
 			org.DirectRoleBindings = false
+			org.TeamRoleBindings = false
 			transport.PermissionCheck = false
 			transport.RoleCreate, transport.RoleUpdate, transport.RoleDelete, transport.RoleGet, transport.RoleList = false, false, false, false, false
 		} else if extensions.organizationTeamCRUD {
@@ -1742,7 +1747,7 @@ END $$`); err != nil {
 				if extensions.organizationRoles {
 					probePath = "/v1/organization/role/list"
 				}
-				if extensions.organizationBindings {
+				if extensions.organizationBindings || extensions.organizationTeamBindings {
 					probePath = "/v1/organization/permission-check"
 				}
 				probe, err := http.NewRequestWithContext(ctx, http.MethodGet, network.URL+probePath, nil)

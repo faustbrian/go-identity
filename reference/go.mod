@@ -49,7 +49,7 @@ require (
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
 	github.com/faustbrian/go-organization v0.0.0-20261026235409-4f99657f4775
-	github.com/faustbrian/go-organization/postgres v0.0.0-20261026233038-0d454b7fab20
+	github.com/faustbrian/go-organization/postgres v0.0.0-20261027002207-d1f72f54441c
 	github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86
 	github.com/faustbrian/go-passkey/postgres v0.0.0-20261025200953-935ddaffedb1
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff

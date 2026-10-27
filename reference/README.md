@@ -2,6 +2,12 @@
 
 ## Optional organization backend
 
+`Organization.TeamRoleBindings` additionally selects guarded
+`AssignTeamDynamicRole`/`RevokeTeamDynamicRole` after native team-role and terminal
+team lifecycle selection. Its separate forward lookup history preserves existing
+role/team/direct histories. Existing permission HTTP observes actual team grants,
+revocation and membership/lifecycle changes without impersonating the team.
+
 `Organization.DirectRoleBindings` selects guarded original-key
 `AssignDynamicRole` and natural exact-binding `RevokeDynamicRole` after native
 dynamic-role selection and its independent forward lookup migration. Separately

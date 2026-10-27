@@ -69,8 +69,24 @@ storage selection when disabling HTTP so original history stays owned.
 For team inheritance, additionally select `DynamicRoles.TeamBindingsVersion: 1`
 and `Teams.LifecycleVersion: 1` with complete bounded team configuration. The
 unchanged native team-role migration appends role history3 after terminal team
-identities. Direct and team assignments remain existing native organization
-APIs, not HTTP endpoints in this selected CRUD profile. Revoking membership or
+identities. `Organization.TeamRoleBindings: true` independently selects guarded
+`AssignTeamDynamicRole` and `RevokeTeamDynamicRole`; direct binding selection is
+not required. The real authenticated manager remains the human actor/recovery
+target, never the team ID. Assignment preserves an original key and exact
+organization/role/team/binding epochs. Revocation has no caller key or command;
+only current-authorized original native receipts establish successful repeats.
+Reassignment, organization readmission and terminal team IDs cannot be reached
+by stale intent. Discover exact selectors through `GetDynamicRole` with
+`TargetTeamID`.
+
+Apply the separate `identity_organization_team_bindings` version1 history
+before activating writers. Its unchanged native
+`TeamRoleBindingRevokeOperationLookupMigrationSource` adds only nullable
+team-specific effect selectors and a transactional partial index; legacy/direct
+effects are not backfilled. Use a bounded write-blocking maintenance window.
+No installed role/team/direct prefix is changed, and later direct selection
+remains possible. Binding mutations remain SDK operations, not HTTP endpoints.
+Revoking membership or
 deleting a role/team invalidates derived permission; retained bindings never
 revive terminal identities. Explicit deny overrides allow.
 
