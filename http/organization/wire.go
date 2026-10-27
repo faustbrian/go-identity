@@ -75,6 +75,9 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	failure := any(errorSchema)
 	success := object(readRequired, readFields)
+	if op == organization.CheckPermission {
+		success = object([]string{"decision", "organizationVersion"}, map[string]any{"decision": map[string]any{"type": "string", "enum": []string{"allow", "deny"}}, "organizationVersion": version(1)})
+	}
 	if op == organization.GetDynamicRole {
 		success = object([]string{"organizationVersion", "role"}, map[string]any{"organizationVersion": version(1), "role": role})
 	}
@@ -228,6 +231,12 @@ func operationWire(op organization.Operation) *identityhttp.WireOperation {
 		if op == organization.RemoveMember {
 			description += "Removal is naturally repeatable at exact organization/member versions, not keyed. Only an actual matching original durable effect and current-authorized native receipt prove a prior removal; absence or a tombstone alone is never success. Last-owner denial is distinct. "
 		}
+	} else if op == organization.CheckPermission {
+		for _, name := range []string{"organizationID", "action", "resourceType", "resourceID"} {
+			parameters = append(parameters, map[string]any{"name": name, "in": "query", "required": true, "schema": id})
+		}
+		parameters = append(parameters, map[string]any{"name": "organizationVersion", "in": "query", "required": true, "schema": version(1), "description": "Canonical positive unsigned decimal current policy epoch; this read does not advance it."})
+		description += "Native current authenticated-member permission evaluation at an exact organization policy epoch. Explicit allow/deny only; static management roles grant no implicit application access. Native current direct/team membership, catalog and deny precedence remain authoritative. No actor/tenant/context override, wildcard, authority refresh or cached-allow lease. "
 	} else if roleReadOperation(op) {
 		parameters = append(parameters, map[string]any{"name": "organizationID", "in": "query", "required": true, "schema": id})
 		if op == organization.GetDynamicRole {

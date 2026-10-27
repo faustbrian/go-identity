@@ -1,5 +1,29 @@
 # go-identity/http/organization
 
+`PermissionCheck` independently selects the strict-bearer HTTPS
+`GET /v1/organization/permission-check` endpoint. Supply the actual native
+`PermissionChecker`, current sessions and shared `SafeRate`; neither `Service`,
+role-reader nor administrative-rate ports are required. It checks only the
+authenticated current member, not a caller-selected subject. Static owner/admin
+roles grant management, not implicit application permission.
+
+The query contains exactly `organizationID`, canonical positive decimal
+`organizationVersion`, `action`, `resourceType` and `resourceID`. The epoch is
+observed, not advanced, so MaxUint64 remains valid. This exact-resource profile
+accepts no body, key, wildcard, arbitrary context, actor or tenant override.
+Tenant/session/current membership and the immutable native catalog remain the
+authorities. A successful response is `{ "decision": "allow", "organizationVersion": 3 }`
+or explicit `deny` at the same epoch. Unknown outcomes, wrong native revisions,
+expired evidence and failures expose no decision. Results are not cache leases.
+Disabled selection exposes neither route nor metadata.
+
+This projects the existing root `895ac99`/native `0d454b7` CheckPermission
+contract: current organization epoch and exact typed action/resource selectors,
+with trusted actor/tenant/context derived by owners. The historical generic
+caller `Actor`, `TenantID`, `Context` and `PolicyVersion` request shape does not
+override that authority. Context/conditional profiles remain unselected rather
+than accepting ignored attributes or duplicating the authorization engine.
+
 Custom-role CRUD is independently opt-in through `RoleCreate`, `RoleUpdate`,
 `RoleDelete`, `RoleGet` and `RoleList`. Supply only the corresponding narrow
 `RoleCreator`, `RoleUpdater`, `RoleDeleter`, `RoleGetter` or `RoleLister` owner,

@@ -199,6 +199,9 @@ type Config struct {
 	RoleDeleter DynamicRoleDeleter
 	RoleGetter  DynamicRoleGetter
 	RoleLister  DynamicRoleLister
+	// PermissionChecker is independently selected for current member decisions;
+	// it needs shared SafeRate, not an administrative or role-read grant.
+	PermissionChecker PermissionChecker
 	// OwnerTransfer requires these settings, Sessions and AdminRate, not Service.
 	// Proof lookup supplies the original record, not new transport authority.
 	OwnerTransferer       OwnerTransferer
@@ -255,6 +258,7 @@ type FeatureConfig struct {
 	TeamCreate, TeamUpdate, TeamDelete, TeamList                  bool
 	RoleCreate, RoleUpdate, RoleDelete                            bool
 	RoleGet, RoleList                                             bool
+	PermissionCheck                                               bool
 }
 
 // NewFeature constructs actual selected handlers and concrete wire metadata.
@@ -266,14 +270,14 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // Trusted synchronous hooks cannot replace frozen credentials, request keys,
 // tenant or target input. An invalid selection returns no partial feature.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationList && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationExpire && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave && !c.OwnerTransfer && !c.Archive && !c.Restore && !c.TeamMemberAdd && !c.TeamMemberRemove && !c.TeamListMine && !c.TeamMemberList && !c.TeamCreate && !c.TeamUpdate && !c.TeamDelete && !c.TeamList && !c.RoleCreate && !c.RoleUpdate && !c.RoleDelete && !c.RoleGet && !c.RoleList {
+	if !c.Create && !c.Get && !c.MemberList && !c.MemberAdd && !c.MemberRemove && !c.Update && !c.MemberUpdate && !c.InvitationGet && !c.InvitationListMine && !c.InvitationList && !c.InvitationSend && !c.InvitationAccept && !c.InvitationResend && !c.InvitationCancel && !c.InvitationExpire && !c.InvitationReject && !c.SlugAvailable && !c.List && !c.MemberLeave && !c.OwnerTransfer && !c.Archive && !c.Restore && !c.TeamMemberAdd && !c.TeamMemberRemove && !c.TeamListMine && !c.TeamMemberList && !c.TeamCreate && !c.TeamUpdate && !c.TeamDelete && !c.TeamList && !c.RoleCreate && !c.RoleUpdate && !c.RoleDelete && !c.RoleGet && !c.RoleList && !c.PermissionCheck {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
 	for _, selected := range []struct {
 		op organization.Operation
 		on bool
-	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationList, c.InvitationList}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationExpire, c.InvitationExpire}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}, {organization.OwnerTransfer, c.OwnerTransfer}, {organization.Archive, c.Archive}, {organization.Restore, c.Restore}, {organization.AddTeamMember, c.TeamMemberAdd}, {organization.RemoveTeamMember, c.TeamMemberRemove}, {organization.ListMyTeams, c.TeamListMine}, {organization.ListTeamMembers, c.TeamMemberList}, {organization.CreateTeam, c.TeamCreate}, {organization.UpdateTeam, c.TeamUpdate}, {organization.DeleteTeam, c.TeamDelete}, {organization.ListTeams, c.TeamList}, {organization.CreateDynamicRole, c.RoleCreate}, {organization.UpdateDynamicRole, c.RoleUpdate}, {organization.DeleteDynamicRole, c.RoleDelete}, {organization.GetDynamicRole, c.RoleGet}, {organization.ListDynamicRoles, c.RoleList}} {
+	}{{organization.Create, c.Create}, {organization.Update, c.Update}, {organization.Get, c.Get}, {organization.ListMembers, c.MemberList}, {organization.AddMember, c.MemberAdd}, {organization.UpdateMember, c.MemberUpdate}, {organization.RemoveMember, c.MemberRemove}, {organization.InvitationGet, c.InvitationGet}, {organization.InvitationListMine, c.InvitationListMine}, {organization.InvitationList, c.InvitationList}, {organization.InvitationSend, c.InvitationSend}, {organization.InvitationAccept, c.InvitationAccept}, {organization.InvitationResend, c.InvitationResend}, {organization.InvitationCancel, c.InvitationCancel}, {organization.InvitationExpire, c.InvitationExpire}, {organization.InvitationReject, c.InvitationReject}, {organization.SlugAvailable, c.SlugAvailable}, {organization.ListOrganizations, c.List}, {organization.LeaveMember, c.MemberLeave}, {organization.OwnerTransfer, c.OwnerTransfer}, {organization.Archive, c.Archive}, {organization.Restore, c.Restore}, {organization.AddTeamMember, c.TeamMemberAdd}, {organization.RemoveTeamMember, c.TeamMemberRemove}, {organization.ListMyTeams, c.TeamListMine}, {organization.ListTeamMembers, c.TeamMemberList}, {organization.CreateTeam, c.TeamCreate}, {organization.UpdateTeam, c.TeamUpdate}, {organization.DeleteTeam, c.TeamDelete}, {organization.ListTeams, c.TeamList}, {organization.CreateDynamicRole, c.RoleCreate}, {organization.UpdateDynamicRole, c.RoleUpdate}, {organization.DeleteDynamicRole, c.RoleDelete}, {organization.GetDynamicRole, c.RoleGet}, {organization.ListDynamicRoles, c.RoleList}, {organization.CheckPermission, c.PermissionCheck}} {
 		if !selected.on {
 			continue
 		}

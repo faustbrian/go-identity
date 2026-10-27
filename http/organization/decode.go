@@ -48,10 +48,14 @@ type requestInput struct {
 	roleVersion                   uint64
 	roleCursor                    string
 	statements                    []organization.RoleStatement
+
+	permissionAction, permissionType, permissionResource string
 }
 
 func operationPath(op organization.Operation) (string, string) {
 	switch op {
+	case organization.CheckPermission:
+		return "/v1/organization/permission-check", http.MethodGet
 	case organization.GetDynamicRole:
 		return "/v1/organization/role/get", http.MethodGet
 	case organization.ListDynamicRoles:
@@ -123,6 +127,8 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 	path, method := operationPath(op)
 	missingOwner := nilService(c.Service)
 	switch op {
+	case organization.CheckPermission:
+		missingOwner = nilService(c.PermissionChecker)
 	case organization.GetDynamicRole:
 		missingOwner = nilService(c.RoleGetter)
 	case organization.ListDynamicRoles:
@@ -267,7 +273,11 @@ func newDecoder(c Config, op organization.Operation) (func(*http.Request) (State
 			if err != nil {
 				return zero, identityhttp.ErrInvalidInput
 			}
-			if roleReadOperation(op) {
+			if op == organization.CheckPermission {
+				if err := decodePermissionQuery(input, query); err != nil {
+					return zero, err
+				}
+			} else if roleReadOperation(op) {
 				if err := decodeRoleQuery(input, query); err != nil {
 					return zero, err
 				}

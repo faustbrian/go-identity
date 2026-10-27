@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an independently selected current-member permission-check endpoint using
+  the native evaluator, exact organization policy epoch and shared safe rates.
+  Return explicit allow/deny only for matching native revisions; stale authority,
+  failures and malformed inputs disclose no decision. This exact-resource profile
+  accepts no actor, tenant, arbitrary context, wildcard, body or request-key
+  overrides. Disabled selection exposes neither route nor metadata.
+
 - Add independently selected strict-bearer custom-role create/get/list/update/
   delete using native typed statements, original keys, exact epochs and terminal
   deletion recovery. Shared rates, current manager/session authority and native

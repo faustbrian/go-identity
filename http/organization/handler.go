@@ -268,6 +268,21 @@ func newHandler(c Config, op organization.Operation, m []identityhttp.Middleware
 				writeJSON(w, 200, SlugAvailableResponse{Available: out.Available})
 				return
 			}
+			if op == organization.CheckPermission {
+				decision, err := c.PermissionChecker.CheckPermission(r.Context(), in.permissionCheck())
+				if err != nil {
+					status, code := domainFailure(err)
+					reject(w, r, requestFailure{status: status, code: code})
+					return
+				}
+				response, err := permissionResponse(in, decision)
+				if err != nil || r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				writeJSON(w, 200, response)
+				return
+			}
 			if roleReadOperation(op) {
 				var view organization.View
 				var err error
