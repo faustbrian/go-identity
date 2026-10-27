@@ -1,5 +1,91 @@
 # Identity Implementation — Current Milestone
 
+2026-10-27 01:27 UTC — team-binding Reference profile CLOSED.
+Reference2abecf4232f8, complete11-path31eab96d independently APPROVE by
+team_binding_reference_review, main/remote exact and Required40430186894 SUCCESS.
+RED10866 missing facades/selection; focused18801 race1.799s. First77082 was a
+test field-name error (BindingVersion vs actual MembershipVersion), not a product
+failure. Corrected33540 fresh/populated PG/HTTPS/race18.147s; final57481 ordinary
+Reference/cmd race6.531s/8.282s, tagged vet0, retained role/direct profiles27.328s.
+Metadata32768 tidy silent/modules verified0 after two obsolete native sums;
+actual native d1 pin unchanged. Public v0.0.0-20261027010232-2abecf4232f8 has
+exact origin/subdir/all11files; Sum wGnxIAKUEVtKv2HYR9wsel3j3rrWSXwMLUukT4AHDjA=,
+GoModSum KiuY0WgvHzoBNaLr+It5+yPzHoXMtS67i1ieR7Y5NOI=. Actual downloaded
+module23217 fresh10.94s/populated11.69s PG/race PASS24.616s, exit0. Owned
+PG54038/PID13637 and 2eW2w5 cohort removed59723; directory/listener/PID absent.
+
+2026-10-27 01:51 UTC — parallel managed-public OAuth native profile delivered.
+Root6c34ccf12a5a, final8-path96029e4f independently APPROVE, main/remote exact,
+Required40430055982 SUCCESS; actual public root/all8files match. Go1.27.3
+final11327 focused0.275s/root race1.515s/vet0; read-coverage action resolved.
+Native dfcbbb778b72592f18369a6893a24480a9a434b6, reviewed13-path6560adabc5
+APPROVE/no remaining findings by oauth_managed_public_native_review. Main/remote
+exact; Required40433811185 SUCCESS. Review's public-update denial action added
+one actual public-target test with updates selected: no metadata/effect/version/
+digest change. Follow-up37413 PG/race15.090s and taggedvet20007 exit0.
+Source public55528 PG/race36.456s, retained/public11986 44.348s, ordinary35444
+race1.226s, taggedvet90704, tidy97151e/verify43632 exit0 retained unchanged.
+Original14102 remains failed (test replay correctly revoked its refresh family).
+Public native v0.0.0-20261027013831-dfcbbb778b72: exact origin/subdir/all13files,
+Sum m8wNZY4uG++K/xUBbucUnw8XiSyu0ebiltSLBo3SV0c=,
+GoModSum 4Ke63Xru2lFzDc8tMArbzyCuO/wGTUWT7bDD+DDcxis=.
+Downloaded-module85410 public PG/race combined run FAILED70.739s: fresh/populated
+17.18s, unknown5.29s, rollback audit/unknown/before, actual-public-update6.16s
+and activation5.82s passed; rollback/outbox failed before OAuth at actual password
+signin503 (fixture setup14.23s). Unchanged isolated exact outbox retry46673/c18026
+PASS4.651s, case3.19s, exit0. All selected assertions have passing executions,
+but the original combined run stays failed; setup root cause remains unproved,
+not reported fixed or waived. No source/policy/timeout change or broad restart.
+Worker cleanup verified exact data_directory/PID94542 and no Go processes,
+fast-stopped40e784, removed entire owned eCirw3 cohort28646/322693 exit0.
+Final c2b038 confirms directory/postmaster.pid/PID94542/TCP54039 absent.
+No HTTP/Reference, RFC7591, whole M30 or additional qualified-unit claim.
+
+Next primary boundary mapped by session_selection_boundary: actual Session
+authority has selected-organization fields, but set/get/clear/admission are absent.
+Stored selection must bump exact session version and preserve the complete
+authority/provenance, family-before-session-before-org lock order and one
+Coordinator. Current password admission rejects organization presence; setting
+only an ID would break reads/signout. Reconcile catalog selection's missing
+SessionID explicitly. Full contract/implementation is not yet frozen or started.
+
+Frozen parallel OAuth lane — 2026-10-27 00:47 UTC.
+Owner: public-client worker, go-oauth-server root and postgres code/tests/local
+manifests/docs/changelogs; no oidc/device, parent Reference/HTTP or Git writes.
+Base6ad14b9. Consume existing public identity/session/kernel pins and genuine
+signup/session fixture already used by native OAuth; readiness mapped by
+next_parallel_protocol_lane. No identity prerequisite or replacement engine.
+Outcome: platform-authorized Public=true managed client -> no-secret native
+registry -> fresh-service S256/consent/code -> refresh -> revoke/delete.
+Preserve confidential Basic clients, class-sensitive original intent, current
+actor/owner/query/20s fences, required effects and unknown-create recovery.
+Add forward schema/explicit activation without rewriting installed migrations;
+public clients reject secret rotation. Exclude RFC7591/device/OIDC/delegation/
+token exchange/HTTP composition, not their retained eventual requirements.
+First root regression/compatibility batch must be reviewed/main-published and
+normally pinned before dependent native execution. Focused root and real native
+fresh/populated PG/race + retained confidential/recovery checks, one independent
+complete final-diff review per coherent module, main/CI/public proof. Primary
+owns pins/Git/integration; serialize heavy runs, owned fixture PG54039 if needed.
+
+Frozen primary M23 team-binding Reference profile — 2026-10-27 00:46 UTC.
+Owner: primary, reference/ APIs/configuration/migrations/tests/docs/pins only.
+Consume root4f996, native d1f72f5 and genuine public consumer f278236
+(PG/race18.411s, independent review/main/CI), HTTPb1f1fed and Referenceaaf3669.
+Outcome: real signup/session -> guarded keyed team assignment -> member HTTP
+permission allow -> exact natural team revocation -> deny -> fresh/rebuilt
+original recovery -> reassignment/readmission/terminal-team denial and logout.
+Select Organization.TeamRoleBindings independently of direct bindings, requiring
+native TeamBindingsVersion1 and team lifecycle1; add a separate native lookup
+history without changing installed role/team/direct prefixes. No team-identity
+impersonation, new authority/journal, binding mutation HTTP or whole-M23 claim.
+Checks: focused RED/GREEN graph/configuration/history tests, real fresh/populated
+PG/HTTPS/race journey with original-key/rollback/denial cases, affected direct/
+role/team regressions and tagged vet, module metadata, one independent complete
+final-diff review, main/CI and actual downloaded Reference consumer proof.
+Use owned /tmp/identity-team-role-reference.2eW2w5 caches and loopback PG54038;
+serialize heavy checks. Other worker investigates a separate OAuth lane read-only.
+
 2026-10-27 00:40 UTC — selected direct-binding backend and native team-binding
 profiles CLOSED; full M23/67-unit qualification remains open.
 
