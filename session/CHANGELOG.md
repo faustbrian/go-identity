@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add neutral exact-session active-organization set/clear command construction.
+  Preserve authentication, credential continuation and original lifetime while
+  advancing only session/selection authority; clear obsolete CSRF state. This
+  is structural intent, not a usable selector: current organization membership,
+  atomic native effects and explicit transport composition remain required.
+
 - Add an explicitly selected passkey-primary/TOTP completion issuer and trusted
   historical session reconstruction. Preserve original UV credential, factor
   provenance, security epochs, remember choice and primary freshness; ordinary

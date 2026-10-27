@@ -1,5 +1,28 @@
 # Session
 
+## Exact-session organization selection intent
+
+`NewOrganizationSelectionCommand` freezes one self-session set/clear CAS for
+the organization-owned `identity.organization.active-set` operation. Its
+`ActiveOrganizationSelection` binds the exact `SessionID`, tenant, expected
+positive `SessionVersion` and organization-owned authority scope/version.
+An empty organization ID with zero authority explicitly clears selection;
+absence never means "leave unchanged". Selection is not membership or permission.
+
+The successor retains original authentication, credential continuation, token
+lookup, family, remember policy, activity and lifetime. Only the session
+version/vector and organization dimension change. Version-bound CSRF is cleared,
+not copied into the successor. No credential, current validity or fresh login
+is created. Zero/foreign/malformed/overflow inputs fail without a partial command.
+
+This is a storage-neutral prerequisite, not an executable selector. The native
+organization participant must authenticate the actual current session, validate
+membership/lifecycle/policy and invoke the session-owned effect in its existing
+coordinator transaction. It must retain the original evidence deadline and
+require the successor at final commit. Cookie composition needs separately owned
+replacement synchronizer delivery; it cannot be enabled by this constructor.
+Other authority dimensions must be preserved or the unsupported profile denied.
+
 ## Passkey primary with a separate enrolled factor
 
 `NewMFAPasskeySessionIssuer` and its `WithCSRF` variant explicitly select
