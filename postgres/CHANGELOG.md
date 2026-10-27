@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add `Work.RequireActiveUserStatus` for a live feature's command-bound user
+  owner. Fence active status and the independent user-security epoch under
+  the existing lifecycle row lock without inventing password/identifier
+  dependencies or treating metadata revisions as security epochs. This does
+  not authenticate an API key or replace credential-specific admission.
+
 - Add optional expiry of an authenticated, never-started prepared request.
   After its immutable original deadline, the existing global command-ID claim
   permanently prevents execution and exact retries return metadata-only

@@ -82,6 +82,7 @@ func TestOTPAuthorityPostgresIntegration(t *testing.T) {
 	}()
 	testOTPCurrentAuthority(t, ctx, pool)
 	testOTPUserAuthority(t, ctx, pool)
+	t.Run("independent user status", func(t *testing.T) { testCurrentUserStatusAdmission(t, ctx, pool) })
 	t.Run("recipient", func(t *testing.T) { testRecipientPostgres(t, ctx, pool) })
 }
 

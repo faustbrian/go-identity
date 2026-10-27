@@ -1,5 +1,24 @@
 # Identity PostgreSQL
 
+## Independent user-owner status admission
+
+`Work.RequireActiveUserStatus` admits only the exact registered feature owner
+during its live invocation. Freeze the real `Repository.GetStatus` result in
+the command's intent, then require the command-bound tenant/user's active state
+and original positive user-security epoch. The existing user-row `SHARE` lock
+fences lifecycle changes until the coordinator commits or aborts. Acquire this
+guard before API-key or other feature-aggregate locks and repeat the original
+expectation at the final check; do not adopt a newer epoch to make it pass.
+
+The user's aggregate revision is not an authority epoch. This guard does not
+require password, identifier or session credentials and does not authenticate
+an API-key actor as its human owner. Native callers must separately prove the
+actual credential, directory/tenant status and permission ceiling. Existing
+credential-specific guards remain mandatory for operations relying on them.
+Missing/inactive/stale owners deny uniformly; every live failure poisons Work,
+including an already-open cursor, while expired invocations cannot poison a
+later call. No transaction, authority state or freshness window is created.
+
 ## Passkey eligibility during anonymous TOTP completion
 
 `Work.RequireMFAPasskeyCredential` fences the exact passkey reference and user
