@@ -137,6 +137,18 @@ introduced. Earlier deadlines win; cancellation survives and errors/panics redac
 
 ## Quick start
 
+Native signin results default to `CookieSignin`: original fresh success carries
+the session bearer and synchronizer for a separately selected cookie transport.
+`BearerSignin` is an explicit native email/password single-factor selection.
+Its `SigninResult.Transport` carries the selection even for neutral denial and
+password-free history; it never carries cookie attributes, stored CSRF or a
+synchronizer. `SigninResult.Validate` rejects unknown or mixed variants, not
+just malformed credentials. The native owner must still establish real password,
+pre-auth, risk, current policy and known-empty factor authority atomically.
+An original bearer can be delivered once with `Issuance.Token.Reveal`; do not
+log it, reconstruct it on recovery or assume a cookie HTTP handler supports it.
+Result validation grants neither current authentication nor delivery authority.
+
 ```go
 policy := password.RegistrationPolicy{
     Enabled: true, MinimumBytes: 12, MaximumBytes: 128,

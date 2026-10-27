@@ -1,5 +1,17 @@
 # Session
 
+## Explicit password-bearer issuance
+
+`NewPasswordBearerSessionIssuer` uses the same prospective password preparation,
+one-bind/one-issue custody and owned native executor as browser signin, but requires
+zero `IssuerConfig.Cookie` and returns no cookie attributes or synchronizer state.
+It does not remove CSRF from an existing session or turn a structural password
+projection into authentication. The password owner still performs real comparison,
+current-authority checks and atomic session/audit/lifecycle persistence. Only an
+exact acknowledged new commit can deliver the original bearer; historical,
+ambiguous, cancelled and expired outcomes cannot. Existing constructors retain
+their cookie requirements and behavior.
+
 ## Explicit organization-bearer admission
 
 `NewOrganizationBearerProfileSessionService` retains the selected-method reader

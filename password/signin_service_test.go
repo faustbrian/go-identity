@@ -255,6 +255,66 @@ func TestSigninResultNativeCustodyAndHistoricalReplay(t *testing.T) {
 	}
 }
 
+func TestSigninResultBearerTransport(t *testing.T) {
+	r := signinResult(t, identity.CommitOutcomeCommitted)
+	r.Transport = password.BearerSignin
+	var err error
+	r.Issuance.Token, err = session.NewToken(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Validate(); err != nil {
+		t.Fatal("explicit bearer original denied", err)
+	}
+	csrf, err := session.NewCSRFToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*password.SigninResult){
+		func(r *password.SigninResult) { r.Transport = password.CookieSignin },
+		func(r *password.SigninResult) { r.Transport = 255 },
+		func(r *password.SigninResult) { r.CSRFToken = csrf },
+		func(r *password.SigninResult) { r.Issuance.Cookie.Name = "__Host-session" },
+		func(r *password.SigninResult) { r.Issuance.Cookie.Secure = true },
+		func(r *password.SigninResult) { r.Issuance.Replayed = true },
+		func(r *password.SigninResult) {
+			spec, _ := r.Issuance.Session.Bindings()
+			state, err := session.NewCSRFState(session.CSRFStateSpec{Binding: session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}, KeyVersion: 1, Digest: [32]byte{1}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.Issuance.Session, err = session.NewSessionWithCSRF(spec, state)
+			if err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		bad := r
+		mutate(&bad)
+		if bad.Validate() == nil {
+			t.Fatal("mixed or malformed bearer delivery accepted")
+		}
+	}
+	for _, outcome := range []identity.CommitOutcome{identity.CommitOutcomeCommitted, identity.CommitOutcomeNotCommitted, identity.CommitOutcomeUnknown, identity.CommitOutcomeConflict, identity.CommitOutcomeInProgress} {
+		history := signinResult(t, outcome)
+		history.Transport = password.BearerSignin
+		history.Issuance.Replayed = true
+		if outcome == identity.CommitOutcomeCommitted {
+			history.Issuance.Session = session.Session{}
+		}
+		if history.Validate() != nil {
+			t.Fatal("credential-free bearer outcome denied")
+		}
+	}
+	challenge := signinResult(t, identity.CommitOutcomeCommitted)
+	challenge.Transport, challenge.State, challenge.SessionID = password.BearerSignin, auth.SignInStateChallengeRequired, ""
+	challenge.Issuance.Session = session.Session{}
+	challenge.Challenge = password.MFAChallengeResult{ID: challenge.Issuance.CommandID, Method: "totp", ExpiresAt: time.Date(2026, 10, 10, 6, 0, 0, 0, time.UTC)}
+	if challenge.Validate() == nil {
+		t.Fatal("unsupported bearer MFA continuation accepted")
+	}
+}
+
 func TestSigninRecoveryRequestRequiresOriginalActorAndCustody(t *testing.T) {
 	input := signinInput(t)
 	r := password.SigninRecoveryRequest{Recovery: signinRecovery(t, true), Cookie: input.Cookie, Caller: input.Caller, Origin: input.Origin, Network: input.Network, Device: input.Device}

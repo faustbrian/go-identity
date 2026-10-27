@@ -62,7 +62,8 @@ type IssueExecution struct {
 // private proof authority for NewSessionIssuer; it must be nil for the explicit
 // OTP, password and passkey profiles. MaximumDuration is 1ms..30s; dependencies must honor
 // it. TokenSize is 32..64 bytes. LookupKey is independent session-lookup custody.
-// Cookie is the validated host-only transport profile. OTP pre-auth flows may
+// Cookie is the validated host-only transport profile, except the explicit
+// NewPasswordBearerSessionIssuer profile requires it to be zero. OTP pre-auth flows may
 // retain anonymous command scope while the native effect resolves the final
 // user. Anonymous sessions and bearer continuations require separate admission.
 type IssuerConfig struct {
@@ -82,6 +83,7 @@ type SessionIssuer struct {
 	executor         IssueExecutor
 	config           IssuerConfig
 	csrfKey          CSRFKey
+	bearer           bool
 	otp              bool
 	password         bool
 	signup           bool
@@ -123,10 +125,15 @@ func NewSessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionIssuer, e
 }
 
 func newSessionIssuer(executor IssueExecutor, c IssuerConfig, otp bool) (*SessionIssuer, error) {
-	if issuerNil(executor) || issuerNil(c.Clock) || (!otp && c.Authority == nil) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 || c.Cookie.name == "" {
+	return newSessionIssuerWithTransport(executor, c, otp, false)
+}
+
+func newSessionIssuerWithTransport(executor IssueExecutor, c IssuerConfig, otp, bearer bool) (*SessionIssuer, error) {
+	invalidCookie := !bearer && c.Cookie.name == "" || bearer && c.Cookie != (CookiePolicy{})
+	if issuerNil(executor) || issuerNil(c.Clock) || (!otp && c.Authority == nil) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 || invalidCookie {
 		return nil, ErrInvalidIssuer
 	}
-	return &SessionIssuer{executor: executor, config: c, otp: otp}, nil
+	return &SessionIssuer{executor: executor, config: c, otp: otp, bearer: bearer}, nil
 }
 
 func issuerNil(v any) bool {
@@ -281,6 +288,7 @@ func (PreparedIssuance) MarshalText() ([]byte, error) { return nil, ErrSecretSer
 // Token and credential-free Cookie are returned only on exact new committed
 // execution with no error, cancellation or expired original lifetime. Copies
 // share Token's reveal-once permission. Replays and recovery return no token.
+// The explicit password-bearer issuer returns a zero Cookie.
 // Cookie.Value is always empty; explicitly populate it only at authorized HTTP
 // delivery, never in logs or general serialization.
 type IssueResult struct {
@@ -399,9 +407,14 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, e
 	}
 	spec, _ := out.Session.Bindings()
-	cookie, e := s.config.Cookie.Attributes(spec.Remember, now, life.AbsoluteExpiresAt)
-	if e != nil {
-		return out, e
+	var cookie http.Cookie
+	if !s.bearer {
+		cookie, e = s.config.Cookie.Attributes(spec.Remember, now, life.AbsoluteExpiresAt)
+		if e != nil {
+			return out, e
+		}
+	} else if _, e := out.Session.CSRFState().Bindings(); e == nil {
+		return out, ErrInvalidIssuance
 	}
 	if e := ctx.Err(); e != nil {
 		return out, e

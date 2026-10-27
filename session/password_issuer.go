@@ -40,6 +40,24 @@ func NewPasswordSessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionI
 	return s, nil
 }
 
+// NewPasswordBearerSessionIssuer selects prospective native password issuance
+// without cookie attributes or synchronizer state. Cookie must be zero and
+// Authority nil; other bounds and exact commit-gated delivery match
+// NewPasswordSessionIssuer. The owned password executor still proves comparison,
+// current authority and all atomic effects. This is not a cookie-to-bearer
+// conversion: existing sessions and browser issuance are unchanged.
+func NewPasswordBearerSessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionIssuer, error) {
+	if c.Authority != nil {
+		return nil, ErrInvalidIssuer
+	}
+	s, err := newSessionIssuerWithTransport(executor, c, true, true)
+	if err != nil {
+		return nil, err
+	}
+	s.otp, s.password = false, true
+	return s, nil
+}
+
 // NewPasswordSessionIssuerWithCSRF also prepares original synchronizer custody,
 // which must be persisted in the same login commit and delivered only through
 // PreparedIssuance.CSRFToken after a fresh known success.

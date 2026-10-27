@@ -106,6 +106,18 @@ func (r SigninRecoveryRequest) Validate() error {
 	return nil
 }
 
+// SigninTransport selects one closed original-session delivery contract.
+// It does not authenticate credentials or select an HTTP handler.
+type SigninTransport uint8
+
+const (
+	// CookieSignin is the existing default cookie and synchronizer profile.
+	CookieSignin SigninTransport = iota
+	// BearerSignin is an explicitly selected bearer-only profile. It forbids
+	// cookie metadata, synchronizer delivery and stored session CSRF state.
+	BearerSignin
+)
+
 // SigninResult preserves the sole session-owned issuance/outcome and native
 // reveal-once custody. Authenticated means known committed session history,
 // not current validity or permission to use it. SessionID survives authorized
@@ -115,11 +127,14 @@ func (r SigninRecoveryRequest) Validate() error {
 // were wrong or that an Unknown command rolled back. Inspect CommitOutcome.
 // ChallengeRequired describes committed partial authentication, never session
 // authority. Its challenge cannot accompany a session, cookie or synchronizer.
-// Fresh bearer/CSRF exists only for original error-free uncancelled commit;
-// replay/recovery/errors must omit both and all cookie metadata. Cookie.Value
+// Fresh bearer exists only for original error-free uncancelled commit; the
+// default CookieSignin additionally requires synchronizer delivery. Explicit
+// BearerSignin omits all cookie metadata and CSRF state. Replay/recovery/errors
+// must omit credentials and all cookie metadata. Cookie.Value
 // is always empty; trusted HTTP alone reveals the original token into a cookie.
 // Zero is an unobserved service error result, not a valid terminal observation.
 type SigninResult struct {
+	Transport SigninTransport
 	State     auth.SignInState
 	SessionID string
 	Issuance  session.IssueResult
@@ -164,13 +179,13 @@ func (MFAChallengeResult) LogValue() slog.Value {
 func (r SigninResult) Validate() error {
 	q, _, err := r.Recovery.Bindings()
 	i := r.Issuance
-	if err != nil || q.CommandID != i.CommandID || i.RetryAfter < 0 || i.RetryAfter > 0 && i.CommitOutcome != identity.CommitOutcomeInProgress || i.Cookie.Value != "" || i.Cookie.Raw != "" || len(i.Cookie.Unparsed) != 0 {
+	if err != nil || (r.Transport != CookieSignin && r.Transport != BearerSignin) || q.CommandID != i.CommandID || i.RetryAfter < 0 || i.RetryAfter > 0 && i.CommitOutcome != identity.CommitOutcomeInProgress || i.Cookie.Value != "" || i.Cookie.Raw != "" || len(i.Cookie.Unparsed) != 0 {
 		return ErrPasswordWork
 	}
 	hasToken, hasCSRF := i.Token != (session.Token{}), r.CSRFToken != (session.CSRFToken{})
 	if r.State == auth.SignInStateChallengeRequired {
 		c := r.Challenge
-		if _, err := identity.ParseCommandID(string(c.ID)); err != nil || i.CommitOutcome != identity.CommitOutcomeCommitted || r.SessionID != "" || i.Session != (session.Session{}) || hasToken || hasCSRF || !emptySigninCookie(i.Cookie) || c.Method != "totp" || c.ExpiresAt.IsZero() || !c.ExpiresAt.After(time.Unix(0, 0)) || c.ExpiresAt.Nanosecond() != 0 || i.Replayed && c.Proof != (capability.Proof{}) {
+		if _, err := identity.ParseCommandID(string(c.ID)); err != nil || r.Transport != CookieSignin || i.CommitOutcome != identity.CommitOutcomeCommitted || r.SessionID != "" || i.Session != (session.Session{}) || hasToken || hasCSRF || !emptySigninCookie(i.Cookie) || c.Method != "totp" || c.ExpiresAt.IsZero() || !c.ExpiresAt.After(time.Unix(0, 0)) || c.ExpiresAt.Nanosecond() != 0 || i.Replayed && c.Proof != (capability.Proof{}) {
 			return ErrPasswordWork
 		}
 		return nil
@@ -178,7 +193,7 @@ func (r SigninResult) Validate() error {
 	if r.Challenge != (MFAChallengeResult{}) {
 		return ErrPasswordWork
 	}
-	if hasToken != hasCSRF || (i.Replayed || !hasToken) && !emptySigninCookie(i.Cookie) {
+	if r.Transport == CookieSignin && hasToken != hasCSRF || r.Transport == BearerSignin && (hasCSRF || !emptySigninCookie(i.Cookie) || i.Session.CSRFState() != (session.CSRFState{})) || (i.Replayed || !hasToken) && !emptySigninCookie(i.Cookie) {
 		return ErrPasswordWork
 	}
 	switch i.CommitOutcome {

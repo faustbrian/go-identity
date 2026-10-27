@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an explicit prospective password-bearer issuer requiring no cookie policy
+  and delivering no cookie attributes or CSRF state. Existing cookie issuance,
+  atomic native authentication and reveal-once commit/recovery rules are unchanged.
+
 - Add an explicit organization-bearer reader profile without changing existing
   constructors or unselected cookie behavior. Selected cookie/CSRF records deny
   in fresh and cached admission; encrypted cache context binds the restriction.

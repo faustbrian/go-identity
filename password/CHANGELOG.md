@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Distinguish explicitly selected bearer-only password signin results from the
+  existing cookie/synchronizer default. Bearer results reject cookie metadata,
+  stored CSRF and credential redelivery; MFA continuation is not selected.
+
 - Expose the adapter-neutral `ActionPrimaryRequest` input carrier for typed
   feature and transport composition. It preserves original session, signed
   proof, caller and CSRF custody without granting admission; diagnostics redact
