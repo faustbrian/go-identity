@@ -51,6 +51,11 @@ import (
 // Hash upgrades are atomic with original signin. Other-factor continuation
 // remains in development and must be denied by the selected single-factor policy.
 type SigninConfig struct {
+	// Transport defaults to cookie plus synchronizer. BearerSignin explicitly
+	// selects email/password SFA with known-empty native MFA authority, no
+	// cookie policy and no CSRFKey. Username, Phone and MFA continuations are
+	// not supported by this bearer profile; mixed configuration fails closed.
+	Transport password.SigninTransport
 	// Username selects exact username signin. Nil retains email signin. This
 	// profile requires verified email and known-empty native MFA state.
 	Username *username.Policy
@@ -101,6 +106,9 @@ var _ password.SigninService = (*SigninService)(nil)
 // authorization, password, pre-auth, session/CSRF, audit and lifecycle histories
 // before use. Zero, absent keys and inconsistent profiles return ErrPasswordWork.
 func NewSigninService(pool *database.Pool, c SigninConfig) (*SigninService, error) {
+	if c.Transport != password.CookieSignin && c.Transport != password.BearerSignin || c.Transport == password.BearerSignin && (c.Username != nil || c.Phone != nil || c.CSRFKey != (session.CSRFKey{}) || c.Issuance.Cookie != (session.CookiePolicy{})) {
+		return nil, password.ErrPasswordWork
+	}
 	if c.Phone != nil {
 		if c.Username != nil || c.Phone.Profile() != phone.CurrentNumberProfile() {
 			return nil, password.ErrPasswordWork
@@ -179,7 +187,7 @@ func NewSigninService(pool *database.Pool, c SigninConfig) (*SigninService, erro
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	if _, err = session.NewPasswordSessionIssuerWithCSRF(&signinExecution{}, c.Issuance, c.CSRFKey); err != nil {
+	if _, err = signinIssuer(&signinExecution{}, c); err != nil {
 		return nil, password.ErrPasswordWork
 	}
 	s := &SigninService{pool: pool, repository: r, domain: domain, policyAuthority: policy, effect: effect, sessions: sessions, address: address, custody: custody, c: c}
@@ -187,6 +195,13 @@ func NewSigninService(pool *database.Pool, c SigninConfig) (*SigninService, erro
 		return nil, password.ErrPasswordWork
 	}
 	return s, nil
+}
+
+func signinIssuer(executor *signinExecution, c SigninConfig) (*session.SessionIssuer, error) {
+	if c.Transport == password.BearerSignin {
+		return session.NewPasswordBearerSessionIssuer(executor, c.Issuance)
+	}
+	return session.NewPasswordSessionIssuerWithCSRF(executor, c.Issuance, c.CSRFKey)
 }
 
 func signinURLs(values []string, origin bool) bool {
@@ -274,7 +289,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
-	out = password.SigninResult{State: auth.SignInStateRejected, Recovery: recovery, Issuance: session.IssueResult{CommandID: id, CommitOutcome: identity.CommitOutcomeNotCommitted}}
+	out = password.SigninResult{Transport: s.c.Transport, State: auth.SignInStateRejected, Recovery: recovery, Issuance: session.IssueResult{CommandID: id, CommitOutcome: identity.CommitOutcomeNotCommitted}}
 	if err = s.authorize(ctx, r.Caller, b, ""); err != nil {
 		return out, err
 	}
@@ -331,12 +346,12 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	}
 	var factorVersion uint64
 	var challengeRequired bool
-	if s.mfa != nil || s.c.Username != nil || s.c.Phone != nil {
+	if s.mfa != nil || s.c.Username != nil || s.c.Phone != nil || s.c.Transport == password.BearerSignin {
 		factorVersion, challengeRequired, err = mfapg.ReadPasswordSigninFactors(ctx, s.pool, r.TenantID, selected, s.c.Repository.MaximumDuration)
 		if err != nil {
 			return out, err
 		}
-		if (s.c.Username != nil || s.c.Phone != nil) && s.mfa == nil && challengeRequired {
+		if (s.c.Username != nil || s.c.Phone != nil || s.c.Transport == password.BearerSignin) && s.mfa == nil && challengeRequired {
 			return out, identity.ForbiddenError{}
 		}
 	}
@@ -411,7 +426,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		return out, password.ErrPasswordWork
 	}
 	executor := &signinExecution{clock: s.c.Issuance.Clock}
-	issuer, err := session.NewPasswordSessionIssuerWithCSRF(executor, s.c.Issuance, s.c.CSRFKey)
+	issuer, err := signinIssuer(executor, s.c)
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
@@ -464,7 +479,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if out.Issuance.CommitOutcome == identity.CommitOutcomeCommitted {
 		out.State, out.SessionID = auth.SignInStateAuthenticated, string(sessionID)
 	}
-	if err == nil && !out.Issuance.Replayed && out.Issuance.Token != (session.Token{}) {
+	if err == nil && s.c.Transport == password.CookieSignin && !out.Issuance.Replayed && out.Issuance.Token != (session.Token{}) {
 		out.CSRFToken, err = prepared.CSRFToken()
 	}
 	return out, err
@@ -672,12 +687,12 @@ func (s *SigninService) RecoverSignin(ctx context.Context, r password.SigninReco
 		return out, identity.ForbiddenError{}
 	}
 	if current.Outcome != receipt.Outcome {
-		return password.SigninResult{State: auth.SignInStateRejected, Recovery: r.Recovery, Issuance: session.IssueResult{CommandID: q.CommandID, CommitOutcome: identity.CommitOutcomeUnknown, Replayed: true}}, identity.UnknownCommitError{CommandID: q.CommandID}
+		return password.SigninResult{Transport: s.c.Transport, State: auth.SignInStateRejected, Recovery: r.Recovery, Issuance: session.IssueResult{CommandID: q.CommandID, CommitOutcome: identity.CommitOutcomeUnknown, Replayed: true}}, identity.UnknownCommitError{CommandID: q.CommandID}
 	}
 	if receipt.Outcome == identity.CommitOutcomeCommitted && currentErr != nil {
 		return out, currentErr
 	}
-	out = password.SigninResult{State: auth.SignInStateRejected, Recovery: r.Recovery, Issuance: session.IssueResult{CommandID: q.CommandID, CommitOutcome: receipt.Outcome, Replayed: true, RetryAfter: receipt.RetryAfter}}
+	out = password.SigninResult{Transport: s.c.Transport, State: auth.SignInStateRejected, Recovery: r.Recovery, Issuance: session.IssueResult{CommandID: q.CommandID, CommitOutcome: receipt.Outcome, Replayed: true, RetryAfter: receipt.RetryAfter}}
 	if receipt.Outcome == identity.CommitOutcomeCommitted {
 		out.State, out.SessionID = auth.SignInStateAuthenticated, sessionID
 	}

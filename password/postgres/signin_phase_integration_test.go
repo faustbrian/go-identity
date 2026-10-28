@@ -323,6 +323,14 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 		testPublicNativeSignin(t, ctx, pool, policy, crypto, hash, sessionConfig, profile)
 		return
 	}
+	if scenario == "public bearer service" {
+		testPublicNativeBearerSignin(t, ctx, pool, policy, crypto, hash, sessionConfig, profile)
+		return
+	}
+	if scenario == "public bearer regression" {
+		testPublicNativeSigninTransport(t, ctx, pool, policy, crypto, hash, sessionConfig, profile, password.BearerSignin)
+		return
+	}
 	if scenario == "password MFA challenge" {
 		testPublicPasswordMFAChallenge(t, ctx, pool, policy, crypto, hash, sessionConfig, profile)
 		return

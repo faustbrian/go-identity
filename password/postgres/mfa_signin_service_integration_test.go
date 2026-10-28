@@ -79,6 +79,13 @@ func testPublicPasswordMFAChallenge(t *testing.T, ctx context.Context, pool *dat
 	if err != nil {
 		t.Fatal("native MFA composition denied", err)
 	}
+	t.Run("unsupported-bearer", func(t *testing.T) {
+		bearer := c
+		bearer.Transport, bearer.CSRFKey, bearer.Issuance.Cookie = password.BearerSignin, session.CSRFKey{}, session.CookiePolicy{}
+		if got, err := NewMFASigninService(pool, bearer, mc); err == nil || got != nil {
+			t.Fatal("otherwise-valid MFA composition accepted unsupported bearer transport")
+		}
+	})
 	usernameConfig := c
 	usernameConfig.Username, err = username.NewPolicy(username.ReferencePolicySpec())
 	if err != nil {

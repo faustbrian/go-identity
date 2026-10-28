@@ -93,6 +93,9 @@ func NewUsernameMFASigninService(pool *database.Pool, c SigninConfig, m MFAChall
 }
 
 func newMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
+	if c.Transport != password.CookieSignin {
+		return nil, password.ErrPasswordWork
+	}
 	methods, methodErr := freezeMFACompletionMethods(m.AllowedMethods)
 	if methodErr != nil {
 		return nil, methodErr

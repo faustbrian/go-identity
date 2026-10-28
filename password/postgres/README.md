@@ -121,6 +121,33 @@ counter/audit/storage outages and cancellation cannot become an available name.
 No routes are enabled by construction. Rename has its separate explicit
 constructor above; selected HTTP/reference composition remains unfinished.
 
+## Explicit bearer password signin
+
+`NewSigninService` retains cookie/synchronizer signin by default. To select the
+email/password-only bearer profile, set `SigninConfig.Transport` to
+`password.BearerSignin`, leave `CSRFKey` and `Issuance.Cookie` zero, and leave
+`Username` and `Phone` nil. Install native MFA authority and initialize the user
+through the real signup workflow: missing or nonempty factor authority denies.
+MFA signin constructors reject bearer selection; no factor fallback is offered.
+
+This profile performs the same genuine raw-password comparison, original
+pre-auth possession/intent checks, risk admission, signed authentication, hash
+upgrade and atomic session/pre-auth/audit/outbox transaction. It issues a new
+bearer-only session with no stored CSRF, synchronizer or cookie attributes;
+no existing cookie session is converted or stripped. Original proof, session
+and current-authority expiry bounds are unchanged. Consumers still need the
+normal exact origin/callback allowlists and the original pre-auth credential.
+
+An original successful `SigninResult` reports `Transport == password.BearerSignin`.
+Use `Issuance.Token.Reveal` once at an explicitly selected bearer transport, then
+send the resulting credential in `Authorization: Bearer <token>` to a matching
+supported session reader. Do not expose it through an existing cookie handler.
+Wrong/unknown credentials remain enumeration-safe; errors, cancelled/unknown
+outcomes, consumed-flow retries and `RecoverSignin` reveal no new credentials.
+Recovery preserves only the authorized original session identity and cannot
+renew its authentication or authority lifetime. Constructor acceptance alone
+does not prove a downstream organization/session consumer.
+
 ## Explicit phone password signin
 
 Set `SigninConfig.Phone` to the fixed `phone.NumberPolicy` used for enrollment;

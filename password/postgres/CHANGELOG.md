@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Select explicit email/password bearer-only signin with `SigninConfig.Transport`.
+  It uses the same real comparison, pre-auth consumption, signed authentication,
+  atomic session/audit/outbox and recovery, but stores no CSRF and emits no
+  cookie metadata. Supply no cookie policy or CSRF key and install known-empty
+  native MFA authority. Cookie defaults stay unchanged; bearer username, phone
+  and MFA continuation combinations fail closed.
+
 - Admit genuine self-deletion passkey action proofs through the existing
   signed-primary owner. Append `PasskeyDeletionReauthenticationMigrationSource`
   after every installed selected proof suffix; consumption remains atomic with

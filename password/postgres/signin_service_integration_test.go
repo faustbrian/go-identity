@@ -108,12 +108,29 @@ func publicSigninFixture(t *testing.T, pool *database.Pool, policy primitive.Pol
 
 func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, hash primitive.EncodedHash, storage sessionpg.Config, profile sessionpg.IdentifierAdmissionConfig) {
 	t.Helper()
+	testPublicNativeSigninTransport(t, ctx, pool, policy, crypto, hash, storage, profile, password.CookieSignin)
+}
+
+func testPublicNativeSigninTransport(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, hash primitive.EncodedHash, storage sessionpg.Config, profile sessionpg.IdentifierAdmissionConfig, transport password.SigninTransport) {
+	t.Helper()
 	service, c := publicSigninFixture(t, pool, policy, crypto, hash, storage, profile)
+	if transport == password.BearerSignin {
+		seedNativeBearerFactors(t, ctx, pool)
+		c.Transport, c.CSRFKey, c.Issuance.Cookie = transport, session.CSRFKey{}, session.CookiePolicy{}
+		var err error
+		service, err = NewSigninService(pool, c)
+		if err != nil {
+			t.Fatal("native bearer regression composition", err)
+		}
+	}
 	flowKey := c.FlowKeys[0]
 	query := *c.Coordinator.QueryPolicy
 	var err error
 	var workflow password.SigninService = service
-	for _, mode := range []string{"http-browser", "http-persistent", "commit", "commit-persistent", "wrong", "unknown", "invalid-email", "foreign-cookie", "foreign-origin", "foreign-callback", "changed-remember", "policy-advance", "rehash", "rehash-persistent", "rehash-wrong", "rehash-policy-advance", "rehash-outbox-failure", "rehash-concurrent", "rehash-expired", "rehash-cancelled", "rehash-disconnect-before", "rehash-disconnect-after"} {
+	for _, mode := range []string{"http-browser", "http-persistent", "commit", "commit-persistent", "wrong", "unknown", "invalid-email", "foreign-cookie", "foreign-origin", "foreign-callback", "changed-remember", "policy-advance", "same-flow-concurrent", "rehash", "rehash-persistent", "rehash-wrong", "rehash-policy-advance", "rehash-outbox-failure", "rehash-concurrent", "rehash-expired", "rehash-cancelled", "rehash-disconnect-before", "rehash-disconnect-after"} {
+		if transport == password.BearerSignin && strings.HasPrefix(mode, "http-") {
+			continue // The selected HTTP owner remains cookie-only.
+		}
 		t.Run(mode, func(t *testing.T) {
 			r, _, _, _ := nativeSigninFlow(t)
 			r.TenantID, r.Caller.Request.Tenant, r.Caller.Request.Subject.ID = signinTestTenant, signinTestTenant, signinTestActor
@@ -283,6 +300,16 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					}
 				})
 			}
+			if mode == "same-flow-concurrent" {
+				changed := c
+				admission := query
+				admission.Authorization = &signinPublicBarrierPolicy{ready: make(chan struct{})}
+				changed.Coordinator.AdmissionPolicy = &admission
+				attempt, e = NewSigninService(pool, changed)
+				if e != nil {
+					t.Fatal("same-flow contention composition", e)
+				}
+			}
 			if mode == "rehash-outbox-failure" {
 				if _, e := pool.Raw().Exec(ctx, `ALTER TABLE public.identity_outbox_bindings ADD CONSTRAINT signin_rehash_fault CHECK(false) NOT VALID`); e != nil {
 					t.Fatal("outbox fault fixture", e)
@@ -305,21 +332,36 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 			}
 			var result password.SigninResult
 			var signinErr error
-			if mode == "rehash-concurrent" {
+			if mode == "rehash-concurrent" || mode == "same-flow-concurrent" {
 				other := r
-				other.PreAuthID, e = identity.NewPreAuthTransactionID()
-				if e != nil {
-					t.Fatal(e)
+				// Secret value copies share custody and reject concurrent Use. Each
+				// simulated request must reach SQL with an independent secret owner.
+				if e = r.Password.Use(func(raw []byte) error {
+					other.Password, e = primitive.NewSecret(raw)
+					return e
+				}); e != nil {
+					t.Fatal("independent contention password fixture", e)
 				}
-				otherBinding := b
-				otherBinding.ID = other.PreAuthID
-				otherDigest, e := token.PreAuthDigest(flowKey, otherBinding)
-				if e != nil {
-					t.Fatal("second cookie fixture")
+				defer other.Password.Destroy()
+				if mode == "rehash-concurrent" {
+					other.PreAuthID, e = identity.NewPreAuthTransactionID()
+					if e != nil {
+						t.Fatal(e)
+					}
+					otherBinding := b
+					otherBinding.ID = other.PreAuthID
+					otherDigest, e := token.PreAuthDigest(flowKey, otherBinding)
+					if e != nil {
+						t.Fatal("second cookie fixture")
+					}
+					otherFlow, e := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: otherBinding, Cookie: otherDigest, Version: 1})
+					if e != nil || sessionpg.InsertPreAuth(ctx, signinTestTx{pool}, storage, otherFlow) != nil {
+						t.Fatal("second flow fixture")
+					}
 				}
-				otherFlow, e := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: otherBinding, Cookie: otherDigest, Version: 1})
-				if e != nil || sessionpg.InsertPreAuth(ctx, signinTestTx{pool}, storage, otherFlow) != nil {
-					t.Fatal("second flow fixture")
+				var sessionsBefore, recordsBefore int
+				if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM signin_sessions.sessions),(SELECT count(*) FROM identity_password.signin_records)`).Scan(&sessionsBefore, &recordsBefore); e != nil {
+					t.Fatal("contention baseline unavailable", e)
 				}
 				type outcome struct {
 					request password.SigninRequest
@@ -341,7 +383,11 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					}
 				}
 				if winners != 1 {
-					t.Fatal("concurrent rehash did not have exactly one winner")
+					t.Fatal("concurrent signin did not have exactly one winner")
+				}
+				var sessionsAfter, recordsAfter int
+				if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM signin_sessions.sessions),(SELECT count(*) FROM identity_password.signin_records)`).Scan(&sessionsAfter, &recordsAfter); e != nil || sessionsAfter != sessionsBefore+1 || recordsAfter != recordsBefore+1 {
+					t.Fatal("concurrent signin persisted more than one success", e)
 				}
 			} else {
 				result, signinErr = attempt.Signin(attemptContext, r)
@@ -366,7 +412,7 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 			if e = pool.Raw().QueryRow(ctx, `SELECT state FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(r.PreAuthID)).Scan(&state); e != nil {
 				t.Fatal("flow observation")
 			}
-			if mode != "commit" && mode != "commit-persistent" && mode != "rehash" && mode != "rehash-persistent" && mode != "rehash-concurrent" {
+			if mode != "commit" && mode != "commit-persistent" && mode != "same-flow-concurrent" && mode != "rehash" && mode != "rehash-persistent" && mode != "rehash-concurrent" {
 				if result.State == auth.SignInStateAuthenticated || result.Issuance.Token != (session.Token{}) || result.CSRFToken != (session.CSRFToken{}) || result.Issuance.Cookie.Name != "" || state != "issued" {
 					t.Fatal("neutral denial disclosed or consumed authentication")
 				}
@@ -421,17 +467,25 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					t.Fatal("upgraded password unusable")
 				}
 			}
-			if _, e = result.Issuance.Token.Reveal(); e != nil {
+			wire, e := result.Issuance.Token.Reveal()
+			if e != nil {
 				t.Fatal("native bearer withheld")
 			}
 			if _, e = result.Issuance.Token.Reveal(); e == nil {
 				t.Fatal("bearer revealed twice")
 			}
-			if _, e = result.CSRFToken.Reveal(); e != nil || s.SessionID != result.SessionID {
-				t.Fatal("native synchronizer or identity withheld")
-			}
-			if (mode == "commit-persistent" || mode == "rehash-persistent") && (result.Issuance.Cookie.MaxAge <= 0 || result.Issuance.Cookie.Expires.IsZero()) || (mode == "commit" || mode == "rehash") && (result.Issuance.Cookie.MaxAge != 0 || !result.Issuance.Cookie.Expires.IsZero()) {
-				t.Fatal("issued cookie lost original remember choice")
+			if transport == password.BearerSignin {
+				if result.CSRFToken != (session.CSRFToken{}) || !zeroSigninCookie(result.Issuance.Cookie) || s.SessionID != result.SessionID {
+					t.Fatal("bearer regression added cookie/CSRF or lost session identity")
+				}
+				checkNativeBearerSession(t, ctx, pool, c, wire, result.Issuance.Session)
+			} else {
+				if _, e = result.CSRFToken.Reveal(); e != nil || s.SessionID != result.SessionID {
+					t.Fatal("native synchronizer or identity withheld")
+				}
+				if (mode == "commit-persistent" || mode == "rehash-persistent") && (result.Issuance.Cookie.MaxAge <= 0 || result.Issuance.Cookie.Expires.IsZero()) || (mode == "commit" || mode == "rehash") && (result.Issuance.Cookie.MaxAge != 0 || !result.Issuance.Cookie.Expires.IsZero()) {
+					t.Fatal("issued cookie lost original remember choice")
+				}
 			}
 			replay, replayErr := workflow.Signin(ctx, r)
 			if replayErr == nil || replay.Issuance.Token != (session.Token{}) || replay.CSRFToken != (session.CSRFToken{}) || replay.Issuance.Cookie.Name != "" {

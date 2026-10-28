@@ -22,12 +22,12 @@ require (
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261020163503-ea96b3da9b18
 	github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6
 	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6
-	github.com/faustbrian/go-identity/password v0.0.0-20261023192729-324d7aeea43e
+	github.com/faustbrian/go-identity/password v0.0.0-20261027053124-3051d2cd42b5
 	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261021074754-2eafc2592af0
 	github.com/faustbrian/go-identity/risk v0.0.0-20261020133538-6d5c539268df
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261020123641-81bbbbbffa8e
-	github.com/faustbrian/go-identity/session v0.0.0-20261020084459-928f9b710602
+	github.com/faustbrian/go-identity/session v0.0.0-20261027053124-3051d2cd42b5
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261020162400-f96bcf8bf25d
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
