@@ -410,6 +410,14 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 			return false
 		}
 		csrfMatches := r.CSRFOrigin.Mode == want.CSRFOrigin.Mode
+		idempotencyMatches := r.Idempotency == want.Idempotency
+		// Native API-key management requires original keyed custody even for
+		// rotation/revocation. This explicit bearer profile cannot describe a
+		// cookie handler or inherit the older draft's non-keyed labels.
+		if apiKeyManagementOperation(r.OperationID) && r.CSRFOrigin.Mode == CSRFNone {
+			csrfMatches = true
+			idempotencyMatches = r.Idempotency == "keyed"
+		}
 		// These selected organization mutations also admit strict bearer-only
 		// handlers (identity/http's bearer profile), which must ignore ambient
 		// cookies. Only their explicit None profile is admitted; cookie handlers
@@ -492,13 +500,22 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if r.OperationID == "identity.mfa.totp-verify" && (r.CSRFOrigin.Mode == CSRFSessionState || r.CSRFOrigin.Mode == CSRFVariantOriginSessionState) && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
-		if r.Exposure != want.Exposure || !slices.Equal(r.Owners, want.Owners) || r.Access != want.Access || r.Authorization != want.Authorization || !csrfMatches || r.RiskClass != want.RiskClass || r.RatePolicy != want.RatePolicy || r.Idempotency != want.Idempotency || r.EventSemantics != want.EventSemantics || r.HandlerOwner != want.HandlerOwner || r.Method != want.Method || r.Path != want.Path || r.OpenAPIOperationID != want.OpenAPIOperationID || r.RequestSchema.ID != row.RequestSchema || r.ResultSchema.ID != row.ResultSchema || r.ErrorSchema.ID != row.ErrorSchema {
+		if r.Exposure != want.Exposure || !slices.Equal(r.Owners, want.Owners) || r.Access != want.Access || r.Authorization != want.Authorization || !csrfMatches || r.RiskClass != want.RiskClass || r.RatePolicy != want.RatePolicy || !idempotencyMatches || r.EventSemantics != want.EventSemantics || r.HandlerOwner != want.HandlerOwner || r.Method != want.Method || r.Path != want.Path || r.OpenAPIOperationID != want.OpenAPIOperationID || r.RequestSchema.ID != row.RequestSchema || r.ResultSchema.ID != row.ResultSchema || r.ErrorSchema.ID != row.ErrorSchema {
 			return false
 		}
 		return owner == r.Owners[0] || (owner == "identity/http.probes" && (r.OperationID == "identity.health" || r.OperationID == "identity.readiness"))
 	}
 	prefix := "extension." + strings.ReplaceAll(string(owner), "/", ".") + "."
 	return strings.HasPrefix(r.OperationID, prefix) && len(r.OperationID) > len(prefix) && r.OpenAPIOperationID == r.OperationID && r.Owners[0] == owner && r.HandlerOwner == owner
+}
+
+func apiKeyManagementOperation(id string) bool {
+	switch id {
+	case "identity.apikey.create", "identity.apikey.rotate", "identity.apikey.delete":
+		return true
+	default:
+		return false
+	}
 }
 
 func validSchema(s TypedSchema) bool {

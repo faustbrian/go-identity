@@ -1,5 +1,14 @@
 # Identity HTTP transport
 
+API-key create/rotate/delete may explicitly select `CSRFNone` only for strict
+bearer handlers that ignore ambient cookies. This selected profile requires
+the original `Idempotency-Key` for all three operations, matching the native
+management API rather than the draft catalog's rotate/repeat labels. The same
+`KeyedSecretRateLimiter` admits these actions with shared IP/subject budgets
+and stable original debit custody. Cookie profiles and all other operation
+contracts remain unchanged. This metadata selection grants no authority and
+does not enable routes; the optional feature must enforce the native workflow.
+
 Organization creation/metadata updates, member admission/role updates/removal
 and invitation sending/acceptance/resend/cancellation/rejection may select `CSRFNone` only
 for strict-bearer feature handlers that ignore ambient cookies.

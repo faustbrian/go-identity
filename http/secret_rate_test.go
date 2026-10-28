@@ -151,6 +151,38 @@ func TestPasskeyRemovalRepeatProfileRetainsOriginalKeyRateCustody(t *testing.T) 
 	}
 }
 
+func TestAPIKeyManagementSharesOriginalKeySecretRateCustody(t *testing.T) {
+	l, b := secretLimiter(t)
+	r := secretRequest(t)
+	facts := safeFacts(t, "198.51.100.1")
+	var first ratelimit.AtomicBatchRequest
+	commands := make(map[string]bool)
+	for _, action := range []string{"create", "rotate", "delete"} {
+		r.OperationID = "identity.apikey." + action
+		if out, err := l.Admit(t.Context(), facts, r); err != nil || !out.Allowed {
+			t.Fatal("native keyed management action denied", action, err)
+		}
+		current := b.last
+		if len(current.Requests) != 2 || current.CommandID == "" || commands[current.CommandID] {
+			t.Fatal("management action lost distinct command or shared dimensions")
+		}
+		commands[current.CommandID] = true
+		if action == "create" {
+			first = current
+		} else if current.Requests[0].Key != first.Requests[0].Key || current.Requests[1].Key != first.Requests[1].Key {
+			t.Fatal("management route reset shared budget")
+		}
+		if out, err := l.Admit(t.Context(), facts, r); err != nil || !out.Allowed || b.last.CommandID != current.CommandID {
+			t.Fatal("original management retry lost debit custody", action, err)
+		}
+	}
+	before := b.calls
+	r.OperationID = "identity.session.revoke-one"
+	if _, err := l.Admit(t.Context(), facts, r); !errors.Is(err, identityhttp.ErrInvalidInput) || b.calls != before {
+		t.Fatal("management exception broadened unrelated repeat")
+	}
+}
+
 func TestKeyedSecretRateDenialUnknownAndCancellation(t *testing.T) {
 	l, b := secretLimiter(t)
 	r := secretRequest(t)

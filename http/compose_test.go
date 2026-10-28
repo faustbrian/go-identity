@@ -130,3 +130,40 @@ func TestPhoneRemovalStoredSynchronizerContract(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIKeyManagementSelectsOnlyExplicitBearerKeyedProfile(t *testing.T) {
+	for _, action := range []string{"create", "rotate", "delete"} {
+		t.Run(action, func(t *testing.T) {
+			c := identityhttp.CanonicalOperationConfig{Owner: "identity/apikey", OperationID: "identity.apikey." + action, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) }), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 16384}
+			op, err := identityhttp.NewCanonicalOperation(c)
+			if err != nil || op.Record.Idempotency != "keyed" || op.Record.RatePolicy != "rate.secret" || op.Route.CSRF != c.CSRF {
+				t.Fatal("native bearer/keyed management profile rejected", err)
+			}
+			f := feature(t, "identity/apikey", nil, op)
+			h, err := identityhttp.NewSelectedHandler(identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest("POST", "/v1/apikey/"+action, nil))
+			if w.Code != http.StatusAccepted {
+				t.Fatal("selected management handler is unreachable", w.Code)
+			}
+			for _, change := range []func(*identityhttp.OperationDescriptor){
+				func(o *identityhttp.OperationDescriptor) { o.Record.Idempotency = "repeat" },
+				func(o *identityhttp.OperationDescriptor) { o.Record.Idempotency = "rotate" },
+			} {
+				bad := op
+				change(&bad)
+				if _, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: c.Owner, Operations: []identityhttp.OperationDescriptor{bad}}); err == nil {
+					t.Fatal("bearer management admitted without original keyed custody")
+				}
+			}
+		})
+	}
+	for _, operation := range []string{"identity.apikey.update", "identity.password.reset-inspect"} {
+		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/apikey", OperationID: operation, Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 16384}); err == nil {
+			t.Fatal("management exception broadened another operation", operation)
+		}
+	}
+}

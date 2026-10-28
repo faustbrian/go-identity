@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit explicit strict-bearer API-key create/rotate/delete descriptors with
+  original-key idempotency and shared secret-rate admission for all three
+  native mutations. Existing cookie profiles and unrelated operations retain
+  their policies. Selection alone enables no handler or authority.
+
 - Admit exact opt-in strict-bearer role create/update/delete policies while
   preserving canonical role-write, administrative-rate, keyed/natural-repeat
   and cookie-CSRF contracts. Selection enables no handler or native authority.

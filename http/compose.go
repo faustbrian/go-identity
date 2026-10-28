@@ -25,6 +25,9 @@ import (
 // additionally admit None only for explicitly selected strict bearer handlers
 // that ignore ambient cookies. Owner-transfer retains its native fresh proof.
 // Other organization mutations retain their canonical policy.
+// API-key create/rotate/delete additionally admit explicit bearer-only None
+// with keyed custody, matching the native management contracts. Those handlers
+// must reject cookie fallback and require the original Idempotency-Key.
 // MaximumSerializedBytes
 // bounds each schema summary (1..16MiB); it is not response-size enforcement.
 // Handler must be usable/concurrency-safe and own its declared security. Nil
@@ -55,6 +58,9 @@ func NewCanonicalOperation(c CanonicalOperationConfig) (OperationDescriptor, err
 	}
 	r := row.record()
 	r.CSRFOrigin = c.CSRF
+	if apiKeyManagementOperation(r.OperationID) && c.CSRF.Mode == CSRFNone {
+		r.Idempotency = "keyed"
+	}
 	r.RequestSchema = schemaSummary(row.RequestSchema, row.RequestDigest)
 	r.ResultSchema = schemaSummary(row.ResultSchema, row.ResultDigest)
 	r.ErrorSchema = schemaSummary(row.ErrorSchema, row.ErrorDigest)
