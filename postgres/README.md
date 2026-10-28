@@ -1,5 +1,52 @@
 # Identity PostgreSQL
 
+## Atomic API-key verification effects
+
+The closed `CommandPlan.APIKeyVerification` profile is a trusted native-adapter
+composition seam, not a standalone API-key backend. Its exact
+`APIKeyVerificationContributor` compares the credential and checks current
+owner, tenant and policy authority inside the existing `Work`. It must first
+require the unchanged command through `Work.RequireFeatureCommand`, and its
+mandatory `CheckFeatureCommit` fences the original facts and expiry again after
+required effects. It cannot renew freshness or create a private transaction.
+
+`ApplyAPIKeyVerification` returns a record-free `FeatureReceipt` and an
+independent `APIKeyVerificationOutcome`:
+
+- Ordinary success or denial persists one protected authentication audit,
+  without advancing key versions or emitting lifecycle events.
+- A genuine strict permission reduction also persists its successful update
+  audit and `api_key.permissions_changed.v1`, even if the resulting grant denies
+  authentication. Both effects remain atomic with the actual native reduction.
+- An unknown key can only deny, with an `authentication_attempt` subject bound
+  to the original command. It cannot authenticate or reduce any key's grant.
+
+Known-key plans freeze the original positive, incrementable `KeyVersion`, the
+API-key actor as audit target, protected authentication/update slots and nominal
+zero-version lifecycle declaration. Unknown-key plans use version zero and only
+the authentication slot. The coordinator selects actual slots from the native
+result; the retained plan never changes. Actual reductions use the frozen key's
+adjacent version transition while the record-free receipt stays at zero.
+All other feature profiles retain their existing mandatory mutation effects.
+The declared native verification schemas require this closed plan and cannot
+fall back to a generic mutation contributor. The envelope discriminator does
+not reserve an operation name belonging to another registered feature owner.
+
+`CommitOutcomeCommitted` describes durable command effects, not successful
+authentication. Native adapters must retain and reconcile their original result
+under the sole command journal, never infer a principal from that receipt or
+rerun comparison after an ambiguous commit. Missing required audit, lifecycle or
+final authority rolls back the entire provisional reduction; unproven closure
+remains unknown. This support alone does not supply native credential storage,
+verification, reconciliation, HTTP or cache adapters.
+
+After the original lease expires, unanimous negative evidence from every frozen
+participant may close the attempt as not committed. That recovery writes only
+the failed authentication audit, never the possible update/lifecycle. It retains
+the existing dependency-failure error classification alongside the durable
+noncommit result. Composed authentication and reduction records share original
+command/correlation identity and retain distinct canonical causation IDs.
+
 ## Independent user-owner status admission
 
 `Work.RequireActiveUserStatus` admits only the exact registered feature owner

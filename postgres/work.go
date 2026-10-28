@@ -65,6 +65,7 @@ type workState struct {
 	featureAttempted          bool
 	authenticationChecked     bool
 	featureReceipt            *identity.FeatureReceipt
+	apiKeyVerification        *APIKeyVerificationOutcome
 	featureCommitCommand      *identity.Command
 	featureInvocation         FeatureExecutionContributor
 	featureApplying           bool

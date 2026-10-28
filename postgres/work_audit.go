@@ -18,7 +18,11 @@ import (
 // index requires exactly one record; indices increase strictly, at most 64.
 // Byte bounds may lower but never exceed the 16 KiB identity security profile.
 // RetentionPolicyVersion is the exact durable policy selected at admission;
-// staging does not read or mutate retention policy. Zero and Required=false
+// staging does not read or mutate retention policy. The closed API-key
+// verification profile declares its maximum slots; the coordinator selects
+// the update slot only for an actual strict permission reduction, and rollback
+// selects authentication alone. Other profiles require every declared slot.
+// Zero and Required=false
 // are invalid. This declaration alone grants no persistence authority.
 type AuditPlan struct {
 	EventType              string
@@ -80,8 +84,17 @@ func FeatureAuditBindingDigest(binding identity.CommandBinding, operation identi
 	if binding.ValidateFor(operation) != nil || !auditName(subjectType) {
 		return [32]byte{}, invalidAudit()
 	}
-	target := featureTargetID(binding)
+	target := featureAuditTargetID(binding, operation)
 	return securityAuditBindingDigest(binding, &operation, subjectType, target, record)
+}
+
+func featureAuditTargetID(binding identity.CommandBinding, operation identity.FeatureOperation) string {
+	if operation == apiKeyVerificationOperation(false) && binding.ActorKind == authorization.SubjectAPIKey {
+		// Read-only verification has no mutation RecordID. The credential actor,
+		// not its human owner, is the actual authentication/mutation target.
+		return string(binding.ActorID)
+	}
+	return featureTargetID(binding)
 }
 
 // featureTargetID preserves the descriptor-selected subject namespace when a

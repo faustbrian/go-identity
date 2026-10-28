@@ -289,6 +289,10 @@ func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before 
 }
 
 func securityMutationAudit(ctx context.Context, b identity.CommandBinding, before, afterVersion uint64, now time.Time, class, action, kind, target, retention string, feature bool) (audit.Record, error) {
+	return securityMutationAuditCausation(ctx, b, before, afterVersion, now, class, action, kind, target, retention, feature, "")
+}
+
+func securityMutationAuditCausation(ctx context.Context, b identity.CommandBinding, before, afterVersion uint64, now time.Time, class, action, kind, target, retention string, feature bool, causation string) (audit.Record, error) {
 	actorKind := audit.ActorHuman
 	switch b.ActorKind {
 	case authorization.SubjectUser:
@@ -331,7 +335,7 @@ func securityMutationAudit(ctx context.Context, b identity.CommandBinding, befor
 	if feature && b.OperationID == "identity.otp.email-change-confirm" && b.SchemaID == "identity.otp.email-change-confirm.managed-v1" && b.SchemaVersion == 1 {
 		attributes["authentication.recovery_path"] = "email_change_otp"
 	}
-	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: action, Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: attributes})
+	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: action, Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID, CausationID: causation}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: attributes})
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}

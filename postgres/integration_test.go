@@ -106,6 +106,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("feature observation", func(t *testing.T) { testFeatureObservation(t, ctx, pool) })
 	t.Run("command admission", func(t *testing.T) { testCommandAdmissionPrimary(t, ctx, pool) })
 	t.Run("feature execution", func(t *testing.T) { testFeatureExecution(t, ctx, pool, repo) })
+	t.Run("API-key verification", func(t *testing.T) { testAPIKeyVerification(t, ctx, pool, repo) })
 	// Keep optional preparation in the real migration history. Installing it
 	// as raw fixture SQL and later appending it to reset history would attempt
 	// to create the same columns twice.

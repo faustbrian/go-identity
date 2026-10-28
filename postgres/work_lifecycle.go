@@ -116,10 +116,18 @@ func (w Work) StageLifecycle(index uint16, occurredAt time.Time) error {
 		return w.fail(w.state.ctx, invalidLifecycle())
 	}
 	b := w.state.binding
+	plan := l.plan
 	kind, target := "user", string(b.UserID)
 	if w.state.feature != nil {
 		kind = w.state.subjectType
-		target = featureTargetID(b)
+		target = featureAuditTargetID(b, w.state.feature.Operation)
+		if w.state.apiKeyVerification != nil {
+			var err error
+			plan, err = apiKeyVerificationLifecyclePlan(w)
+			if err != nil {
+				return w.fail(w.state.ctx, err)
+			}
+		}
 	} else if b.RecordID != "" {
 		target = b.RecordID
 		switch kernelCommandAudit(b.OperationID) {
@@ -134,14 +142,17 @@ func (w Work) StageLifecycle(index uint16, occurredAt time.Time) error {
 		}
 	}
 	id := sha256.Sum256(cborMap(map[string][]byte{"profile": cborText("identity-effect-id-v1"), "command_id": cborText(string(b.CommandID)), "class": cborText("lifecycle"), "index": cborUint(uint64(index))}))
-	l.record = &StagedLifecycle{ID: hex.EncodeToString(id[:]), CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, OperationID: b.OperationID, EventType: l.plan.EventType, EventIndex: index, SubjectType: kind, SubjectID: target, BeforeVersion: l.plan.BeforeVersion, AfterVersion: l.plan.AfterVersion, OccurredAt: occurredAt}
+	l.record = &StagedLifecycle{ID: hex.EncodeToString(id[:]), CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, OperationID: b.OperationID, EventType: plan.EventType, EventIndex: index, SubjectType: kind, SubjectID: target, BeforeVersion: plan.BeforeVersion, AfterVersion: plan.AfterVersion, OccurredAt: occurredAt}
 	return nil
 }
 
 // StagedLifecycle returns one owned record only after the declared event was
 // staged and its successful audit agrees on the exact aggregate and versions.
-// Conflicting audit evidence poisons Work; denial/failure cannot produce a
-// success lifecycle notification. Missing or invalid Work returns no records.
+// Conflicting audit evidence poisons Work. An authentication denial in the
+// closed API-key verification profile may accompany its independent successful
+// permission-reduction audit; only that actual update produces its lifecycle.
+// Other denied/failed mutations cannot produce success notifications.
+// Missing or invalid Work returns no records.
 // The outbox contributor
 // must persist it through this same Work before successful terminalization.
 func (w Work) StagedLifecycle() ([]StagedLifecycle, error) {
@@ -155,6 +166,13 @@ func (w Work) StagedLifecycle() ([]StagedLifecycle, error) {
 		return nil, err
 	}
 	r := w.state.lifecycle.record
+	if w.state.apiKeyVerification != nil {
+		plan, err := apiKeyVerificationLifecyclePlan(w)
+		if err != nil || validateAPIKeyVerificationAudits(w) != nil || r.EventType != plan.EventType || r.EventIndex != plan.EventIndex || r.SubjectType != w.state.subjectType || r.SubjectID != featureAuditTargetID(w.state.binding, w.state.feature.Operation) || r.BeforeVersion != plan.BeforeVersion || r.AfterVersion != plan.AfterVersion {
+			return nil, w.fail(w.state.ctx, invalidLifecycle())
+		}
+		return []StagedLifecycle{*r}, nil
+	}
 	for _, record := range w.state.audits.records {
 		attributes := record.Attributes()
 		if record.Outcome() != audit.OutcomeSucceeded || record.Subject().Type() != r.SubjectType || record.Subject().ID() != r.SubjectID || attributes["aggregate.before_version"] != strconv.FormatUint(r.BeforeVersion, 10) || attributes["aggregate.after_version"] != strconv.FormatUint(r.AfterVersion, 10) {

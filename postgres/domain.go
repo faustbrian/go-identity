@@ -131,6 +131,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 		descriptors[i] = entry.descriptor
 	}
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest, CaptchaReplayReservation: p.captchaReplay, SignupAcceptance: p.signupAcceptance}
+	result.APIKeyVerification = cloneAPIKeyVerificationPlan(p.apiKeyVerification)
 	result.MagicLinkRequestAcceptance = p.magicLinkRequestAcceptance
 	result.OrganizationInvitationOrigin = cloneOrganizationInvitationOrigin(p.invitationOrigin)
 	result.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.magicLinkRegistration)
@@ -249,10 +250,13 @@ func (r *Repository) insertCreation(ctx context.Context, w Work, spec identity.C
 	return user, nil
 }
 
-// Commit verifies the receipt against the owned actual mutation and exact
-// staged successful audit/lifecycle transition, persists registered audit then
-// outbox phases through this same Work, and writes the terminal result before
-// one primary commit. A caller-authored receipt cannot fabricate a mutation.
+// Commit verifies the receipt against the owned native result and required
+// effects, persists registered audit/outbox phases through this same Work,
+// and writes the terminal result before one primary commit. Ordinary mutations
+// require their successful audit/lifecycle transition. Closed API-key
+// verification independently records authentication and optional permission
+// reduction; durable command commit does not imply successful authentication.
+// A caller-authored receipt cannot fabricate a mutation or native disposition.
 // All aliases and rows are invalidated before closure. Any error after commit
 // begins returns Unknown with no rollback/retry. Pre-commit failures roll back
 // through Abort; absent matching failure audit leaves pending/Unknown, not a
@@ -276,15 +280,29 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if err := completeAudits(w); err != nil {
 		return c.Abort(w, err)
 	}
-	lifecycle := w.state.execution.reservation.plan.lifecycle
-	for i, record := range w.state.audits.records {
-		attrs := record.Attributes()
-		if i == 0 && record.ID() != result.AuditEventID || record.Outcome() != audit.OutcomeSucceeded || record.ReasonCode() != "completed" || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(lifecycle.BeforeVersion, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(lifecycle.AfterVersion, 10) {
+	plan := w.state.execution.reservation.plan
+	if plan.apiKeyVerification != nil {
+		if validateAPIKeyVerificationAudits(w) != nil || w.state.audits.records[0].ID() != result.AuditEventID {
 			return c.Abort(w, invalidAudit())
 		}
-	}
-	if _, err := w.StagedLifecycle(); err != nil {
-		return c.Abort(w, err)
+		if w.state.apiKeyVerification.PermissionsChanged {
+			if _, err := w.StagedLifecycle(); err != nil {
+				return c.Abort(w, err)
+			}
+		} else if w.state.lifecycle.record != nil {
+			return c.Abort(w, invalidLifecycle())
+		}
+	} else {
+		lifecycle := plan.lifecycle
+		for i, record := range w.state.audits.records {
+			attrs := record.Attributes()
+			if i == 0 && record.ID() != result.AuditEventID || record.Outcome() != audit.OutcomeSucceeded || record.ReasonCode() != "completed" || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(lifecycle.BeforeVersion, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(lifecycle.AfterVersion, 10) {
+				return c.Abort(w, invalidAudit())
+			}
+		}
+		if _, err := w.StagedLifecycle(); err != nil {
+			return c.Abort(w, err)
+		}
 	}
 	if err := c.persistCapabilityIssuance(w); err != nil {
 		return c.Abort(w, err)
@@ -297,6 +315,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	}
 	for _, entry := range w.state.execution.reservation.plan.contributors {
 		if entry.descriptor.Owner == "outbox/postgres" {
+			if plan.apiKeyVerification != nil && !w.state.apiKeyVerification.PermissionsChanged {
+				continue
+			}
 			var err error
 			if w.state.oauthConsent != nil {
 				err = entry.contributor.(OAuthConsentLifecycleContributor).PersistOAuthConsent(w.state.ctx, w)
@@ -468,7 +489,11 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	} else if complete {
 		records = w.state.audits.records
 	}
-	complete = complete && len(records) == len(r.plan.audits)
+	abortPlans := r.plan.audits
+	if r.plan.apiKeyVerification != nil {
+		abortPlans = abortPlans[:1]
+	}
+	complete = complete && len(records) == len(abortPlans)
 	if complete {
 		before := strconv.FormatUint(r.plan.lifecycle.BeforeVersion, 10)
 		for _, record := range records {
@@ -519,13 +544,18 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := r.plan.bindWork(terminal); err != nil {
 		return fail(err)
 	}
+	if r.plan.apiKeyVerification != nil {
+		if err := selectAPIKeyVerificationAudits(terminal, 1); err != nil {
+			return fail(err)
+		}
+	}
 	if r.plan.risk != nil || r.plan.capability != nil || r.plan.captchaUse != nil || r.plan.otp != nil {
 		if err := configureKernelWork(cleanup, terminal); err != nil {
 			return fail(err)
 		}
 	}
 	for i, record := range records {
-		if err := terminal.StageAudit(r.plan.audits[i].EventIndex, record); err != nil {
+		if err := terminal.StageAudit(abortPlans[i].EventIndex, record); err != nil {
 			return fail(err)
 		}
 	}

@@ -296,6 +296,13 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e != nil {
 		return result, e
 	}
+	if admitted.apiKeyVerification != nil {
+		// Unanimous negative evidence proves Narrow did not commit. Only the
+		// failed authentication attempt exists, not its possible update slot.
+		if e = selectAPIKeyVerificationAudits(work, 1); e != nil {
+			return result, e
+		}
+	}
 	for i, record := range records {
 		if e = work.StageAudit(admitted.audits[i].EventIndex, record); e != nil {
 			return result, e

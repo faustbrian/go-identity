@@ -22,6 +22,8 @@ import (
 // primary-record receipt. It must not stage audit/lifecycle, close or retain Work,
 // mutate kernel-owned tables, perform network IO, or return secret material.
 // The coordinator stages the declared effects and establishes durability.
+// Closed API-key verification invokes APIKeyVerificationContributor instead
+// of the generic mutation method, without changing other feature contracts.
 // Methods must support concurrent calls with independent serial-use handles.
 // Risk execution additionally requires its exact typed current-check/finalize
 // owner. The exact registration-email, password-reset and magic-link profiles
@@ -243,6 +245,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
 	}
+	if p.APIKeyVerification != nil {
+		if _, ok := feature.contributor.(APIKeyVerificationContributor); !ok {
+			return nil, invalidPlan()
+		}
+	}
 	if anonymousUpgradePreparationSelected(p) {
 		if _, ok := feature.contributor.(AnonymousUpgradePreparationContributor); !ok || !validAnonymousUpgradePreparation(b, p) || !preparation && p.CapabilityIssuance == nil || preparation && p.CapabilityIssuance != nil {
 			return nil, invalidPlan()
@@ -411,7 +418,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 			return nil, invalidPlan()
 		}
 	}
-	target, actorKind := featureTargetID(b), audit.ActorService
+	target, actorKind := featureAuditTargetID(b, p.Feature.Operation), audit.ActorService
 	if b.ActorKind == authorization.SubjectUser {
 		actorKind = audit.ActorHuman
 	}
@@ -581,7 +588,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), passkeyRegistration: clonePasskeyRegistrationPlan(p.PasskeyRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{apiKeyVerification: cloneAPIKeyVerificationPlan(p.APIKeyVerification), invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), passkeyRegistration: clonePasskeyRegistrationPlan(p.PasskeyRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
@@ -839,17 +846,25 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
-	success, e := featureMutationAudits(ctx, p, now, "committed")
-	if e != nil {
-		return result, w.fail(ctx, e)
-	}
-	for i, record := range success {
-		if e = w.StageAudit(p.audits[i].EventIndex, record); e != nil {
+	var success []audit.Record
+	if p.apiKeyVerification != nil {
+		success, e = stageAPIKeyVerificationEffects(ctx, w, now)
+		if e != nil {
+			return result, w.fail(ctx, e)
+		}
+	} else {
+		success, e = featureMutationAudits(ctx, p, now, "committed")
+		if e != nil {
+			return result, w.fail(ctx, e)
+		}
+		for i, record := range success {
+			if e = w.StageAudit(p.audits[i].EventIndex, record); e != nil {
+				return result, e
+			}
+		}
+		if e = w.StageLifecycle(p.lifecycle.EventIndex, now); e != nil {
 			return result, e
 		}
-	}
-	if e = w.StageLifecycle(p.lifecycle.EventIndex, now); e != nil {
-		return result, e
 	}
 	result = identity.CommandResult{Binding: p.binding, Outcome: identity.CommitOutcomeCommitted, AuditEventID: success[0].ID(), Feature: &receipt}
 	if p.feature.Operation == emailRemovalOperation() || p.feature.Operation == phoneRemovalOperation() || p.feature.Operation == phoneChangeOperation() {
@@ -933,10 +948,35 @@ func invokeFeature(p FeatureExecutionContributor, ctx context.Context, w Work, c
 		w.state.featureApplyCommand = nil
 		w.state.featureInvocation = nil
 	}()
+	if execution := w.state.execution; execution != nil && execution.reservation != nil && execution.reservation.plan != nil && execution.reservation.plan.apiKeyVerification != nil {
+		owner, ok := p.(APIKeyVerificationContributor)
+		if !ok || w.state.apiKeyVerification != nil {
+			return identity.FeatureReceipt{}, invalidWork()
+		}
+		receipt, outcome, err := owner.ApplyAPIKeyVerification(ctx, w, command)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if !validAPIKeyVerificationOutcome(execution.reservation.plan, outcome) {
+			return identity.FeatureReceipt{}, invalidWork()
+		}
+		w.state.apiKeyVerification = &outcome
+		return receipt, nil
+	}
 	return p.ApplyFeature(ctx, w, command)
 }
 
 func featureMutationAudits(ctx context.Context, p *admittedKernelPlan, now time.Time, class string) ([]audit.Record, error) {
+	if p.apiKeyVerification != nil {
+		if class == "committed" {
+			return nil, invalidAudit()
+		}
+		authentication, err := securityMutationAuditCausation(ctx, p.binding, 0, 0, now, class, p.audits[0].EventType, p.subjectType, featureAuditTargetID(p.binding, p.feature.Operation), "protected", true, string(p.binding.CommandID))
+		if err != nil {
+			return nil, err
+		}
+		return []audit.Record{authentication}, nil
+	}
 	records := make([]audit.Record, len(p.audits))
 	target := featureTargetID(p.binding)
 	for i, a := range p.audits {

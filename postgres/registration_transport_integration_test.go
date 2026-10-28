@@ -16,6 +16,9 @@ import (
 type registrationCommitFault struct {
 	before bool
 	hit    atomic.Bool
+	// Other protected workflows select their actual owned INSERT. Empty keeps
+	// the established registration target; never arm on an earlier reservation.
+	marker []byte
 }
 
 func (f *registrationCommitFault) dial(ctx context.Context, network, address string) (net.Conn, error) {
@@ -34,7 +37,11 @@ type registrationFaultConn struct {
 }
 
 func (c *registrationFaultConn) Write(p []byte) (int, error) {
-	if bytes.Contains(p, []byte("identity.registration_bindings(")) {
+	marker := c.fault.marker
+	if len(marker) == 0 {
+		marker = []byte("identity.registration_bindings(")
+	}
+	if bytes.Contains(p, marker) {
 		c.mutation.Store(true)
 	}
 	if c.fault.before && c.mutation.Load() && len(p) >= 5 && p[0] == 'Q' && bytes.EqualFold(p[5:], []byte("commit\x00")) && c.fault.hit.CompareAndSwap(false, true) {

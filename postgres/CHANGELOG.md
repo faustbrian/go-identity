@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add a closed native API-key verification profile with an independent typed
+  authentication result and mandatory final authority fence. Ordinary attempts
+  persist authentication audit only; a strict permission reduction can commit
+  its own update audit/lifecycle even when authentication denies. Required
+  effects remain atomic, rollback records no fictional update, and command
+  commitment/recovery does not itself grant fresh authentication. Expired
+  attempts close only after unanimous noncommit proof, with authentication-only
+  failure evidence; composed authentication/update audits retain distinct
+  causation. Unrelated generic feature history keeps its original decoding.
+
 - Add `Work.RequireActiveUserStatus` for a live feature's command-bound user
   owner. Fence active status and the independent user-security epoch under
   the existing lifecycle row lock without inventing password/identifier

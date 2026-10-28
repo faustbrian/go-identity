@@ -22,6 +22,11 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
+	// APIKeyVerification freezes the closed read-only authentication attempt and
+	// its optional same-command permission reduction. Nil preserves existing
+	// non-verification profiles; the native verification schema requires it.
+	// It is not permission to commit an arbitrary error or omit ordinary effects.
+	APIKeyVerification *APIKeyVerificationPlan
 	// OrganizationInvitationOrigin retains original organization correlation in
 	// the invitation-send journal before any generated output or domain row.
 	// Nil preserves historical bytes; it cannot support origin lookup recovery.
@@ -124,7 +129,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
-	if plan.OrganizationInvitationOrigin != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.PasskeyRegistration != nil || plan.MagicLinkRequestAcceptance {
+	if plan.APIKeyVerification != nil || plan.OrganizationInvitationOrigin != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.PasskeyRegistration != nil || plan.MagicLinkRequestAcceptance {
 		return nil, invalidPlan()
 	}
 	if plan.Delivery != nil {
@@ -209,6 +214,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
+	apiKeyVerification         *APIKeyVerificationPlan
 	invitationOrigin           *OrganizationInvitationOriginPlan
 	mfaCompletion              *MFACompletionPlan
 	mfaContinuation            *MFAContinuationPlan

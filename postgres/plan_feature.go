@@ -34,6 +34,12 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 // proofBase is private to fixed-depth, closed consumption envelopes. Public
 // preparation never admits their proof-free base as a standalone declaration.
 func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, proofBase bool) ([]byte, error) {
+	if p.APIKeyVerification != nil {
+		return encodeAPIKeyVerificationPlan(binding, fingerprint, p)
+	}
+	if !proofBase && p.Feature != nil && (p.Feature.Operation == apiKeyVerificationOperation(false) || p.Feature.Operation == apiKeyVerificationOperation(true)) {
+		return nil, invalidPlan()
+	}
 	if p.PasskeyRegistration != nil {
 		return encodePasskeyRegistrationPlan(binding, fingerprint, p)
 	}
@@ -240,6 +246,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 		return fail()
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation, SignupAcceptance: p.SignupAcceptance}
+	snapshot.APIKeyVerification = cloneAPIKeyVerificationPlan(p.APIKeyVerification)
 	snapshot.MagicLinkRequestAcceptance = p.MagicLinkRequestAcceptance
 	snapshot.OrganizationInvitationOrigin = cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin)
 	if p.Capability != nil {

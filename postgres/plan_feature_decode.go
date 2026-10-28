@@ -15,6 +15,12 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 }
 
 func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
+	// Only the new closed envelope selects verification decoding. Generic
+	// descriptors have independent owners; an operation name alone cannot
+	// capture their previously encoded history.
+	if !proofBase && binding.OperationID == "identity.apikey.verify" && apiKeyVerificationEnvelope(encoded) {
+		return decodeAPIKeyVerificationPlan(binding, fingerprint, encoded)
+	}
 	if !proofBase && binding.OperationID == passkeyRegistrationOperation().OperationID && binding.SchemaID == passkeyRegistrationOperation().SchemaID && len(encoded) > 0 && encoded[0] == 0xa3 {
 		return decodePasskeyRegistrationPlan(binding, fingerprint, encoded)
 	}
