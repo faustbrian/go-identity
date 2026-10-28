@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a bounded read-only deployment configuration check for exact existing
+  active profiles. It neither provisions nor resets disabled authority;
+  first-install initialization retains its existing conflict semantics.
+
 - Add native modern human-owned API-key issuance, reveal-once recovery,
   zero-overlap rotation and revocation using actual password bearer authority,
   protected admission and the existing identity coordinator.

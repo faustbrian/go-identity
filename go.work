@@ -11,6 +11,7 @@ use (
 	./email
 	./http
 	./http/anonymous
+	./http/apikey
 	./http/email
 	./http/magiclink
 	./http/mfa

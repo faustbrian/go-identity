@@ -256,7 +256,18 @@ func genuineUser(t *testing.T, ctx context.Context, pool *database.Pool, graph *
 	return caller, bound.UserID
 }
 
-func TestGenuinePasswordCreateCommitsBeforeOneTimeReveal(t *testing.T) {
+type nativeConsumerFixture struct {
+	ctx                           context.Context
+	pool                          *database.Pool
+	config                        apikeypg.ServiceConfig
+	caller                        apikey.Authentication
+	user                          identity.UserID
+	maximumGrants                 []string
+	deniedGrant, deniedManagement *atomic.Bool
+}
+
+func setupNativeConsumer(t *testing.T) nativeConsumerFixture {
+	t.Helper()
 	ctx, pool, db := consumerDatabase(t)
 	names := []string{"fingerprint", "request", "counter", "risk-evidence", "risk-seal", "preauth-cookie", "session-token", "session-csrf", "http-device", "delivery-envelope", "dummy-password", "capability-binding", "capability-signing", "signin-proof", "migration", "counter-replay", "http-rate", "otp-lockout", "otp-wrap", "otp-attempt", "otp-code", "otp-intent", "identifier", "delivery-digest", "delivery-namespace", "password-flow", "signup-binding", "signup-intent", "verification-scope", "capability-replay", "capability-envelope", "counter-envelope", "verification-http", "api-key-pepper", "api-key-envelope"}
 	keys := make(map[string][32]byte, len(names))
@@ -394,8 +405,15 @@ func TestGenuinePasswordCreateCommitsBeforeOneTimeReveal(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := apikeypg.ServiceConfig{Configuration: configuration, Clock: clock.System{}, MaximumDuration: 4 * time.Second, Sessions: sessions, Session: sessionStore, Profile: profile, LookupKeys: map[uint32]session.DigestKey{11: lookup}, Authorization: authorize, PolicyID: "api-key-policy", PolicyVersion: 9, Pepper: pepper, Counters: counters, Risk: risk.ProtectedProviderAdmissionCustodyConfig{Evaluation: evaluation, ConfigurationID: "api-key-providers-v1", Keys: []risk.EvidenceKey{evidence}}, CounterPolicy: policy, Coordinator: kernel.CoordinatorConfig{MaximumDuration: 4 * time.Second, LeaseDuration: 5 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: keys["fingerprint"]}, QueryPolicy: &query, AdmissionPolicy: &query}, RequestKeys: requestKeys, ActiveEnvelopeKeyID: "api-key-envelope", RetainedEnvelopeKeys: map[string][]byte{"api-key-envelope": material("api-key-envelope")}}
+	return nativeConsumerFixture{ctx: ctx, pool: pool, config: c, caller: caller, user: user, maximumGrants: maximumGrants, deniedGrant: &deniedGrant, deniedManagement: &deniedManagement}
+}
+
+func TestGenuinePasswordCreateCommitsBeforeOneTimeReveal(t *testing.T) {
+	f := setupNativeConsumer(t)
+	ctx, pool, c, caller, user := f.ctx, f.pool, f.config, f.caller, f.user
+	maximumGrants, deniedGrant, deniedManagement := f.maximumGrants, f.deniedGrant, f.deniedManagement
 	if !t.Run("unsupported-revoke-policy", func(t *testing.T) {
-		spec := configuration.Spec()
+		spec := c.Configuration.Spec()
 		spec.PermissionReduction = apikey.PermissionReductionRevoke
 		revoke, err := apikey.NewConfiguration(spec)
 		if err != nil {
@@ -486,8 +504,8 @@ func TestGenuinePasswordCreateCommitsBeforeOneTimeReveal(t *testing.T) {
 	}) {
 		return
 	}
-	exerciseRotationRevocation(t, ctx, pool, restarted, c, request, &deniedGrant, &deniedManagement)
-	exerciseAtomicVerification(t, ctx, pool, restarted, c, request, wire, record, &deniedGrant)
+	exerciseRotationRevocation(t, ctx, pool, restarted, c, request, deniedGrant, deniedManagement)
+	exerciseAtomicVerification(t, ctx, pool, restarted, c, request, wire, record, deniedGrant)
 }
 
 func exerciseMaximumGrantVerification(t *testing.T, ctx context.Context, s *apikeypg.Service, c apikeypg.ServiceConfig, create apikey.CreateRequest, permissions []string) {

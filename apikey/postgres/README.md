@@ -90,3 +90,15 @@ Organization ownership, legacy digest import, finite quota, cache projection,
 API-key sessions, general CRUD/metadata, and HTTP/Reference composition are
 remaining platform work, not selected fallback behavior. This experimental
 module's native profile is not whole M21 or final release qualification.
+## Explicit deployment configuration checks
+
+`CheckConfiguration` reads the exact selected native configuration without
+provisioning, resetting its lifecycle epoch or issuing authority. It rejects
+absent, different and disabled configurations. This is a bounded trusted
+deployment check, not authentication or a reusable validity proof.
+
+`InitializeConfiguration` remains first-install provisioning and still conflicts
+on an existing row. A reconstructing graph can observe that conflict, then call
+`CheckConfiguration`; it must not treat conflict alone as compatible startup or
+overwrite disabled authority. Runtime operations independently read/fence their
+current configuration and never inherit a startup authorization cache.

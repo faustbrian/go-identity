@@ -93,6 +93,21 @@ func configurationDigest(configuration apikey.Configuration) ([32]byte, error) {
 	return sha256.Sum256(wire), nil
 }
 
+// CheckConfiguration performs a bounded primary read of the exact configured
+// tenant/profile. It rejects absent, different or disabled authority without
+// inserting, resetting lifecycle state or issuing a reusable validity proof.
+// This is trusted deployment observation, not caller authentication. Runtime
+// operations still perform their own current-authority reads and final fences.
+func (s *Service) CheckConfiguration(ctx context.Context, tenant identity.TenantID) error {
+	if s == nil || s.config == nil || ctx == nil || !scope(string(tenant)) {
+		return apikey.ErrInvalid
+	}
+	bounded, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
+	defer cancel()
+	_, err := s.configurationAuthority(bounded, tenant)
+	return err
+}
+
 // InitializeConfiguration is explicit trusted deployment bootstrap, not an
 // authenticated request or upsert. It creates only a previously absent exact
 // tenant/configuration at epoch one. Existing state conflicts, never resets or
