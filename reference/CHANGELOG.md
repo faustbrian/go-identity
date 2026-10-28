@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve a redaction-safe router-construction failure category alongside
+  the existing invalid-input field. Callers can distinguish cancellation,
+  deadline and invalid transport metadata through standard error matching
+  without retaining the original diagnostic or partial server.
+
 - Compose guarded native team-role assignment and exact revocation behind
   `Organization.TeamRoleBindings`, independently of direct binding operations.
   A separate native lookup history preserves installed role/team/direct prefixes.

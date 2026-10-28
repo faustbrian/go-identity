@@ -190,6 +190,55 @@ func serverFixture(t *testing.T) (ReferenceConfig, ReferenceDependencies, Featur
 	return c, ReferenceDependencies{PostgreSQL: pool}, FeatureSet{state: s}
 }
 
+func TestReferenceServerRouterFailurePreservesSafeCauseAndLegacyClassification(t *testing.T) {
+	c, d, f := serverFixture(t)
+	c.HTTP.Document.Title = ""
+	s, err := NewServer(c, d, f)
+	var invalid identity.InvalidInputError
+	if s != nil || !errors.As(err, &invalid) || invalid.Field != "reference_server_router" || !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("router construction discarded its safe failure class", err)
+	}
+}
+
+func TestReferenceServerRouterFailureNeverRetainsOriginalDiagnostic(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cause error
+		class error
+	}{
+		{"invalid", identityhttp.ErrInvalidInput, identityhttp.ErrInvalidInput},
+		{"deadline", context.DeadlineExceeded, context.DeadlineExceeded},
+		{"canceled", context.Canceled, context.Canceled},
+		{"wrapped-deadline", fmt.Errorf("private configuration: %w", context.DeadlineExceeded), context.DeadlineExceeded},
+		{"wrapped-canceled", fmt.Errorf("private configuration: %w", context.Canceled), context.Canceled},
+		{"wrapped-invalid", fmt.Errorf("private configuration: %w", identityhttp.ErrInvalidInput), identityhttp.ErrInvalidInput},
+		{"unexpected", errors.New("private configuration"), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := redactedRouterFailure(tc.cause)
+			var invalid identity.InvalidInputError
+			var unavailable identity.UnavailableError
+			if !errors.As(err, &invalid) || invalid.Field != "reference_server_router" || errors.As(err, &unavailable) != (tc.class == nil) {
+				t.Fatal("router failure changed its closed classification")
+			}
+			for _, class := range []error{context.Canceled, context.DeadlineExceeded, identityhttp.ErrInvalidInput} {
+				if errors.Is(err, class) != (class == tc.class) {
+					t.Fatal("router failure retained the wrong cause category")
+				}
+			}
+			wire, marshalErr := json.Marshal(err)
+			if marshalErr != nil {
+				t.Fatal("closed error serialization failed")
+			}
+			for _, text := range []string{err.Error(), fmt.Sprintf("%v", err), fmt.Sprintf("%+v", err), fmt.Sprintf("%#v", err), string(wire)} {
+				if strings.Contains(text, "private configuration") {
+					t.Fatal("router failure retained original diagnostic")
+				}
+			}
+		})
+	}
+}
+
 func TestReferenceServerPureConstructionAndSelectedProbes(t *testing.T) {
 	c, d, f := serverFixture(t)
 	s, err := NewServer(c, d, f)

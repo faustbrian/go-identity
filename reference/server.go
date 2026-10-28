@@ -2,6 +2,7 @@ package reference
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -106,6 +107,10 @@ type Server struct {
 // NewServer validates the selected graph, callbacks, deployment profile and
 // transport before exposing a handler. It performs no IO, callbacks, entropy,
 // startup, migrations or goroutine creation; failure returns no partial server.
+// Router failure preserves InvalidInputError's reference_server_router field
+// through errors.As. errors.Is additionally distinguishes canceled, deadline
+// and identityhttp.ErrInvalidInput failures; other causes are redacted to
+// identity.UnavailableError. The original error/configuration is not retained.
 func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Server, error) {
 	invalid := identity.InvalidInputError{Field: "reference_server"}
 	s := f.state
@@ -354,10 +359,26 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	}
 	handler, document, err := identityhttp.NewRouter(c.HTTP, operations, nil)
 	if err != nil {
-		return nil, identity.InvalidInputError{Field: "reference_server_router"}
+		return nil, redactedRouterFailure(err)
 	}
 	server.handler, server.document = handler, document
 	return server, nil
+}
+
+// NewRouter validates a bounded document as part of this exact call. Preserve
+// only a closed failure category so a rejected graph can be diagnosed without
+// logging a provider/schema error that may contain configuration or custody.
+func redactedRouterFailure(cause error) error {
+	var safe error = identity.UnavailableError{}
+	switch {
+	case errors.Is(cause, context.Canceled):
+		safe = context.Canceled
+	case errors.Is(cause, context.DeadlineExceeded):
+		safe = context.DeadlineExceeded
+	case errors.Is(cause, identityhttp.ErrInvalidInput):
+		safe = identityhttp.ErrInvalidInput
+	}
+	return errors.Join(identity.InvalidInputError{Field: "reference_server_router"}, safe)
 }
 
 func matchingProfile(profile DeploymentProfile, durable bool) bool {

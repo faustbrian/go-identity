@@ -1285,7 +1285,8 @@ END $$`); err != nil {
 	}
 	server, err := reference.NewServer(config, deps, features)
 	if err != nil {
-		if invalid, ok := err.(identity.InvalidInputError); ok {
+		var invalid identity.InvalidInputError
+		if errors.As(err, &invalid) {
 			t.Fatal("registration HTTP server", invalid.Field)
 		}
 		t.Fatal("registration HTTP server", err)
