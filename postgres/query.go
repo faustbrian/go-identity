@@ -128,8 +128,24 @@ WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed
 // snapshot. A concurrent attachment causes retry, never false noncommit proof.
 func readObservedCounterPreparation(ctx context.Context, reader interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
-}, id []byte, observed *commandObservation) error {
+}, id []byte, observed *commandObservation) (err error) {
+	defer func() {
+		// The primary claim already exists. Losing this second snapshot to
+		// attachment/lease movement is uncertainty, never global absence.
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = identity.UnavailableError{}
+		}
+	}()
 	_, feature, err := decodeObservedScope(observed.scope)
+	if err == nil && observed.plan == nil && feature != nil && (*feature == apiKeyVerificationOperation(false) || *feature == apiKeyVerificationOperation(true)) && observed.state != nil && *observed.state == "pending" && observed.until != nil {
+		// API-key preparations have no counters or declaration column. Read
+		// only their existing original-output profile, preserving compatibility
+		// with compositions that installed PreparationMigrationSource alone.
+		return reader.QueryRow(ctx, `SELECT j.preparation_profile
+FROM identity.identity_command_id_claims c JOIN identity.commands j USING(command_id)
+WHERE c.command_id=$1 AND c.tenant_id=$2 AND c.purpose=$3 AND c.safe_fields=$4 AND c.fingerprint=$5
+AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL AND j.state=$6 AND j.lease_until=$7`, id, observed.tenant, observed.purpose, observed.scope, observed.fingerprint, *observed.state, *observed.until).Scan(&observed.preparationProfile)
+	}
 	if err != nil || observed.plan != nil || feature == nil || feature.OperationID != "identity.mfa.otp-verify" && !organizationInvitationIssuanceOperation(*feature) || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
 		return nil
 	}
@@ -246,9 +262,12 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	if observed.state == nil || observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
-	plan, _, err := observedCommandPlan(binding, feature, observed)
-	if err != nil || feature != nil && (plan.Feature == nil || plan.Feature.Operation != *feature) {
-		return identity.CommandResult{}, identity.UnavailableError{}
+	var plan CommandPlan
+	if !pendingAPIKeyPreparation(binding, feature, observed) {
+		plan, _, err = observedCommandPlan(binding, feature, observed)
+		if err != nil || feature != nil && (plan.Feature == nil || plan.Feature.Operation != *feature) {
+			return identity.CommandResult{}, identity.UnavailableError{}
+		}
 	}
 	if *observed.state == "pending" {
 		if observed.resultVersion != nil || observed.class != nil || observed.result != nil {

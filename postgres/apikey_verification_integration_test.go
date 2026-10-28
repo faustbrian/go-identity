@@ -229,6 +229,7 @@ CREATE TABLE public.identity_test_api_key_lifecycle(command_id text PRIMARY KEY,
 			config := CoordinatorConfig{MaximumDuration: 3 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: &CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			})}}
+			config.AdmissionPolicy = config.QueryPolicy
 			c, err := NewCoordinator(executionPool, registry, config)
 			if err != nil {
 				t.Fatal(err)
@@ -264,6 +265,11 @@ CREATE TABLE public.identity_test_api_key_lifecycle(command_id text PRIMARY KEY,
 			if err != nil {
 				t.Fatal("verification plan", err)
 			}
+			query, caller := queryInputs(b)
+			observation, originalFingerprint, err := c.ObserveAPIKeyVerificationCommand(ctx, command, caller)
+			if err != nil || !observation.Absent || originalFingerprint == ([32]byte{}) {
+				t.Fatal("native attempt could not bind its prospective original claim", err)
+			}
 			r, receipt, err := c.ReserveCommand(ctx, b, command, p)
 			if err != nil || r.state == nil || receipt.Outcome != identity.CommitOutcomeInProgress {
 				t.Fatal("verification reservation", err)
@@ -295,9 +301,8 @@ CREATE TABLE public.identity_test_api_key_lifecycle(command_id text PRIMARY KEY,
 				if err != nil {
 					t.Fatal(err)
 				}
-				query, caller := queryInputs(b)
 				for range 2 {
-					original, err := fresh.RecoverCommand(ctx, query, caller)
+					original, err := fresh.RecoverAPIKeyVerificationCommand(ctx, query, originalFingerprint, caller)
 					if err != nil || original.Validate() != nil || original.Outcome != wantOutcome || original.Binding != b || native.verificationCalls != 1 {
 						t.Fatal("fresh recovery reran comparison or fabricated terminal authority", original.Outcome, err)
 					}
@@ -318,8 +323,18 @@ CREATE TABLE public.identity_test_api_key_lifecycle(command_id text PRIMARY KEY,
 					if err != nil {
 						t.Fatal(err)
 					}
+					wrongFingerprint := originalFingerprint
+					wrongFingerprint[0] ^= 1
+					var conflict identity.ConflictError
+					if got, err := fresh.RecoverAPIKeyVerificationCommand(ctx, query, wrongFingerprint, caller); !errors.As(err, &conflict) || got != (identity.CommandResult{}) {
+						t.Fatal("wrong fingerprint terminalized the pending native attempt", err)
+					}
+					var state string
+					if err := pool.Raw().QueryRow(ctx, `SELECT state FROM identity.commands WHERE command_id=$1`, id).Scan(&state); err != nil || state != "pending" {
+						t.Fatal("fingerprint mismatch changed original journal state", err)
+					}
 					for range 2 {
-						original, err := fresh.RecoverCommand(ctx, query, caller)
+						original, err := fresh.RecoverAPIKeyVerificationCommand(ctx, query, originalFingerprint, caller)
 						var unavailable identity.UnavailableError
 						if !errors.As(err, &unavailable) || original.Outcome != identity.CommitOutcomeNotCommitted || original.Binding != b {
 							t.Fatal("expired unanimous negative evidence could not close original verification", original.Outcome, err)
@@ -436,6 +451,163 @@ CREATE TABLE public.identity_test_api_key_lifecycle(command_id text PRIMARY KEY,
 	t.Run("competing-permission-reductions", func(t *testing.T) {
 		testAPIKeyVerificationNarrowContention(t, ctx, pool, repo)
 	})
+}
+
+// Preparation can stop after its durable start marker. A caller must still
+// receive the claim actually matched under the journal lock, not a fingerprint
+// calculated before a concurrent coordinator used an older retained key.
+type apiKeyVerificationPreparationProbe struct {
+	*apiKeyVerificationIntegrationParticipant
+	generated int
+}
+
+func (*apiKeyVerificationPreparationProbe) ValidateFeaturePreparation(identity.Command, CommandPlan) error {
+	return nil
+}
+func (p *apiKeyVerificationPreparationProbe) AdmitFeaturePreparation(_ context.Context, w Work, command identity.Command) error {
+	b, _, _, err := w.FeatureScope(p)
+	spec, _ := command.Feature()
+	if err != nil || b != spec.Binding {
+		return invalidWork()
+	}
+	return nil
+}
+func (p *apiKeyVerificationPreparationProbe) GenerateFeaturePreparation(context.Context, identity.Command, uint64) ([]byte, error) {
+	p.generated++
+	return nil, identity.UnavailableError{}
+}
+func (*apiKeyVerificationPreparationProbe) RestoreFeaturePreparation(context.Context, identity.Command, uint64, []byte) (identity.Command, CommandPlan, error) {
+	return identity.Command{}, CommandPlan{}, invalidPreparation()
+}
+
+func testAPIKeyVerificationSubmission(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, lostAcknowledgement bool) {
+	p := &apiKeyVerificationPreparationProbe{apiKeyVerificationIntegrationParticipant: &apiKeyVerificationIntegrationParticipant{apiKeyVerificationTestParticipant: &apiKeyVerificationTestParticipant{}}}
+	registry, err := NewContributorRegistry([]Contributor{repo, &apiKeyVerificationAuditPhase{}, &apiKeyVerificationLifecyclePhase{}, p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := &CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+	})}
+	config := CoordinatorConfig{MaximumDuration: 3 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}, 2: {2}}, QueryPolicy: policy, AdmissionPolicy: policy}
+	executionPool := pool
+	var fault *registrationCommitFault
+	if lostAcknowledgement {
+		fault = &registrationCommitFault{marker: []byte("preparation_started_generation=generation")}
+		var name string
+		if err := pool.Raw().QueryRow(ctx, `SELECT current_database()`).Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		executionPool, err = database.Connect(ctx, database.Config{DSN: os.Getenv("IDENTITY_POSTGRES_TEST_DSN"), MaxConns: 2, Configure: func(c *database.PoolConfig) error {
+			c.ConnConfig.Database = name
+			c.ConnConfig.DialFunc = fault.dial
+			return nil
+		}})
+		if err != nil {
+			t.Fatal("owned preparation fault pool", err)
+		}
+		defer func() {
+			cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := executionPool.Close(cleanup); err != nil {
+				t.Error("owned preparation fault cleanup", err)
+			}
+		}()
+	}
+	old, err := NewCoordinator(executionPool, registry, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.CurrentFingerprintKeyVersion = 2
+	newer, err := NewCoordinator(pool, registry, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, plan := apiKeyVerificationPlanFixture(t, false)
+	b.CommandID, err = identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.Contributors = registry.Descriptors()
+	for i := range plan.Audits {
+		record, err := securityMutationAudit(ctx, b, 0, 0, time.Now().UTC().Truncate(time.Microsecond), "denied", plan.Audits[i].EventType, plan.SubjectType, string(b.ActorID), "protected", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan.Audits[i].BindingDigest, err = FeatureAuditBindingDigest(b, plan.Feature.Operation, plan.SubjectType, record)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: plan.Feature.Operation, Fields: []identity.FeatureField{{Name: "apikey.verify.key-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: plan.APIKeyVerification.KeyVersion}}}})
+	_, caller := queryInputs(b)
+	observation, prospective, err := newer.ObserveAPIKeyVerificationCommand(ctx, command, caller)
+	if err != nil || !observation.Absent || prospective == ([32]byte{}) {
+		t.Fatal("new-key absence observation", err)
+	}
+	oldPlan, err := old.PrepareFeaturePreparationPlan(command, plan)
+	if err != nil {
+		t.Fatal("original preparation declaration", err)
+	}
+	first, original, err := old.ExecutePreparedAPIKeyVerification(ctx, command, oldPlan)
+	wantGenerated := 1
+	if lostAcknowledgement {
+		wantGenerated = 0
+	}
+	if err == nil || first.Outcome != identity.CommitOutcomeUnknown || original == ([32]byte{}) || original == prospective || p.generated != wantGenerated || fault != nil && !fault.hit.Load() {
+		t.Fatal("original submission lost its actual commitment after durable preparation", first.Outcome, err)
+	}
+	newPlan, err := newer.PrepareFeaturePreparationPlan(command, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, adopted, err := newer.ExecutePreparedAPIKeyVerification(ctx, command, newPlan)
+	if err != nil || replay.Outcome != identity.CommitOutcomeInProgress || adopted != original || p.generated != wantGenerated {
+		t.Fatal("retained-key retry renewed identity or repeated generation", replay.Outcome, err)
+	}
+	id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+	var retained []byte
+	if err := pool.Raw().QueryRow(ctx, `SELECT fingerprint FROM identity.identity_command_id_claims WHERE command_id=$1`, id).Scan(&retained); err != nil || string(retained) != string(original[:]) {
+		t.Fatal("submission did not return the actual original claim", err)
+	}
+	// The public entry must reject a different declaration even on a journal
+	// hit: helper-only checks cannot prove it runs before original disclosure.
+	changedDeclaration := newPlan
+	changedVersion := *newPlan.APIKeyVerification
+	changedVersion.KeyVersion++
+	changedDeclaration.APIKeyVerification = &changedVersion
+	var invalid identity.InvalidInputError
+	if result, fp, err := newer.ExecutePreparedAPIKeyVerification(ctx, command, changedDeclaration); !errors.As(err, &invalid) || result != (identity.CommandResult{}) || fp != ([32]byte{}) || p.generated != wantGenerated {
+		t.Fatal("public submission accepted a version outside original intent", result.Outcome, err)
+	}
+	if err := pool.Raw().QueryRow(ctx, `SELECT fingerprint FROM identity.identity_command_id_claims WHERE command_id=$1`, id).Scan(&retained); err != nil || string(retained) != string(original[:]) {
+		t.Fatal("rejected version substitution changed the original claim", err)
+	}
+	observed, observedFP, err := newer.ObserveAPIKeyVerificationCommand(ctx, command, caller)
+	if err != nil || observed.Record.Outcome != identity.CommitOutcomeInProgress || observedFP != original || p.generated != wantGenerated {
+		t.Fatal("healthy prepared-only attempt lost original pending metadata", err)
+	}
+	query, _ := queryInputs(b)
+	for range 2 {
+		pending, err := newer.RecoverAPIKeyVerificationCommand(ctx, query, original, caller)
+		if err != nil || pending.Outcome != identity.CommitOutcomeInProgress || pending.Binding != b || p.generated != wantGenerated {
+			t.Fatal("prepared-only recovery reran generation or lost original uncertainty", pending.Outcome, err)
+		}
+	}
+	wrong := original
+	wrong[0] ^= 1
+	var mismatch identity.ConflictError
+	if result, err := newer.RecoverAPIKeyVerificationCommand(ctx, query, wrong, caller); !errors.As(err, &mismatch) || result != (identity.CommandResult{}) || p.generated != wantGenerated {
+		t.Fatal("prepared-only recovery ignored original commitment", err)
+	}
+	spec, _ := command.Feature()
+	spec.Fields = append(spec.Fields, identity.FeatureField{Name: "changed", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "different original"}})
+	changed := featureCodecCommand(t, spec)
+	conflicting, fp, err := newer.ExecutePreparedAPIKeyVerification(ctx, changed, newPlan)
+	var conflict identity.ConflictError
+	if !errors.As(err, &conflict) || conflicting.Outcome != identity.CommitOutcomeConflict || fp != ([32]byte{}) || p.generated != wantGenerated {
+		t.Fatal("changed intent disclosed the original commitment or generated again", conflicting.Outcome, err)
+	}
 }
 
 func testAPIKeyVerificationNarrowContention(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository) {

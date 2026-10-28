@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add native API-key attempt commitment observation and fingerprint-bound
+  recovery through the existing coordinator. Retained-key retries preserve
+  original identity; a different fingerprint cannot terminalize pending work
+  or disclose terminal history. Prepared native submission returns the actual
+  locked original commitment even after lost acknowledgement or concurrent
+  fingerprint-key rotation; restoration cannot replace its original key-version
+  fence. Generic command metadata is unchanged.
+
 - Add a closed native API-key verification profile with an independent typed
   authentication result and mandatory final authority fence. Ordinary attempts
   persist authentication audit only; a strict permission reduction can commit

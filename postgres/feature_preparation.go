@@ -190,6 +190,10 @@ func (c *Coordinator) ExecutePreparedMFAOTPFeature(ctx context.Context, original
 }
 
 func (c *Coordinator) executePreparedFeature(ctx context.Context, claimSource *identity.Command, original identity.Command, declaration CommandPlan) (result identity.CommandResult, err error) {
+	return c.executePreparedFeatureCaptured(ctx, claimSource, original, declaration, nil)
+}
+
+func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimSource *identity.Command, original identity.Command, declaration CommandPlan, fingerprint *[32]byte) (result identity.CommandResult, err error) {
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || c.registry == nil || c.maximumDuration <= 0 {
 		return result, invalidPreparation()
 	}
@@ -205,6 +209,7 @@ func (c *Coordinator) executePreparedFeature(ctx context.Context, claimSource *i
 			return result, err
 		}
 	}
+	q.matchedFingerprint = fingerprint
 	b := admitted.binding
 	started := false
 	defer func() {
@@ -412,6 +417,9 @@ func consumptionAuthenticationPreparation(p CommandPlan) bool {
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
+	if (original.APIKeyVerification == nil) != (final.APIKeyVerification == nil) || original.APIKeyVerification != nil && *original.APIKeyVerification != *final.APIKeyVerification {
+		return false
+	}
 	if anonymousUpgradePreparationSelected(original) && (!validAnonymousUpgradePreparation(b, original) || !validAnonymousUpgradePreparation(b, final) || final.CapabilityIssuance == nil) {
 		return false
 	}

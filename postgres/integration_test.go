@@ -119,6 +119,15 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal("preparation migration", err)
 	}
 	t.Run("prepared feature", func(t *testing.T) { testPreparedFeature(t, ctx, pool, repo) })
+	t.Run("API-key original submission", func(t *testing.T) {
+		for _, lostAcknowledgement := range []bool{false, true} {
+			name := "generation-failed"
+			if lostAcknowledgement {
+				name = "acknowledgement-lost"
+			}
+			t.Run(name, func(t *testing.T) { testAPIKeyVerificationSubmission(t, ctx, pool, repo, lostAcknowledgement) })
+		}
+	})
 	kernelHistory := AdmissionPreparationMigrationSource{Base: preparationHistory, Version: 11}
 	admissionRunner, err := migrations.NewRunner(kernelHistory, backend)
 	if err != nil {

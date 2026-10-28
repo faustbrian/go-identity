@@ -36,6 +36,10 @@ type claimRequest struct {
 	// feature is the exact immutable codec descriptor, not inferred from scope.
 	// Historical feature recovery must obtain it from the frozen owned plan.
 	feature *identity.FeatureOperation
+	// Invocation-owned output, installed only by the closed native API-key
+	// submission route. The matching claim lock, not a prospective read, owns
+	// the retained-key identity, including when acknowledgement is lost later.
+	matchedFingerprint *[32]byte
 }
 type claimKeys struct {
 	current  uint32
@@ -111,6 +115,9 @@ FROM identity.identity_command_id_claims WHERE command_id=$1 FOR UPDATE`, id).Sc
 	expected := claimFingerprint(key, canonical)
 	if !hmac.Equal(fingerprint, expected[:]) {
 		return claimConflict, nil
+	}
+	if q.matchedFingerprint != nil {
+		*q.matchedFingerprint = expected
 	}
 	if inserted.RowsAffected() == 1 {
 		return claimNew, nil

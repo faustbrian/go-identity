@@ -2,6 +2,25 @@
 
 ## Atomic API-key verification effects
 
+The native verifier uses `ExecutePreparedAPIKeyVerification` to submit original
+preparation and obtain the coordinator fingerprint actually matched under its
+claim lock, including when acknowledgement is lost. `ObserveAPIKeyVerificationCommand`
+is an effect-free intent check; absence supplies only a prospective fingerprint,
+which must never replace the actual submission commitment after a concurrent
+retained-key claimant wins.
+Authorized primary absence supplies only the prospective current-key commitment;
+it is not a reservation or rollback proof. Existing attempts compare complete
+intent under their retained fingerprint key. `RecoverAPIKeyVerificationCommand`
+requires that original nonzero fingerprint before pending recovery, and repeats
+the check under existing recovery locks. Neither method compares a credential,
+returns a native principal, renews freshness or adds an attempt journal. Generic
+command metadata remains fingerprint-free.
+
+Prepared native submissions bind `APIKeyVerification.KeyVersion` in the
+original uint64 `apikey.verify.key-version` field. An unattached preparation
+remains fingerprint-bound pending metadata, even after its lease expires;
+missing output never authorizes generation or proves rollback.
+
 The closed `CommandPlan.APIKeyVerification` profile is a trusted native-adapter
 composition seam, not a standalone API-key backend. Its exact
 `APIKeyVerificationContributor` compares the credential and checks current
