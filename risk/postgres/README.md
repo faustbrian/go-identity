@@ -5,6 +5,14 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `ValidateCounterOnlyOperation(action)` checks this repository's configured
+  protected operation before composing a workflow that has no provider-evidence
+  admission. Only an exact velocity-only policy is supported by that workflow;
+  mandatory status, CAPTCHA or other provider signals fail closed rather than
+  disappear during counter preparation. The check is pure and gives no domain
+  authorization or counter allowance. Workflows with actual provider admission
+  keep the existing richer counter-policy support.
+
 - `PreparePasskeySignupCommandCounters(command, subject, primaryTime)` selects
   only the anonymous `passkey` owner's two canonical registration actions with
   their exact `.signup-v1` schemas. It uses the original bound browser flow and

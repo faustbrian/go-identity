@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose `Repository.ValidateCounterOnlyOperation` for native workflows without
+  provider-evidence admission. It validates the repository's actual protected
+  velocity-only profile and rejects unenforced mandatory provider signals,
+  without restricting richer policies used by provider-aware workflows.
+
 - Add exact anonymous passkey signup counter preparation using the original
   bound browser flow and trusted network/device without inventing an account
   or session. Registration retains its protected five-attempt/fifteen-minute

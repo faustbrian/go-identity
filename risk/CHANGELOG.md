@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit exact-session active-organization changes through the protected
+  privileged profile with tenant, actor, session-resource and network counters.
+  Current signals remain mandatory; this grants neither organization access
+  nor permission to change another session. Reads, team selection and aliases
+  retain their existing closed classifications.
+
 - Prospective passkey registration can prepare a closed protected counter
   projection using the actual original browser flow, tenant, network and device.
   Credential-mutation limits, deny policy and transaction-owned reservation

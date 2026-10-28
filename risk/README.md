@@ -926,6 +926,14 @@ requires actor/resource/network-bound counters in the owning transaction; clean
 provider facts alone are not consent or issuance authority. Native entries may
 fill an omitted matrix classification, never override an explicit pinned class.
 
+Exact active-organization selection (`identity.organization.active-set`) uses
+the same Privileged reservation profile as other organization mutations. Its
+resource is the exact authenticated session being changed, not a user-global
+preference or the target organization. Current provider signals and protected
+tenant/actor/session-resource/network counters are required; selection and
+membership authorization remain with the native organization/session owners.
+This classification does not enable active reads, team selection or aliases.
+
 Explicit invitation expiry (`identity.organization.invitation.expire`) uses the
 same Privileged reservation profile as invitation cancellation. It requires
 complete current provider signals and transaction-owned tenant, actor,
