@@ -13,6 +13,16 @@ absence; this declaration grants neither import authority nor overwrite rights.
 
 ## Atomic API-key verification effects
 
+The exact opt-in `apikey-verify-organization-v1` schema represents a known
+organization-owned key without a human `UserID`. Its `AnonymousFlowID` is the
+original command ID (the authentication attempt), while the actual API-key actor
+remains the audit target and owns the positive original key version. It uses
+the same closed plan, typed comparison, required effects and original recovery
+as known user-owned keys, not the unknown-key denial profile. The trusted native
+producer must bind the actual organization and credential epochs in command
+fields and fence current organization authority inside Work; this kernel
+support supplies no organization authority or browser session.
+
 The native verifier uses `ExecutePreparedAPIKeyVerification` to submit original
 preparation and obtain the coordinator fingerprint actually matched under its
 claim lock, including when acknowledgement is lost. `ObserveAPIKeyVerificationCommand`

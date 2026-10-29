@@ -66,11 +66,7 @@ func (c *Coordinator) ObserveAPIKeyVerificationCommand(ctx context.Context, comm
 		return zero(coordinatorError())
 	}
 	spec, ok := command.Feature()
-	if !ok || spec.Operation != apiKeyVerificationOperation(spec.Binding.UserID == "") || spec.Binding.ValidateFor(spec.Operation) != nil {
-		return zero(invalidPlan())
-	}
-	b := spec.Binding
-	if b.UserID != "" && b.ActorKind != authorization.SubjectAPIKey || b.UserID == "" && (b.ActorKind != authorization.SubjectServiceAccount || b.AnonymousFlowID != string(b.CommandID)) {
+	if !ok || !validAPIKeyVerificationBinding(spec.Binding, spec.Operation) {
 		return zero(invalidPlan())
 	}
 	entry, err := c.registry.selectFeatureOperation(FeatureRegistration{Contributor: apiKeyVerificationDescriptor(), Operation: spec.Operation})
@@ -160,7 +156,7 @@ func (c *Coordinator) RecoverAPIKeyVerificationCommand(ctx context.Context, q id
 }
 
 func pendingAPIKeyPreparation(binding identity.CommandBinding, operation *identity.FeatureOperation, observed commandObservation) bool {
-	return operation != nil && *operation == apiKeyVerificationOperation(binding.UserID == "") && binding.ValidateFor(*operation) == nil && observed.plan == nil && observed.state != nil && *observed.state == "pending" && observed.preparationProfile != nil && (*observed.preparationProfile == 1 || *observed.preparationProfile == 2) && len(observed.fingerprint) == 32 && observed.resultVersion == nil && observed.class == nil && observed.result == nil
+	return operation != nil && validAPIKeyVerificationBinding(binding, *operation) && observed.plan == nil && observed.state != nil && *observed.state == "pending" && observed.preparationProfile != nil && (*observed.preparationProfile == 1 || *observed.preparationProfile == 2) && len(observed.fingerprint) == 32 && observed.resultVersion == nil && observed.class == nil && observed.result == nil
 }
 
 func checkAPIKeyVerificationObservation(q identity.RecoveryQuery, fingerprint [32]byte) func(commandObservation) error {
@@ -169,7 +165,7 @@ func checkAPIKeyVerificationObservation(q identity.RecoveryQuery, fingerprint [3
 			return identity.ConflictError{CommandID: q.CommandID}
 		}
 		b, op, err := commandObservationScope(q, observed, nil)
-		if err != nil || op == nil || *op != apiKeyVerificationOperation(b.UserID == "") {
+		if err != nil || op == nil || !validAPIKeyVerificationBinding(b, *op) {
 			return identity.ForbiddenError{}
 		}
 		if pendingAPIKeyPreparation(b, op, observed) {

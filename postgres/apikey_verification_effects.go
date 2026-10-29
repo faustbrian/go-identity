@@ -78,7 +78,7 @@ func buildAPIKeyVerificationEffects(ctx context.Context, p *admittedKernelPlan, 
 }
 
 func validAPIKeyVerificationOutcome(p *admittedKernelPlan, outcome APIKeyVerificationOutcome) bool {
-	return p != nil && validAPIKeyVerificationPlan(p.binding, p.snapshot()) && (p.binding.UserID != "" || !outcome.Authenticated && !outcome.PermissionsChanged)
+	return p != nil && validAPIKeyVerificationPlan(p.binding, p.snapshot()) && (p.feature.Operation != apiKeyVerificationOperation(true) || !outcome.Authenticated && !outcome.PermissionsChanged)
 }
 
 func selectAPIKeyVerificationAudits(w Work, count int) error {

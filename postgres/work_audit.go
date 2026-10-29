@@ -89,7 +89,7 @@ func FeatureAuditBindingDigest(binding identity.CommandBinding, operation identi
 }
 
 func featureAuditTargetID(binding identity.CommandBinding, operation identity.FeatureOperation) string {
-	if operation == apiKeyVerificationOperation(false) && binding.ActorKind == authorization.SubjectAPIKey {
+	if (operation == apiKeyVerificationOperation(false) || operation == organizationAPIKeyVerificationOperation()) && binding.ActorKind == authorization.SubjectAPIKey {
 		// Read-only verification has no mutation RecordID. The credential actor,
 		// not its human owner, is the actual authentication/mutation target.
 		return string(binding.ActorID)

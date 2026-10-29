@@ -37,7 +37,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.APIKeyVerification != nil {
 		return encodeAPIKeyVerificationPlan(binding, fingerprint, p)
 	}
-	if !proofBase && p.Feature != nil && (p.Feature.Operation == apiKeyVerificationOperation(false) || p.Feature.Operation == apiKeyVerificationOperation(true)) {
+	if !proofBase && p.Feature != nil && isAPIKeyVerificationOperation(p.Feature.Operation) {
 		return nil, invalidPlan()
 	}
 	if p.PasskeyRegistration != nil {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit an explicitly registered organization-owned API-key verification schema
+  without fabricating a human owner. Retain the actual key actor/version,
+  authentication and conditional narrowing audits, original command commitment
+  and uncertain preparation recovery. Existing user/unknown schemas and retained
+  bytes are unchanged; native producers still own current organization authority.
+
 - Preserve explicit snapshot-import source versions through native command,
   request preparation, plans, lifecycle and journal recovery. Only absent-local
   zero-to-positive transitions are admitted by that trusted policy; existing

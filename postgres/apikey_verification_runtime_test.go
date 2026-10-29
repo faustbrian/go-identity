@@ -21,7 +21,7 @@ func (*apiKeyVerificationTestParticipant) Descriptor() ContributorDescriptor {
 }
 
 func (*apiKeyVerificationTestParticipant) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{apiKeyVerificationOperation(false), apiKeyVerificationOperation(true)}
+	return []identity.FeatureOperation{apiKeyVerificationOperation(false), apiKeyVerificationOperation(true), organizationAPIKeyVerificationOperation()}
 }
 
 func (*apiKeyVerificationTestParticipant) ValidateFeatureCommand(_ identity.Command, p CommandPlan) error {
@@ -55,8 +55,13 @@ func (*apiKeyVerificationTestParticipant) RecoverParticipant(context.Context, Re
 
 func apiKeyVerificationRuntimeFixture(t *testing.T, anonymous bool) (*Coordinator, identity.Command, CommandPlan, *apiKeyVerificationTestParticipant) {
 	t.Helper()
-	c, _, _ := coordinatorFixture(t)
 	b, p := apiKeyVerificationPlanFixture(t, anonymous)
+	return apiKeyVerificationBindingRuntimeFixture(t, b, p)
+}
+
+func apiKeyVerificationBindingRuntimeFixture(t *testing.T, b identity.CommandBinding, p CommandPlan) (*Coordinator, identity.Command, CommandPlan, *apiKeyVerificationTestParticipant) {
+	t.Helper()
+	c, _, _ := coordinatorFixture(t)
 	native := &apiKeyVerificationTestParticipant{}
 	entries := []Contributor{
 		finalTestDomain{c.registry.state.entries[0].contributor},
@@ -71,9 +76,6 @@ func apiKeyVerificationRuntimeFixture(t *testing.T, anonymous bool) (*Coordinato
 	c.registry = registry
 	p.Contributors = registry.Descriptors()
 	p.Feature.Contributor = native.Descriptor()
-	if anonymous {
-		p.SubjectType = "authentication_attempt"
-	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	for i := range p.Audits {
 		probe, err := securityMutationAudit(t.Context(), b, 0, 0, now, "denied", p.Audits[i].EventType, p.SubjectType, featureAuditTargetID(b, p.Feature.Operation), "protected", true)

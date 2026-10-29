@@ -50,12 +50,40 @@ func apiKeyVerificationOperation(anonymous bool) identity.FeatureOperation {
 	return op
 }
 
+func organizationAPIKeyVerificationOperation() identity.FeatureOperation {
+	op := apiKeyVerificationOperation(true)
+	op.SchemaID = "apikey-verify-organization-v1"
+	return op
+}
+
+func isAPIKeyVerificationOperation(op identity.FeatureOperation) bool {
+	return op == apiKeyVerificationOperation(false) || op == apiKeyVerificationOperation(true) || op == organizationAPIKeyVerificationOperation()
+}
+
+func validAPIKeyVerificationBinding(b identity.CommandBinding, op identity.FeatureOperation) bool {
+	if !isAPIKeyVerificationOperation(op) || b.ValidateFor(op) != nil {
+		return false
+	}
+	if op == apiKeyVerificationOperation(false) {
+		return b.ActorKind == authorization.SubjectAPIKey
+	}
+	if b.AnonymousFlowID != string(b.CommandID) {
+		return false
+	}
+	if op == organizationAPIKeyVerificationOperation() {
+		// SI-07/SI-08: the attempt is scoped without a human subject; the
+		// actual key remains the actor, independently of its creator's membership.
+		return b.ActorKind == authorization.SubjectAPIKey
+	}
+	return b.ActorKind == authorization.SubjectServiceAccount
+}
+
 func apiKeyVerificationDescriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "identity/apikey/postgres", ContractID: "identity.apikey", Version: 1}
 }
 
 func validAPIKeyVerificationPlan(b identity.CommandBinding, p CommandPlan) bool {
-	if p.APIKeyVerification == nil || p.Feature == nil || p.Feature.Contributor != apiKeyVerificationDescriptor() || p.Feature.Operation != apiKeyVerificationOperation(b.UserID == "") || b.ValidateFor(p.Feature.Operation) != nil || p.Lifecycle == nil || *p.Lifecycle != (LifecyclePlan{EventType: "api_key.permissions_changed.v1"}) {
+	if p.APIKeyVerification == nil || p.Feature == nil || p.Feature.Contributor != apiKeyVerificationDescriptor() || !validAPIKeyVerificationBinding(b, p.Feature.Operation) || p.Lifecycle == nil || *p.Lifecycle != (LifecyclePlan{EventType: "api_key.permissions_changed.v1"}) {
 		return false
 	}
 	// This first native profile is unlimited and has no projected authority or
@@ -64,7 +92,7 @@ func validAPIKeyVerificationPlan(b identity.CommandBinding, p CommandPlan) bool 
 		return false
 	}
 	n := 2
-	if b.UserID == "" {
+	if p.Feature.Operation == apiKeyVerificationOperation(true) {
 		n = 1
 		if b.ActorKind != authorization.SubjectServiceAccount || b.AnonymousFlowID != string(b.CommandID) || p.SubjectType != "authentication_attempt" || p.APIKeyVerification.KeyVersion != 0 {
 			return false

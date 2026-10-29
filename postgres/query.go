@@ -137,7 +137,7 @@ func readObservedCounterPreparation(ctx context.Context, reader interface {
 		}
 	}()
 	_, feature, err := decodeObservedScope(observed.scope)
-	if err == nil && observed.plan == nil && feature != nil && (*feature == apiKeyVerificationOperation(false) || *feature == apiKeyVerificationOperation(true)) && observed.state != nil && *observed.state == "pending" && observed.until != nil {
+	if err == nil && observed.plan == nil && feature != nil && isAPIKeyVerificationOperation(*feature) && observed.state != nil && *observed.state == "pending" && observed.until != nil {
 		// API-key preparations have no counters or declaration column. Read
 		// only their existing original-output profile, preserving compatibility
 		// with compositions that installed PreparationMigrationSource alone.
