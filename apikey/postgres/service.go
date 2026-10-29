@@ -41,35 +41,56 @@ import (
 // output; it never encrypts a recoverable API-key plaintext. Retain all keys
 // needed by pending original operations. Owners/pool remain caller-owned.
 type ServiceConfig struct {
-	Configuration        apikey.Configuration
-	Clock                clock.Clock
-	MaximumDuration      time.Duration
-	Sessions             *session.SessionService
-	Session              sessionpg.Config
-	Profile              sessionpg.IdentifierAdmissionConfig
-	LookupKeys           map[uint32]session.DigestKey
-	Authorization        authorization.Service
-	PolicyID             string
-	PolicyVersion        uint64
-	Pepper               apikey.Pepper
-	Counters             *riskpg.Repository
-	Risk                 risk.ProtectedProviderAdmissionCustodyConfig
-	CounterPolicy        risk.Policy
-	Coordinator          kernel.CoordinatorConfig
-	RequestKeys          kernel.RequestKeyConfig
-	ActiveEnvelopeKeyID  string
-	RetainedEnvelopeKeys map[string][]byte
+	Configuration apikey.Configuration
+	// LegacyConfiguration optionally enables exactly one explicitly selected
+	// verify-only SHA-256 source profile. Zero preserves modern-only behavior.
+	LegacyConfiguration apikey.Configuration
+	// ValidateCanonicalKeyID is required only for legacy import. It must honor
+	// the bounded context, preserve identifiers, and be concurrency-safe. It is
+	// called outside SQL; it supplies ID policy, never owner/source authority.
+	ValidateCanonicalKeyID func(context.Context, apikey.KeyID) error
+	Clock                  clock.Clock
+	MaximumDuration        time.Duration
+	Sessions               *session.SessionService
+	Session                sessionpg.Config
+	Profile                sessionpg.IdentifierAdmissionConfig
+	LookupKeys             map[uint32]session.DigestKey
+	Authorization          authorization.Service
+	PolicyID               string
+	PolicyVersion          uint64
+	Pepper                 apikey.Pepper
+	Counters               *riskpg.Repository
+	Risk                   risk.ProtectedProviderAdmissionCustodyConfig
+	CounterPolicy          risk.Policy
+	Coordinator            kernel.CoordinatorConfig
+	RequestKeys            kernel.RequestKeyConfig
+	ActiveEnvelopeKeyID    string
+	RetainedEnvelopeKeys   map[string][]byte
 }
 
 // Service supplies native API-key operations through the existing coordinator.
 // It starts no goroutines, owns no pool and never retries a transaction. Calls
 // use isolated participants; immutable configuration supports concurrency.
 type Service struct {
-	pool      *database.Pool
-	directory *kernel.Repository
-	config    func() ServiceConfig
-	crypto    *envelope.Service
-	custody   risk.ProtectedProviderAdmissionCustody
+	pool                  *database.Pool
+	directory             *kernel.Repository
+	config                func() ServiceConfig
+	crypto                *envelope.Service
+	custody               risk.ProtectedProviderAdmissionCustody
+	issuanceConfiguration apikey.Configuration
+}
+
+func validateServiceConfigurations(c ServiceConfig) error {
+	if c.Configuration.Spec().Algorithm != apikey.AlgorithmModernHMACSHA256 {
+		return apikey.ErrInvalid
+	}
+	if c.LegacyConfiguration != (apikey.Configuration{}) {
+		modern, legacy := c.Configuration.Spec(), c.LegacyConfiguration.Spec()
+		if c.LegacyConfiguration.Validate() != nil || legacy.Algorithm != apikey.AlgorithmLegacySHA256V1 || legacy.PermissionReduction != apikey.PermissionReductionNarrow || legacy.ID == modern.ID || legacy.Issuer != modern.Issuer || legacy.Environment != modern.Environment || legacy.Audience != modern.Audience || c.ValidateCanonicalKeyID == nil {
+			return apikey.ErrInvalid
+		}
+	}
+	return nil
 }
 
 // NewService validates immutable composition without SQL, policy/provider calls
@@ -78,6 +99,9 @@ type Service struct {
 // Only PermissionReductionNarrow is supported: Revoke requires a distinct
 // atomic lifecycle profile, not a permission-changed event for a revoked key.
 func NewService(pool *database.Pool, c ServiceConfig) (*Service, error) {
+	if err := validateServiceConfigurations(c); err != nil {
+		return nil, err
+	}
 	if pool == nil || pool.Raw() == nil || c.Configuration.Validate() != nil || c.Configuration.Spec().PermissionReduction != apikey.PermissionReductionNarrow || c.Configuration.Spec().MaximumLifetime < 24*time.Hour || c.Clock == nil || c.MaximumDuration <= 0 || c.MaximumDuration > 5*time.Second || !c.Sessions.Configured() || c.Session.MaximumDuration <= 0 || c.Session.MaximumDuration > time.Minute || c.Profile.Validate() != nil || c.Profile.AuthenticationMethod != "password" || c.Profile.CredentialKind != identity.CredentialPassword || c.Profile.CredentialOwner != "identity/password" || c.Authorization == nil || !scope(c.PolicyID) || c.PolicyVersion == 0 || c.Pepper == (apikey.Pepper{}) || c.Counters == nil || len(c.LookupKeys) < 1 || len(c.LookupKeys) > 4 || !scope(c.ActiveEnvelopeKeyID) || len(c.RetainedEnvelopeKeys) < 1 || len(c.RetainedEnvelopeKeys) > 16 || len(c.RetainedEnvelopeKeys[c.ActiveEnvelopeKeyID]) != 32 || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || c.Coordinator.QueryPolicy.PolicyVersion != c.PolicyVersion || c.Coordinator.AdmissionPolicy.PolicyVersion != c.PolicyVersion || c.RequestKeys.Policy.PolicyVersion != c.PolicyVersion {
 		return nil, apikey.ErrInvalid
 	}
@@ -122,7 +146,7 @@ func NewService(pool *database.Pool, c ServiceConfig) (*Service, error) {
 	c.Coordinator.RetainedFingerprintKeys = maps.Clone(c.Coordinator.RetainedFingerprintKeys)
 	query, admission := *c.Coordinator.QueryPolicy, *c.Coordinator.AdmissionPolicy
 	c.Coordinator.QueryPolicy, c.Coordinator.AdmissionPolicy = &query, &admission
-	s := &Service{pool: pool, directory: directory, config: func() ServiceConfig { return c }, crypto: crypto, custody: custody}
+	s := &Service{pool: pool, directory: directory, config: func() ServiceConfig { return c }, crypto: crypto, custody: custody, issuanceConfiguration: c.Configuration}
 	if _, _, err := s.compose(&creationPhase{service: s}); err != nil {
 		return nil, apikey.ErrInvalid
 	}
@@ -168,15 +192,17 @@ func (s *Service) compose(p kernel.Contributor) (*kernel.Coordinator, *kernel.Co
 // generation marker before minting. Only proven committed original invocation
 // material can be revealed. Matching retries never generate or reveal a key.
 func (s *Service) Create(ctx context.Context, r apikey.CreateRequest) (out apikey.IssuanceResult, err error) {
-	result, err := s.manage(ctx, r, nil, false)
+	result, err := s.manage(ctx, r, nil, false, nil)
 	return s.issuance(result, err)
 }
 
 // Rotate atomically tombstones the original credential and creates a distinct
-// modern successor with the same immutable grant and absolute expiry. Only the
-// original successful invocation retains reveal-once plaintext custody.
+// modern successor with the same immutable grant. Modern predecessors retain
+// their exact absolute expiry; legacy predecessors use the earlier of that
+// expiry and the current modern lifetime ceiling. Only the original successful
+// invocation retains reveal-once plaintext custody.
 func (s *Service) Rotate(ctx context.Context, r apikey.Rotation) (apikey.IssuanceResult, error) {
-	result, err := s.manage(ctx, mutationRequest(r), &r, false)
+	result, err := s.manage(ctx, mutationRequest(r), &r, false, nil)
 	return s.issuance(result, err)
 }
 
@@ -184,7 +210,7 @@ func (s *Service) Rotate(ctx context.Context, r apikey.Rotation) (apikey.Issuanc
 // original command without applying a second transition or advancing epochs.
 func (s *Service) Revoke(ctx context.Context, r apikey.Revocation) (identity.CommandResult, error) {
 	rotation := apikey.Rotation(r)
-	result, err := s.manage(ctx, mutationRequest(rotation), &rotation, true)
+	result, err := s.manage(ctx, mutationRequest(rotation), &rotation, true, nil)
 	return result.receipt, err
 }
 func mutationRequest(r apikey.Rotation) apikey.CreateRequest {
@@ -207,8 +233,8 @@ func (s *Service) issuance(result nativeResult, executionErr error) (apikey.Issu
 	}
 	return out, executionErr
 }
-func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *apikey.Rotation, revoke bool) (out nativeResult, err error) {
-	if s == nil || s.config == nil || ctx == nil || mutation == nil && r.Validate() != nil || mutation != nil && mutation.Validate() != nil {
+func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *apikey.Rotation, revoke bool, imported *apikey.ImportRequest) (out nativeResult, err error) {
+	if s == nil || s.config == nil || ctx == nil || mutation == nil && imported == nil && r.Validate() != nil || mutation != nil && mutation.Validate() != nil || imported != nil && imported.Validate(s.config().Configuration) != nil {
 		return out, apikey.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
@@ -238,10 +264,17 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 	if !s.config().Clock.Now().Before(managementProofDeadline(b)) {
 		return out, apikey.ErrDenied
 	}
+	if revoke {
+		_, profile, e := s.managementRecord(ctx, b.TenantID, mutation.KeyID)
+		if e != nil {
+			return out, e
+		}
+		s = s.withConfiguration(profile)
+	}
 	// A retained mapping is correlation only. Current self-management and every
 	// requested ceiling permission authorize both new preparation and historical
 	// recovery; kernel request/query admission is a separate, narrower policy.
-	p = &creationPhase{service: s, request: r, observed: observed, readStartedAt: started, mutation: mutation, revocation: revoke}
+	p = &creationPhase{service: s, request: r, observed: observed, readStartedAt: started, mutation: mutation, revocation: revoke, imported: imported}
 	op := p.operation()
 	if err := s.allow(ctx, s.decision(r.Authentication.TenantID, b.UserID, op.OperationID, "api-key", s.config().Configuration.Spec().ID, r.CorrelationID)); err != nil {
 		return out, err
@@ -249,6 +282,22 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 	if mutation == nil {
 		if err := s.authorizePermissions(ctx, r.Authentication.TenantID, b.UserID, r.Permissions, r.CorrelationID); err != nil {
 			return out, err
+		}
+	}
+	if imported != nil {
+		if imported.Record.Owner.Spec().UserID != b.UserID {
+			return out, apikey.ErrDenied
+		}
+		if err := s.allow(ctx, s.decision(b.TenantID, b.UserID, op.OperationID, "api-key-import-source", imported.SourceID, r.CorrelationID)); err != nil {
+			return out, err
+		}
+		for _, id := range []apikey.KeyID{imported.Record.ID, imported.Record.PreviousID} {
+			if id != "" && s.config().ValidateCanonicalKeyID(ctx, id) != nil {
+				return out, nativeError(ctx, apikey.ErrInvalid)
+			}
+		}
+		if imported.Record.Status == apikey.KeyActive && (imported.Record.Version == ^uint64(0) || imported.Record.AuthorityVersion == ^uint64(0)) {
+			return out, apikey.ErrDenied
 		}
 	}
 	p.coordinator, p.registry, err = s.compose(p)
@@ -259,12 +308,41 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 	if mutation != nil {
 		intent, err = s.mutationIntent(*mutation, op)
 	}
+	if imported != nil {
+		intent, err = s.importIntent(*imported)
+	}
 	if err != nil {
 		return out, err
 	}
 	p.intent = intent
 	scope := kernel.RequestKeyScope{TenantID: r.Authentication.TenantID, ActorID: identity.ActorID(b.UserID), ActorKind: authorization.SubjectUser, Method: "POST", RouteID: op.OperationID}
 	caller := s.decision(scope.TenantID, b.UserID, op.OperationID, "identity.request-admission", op.OperationID, r.CorrelationID)
+	if imported != nil {
+		feature := kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}
+		bound, wire, found, readErr := p.coordinator.ReadPreparedRequestKey(ctx, scope, r.IdempotencyKey, intent, caller, feature, p)
+		if readErr != nil {
+			clear(wire)
+			return out, nativeError(ctx, readErr)
+		}
+		if found {
+			original, restoreErr := p.RestoreRequestKey(ctx, bound, wire)
+			clear(wire)
+			if restoreErr != nil {
+				return out, nativeError(ctx, restoreErr)
+			}
+			out.receipt, err = p.coordinator.RecoverPreparedFeatureCommand(ctx, recoveryQuery(original), s.decision(b.TenantID, b.UserID, op.OperationID, "identity.user", string(b.UserID), r.CorrelationID), feature, p)
+			return out, nativeError(ctx, err)
+		}
+		clear(wire)
+		original, exists, sourceErr := s.importSource(ctx, *imported)
+		if sourceErr != nil {
+			return out, sourceErr
+		}
+		if exists {
+			out.receipt, err = p.coordinator.RecoverPreparedFeatureCommand(ctx, recoveryQuery(original), s.decision(b.TenantID, b.UserID, op.OperationID, "identity.user", string(b.UserID), r.CorrelationID), feature, p)
+			return out, nativeError(ctx, err)
+		}
+	}
 	bound, wire, err := p.coordinator.ResolvePreparedRequestKey(ctx, scope, r.IdempotencyKey, intent, caller, kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}, p)
 	defer clear(wire)
 	if err != nil {
@@ -438,11 +516,25 @@ func (s *Service) Recover(ctx context.Context, r apikey.RecoveryRequest) (result
 		return result, apikey.ErrDenied
 	}
 	op := operationFor(r.Query.OperationID)
+	if op == importOperation() {
+		if s.config().LegacyConfiguration.Validate() != nil {
+			return result, apikey.ErrDenied
+		}
+		s = s.withConfiguration(s.config().LegacyConfiguration)
+	} else if op == revokeOperation() {
+		_, configuration, lookupErr := s.managementRecord(ctx, b.TenantID, apikey.KeyID(r.Query.RecordID))
+		if lookupErr != nil {
+			return result, lookupErr
+		}
+		s = s.withConfiguration(configuration)
+	}
 	if err := s.allow(ctx, s.decision(b.TenantID, b.UserID, op.OperationID, "api-key", s.config().Configuration.Spec().ID, "")); err != nil {
 		return result, err
 	}
 	p := &creationPhase{service: s}
-	if op != createOperation() {
+	if op == importOperation() {
+		p.imported = &apikey.ImportRequest{}
+	} else if op != createOperation() {
 		p.mutation = &apikey.Rotation{}
 		p.revocation = op == revokeOperation()
 	}

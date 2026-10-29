@@ -33,6 +33,8 @@ func operationFor(id string) identity.FeatureOperation {
 		return rotateOperation()
 	case "identity.apikey.delete":
 		return revokeOperation()
+	case "identity.apikey.import":
+		return importOperation()
 	default:
 		return identity.FeatureOperation{}
 	}
@@ -45,6 +47,8 @@ func intentField(op identity.FeatureOperation) string {
 		return "apikey.rotate.intent"
 	case revokeOperation():
 		return "apikey.revoke.intent"
+	case importOperation():
+		return "apikey.import.intent"
 	default:
 		return ""
 	}
@@ -71,6 +75,9 @@ type creationInput struct {
 	Configuration                         apikey.Configuration
 	Record                                apikey.Record
 	PreviousRecord                        *apikey.Record
+	PreviousConfiguration                 *apikey.Configuration
+	PreviousConfigurationAuthority        *apikey.ConfigurationAuthorityBinding
+	Import                                *legacyImportBinding
 	Binding                               identity.CommandBinding
 	Session                               session.Session
 	Bearer                                auth.BearerCredential
@@ -91,22 +98,42 @@ func (x creationInput) validate() error {
 	ip, ipErr := netip.ParseAddr(x.Network)
 	s, err := x.Session.Bindings()
 	op := operationFor(b.OperationID)
-	if err != nil || intentField(op) == "" || b.ValidateFor(op) != nil || x.Configuration.Validate() != nil || r.Validate(x.Configuration) != nil || o.Kind != apikey.OwnerUser || b.TenantID != o.TenantID || b.UserID != o.UserID || b.ActorID != identity.ActorID(o.UserID) || b.ActorKind != authorization.SubjectUser || b.RecordID != string(r.ID) || len(r.Name) == 0 || c.MaximumLifetime < minimumKeyLifetime || x.OwnerStatus.User.Validate(b.TenantID) != nil || x.OwnerStatus.User.ID != b.UserID || x.OwnerStatus.User.Status != identity.StatusActive || x.OwnerStatus.AuthorityVersion != o.Version || x.ConfigurationAuthority.Validate(b.TenantID, c.ID) != nil || s.TenantID != b.TenantID || s.UserID != b.UserID || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != "password" || s.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || x.Session.MFAAuthentication() != (session.MFAAuthentication{}) || ipErr != nil || ip.Zone() != "" || ip.Unmap().String() != x.Network || ip.IsUnspecified() || ip.IsMulticast() || !exactTime(x.ReadStartedAt) || !exactTime(x.VerifiedAt) || !exactTime(x.ValidUntil) || x.VerifiedAt.Before(x.ReadStartedAt) || x.VerifiedAt.Sub(x.ReadStartedAt) > c.MaximumRead || !x.ValidUntil.After(x.VerifiedAt) || x.ValidUntil.Sub(x.ReadStartedAt) > 20*time.Second || r.CreatedAt.After(x.VerifiedAt) {
+	ownerVersionValid := x.OwnerStatus.AuthorityVersion == o.Version || op == importOperation() && x.OwnerStatus.AuthorityVersion >= o.Version
+	if err != nil || intentField(op) == "" || b.ValidateFor(op) != nil || x.Configuration.Validate() != nil || r.Validate(x.Configuration) != nil || o.Kind != apikey.OwnerUser || b.TenantID != o.TenantID || b.UserID != o.UserID || b.ActorID != identity.ActorID(o.UserID) || b.ActorKind != authorization.SubjectUser || b.RecordID != string(r.ID) || op == createOperation() && len(r.Name) == 0 || c.Algorithm == apikey.AlgorithmModernHMACSHA256 && c.MaximumLifetime < minimumKeyLifetime || x.OwnerStatus.User.Validate(b.TenantID) != nil || x.OwnerStatus.User.ID != b.UserID || x.OwnerStatus.User.Status != identity.StatusActive || !ownerVersionValid || x.ConfigurationAuthority.Validate(b.TenantID, c.ID) != nil || s.TenantID != b.TenantID || s.UserID != b.UserID || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != "password" || s.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || x.Session.MFAAuthentication() != (session.MFAAuthentication{}) || ipErr != nil || ip.Zone() != "" || ip.Unmap().String() != x.Network || ip.IsUnspecified() || ip.IsMulticast() || !exactTime(x.ReadStartedAt) || !exactTime(x.VerifiedAt) || !exactTime(x.ValidUntil) || x.VerifiedAt.Before(x.ReadStartedAt) || x.VerifiedAt.Sub(x.ReadStartedAt) > c.MaximumRead || !x.ValidUntil.After(x.VerifiedAt) || x.ValidUntil.Sub(x.ReadStartedAt) > 20*time.Second || r.CreatedAt.After(x.VerifiedAt) {
 		return apikey.ErrInvalid
 	}
 	if !x.VerifiedAt.Before(managementProofDeadline(s)) || x.ValidUntil.After(managementProofDeadline(s)) {
 		return apikey.ErrDenied
 	}
-	if op == createOperation() {
+	if op == importOperation() {
+		if x.Import == nil || x.PreviousRecord != nil || x.PreviousConfiguration != nil || x.PreviousConfigurationAuthority != nil || c.Algorithm != apikey.AlgorithmLegacySHA256V1 || c.State != apikey.ConfigurationVerifyOnly || !scope(x.Import.SourceID) || x.Import.SourceVersion == 0 || x.Import.Digest == ([32]byte{}) || r.Status == apikey.KeyActive && (r.Version == ^uint64(0) || r.AuthorityVersion == ^uint64(0) || x.ConfigurationAuthority.Version == ^uint64(0)) {
+			return apikey.ErrInvalid
+		}
+	} else if op == createOperation() {
+		if x.Import != nil || x.PreviousConfiguration != nil || x.PreviousConfigurationAuthority != nil {
+			return apikey.ErrInvalid
+		}
 		if x.PreviousRecord != nil || !x.Configuration.AllowsIssuance() || r.Version != 1 || r.AuthorityVersion != 1 || r.RootVersion != 1 || r.Status != apikey.KeyActive || r.PreviousID != "" || r.ExpiresAt.Sub(r.CreatedAt) < minimumKeyLifetime || r.CreatedAt.Before(x.ReadStartedAt) {
 			return apikey.ErrInvalid
 		}
 	} else {
+		if x.Import != nil {
+			return apikey.ErrInvalid
+		}
 		if x.PreviousRecord == nil || x.ConfigurationAuthority.Version == ^uint64(0) {
 			return apikey.ErrInvalid
 		}
 		prior := *x.PreviousRecord
-		if prior.Validate(x.Configuration) != nil || !prior.Owner.SameIdentity(r.Owner) || prior.Owner.Version() > r.Owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
+		previousConfiguration := x.Configuration
+		if x.PreviousConfiguration != nil {
+			previousConfiguration = *x.PreviousConfiguration
+			if op != rotateOperation() || x.PreviousConfigurationAuthority == nil || x.PreviousConfigurationAuthority.Validate(b.TenantID, previousConfiguration.Spec().ID) != nil || x.PreviousConfigurationAuthority.Version == ^uint64(0) || previousConfiguration.Spec().Algorithm != apikey.AlgorithmLegacySHA256V1 {
+				return apikey.ErrInvalid
+			}
+		} else if x.PreviousConfigurationAuthority != nil {
+			return apikey.ErrInvalid
+		}
+		if prior.Validate(previousConfiguration) != nil || !prior.Owner.SameIdentity(r.Owner) || prior.Owner.Version() > r.Owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
 			return apikey.ErrInvalid
 		}
 		want := prior
@@ -117,6 +144,10 @@ func (x creationInput) validate() error {
 			}
 			want.ID, want.RootID, want.PreviousID, want.CreatedAt = r.ID, r.ID, prior.ID, r.CreatedAt
 			want.Version, want.AuthorityVersion, want.RootVersion = 1, 1, 1
+			want.ConfigurationID, want.ConfigurationRevision, want.Issuer, want.Environment, want.Audience = c.ID, c.Revision, c.Issuer, c.Environment, c.Audience
+			if previousConfiguration.Spec().Algorithm == apikey.AlgorithmLegacySHA256V1 {
+				want.ExpiresAt = minTime(prior.ExpiresAt, r.CreatedAt.Add(c.MaximumLifetime).Truncate(time.Microsecond))
+			}
 		} else {
 			want.Version++
 			want.AuthorityVersion++
@@ -153,12 +184,23 @@ func (x creationInput) commitment() ([32]byte, error) {
 	}
 	var previous []byte
 	if x.PreviousRecord != nil {
-		previous, err = encodeRecord(*x.PreviousRecord, x.Configuration)
+		previousConfiguration := x.Configuration
+		if x.PreviousConfiguration != nil {
+			previousConfiguration = *x.PreviousConfiguration
+		}
+		previous, err = encodeRecord(*x.PreviousRecord, previousConfiguration)
 		if err != nil {
 			return [32]byte{}, err
 		}
 	}
 	a := x.ConfigurationAuthority
+	var previousConfiguration *apikey.ConfigurationSpec
+	var previousAuthority uint64
+	if x.PreviousConfiguration != nil {
+		spec := x.PreviousConfiguration.Spec()
+		previousConfiguration = &spec
+		previousAuthority = x.PreviousConfigurationAuthority.Version
+	}
 	preimage, err := json.Marshal(struct {
 		Profile                               string
 		Record                                []byte
@@ -170,7 +212,10 @@ func (x creationInput) commitment() ([32]byte, error) {
 		ConfigurationVersion                  uint64
 		ReadStartedAt, VerifiedAt, ValidUntil time.Time
 		Network                               string
-	}{x.Binding.OperationID, record, previous, x.Configuration.Spec(), x.OwnerStatus.User.Version, x.OwnerStatus.AuthorityVersion, a.TenantID, a.ConfigurationID, a.Version, x.ReadStartedAt.UTC(), x.VerifiedAt.UTC(), x.ValidUntil.UTC(), x.Network})
+		PreviousConfiguration                 *apikey.ConfigurationSpec `json:",omitempty"`
+		PreviousAuthority                     uint64                    `json:",omitempty"`
+		Import                                *legacyImportBinding      `json:",omitempty"`
+	}{x.Binding.OperationID, record, previous, x.Configuration.Spec(), x.OwnerStatus.User.Version, x.OwnerStatus.AuthorityVersion, a.TenantID, a.ConfigurationID, a.Version, x.ReadStartedAt.UTC(), x.VerifiedAt.UTC(), x.ValidUntil.UTC(), x.Network, previousConfiguration, previousAuthority, x.Import})
 	if err != nil {
 		return [32]byte{}, apikey.ErrInvalid
 	}

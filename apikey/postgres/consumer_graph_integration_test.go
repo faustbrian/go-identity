@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -47,6 +48,39 @@ type baselineGraph struct {
 	server   *reference.Server
 	hibp     *hibp.Client
 	http     *httpclient.Client
+	password *primitiveObserver
+}
+
+type primitiveEvent struct {
+	Operation primitive.Operation
+	Outcome   primitive.Outcome
+	Duration  time.Duration
+	Context   string
+}
+
+type primitiveObserver struct {
+	mu     sync.Mutex
+	events []primitiveEvent
+}
+
+func (o *primitiveObserver) Observe(ctx context.Context, event primitive.Observation) {
+	state := "active"
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		state = "deadline"
+	} else if ctx.Err() != nil {
+		state = "canceled"
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if len(o.events) < 16 {
+		o.events = append(o.events, primitiveEvent{event.Operation, event.Outcome, event.Duration, state})
+	}
+}
+
+func (o *primitiveObserver) snapshot() []primitiveEvent {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return slices.Clone(o.events)
 }
 
 func (g *baselineGraph) close(ctx context.Context) error {
@@ -163,7 +197,8 @@ func fixtureGraph(ctx context.Context, origin string, fixtureKeys map[string][32
 		return nil, err
 	}
 	profile := primitive.DefaultPolicy()
-	crypto, err := primitive.New(profile)
+	passwordObserver := &primitiveObserver{}
+	crypto, err := primitive.New(profile, primitive.WithObserver(passwordObserver))
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +215,7 @@ func fixtureGraph(ctx context.Context, origin string, fixtureKeys map[string][32
 		_ = transport.Close()
 		return nil, err
 	}
-	g := &baselineGraph{hibp: checker.(*hibp.Client), http: transport}
+	g := &baselineGraph{hibp: checker.(*hibp.Client), http: transport, password: passwordObserver}
 	defer func() {
 		if err != nil {
 			cleanup, stop := context.WithTimeout(context.Background(), 5*time.Second)
@@ -343,7 +378,7 @@ func (e *baselineEvaluator) Evaluate(ctx context.Context, r authorization.Reques
 		// retained coordinator fingerprint and scope. This grants only metadata
 		// disclosure, not key management, a permission grant or fresh authority.
 		if r.Action == "identity.apikey.verify" {
-			allow = r.Subject.Kind == authorization.SubjectAPIKey && r.Resource.Type == "identity.user" || r.Subject.Kind == authorization.SubjectServiceAccount && (r.Subject.ID == "automation" || r.Subject.ID == "rotation") && r.Resource.Type == "identity.anonymous-flow"
+			allow = r.Subject.Kind == authorization.SubjectAPIKey && r.Resource.Type == "identity.user" || r.Subject.Kind == authorization.SubjectServiceAccount && (r.Subject.ID == "automation" || r.Subject.ID == "rotation" || r.Subject.ID == "legacy") && r.Resource.Type == "identity.anonymous-flow"
 		}
 		if r.Subject.Kind == authorization.SubjectServiceAccount && r.Subject.ID == baselineActor {
 			switch r.Action {
@@ -359,11 +394,14 @@ func (e *baselineEvaluator) Evaluate(ctx context.Context, r authorization.Reques
 			allow = r.Resource.Type == "identity.delivery-worker" && r.Resource.ID == "baseline-worker"
 		}
 		if r.Subject.Kind == authorization.SubjectUser {
-			keyConfiguration := r.Resource.ID == "automation" || r.Resource.ID == "rotation"
+			keyConfiguration := r.Resource.ID == "automation" || r.Resource.ID == "rotation" || r.Resource.ID == "legacy"
 			allow = r.Resource.Type == "api-key" && keyConfiguration && slices.Contains(e.additionalPermissions, string(r.Action))
 			switch r.Action {
-			case "identity.apikey.create", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.update":
+			case "identity.apikey.create", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.update", "identity.apikey.import":
 				allow = r.Resource.Type == "api-key" && keyConfiguration || r.Resource.Type == "identity.user" && string(r.Resource.ID) == string(r.Subject.ID) || r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action)
+				if r.Action == "identity.apikey.import" && r.Resource.Type == "api-key-import-source" && r.Resource.ID == "authenticated-source" {
+					allow = true
+				}
 				if r.Resource.Type == "api-key" && e.deniedManagement != nil && e.deniedManagement.Load() {
 					allow = false
 				}

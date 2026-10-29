@@ -56,11 +56,15 @@ func (p *creationPhase) requirePrevious(ctx context.Context, w kernel.Work) erro
 	if p.applied {
 		expected = p.tombstone()
 	}
-	want, err := encodeRecord(expected, p.input.Configuration)
+	configuration := p.input.Configuration
+	if p.input.PreviousConfiguration != nil {
+		configuration = *p.input.PreviousConfiguration
+	}
+	want, err := encodeRecord(expected, configuration)
 	if err != nil {
 		return err
 	}
-	rows, err := w.Query(ctx, `SELECT user_id,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 FOR UPDATE`, string(p.input.Binding.TenantID), p.input.Configuration.Spec().ID, string(expected.ID))
+	rows, err := w.Query(ctx, `SELECT user_id,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 FOR UPDATE`, string(p.input.Binding.TenantID), configuration.Spec().ID, string(expected.ID))
 	if err != nil {
 		return err
 	}

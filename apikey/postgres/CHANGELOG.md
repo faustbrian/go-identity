@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add an explicit user-owned verify-only SHA-256 import profile through the
+  existing native authority/coordinator, preserving canonical IDs, distinct
+  source/record versions, original absolute times, restrictions and tombstones.
+  Imports accept no plaintext and produce no issuance/reveal event.
+- Add additive populated-state migration and exact legacy configuration checks.
+  Bare verification uses server-selected bounded digest lookup; rotation makes
+  a modern successor with a non-expanding expiry and no old-root authority.
+  Source retries recover original outcomes; stale/conflicting updates fail
+  explicitly rather than resurrecting credentials.
 - Add a bounded read-only deployment configuration check for exact existing
   active profiles. It neither provisions nor resets disabled authority;
   first-install initialization retains its existing conflict semantics.

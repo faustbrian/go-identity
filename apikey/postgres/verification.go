@@ -35,7 +35,15 @@ func verificationOperation(unknown bool) identity.FeatureOperation {
 // Preserve Fingerprint and Original for ambiguous outcome inquiry; retries
 // cannot refresh a recorded positive result or repeat a permission transition.
 func (s *Service) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificationRequest) (out apikey.AtomicVerificationResult, err error) {
-	if s == nil || s.config == nil || ctx == nil || r.Validate(s.config().Configuration) != nil {
+	if s == nil || s.config == nil || ctx == nil {
+		return out, apikey.ErrInvalid
+	}
+	configuration, selectionErr := s.selectedConfiguration(r.ConfigurationID, r.ConfigurationRevision)
+	if selectionErr != nil {
+		return out, selectionErr
+	}
+	s = s.withConfiguration(configuration)
+	if r.Validate(configuration) != nil {
 		return out, apikey.ErrInvalid
 	}
 	out = apikey.AtomicVerificationResult{AttemptID: r.AttemptID, State: apikey.VerificationAttemptNotDebited, Outcome: identity.CommitOutcomeNotCommitted}
@@ -59,7 +67,7 @@ func (s *Service) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificat
 	if !directory.Enabled {
 		return out, apikey.ErrDenied
 	}
-	digest, err := r.Secret.Digest(s.config().Pepper, string(r.TenantID), s.config().Configuration)
+	digest, err := s.presentedDigest(r)
 	if err != nil {
 		return out, err
 	}
@@ -110,6 +118,14 @@ func (s *Service) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificat
 	return s.verificationEffect(ctx, out)
 }
 
+func (s *Service) presentedDigest(r apikey.AtomicVerificationRequest) (apikey.Digest, error) {
+	if s.config().Configuration.Spec().Algorithm == apikey.AlgorithmLegacySHA256V1 {
+		legacy, err := r.LegacySecret.Digest(s.config().Configuration)
+		return apikey.Digest{Sum: legacy.Sum()}, err
+	}
+	return r.Secret.Digest(s.config().Pepper, string(r.TenantID), s.config().Configuration)
+}
+
 // ReconcileVerifyAndConsume asks only about the exact original submitted
 // attempt. It carries no raw key, performs no comparison/debit, cannot create
 // a missing command and never renews the original result's validity window.
@@ -121,6 +137,16 @@ func (s *Service) ReconcileVerifyAndConsume(ctx context.Context, q apikey.Verifi
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
 	defer cancel()
+	var configuration apikey.Configuration
+	if q.Original.UserID == "" {
+		configuration, err = s.selectedConfiguration(string(q.Original.ActorID), 0)
+	} else {
+		_, configuration, err = s.managementRecord(ctx, q.TenantID, apikey.KeyID(q.Original.ActorID))
+	}
+	if err != nil {
+		return out, nativeError(ctx, err)
+	}
+	s = s.withConfiguration(configuration)
 	p := &verificationPhase{service: s, binding: recoveryBinding(q.Original)}
 	p.coordinator, p.registry, err = s.compose(p)
 	if err != nil {
@@ -167,6 +193,12 @@ func (s *Service) verificationCandidate(ctx context.Context, r apikey.AtomicVeri
 	record, err := decodeRecord(wire, s.config().Configuration)
 	if err != nil || record.Owner.Spec().TenantID != r.TenantID || r.Candidate != "" && record.ID != r.Candidate {
 		return nil, identity.UnavailableError{}
+	}
+	// Snapshot import may preserve a full-width terminal source version. Such
+	// a credential is permanently denied, not a mutable verification target;
+	// retaining it must not fabricate a successor version or principal.
+	if record.Status == apikey.KeyRevoked && (record.Version == ^uint64(0) || record.AuthorityVersion == ^uint64(0)) {
+		return nil, nil
 	}
 	return &record, nil
 }

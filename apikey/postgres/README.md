@@ -1,7 +1,7 @@
 # Native PostgreSQL API keys
 
 `github.com/faustbrian/go-identity/apikey/postgres` implements the selected
-modern, human-owned, unlimited-quota API-key workflow. It uses the actual
+human-owned, unlimited-quota modern and explicit legacy API-key workflows. It uses the actual
 identity coordinator, PostgreSQL authority, password bearer sessions,
 authorization, risk counters, audit and transactional outbox owners. It does
 not issue browser sessions or treat the creator as the API key's human actor.
@@ -50,7 +50,8 @@ at an existing service or shared cluster.
 
 ## Security and recovery
 
-Only HMAC-with-pepper digests are durable; prepared output never contains
+Modern keys retain only HMAC-with-pepper digests; explicitly imported legacy
+keys retain their historical SHA-256 digests. Prepared output never contains
 recoverable key plaintext. Keep peppers, envelope keys and coordinator keys
 private and retain versions needed by pending original commands. Do not log
 request, result, key or session material.
@@ -79,14 +80,14 @@ verification; directory/user authority is fenced first. Required audit/outbox
 failure rolls back the protected mutation. Missing or unavailable authority
 never permits a fallback store or weaker authentication profile.
 
-Create, rotate and revoke also require the original primary authentication
+Create, import, rotate and revoke also require the original primary authentication
 to remain within its 15-minute sensitive-operation window. A new session read
 or refresh does not restart that window; protected work cannot cross its
 original deadline. Status-only recovery does not perform a new mutation.
 
 ## Retained scope
 
-Organization ownership, legacy digest import, finite quota, cache projection,
+Organization ownership, finite quota, cache projection,
 API-key sessions, general CRUD/metadata, and HTTP/Reference composition are
 remaining platform work, not selected fallback behavior. This experimental
 module's native profile is not whole M21 or final release qualification.
@@ -102,3 +103,72 @@ on an existing row. A reconstructing graph can observe that conflict, then call
 `CheckConfiguration`; it must not treat conflict alone as compatible startup or
 overwrite disabled authority. Runtime operations independently read/fence their
 current configuration and never inherit a startup authorization cache.
+
+## Explicit digest-only legacy profile
+
+Keep `Configuration` as the current modern HMAC issuance profile. Opt in to one
+distinct `LegacyConfiguration` selecting `AlgorithmLegacySHA256V1`,
+`ConfigurationVerifyOnly`, unlimited quota, no cache and Narrow permission
+reduction. Both profiles must share issuer, environment and audience. Supply a
+bounded, concurrency-safe `ValidateCanonicalKeyID` policy that accepts existing
+canonical IDs unchanged, including supplied replacement lineage; it is required
+only when selecting legacy support and never supplies missing owner authority.
+
+Apply `LegacyMigrationSource` with the unchanged original `MigrationSource` as
+its `Base` and a permanently allocated later version. This additive migration
+retains old records and migration checksums. It refuses ambiguous existing
+tenant/key IDs rather than selecting a profile or rewriting data. Zero in the
+internal pepper-version column denotes the explicitly selected legacy
+algorithm, not a usable modern pepper or a token-selected fallback. Explicitly
+provision with `InitializeLegacyConfiguration`; use `CheckLegacyConfiguration`
+to observe exact existing authority without resetting or enabling it.
+
+`Import` takes a digest-only `ImportRequest`: the exact typed metadata record,
+source ID/version and `LegacyDigest`, never plaintext. It authenticates a real
+fresh self-owner session and separately authorizes the source and each grant.
+Record version and source version remain distinct; snapshot import records a
+truthful absent-local `0 -> imported record version`, including full-width
+terminal metadata. It does not generate a key, emit a created-key event or
+reveal material. Imported original creation/expiry times, status, ownership,
+restrictions and predecessor remain unchanged. The finite profile requires
+explicit absolute expiry; it does not invent a deadline for no-expiry keys.
+Historical lifetime is not constrained by modern issuance-age limits.
+
+Identical original client-key retries recover that exact command, including a
+failed original after a later explicit import of the same source. For an unused
+client key, an already committed identical source is a status-only read of its
+original command; that read creates no new mapping, command, counter or effect.
+Different-key contenders may conflict. Older source versions have a typed stale
+outcome. Changed snapshots, including newer tombstones, explicitly conflict:
+they are unsupported source updates, never silently reported as applied or
+upserted. A revoked or rotated key cannot be resurrected by reimport. Required
+audit/outbox failure rolls back key/source/effects together; lost commit
+acknowledgements retain the original unknown outcome for status recovery.
+
+For verification, supply `LegacySecret` and the exact server-selected legacy
+configuration to `VerifyAndConsume`. Bare bytes are SHA-256 hashed unchanged,
+then looked up through the bounded exact tenant/configuration/digest index.
+No prefix is invented, no configuration is inferred from token text, and no
+profile scan or fallback occurs. Current owner/tenant/policy, original grant,
+absolute expiry and terminal status remain authoritative. Original attempt
+replay/reconciliation preserves source timestamps and cannot refresh authority.
+
+`Rotate` always creates a modern successor and terminates the legacy root in
+the same protected transaction. Its expiry is the earlier of the legacy
+absolute expiry and the rotation instant plus current modern maximum lifetime,
+conservatively floored to database precision; it never extends authority.
+Ordinary modern-to-modern rotation still preserves its exact original expiry.
+Both configuration fences and the exact predecessor are locked in a fixed
+order. Imported source metadata/tombstones remain retained; owner restoration
+cannot restore a revoked root or narrowed permission.
+
+The real populated-state consumer is `TestGenuineLegacyDigestImportVerificationAndModernRotation`.
+Run it with the same disposable loopback fixture and task-owned caches:
+
+```sh
+GOWORK=off go test -mod=readonly -race -tags=integration \
+  -run '^TestGenuineLegacyDigestImportVerificationAndModernRotation$' -count=1 .
+```
+
+This selects native user-owned import/verification/rotation only. It does not
+enable organization, quota, cache, legacy HTTP/Reference or no-expiry variants.

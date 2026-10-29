@@ -317,7 +317,7 @@ func (p *verificationPhase) ApplyAPIKeyVerification(ctx context.Context, w kerne
 			return zero(err)
 		}
 		// Constant-time comparison includes pepper version and every digest byte.
-		presented, err := p.request.Secret.Digest(p.service.config().Pepper, string(p.binding.TenantID), p.service.config().Configuration)
+		presented, err := p.service.presentedDigest(p.request)
 		if err != nil {
 			return zero(err)
 		}
@@ -382,7 +382,9 @@ func (p *verificationPhase) lockKey(ctx context.Context, w kernel.Work, expected
 		return apikey.Record{}, apikey.Digest{}, identity.UnavailableError{}
 	}
 	record, err := decodeRecord(wire, p.service.config().Configuration)
-	if err != nil || user != string(p.binding.UserID) || !sameRecord(record, expected, p.service.config().Configuration) || pepper < 1 || pepper > 4294967295 || len(digest) != 32 {
+	legacy := p.service.config().Configuration.Spec().Algorithm == apikey.AlgorithmLegacySHA256V1
+	validPepper := legacy && pepper == 0 || !legacy && pepper >= 1 && pepper <= 4294967295
+	if err != nil || user != string(p.binding.UserID) || !sameRecord(record, expected, p.service.config().Configuration) || !validPepper || len(digest) != 32 {
 		return apikey.Record{}, apikey.Digest{}, identity.ConflictError{}
 	}
 	return record, apikey.Digest{PepperVersion: uint32(pepper), Sum: [32]byte(digest)}, nil
