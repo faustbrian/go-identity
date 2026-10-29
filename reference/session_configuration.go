@@ -6,6 +6,7 @@ import (
 	"io"
 
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -23,8 +24,10 @@ import (
 // Explicit passkey-only composition admits only its native passkey provenance.
 // Selected MagicLink.TOTP additionally composes current confirmed factor
 // authority into both paths; MFA never falls back to a single-factor profile.
-// Every selected issuer must use the same store, deployment, policy namespace,
-// audience and cookie policy, with readable lookup and optional signout CSRF keys.
+// Every selected issuer shares the store, deployment, policy namespace, audience
+// and readable lookup custody. Cookie-producing issuers also share the cookie
+// policy and their optional signout CSRF keys. Explicit native password bearer
+// issuance instead requires zero cookie and CSRF configuration.
 type SessionConfiguration struct {
 	Native   sessionpg.SignOutServiceConfig
 	CSRFKeys []session.CSRFKey
@@ -211,7 +214,7 @@ func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSess
 	}
 	if c.PasswordSignin != nil {
 		p := c.PasswordSignin.Native
-		if p.Profile != verified || p.Session != e.Repository || !sessionIssuanceMatches(n, p.Issuance, p.CSRFKey) {
+		if p.Profile != verified || p.Session != e.Repository || !passwordSessionIssuanceMatches(n, p) {
 			return deny()
 		}
 	}
@@ -231,6 +234,20 @@ func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSess
 		selected.MagicLink = &profile
 	}
 	return selected, nil
+}
+
+func passwordSessionIssuanceMatches(n SessionConfiguration, p passwordpg.SigninConfig) bool {
+	if p.Transport == password.CookieSignin {
+		return sessionIssuanceMatches(n, p.Issuance, p.CSRFKey)
+	}
+	if p.Transport != password.BearerSignin || p.CSRFKey != (session.CSRFKey{}) || p.Issuance.Cookie != (session.CookiePolicy{}) {
+		return false
+	}
+	// Native BearerSignin never issues synchronizer state. Other selected
+	// cookie issuers still validate their own cookie/CSRF keys above; this
+	// copied selection checks only the bearer's actual lookup custody.
+	n.CSRFKeys = nil
+	return sessionKeysMatch(n, p.Issuance.LookupKey, session.CSRFKey{})
 }
 
 func sessionIssuanceMatches(n SessionConfiguration, issuer session.IssuerConfig, csrf session.CSRFKey) bool {

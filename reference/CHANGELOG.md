@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Compose modern self-owned API-key issuance, atomic verification, rotation,
+  revocation and original recovery through guarded native handles. Independently
+  opt into strict-bearer keyed HTTP create/rotate/delete with shared rate
+  admission. Selected native migrations preserve populated account/session
+  histories; startup checks existing configuration without resetting authority.
+- Admit explicitly configured native password bearer signin into the existing
+  session reader using its actual lookup custody. Cookie issuers retain their
+  own synchronizer checks. Browser password HTTP cannot select a bearer issuer.
+
 - Preserve a redaction-safe router-construction failure category alongside
   the existing invalid-input field. Callers can distinguish cancellation,
   deadline and invalid transport metadata through standard error matching

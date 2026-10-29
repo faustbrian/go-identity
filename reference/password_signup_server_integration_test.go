@@ -280,6 +280,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	apiKey                   bool
+	apiKeyUpgrade            bool
 	organization             bool
 	organizationUpgrade      bool
 	organizationTransfer     bool
@@ -486,6 +488,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	if extensions.apiKey {
+		selectedAuthorization = referenceAPIKeyPolicy{}
+	}
 	if extensions.organization {
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
@@ -535,6 +540,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectedAuthorization = f.adminEmailGrant
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
+	if extensions.apiKey && !extensions.apiKeyUpgrade {
+		configureReferenceAPIKey(t, &c, origin)
+	}
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
 	}
@@ -1232,8 +1240,14 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
+	if c.APIKey != nil {
+		modules = append(modules, "identity/apikey/postgres")
+	}
 	if c.Passkey != nil {
 		modules = append(modules, "passkey/postgres", "webauthn/postgres")
+	}
+	if extensions.apiKey && !extensions.apiKeyUpgrade {
+		proveReferenceAPIKeyOnlyRateMigrations(t, ctx, f, c, deps, workerConfigs)
 	}
 	t.Cleanup(func() {
 		bounded, stop := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1280,6 +1294,10 @@ END $$`); err != nil {
 	if extensions.postgresBaseline {
 		config.Profile = reference.PostgresOnly
 	}
+	if extensions.apiKey {
+		config.HTTP.Network.Limits.MaximumBodyBytes = 65536
+		config.HTTP.Network.Limits.MaximumFields = 128
+	}
 	if extensions.passkeyHTTP {
 		config.HTTP.Network.TenantHosts = []identityhttp.TenantHost{{Host: "identity.example", TenantID: otpTenant}}
 	}
@@ -1296,6 +1314,9 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPAPIKey != nil {
+		wantOperations += 3
+	}
 	if c.HTTPOrganization != nil {
 		for _, selected := range []struct {
 			op string
@@ -1795,6 +1816,11 @@ END $$`); err != nil {
 			} else {
 				proveReferenceOrganizationHTTPS(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf)
 			}
+		}
+	}
+	if extensions.apiKey {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade)
 		}
 	}
 	if extensions.passkey {

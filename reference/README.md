@@ -1,5 +1,14 @@
 # Identity reference composition
 
+## Optional API-key backend
+
+Select native `APIKey` and independently select `HTTPAPIKey.Create`, `Rotate`
+and `Revoke` for modern self-owned password-bearer keys. The graph owns the
+actual session, risk, transaction, migration and secret-custody composition.
+Disabled operations expose no routes or OpenAPI metadata. See the
+[configuration and consumer walkthrough](APIKEY.md) for initialization,
+original retries and the supported profile.
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

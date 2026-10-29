@@ -2,6 +2,7 @@ package reference
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -85,6 +86,8 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	apiKey                       *apiKeyState
+	httpAPIKey                   *apiKeyHTTPState
 	organization                 *organizationState
 	httpOrganization             *organizationHTTPState
 	passkey                      *passkeyState
@@ -525,6 +528,19 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.singleSessionRevocation = sessionOwner != nil
+	apiKeyOwner, err := composeAPIKey(c, d.PostgreSQL, sessionOwner, s.policy, evaluator)
+	if err != nil {
+		return err
+	}
+	httpAPIKey, err := composeAPIKeyHTTP(c, apiKeyOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			httpAPIKey.close()
+		}
+	}()
 	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
 	if err != nil {
 		return err
@@ -896,6 +912,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		s.features.verificationSessionLineage = c.PasswordSignup.VerificationSessionLineage
 	}
 	s.features.session = sessionOwner
+	s.features.apiKey = apiKeyOwner
+	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner
 	s.features.httpOrganization = httpOrganization
 	s.features.passwordVerification = passwordVerificationOwner
@@ -1138,6 +1156,19 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 		if enrollment.activeIssuer != nil {
 			if err := enrollment.activeIssuer.Initialize(w, s.pool); err != nil {
 				return err
+			}
+		}
+	}
+	if owner := s.features.apiKey; owner != nil {
+		for _, tenant := range s.features.migrations.tenants {
+			if err := owner.native.InitializeConfiguration(w, tenant); err != nil {
+				var conflict identity.ConflictError
+				if !errors.As(err, &conflict) {
+					return err
+				}
+				if err := owner.native.CheckConfiguration(w, tenant); err != nil {
+					return err
+				}
 			}
 		}
 	}

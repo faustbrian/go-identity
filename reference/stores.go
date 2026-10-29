@@ -38,6 +38,10 @@ type ReferenceDependencies struct {
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
+	// APIKey independently selects native modern human-owned key workflows.
+	APIKey *APIKeyConfiguration
+	// HTTPAPIKey independently selects strict-bearer management routes.
+	HTTPAPIKey *HTTPAPIKeyConfiguration
 	// Organization selects explicit verified-password bearer organization owners.
 	Organization *OrganizationConfiguration
 	// HTTPOrganization independently selects organization routes and metadata.
@@ -230,6 +234,9 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
+	if c.APIKey != nil && (c.OTP == nil || c.Session == nil || c.PasswordSignin == nil) || c.HTTPAPIKey != nil && (c.APIKey == nil || c.HTTPRate == nil) {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_api_key"}
+	}
 	if c.Organization != nil && (c.OTP == nil || c.Session == nil || c.PasswordSignin == nil) || c.HTTPOrganization != nil && c.Organization == nil {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_organization"}
 	}
@@ -483,6 +490,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 	state.closed = true
 	state.cancel()
 	if state.features != nil {
+		state.features.httpAPIKey.close()
 		state.features.httpOrganization.close()
 	}
 	if state.features != nil && state.features.httpAnonymous != nil {

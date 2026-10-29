@@ -9,6 +9,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
+	"github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"
 )
 
@@ -56,6 +57,9 @@ func composePasswordSigninHTTP(c StoreConfiguration, original *preAuthHTTPState)
 		return nil, invalid
 	}
 	p, n, selection := *c.PasswordSignin.PreAuth, c.PasswordSignin.Native, *c.HTTPPasswordSignin
+	if n.Transport != password.CookieSignin {
+		return nil, invalid
+	}
 	if selection.ActorID == "" || selection.ActorID != p.ActorID || selection.PolicyRevision == 0 || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || uint64(selection.PolicyRevision) != n.Coordinator.QueryPolicy.PolicyVersion || uint64(selection.PolicyRevision) != n.Coordinator.AdmissionPolicy.PolicyVersion || p.FlowTTL != 5*time.Minute || p.Origin != original.deployment.Origin {
 		return nil, invalid
 	}

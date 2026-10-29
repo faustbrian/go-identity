@@ -9,10 +9,43 @@ import (
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
+	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
+
+func TestSessionSelectionExplicitPasswordBearer(t *testing.T) {
+	lookup, _ := session.NewDigestKey(1, bytes.Repeat([]byte{1}, 32))
+	csrf, _ := session.NewCSRFKey(1, bytes.Repeat([]byte{2}, 32))
+	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-session", SameSite: http.SameSiteStrictMode})
+	store := sessionpg.Config{Schema: "session_store", MaximumDuration: time.Second}
+	profile := sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "password", CredentialKind: 1, CredentialOwner: "identity/password"}
+	c := StoreConfiguration{
+		Session:        &SessionConfiguration{Native: sessionpg.SignOutServiceConfig{Execution: sessionpg.IssueExecutorConfig{Repository: store, Profile: sessionpg.IssueAdmissionConfig(profile)}, Validation: session.ServiceConfig{LookupKeys: []session.DigestKey{lookup}}, Cookie: cookie}, CSRFKeys: []session.CSRFKey{csrf}},
+		OTP:            &OTPSendConfiguration{},
+		PasswordSignin: &PasswordSigninConfiguration{Native: passwordpg.SigninConfig{Transport: password.BearerSignin, Session: store, Profile: profile, Issuance: session.IssuerConfig{LookupKey: lookup}}},
+	}
+	selected, err := sessionAdmissionSelection(c)
+	if err != nil || selected.Verified == nil || *selected.Verified != profile || selected.OTP != nil {
+		t.Fatal("explicit native bearer could not join its actual session authority", err)
+	}
+	for _, alter := range []func(*passwordpg.SigninConfig){
+		func(p *passwordpg.SigninConfig) { p.CSRFKey = csrf },
+		func(p *passwordpg.SigninConfig) { p.Issuance.Cookie = cookie },
+		func(p *passwordpg.SigninConfig) {
+			p.Issuance.LookupKey, _ = session.NewDigestKey(1, bytes.Repeat([]byte{3}, 32))
+		},
+		func(p *passwordpg.SigninConfig) { p.Transport = password.SigninTransport(255) },
+	} {
+		original := c.PasswordSignin.Native
+		alter(&c.PasswordSignin.Native)
+		if _, err := sessionAdmissionSelection(c); err == nil {
+			t.Fatal("bearer selection accepted cookie custody, foreign keys or unknown transport")
+		}
+		c.PasswordSignin.Native = original
+	}
+}
 
 func TestSessionSelectionRequiresNativeOwners(t *testing.T) {
 	if owner, err := composeSession(StoreConfiguration{}, ReferenceDependencies{}, nil); err != nil || owner != nil {

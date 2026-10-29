@@ -53,6 +53,25 @@ func TestReferenceHTTPRateOwnsSelectedNativeHistory(t *testing.T) {
 	}
 }
 
+func TestAPIKeyOnlyHTTPIncludesAtomicRateHistory(t *testing.T) {
+	s := StoreSet{state: &storeState{config: VelocityStoreConfiguration{Schema: "risk_store"}, httpRate: &httpRateState{}, features: &featureState{migrations: featureMigrationConfig{otpSchema: "otp_store", sessionSchema: "session_store", signinSchema: "session_store", global: "deployment"}, httpAPIKey: &apiKeyHTTPState{}}}}
+	catalog, err := s.migrationCatalog(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, history := range catalog {
+		if history.namespace != "identity_http_rate" {
+			continue
+		}
+		native := ratepg.AtomicSchemaMigration()
+		if len(history.history) != 2 || history.history[1].UpSQL() != native.Up || history.owners[history.history[1].Version()] != "rate-limit/postgres" {
+			t.Fatal("API-key-only HTTP cannot install its native atomic rate owner")
+		}
+		return
+	}
+	t.Fatal("API-key-only HTTP rate history absent")
+}
+
 func TestReferenceHTTPRateValidatesBeforeResourcesAndRetainsOneOwner(t *testing.T) {
 	pool, err := database.Connect(t.Context(), database.Config{DSN: "host=127.0.0.1 port=1 user=postgres dbname=identity_test sslmode=disable search_path=public", StartupPolicy: database.StartupLazy})
 	if err != nil {
