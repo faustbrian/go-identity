@@ -1,5 +1,68 @@
 # Identity Implementation — Current Milestone
 
+2026-10-29 07:34 UTC — selected M21 organization-key Reference profile DELIVERED.
+Reference15 exact manifestd05c9ce5 independently APPROVED, main-pushed ec4b98d,
+Required SUCCESS https://github.com/faustbrian/go-identity/actions/runs/40835960572.
+Actual authenticated public Referencev0.0.0-20261029073032-ec4b98dd75b0 matches
+all15 files and real fresh/populated PostgreSQL/HTTPS race consumer passes19.382s.
+Retained local affected modern/legacy/organization race50.048s, ordinary5.653s,
+vet/tidy/module/static checks pass. Creator-removal/other-owner lifecycle, retained
+user-key migration, user-only transport nonmutation and audit rollback proven.
+WholeM21 remains open; no quota/cache/no-expiry/full qualification claim.
+OAuth root public-pairwise prerequisite main d8d18fb, exact CI40835306698SUCCESS;
+native worker actual public pin/seven files equal, key bootstrap red/green proven.
+Native full consumer running next; primary public acceptance complete and heavy
+slot released back to worker. No duplicate compilation/service-heavy work.
+
+2026-10-29 07:01 UTC — parallel M31 managed public single-host pairwise lane.
+Worker oauth_next_ready_outcome owns ONLY go-oauth-server root client_management.go,
+client_read.go and their corresponding/new public-pairwise tests, root CHANGELOG.md
+and docs/selected-oidc-profile.md; native postgres new public-pairwise consumer,
+client_managed_pairwise_test.go, README/CHANGELOG/go.mod/go.sum. Existing native
+client_registry.go/client_management.go/subject_keys.go only for demonstrated
+combined-path defects, reported before expansion. No identity/shared/Reference,
+OIDC-child engine, schema/migration, tool or branch changes. Base clean main0196c2a;
+consume delivered root3866e19 and oidcbaa3ff6 as pinned in native module and genuine
+public-client/confidential-pairwise independent-RP consumers. Root contract change
+must be reviewed/main-published before native adoption; no replace/stub readiness.
+Outcome: explicit trusted public-pairwise selection, genuine manager creates
+secretless public RP, consent/code-S256 yields independently validated equal-sub
+ID-token/UserInfo across reconstruction/subject-key rotation, refresh and withdrawal.
+Preserve default/confidential-only deployments. Prove no generated/stored/revealed
+client secret; finite unselected/sector/key/PKCE/client/user/session denials plus
+required-effect rollback and original unknown recovery. Primary owns final
+acceptance/Git delivery/reviews; worker cannot spawn, stage, commit or push.
+Heavy Go/service checks require primary slot grant. Primary continues M21 Reference.
+
+2026-10-29 06:58 UTC — bounded dependency-ready OAuth successor check.
+Read-only agent owns no writable paths, no Go/heavy runs, no children/Git/network
+mutations. Inspect go-oauth-server root/postgres current main (last delivered
+0196c2a managed confidential pairwise) and consumed public native owner contracts.
+Return one next finite OAuth/OIDC consumer that can be implemented independently
+of primary Reference organization-key integration; name actual ready sources,
+missing authority and exact files. Do not propose interfaces/stubs as readiness,
+reopen delivered profiles, or build before the parent assigns the coherent lane.
+Parent continues Reference coding/checks and does not wait for this investigation.
+
+2026-10-29 06:07 UTC — continue frozen M21 selected HTTP/Reference integration.
+Primary owns http/apikey and Reference composition; no native restart. Consume
+public core9d77699/native8de0410/org02c55d2/kernel601e478 with their delivered
+actual public PostgreSQL/race proof. Tier C: explicitly selected organization
+create/rotate/revoke HTTP, typed human manager versus organization ownership,
+strict original Idempotency-Key, current native authority, reveal-once/unknown
+projection and opt-in OpenAPI. Default user-only selection must not acquire org
+mutation authority. Reference owns actual repository/profile/migration wiring;
+no stores or handlers supplied by consumers. Legacy import stays native/direct
+in this finite transport profile, not silently exposed as another HTTP route.
+Checks: focused HTTP runtime reds/greens, whole affected HTTP race/static/fuzz,
+then real Reference populated/fresh PostgreSQL/HTTPS creator-removal journey,
+disabled/tenant/schema/membership/rollback/recovery cases and final combined
+independent review per coherent published owner. Whole M21 remains open.
+Design: explicit OrganizationOwned plus typed OrganizationCreator port, not an
+optional owner ignored by old Create implementations. Reference will retain
+user-only and explicitly selected organization profile views of the same actual
+native owners so disabled HTTP cannot inherit organization mutation access.
+
 2026-10-29 05:56 UTC — M21 native organization-owned profile DELIVERED.
 Main8de0410c02792a2311eeab2101e6b9d0fcd755fa, exact Required CI success:
 https://github.com/faustbrian/go-identity/actions/runs/40825977307

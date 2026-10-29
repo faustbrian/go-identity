@@ -1,6 +1,32 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-29 05:56 UTC
+## Current TL;DR — 2026-10-29 07:34 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
+  closed.** No additional fully release-qualified unit out of67 is claimed.
+  M21/API keys and M31/OIDC contain delivered profiles but remain incomplete.
+- **Delivered backend behavior:** organization-owned keys now work through
+  the opt-in Reference PostgreSQL/HTTPS composition. Consumers can register,
+  verify, sign in, issue a key, remove its creator while preserving the key,
+  and rotate/revoke it as another authorized owner. Populated migration retains
+  existing user keys. Disabled organization HTTP denies before mutation even
+  when native organization support is selected; required-audit failure rolls
+  back the write. Source ec4b98d is reviewed, on main and
+  [CI-green](https://github.com/faustbrian/go-identity/actions/runs/40835960572).
+  All15 downloaded public-module files match; its genuine fresh/populated
+  PostgreSQL/HTTPS race consumer passes19.382s. This closes the selected
+  organization-key consumer profile, not all API-key variants.
+- **Parallel OAuth:** public pairwise-client policy is reviewed/main-pushed
+  d8d18fb with [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40835306698).
+  The worker has reproduced and fixed its native key-bootstrap gap; the complete
+  secretless manager/independent-RP PostgreSQL journey remains in progress.
+- **Next:** finish remaining API-key lifetime/quota/cache/management profiles;
+  continue the independent OAuth lane. Federation, SCIM, other retained
+  capability profiles and final qualification remain substantial work.
+  Nothing waits on a user decision. The earlier intermittent preauth503 cause
+  remains unproved; later passing consumers do not establish its repair.
+
+## Retained checkpoint — 2026-10-29 05:56 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
   closed.** The native organization-owned-key profile is delivered; its selected
