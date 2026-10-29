@@ -1,8 +1,8 @@
-# Optional self-owned API keys
+# Optional user and organization-owned API keys
 
 This selected backend composes public native owners. It is not an API-key
 authentication session issuer, an administrative UI or complete M21 support.
-Organization ownership, no-expiry legacy keys, finite quotas and cache projections
+No-expiry legacy keys, finite quotas and cache projections
 remain separate profiles.
 
 ## Configuration and ownership
@@ -122,6 +122,45 @@ imported canonical ID and creates a modern successor without extending expiry;
 the revocation route retains terminal denial for that successor. Current session logout also
 denies original management retries. No browser session is issued by key use.
 
+## Organization-owned keys
+
+Configure `Organization` with its real native settings and set
+`APIKey.OrganizationOwned = true`. The public `FeatureSet.APIKeys()` handle then
+also exposes `CreateOrganization` and `RecoverOrganization`. No organization
+repository, workflow callback or SQL is supplied by the application. Current
+human management is distinct from the credential's durable organization owner.
+
+Include both `organization/postgres` and `identity/apikey/postgres` in the
+operator migration selection, along with existing baseline owners. The plan
+applies native organization credential authority and key-owner extensions in
+that order after their base histories. Independent optional histories preserve
+the installed organization and modern/legacy key prefixes, including populated
+user keys. Startup checks the selected sources; it does not implicitly migrate.
+
+Additionally set `HTTPAPIKey.OrganizationOwned = true` to select organization
+management on the existing HTTPS routes. Creation then accepts optional
+`organizationID` alongside `name`, `permissions` and `expiresAt`; absent owner
+input retains ordinary self issuance. Rotate/delete take the original key ID
+and expected version and use its immutable actual owner. Actor and tenant still
+come exclusively from the genuine password bearer and trusted host. Native
+current membership and policy authorize each mutation and its protected work.
+
+Leaving the HTTP flag false retains user-only mutation authority even when
+native organization support is selected. This is a native profile restriction,
+not merely removal of an OpenAPI property or suppression of committed output.
+The ordinary API-key routes remain available for user keys; organization input
+is rejected, and an organization key cannot be rotated/revoked through them.
+
+Key verification has no fabricated creator `UserID`. Creator membership removal
+preserves the independently owned key while denying that human's management
+and original recovery. Another current authorized owner may rotate or revoke.
+The native owner's separate credential epoch prevents archive/restore from
+reviving older authority. Original evidence deadlines, permission narrowing,
+required effects, reveal-once custody and unknown-outcome handling are unchanged.
+Retain the target organization with the original input/key for direct
+`RecoverOrganization`; status inquiries do not reconstruct plaintext or replay
+missing work. Organization keys never issue a user/browser session.
+
 ## Executable acceptance
 
 The integration test uses real PostgreSQL and the supported public module pins:
@@ -140,3 +179,12 @@ task-owned Go caches and remove the fixture/caches after the bounded run.
 migration, source-version-preserving import, unchanged bare verification, graph
 reconstruction/original recovery, actual HTTPS rotation/revocation, logout and
 disabled-configuration startup denial through the same public owners.
+
+`TestReferencePostgresOrganizationAPIKeyHTTPS` proves fresh selected and populated
+user-key upgrades, genuine registration/verification/native bearer signin,
+HTTPS organization-key issue/retry, creator removal, independent verification,
+other-owner rotation/revocation, native recovery denial and required-audit
+rollback. It also proves user-only HTTP cannot mutate an organization key even
+while direct organization support is selected. The regression was observed
+failing under an intentionally wrong native view and passes with that view
+restored. These profiles are not whole M21 or final release qualification.

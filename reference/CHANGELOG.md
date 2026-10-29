@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Compose explicitly selected organization-owned API-key issuance, verification,
+  rotation, revocation and original status recovery with the actual organization
+  repository. Creator removal denies that human's management without revoking
+  independently owned keys. Native and HTTP selections remain independent;
+  user-only HTTP uses a user-restricted native view before effects occur.
+- Add optional organization credential-epoch and key-owner histories after the
+  existing native owners without rewriting base/legacy migration prefixes or
+  populated user keys. Selected handlers retain strict bearer/keyed custody,
+  current member authority, required-effect rollback and reveal-once responses.
+
 - Compose opt-in digest-only legacy API-key import, unchanged bare SHA-256
   verification and modern successor rotation through the existing guarded
   owner. Selected legacy history is additive to populated modern installations;

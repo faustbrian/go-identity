@@ -12,6 +12,14 @@ Disabled operations expose no routes or OpenAPI metadata. See the
 [configuration and consumer walkthrough](APIKEY.md) for initialization,
 original retries and the supported profile.
 
+`APIKey.OrganizationOwned` additionally selects the actual `Organization` owner
+and forward credential/key-owner migrations. Independently enable
+`HTTPAPIKey.OrganizationOwned` for organization create/rotate/revoke over HTTPS.
+User-only HTTP retains a restricted native view even if direct organization
+operations are enabled. Creator removal preserves the key but denies that
+human's management; another authorized owner can rotate/revoke. See the
+[organization-key walkthrough](APIKEY.md#organization-owned-keys).
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

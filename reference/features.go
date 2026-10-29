@@ -528,7 +528,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.singleSessionRevocation = sessionOwner != nil
-	apiKeyOwner, err := composeAPIKey(c, d.PostgreSQL, sessionOwner, s.policy, evaluator)
+	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
+	if err != nil {
+		return err
+	}
+	organizationOwner, err := composeOrganization(c, d, sessionOwner, deliveryOwner, passwordVerificationOwner)
+	if err != nil {
+		return err
+	}
+	apiKeyOwner, err := composeAPIKey(c, d.PostgreSQL, sessionOwner, organizationOwner, s.policy, evaluator)
 	if err != nil {
 		return err
 	}
@@ -541,14 +549,6 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpAPIKey.close()
 		}
 	}()
-	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
-	if err != nil {
-		return err
-	}
-	organizationOwner, err := composeOrganization(c, d, sessionOwner, deliveryOwner, passwordVerificationOwner)
-	if err != nil {
-		return err
-	}
 	httpOrganization, err := composeOrganizationHTTP(c, organizationOwner, s.httpRate)
 	if err != nil {
 		return err

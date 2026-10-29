@@ -18,8 +18,11 @@ import (
 // deployment identity resets budgets and original debit correlation.
 type HTTPAPIKeyConfiguration struct {
 	Create, Rotate, Revoke bool
-	SecretNamespace        string
-	SecretKey              [32]byte
+	// OrganizationOwned separately selects organization management on HTTP.
+	// Native organization support alone must not expand transport authority.
+	OrganizationOwned bool
+	SecretNamespace   string
+	SecretKey         [32]byte
 }
 
 type apiKeyHTTPState struct {
@@ -38,7 +41,7 @@ func composeAPIKeyHTTP(c StoreConfiguration, owner *apiKeyState, shared *httpRat
 	}
 	h := *c.HTTPAPIKey
 	invalid := identity.InvalidInputError{Field: "reference_http_api_key"}
-	if owner == nil || shared == nil || c.HTTPRate == nil || !h.Create && !h.Rotate && !h.Revoke {
+	if owner == nil || shared == nil || c.HTTPRate == nil || !h.Create && !h.Rotate && !h.Revoke || h.OrganizationOwned && !owner.organization {
 		return nil, invalid
 	}
 	limiter, err := identityhttp.NewKeyedSecretRateLimiter(identityhttp.KeyedSecretRateConfig{Shared: shared.backend, Namespace: h.SecretNamespace, Key: h.SecretKey, Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration})
@@ -57,7 +60,15 @@ func (s *Server) apiKeyFeature(network identityhttp.NetworkConfig) (*identityhtt
 		return nil, identity.InvalidInputError{Field: "reference_http_api_key"}
 	}
 	h, n := f.httpAPIKey, f.apiKey
-	feature, err := apikeyhttp.NewFeature(apikeyhttp.FeatureConfig{Config: apikeyhttp.Config{Network: network, Sessions: f.session.reader, Creator: n.native, Rotator: n.native, Revoker: n.native, SecretRate: h.limiter, Now: time.Now, MaximumDuration: n.maximum}, Create: h.config.Create, Rotate: h.config.Rotate, Revoke: h.config.Revoke})
+	native := n.selfOnly
+	var organizationCreator apikeyhttp.OrganizationCreator
+	if h.config.OrganizationOwned {
+		native = n.native
+		if h.config.Create {
+			organizationCreator = native
+		}
+	}
+	feature, err := apikeyhttp.NewFeature(apikeyhttp.FeatureConfig{Config: apikeyhttp.Config{Network: network, Sessions: f.session.reader, Creator: native, OrganizationCreator: organizationCreator, Rotator: native, Revoker: native, SecretRate: h.limiter, Now: time.Now, MaximumDuration: n.maximum}, Create: h.config.Create, Rotate: h.config.Rotate, Revoke: h.config.Revoke, OrganizationOwned: h.config.OrganizationOwned})
 	if err != nil {
 		return nil, err
 	}

@@ -141,6 +141,7 @@ func (OrganizationInvitationConfiguration) MarshalText() ([]byte, error) {
 }
 
 type organizationState struct {
+	repository         *organizationpg.Repository
 	operations         *organizationpg.OperationService
 	invitations        *organizationpg.InvitationService
 	sender             *organizationpg.InvitationOperationService
@@ -273,7 +274,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_organization_operations"}
 	}
-	state := &organizationState{operations: operations, maximum: n.Core.MaximumDuration, teams: n.Core.Teams.MaximumTeams != 0}
+	state := &organizationState{repository: repository, operations: operations, maximum: n.Core.MaximumDuration, teams: n.Core.Teams.MaximumTeams != 0}
 	state.dynamicRoles, state.teamRoleBindings = n.Core.DynamicRoles.Version != 0, n.Core.DynamicRoles.TeamBindingsVersion == 1
 	state.directRoleBindings = n.DirectRoleBindings
 	state.teamRoleOperations = n.TeamRoleBindings

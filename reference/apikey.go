@@ -56,6 +56,30 @@ func (a *APIKeyService) Create(ctx context.Context, r apikey.CreateRequest) (api
 	return n.native.Create(w, r)
 }
 
+// CreateOrganization retains genuine current human management independently
+// of the explicitly selected organization credential owner. It shares this
+// graph's admission, lifetime and native original reveal-once custody.
+func (a *APIKeyService) CreateOrganization(ctx context.Context, r apikey.OrganizationCreateRequest) (apikey.IssuanceResult, error) {
+	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
+	if err != nil {
+		return apikey.IssuanceResult{}, err
+	}
+	defer done()
+	return n.native.CreateOrganization(w, r)
+}
+
+// RecoverOrganization observes only the exact original command under current
+// member authority. Retain its target even when an unknown create has no key
+// row; status recovery neither executes work nor reconstructs key plaintext.
+func (a *APIKeyService) RecoverOrganization(ctx context.Context, id apikey.OrganizationID, r apikey.RecoveryRequest) (identity.CommandResult, error) {
+	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
+	if err != nil {
+		return identity.CommandResult{}, err
+	}
+	defer done()
+	return n.native.RecoverOrganization(w, id, r)
+}
+
 // Import retains the selected native digest-only workflow, current source and
 // owner authorization, and original outcome recovery. It never issues a key.
 func (a *APIKeyService) Import(ctx context.Context, r apikey.ImportRequest) (identity.CommandResult, error) {
@@ -125,4 +149,5 @@ func (APIKeyService) MarshalJSON() ([]byte, error) { return nil, apikey.ErrDiscl
 func (APIKeyService) MarshalText() ([]byte, error) { return nil, apikey.ErrDisclosure }
 
 var _ apikey.Service = (*APIKeyService)(nil)
+var _ apikey.OrganizationService = (*APIKeyService)(nil)
 var _ apikey.LegacyImporter = (*APIKeyService)(nil)

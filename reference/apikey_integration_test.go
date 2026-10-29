@@ -414,7 +414,7 @@ func composeReferenceAPIKeyGraph(t *testing.T, c reference.StoreConfiguration, d
 	return stores, features
 }
 
-func referenceAPIKeyBearer(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, origin string, user identity.UserID) apikey.Authentication {
+func referenceAPIKeyBearer(t *testing.T, ctx context.Context, features reference.FeatureSet, c reference.StoreConfiguration, origin string, user identity.UserID, identifiers ...string) apikey.Authentication {
 	t.Helper()
 	issuer, err := features.PasswordPreAuth()
 	if err != nil {
@@ -449,7 +449,11 @@ func referenceAPIKeyBearer(t *testing.T, ctx context.Context, features reference
 		t.Fatal(err)
 	}
 	defer secret.Destroy()
-	input, err := identifier.NewInput("registered@example.invalid")
+	identifierText := "registered@example.invalid"
+	if len(identifiers) == 1 {
+		identifierText = identifiers[0]
+	}
+	input, err := identifier.NewInput(identifierText)
 	if err != nil {
 		t.Fatal(err)
 	}

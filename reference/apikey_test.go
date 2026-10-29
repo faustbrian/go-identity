@@ -24,6 +24,12 @@ func TestAPIKeySelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	if _, err := absent.Create(t.Context(), apikey.CreateRequest{}); !errors.As(err, &unavailable) {
 		t.Fatal("nil handle reached native issuance")
 	}
+	if _, err := absent.CreateOrganization(t.Context(), apikey.OrganizationCreateRequest{}); !errors.As(err, &unavailable) {
+		t.Fatal("nil handle reached native organization issuance")
+	}
+	if _, err := absent.RecoverOrganization(t.Context(), "organization", apikey.RecoveryRequest{}); !errors.As(err, &unavailable) {
+		t.Fatal("nil handle reached native organization recovery")
+	}
 	lifetime, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	drained := make(chan struct{})
@@ -39,6 +45,12 @@ func TestAPIKeySelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	caller := apikey.Authentication{TenantID: "tenant"}
 	if _, err := handle.Create(t.Context(), apikey.CreateRequest{Authentication: caller}); !errors.As(err, &unavailable) {
 		t.Fatal("retained closed handle reached native issuance")
+	}
+	if _, err := handle.CreateOrganization(t.Context(), apikey.OrganizationCreateRequest{CreateRequest: apikey.CreateRequest{Authentication: caller}, OrganizationID: "organization"}); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed handle reached organization issuance")
+	}
+	if _, err := handle.RecoverOrganization(t.Context(), "organization", apikey.RecoveryRequest{Authentication: caller}); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed handle reached organization recovery")
 	}
 	if _, err := handle.Rotate(t.Context(), apikey.Rotation{Authentication: caller}); !errors.As(err, &unavailable) {
 		t.Fatal("retained closed handle reached native rotation")

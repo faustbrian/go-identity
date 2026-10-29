@@ -280,6 +280,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	organizationKey          bool
+	organizationKeyUpgrade   bool
 	apiKey                   bool
 	apiKeyUpgrade            bool
 	apiKeyLegacy             bool
@@ -495,6 +497,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
+	if extensions.organizationKey {
+		selectedAuthorization = referenceOrganizationKeyPolicy{}
+	}
 	if extensions.organizationTeams {
 		selectedAuthorization = referenceOrganizationTeamsPolicy{}
 	}
@@ -546,6 +551,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
+	}
+	if extensions.organizationKey && !extensions.organizationKeyUpgrade {
+		configureReferenceOrganizationKey(t, &c, origin)
+	}
+	if extensions.organizationKey && extensions.organizationKeyUpgrade {
+		configureReferenceAPIKey(t, &c, origin)
 	}
 	if extensions.organizationTeams {
 		c.Organization.Core.Teams = organization.TeamConfig{Version: 1, MaximumTeams: 10, MaximumMembers: 100}
@@ -1295,7 +1306,7 @@ END $$`); err != nil {
 	if extensions.postgresBaseline {
 		config.Profile = reference.PostgresOnly
 	}
-	if extensions.apiKey {
+	if extensions.apiKey || extensions.organizationKey {
 		config.HTTP.Network.Limits.MaximumBodyBytes = 65536
 		config.HTTP.Network.Limits.MaximumFields = 128
 	}
@@ -1822,6 +1833,11 @@ END $$`); err != nil {
 	if extensions.apiKey {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
 			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade, extensions.apiKeyLegacy)
+		}
+	}
+	if extensions.organizationKey {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			proveReferenceOrganizationKey(t, ctx, f, c, deps, features, workers, workerConfigs, config, client, network.URL, origin, messages, user, extensions.organizationKeyUpgrade)
 		}
 	}
 	if extensions.passkey {
