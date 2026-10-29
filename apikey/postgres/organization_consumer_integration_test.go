@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -76,7 +77,7 @@ func organizationKeyOwners(t *testing.T, f nativeConsumerFixture, id organizatio
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if id != "01ARZ3NDEKTSV4RRFFQ69G5FAZ" {
+		if id != "01ARZ3NDEKTSV4RRFFQ69G5FAZ" && id != "01ARZ3NDEKTSV4RRFFQ69G5FAY" {
 			return apikey.ErrInvalid
 		}
 		return nil
@@ -177,6 +178,15 @@ func installOrganizationKeyOwners(t *testing.T, f nativeConsumerFixture) {
 }
 
 func TestGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T) {
+	proveGenuineOrganizationKeySurvivesCreatorRemoval(t, false)
+}
+
+func TestGenuineOrganizationNoExpiryKeySurvivesCreatorRemoval(t *testing.T) {
+	proveGenuineOrganizationKeySurvivesCreatorRemoval(t, true)
+}
+
+func proveGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T, noExpiry bool) {
+	t.Helper()
 	f := setupNativeConsumer(t)
 	self, err := apikeypg.NewService(f.pool, f.config)
 	if err != nil {
@@ -206,6 +216,12 @@ func TestGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 	org, repository, config := organizationKeyOwners(t, f, organization.ID(orgID))
+	legacySpec := config.LegacyConfiguration.Spec()
+	legacySpec.AllowLegacyNoExpiry = noExpiry
+	config.LegacyConfiguration, err = apikey.NewConfiguration(legacySpec)
+	if err != nil {
+		t.Fatal(err)
+	}
 	authentication := func(a apikey.Authentication) organization.Authentication {
 		return organization.Authentication{TenantID: a.TenantID, Bearer: a.Bearer}
 	}
@@ -289,6 +305,9 @@ func TestGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T) {
 	legacyRecord.ConfigurationID = config.LegacyConfiguration.Spec().ID
 	legacyRecord.CreatedAt = time.Now().UTC().Add(-500 * 24 * time.Hour).Truncate(time.Microsecond)
 	legacyRecord.ExpiresAt = time.Now().UTC().Add(500 * 24 * time.Hour).Truncate(time.Microsecond)
+	if noExpiry {
+		legacyRecord.ExpiresAt = time.Time{}
+	}
 	bare := "organization-bare-" + string(commandID(t))
 	legacyDigest, _ := apikey.NewLegacyDigest(sha256.Sum256([]byte(bare)))
 	importKey, _ := identity.NewIdempotencyKey([]byte("organization-key-original-legacy-import"))
@@ -300,6 +319,18 @@ func TestGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T) {
 	importRequest.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("organization-key-same-source-new-key"))
 	if repeated, err := service.Import(f.ctx, importRequest); err != nil || repeated.Binding != imported.Binding || repeated.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("organization source retry did not retain the original human command", err)
+	}
+	var directRevocation apikey.ImportRequest
+	var directSecret apikey.LegacySecret
+	if noExpiry {
+		directRevocation = importRequest
+		directRevocation.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("organization-no-expiry-direct-revoke-import"))
+		directRevocation.Record.ID, directRevocation.Record.RootID = "01ARZ3NDEKTSV4RRFFQ69G5FAY", "01ARZ3NDEKTSV4RRFFQ69G5FAY"
+		directRevocation.Digest, _ = apikey.NewLegacyDigest(sha256.Sum256([]byte(bare + "-direct-revoke")))
+		directSecret, _ = apikey.ParseLegacySecret(bare + "-direct-revoke")
+		if out, err := service.Import(f.ctx, directRevocation); err != nil || out.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("actual no-expiry organization revocation specimen import failed", err)
+		}
 	}
 	if result, err := service.RecoverOrganization(f.ctx, apikey.OrganizationID(orgID), apikey.RecoveryRequest{Authentication: f.caller, Query: original}); err != nil || result.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("explicit organization status recovery lost original owner", err)
@@ -422,7 +453,7 @@ func TestGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T) {
 	}
 	legacySecret, _ := apikey.ParseLegacySecret(bare)
 	legacyVerified, err := service.VerifyAndConsume(f.ctx, apikey.AtomicVerificationRequest{AttemptID: apikey.VerificationAttemptID(commandID(t)), TenantID: baselineTenant, ConfigurationID: config.LegacyConfiguration.Spec().ID, ConfigurationRevision: config.LegacyConfiguration.Spec().Revision, LegacySecret: legacySecret, RequiredPermissions: []string{"invoice.read"}})
-	if err != nil || legacyVerified.Result == nil || legacyVerified.Result.Record.ID != legacyRecord.ID || legacyVerified.Result.Record.Version != 3 || legacyVerified.Result.Owner != record.Owner || legacyVerified.Original.UserID != "" {
+	if err != nil || legacyVerified.Result == nil || legacyVerified.Result.Record.ID != legacyRecord.ID || legacyVerified.Result.Record.Version != 3 || legacyVerified.Result.Owner != record.Owner || legacyVerified.Original.UserID != "" || !legacyVerified.Result.Record.ExpiresAt.Equal(legacyRecord.ExpiresAt) || legacyVerified.Result.ValidUntil.After(legacyVerified.Result.ReadStartedAt.Add(20*time.Second)) {
 		t.Fatal("creator removal changed bare organization-key verification or source versions", err)
 	}
 	query := apikey.VerificationReconcileQuery{AttemptID: verify.AttemptID, TenantID: verify.TenantID, Fingerprint: verified.Fingerprint, Original: verified.Original}
@@ -449,12 +480,16 @@ func TestGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T) {
 		t.Fatal("removed creator retained explicit outcome disclosure", err)
 	}
 	rotationKey, _ := identity.NewIdempotencyKey([]byte("organization-key-other-owner-rotate"))
-	rotated, err := service.Rotate(f.ctx, apikey.Rotation{Authentication: second, IdempotencyKey: rotationKey, KeyID: record.ID, ExpectedVersion: record.Version, Network: "192.0.2.22"})
+	rotationTarget := record
+	if noExpiry {
+		rotationTarget = legacyVerified.Result.Record
+	}
+	rotated, err := service.Rotate(f.ctx, apikey.Rotation{Authentication: second, IdempotencyKey: rotationKey, KeyID: rotationTarget.ID, ExpectedVersion: rotationTarget.Version, Network: "192.0.2.22"})
 	if err != nil {
 		t.Fatal("remaining actual owner cannot rotate", err)
 	}
 	successor, ok := rotated.Record()
-	if !ok || successor.Owner != record.Owner || successor.PreviousID != record.ID || successor.ID == record.ID {
+	if !ok || successor.Owner != rotationTarget.Owner || successor.PreviousID != rotationTarget.ID || successor.ID == rotationTarget.ID || !slices.Equal(successor.Grant, rotationTarget.Grant) || successor.ConfigurationID != config.Configuration.Spec().ID || successor.ExpiresAt.IsZero() || !successor.ExpiresAt.After(successor.CreatedAt) || successor.ExpiresAt.Sub(successor.CreatedAt) > config.Configuration.Spec().MaximumLifetime {
 		t.Fatal("organization rotation changed immutable owner or lineage")
 	}
 	if _, err := rotated.Reveal(); err != nil {
@@ -463,6 +498,25 @@ func TestGenuineOrganizationKeySurvivesCreatorRemoval(t *testing.T) {
 	revokeKey, _ := identity.NewIdempotencyKey([]byte("organization-key-other-owner-revoke"))
 	if result, err := service.Revoke(f.ctx, apikey.Revocation{Authentication: second, IdempotencyKey: revokeKey, KeyID: successor.ID, ExpectedVersion: successor.Version, Network: "192.0.2.22"}); err != nil || result.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("remaining owner cannot revoke organization key", err)
+	}
+	if noExpiry {
+		verifyLegacy := func(secret apikey.LegacySecret) (apikey.AtomicVerificationResult, error) {
+			return service.VerifyAndConsume(f.ctx, apikey.AtomicVerificationRequest{AttemptID: apikey.VerificationAttemptID(commandID(t)), TenantID: baselineTenant, ConfigurationID: config.LegacyConfiguration.Spec().ID, ConfigurationRevision: config.LegacyConfiguration.Spec().Revision, LegacySecret: secret, RequiredPermissions: []string{"invoice.read"}})
+		}
+		if out, err := verifyLegacy(legacySecret); err == nil || out.Result != nil {
+			t.Fatal("no-expiry organization predecessor remained usable after rotation")
+		}
+		current, err := verifyLegacy(directSecret)
+		if err != nil || current.Result == nil || current.Result.Record.ID != directRevocation.Record.ID || !current.Result.Record.ExpiresAt.IsZero() {
+			t.Fatal("surviving owner lost the genuine no-expiry direct-revoke specimen", err)
+		}
+		directKey, _ := identity.NewIdempotencyKey([]byte("organization-no-expiry-direct-revoke"))
+		if out, err := service.Revoke(f.ctx, apikey.Revocation{Authentication: second, IdempotencyKey: directKey, KeyID: directRevocation.Record.ID, ExpectedVersion: current.Result.Record.Version, Network: "192.0.2.22"}); err != nil || out.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("surviving owner cannot directly revoke absent-expiry organization key", err)
+		}
+		if out, err := verifyLegacy(directSecret); err == nil || out.Result != nil {
+			t.Fatal("directly revoked no-expiry organization key retained authority")
+		}
 	}
 	newKey, _ := identity.NewIdempotencyKey([]byte("organization-key-before-owner-archive"))
 	request.Authentication, request.IdempotencyKey = second, newKey

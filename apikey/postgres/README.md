@@ -177,9 +177,13 @@ Record version and source version remain distinct; snapshot import records a
 truthful absent-local `0 -> imported record version`, including full-width
 terminal metadata. It does not generate a key, emit a created-key event or
 reveal material. Imported original creation/expiry times, status, ownership,
-restrictions and predecessor remain unchanged. The finite profile requires
-explicit absolute expiry; it does not invent a deadline for no-expiry keys.
-Historical lifetime is not constrained by modern issuance-age limits.
+restrictions and predecessor remain unchanged. Legacy profiles require explicit
+absolute expiry by default. Set `AllowLegacyNoExpiry` only in the selected
+verify-only legacy configuration to retain absent expiry as zero `ExpiresAt`.
+This does not invent a deadline, enable unbounded modern issuance or relax the
+original 20-second authority ceiling. Historical lifetime is not constrained by
+modern issuance-age limits. Existing finite configuration bytes remain unchanged;
+select a new immutable configuration rather than changing an installed profile.
 
 Identical original client-key retries recover that exact command, including a
 failed original after a later explicit import of the same source. For an unused
@@ -197,11 +201,11 @@ configuration to `VerifyAndConsume`. Bare bytes are SHA-256 hashed unchanged,
 then looked up through the bounded exact tenant/configuration/digest index.
 No prefix is invented, no configuration is inferred from token text, and no
 profile scan or fallback occurs. Current owner/tenant/policy, original grant,
-absolute expiry and terminal status remain authoritative. Original attempt
+present absolute expiry and terminal status remain authoritative. Original attempt
 replay/reconciliation preserves source timestamps and cannot refresh authority.
 
 `Rotate` always creates a modern successor and terminates the legacy root in
-the same protected transaction. Its expiry is the earlier of the legacy
+the same protected transaction. Its expiry is the earlier of a present legacy
 absolute expiry and the rotation instant plus current modern maximum lifetime,
 conservatively floored to database precision; it never extends authority.
 Ordinary modern-to-modern rotation still preserves its exact original expiry.
@@ -217,5 +221,9 @@ GOWORK=off go test -mod=readonly -race -tags=integration \
   -run '^TestGenuineLegacyDigestImportVerificationAndModernRotation$' -count=1 .
 ```
 
-This selects native user-owned import/verification/rotation only. It does not
-enable organization, quota, cache, legacy HTTP/Reference or no-expiry variants.
+That command selects the finite user-owned import/verification/rotation journey.
+`TestGenuineLegacyNoExpiryImportVerificationAndModernRotation` additionally proves
+the selected absent-expiry variant, required-effect rollback and original unknown
+recovery. `TestGenuineOrganizationNoExpiryKeySurvivesCreatorRemoval` exercises
+the same metadata through current organization authority without a creator-user
+dependency. Quota, cache and broader management remain separate profiles.

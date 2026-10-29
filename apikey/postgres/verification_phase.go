@@ -202,7 +202,7 @@ func (p *verificationPhase) GenerateFeaturePreparation(ctx context.Context, comm
 	// fractional budget rather than retain an unrestorable deadline or round
 	// it upward and extend the original authority window.
 	x.Until = started.Add(20*time.Second - c.ClockUncertainty - c.DecisionRaceBudget).Truncate(time.Microsecond)
-	if p.candidate != nil {
+	if p.candidate != nil && !p.candidate.ExpiresAt.IsZero() {
 		x.Until = minTime(x.Until, p.candidate.ExpiresAt)
 	}
 	if x.Organization != nil {
@@ -393,7 +393,7 @@ func (p *verificationPhase) ApplyAPIKeyVerification(ctx context.Context, w kerne
 			return zero(err)
 		}
 		valid := presented.Equal(stored)
-		if valid && record.Status == apikey.KeyActive && p.snapshot.Verified.Before(record.ExpiresAt) {
+		if valid && record.Status == apikey.KeyActive && (record.ExpiresAt.IsZero() || p.snapshot.Verified.Before(record.ExpiresAt)) {
 			owner, err := p.snapshot.owner(record)
 			if err != nil {
 				return zero(err)

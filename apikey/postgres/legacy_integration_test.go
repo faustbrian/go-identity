@@ -24,6 +24,15 @@ import (
 )
 
 func TestGenuineLegacyDigestImportVerificationAndModernRotation(t *testing.T) {
+	proveGenuineLegacyDigestImport(t, false)
+}
+
+func TestGenuineLegacyNoExpiryImportVerificationAndModernRotation(t *testing.T) {
+	proveGenuineLegacyDigestImport(t, true)
+}
+
+func proveGenuineLegacyDigestImport(t *testing.T, noExpiry bool) {
+	t.Helper()
 	f := setupNativeConsumer(t)
 	ctx, c := f.ctx, f.config
 	key := func(text string) identity.IdempotencyKey {
@@ -71,6 +80,7 @@ func TestGenuineLegacyDigestImportVerificationAndModernRotation(t *testing.T) {
 	}
 	legacySpec := c.Configuration.Spec()
 	legacySpec.ID, legacySpec.Algorithm, legacySpec.State = "legacy", apikey.AlgorithmLegacySHA256V1, apikey.ConfigurationVerifyOnly
+	legacySpec.AllowLegacyNoExpiry = noExpiry
 	c.LegacyConfiguration, err = apikey.NewConfiguration(legacySpec)
 	if err != nil {
 		t.Fatal(err)
@@ -135,6 +145,9 @@ func TestGenuineLegacyDigestImportVerificationAndModernRotation(t *testing.T) {
 	owner, _ := apikey.NewOwner(apikey.OwnerSpec{TenantID: baselineTenant, Kind: apikey.OwnerUser, UserID: f.user, Version: status.AuthorityVersion})
 	created := time.Now().UTC().Add(-500 * 24 * time.Hour).Truncate(time.Microsecond)
 	expires := time.Now().UTC().Add(500 * 24 * time.Hour).Truncate(time.Microsecond)
+	if noExpiry {
+		expires = time.Time{}
+	}
 	id := apikey.KeyID("01ARZ3NDEKTSV4RRFFQ69G5FAV")
 	raw := "historical-bare-" + string(commandID(t))
 	digest, _ := apikey.NewLegacyDigest(sha256.Sum256([]byte(raw)))
@@ -207,6 +220,9 @@ func TestGenuineLegacyDigestImportVerificationAndModernRotation(t *testing.T) {
 	verified, err := s.VerifyAndConsume(ctx, knownRequest)
 	if err != nil || verified.Result == nil || verified.Result.Record.ID != id || verified.Result.Owner != owner || !verified.Result.Record.CreatedAt.Equal(created) || !verified.Result.Record.ExpiresAt.Equal(expires) || verified.State != apikey.VerificationAttemptNotApplicable {
 		t.Fatal("unchanged historical bare token or restrictions changed", err)
+	}
+	if verified.Result.ValidUntil.After(verified.Result.ReadStartedAt.Add(20 * time.Second)) {
+		t.Fatal("legacy expiry policy extended original authority freshness")
 	}
 	statusQuery := apikey.VerificationReconcileQuery{AttemptID: verified.AttemptID, TenantID: baselineTenant, Fingerprint: verified.Fingerprint, Original: verified.Original}
 	if observed, err := s.ReconcileVerifyAndConsume(ctx, statusQuery); err != nil || observed.Result == nil || !observed.Result.ValidUntil.Equal(verified.Result.ValidUntil) || !observed.Result.ReadStartedAt.Equal(verified.Result.ReadStartedAt) {
@@ -366,7 +382,7 @@ func TestGenuineLegacyDigestImportVerificationAndModernRotation(t *testing.T) {
 		t.Fatal("legacy rotation failed", err)
 	}
 	successor, ok := rotated.Record()
-	if !ok || successor.Name != "" || successor.ID == id || successor.PreviousID != id || successor.ConfigurationID != c.Configuration.Spec().ID || !successor.Owner.SameIdentity(owner) || strings.Join(successor.Grant, ",") != "invoice.read" || successor.ExpiresAt.After(rotationStart.Add(c.Configuration.Spec().MaximumLifetime+time.Second)) || successor.ExpiresAt.After(expires) {
+	if !ok || successor.Name != "" || successor.ID == id || successor.PreviousID != id || successor.ConfigurationID != c.Configuration.Spec().ID || !successor.Owner.SameIdentity(owner) || strings.Join(successor.Grant, ",") != "invoice.read" || successor.ExpiresAt.IsZero() || !successor.ExpiresAt.After(rotationStart) || successor.ExpiresAt.After(rotationStart.Add(c.Configuration.Spec().MaximumLifetime+time.Second)) || !expires.IsZero() && successor.ExpiresAt.After(expires) {
 		t.Fatal("rotation did not retain non-expanding modern authority")
 	}
 	newWire, err := rotated.Reveal()

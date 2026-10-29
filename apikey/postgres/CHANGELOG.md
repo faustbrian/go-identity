@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Support digest-only legacy imports with an absent expiry under an explicitly
+  selected `AllowLegacyNoExpiry` configuration. Preserve canonical source
+  metadata and original bounded authority evidence through verification and
+  recovery; rotation creates a finite modern successor and revocation remains
+  terminal. Default legacy and modern expiry requirements are unchanged.
+
 - Add explicitly selected organization-owned creation, digest-only import,
   verification, rotation, revocation and original status recovery through the
   existing native coordinator. Creator membership removal denies that person's

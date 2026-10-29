@@ -237,7 +237,7 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 			// a modern successor must also honor current modern issuance policy.
 			// Ordinary modern rotations retain their exact original deadline.
 			if priorConfiguration.Spec().Algorithm == apikey.AlgorithmLegacySHA256V1 {
-				record.ExpiresAt = minTime(prior.ExpiresAt, verified.Add(config.MaximumLifetime).Truncate(time.Microsecond))
+				record.ExpiresAt = modernSuccessorExpiry(prior.ExpiresAt, verified, config.MaximumLifetime)
 			}
 		}
 	}
@@ -820,6 +820,18 @@ func decodeCanonical(wire []byte, out any) error {
 	}
 	return nil
 }
+
+// SI-07 keeps a present historical expiry as a ceiling. Its explicitly allowed
+// absence supplies no ceiling, but never exempts a new modern successor from
+// the current finite issuance lifetime.
+func modernSuccessorExpiry(previous, created time.Time, maximum time.Duration) time.Time {
+	deadline := created.Add(maximum).Truncate(time.Microsecond)
+	if !previous.IsZero() {
+		deadline = minTime(previous, deadline)
+	}
+	return deadline
+}
+
 func minTime(a, b time.Time) time.Time {
 	if a.Before(b) {
 		return a

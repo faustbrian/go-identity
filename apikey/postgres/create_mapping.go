@@ -151,14 +151,14 @@ func (x creationInput) validate() error {
 		want := prior
 		want.Owner = r.Owner
 		if b.OperationID == "identity.apikey.rotate" {
-			if !x.Configuration.AllowsIssuance() || !x.VerifiedAt.Before(prior.ExpiresAt) || r.ID == prior.ID || r.CreatedAt.Before(x.ReadStartedAt) {
+			if !x.Configuration.AllowsIssuance() || !prior.ExpiresAt.IsZero() && !x.VerifiedAt.Before(prior.ExpiresAt) || r.ID == prior.ID || r.CreatedAt.Before(x.ReadStartedAt) {
 				return apikey.ErrInvalid
 			}
 			want.ID, want.RootID, want.PreviousID, want.CreatedAt = r.ID, r.ID, prior.ID, r.CreatedAt
 			want.Version, want.AuthorityVersion, want.RootVersion = 1, 1, 1
 			want.ConfigurationID, want.ConfigurationRevision, want.Issuer, want.Environment, want.Audience = c.ID, c.Revision, c.Issuer, c.Environment, c.Audience
 			if previousConfiguration.Spec().Algorithm == apikey.AlgorithmLegacySHA256V1 {
-				want.ExpiresAt = minTime(prior.ExpiresAt, r.CreatedAt.Add(c.MaximumLifetime).Truncate(time.Microsecond))
+				want.ExpiresAt = modernSuccessorExpiry(prior.ExpiresAt, r.CreatedAt, c.MaximumLifetime)
 			}
 		} else {
 			want.Version++
