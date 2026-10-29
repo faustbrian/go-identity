@@ -1,5 +1,223 @@
 # Identity Platform Progress
 
+## Current TL;DR — 2026-10-29 03:56 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
+  closed.** No additional fully qualified unit out of 67 is claimed. M21/M31
+  have delivered profiles but remain incomplete; federation, SCIM and broader
+  API-key/organization/session profiles still represent substantial work.
+- **Working backend:** the modern self-owned API-key journey below is delivered
+  on main, including genuine signup/verification/bearer signin, HTTPS management,
+  native verification, rotation, revocation, restart recovery and logout.
+- **Legacy import:** core digest-only contracts and protected risk admission
+  are reviewed, main-pushed and authenticated through actual public modules.
+  The [root version-policy prerequisite](https://github.com/faustbrian/go-identity/actions/runs/40798848403)
+  is also main-pushed and CI-green; it preserves source versions without fake
+  local predecessors. Native coordinator9ebf2f1 is reviewed, main-pushed and
+  [CI-green](https://github.com/faustbrian/go-identity/actions/runs/40800556723).
+  Real PostgreSQL proves source-version commit, required-effect rollback and
+  original recovery; actual downloaded source matches all reviewed files.
+  Native importer/verifier/modern rotation is now delivered on main3930442 with
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40810166841).
+  Actual authenticated public native source matches all16 reviewed files and
+  its populated-state PostgreSQL/race journey passes6.880s. This proves exact
+  source/key versions and canonical IDs, original retries, unchanged bare-key
+  verification, unnamed-key rotation/revocation, wrong-secret denial, terminal
+  retention, required-effect rollback and lost-COMMIT recovery. Native whole
+  tagged race passes40.261s; the earlier Signup503 cause remains unproved.
+  Reference compositionf66303d is now reviewed/main-pushed with
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40812448189).
+  Its actual downloaded module matches all14 reviewed files and passes legacy
+  plus retained modern PostgreSQL/HTTPS/race journeys14.831s: populated migration,
+  digest-only import, unchanged verification, reconstruction/original recovery,
+  modern successor rotation/revocation, logout and disabled-authority denial.
+  A confirmed private-wrapper formatting
+  disclosure in the earlier legacy core is corrected on main9a96661 with
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40804065285)
+  and actual downloaded wrapper regression proof. Delivered native consumes it.
+- **Parallel confidential OIDC:** actual fresh and populated independent-RP
+  journeys and selected rollback, unknown-outcome and deletion cases pass.
+  The finite confidential Basic/openid/default-subject native profile is now
+  delivered on main0eff366 with [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40804483677).
+  Actual downloaded fresh/populated independent-RP PostgreSQL/race passes18.393s;
+  current source review/addendum and affected checks pass. Earlier baseline
+  HTTPS/signin setup failures remain unexplained and preserved, not claimed
+  fixed. Managed confidential single-host pairwise registration is now also
+  delivered on main0196c2a with [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40814554861).
+  All10 downloaded source files match the independently reviewed candidate;
+  actual public fresh/populated independent-RP PostgreSQL/race passes11.014s.
+  Managed-only key custody, stable/isolated subjects, rotation/reconstruction,
+  withdrawal, required-effect rollback and unknown recovery are proven within
+  this profile. HTTP/Reference/additional profiles and wholeM31 remain unfinished.
+- **Next:** organization-owned key authority without a fabricated creator-user
+  identity, then remaining API-key expiry/quota/cache/management profiles.
+  Do not restart delivered modern/absolute-expiry legacy or pairwise journeys.
+  Human code/access and
+  refresh-issued access exchange were already delivered; they are not restarted.
+  No user decision is pending.
+
+## Retained delivered profile — 2026-10-29 00:14 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
+  closed.** The deliveries below close useful profiles, not whole M21/M31 or
+  another fully release-qualified unit out of67. Enterprise federation, SCIM,
+  remaining social/organization/API-key/session profiles and final unit
+  qualification remain substantial work.
+- **Usable self-owned API-key backend delivered:** genuine registration,
+  captured verification, native password bearer signin, HTTPS key creation,
+  native verification, graph reconstruction, secret-free original retry,
+  zero-overlap rotation, terminal revocation and logout work against real
+  PostgreSQL. Fresh and populated operator migrations preserve baseline sessions.
+  Native/HTTP/configuration and Reference owners are integrated on main, latest
+  Referencef642787; [Required CI passes](https://github.com/faustbrian/go-identity/actions/runs/40792443173).
+  The actual authenticated downloaded Reference module matches all20 reviewed
+  module files and passes its API-key/baseline PG/race consumer13.305s.
+- **Verification:** independent complete final-diff review approves; local
+  corrected PG/race9.443s, ordinary Reference/command race, tagged vet,
+  tidy/module verification, structure/docs and selected current/committed-range
+  secrets pass. Review exposed an API-key-only atomic-rate migration omission;
+  an isolated operator/native-admission red proved it, and the corrected path
+  passes without another feature masking the prerequisite.
+- **M21 still open:** organization-owned keys, digest-only legacy import,
+  finite quotas, selected caches and remaining management/authentication
+  operations are not delivered by this modern self-owned Narrow-only profile.
+  Nothing here claims full-history secrecy, full-unit qualification or deployment.
+- **OIDC:** managed-public native profile3c5567c remains delivered with its
+  [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40751691292)
+  and real published independent-RP consumer. The separate confidential browser
+  profile is in progress: root prerequisite332b6e0 is independently approved
+  and locally committed; native composition/tests are not yet delivered.
+  Metadata-scope and historical-retry review findings are corrected at root;
+  actual native protected-state/recovery proof still remains.
+- **Next:** finish the confidential native lane in parallel with the next
+  dependency-ready API-key/Reference outcome. No user decision is pending.
+
+## Current TL;DR — 2026-10-28 18:28 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
+  closed.** No new fully qualified unit out of 67 is claimed.
+- **New delivered behavior:** a genuine signup/verification/bearer consumer now
+  issues, verifies, rotates and revokes modern human-owned API keys against
+  PostgreSQL. Permission narrowing persists even when the removed permission
+  denies; restoring policy cannot broaden it. Original retry/reconciliation
+  keeps the same fingerprint and freshness after key changes, including failed
+  attempts whose protected effects rolled back. The authenticated downloaded
+  public module's consumer race passes26.878s, including maximum escaped grants, original-expiry denial,
+  fractional clock budgets and explicit known-key/wrong-secret denial without
+  mutation. Unsupported Revoke policy is rejected by this Narrow-only profile.
+  Native `6fc21bb` and Reference diagnostics `9a0e8a0` are main-pushed;
+  [Required CI](https://github.com/faustbrian/go-identity/actions/runs/40743284672)
+  passes planning/secrets, not runtime qualification. Independent correctness,
+  compatibility, coverage and delivery audits approve the finite native profile.
+  The offline attack's privileged malformed-snapshot probe was reproduced but
+  independently rejected as a supported-path defect; it proved no auth bypass.
+- **Remaining:** opt-in API-key HTTP/Reference management composition, then
+  organization/legacy/quota/cache and remaining M21 profiles. This closes the
+  native human-owned profile, not whole M21. One earlier race failed during Signup503
+  before API keys; its cause remains unproved and is not erased by the pass.
+- **OIDC:** the native independent-RP journey passes, but publication still
+  waits on the exact Reference-router construction failure in one selected case.
+  The new public Reference diagnostic dependency is ready for that lane.
+  No user decision is blocking either lane.
+
+## Current TL;DR — 2026-10-28 14:24 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
+  closed.** No new fully qualified unit out of67 or whole-row closure is claimed.
+- **New delivered prerequisite:** explicit native email/password bearer signin
+  is on main at `7ca5d4d`, Required CI40656947253 green. Its authenticated public
+  module passes real PostgreSQL/race registration, captured verification,
+  original pre-auth, bearer signin, session read and secret-free recovery8.248s.
+  No cookie/session conversion, CSRF stripping or substitute authority is used.
+- **Acceptance:** complete affected native race23.957s, tagged vet, exact public
+  source comparison and changed-content secrets pass. Independent full-diff
+  review and regression audit approve. The adversarial pass and primary replay
+  reproduce no defect; its database exclusions remain explicit. Delivery audit
+  confirmed the exact delivered source; Reference/organization/API-key
+  integration remains unfinished.
+- **Concrete failure resolved:** concurrent fixture requests shared one opaque
+  password owner, so one could fail before SQL while its peer waited. Independent
+  secret custody fixes the fixture; production, timeouts and exactly-one-winner
+  assertions are unchanged. Original failed runs remain recorded, not erased.
+- **Organization prerequisite delivered:** risk `945b17f` is main-pushed and
+  Required CI40663839198 is green. Exact protected selection is admitted;
+  counter-only composition rejects mandatory provider signals it cannot enforce.
+  Root/adapter race and vet pass; authenticated public modules match the
+  reviewed changes. This is not a complete organization-selector journey.
+- **Organization selection delivered natively:** main-pushed `921b5ae` supports
+  independent genuine bearer-session set/get/switch/clear, current membership,
+  original expiry, rollback and lost-COMMIT recovery. Final native PostgreSQL/race
+  passes (39.223s); independent review/regression/delivery audits are accepted.
+  [Required CI](https://github.com/faustbrian/go-organization/actions/runs/40677108154)
+  passed; this is not whole-unit release qualification.
+- **Public consumer delivered:** the authenticated downloaded native
+  module passes real signup/verification/bearer selection (race11.523s) and
+  retained password/HTTP consumers (race22.418s). Independent review and regression
+  audit approve; consumer `02af220` is main-pushed with
+  [Required CI passing](https://github.com/faustbrian/go-organization/actions/runs/40679712117).
+  HTTP/Reference selection and full M22 remain open.
+- **API-key prerequisite pushed:** coordinator `5ab106b` supports independent
+  authentication outcomes, atomic permission reduction and original recovery.
+  Final affected PostgreSQL/race, ordinary race, vet and bounded codec fuzz pass;
+  independent correctness/regression and delivery audits accept this limited
+  prerequisite. [Exact-head CI](https://github.com/faustbrian/go-identity/actions/runs/40692864018)
+  passes planning/secrets only. The actual native verifier and public-module
+  adoption remain unfinished; this is not another closed milestone.
+- **OIDC root delivered:** managed public `openid` support `d6f73ff` is reviewed,
+  pushed and publicly downloadable with matching source. [Exact-head CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40697010136)
+  also passes root format/tidy/safety/test/race/docs, not only planning/secrets.
+  The explicitly waived root-only adversarial run was unavailable, not passed.
+- **Actual OIDC native journey:** local fresh/populated PostgreSQL plus an
+  independent relying party passes create, read, code/ID-token/UserInfo, refresh,
+  revocation and deletion, preserving prior confidential behavior. Broader native
+  regression failed; focused follow-ups passed some cases, but remaining
+  attributable checks, tidy cleanup and independent review findings keep native
+  publication/M31 unfinished. No whole milestone or qualified unit added.
+- **API-key native still unfinished:** genuine signup/verification/native bearer
+  now reaches actual creation and rotation before the missing AtomicVerifier
+  assertion. A known-owner stale-CAS classification was corrected locally.
+  Original-fingerprint observation/recovery tests pass, but review identified
+  the prospective-versus-actual reservation fingerprint handoff still missing.
+  No native verifier or usable API-key backend completion is claimed.
+  Nothing waits on the user.
+
+## Retained checkpoint — 2026-10-27 05:20 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
+  closed.** Progress inside M21/M22/M23/M30 is not another whole-row closure;
+  no additional fully qualified unit out of67 is claimed.
+- **Existing usable deliveries:** direct/team role bindings with actual HTTP
+  permission allow/deny, and managed native OAuth public clients. Their exact
+  runtime/consumer evidence and remaining limitations are retained below.
+- **New prerequisites delivered on main:** session-selection core9d0a293,
+  independent user-security native guard1c2868, and modern API-key corebd820be.
+  CI is green after parent-owned workspace/catalog corrections7811570. These
+  are not yet complete selector or API-key backends.
+- **Transport correction:** independently reviewed session2818789 is pushed to
+  main; full core race1.822s/vet0. Selected cookies/CSRF records deny in fresh
+  and cached admission without changing unselected cookie behavior. Its
+  exact required CI40450277298 is green; actual public module28187890dc06
+  downloaded through proxy/sumdb. Native consumption/validation remain pending.
+- **Session-native prerequisite delivered:** atomic selection/switch/clear,
+  current selected authority and selected-caller revocation are independently
+  reviewed, main-pushed and CI-green at80f08eb. Final PostgreSQL/race6.061s,
+  ordinary race2.201s, vet and bounded field fuzz pass; the actual public module
+  matches all25reviewed paths. Earlier setup failures remain failed, not erased.
+  Real organization membership/selector and Reference integration remain open.
+- **API-key local behavior:** genuine signup/signin -> durable Create -> one-time
+  secret reveal and retained-retry management/grant denial pass PostgreSQL1.550s.
+  Native code remains unreviewed/uncommitted. Verification still needs the
+  primary-owned atomic denial/permission-Narrow seam; rotate/revoke are being
+  implemented independently against existing committed contracts.
+- **Organization local:** root selection API passes race/vet/fuzz and followup
+  independent source review has no remaining finding; structure/secrets are
+  pending. Native integration requires genuine bearer password signin, not
+  stripping cookie CSRF. A dedicated password worker implements that explicit
+  profile while primary owns its session-issuer prerequisite.
+- **Next:** publish the reviewed organization root, finish actual native selector
+  and the API-key verification owner. Three implementation workers are active
+  again after replacing a usage-limited worker. No user decision is blocking work.
+
 ## Current TL;DR — 2026-10-27 01:51 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole roadmap rows
@@ -3132,7 +3350,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
-| M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
+| M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Modern self-owned issuance/verification/rotation/revocation and absolute-expiry legacy digest import/unchanged bare verification/modern successor are delivered natively and in opt-in Reference/HTTPS. Native3930442 and Referencef66303d are independently reviewed/main/CI-green; actual public native/reference PostgreSQL journeys pass6.880s/14.831s. Organization ownership, no-expiry legacy import, finite quotas, caches and remaining management/session operations keep the whole row open; full-unit qualification is separate. |
 | M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave retain their delivered evidence. The integrated HTTP/Reference backend includes exact-version metadata/static-role updates, current privilege changes, last-owner safety, encrypted invitation send/resend/once acceptance and original recovery. Resend native `8638dae`, public consumer `e0e077b`, HTTP leaf `41bd437` and Reference `4c4fcb7` are reviewed/main/CI-green; the actual downloaded Reference passes fresh/populated-identity PostgreSQL/HTTPS/race journeys (10.142s), including predecessor denial, fixed expiry/role, successor acceptance, reconstruction recovery and logout. Native original-key archive/restore `e7ab7d0` with public consumer `381ac2a` retains its public PostgreSQL/race proof (12.530s). Natural-repeat cancellation (Reference `ae30528`) and recipient rejection (Reference `bb8415d`) are now reviewed/main/CI-green with genuine downloaded-public PostgreSQL/HTTPS/race proof. Advisory slug availability is delivered through root `c39b1e6`, native `4c16fb9`, HTTP `5d1e06d`, genuine consumer `ef179f3` and Reference `0cebe9e`; the downloaded Reference passes fresh/populated PostgreSQL/HTTPS/race12.648s, including nonmember reads, actual create/rename changes, reconstruction and logout denial. Remaining HTTP mutations, external lifecycle cascades and active-selection variants keep the full row open; unit qualification remains separately outstanding. |
 | M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Team lifecycle/membership and role CRUD are delivered through native and opt-in HTTP/Reference owners. Direct-binding backend `aaf3669` and team-binding backend `2abecf4` are independently reviewed/main/CI-green, with actual downloaded fresh/populated PostgreSQL/HTTPS/race proofs (15.008s/24.616s). Real sessions assign roles, observe permission allow, revoke and observe deny; original recovery, readmission, terminal IDs and logout remain fenced. Active-team/member/role selection, typed-field/hook variants and full-unit qualification remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
@@ -3142,9 +3360,9 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M28 | Authorized SCIM discovery/User CRUD/filter/PATCH/pagination: scim, scim/postgres | Closure not reassessed |
 | M29 | SCIM Groups, organization reconciliation and deprovisioning effects: scim/organization and organization owners | Closure not reassessed |
 | M30 | OAuth client/consent, authorization-code/S256 grants and refresh rotation: oauth-server, oauth-server/postgres | Selected native configured public/confidential code/S256, consent, refresh, revocation and owning-client introspection delivered. Managed public-client root `6c34ccf` and native `dfcbbb7` now support genuine platform-manager creation without secrets, current metadata, S256 grants, refresh/revocation and terminal deletion; reviewed/main/CI-green with downloaded-public PostgreSQL proof and the setup-failure/retry limitation recorded above. RFC7591, broader management profiles and complete HTTP/Reference remain; full row not closed. |
-| M31 | OIDC discovery/JWKS/ID-token/userinfo consumers: oauth-server/oidc | Consented native profile/name UserInfo is delivered: root/child `baa3ff6`, native `6ad14b9`, independent complete-diff reviews and exact green CI. The actual authenticated downloaded native passes PostgreSQL/race104.511s: unchanged independently validated ID token and same access token across two real committed name changes; unconsented/absent name omission, schema/source/mixed-snapshot/late-withdrawal/exclusive-expiry denial. Existing email/phone/pairwise paths retain their selected proofs; failed combined run remains failed and named retained partitions separately pass. Full OIDC catalog and HTTP/reference composition keep the whole row open; unit qualification remains separate. |
+| M31 | OIDC discovery/JWKS/ID-token/userinfo consumers: oauth-server/oidc | Consented native profile/name UserInfo is delivered: root/child `baa3ff6`, native `6ad14b9`, independent complete-diff reviews and exact green CI. The actual authenticated downloaded native passes PostgreSQL/race104.511s: unchanged independently validated ID token and same access token across two real committed name changes; unconsented/absent name omission, schema/source/mixed-snapshot/late-withdrawal/exclusive-expiry denial. Existing email/phone/pairwise paths retain their selected proofs; failed combined run remains failed and named retained partitions separately pass. Managed confidential default-subject0eff366 and single-host pairwise0196c2a are now reviewed/main/public/CI-green; actual downloaded fresh/populated independent-RP journeys pass18.393s/11.014s, with real managed custody, current withdrawal and protected recovery. Full OIDC catalog and HTTP/reference composition keep the whole row open; unit qualification remains separate. |
 | M32 | Workload client-credentials issuance, introspection and revocation: OAuth server owners | Configured access-only native machine profile delivered as `28444ed`, green CI and downloaded-native PostgreSQL/race consumer. Full row qualification/composition not closed. |
-| M33 | Restricted token exchange with lineage/non-expanding authority and bounded cache validity: OAuth server, authentication, API-key and organization owners; SI-01 through SI-10 | Native Basic workload-only opaque exchange is delivered through OAuth `9969c9d` / native `5c597f4`, independently approved and final exact-CI green. Downloaded-public PostgreSQL/race consumer passes five journeys (44.086s), including reusable sources, original pending recovery and withdrawal after preflight. Human/API-key/organization sources, HTTP/reference and cached shared-issuer profiles keep the full row open. |
+| M33 | Restricted token exchange with lineage/non-expanding authority and bounded cache validity: OAuth server, authentication, API-key and organization owners; SI-01 through SI-10 | Native Basic workload exchange `9969c9d`/`5c597f4` is delivered with historical public-consumer proof44.086s. Human code-issued access exchange `599225f`/`3b58e4c` and refresh-issued human access exchange `ed2b1a36` are also delivered, with retained independent reviews/main/CI and public-consumer proofs64.253s/9.117s. Current source still selects their explicit policies; these are historical results, not new executions. API-key/organization sources, managed-client selection, JWT/positive-cache validity and HTTP/reference keep the full row open. |
 | M34 | Device authorization to issuance/expiry/denial: oauth-server/device, optional native PostgreSQL composition | Closure not reassessed |
 | M35 | Action-bound risk/velocity/admission and every selected CAPTCHA provider: identity/risk, identity/risk/postgres, identity/risk/valkey, identity/risk/captcha, identity/risk/captcha/recaptcha, identity/risk/captcha/turnstile, identity/risk/captcha/hcaptcha, identity/risk/captcha/captchafox; HIBP remains required when setting passwords | Closure not reassessed |
 | M36 | Locale selection and localized public messages/delivery templates: identity/i18n | Closure not reassessed |

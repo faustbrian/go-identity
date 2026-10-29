@@ -1,5 +1,520 @@
 # Identity Implementation — Current Milestone
 
+2026-10-29 03:56 UTC — managed confidential pairwise native profile DELIVERED.
+go-oauth-server0196c2a9d8e786f9736854dc827128fc2ee6161e reviewed/main-pushed,
+Required40814554861 SUCCESS. Actual authenticated public postgres
+v0.0.0-20261029035128-0196c2a9d8e7 matches all10 reviewed files; public actual
+fresh/populated independent-RP PG/race PASS11.014s. Final independent complete10
+APPROVE; ordinary race1.252s/vet/taggedvet/tidy/modverify/current+committed-range
+secrets/structure pass. Local RP11.789s and unchanged audit/outbox/unknown cases
+retain separate original execution results; original combined run remains
+failed because its RP denial oracle required zero outcome instead of the
+existing safe historical/unknown metadata category. Only that oracle changed;
+no grant/credentials/redirect/effects were allowed on error. Explicit managed
+registration reaches existing encrypted key/binding owners and actual manager,
+consent/S256/code/IDtoken/UserInfo, same/cross-sector subjects, key rotation/
+reconstruction, refresh and current user/client/session withdrawal. Client
+management never acquires an individual grant through its generic binding check;
+all actual grant issuance/replay binding fences remain. Exact owned UTF8 PG91663
+stopped and ndbG4m runtime removed after public proof; no user service touched.
+FullM31/HTTP/Reference/unit qualification remain open. Next primary bounded
+source pass found organization credential authority cannot borrow the removed
+creator's user ID: current org reads require a human member, and generic API-key
+known verification currently requires UserID. These are owning implementation
+prerequisites for the real organization-owned profile, not preflight gates.
+
+2026-10-29 03:33 UTC — Reference legacy backend profile DELIVERED.
+Primaryf66303d2885cd769dfb60c274d4b4aced0661051 contains exactly reviewed14;
+Required40812448189 SUCCESS. Actual authenticated public Reference
+v0.0.0-20261029032847-f66303d2885c matches all14 reviewed files and its legacy
+plus retained modern PostgreSQL/HTTPS/race journeys PASS14.831s. Local selected
+13.247s, module race5.270s/cmd6.955s, taggedvet/tidy/modverify/current and
+committed-range secrets/structure pass. Independent complete14 APPROVE, no
+findings. Interface runtime red proved missing Import; real composition red
+proved missing additive migration before wiring. Existing sole native owners
+now serve populated import/unchanged bare verification/restart recovery/HTTPS
+modern rotation/successor revoke/logout/disabled configuration denial. No new
+HTTP import route or authority/journal. All exact primary PG/volumes removed.
+No wholeM21/unit completion or historical Signup503 fix claim.
+Parallel OAuth root3866e194 is reviewed/main/public/CIgreen40810610494, actual
+public focusedrace1.239s. Native codec/intent/metadata/key-selection reds and
+keygreen are observed. First manager PG attempt failed BEFORE OAuth because
+new owned initdb omitted UTF8; actual serverSQL_ASCII/conversion error identifies
+fixture cause. Exact fixture stopped/removed; next own fixture must explicitly
+use UTF8. Manager behavior not yet proven; no production change for setup.
+
+2026-10-29 03:10 UTC — native legacy SI-07 profile DELIVERED; Reference lane FROZEN.
+Native3930442182a265cf67fa1d494863944b0ab517fc reviewed/main-pushed/Required
+40810166841 SUCCESS. Actual public postgresv0.0.0-20261029030409-3930442182a2
+all16 reviewed bytes equal; genuine populated-state PG/race6.880s passes. Local
+whole tagged40.261s, final exact7.067s, taggedvet/tidy/modules/current+committed
+secrets/structure pass. Original Signup503 and invalid test-oracle failures
+remain preserved; no Signup cause/fix claimed. Empty-name lifecycle guard and
+existing-candidate wrong-SHA partition resolved; final independent16 APPROVE.
+Native fullM21/whole-unit qualification is not claimed.
+
+Primary next finite outcome owns reference/** only: explicit optional legacy
+configuration/canonical-ID callback, owned additive migration+startup checks,
+guarded native Import accessor and existing opt-in HTTPS rotate/revoke, consumed
+from actual public3930442/core9a/kernel9eb/risk6fd. Caller supplies existing typed
+configuration and bounded canonical-ID policy, never domain stores/authority.
+Design: add the native optional fields to existing APIKeyConfiguration and one
+sealed state selection flag, not a second legacy graph/engine. Rejected parallel
+LegacyAPIKey service/configuration graph because it duplicates lifetime/session/
+transaction owners. Preserve modern-only omitted selection/history, existing
+native authorizations/unknown recovery, no HTTP import endpoint invented.
+Prove genuine baseline registration/verification/bearer signin -> reference
+digest-only import -> unchanged bare verification -> graph reconstruction/same
+original recovery -> HTTP modern rotation/old denial -> revocation/denial/logout.
+Prove populated migration, missing/disabled authority, no route added when
+disabled, tenant/closed/uninitialized guard, same native required effects and
+retained baseline sessions. Focused runtime red/green and real PG/race, affected
+modern consumer, public downloaded composition and one complete independent
+review; no full fleet/Tools/qualification restart. Organization/no-expiry/quota/
+cache variants remain laterM21 profiles, not removed from goal.
+
+2026-10-29 02:25 UTC — next finite OAuth lane FROZEN, managed pairwise OIDC.
+Bounded actual-source check confirmed human code/access exchange root599225/
+native3b58e4c and refresh-sourceed2b1a36 already delivered; do NOT duplicate them.
+The earlier02:14 human proposal was read-only discovery, not implementation.
+Owner managed_oidc_native_finish now owns only go-oauth-server root/oidc/postgres
+source/tests/module-local docs/manifests/migrations required for confidential
+single-host managed pairwise registration. No identity/shared/HTTP/Reference,
+tooling/collection/Git/children writes. Consume actual public root332b6e,
+OIDCbaa3ff6 and native0eff366; key installation/activation/retention, pairwise
+derivation and durable subject-binding owners already exist and stay sole owners.
+Outcome: genuine manager ClientCreate->safe Get/List->real consent/S256/code/
+ID-token/UserInfo with explicitly authorized immutable pairwise registration;
+independent RP proves equal-sub stability/reconstruction and sector isolation,
+including key rotation, missing/foreign/retired custody denial, current manager/
+user/session/client withdrawal, atomic effects/unknown original recovery and
+old default-subject compatibility. Selection is explicit server trust, never a
+fabricated static client or request-selected key material. Preserve old omitted
+registration/intent bytes and exact original retries. No key/subject engine,
+private authority, fresh-value fallback or new journal. Exclude multi-host sector
+URI, managed-public pairwise, additional claims, metadata replacement and HTTP/
+Reference from this finite profile, not eventualM31 scope. First root contract
+gets TDD and primary alignment/review/publication before native adoption; native
+must consume a real committed public pin. Focused owning regressions, real PG/
+race, selected public consumer, one independent complete review; no fleet reset.
+Source tests may be prepared now; heavy Go slot remains with legacy API-key owner.
+
+2026-10-29 02:14 UTC — finite confidential native OIDC profile DELIVERED.
+go-oauth-server0eff36641023c9978958cdb520488f90a49df1c6 is reviewed/main-pushed,
+Required40804483677 SUCCESS; actual authenticated public postgres module
+v0.0.0-20261029020453-0eff36641023 all13 reviewed bytes equal. Actual downloaded
+fresh/populated independent-RP PostgreSQL/race PASS18.393s (Go1.27.2); original
+wrong-role fixture failure retained separately, no source correction needed.
+Current source13/addendum review APPROVE, final ordinary/tagged/modules/scanner
+checks pass. Older setup failures remain failed/unexplained, not claimed fixed.
+This closes this managed confidential Basic/openid/default-subject SDK profile,
+not HTTP/Reference/extra claims or fullM31/qualified units. Idle PG/supplier
+resources are no longer needed and will be cleaned; no user service touched.
+
+Next dependency-ready OAuth lane, READ-ONLY consumed-contract check first:
+owner managed_oidc_native_finish, only go-oauth-server root/oidc/postgres, no
+identity/shared/HTTP/Reference/Git/tooling/children writes. Consume actual public
+native0eff366 real human authorization-code/session authority and retained native
+workload-exchange5c597f4/standard RFC8693 owners; no API-key/organization source
+dependency for this user-owned profile. Proposed finite outcome: genuine human
+code/access grant exchanges to a registered narrower audience/scope, preserving
+separate owner/actor/tenant/client and root/parent lineage, original expiry/
+freshness, nonexpansion, current user/session/grant withdrawal and exact recovery.
+Private session-JWT exchange remains distinct. API-key/org/cache variants stay
+later work, not waived. Worker first reports actual missing owned behavior and
+dependency readiness; NO production edits/Go until primary freezes that evidence
+and selected public boundary. If shared authority is absent, request its owner,
+never decode public subject/token strings into invented identity. Small owning
+root/native tests, genuine PG denial/replay/rollback/revocation and actual public
+consumer plus one independent final review; no full fleet/Tools/evidence work.
+
+2026-10-29 01:32 UTC — coordinator snapshot prerequisite delivered9ebf2f1.
+Actual public nativev0.0.0-20261029012551-9ebf2f1cda2f authenticated Origin/all16
+reviewed bytes equal; Required40800556723 SUCCESS. Complete16 review APPROVE
+after correcting test expectations for unavailable mandatory failure audit and
+typed terminal errors, not weakening production. Real PostgreSQL/race4.301s
+proves source3 commit and audit/outbox rollback with original zero-version
+recovery. Full native race10.008s/finalfocused1.392s/taggedvet/modules/structure/
+current16 and actual committed-range secrets pass; bounded changed-parser fuzz
+passes, with only12 plan executions explicitly limited. Actual native importer
+remains worker-owned/unfinished. Primary found optional Legacy Revoke admission
+would select unsupported nonterminal effects; worker confirmed and prepares
+constructor red before rejection, preserving explicit Narrow-only support.
+OIDC source13 review remains clean, but affected-helper56247 terminal1 has
+three pre-OAuth baseline request/signin failures. No all-green or completed
+native profile claim. Next discriminator uses existing primitive observation
+on the actual failing signin/request boundary, not a broad rerun or timeout bump.
+
+2026-10-29 01:20 UTC — delivery/checkpoint inside the frozen SI-07 lane.
+Risk6fd24db and legacy coreaa84a2f are independently reviewed/main-pushed,
+Required CI-green and authenticated actual public consumers. Root snapshot
+policycc0c343 is main/public/CI-green, exact reviewed5 byteequal; no native
+import capability is claimed from those prerequisites. Primary native kernel
+16-file candidate consumes actual cc0c root and binds policy through command,
+scope, preparation identity, plan/history, lifecycle and journal. Runtime reds
+prove omitted policy and source3 lifecycle rejection; focused1.530s and whole
+native race10.008s/taggedvet/tidy/modverify pass. Added explicit scope decode
+regression caught the remaining closed-parser omission; corrected source is
+under actual UTF8 PostgreSQL feature-execution/fuzz proof and independent
+complete16 review snapshot_import_kernel_review. Initial disposable cluster
+failed old identifier migration before feature execution; preserve that result,
+use the required Unicode-capable fixture rather than edit migration history.
+Legacy worker retains apikey/postgres only; source implementation follows real
+contracts, no invented journal/authority. Parallel OIDC source13 review has no
+findings; its inherited pre-OAuth signup failure remains unresolved, selected
+fresh/populated/unknown and protected effects have real passes. Full scope and
+milestone denominators unchanged. No additional workflow machinery or decision.
+
+2026-10-29 00:52 UTC — actual SI-07 source-version contract gap, primary-owned.
+Generic FeatureReceipt and postgres feature-plan validation require every new
+record to start0->1, but imported Record.Version must retain e.g.3. Do not fake
+Before=2 or hide key history in another source-binding aggregate. Chosen design:
+explicit trusted FeatureOperation.VersionPolicy (default sequential, omitted
+from existing canonical JSON/CBOR) with a closed snapshot-import alternative
+allowing ONLY absent-local0->positive source version. Root receipt and native
+kernel share one predicate, and registry/command/digest declarations bind it.
+Rejected direct API-key name exceptions in generic kernel (wrong owner coupling)
+and weakening all version transitions (unsafe). Intended caller: API-key import
+descriptor selects snapshot policy; modern create/rotate/revoke remain default.
+Own shared root feature operation/receipt docs/tests and postgres codec/plan/
+registry tests only. Focused receipt/plan red/green, old-byte/digest/replay and
+policy-mismatch rejection plus real coordinator import/rollback/recovery proof
+are needed; root actual public pin precedes native kernel adoption. API-key
+worker keeps its root10 frozen/published separately and native source behind
+these genuine contracts. This is implementation, not new evidence machinery.
+
+2026-10-29 00:20 UTC — primary prerequisite inside the frozen SI-07 lane:
+`identity.apikey.import` is absent from the existing risk catalog and therefore
+cannot reserve protected counters. Own ONLY risk/native_operations.json,
+regenerated risk/catalog_generated.go, a focused behavior test and module docs/
+changelog. Add the exact CredentialMutation classification using the existing
+reserved transaction/provider semantics; aliases, missing/unavailable signals,
+foreign/replayed/expired projections remain denied. Do not create an import
+policy engine or issue a key through create. Existing pinned generator inputs
+match both recorded hashes; regenerate only the added native action. Focused
+runtime red/green, risk race/vet, structure/current secrets and one independent
+review precede public risk adoption. The API-key worker retains all API/native
+code; root/kernel/event changes occur only if its exact closed validators need
+them. Separate legacy verifier ownership was rejected; an additive configured
+credential union preserves one verifier/coordinator and modern canonical bytes.
+
+2026-10-29 00:16 UTC — dependency-ready legacy-key native lane (SI-07 profile).
+Owner apikey_legacy_delivery owns ONLY apikey/** root/core and postgres module
+source/tests/docs/module-local manifests/migrations, excluding any Valkey,
+HTTP/Reference, shared kernel/session/risk/organization, collection metadata,
+tooling and Git writes. Consume public modern API-key root6fc21bb/native7ef319e,
+kernel59535bb/session9a0e8a0 and existing authenticated source pins; the genuine
+published Referencef642787 PG/race13.305s proves current native composition.
+Freeze outcome: authenticated, authorized digest-only import of user-owned
+legacy SHA-256 records preserving canonical IDs, source/version, configuration,
+restrictions/absolute expiry/status/tombstone/lineage; identical import recovery
+does not issue/reveal or resurrect; unchanged bare secret verifies by bounded
+server-selected legacy lookup, wrong secret denies, rotation makes a modern
+successor and terminates legacy authority. Keep modern generator/parser/digest
+and existing APIs behaviorally compatible; no raw import secret or private
+authority/journal. Native organization-owned, quota/cache and HTTP legacy
+profiles remain subsequent work, not waived by this finite user-owned outcome.
+Read complete selected goals/shared-issuer profile, inspect consumed behavior
+once, and report the first public boundary before adopting it natively. If
+import/risk/kernel authority is missing, request that exact behavior from primary;
+do not invent a substitute or write outside ownership. Native adoption waits
+for actual reviewed committed public root contract, never a stub or future pin.
+TDD/root compatibility plus real PostgreSQL import/verify/rotation/revocation,
+typed conflict/stale/tombstone denial, transaction rollback/unknown recovery,
+current authority and secret redaction are the finite acceptance. Heavy local
+checks/fixtures serialized by primary; no Go until explicit slot. Same-repo
+worker never stages/commits/pushes; parent owns one independent complete final
+review, integration/source authentication and ordinary-main delivery.
+
+2026-10-29 00:14 UTC — M21 self-owned Reference profile DELIVERED, not wholeM21.
+Referencef6427875099f7333f3b3f57c370333d408449910 is remote main with
+[Required CI passing](https://github.com/faustbrian/go-identity/actions/runs/40792443173).
+Actual public modulev0.0.0-20261029000821-f6427875099f authenticated Origin/Sum;
+all20 module files match reviewed source. Real downloaded API-key/baseline
+PG/race consumer PASS13.305s. Fresh/populated/reconstructed lifecycle, original
+retry/no reveal, rotation/revocation/logout and retained closure are proven.
+Independent21-file final review APPROVE; local corrected PG9.443s, ordinary
+race/static/modules/structure/docs and selected secret checks pass. F1 isolated
+API-key-only rate migration red/green is retained; A1 GoDoc corrected. Fullgoal
+remains10/39 whole milestones; no new full-unit release qualification claimed.
+Parallel confidential OIDC root332b6e0 is reviewed/committed pending ordinary
+push/publicpin; worker retains native original-class/recovery/RP work below.
+
+2026-10-28 20:27 UTC — frozen M21 Reference integration and next ready OIDC lane.
+Primary owns reference/**, shared contracts/root metadata and final acceptance.
+Native public-key HTTP consumer a260702 is main-pushed; Required40763201751
+passes. Actual public-pin SDK/HTTPS/configuration PG/race32.021s and tagged vet
+pass; independent existing-review addendum approves the exact three-file scope.
+Reference fresh/populated journeys passed7.991s; concrete bearer-versus-cookie
+composition contradiction is now covered by a focused red/green and an actual
+invalid-browser-selection red. Current run adds graph reconstruction after
+creation and original retry before rotation/revocation. No profile expansion.
+
+Dependency-ready parallel owner managed_oidc_native_finish: ONLY go-oauth-server
+root/oidc/postgres source, tests and module-local docs/manifests needed for the
+finite managed confidential OIDC profile; no device, HTTP/Reference, identity,
+tooling, collection metadata, Git delivery or children. Consume committed main
+3c5567cc57967648e4558b8bfcec6e3ccf91e06e native managed-public OIDC and existing
+confidential client-authentication/rotation contracts, plus existing proven
+identity/session pins. Outcome: genuine manager provisions confidential openid
+client, safe read, actual client authentication/code/S256/ID token/UserInfo,
+secret rotation with old-secret denial, refresh and terminal deletion. Reuse
+current native signing, consent, grants, authority, custody and original recovery;
+no substitute engine. Exclude pairwise/additional claims and HTTP/Reference from
+this finite profile, not eventual scope. One bounded consumed-contract pass,
+focused denial/replay/rollback/current authority and retained public/confidential
+compatibility plus real independent-RP PostgreSQL/race proof. Worker reports the
+first public boundary for primary alignment; heavy Go/PG only after primary
+grants the shared local slot. Parent retains one independent final review and
+ordinary-main delivery. No additional planning programme.
+
+2026-10-28 11:57 UTC — frozen parallel M31 managed-public OIDC profile.
+Owner managed_oidc_delivery: go-oauth-server root management/read source and tests,
+oidc/ and postgres/ only where this profile requires changes, module-local
+go.mod/go.sum/docs/changelogs. No device/HTTP/Reference, shared identity/session/
+risk/kernel, root collection manifests, tooling, Git or child-agent writes.
+Base dfcbbb778b72592f18369a6893a24480a9a434b6, clean main, Go1.27.3.
+Consume proven native managed public clients and existing OIDC/signing/UserInfo
+owners; nested root6c34ccf/childbaa3ff6 and committed identity/kernel/session pins
+remain actual inputs until reviewed prerequisite publication. No parent dirty
+API-key dependency. Independent map managed_oidc_map and QA managed_oidc_qa
+complete, no contradiction. One bounded investigation; no replanning ceremony.
+Outcome: genuine current platform manager -> no-secret managed public client
+requesting openid alone -> fresh-service safe get/list -> actual password-session
+consent/S256/code -> independent RP discovery/JWKS/ID token and equal-sub UserInfo
+-> refresh/revocation -> terminal deletion. Default public subject; independently
+configured existing OAuth resource scopes/static-client bootstrap stay unchanged.
+Exclude managed confidential OIDC mutation/rotation, pairwise/additional claims,
+RFC7591, HTTP/Reference and organization/API-key exchange from this profile, not
+from eventual scope. Native scope meanings remain child-owned; no private engine.
+Q1-Q6 prove explicit opt-in/default-deny scopes/classes, genuine fresh/populated
+public consumer with independent RP, current authority/original20s freshness,
+atomic failures/lost-COMMIT/original recovery, deletion/redemption races and
+legacy public/confidential/static compatibility. Reuse unchanged owner evidence;
+use focused owning tests/race/vet and actual published-consumer source, not full
+Tools/history/67-unit reruns. No new receipt or evidence framework.
+Primary reviews first implemented root public boundary and coherent batch;
+owns root/native publication, pins, final acceptance and future composition.
+Worker must wait for a real reviewed root pin before dependent native execution,
+never replace with a sibling source. All heavy Go/PG runs serialized with primary;
+new task-owned fixture/caches only, cleanup after bounded run. This profile may
+progress independently while primary finishes the native API-key verifier.
+
+2026-10-28 11:57 UTC — selected organization native921b5ae and genuine published
+consumer02af220 are independently reviewed/main-pushed/CI-successful, delivery
+audited. Real signup/verification/bearer selection race11.523s and retained
+password/HTTP race22.418s prove the consumed public module. Reference/HTTP
+selection/full M22 remain open. Primary kernel verification21candidate is in
+bounded codec compatibility correction after reproduced review findings; real
+native VerifyAndConsume/Reconcile remains unfinished. No user decision pending.
+
+2026-10-28 08:33 UTC — native bearer prerequisite delivered; dependency-ready
+organization selector handoff. Primary is hands-on in go-identity/main and owns
+all shared kernel/session/risk, API-key verification, Reference/HTTP integration,
+collection manifests, Git and final acceptance. Native bearer7ca5d4d is remote
+main, Required40656947253 SUCCESS; public password/postgres
+v0.0.0-20261028082559-7ca5d4db76d2 Origin exact, alltenfiles compared. Actual
+downloaded native PG/race8.248s proves genuine registration/verification/native
+preauth/bearer signin/read/recovery. Full affected race23.957s/vet0 and independent
+correctness/regression approve; offline executed adversarial pass/replay have
+no finding, remaining delivery audit does not imply whole milestone closure.
+Fresh user confirmation covers ordinary origin/main pushes for this resumed
+run; force/release/deployment/history operations remain unauthorized.
+
+Proposed next writer organization_selector_delivery owns ONLY go-organization
+postgres/**, including its consumer nested module, source/tests/docs/module-local
+manifests. Adopt existing dirty selector implementation, do not restart root.
+Base/root f77e41b907101c67d00b3d5f836616b1d0304e14; consumed selected session core
+28187890dc06 and native80f08eb82bb9, plus actual public bearer native7ca5d4db76d2.
+Frozen outcome remains two genuine password bearer sessions set/get/switch/clear
+selection through actual organization/member/policy authority and one Work.
+Prove exact-session/sibling-family isolation, original-key/current-authorized
+secret-free recovery, stale CAS/contention, required-effect rollback, unknown
+commit and archive/removal/logout denial. Unsupported cookie/MFA/passkey denies.
+No substitute stores/proofs/session engine, no active-selection HTTP invented.
+No root/shared/Reference/tooling writes, no Git mutations or child agents.
+Primary waits for bounded consumed-boundary map/QA before new production writes;
+worker may read and prepare focused public-consumer regression tests in parallel.
+Heavy Go/PG checks require primary's serialized slot and new owned disposable
+resources. Primary inspects first implemented public boundary and coherent batch,
+then owns review, module publication, clean consumer and Reference adoption.
+This is the same frozen selection profile, not a new architecture/planning goal.
+
+2026-10-27 05:18 UTC — resumed finite implementation lanes, same milestones.
+Previous organization worker ended on usage limit; resumed owner
+organization_selector_resume retains exactly the root/native/consumer paths
+and frozen selector below. Root first8path independent review found no code
+blocker; unsupported method/assurance/factor/passkey denial tests requested
+and being added. Native and Reference remain open, not milestone closure.
+apikey_native_resume retains only apikey/postgres; actual Create/retry-policy
+consumer81959 PASS1.550s before pending Verify tests. It now implements bounded
+modern rotate/revoke using existing owners while primary supplies verification.
+password_bearer_signin_profile owns password root/native signin files and their
+tests/docs/changelogs only: explicit email single-factor bearer profile, unchanged
+cookie default, genuine password comparison/atomic issuance, no CSRF stripping.
+Primary owns shared session bearer issuer prerequisite, kernel verification
+plan/disposition, all Git/Reference/HTTP/collection integration and acceptance.
+All resumed workers gpt-6.1-sol/high/no children, no Git mutations; heavy runs
+serialized. Explicit bearer result/issuer guards and native actual session read,
+denial/replay/unknown/no-secret recovery are required before adopting that pin.
+Kernel closed verification declaration RED21143 missingAPI, GREEN15021 0.270s;
+runtime attempt/disposition integration remains implementation work, not delivery.
+
+2026-10-27 04:52 UTC — dependency-ready ownership transfer, same frozen selector.
+Session-native80f08eb82bb95e239e078d3497fa7a22d496c00f independently APPROVE
+25paths24bec062, main/remote exact, Required40451825956 SUCCESS. Actual public
+v0.0.0-20261027044816-80f08eb82bb9 downloaded proxy/sumdb, Origin exact and all
+25reviewed paths compared. Final PG/race24862 PASS6.061s includes set/switch/
+clear/numeric staleCAS, denial/rollback, retained/corrupt pending recovery and
+public selected caller->distinct target revocation with late owner withdrawal.
+39622 full ordinary race2.201s/taggedvet0/fuzz14324exec4.312s/tidydiff0;
+modulesverified0. The actual organization.membership descriptor mismatch was
+genuinely RED56d667 before correction. Changed secrets117340bytes/noLeaks0.
+Owned PG54041/PID7564 stopped and selection-pg/data/log removed0906f2.
+
+Worker organization_selection_profile_worker now owns go-organization root,
+postgres and postgres/consumer source/tests/docs/module-local manifests only;
+basef278236 clean main. This replaces earlier primary write ownership for those
+paths, not the frozen profile or acceptance. Consume public session2818789 and
+native80f08eb before actual execution. Outcome remains two genuine password
+bearer sessions independently set/get/switch/clear organization selection using
+actual org/member/policy authority, one coordinator and the delivered session
+effect. No substitute store, extra selection authority or private session engine.
+Prove current authority, stable original-key/fresh-service recovery, sibling/
+family isolation, rollback/required effects, staleCAS/contention/unknown and
+archive/removal/logout denial in real native public-consumer PG/race. Same-org
+aggregate epoch is conservative; never use membership epoch as organization.
+Unsupported cookie/MFA/passkey selection denies. Parent inspects first actual
+boundary and coherent tested batches, owns all Git and shared kernel/session/
+risk/Reference/HTTP/integration pins/collection manifests and final acceptance.
+Worker may change its consumed module-local pins, but not stage/commit/push/
+branch or spawn. Root/native cross-module prerequisites get reviewed/public pins
+before downstream execution, not a wrapper-only backend claim. Heavy runs stay
+serialized; own new fixtures/caches, clean promptly, no broad baseline restart.
+
+Primary now owns a concrete API-key upstream coordinator gap while that ready
+organization lane proceeds independently. Read-only apikey_committed_denial_boundary
+confirmed existing generic features mandate lifecycle/successor and all-success
+audits; neither committed auth denial nor denied-auth+succeeded-Narrow lifecycle
+fits. OTP/counter denied paths roll back domain effects and are closed owners.
+Implement only a closed additive API-key verification disposition/effect path in
+the existing Work/coordinator, preserving ordinary feature/OTP/counter behavior.
+No private transaction/audit/outbox owner, artificial verification version bump
+or invented auth lifecycle. Frozen API-key owner/root/config/time invariants and
+67unit completion remain unchanged. API-key worker retains Create and finite
+denial/Narrow tests; Verify production waits for the actual owning contract.
+
+2026-10-27 04:34 UTC — retained source checkpoint; whole-row count stays10/39.
+Session core9d0a293, user-status native1c2868 and API-key rootbd820be are on
+remote main with exact-source CI green. Parent API-key registration defects
+(missing go.work entry; unsorted catalog set) corrected adff04a/7811570;
+Required40444202939 SUCCESS. No runtime/tooling repair or new unit closure.
+Actual public native guard v0.0.0-20261027024806-1c2868e9cf24 and API-key root
+v0.0.0-20261027031659-bd820beb3d15 downloaded through proxy/sumdb and matched
+all reviewed paths. Worker now implements real Create in owned apikey/postgres;
+codec/mapping/invalid-owner tests pass, real PostgreSQL commit remains unproved.
+First actual boundary inspection found retained Create retries bypassed current
+management/grant decisions; worker reproduces and corrects that through the
+existing policy seam before native acceptance. No substitute domain authority.
+
+Primary native selection source now includes closed intent mapping, exact CAS
+effect, retained session participant evidence, selected owner read/fence port,
+earliest20s primary admission and selected bearer revocation. Scope remains
+the frozen one complete selector profile, not helper-based milestone closure.
+Native review snapshot f9dc0a04 (25paths) REQUEST_CHANGES: selected cookie/CSRF
+admission, final extra PG cases unverified, and public selected-caller revocation
+coverage. Concrete correction required an additive explicit core transport
+profile; existing constructors and unselected cookies remain unchanged.
+Core6paths b147af3b independently APPROVE by organization_selection_native_review;
+RED98366 missing constructor, focused58699 PASS0.401s, final22971 full race1.822s
+and vet0. Commit28187890dc06fc6d14be6583440ee7cf1e38f58f main-pushed; exact CI
+40450277298 SUCCESS. Actual public sessionv0.0.0-20261027043115-28187890dc06
+downloaded proxy/sumdb; Origin exact, source comparison/native consumption next.
+Native selected-CSRF regression
+52291 genuinely failed before correction. No renewed lease or broad restart.
+
+Native563089 focused race1.291s; ordinary17588 race1.967s/taggedvet0. Selected
+and retained revocation/OIDC plus native reader95725 PASS6.514s before later
+switch, numeric staleCAS, retained/corrupt recovery and public caller tests.
+Later12246 FAILED18.519s in old initial issuance before target;96913 FAILED
+56.660s in old migration39 at the fixture45s context before target. Their causes
+remain unproved; host load312 was observed, not asserted as a verified cause.
+No timeout/assertion weakened and no test presence counted as passing evidence.
+Task-owned leftover fixture DB resolved/removed; PG54041 in exact primary cohort
+remains owned for current bounded integration. Worker plans separate54042 only
+after its actual consumer fixture compiles. Serialized heavy slots retained.
+
+Frozen parallel human-owned API-key profile — 2026-10-27 02:00 UTC.
+Worker owns only new apikey/ and apikey/postgres/ source, module-local manifests,
+tests/docs/changelogs/migrations; primary owns collection manifests, all shared
+contracts/session/Reference/HTTP, pins and Git. No other writer in these leaves.
+Source-ready mapping next_parallel_protocol_lane inspected actual Identity473945,
+native9ccf9a, sessione95289 and native49fde04 public owner behavior. Resolve
+full normal public module pins before use, no new repo/topology or substitutes.
+Finite outcome: genuine signup/signin -> authorized self-owned modern key ->
+reveal once -> fresh native verification -> traceable rotation/old denial ->
+successor revocation/denial. Current tenant/user/permissions and original20s
+validity are mandatory; persist narrowing under PermissionReductionNarrow.
+Selected explicit unlimited quota still records atomic attempt/fingerprint and
+not-applicable success. Lost create/rotate acknowledgement recovers status only;
+never persist recoverable key plaintext or regenerate/re-reveal originals.
+Cross-tenant/wrong-secret/scope denial, owner suspension/permission withdrawal,
+attempt replay/conflict, rotate/revoke contention and required-effect rollback
+need genuine public-consumer PostgreSQL/race proof in the sole coordinator.
+User owner only/no cache; organization-owned keys, legacy import, bounded quotas,
+session-principal adapter and OAuth delegation remain retained future profiles,
+not permissive fallbacks. Shape owner/configuration/root lineage from the full
+goals/shared-issuer profile now, not incompatible retrofit. Initial root public
+boundary receives primary alignment and independent review/main publication
+before native code executes against its committed pin. Workers do not stage,
+commit/push/change branches or spawn; request absent shared-owner behavior.
+Focused TDD/native integration/vet/secret and one complete independent review per
+coherent module, no whole-unit closure from this profile. Serialize heavy runs.
+
+Concrete consumed-owner gap found during API-key native mapping: GetStatus
+returns real user security epoch, but Work only exposes credential-bound or
+three-epoch user guards, and target-user admission checks aggregate version.
+Primary owns a narrow RequireActiveUserStatus guard for the exact live feature
+participant and command-bound tenant/user, active state and original positive
+user-security epoch under the existing user-row SHARE lock. Aggregate metadata,
+identifier and password epochs are not key-owner authority. Known-key command
+uses the actual owner as target and SubjectAPIKey/KeyID as actor; unknown-key
+anonymous-flow denial never calls this guard. Prove scope/cancellation/poison,
+real epoch/status denial, retained locks and rollback without credential rows;
+publish/review this prerequisite before native API-key adoption. No new state,
+migration, principal substitute or second transaction is introduced.
+
+Frozen primary active-organization profile — 2026-10-27 02:00 UTC.
+Primary owns session core/native, organization core/native and final Reference/
+HTTP/pins/Git; no parallel writer in these paths. Consume identity runtime2abecf4,
+organization f278236, existing real password-session/coordinator/request-key
+owners. Outcome: two genuine password bearer sessions independently set/get/
+switch/clear organizations; only the exact session version/vector advances.
+Current organization/membership/policy, explicit absence, stale/conflicting CAS,
+rollback/required effects, original-key/fresh-service recovery, archive/removal
+and logout denial are required in fresh/populated PG and selected Reference.
+Keep logical identity.organization.active-set owned by organization. Its one
+native feature calls a closed session-owned Work effect, like existing native
+OIDC end-session; no second feature/transaction or registry exception. Lock
+family/session before organization/member, check successor at final commit.
+Stable request intent binds session ID + requested organization/absence, not
+the observed source version; retained keys recover without re-preparation.
+Use the existing organization aggregate authority epoch, not member authority
+disguised as Organization. Same-organization metadata/security epoch changes
+conservatively invalidate selected authority; unrelated organizations do not.
+Preserve original global/user/factor/passkey provenance and freshness; native
+first profile admits only genuine single-factor password/bearer. Cookie/MFA/
+passkey variants remain unsupported/deny, not weakened or silently stripped.
+Catalog correction: neutral selection must include exact SessionID as well as
+tenant, positive source session CAS and organization-owned scope/version.
+Clear is explicit absent organization; selection alone never grants permission.
+Start with focused neutral constructor TDD, then native one-Work ownership,
+real integration/recovery/denial proof and guarded Reference composition; each
+cross-module prerequisite is reviewed/committed before its actual public pin.
+Use one bounded owned cache/PG cohort, serialized heavy runs, affected tests/
+race/vet and final independent review. No whole M22/M23/unit closure from a
+constructor or adapter alone, no historical tooling changes or new proof engine.
+
 2026-10-27 01:27 UTC — team-binding Reference profile CLOSED.
 Reference2abecf4232f8, complete11-path31eab96d independently APPROVE by
 team_binding_reference_review, main/remote exact and Required40430186894 SUCCESS.
@@ -14256,3 +14771,64 @@ rebuild evidence machinery or rerun unchanged package matrices.
 Maintain [IDENTITY_PROGRESS.md](IDENTITY_PROGRESS.md) for delivered behavior,
 remaining consumer gaps, source commits and pending qualification. Keep this
 note compact and update the current milestone rather than creating plan versions.
+
+### Native human-owned API-key profile delivered — 2026-10-28 18:28 UTC
+
+Native6fc21bb is ordinary-main-pushed under main9a0e8a0, with
+[Required CI passing](https://github.com/faustbrian/go-identity/actions/runs/40743284672).
+Authenticated public native module v0.0.0-20261028175434-6fc21bb40ed3 matches
+all17 reviewed source files; its genuine PostgreSQL/race consumer passes26.878s.
+Create/reveal-once, current verification, atomic Narrow/denial, rotation,
+revocation and exact original replay/recovery (including rolled-back effects)
+are delivered. Independent native reviews/delivery audit approve this finite
+human-owned, modern, unlimited, uncached profile, not full M21 or unit release.
+Reference9a0e8a0 diagnostics are separately reviewed/pushed/public; actual OIDC
+rejection is not yet corrected. Native attack scratch/caches/branch removed.
+
+### Next bounded lanes — 2026-10-28 18:28 UTC
+
+Checkpoint19:18UTC: native managed-public OIDC profile reviewed/main-pushed at
+go-oauth-server3c5567cc57967648e4558b8bfcec6e3ccf91e06e; exact
+[Required CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40751691292)
+green. Publicproxy/sumdb modulev0.0.0-20261028190854-3c5567cc5796 matches14
+reviewed paths; actual downloaded fresh/populated independent-RP PostgreSQL/race
+PASS10.938s. Prior local9case PASS84.782s and scanner/currentstructure retained.
+Worker stopped with clean source. No wholeM31/HTTP/release claim or constructor
+cause attribution. CoreHTTP prerequisite3ea02a3 reviewed/main/CI-green with
+affected race/vet and real committedrange scanner; new optional http/apikey
+tests/handlers local, no Reference composition/acceptance yet. Native original
+key/result/transaction owner reused, not replaced. Fullgoal remains10/39.
+
+Primary owns opt-in API-key HTTP management and Reference composition against
+public native6fc21bb and current HTTP/session contracts. One bounded mapping/QA
+pass must select exact catalog create/rotate/revoke/recovery surfaces before
+production writes. Outcome is genuine bearer HTTP management with native
+verification of issued/rotated/revoked credentials; disabled routes/docs absent.
+Organization/legacy/quota/cache/API-key session authentication remain later
+profiles. Shared kernel/HTTP/Reference/root metadata and all Git stay primary.
+
+The single mapping/QA pass is complete at main9a0e8a0. Freeze the selected
+strict-bearer/keyed profile on canonical create/rotate/delete paths: exactly one
+Idempotency-Key is required for all three native-keyed mutations. Published
+Rotation/Revocation require that key; no transport-side fresh/derived retry key
+or new custody owner is introduced to satisfy older rotate/repeat draft labels.
+Admit only this explicit operation-specific CSRFNone/keyed descriptor variant;
+all existing cookie/other operation metadata retains its protection. Extend the
+existing shared secret-rate owner only for these selected native-keyed actions.
+Do not add a recovery route. Own the finite projection/type/schema alignment in
+the affected module's profile documentation; do not migrate historical catalogs
+or reopen Tools. QA Q1-Q12 covers the selected journey and real rate/native risk
+separately; original15m proof/freshness remains native-owned. No extra planning
+approval/evidence cycle selected.
+
+Worker /root/managed_oidc_native_finish resumes the existing frozen M31 native14
+in go-oauth-server/main atd6f73ffd928d. Own only the14 native paths named in
+/tmp/managed-oidc-root-review.LWEBf2/evidence/native-current.sha256, preserving
+all current work. Adopt public Referencev0.0.0-20261028180115-9a0e8a020cce
+(authenticated parent source4 comparison passed; safe errors.Is categories,
+no timeout/auth change). First reproduce/classify the one existing uncomposed
+continuation bootstrap failure, then finish actual independent-RP acceptance
+and its finite affected checks. No new flow, engine, retry or authority bypass;
+no shared-owner edits, staging, commit/push/branches/children. Parent integrates
+pins/Git and accepts final review. Worker exclusively owns heavy Go/PG slot
+when dispatched; primary does source work until the slot is returned.
