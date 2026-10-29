@@ -15,8 +15,8 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261029011001-cc0c343afad6
 	github.com/faustbrian/go-identity/anonymous v0.0.0-20261023043948-50a36bd23473
 	github.com/faustbrian/go-identity/anonymous/postgres v0.0.0-20261023055944-d2f004fd7b32
-	github.com/faustbrian/go-identity/apikey v0.0.0-20261029050328-9d776996c632
-	github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029055312-8de0410c0279
+	github.com/faustbrian/go-identity/apikey v0.0.0-20261029074756-35e4d0d91c25
+	github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029081445-7bf2127d80ca
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8

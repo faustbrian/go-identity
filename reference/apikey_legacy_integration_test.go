@@ -26,7 +26,11 @@ func TestReferencePostgresLegacyAPIKeyHTTPS(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{apiKey: true, apiKeyLegacy: true, postgresBaseline: true})
 }
 
-func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workers []deliverypg.WorkerConfig, config reference.ReferenceConfig, originalStores reference.StoreSet, originalFeatures reference.FeatureSet, caller apikey.Authentication, user identity.UserID) {
+func TestReferencePostgresLegacyNoExpiryAPIKeyHTTPS(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{apiKey: true, apiKeyLegacy: true, apiKeyLegacyNoExpiry: true, postgresBaseline: true})
+}
+
+func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workers []deliverypg.WorkerConfig, config reference.ReferenceConfig, originalStores reference.StoreSet, originalFeatures reference.FeatureSet, caller apikey.Authentication, user identity.UserID, noExpiry bool) {
 	t.Helper()
 	key := func(label string) identity.IdempotencyKey {
 		t.Helper()
@@ -54,6 +58,7 @@ func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores,
 	}
 	spec := c.APIKey.Configuration.Spec()
 	spec.ID, spec.Algorithm, spec.State = "reference-legacy", apikey.AlgorithmLegacySHA256V1, apikey.ConfigurationVerifyOnly
+	spec.AllowLegacyNoExpiry = noExpiry
 	legacy, err := apikey.NewConfiguration(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +149,9 @@ func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores,
 	raw := "reference-bare-" + string(rawID)
 	digest, _ := apikey.NewLegacyDigest(sha256.Sum256([]byte(raw)))
 	record := apikey.Record{ID: canonical, Owner: credentialOwner, Version: 3, AuthorityVersion: 2, ConfigurationID: spec.ID, ConfigurationRevision: spec.Revision, Status: apikey.KeyActive, Grant: []string{"invoice.read"}, CreatedAt: time.Now().UTC().Add(-500 * 24 * time.Hour).Truncate(time.Microsecond), ExpiresAt: time.Now().UTC().Add(500 * 24 * time.Hour).Truncate(time.Microsecond), RootID: canonical, RootVersion: 2, Issuer: spec.Issuer, Environment: spec.Environment, Audience: spec.Audience}
+	if noExpiry {
+		record.ExpiresAt = time.Time{}
+	}
 	input := apikey.ImportRequest{Authentication: caller, IdempotencyKey: key("reference-legacy-import"), Record: record, Digest: digest, SourceID: "reference-import-source", SourceVersion: 7, Network: "127.0.0.1"}
 	imported, err := owner.Import(ctx, input)
 	if err != nil || imported.Outcome != identity.CommitOutcomeCommitted || imported.Binding.RecordID != string(canonical) {
@@ -221,7 +229,7 @@ func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores,
 	}
 	verify(legacy, raw, false)
 	successor := verify(c.APIKey.Configuration, rotated.Secret, true)
-	if !successor.Result.Record.ExpiresAt.Equal(successor.Result.Record.CreatedAt.Add(c.APIKey.Configuration.Spec().MaximumLifetime)) || successor.Result.Record.ExpiresAt.After(record.ExpiresAt) {
+	if !successor.Result.Record.ExpiresAt.Equal(successor.Result.Record.CreatedAt.Add(c.APIKey.Configuration.Spec().MaximumLifetime)) || !record.ExpiresAt.IsZero() && successor.Result.Record.ExpiresAt.After(record.ExpiresAt) {
 		t.Fatal("legacy HTTP successor expanded original or modern expiry")
 	}
 	if revoked := call("delete", rotated.Key.ID, rotated.Key.Version); revoked.Secret != "" {

@@ -139,7 +139,7 @@ func proveReferenceAPIKeyOnlyRateMigrations(t *testing.T, ctx context.Context, f
 
 // Reuse the actual registration/verification/browser baseline, then explicitly
 // select native bearer signin. No token is reclassified and no CSRF is stripped.
-func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, server *reference.Server, client *http.Client, origin string, user identity.UserID, cookies []*http.Cookie, upgrade, legacy bool) {
+func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, server *reference.Server, client *http.Client, origin string, user identity.UserID, cookies []*http.Cookie, upgrade, legacy, noExpiry bool) {
 	t.Helper()
 	if upgrade {
 		for _, op := range server.OpenAPI().Operations() {
@@ -225,7 +225,7 @@ func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c ref
 	}
 	caller := referenceAPIKeyBearer(t, ctx, features, c, origin, user)
 	if legacy {
-		proveReferenceLegacyAPIKey(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller, user)
+		proveReferenceLegacyAPIKey(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller, user, noExpiry)
 		return
 	}
 	selectedServer, err := reference.NewServer(config, deps, features)

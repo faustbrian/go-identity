@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adopt explicitly selected absent-expiry legacy API-key import and verification
+  through the native owner. Populated modern keys, original recovery, current
+  authority and bounded evidence remain intact; existing HTTPS rotation creates
+  finite modern successors. Default legacy and modern expiry policies do not
+  change, and no HTTP import or unbounded issuance route is added.
+
 - Compose explicitly selected organization-owned API-key issuance, verification,
   rotation, revocation and original status recovery with the actual organization
   repository. Creator removal denies that human's management without revoking

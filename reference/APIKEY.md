@@ -2,7 +2,7 @@
 
 This selected backend composes public native owners. It is not an API-key
 authentication session issuer, an administrative UI or complete M21 support.
-No-expiry legacy keys, finite quotas and cache projections
+Finite quotas and cache projections
 remain separate profiles.
 
 ## Configuration and ownership
@@ -179,6 +179,20 @@ task-owned Go caches and remove the fixture/caches after the bounded run.
 migration, source-version-preserving import, unchanged bare verification, graph
 reconstruction/original recovery, actual HTTPS rotation/revocation, logout and
 disabled-configuration startup denial through the same public owners.
+
+To preserve historical keys with no expiry, explicitly set
+`AllowLegacyNoExpiry` in the named verify-only `APIKey.LegacyConfiguration`.
+Pass a zero `Record.ExpiresAt` to digest-only import; no artificial deadline is
+stored. Use a new immutable configuration rather than editing an installed
+finite profile. Default legacy and every modern configuration still require
+expiry. This opt-in does not change current owner/policy checks, the original
+20-second evidence ceiling, terminal revocation or secret custody. Existing HTTP
+rotation creates a finite modern successor using current issuance policy;
+there is no new HTTP import route or unbounded issuance option.
+
+`TestReferencePostgresLegacyNoExpiryAPIKeyHTTPS` proves populated modern-state
+adoption, native import and unchanged verification, graph reconstruction and
+original recovery, followed by HTTPS modern rotation/revocation and logout.
 
 `TestReferencePostgresOrganizationAPIKeyHTTPS` proves fresh selected and populated
 user-key upgrades, genuine registration/verification/native bearer signin,

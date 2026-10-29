@@ -20,6 +20,12 @@ operations are enabled. Creator removal preserves the key but denies that
 human's management; another authorized owner can rotate/revoke. See the
 [organization-key walkthrough](APIKEY.md#organization-owned-keys).
 
+An explicit `AllowLegacyNoExpiry` in the named verify-only legacy configuration
+preserves imported keys with absent expiry. Verification still requires current
+authority and original bounded evidence; HTTPS rotation creates a finite modern
+successor. Default legacy and all modern issuance remain expiry-bound. See the
+[API-key walkthrough](APIKEY.md).
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

@@ -67,10 +67,10 @@ github.com/faustbrian/go-identity/anonymous v0.0.0-20261023043948-50a36bd23473 h
 github.com/faustbrian/go-identity/anonymous v0.0.0-20261023043948-50a36bd23473/go.mod h1:Dp7jafZMRUt5nb0SScWgRShAffsXzReVw6RMChkjXk4=
 github.com/faustbrian/go-identity/anonymous/postgres v0.0.0-20261023055944-d2f004fd7b32 h1:vy5UXtPWKEeEfL/e+7fPCf8qrY3hIdtYP4RbkM3RQQs=
 github.com/faustbrian/go-identity/anonymous/postgres v0.0.0-20261023055944-d2f004fd7b32/go.mod h1:0U3JJ9pSRU6XLzsqgVzZ1QtCfe/r9nqXyKf8wct14rQ=
-github.com/faustbrian/go-identity/apikey v0.0.0-20261029050328-9d776996c632 h1:Q2ykjYAF32Vj4e0h5A4K+vHU3oHvoC+H+tc1yzogxBg=
-github.com/faustbrian/go-identity/apikey v0.0.0-20261029050328-9d776996c632/go.mod h1:/g+HcCipi5KkToWvE+nB2YvYte70Pku/ORoigs3UZVo=
-github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029055312-8de0410c0279 h1:NR+hmWSzxcTSgJRsrHfVYiTaL1E8Fn0CaUgWnWikI2o=
-github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029055312-8de0410c0279/go.mod h1:9Stx1AvOHFaaw6iBlVNfqVvdbjxWxw2sQ1KSUOh0Hfo=
+github.com/faustbrian/go-identity/apikey v0.0.0-20261029074756-35e4d0d91c25 h1:WC+5JykpgsmfTwuGugt4Q8f8NhOEPozvqdzYZ/P8k6I=
+github.com/faustbrian/go-identity/apikey v0.0.0-20261029074756-35e4d0d91c25/go.mod h1:/g+HcCipi5KkToWvE+nB2YvYte70Pku/ORoigs3UZVo=
+github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029081445-7bf2127d80ca h1:B7xK9h2fZ1aSbr9a0pTBnyPmCCysF6aDHGP+MA/tnBo=
+github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029081445-7bf2127d80ca/go.mod h1:UIk9dJoMPMnorNBV4zBiEHT2Z6XHfT+F8KXI2u7mwfA=
 github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053 h1:XFlSTdRmnTbUMrVY1nRcwFUCtNR19cqP9XUoKqreHd0=
 github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053/go.mod h1:gbHmgfef5iSUtki7ZEa7HnqngXCugftiOgDlPQGwYx0=
 github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907 h1:dLBvHl7G/7ZAuvrlF/BtO3KDEnvIGXNVMvOU9YslG0s=
