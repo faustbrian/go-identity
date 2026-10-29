@@ -1,7 +1,7 @@
 # API keys
 
-`github.com/faustbrian/go-identity/apikey` defines user-owned modern API-key
-issuance and an explicit verify-only legacy profile. New issuance uses fixed
+`github.com/faustbrian/go-identity/apikey` defines explicit user/organization
+ownership and an explicit verify-only legacy profile. New issuance uses fixed
 `idk_` plus 32 CSPRNG bytes in unpadded base64url, with
 HMAC-SHA-256 lookup separated by tenant, configuration/revision, pepper version,
 issuer, environment and audience. Raw keys are transient and reveal once across
@@ -18,7 +18,16 @@ wire, err := secret.Reveal()
 The owned PostgreSQL adapter supplies `Service`; application code supplies
 configuration, actual human credentials and explicit external policy, not a
 domain store or a replacement transaction/replay engine. Owner and human actor
-remain distinct. The selected management requests have no user/owner override.
+remain distinct. User-owned management requests have no user/owner override.
+`OrganizationService.CreateOrganization` separately accepts an explicit
+`OrganizationCreateRequest`; it cannot silently become a self-owned `Create`.
+The target organization ID grants no membership or permission. Committed
+organization results require the exact `apikey-create-organization-v1` or
+`apikey-rotate-organization-v1` schema with the real human manager as actor,
+while the record retains its separate organization owner. The native adapter
+must prove current membership and permission before protected issuance; this
+root contract does not supply that authority. Original invocation reveal-once
+and status-only recovery semantics are identical for both owner kinds.
 `ParseKeyID` preserves bounded existing IDs including canonical ULIDs; native
 composition owns canonical identifier policy. `NewKeyID` is a separate modern
 random-ID generator, not a constraint on imported durable identity.
@@ -30,6 +39,12 @@ and policy revision; a store must persist them atomically with required effects.
 Restoring owner eligibility cannot restore revoked keys or withdrawn immutable
 permissions. Verification is not a durable session or an assertion that the key
 creator is a currently authenticated human.
+
+For an organization owner, `Owner.Version` is the terminal credential-revocation
+epoch, separate from organization policy and membership versions. Current
+authority must match the record's epoch exactly; archive/delete followed by
+restore cannot make an older credential eligible again. User-owner current
+policy versions retain their existing equal-or-newer comparison.
 
 Every key is its own shared-issuer credential root: `RootID == ID` and
 `RootVersion == AuthorityVersion`, including after permission narrowing.
@@ -54,8 +69,10 @@ result, not a new verification; its original validity must still pass
 `VerificationResult.ValidateAt` before reuse. Reconciliation carries only the
 exact attempt, tenant, fingerprint and original safe coordinator scope. It
 contains no raw key/digest and cannot verify/debit again. Known-key attempts
-preserve the actual user target and API-key actor; unknown-key denials preserve
-their separate anonymous-flow/service actor. Current record state cannot
+preserve the actual API-key actor. User keys retain their actual user target;
+known organization keys have no user and use the attempt ID as their anonymous
+namespace. Unknown-key denials retain their separate service-account actor and
+cannot acquire a positive result. Current record state cannot
 reinterpret that historical routing. Modern verification remains secret-only;
 no caller-supplied key ID is required.
 
@@ -94,8 +111,11 @@ wire value cannot select an algorithm or trigger profile scanning.
 `ImportRequest` carries only a nonzero `LegacyDigest`, bounded source ID/version
 and the exact typed metadata record, including stable canonical key ID, owner,
 permission ceiling, absolute expiry, terminal status and replacement lineage.
-Native import must authenticate and authorize the real self-owner and source,
-validate canonical IDs, retain tombstones, and use the existing coordinator for
+The record may carry a user or organization owner in the human bearer's tenant.
+Native import must authenticate the real human and authorize that exact owner
+and source, including current membership and permissions for organization
+management. The shape validator grants none of that authority. Native import
+must validate canonical IDs, retain tombstones, and use the existing coordinator for
 atomic effects and original status recovery. A digest constructor or request
 validator alone establishes neither authentication nor a durable import.
 Imports are not issuance, and cannot reveal or regenerate historical plaintext.

@@ -84,7 +84,7 @@ type VerificationResult struct {
 // A recorded successful replay is historical after this bound, not fresh
 // authentication. Copying/reconciliation cannot extend any timestamp.
 func (r VerificationResult) ValidateAt(c Configuration, now time.Time) error {
-	if r.Record.Validate(c) != nil || !c.AllowsVerification() || r.Record.Status != KeyActive || r.Owner.Validate() != nil || !r.Owner.SameIdentity(r.Record.Owner) || r.Owner.Version() < r.Record.Owner.Version() || r.PolicyVersion == 0 || r.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(r.Grant) || r.ReadStartedAt.IsZero() || r.VerifiedAt.Before(r.ReadStartedAt) || r.VerifiedAt.After(now) || r.VerifiedAt.Sub(r.ReadStartedAt) > c.spec.MaximumRead || !r.ValidUntil.After(r.VerifiedAt) || r.ValidUntil.Sub(r.ReadStartedAt) > 20*time.Second || !now.Before(r.ValidUntil) || !now.Before(r.Record.ExpiresAt) {
+	if r.Record.Validate(c) != nil || !c.AllowsVerification() || r.Record.Status != KeyActive || r.Owner.Validate() != nil || !r.Owner.SameIdentity(r.Record.Owner) || !r.Owner.admitsEpoch(r.Record.Owner) || r.PolicyVersion == 0 || r.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(r.Grant) || r.ReadStartedAt.IsZero() || r.VerifiedAt.Before(r.ReadStartedAt) || r.VerifiedAt.After(now) || r.VerifiedAt.Sub(r.ReadStartedAt) > c.spec.MaximumRead || !r.ValidUntil.After(r.VerifiedAt) || r.ValidUntil.Sub(r.ReadStartedAt) > 20*time.Second || !now.Before(r.ValidUntil) || !now.Before(r.Record.ExpiresAt) {
 		return ErrDenied
 	}
 	for _, permission := range r.Grant {
@@ -104,8 +104,9 @@ type AtomicVerificationResult struct {
 	// not retain or resubmit a raw key. Zero is allowed only before submission.
 	Fingerprint [32]byte
 	// Original retains the exact submitted coordinator scope, including its
-	// user/API-key actor or anonymous denial namespace. Current key state must
-	// never reconstruct or reinterpret historical routing on reconciliation.
+	// user/API-key actor, known nonhuman API-key actor or anonymous service-actor
+	// denial namespace. Current key state must never reconstruct or reinterpret
+	// historical routing on reconciliation.
 	Original identity.RecoveryQuery
 	State    VerificationAttemptState
 	Outcome  identity.CommitOutcome
@@ -126,11 +127,23 @@ func (r AtomicVerificationResult) Validate() error {
 			return ErrInvalid
 		}
 		owner := r.Result.Owner.Spec()
-		if r.Original.UserID == "" || r.Original.ActorKind != authorization.SubjectAPIKey || owner.Kind != OwnerUser || owner.TenantID != r.Original.TenantID || owner.UserID != r.Original.UserID || KeyID(r.Original.ActorID) != r.Result.Record.ID || r.Result.ConfigurationAuthority.Validate(owner.TenantID, r.Result.Record.ConfigurationID) != nil {
+		if r.Original.ActorKind != authorization.SubjectAPIKey || owner.TenantID != r.Original.TenantID || KeyID(r.Original.ActorID) != r.Result.Record.ID || r.Result.ConfigurationAuthority.Validate(owner.TenantID, r.Result.Record.ConfigurationID) != nil {
+			return ErrInvalid
+		}
+		switch owner.Kind {
+		case OwnerUser:
+			if r.Original.UserID == "" || owner.UserID != r.Original.UserID {
+				return ErrInvalid
+			}
+		case OwnerOrganization:
+			if r.Original.UserID != "" || r.Original.AnonymousFlowID != string(r.AttemptID) {
+				return ErrInvalid
+			}
+		default:
 			return ErrInvalid
 		}
 		record := r.Result.Record
-		if record.Status != KeyActive || record.Version == 0 || record.AuthorityVersion == 0 || record.RootID != record.ID || record.RootVersion != record.AuthorityVersion || r.Result.Owner.Version() < record.Owner.Version() || !validPermissions(record.Grant) {
+		if record.Status != KeyActive || record.Version == 0 || record.AuthorityVersion == 0 || record.RootID != record.ID || record.RootVersion != record.AuthorityVersion || !r.Result.Owner.admitsEpoch(record.Owner) || !validPermissions(record.Grant) {
 			return ErrInvalid
 		}
 		for _, permission := range r.Result.Grant {
@@ -177,8 +190,22 @@ func (q VerificationReconcileQuery) Validate() error {
 		if !scope(string(o.UserID), 128) || o.AnonymousFlowID != "" || o.ActorKind != authorization.SubjectAPIKey || o.RecordID != "" && o.RecordID != string(o.ActorID) {
 			return ErrInvalid
 		}
-	} else if o.AnonymousFlowID != string(q.AttemptID) || o.ActorKind != authorization.SubjectServiceAccount || o.RecordID != "" {
-		return ErrInvalid
+	} else {
+		if o.AnonymousFlowID != string(q.AttemptID) {
+			return ErrInvalid
+		}
+		switch o.ActorKind {
+		case authorization.SubjectAPIKey:
+			if o.RecordID != "" && o.RecordID != string(o.ActorID) {
+				return ErrInvalid
+			}
+		case authorization.SubjectServiceAccount:
+			if o.RecordID != "" {
+				return ErrInvalid
+			}
+		default:
+			return ErrInvalid
+		}
 	}
 	return nil
 }

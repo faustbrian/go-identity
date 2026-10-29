@@ -62,7 +62,9 @@ const (
 type OrganizationID string
 
 // OwnerSpec binds exactly one identity arm and its positive authority epoch.
-// Version is the owner security epoch, not its directory row revision.
+// Version is the owner security epoch, not its directory row revision. For an
+// organization it is the terminal credential-revocation epoch, not the policy
+// or membership epoch: a newer value cannot authorize an older credential.
 type OwnerSpec struct {
 	TenantID       identity.TenantID
 	Kind           OwnerKind
@@ -102,6 +104,16 @@ func (o Owner) Validate() error { _, err := NewOwner(o.spec); return err }
 func (o Owner) SameIdentity(other Owner) bool {
 	a, b := o.spec, other.spec
 	return o.Validate() == nil && other.Validate() == nil && a.TenantID == b.TenantID && a.Kind == b.Kind && a.UserID == b.UserID && a.OrganizationID == b.OrganizationID
+}
+
+// Organization archive/delete advances a terminal credential epoch (shared-
+// issuer SI-02); accepting a later epoch would resurrect pre-archive keys on
+// restore. User owners retain their existing current-policy version semantics.
+func (o Owner) admitsEpoch(recorded Owner) bool {
+	if o.spec.Kind == OwnerOrganization {
+		return o.Version() == recorded.Version()
+	}
+	return o.Version() >= recorded.Version()
 }
 func (Owner) Format(s fmt.State, _ rune)   { io.WriteString(s, "apikey.Owner(redacted)") }
 func (Owner) MarshalJSON() ([]byte, error) { return nil, ErrDisclosure }

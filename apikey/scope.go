@@ -82,7 +82,7 @@ type CurrentAuthority struct {
 type ScopePolicy struct{}
 
 func (ScopePolicy) EffectiveGrant(r Record, a CurrentAuthority, c Configuration, now time.Time) ([]string, error) {
-	if r.Validate(c) != nil || !c.AllowsVerification() || r.Status != KeyActive || !now.Before(r.ExpiresAt) || !a.Owner.SameIdentity(r.Owner) || a.Owner.Version() < r.Owner.Version() || !a.OwnerActive || !a.TenantActive || a.PolicyVersion == 0 || a.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(a.Permissions) || a.ReadStartedAt.IsZero() || a.VerifiedAt.Before(a.ReadStartedAt) || a.VerifiedAt.After(now) || a.VerifiedAt.Sub(a.ReadStartedAt) > c.spec.MaximumRead || !a.ValidUntil.After(a.VerifiedAt) || a.ValidUntil.Sub(a.ReadStartedAt) > 20*time.Second || !now.Before(a.ValidUntil) {
+	if r.Validate(c) != nil || !c.AllowsVerification() || r.Status != KeyActive || !now.Before(r.ExpiresAt) || !a.Owner.SameIdentity(r.Owner) || !a.Owner.admitsEpoch(r.Owner) || !a.OwnerActive || !a.TenantActive || a.PolicyVersion == 0 || a.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(a.Permissions) || a.ReadStartedAt.IsZero() || a.VerifiedAt.Before(a.ReadStartedAt) || a.VerifiedAt.After(now) || a.VerifiedAt.Sub(a.ReadStartedAt) > c.spec.MaximumRead || !a.ValidUntil.After(a.VerifiedAt) || a.ValidUntil.Sub(a.ReadStartedAt) > 20*time.Second || !now.Before(a.ValidUntil) {
 		return nil, ErrDenied
 	}
 	grant := make([]string, 0, len(r.Grant))

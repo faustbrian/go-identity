@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add an explicit organization creation extension that cannot be ignored by
+  an older self-owned service. Organization create/rotate results retain the
+  real human manager separately from their owner, require exact selected
+  schemas, and preserve reveal-once and uncertain/status-only recovery custody.
+
+- Represent known organization-key verification and same-tenant digest-import
+  snapshots without fabricating a human owner. Organization credential epochs
+  must match exactly, preventing a later owner epoch from reviving old keys;
+  user-key policy epoch and unknown-key denial behavior remain unchanged.
 - Keep legacy credential and verifier custody redacted inside private diagnostic
   wrappers as well as direct formatting, without changing digest bytes or APIs.
 - Add explicit verify-only bare SHA-256 credential and digest-only import

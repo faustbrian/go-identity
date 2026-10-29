@@ -161,7 +161,7 @@ func TestDigestOnlyImportRetainsCanonicalIdentityAndExplicitTombstone(t *testing
 			r.Record.Owner, _ = apikey.NewOwner(apikey.OwnerSpec{TenantID: "other", Kind: apikey.OwnerUser, UserID: "user", Version: 1})
 		},
 		func(r *apikey.ImportRequest) {
-			r.Record.Owner, _ = apikey.NewOwner(apikey.OwnerSpec{TenantID: "tenant-a", Kind: apikey.OwnerOrganization, OrganizationID: "org", Version: 1})
+			r.Record.Owner = apikey.Owner{}
 		},
 	} {
 		bad := r
@@ -172,6 +172,59 @@ func TestDigestOnlyImportRetainsCanonicalIdentityAndExplicitTombstone(t *testing
 	}
 	if _, err := json.Marshal(r); !errors.Is(err, apikey.ErrDisclosure) {
 		t.Fatal("digest-only request serialized")
+	}
+}
+
+func TestDigestOnlyImportRepresentsOrganizationSnapshotWithoutHumanSubstitution(t *testing.T) {
+	c := legacyConfiguration(t)
+	owner, err := apikey.NewOwner(apikey.OwnerSpec{TenantID: "tenant-a", Kind: apikey.OwnerOrganization, OrganizationID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", Version: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := apikey.ParseKeyID("01ARZ3NDEKTSV4RRFFQ69G5FAW")
+	key, _ := identity.NewIdempotencyKey([]byte("organization-digest-only-import"))
+	digest, _ := apikey.NewLegacyDigest([32]byte{1})
+	at := time.Date(2016, 10, 1, 0, 0, 0, 123456000, time.UTC)
+	r := apikey.ImportRequest{
+		Authentication: apikey.Authentication{TenantID: "tenant-a", Bearer: auth.NewBearerCredential("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE")},
+		IdempotencyKey: key, Digest: digest, SourceID: "source-system", SourceVersion: 12, Network: "192.0.2.1",
+		Record: apikey.Record{ID: id, Owner: owner, Version: 8, AuthorityVersion: 6, RootID: id, RootVersion: 6, PreviousID: "older-key",
+			ConfigurationID: c.Spec().ID, ConfigurationRevision: c.Spec().Revision, Name: "existing organization integration", Status: apikey.KeyRevoked,
+			Grant: []string{"invoice.read"}, CreatedAt: at, ExpiresAt: at.Add(20 * 365 * 24 * time.Hour), Issuer: c.Spec().Issuer, Environment: c.Spec().Environment, Audience: c.Spec().Audience},
+	}
+	if err := r.Validate(c); err != nil {
+		t.Fatalf("organization source snapshot rejected: %v", err)
+	}
+	if r.Record.ID != id || r.Record.Owner != owner || r.Record.Owner.Spec().UserID != "" || r.Record.Version != 8 || r.Record.AuthorityVersion != 6 || r.Record.RootVersion != 6 || r.Record.PreviousID != "older-key" || r.Record.Status != apikey.KeyRevoked || !r.Record.CreatedAt.Equal(at) || !r.Record.ExpiresAt.Equal(at.Add(20*365*24*time.Hour)) || r.SourceID != "source-system" || r.SourceVersion != 12 {
+		t.Fatal("organization import changed authenticated source metadata")
+	}
+	for _, test := range []struct {
+		name   string
+		change func(*apikey.ImportRequest)
+	}{
+		{"no-human-bearer", func(r *apikey.ImportRequest) { r.Authentication.Bearer = auth.NewBearerCredential("") }},
+		{"cross-tenant", func(r *apikey.ImportRequest) { r.Authentication.TenantID = "tenant-b" }},
+		{"source-unbound", func(r *apikey.ImportRequest) { r.SourceID = "" }},
+		{"source-version-zero", func(r *apikey.ImportRequest) { r.SourceVersion = 0 }},
+		{"no-digest", func(r *apikey.ImportRequest) { r.Digest = apikey.LegacyDigest{} }},
+		{"no-idempotency", func(r *apikey.ImportRequest) { r.IdempotencyKey = identity.IdempotencyKey{} }},
+		{"invalid-owner", func(r *apikey.ImportRequest) { r.Record.Owner = apikey.Owner{} }},
+		{"unbound-root", func(r *apikey.ImportRequest) { r.Record.RootID = "other-key" }},
+		{"unbound-root-epoch", func(r *apikey.ImportRequest) { r.Record.RootVersion++ }},
+		{"zero-record-epoch", func(r *apikey.ImportRequest) { r.Record.Version = 0 }},
+		{"zero-authority-epoch", func(r *apikey.ImportRequest) { r.Record.AuthorityVersion = 0 }},
+		{"zero-creation-time", func(r *apikey.ImportRequest) { r.Record.CreatedAt = time.Time{} }},
+		{"submicrosecond-expiry", func(r *apikey.ImportRequest) { r.Record.ExpiresAt = r.Record.ExpiresAt.Add(time.Nanosecond) }},
+		{"no-expiry", func(r *apikey.ImportRequest) { r.Record.ExpiresAt = time.Time{} }},
+		{"invalid-name", func(r *apikey.ImportRequest) { r.Record.Name = "\xff" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bad := r
+			test.change(&bad)
+			if !errors.Is(bad.Validate(c), apikey.ErrInvalid) {
+				t.Fatal("invalid organization snapshot accepted")
+			}
+		})
 	}
 }
 

@@ -45,7 +45,7 @@ func NewIssuanceResult(c Configuration, receipt identity.CommandResult, record *
 	s := &issuanceState{receipt: copyReceipt}
 	switch receipt.Outcome {
 	case identity.CommitOutcomeCommitted:
-		if record == nil || record.Validate(c) != nil || record.ID != KeyID(receipt.Binding.RecordID) || record.Owner.spec.TenantID != receipt.Binding.TenantID || record.Owner.spec.Kind != OwnerUser || record.Owner.spec.UserID != receipt.Binding.UserID {
+		if record == nil || record.Validate(c) != nil || record.ID != KeyID(receipt.Binding.RecordID) || !issuanceOwnerMatches(*record, receipt) {
 			return IssuanceResult{}, ErrInvalid
 		}
 		copy := *record
