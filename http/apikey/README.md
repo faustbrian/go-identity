@@ -2,19 +2,22 @@
 
 Development profile for Go1.27. This optional module composes the public
 `identity/apikey` native ports with the existing HTTP decoder, network resolver,
-session owner and shared atomic secret-rate limiter. It owns no API-key store,
+session owner and shared rate limiters. It owns no API-key store,
 policy engine, replay journal, transaction or migration.
 
 ## Selected surface
 
-| Selection | Method/path | Closed JSON body |
+| Selection | Method/path | Input |
 | --- | --- | --- |
 | `Create` | `POST /v1/apikey/create` | `name`, `permissions`, `expiresAt` |
 | `Rotate` | `POST /v1/apikey/rotate` | `keyID`, `expectedVersion` |
 | `Revoke` | `POST /v1/apikey/delete` | `keyID`, `expectedVersion` |
+| `Get` | `GET /v1/apikey/get` | query `keyID` |
+| `List` | `GET /v1/apikey/list` | query `limit`, optional `cursor`, `configurationIDs` |
 
-Each route requires exactly one `Authorization: Bearer <native password session>`
-and one original `Idempotency-Key`. All three use keyed native custody. This is
+Every route requires exactly one `Authorization: Bearer <native password session>`.
+The three mutations additionally require one original `Idempotency-Key` and use
+keyed native custody; reads forbid the header. This is
 the explicit strict-bearer profile of the canonical operation IDs, not the
 draft rotate/repeat transport labels. Cookie profiles are not selected, and
 ambient cookies cannot supply authority. No recovery route is invented.
@@ -31,7 +34,7 @@ absent. Construction performs no database, policy, credential or provider IO.
 
 - Exact HTTPS tenant hosts and trusted full IP come from `NetworkConfig`, not
   body fields or untrusted forwarding headers. Actor, tenant and native
-  configuration are not request-selected. Query inputs are forbidden.
+  configuration are not request-selected for mutations, which forbid queries.
   The explicit organization profile below accepts only its typed owner target.
 - JSON fields are exact, closed and duplicate-free. Names are at most128 UTF-8
   bytes. Permissions are an explicit array of at most64 bytewise-sorted unique
@@ -52,7 +55,46 @@ absent. Construction performs no database, policy, credential or provider IO.
   delivery is not permission to reconstruct plaintext or issue a replacement.
   No automatic retry occurs. Reuse exactly the original input/key for retry.
 - Shared HTTP IP/subject budgets are separate from native protected-risk
-  counters. Neither admission grants domain authority. Outages fail closed.
+  counters. Neither admission grants domain authority. Mutation outages fail closed.
+
+## Safe metadata reads
+
+Select `FeatureConfig.Get` and/or `List` and supply only the selected narrow
+`Config.Getter` / `Lister`, the actual native session reader and one shared
+`SafeRateLimiter`. Read-only composition requires no mutation ports, secret-rate
+owner or fresh sensitive-change proof. The reference graph must borrow any
+existing safe limiter rather than create independent emergency budgets.
+Canonical safe-rate admission retains its documented, audited bounded emergency
+policy; no unavailable identity/key authority has a fallback.
+
+Reads have no body and reject `Idempotency-Key`, duplicate/aliased/unknown query
+members, alternate bearer channels and caller-selected actor/user/tenant.
+`Get` requires `keyID`. `List` requires canonical decimal `limit=1..200`; `cursor`
+is an optional unchanged opaque position of at most512 bytes. Encode
+`configurationIDs` as one URL-encoded JSON array of at most16 bytewise-sorted,
+distinct exact IDs, for example `["automation","legacy"]`. Absent/empty selects
+the native configured profiles. The existing URI and decoded-byte limits apply
+before JSON allocation; punctuation inside an ID is not treated as a separator.
+The native service still checks actual profile selection and cursor scope.
+
+Absent `organizationID` means the genuine current human's own user keys. Only
+explicit `OrganizationOwned` selection accepts that query field, with current
+native membership and policy for the exact target. No arbitrary user target or
+administrative impersonation profile is selected. Every request/page repeats
+native authorization; cursors survive reconstruction but grant no access or
+held snapshot. Apply the selected native paging migration before using `List`;
+exact-key `Get` does not need it. This HTTP module owns no migration or index.
+
+Success returns `key` or `keys` plus optional `nextCursor`. The explicit bounded
+projection contains stored owner/version/configuration, name, status, grant,
+timestamps and lineage, never raw keys, digests, a mutation receipt or principal.
+`expiresAt: null` preserves a selected legacy key's absent expiry. Expired and
+revoked records remain readable metadata; stored `status: active` alone does
+not mean an expired key is usable. Permissions are the historical ceiling, not
+current effective authority. Missing and unauthorized targets both deny.
+Wrong-owner/configuration, malformed/partial pages, native errors, cancellation
+or expired original session evidence yield no partial metadata response. Reads
+do not verify/debit API keys or mutate key/configuration/attempt state.
 
 ## Supported profile and remaining work
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independently selected strict-bearer metadata Get/List with exact self or
+  optional organization ownership, bounded live-view pagination and safe stored
+  modern/legacy/terminal record projections. Reads require current native
+  authority and shared safe-rate admission, not mutation ports or fresh action
+  proofs. Bodies and idempotency keys are forbidden; no key secret, digest,
+  principal, verification/debit or partial failed page is exposed.
+
 - Add an explicitly selected organization-owned create profile and typed native
   port, retaining the human manager as actor. Rotation/revocation can project
   selected native organization outcomes without fabricating user ownership.
