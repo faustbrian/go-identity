@@ -1,8 +1,8 @@
 # Identity HTTP transport
 
-API-key create/rotate/delete may explicitly select `CSRFNone` only for strict
+API-key create/rotate/delete/update may explicitly select `CSRFNone` only for strict
 bearer handlers that ignore ambient cookies. This selected profile requires
-the original `Idempotency-Key` for all three operations, matching the native
+the original `Idempotency-Key` for each selected operation, matching the native
 management API rather than the draft catalog's rotate/repeat labels. The same
 `KeyedSecretRateLimiter` admits these actions with shared IP/subject budgets
 and stable original debit custody. Cookie profiles and all other operation

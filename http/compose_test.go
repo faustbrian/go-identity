@@ -132,7 +132,7 @@ func TestPhoneRemovalStoredSynchronizerContract(t *testing.T) {
 }
 
 func TestAPIKeyManagementSelectsOnlyExplicitBearerKeyedProfile(t *testing.T) {
-	for _, action := range []string{"create", "rotate", "delete"} {
+	for _, action := range []string{"create", "rotate", "delete", "update"} {
 		t.Run(action, func(t *testing.T) {
 			c := identityhttp.CanonicalOperationConfig{Owner: "identity/apikey", OperationID: "identity.apikey." + action, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) }), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 16384}
 			op, err := identityhttp.NewCanonicalOperation(c)
@@ -161,7 +161,7 @@ func TestAPIKeyManagementSelectsOnlyExplicitBearerKeyedProfile(t *testing.T) {
 			}
 		})
 	}
-	for _, operation := range []string{"identity.apikey.update", "identity.password.reset-inspect"} {
+	for _, operation := range []string{"identity.apikey.delete-expired", "identity.password.reset-inspect"} {
 		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/apikey", OperationID: operation, Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 16384}); err == nil {
 			t.Fatal("management exception broadened another operation", operation)
 		}

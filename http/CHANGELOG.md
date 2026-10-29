@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit opt-in strict-bearer API-key update descriptors with the original
+  idempotency key and existing secret-rate policy. Cookie profiles retain
+  their CSRF requirements; descriptor selection grants no domain authority.
+
 - Admit explicit strict-bearer API-key create/rotate/delete descriptors with
   original-key idempotency and shared secret-rate admission for all three
   native mutations. Existing cookie profiles and unrelated operations retain

@@ -511,7 +511,7 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 
 func apiKeyManagementOperation(id string) bool {
 	switch id {
-	case "identity.apikey.create", "identity.apikey.rotate", "identity.apikey.delete":
+	case "identity.apikey.create", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.update":
 		return true
 	default:
 		return false

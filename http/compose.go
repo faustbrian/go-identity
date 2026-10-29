@@ -25,7 +25,7 @@ import (
 // additionally admit None only for explicitly selected strict bearer handlers
 // that ignore ambient cookies. Owner-transfer retains its native fresh proof.
 // Other organization mutations retain their canonical policy.
-// API-key create/rotate/delete additionally admit explicit bearer-only None
+// API-key create/rotate/delete/update additionally admit explicit bearer-only None
 // with keyed custody, matching the native management contracts. Those handlers
 // must reject cookie fallback and require the original Idempotency-Key.
 // MaximumSerializedBytes
