@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit exact digest-only API-key import through the existing protected
+  credential-mutation profile and transaction-owned user/session/network
+  counters. Mandatory provider signals, original scope and expiry remain
+  enforced. This grants neither import authority nor new-key issuance;
+  aliases and unselected recovery actions remain closed.
+
 - Admit exact-session active-organization changes through the protected
   privileged profile with tenant, actor, session-resource and network counters.
   Current signals remain mandatory; this grants neither organization access

@@ -1,6 +1,7 @@
 {
   "identity.anonymous.delete": "credential_mutation",
   "identity.anonymous.upgrade": "credential_mutation",
+  "identity.apikey.import": "credential_mutation",
   "identity.email.verification-signin": "authentication",
   "identity.oauth-server.continue": "privileged",
   "identity.organization.active-set": "privileged",

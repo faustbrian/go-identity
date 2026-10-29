@@ -926,6 +926,15 @@ requires actor/resource/network-bound counters in the owning transaction; clean
 provider facts alone are not consent or issuance authority. Native entries may
 fill an omitted matrix classification, never override an explicit pinned class.
 
+Digest-only legacy API-key import (`identity.apikey.import`) uses the existing
+CredentialMutation reservation profile, with tenant, current user, original
+session and canonical network counters. Current required provider signals
+remain mandatory; only velocity is deferred to the owning transaction. This
+classification neither authenticates an importer nor grants ownership/source
+permission, accepts a legacy digest, issues a key or enables an HTTP route.
+The API-key owner retains import authorization, exact source/tombstone fences,
+atomic effects and original recovery. Import is distinct from key creation.
+
 Exact active-organization selection (`identity.organization.active-set`) uses
 the same Privileged reservation profile as other organization mutations. Its
 resource is the exact authenticated session being changed, not a user-global

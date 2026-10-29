@@ -2,7 +2,7 @@
 // Owned Golib planning sources (MIT); regenerate and review all classifications.
 // PUBLIC_CONTRACTS.json SHA-256: 3364b210cb3b5753ff7dd85f11763691519c546bdd6b4220e5e544ae2bf01e05
 // REFERENCE_CONFIGURATION.md SHA-256: dc766c02baefab3b9ebd86b897891b9ea505518ea19363e2b1e083183375a514
-// risk/native_operations.json SHA-256: fd5dd9c29da523f696a066bd449f35a85cda062f460f36bb21cc4f7503951620
+// risk/native_operations.json SHA-256: e9daaea36fe29488582f4a901f65b948d2280ac560a66ffe169d380efbf678e8
 package risk
 
 import "time"
@@ -33,6 +33,7 @@ var canonicalOperations = map[Action]ProfileClass{
 	"identity.apikey.delete":                            CredentialMutation,
 	"identity.apikey.delete-expired":                    DefaultDeny,
 	"identity.apikey.get":                               DefaultDeny,
+	"identity.apikey.import":                            CredentialMutation,
 	"identity.apikey.list":                              DefaultDeny,
 	"identity.apikey.rotate":                            CredentialMutation,
 	"identity.apikey.session-authenticate":              DefaultDeny,
