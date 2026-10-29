@@ -51,15 +51,15 @@ type creationPhase struct {
 
 func (p *creationPhase) operation() identity.FeatureOperation {
 	if p.imported != nil {
-		return importOperation()
+		return p.service.managementOperation("identity.apikey.import")
 	}
 	if p.revocation {
-		return revokeOperation()
+		return p.service.managementOperation("identity.apikey.delete")
 	}
 	if p.mutation != nil {
-		return rotateOperation()
+		return p.service.managementOperation("identity.apikey.rotate")
 	}
-	return createOperation()
+	return p.service.managementOperation("identity.apikey.create")
 }
 func (p *creationPhase) action() string {
 	if p.imported != nil {
@@ -152,6 +152,12 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 		}
 	}
 	owner, err := apikey.NewOwner(apikey.OwnerSpec{TenantID: sessionSpec.TenantID, Kind: apikey.OwnerUser, UserID: sessionSpec.UserID, Version: status.AuthorityVersion})
+	if s.organizationID != "" {
+		if s.organization == nil || s.organization.observation == nil {
+			return apikey.ErrDenied
+		}
+		owner, err = apikey.NewOwner(apikey.OwnerSpec{TenantID: sessionSpec.TenantID, Kind: apikey.OwnerOrganization, OrganizationID: s.organizationID, Version: s.organization.observation.CredentialVersion})
+	}
 	if err != nil {
 		return err
 	}
@@ -172,6 +178,9 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 	// Every protected admission and final check already enforces this immutable
 	// deadline, including a request that crosses the primary freshness boundary.
 	until = minTime(until, managementProofDeadline(sessionSpec))
+	if s.organizationID != "" {
+		until = minTime(until, s.organization.observation.ValidUntil)
+	}
 	config := c.Configuration.Spec()
 	record := apikey.Record{ID: keyID, Owner: owner, Version: 1, AuthorityVersion: 1, ConfigurationID: config.ID, ConfigurationRevision: config.Revision, Name: p.request.Name, Status: apikey.KeyActive, Grant: slices.Clone(p.request.Permissions), CreatedAt: verified, ExpiresAt: p.request.ExpiresAt.UTC(), RootID: keyID, RootVersion: 1, Issuer: config.Issuer, Environment: config.Environment, Audience: config.Audience}
 	var previous *apikey.Record
@@ -181,7 +190,7 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 	if p.imported != nil {
 		record = p.imported.Record
 		record.Grant = slices.Clone(record.Grant)
-		if record.Owner.Spec().UserID != sessionSpec.UserID || record.Owner.Version() > status.AuthorityVersion {
+		if !record.Owner.SameIdentity(owner) || owner.Spec().Kind == apikey.OwnerUser && record.Owner.Version() > status.AuthorityVersion || owner.Spec().Kind == apikey.OwnerOrganization && (record.Owner.Version() > owner.Version() || record.Status == apikey.KeyActive && record.Owner.Version() != owner.Version()) {
 			return apikey.ErrDenied
 		}
 		imported = &legacyImportBinding{p.imported.SourceID, p.imported.SourceVersion, p.imported.Digest.Sum()}
@@ -191,7 +200,7 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 		if err != nil {
 			return err
 		}
-		if prior.Owner.Spec().UserID != sessionSpec.UserID || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
+		if !prior.Owner.SameIdentity(owner) || owner.Spec().Kind == apikey.OwnerOrganization && prior.Owner.Version() != owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
 			return apikey.ErrDenied
 		}
 		if prior.Version != p.mutation.ExpectedVersion {
@@ -233,6 +242,10 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 		}
 	}
 	p.input = creationInput{Configuration: c.Configuration, Record: record, Binding: binding, Session: p.observed.Session, Bearer: p.request.Authentication.Bearer, OwnerStatus: status, ConfigurationAuthority: authority, ReadStartedAt: p.readStartedAt, VerifiedAt: verified, ValidUntil: until, Network: p.request.Network}
+	if s.organizationID != "" {
+		copy := *s.organization.observation
+		p.input.Organization = &copy
+	}
 	p.input.PreviousRecord = previous
 	p.input.PreviousConfiguration, p.input.PreviousConfigurationAuthority, p.input.Import = previousConfiguration, previousAuthority, imported
 	command, err := mapCreation(p.input)
@@ -250,14 +263,15 @@ func (p *creationPhase) mappingContext(b kernel.RequestKeyPreparationBinding) (e
 		return envelope.Context{}, apikey.ErrInvalid
 	}
 	frame, err := json.Marshal(struct {
-		Namespace     string
-		Scope         kernel.RequestKeyScope
-		Admission     kernel.RequestKeyAdmission
-		Feature       kernel.FeatureRegistration
-		Policy        uint64
-		Intent        [32]byte
-		Configuration apikey.ConfigurationSpec
-	}{b.Namespace, b.Scope, b.Admission, b.Feature, b.PolicyVersion, b.IntentDigest, p.service.config().Configuration.Spec()})
+		Namespace      string
+		Scope          kernel.RequestKeyScope
+		Admission      kernel.RequestKeyAdmission
+		Feature        kernel.FeatureRegistration
+		Policy         uint64
+		Intent         [32]byte
+		Configuration  apikey.ConfigurationSpec
+		OrganizationID apikey.OrganizationID `json:",omitempty"`
+	}{b.Namespace, b.Scope, b.Admission, b.Feature, b.PolicyVersion, b.IntentDigest, p.service.config().Configuration.Spec(), p.service.organizationID})
 	if err != nil {
 		return envelope.Context{}, apikey.ErrInvalid
 	}
@@ -382,6 +396,14 @@ func (p *creationPhase) admit(ctx context.Context, w kernel.Work, c identity.Com
 	}
 	if err := sessionpg.RequireSession(ctx, w, config.Session, p.input.Session); err != nil {
 		return err
+	}
+	if p.input.Organization != nil {
+		if p.service.organization == nil || p.service.organization.repository == nil {
+			return apikey.ErrDenied
+		}
+		if err := p.service.organization.repository.RequireCredentialAuthority(ctx, w, p, *p.input.Organization); err != nil {
+			return err
+		}
 	}
 	// Acquire the configuration's UPDATE lock directly on every mutation path.
 	// Never retain SHARE and upgrade it during rotate/narrow/revoke; all keys
@@ -649,7 +671,11 @@ func (p *creationPhase) ApplyFeature(ctx context.Context, w kernel.Work, c ident
 	}
 	var n int64
 	if !p.revocation {
-		n, err = w.Exec(ctx, `INSERT INTO identity_api_keys.keys(tenant_id,configuration_id,key_id,user_id,pepper_version,lookup_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, string(b.TenantID), p.input.Record.ConfigurationID, b.RecordID, string(b.UserID), int64(p.digest.PepperVersion), p.digest.Sum[:], record)
+		if p.input.Record.Owner.Spec().Kind == apikey.OwnerOrganization {
+			n, err = w.Exec(ctx, `INSERT INTO identity_api_keys.keys(tenant_id,configuration_id,key_id,organization_id,pepper_version,lookup_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, string(b.TenantID), p.input.Record.ConfigurationID, b.RecordID, string(p.input.Record.Owner.Spec().OrganizationID), int64(p.digest.PepperVersion), p.digest.Sum[:], record)
+		} else {
+			n, err = w.Exec(ctx, `INSERT INTO identity_api_keys.keys(tenant_id,configuration_id,key_id,user_id,pepper_version,lookup_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, string(b.TenantID), p.input.Record.ConfigurationID, b.RecordID, string(b.UserID), int64(p.digest.PepperVersion), p.digest.Sum[:], record)
+		}
 		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
@@ -745,7 +771,7 @@ func (p *creationPhase) RecoverParticipant(ctx context.Context, w kernel.Recover
 	}
 	want, _ := json.Marshal(storedBinding(b))
 	restored, err := decodeRecord(record, p.service.config().Configuration)
-	if err != nil || !bytes.Equal(binding, want) || restored.ID != apikey.KeyID(b.RecordID) || restored.Owner.Spec().UserID != b.UserID || restored.Owner.Spec().TenantID != b.TenantID || restored.Version != life.AfterVersion || p.operation().ValidateRecordVersions(life.BeforeVersion, life.AfterVersion) != nil || p.revocation && (life.EventType != "api_key.revoked.v1" || restored.Status != apikey.KeyRevoked || len(restored.Grant) != 0) || p.imported != nil && life.EventType != "api_key.imported.v1" || !p.revocation && p.imported == nil && (restored.Version != 1 || restored.Status != apikey.KeyActive || p.mutation != nil && (life.EventType != "api_key.rotated.v1" || restored.PreviousID == "") || p.mutation == nil && life.EventType != "api_key.created.v1") {
+	if err != nil || !bytes.Equal(binding, want) || restored.ID != apikey.KeyID(b.RecordID) || !p.service.managementOwnerMatches(restored, b) || restored.Owner.Spec().TenantID != b.TenantID || restored.Version != life.AfterVersion || p.operation().ValidateRecordVersions(life.BeforeVersion, life.AfterVersion) != nil || p.revocation && (life.EventType != "api_key.revoked.v1" || restored.Status != apikey.KeyRevoked || len(restored.Grant) != 0) || p.imported != nil && life.EventType != "api_key.imported.v1" || !p.revocation && p.imported == nil && (restored.Version != 1 || restored.Status != apikey.KeyActive || p.mutation != nil && (life.EventType != "api_key.rotated.v1" || restored.PreviousID == "") || p.mutation == nil && life.EventType != "api_key.created.v1") {
 		return kernel.RecoveryUnknown, identity.UnavailableError{}
 	}
 	if p.imported != nil {

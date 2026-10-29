@@ -55,6 +55,15 @@ func FuzzDurableKeyRecordCanonicalBound(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(wire)
+	record.Owner, err = apikey.NewOwner(apikey.OwnerSpec{TenantID: "tenant-a", Kind: apikey.OwnerOrganization, OrganizationID: "01ARZ3NDEKTSV4RRFFQ69G5FAX", Version: 7})
+	if err != nil {
+		f.Fatal(err)
+	}
+	wire, err = encodeRecord(record, c)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(wire)
 	record.Grant = nil
 	for i := range 64 {
 		record.Grant = append(record.Grant, fmt.Sprintf("%02d%s", i, strings.Repeat("&", 126)))

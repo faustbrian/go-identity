@@ -1,7 +1,8 @@
 # Native PostgreSQL API keys
 
 `github.com/faustbrian/go-identity/apikey/postgres` implements the selected
-human-owned, unlimited-quota modern and explicit legacy API-key workflows. It uses the actual
+human-owned and explicitly selected organization-owned, unlimited-quota modern
+and legacy API-key workflows. It uses the actual
 identity coordinator, PostgreSQL authority, password bearer sessions,
 authorization, risk counters, audit and transactional outbox owners. It does
 not issue browser sessions or treat the creator as the API key's human actor.
@@ -87,10 +88,56 @@ original deadline. Status-only recovery does not perform a new mutation.
 
 ## Retained scope
 
-Organization ownership, finite quota, cache projection,
+Finite quota, cache projection,
 API-key sessions, general CRUD/metadata, and HTTP/Reference composition are
 remaining platform work, not selected fallback behavior. This experimental
 module's native profile is not whole M21 or final release qualification.
+
+## Explicit organization ownership
+
+Apply the organization's unchanged base migrations and its optional
+`CredentialAuthorityMigrationSource`, followed by this module's
+`OrganizationMigrationSource` at a permanently allocated new migration version.
+Keep the original key migration history: the extension preserves populated
+user-key rows and checksums. It makes `user_id` nullable and enforces exactly
+one user or organization owner, with a tenant-scoped organization foreign key.
+The runner must bound DDL lock waits; removing the extension after organization
+issuance is not a safe downgrade.
+
+Select `NewOrganizationService(pool, config, organizationRepository)` using
+the actual native organization repository. Ordinary `NewService` still denies
+organization management and authentication, including original-attempt replay
+and reconciliation. Keep both owners and their pool alive; no worker or
+application domain store is introduced.
+
+Call `CreateOrganization` with an `OrganizationCreateRequest`, a genuine fresh
+human bearer and the exact organization ID. Policy receives the real human and
+organization target; grants must be authorized independently. The resulting
+record belongs to the organization and has no creator `UserID`. `Import`,
+`Rotate` and `Revoke` select the record's actual owner. Digest-only organization
+imports retain the same explicit legacy configuration and canonical-ID policy
+described below. `RecoverOrganization` additionally takes the original target
+organization; retain that target with the recovery query, including when an
+unknown creation has no readable key row. Recovery is status-only, never reveal.
+
+Management checks current membership and policy, then fences those observations
+in the existing protected transaction. Verification uses the actual API-key
+actor and owner-only organization authority, never the creator's user status.
+Member removal denies that human's next management/recovery but preserves the
+key. Organization archive/deletion advances a separate credential epoch;
+restoring the organization cannot revive earlier keys. Current organization
+policy and non-expanding permissions remain authoritative, with the original
+20-second evidence ceiling preserved by retry and reconciliation.
+
+Run the real populated-state consumer with the same disposable fixture setup:
+
+```sh
+GOWORK=off go test -mod=readonly -race -tags=integration \
+  -run '^TestGenuineOrganizationKeySurvivesCreatorRemoval$' -count=1 .
+```
+
+This is the uncached, unlimited, Narrow native profile. Organization HTTP and
+Reference wiring are separate integration work, not implied by this constructor.
 ## Explicit deployment configuration checks
 
 `CheckConfiguration` reads the exact selected native configuration without

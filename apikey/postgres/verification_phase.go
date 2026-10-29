@@ -15,6 +15,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/apikey"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	organization "github.com/faustbrian/go-organization"
 	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
@@ -51,6 +52,20 @@ type verificationSnapshot struct {
 	ConfigurationVersion                uint64
 	Permissions                         []string
 	Started, Verified, Until            time.Time
+	Organization                        *organization.CredentialAuthorityObservation `json:",omitempty"`
+}
+
+func (x verificationSnapshot) owner(record apikey.Record) (apikey.Owner, error) {
+	o := record.Owner.Spec()
+	if o.Kind == apikey.OwnerOrganization {
+		if x.Organization == nil || x.Organization.Validate(organization.CredentialAuthorityQuery{TenantID: o.TenantID, OrganizationID: organization.ID(o.OrganizationID)}, x.Verified) != nil || o.Version != x.Organization.CredentialVersion {
+			return apikey.Owner{}, apikey.ErrDenied
+		}
+		o.Version = x.Organization.CredentialVersion
+	} else {
+		o.Version = x.UserSecurity
+	}
+	return apikey.NewOwner(o)
 }
 
 var _ kernel.APIKeyVerificationContributor = (*verificationPhase)(nil)
@@ -60,14 +75,14 @@ func (*verificationPhase) Descriptor() kernel.ContributorDescriptor {
 	return kernel.ContributorDescriptor{Owner: "identity/apikey/postgres", ContractID: "identity.apikey", Version: 1}
 }
 func (*verificationPhase) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{verificationOperation(false), verificationOperation(true)}
+	return []identity.FeatureOperation{verificationOperation(false), verificationOperation(true), verificationBindingOperation(identity.CommandBinding{ActorKind: authorization.SubjectAPIKey})}
 }
 func (p *verificationPhase) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
 	if p == nil || p.service == nil || plan.APIKeyVerification == nil || command != p.original && command != p.generated {
 		return apikey.ErrInvalid
 	}
 	spec, ok := command.Feature()
-	if !ok || spec.Binding != p.binding || spec.Operation != verificationOperation(p.binding.UserID == "") {
+	if !ok || spec.Binding != p.binding || spec.Operation != verificationBindingOperation(p.binding) {
 		return apikey.ErrInvalid
 	}
 	return nil
@@ -138,22 +153,36 @@ func (p *verificationPhase) GenerateFeaturePreparation(ctx context.Context, comm
 		if err != nil {
 			return nil, err
 		}
-		status, err := s.directory.GetStatus(ctx, identity.UserStatusQuery{TenantID: p.binding.TenantID, UserID: p.binding.UserID})
-		if err != nil {
-			return nil, err
+		if record.Owner.Spec().Kind == apikey.OwnerOrganization {
+			if s.organization == nil || s.organization.repository == nil {
+				return nil, apikey.ErrDenied
+			}
+			// SI-07: owner-only observation intentionally never selects the
+			// creator. Its durable credential epoch is distinct from the
+			// aggregate version that fences current organization policy.
+			observed, err := s.organization.repository.ObserveCredentialAuthority(ctx, organization.CredentialAuthorityQuery{TenantID: p.binding.TenantID, OrganizationID: organization.ID(record.Owner.Spec().OrganizationID)})
+			if err != nil || observed.CredentialVersion != record.Owner.Spec().Version {
+				return nil, apikey.ErrDenied
+			}
+			x.Organization = &observed
+		} else {
+			status, err := s.directory.GetStatus(ctx, identity.UserStatusQuery{TenantID: p.binding.TenantID, UserID: p.binding.UserID})
+			if err != nil {
+				return nil, err
+			}
+			x.UserVersion, x.UserSecurity, x.UserStatus = status.User.Version, status.AuthorityVersion, status.User.Status
+			store, err := authority.NewAuthorityStore(s.pool.Raw(), s.config().MaximumDuration)
+			if err != nil {
+				return nil, err
+			}
+			policy, err := store.Get(ctx, p.authorizationScope())
+			if err != nil {
+				return nil, identity.UnavailableError{}
+			}
+			x.AuthorizationVersion = policy.Version
 		}
-		x.UserVersion, x.UserSecurity, x.UserStatus = status.User.Version, status.AuthorityVersion, status.User.Status
-		store, err := authority.NewAuthorityStore(s.pool.Raw(), s.config().MaximumDuration)
-		if err != nil {
-			return nil, err
-		}
-		policy, err := store.Get(ctx, p.authorizationScope())
-		if err != nil {
-			return nil, identity.UnavailableError{}
-		}
-		x.AuthorizationVersion = policy.Version
 		for _, permission := range record.Grant {
-			decision, err := s.config().Authorization.Decide(ctx, s.decision(p.binding.TenantID, p.binding.UserID, permission, "api-key", s.config().Configuration.Spec().ID, string(p.binding.CommandID)))
+			decision, err := s.config().Authorization.Decide(ctx, p.permissionDecision(record, x, permission))
 			if err != nil || decision.Revision != authorization.Revision(x.PolicyVersion) || decision.Outcome != authorization.Allow && decision.Outcome != authorization.Deny || ctx.Err() != nil {
 				return nil, identity.UnavailableError{}
 			}
@@ -175,6 +204,9 @@ func (p *verificationPhase) GenerateFeaturePreparation(ctx context.Context, comm
 	x.Until = started.Add(20*time.Second - c.ClockUncertainty - c.DecisionRaceBudget).Truncate(time.Microsecond)
 	if p.candidate != nil {
 		x.Until = minTime(x.Until, p.candidate.ExpiresAt)
+	}
+	if x.Organization != nil {
+		x.Until = minTime(x.Until, x.Organization.ValidUntil).Truncate(time.Microsecond)
 	}
 	if x.Verified.Before(x.Started) || x.Verified.Sub(x.Started) > c.MaximumRead || !x.Verified.Before(x.Until) {
 		return nil, apikey.ErrDenied
@@ -205,19 +237,50 @@ func (p *verificationPhase) restore(ctx context.Context, generation uint64, wire
 	if decodeCanonical(plain, &x) != nil || x.Schema != 1 || x.Generation != generation || x.Binding != storedBinding(p.binding) || x.GlobalVersion == 0 || x.TenantVersion == 0 || x.ConfigurationVersion == 0 || x.PolicyVersion != p.service.config().PolicyVersion || !exactTime(x.Started) || !exactTime(x.Verified) || !exactTime(x.Until) || x.Verified.Before(x.Started) || x.Verified.Sub(x.Started) > p.service.config().Configuration.Spec().MaximumRead || !x.Until.After(x.Verified) || x.Until.Sub(x.Started) > 20*time.Second {
 		return identity.UnavailableError{}
 	}
-	if p.binding.UserID == "" {
-		if len(x.Record) != 0 || x.UserVersion != 0 || x.UserSecurity != 0 || x.AuthorizationVersion != 0 || len(x.Permissions) != 0 {
+	if p.binding.ActorKind == authorization.SubjectServiceAccount {
+		if len(x.Record) != 0 || x.UserVersion != 0 || x.UserSecurity != 0 || x.AuthorizationVersion != 0 || len(x.Permissions) != 0 || x.Organization != nil {
 			return identity.UnavailableError{}
 		}
 	} else {
 		record, err := decodeRecord(x.Record, p.service.config().Configuration)
-		if err != nil || record.ID != apikey.KeyID(p.binding.ActorID) || record.Owner.Spec().UserID != p.binding.UserID || record.Owner.Spec().TenantID != p.binding.TenantID || x.UserVersion == 0 || x.UserSecurity == 0 || x.AuthorizationVersion == 0 {
+		if err != nil || !verificationOwnerBinding(record, p.binding) {
+			return identity.UnavailableError{}
+		}
+		if record.Owner.Spec().Kind == apikey.OwnerOrganization {
+			// The organization read uses its application clock; this snapshot
+			// uses PostgreSQL's clock. Exact interval nesting is not meaningful
+			// across them. Retain both original deadlines (the earliest wins)
+			// and validate the owner's original freshness below, without renewal.
+			if x.Organization == nil || x.UserVersion != 0 || x.UserSecurity != 0 || x.UserStatus != "" || x.AuthorizationVersion != 0 || x.Until.After(x.Organization.ValidUntil) {
+				return identity.UnavailableError{}
+			}
+			if _, err := x.owner(record); err != nil {
+				return identity.UnavailableError{}
+			}
+		} else if x.Organization != nil || x.UserVersion == 0 || x.UserSecurity == 0 || x.AuthorizationVersion == 0 {
 			return identity.UnavailableError{}
 		}
 		p.candidate = &record
 	}
 	p.snapshot = x
 	return nil
+}
+
+func (p *verificationPhase) permissionDecision(record apikey.Record, x verificationSnapshot, permission string) authorization.DecisionContext {
+	s := p.service
+	dc := s.decision(p.binding.TenantID, p.binding.UserID, permission, "api-key", s.config().Configuration.Spec().ID, string(p.binding.CommandID))
+	if record.Owner.Spec().Kind == apikey.OwnerOrganization && x.Organization != nil {
+		dc.Request.Subject = authorization.Subject{Kind: authorization.SubjectAPIKey, ID: authorization.SubjectID(record.ID)}
+		dc.Request.Resource = authorization.Resource{Type: "organization-api-key", ID: authorization.ResourceID(record.Owner.Spec().OrganizationID), Attributes: authorization.Attributes{
+			"organization.version":                    authorization.StringValue(strconv.FormatUint(x.Organization.Version, 10)),
+			"organization.credential-version":         authorization.StringValue(strconv.FormatUint(x.Organization.CredentialVersion, 10)),
+			"api-key.configuration-id":                authorization.StringValue(record.ConfigurationID),
+			"api-key.configuration-revision":          authorization.StringValue(strconv.FormatUint(record.ConfigurationRevision, 10)),
+			"api-key.configuration-authority-version": authorization.StringValue(strconv.FormatUint(x.ConfigurationVersion, 10)),
+			"api-key.policy-version":                  authorization.StringValue(strconv.FormatUint(x.PolicyVersion, 10)),
+		}}
+	}
+	return dc
 }
 
 func (p *verificationPhase) RestoreFeaturePreparation(ctx context.Context, original identity.Command, generation uint64, wire []byte) (identity.Command, kernel.CommandPlan, error) {
@@ -255,6 +318,14 @@ func (p *verificationPhase) check(ctx context.Context, w kernel.Work) error {
 			return err
 		}
 		if err := w.RequireActiveUserAuthorization(ctx, p, kernel.UserAuthorizationAdmission{Scope: p.authorizationScope(), Version: x.AuthorizationVersion}); err != nil {
+			return err
+		}
+	}
+	if x.Organization != nil {
+		if p.service.organization == nil || p.service.organization.repository == nil {
+			return apikey.ErrDenied
+		}
+		if err := p.service.organization.repository.RequireCredentialAuthority(ctx, w, p, *x.Organization); err != nil {
 			return err
 		}
 	}
@@ -323,7 +394,7 @@ func (p *verificationPhase) ApplyAPIKeyVerification(ctx context.Context, w kerne
 		}
 		valid := presented.Equal(stored)
 		if valid && record.Status == apikey.KeyActive && p.snapshot.Verified.Before(record.ExpiresAt) {
-			owner, err := apikey.NewOwner(apikey.OwnerSpec{TenantID: p.binding.TenantID, Kind: apikey.OwnerUser, UserID: p.binding.UserID, Version: p.snapshot.UserSecurity})
+			owner, err := p.snapshot.owner(record)
 			if err != nil {
 				return zero(err)
 			}
@@ -366,11 +437,17 @@ func (p *verificationPhase) ApplyAPIKeyVerification(ctx context.Context, w kerne
 		return zero(err)
 	}
 	p.applied = true
-	return identity.FeatureReceipt{Operation: verificationOperation(p.binding.UserID == "")}, outcome, nil
+	return identity.FeatureReceipt{Operation: verificationBindingOperation(p.binding)}, outcome, nil
 }
 
 func (p *verificationPhase) lockKey(ctx context.Context, w kernel.Work, expected apikey.Record) (apikey.Record, apikey.Digest, error) {
-	rows, err := w.Query(ctx, `SELECT user_id,pepper_version,lookup_digest,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 FOR UPDATE`, string(p.binding.TenantID), expected.ConfigurationID, string(expected.ID))
+	query := `SELECT coalesce(user_id::text,''),pepper_version,lookup_digest,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 FOR UPDATE`
+	args := []any{string(p.binding.TenantID), expected.ConfigurationID, string(expected.ID)}
+	if expected.Owner.Spec().Kind == apikey.OwnerOrganization {
+		query = `SELECT coalesce(user_id::text,''),pepper_version,lookup_digest,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 AND organization_id=$4 FOR UPDATE`
+		args = append(args, string(expected.Owner.Spec().OrganizationID))
+	}
+	rows, err := w.Query(ctx, query, args...)
 	if err != nil {
 		return apikey.Record{}, apikey.Digest{}, err
 	}
@@ -420,7 +497,7 @@ func (p *verificationPhase) persistEffect(ctx context.Context, w kernel.Work, ef
 		return apikey.ErrInvalid
 	}
 	id := string(b.ActorID)
-	if b.UserID == "" {
+	if b.ActorKind == authorization.SubjectServiceAccount {
 		id = string(b.CommandID)
 	}
 	n, err := w.Exec(ctx, `INSERT INTO identity_api_keys.command_effects(command_id,tenant_id,key_id,binding,fingerprint,generation,record) VALUES($1,$2,$3,$4,$5,$6::numeric,$7)`, string(b.CommandID), string(b.TenantID), id, bound, fp[:], strconv.FormatUint(generation, 10), wire)

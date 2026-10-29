@@ -78,6 +78,8 @@ type Service struct {
 	crypto                *envelope.Service
 	custody               risk.ProtectedProviderAdmissionCustody
 	issuanceConfiguration apikey.Configuration
+	organization          *organizationComposition
+	organizationID        apikey.OrganizationID
 }
 
 func validateServiceConfigurations(c ServiceConfig) error {
@@ -264,12 +266,35 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 	if !s.config().Clock.Now().Before(managementProofDeadline(b)) {
 		return out, apikey.ErrDenied
 	}
-	if revoke {
-		_, profile, e := s.managementRecord(ctx, b.TenantID, mutation.KeyID)
+	organizationID := s.organizationID
+	if imported != nil && imported.Record.Owner.Spec().Kind == apikey.OwnerOrganization {
+		organizationID = imported.Record.Owner.Spec().OrganizationID
+	}
+	if mutation != nil {
+		record, profile, e := s.managementRecord(ctx, b.TenantID, mutation.KeyID)
 		if e != nil {
 			return out, e
 		}
-		s = s.withConfiguration(profile)
+		if record.Owner.Spec().Kind == apikey.OwnerOrganization {
+			organizationID = record.Owner.Spec().OrganizationID
+		}
+		if revoke {
+			s = s.withConfiguration(profile)
+		}
+	}
+	if organizationID != "" {
+		action := "identity.apikey.create"
+		if imported != nil {
+			action = "identity.apikey.import"
+		} else if revoke {
+			action = "identity.apikey.delete"
+		} else if mutation != nil {
+			action = "identity.apikey.rotate"
+		}
+		s, err = s.selectOrganization(ctx, b.TenantID, b.UserID, organizationID, action, r.CorrelationID)
+		if err != nil {
+			return out, err
+		}
 	}
 	// A retained mapping is correlation only. Current self-management and every
 	// requested ceiling permission authorize both new preparation and historical
@@ -285,7 +310,7 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 		}
 	}
 	if imported != nil {
-		if imported.Record.Owner.Spec().UserID != b.UserID {
+		if imported.Record.Owner.Spec().Kind == apikey.OwnerUser && imported.Record.Owner.Spec().UserID != b.UserID || imported.Record.Owner.Spec().Kind == apikey.OwnerOrganization && imported.Record.Owner.Spec().OrganizationID != s.organizationID {
 			return out, apikey.ErrDenied
 		}
 		if err := s.allow(ctx, s.decision(b.TenantID, b.UserID, op.OperationID, "api-key-import-source", imported.SourceID, r.CorrelationID)); err != nil {
@@ -305,6 +330,9 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 		return out, nativeError(ctx, err)
 	}
 	intent, err := s.createIntent(r)
+	if mutation == nil && imported == nil && s.organizationID != "" {
+		intent, err = s.organizationCreateIntent(r)
+	}
 	if mutation != nil {
 		intent, err = s.mutationIntent(*mutation, op)
 	}
@@ -451,7 +479,11 @@ func (s *Service) authorizeCreate(ctx context.Context, r apikey.CreateRequest, u
 }
 func (s *Service) authorizePermissions(ctx context.Context, tenant identity.TenantID, user identity.UserID, permissions []string, correlation string) error {
 	for _, permission := range permissions {
-		if err := s.allow(ctx, s.decision(tenant, user, permission, "api-key", s.config().Configuration.Spec().ID, correlation)); err != nil {
+		decision := s.decision(tenant, user, permission, "api-key", s.config().Configuration.Spec().ID, correlation)
+		if s.organizationID != "" {
+			decision = s.organizationDecision(tenant, authorization.SubjectUser, string(user), permission, correlation)
+		}
+		if err := s.allow(ctx, decision); err != nil {
 			return err
 		}
 	}
@@ -515,13 +547,19 @@ func (s *Service) Recover(ctx context.Context, r apikey.RecoveryRequest) (result
 	if err != nil || b.UserID != r.Query.UserID {
 		return result, apikey.ErrDenied
 	}
-	op := operationFor(r.Query.OperationID)
-	if op == importOperation() {
+	if s.organizationID != "" {
+		s, err = s.selectOrganization(ctx, b.TenantID, b.UserID, s.organizationID, r.Query.OperationID, "")
+		if err != nil {
+			return result, err
+		}
+	}
+	op := s.managementOperation(r.Query.OperationID)
+	if r.Query.OperationID == "identity.apikey.import" {
 		if s.config().LegacyConfiguration.Validate() != nil {
 			return result, apikey.ErrDenied
 		}
 		s = s.withConfiguration(s.config().LegacyConfiguration)
-	} else if op == revokeOperation() {
+	} else if r.Query.OperationID == "identity.apikey.delete" {
 		_, configuration, lookupErr := s.managementRecord(ctx, b.TenantID, apikey.KeyID(r.Query.RecordID))
 		if lookupErr != nil {
 			return result, lookupErr
@@ -532,11 +570,11 @@ func (s *Service) Recover(ctx context.Context, r apikey.RecoveryRequest) (result
 		return result, err
 	}
 	p := &creationPhase{service: s}
-	if op == importOperation() {
+	if r.Query.OperationID == "identity.apikey.import" {
 		p.imported = &apikey.ImportRequest{}
-	} else if op != createOperation() {
+	} else if r.Query.OperationID != "identity.apikey.create" {
 		p.mutation = &apikey.Rotation{}
-		p.revocation = op == revokeOperation()
+		p.revocation = r.Query.OperationID == "identity.apikey.delete"
 	}
 	p.coordinator, p.registry, err = s.compose(p)
 	if err != nil {

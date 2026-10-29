@@ -17,7 +17,10 @@ import (
 // fault, selected by the legacy owner's final SQL marker. Real SQL, protected
 // participants and the sole command coordinator remain unchanged. It drops
 // only the final COMMIT acknowledgement, after PostgreSQL actually committed.
-type legacyCommitFault struct{ hit atomic.Bool }
+type legacyCommitFault struct {
+	hit    atomic.Bool
+	marker []byte // Immutable SQL-owner marker selected by the test before dial.
+}
 
 func (f *legacyCommitFault) dial(ctx context.Context, network, address string) (net.Conn, error) {
 	c, err := (&net.Dialer{}).DialContext(ctx, network, address)
@@ -38,7 +41,11 @@ func (c *legacyCommitConn) Write(p []byte) (int, error) {
 	if len(p) >= 5 && p[0] == 'Q' && bytes.EqualFold(p[5:], []byte("rollback\x00")) {
 		c.mutation.Store(false)
 	}
-	if bytes.Contains(p, []byte("INSERT INTO identity_api_keys.legacy_imports")) {
+	marker := c.fault.marker
+	if len(marker) == 0 {
+		marker = []byte("INSERT INTO identity_api_keys.legacy_imports")
+	}
+	if bytes.Contains(p, marker) {
 		c.mutation.Store(true)
 	}
 	return c.Conn.Write(p)

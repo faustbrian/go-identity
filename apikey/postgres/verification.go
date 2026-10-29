@@ -28,7 +28,15 @@ func verificationOperation(unknown bool) identity.FeatureOperation {
 	return op
 }
 
-// VerifyAndConsume authenticates one original modern, unlimited human-owned
+func verificationBindingOperation(b identity.CommandBinding) identity.FeatureOperation {
+	op := verificationOperation(b.UserID == "")
+	if b.UserID == "" && b.ActorKind == authorization.SubjectAPIKey {
+		op.SchemaID = "apikey-verify-organization-v1"
+	}
+	return op
+}
+
+// VerifyAndConsume authenticates one original modern, unlimited owner-bound
 // attempt through the native primary owners and sole identity coordinator.
 // Required permissions intersect current policy; strict reduction is atomic
 // even when use of a removed permission denies. No browser session is created.
@@ -79,6 +87,9 @@ func (s *Service) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificat
 		return out, err
 	} else if exists {
 		record = original
+	}
+	if record != nil && record.Owner.Spec().Kind == apikey.OwnerOrganization && (s.organization == nil || s.organization.repository == nil) {
+		return out, apikey.ErrDenied
 	}
 	p := &verificationPhase{service: s, request: r, presented: digest, candidate: record}
 	p.original, err = p.originalCommand()
@@ -138,7 +149,7 @@ func (s *Service) ReconcileVerifyAndConsume(ctx context.Context, q apikey.Verifi
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
 	defer cancel()
 	var configuration apikey.Configuration
-	if q.Original.UserID == "" {
+	if q.Original.ActorKind == authorization.SubjectServiceAccount {
 		configuration, err = s.selectedConfiguration(string(q.Original.ActorID), 0)
 	} else {
 		_, configuration, err = s.managementRecord(ctx, q.TenantID, apikey.KeyID(q.Original.ActorID))
@@ -171,7 +182,7 @@ func (s *Service) ReconcileVerifyAndConsume(ctx context.Context, q apikey.Verifi
 }
 
 func recoveryBinding(q identity.RecoveryQuery) identity.CommandBinding {
-	op := verificationOperation(q.UserID == "")
+	op := verificationBindingOperation(identity.CommandBinding{UserID: q.UserID, ActorKind: q.ActorKind})
 	return identity.CommandBinding{CommandID: q.CommandID, TenantID: q.TenantID, UserID: q.UserID, AnonymousFlowID: q.AnonymousFlowID, ActorID: q.ActorID, ActorKind: q.ActorKind, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion}
 }
 
@@ -225,17 +236,17 @@ func (s *Service) retainedVerificationCandidate(ctx context.Context, r apikey.At
 		return nil, false, nil
 	}
 	var effect verificationEffect
-	if len(wire) > maximumCommandEffectBytes || decodeCanonical(wire, &effect) != nil || effect.Schema != 1 || effect.Snapshot.Binding != binding || binding.CommandID != identity.CommandID(r.AttemptID) || binding.TenantID != r.TenantID || binding.SchemaID != verificationOperation(binding.UserID == "").SchemaID {
+	if len(wire) > maximumCommandEffectBytes || decodeCanonical(wire, &effect) != nil || effect.Schema != 1 || effect.Snapshot.Binding != binding || binding.CommandID != identity.CommandID(r.AttemptID) || binding.TenantID != r.TenantID || binding.SchemaID != verificationBindingOperation(identity.CommandBinding(binding)).SchemaID {
 		return nil, false, identity.UnavailableError{}
 	}
-	if binding.UserID == "" {
-		if len(effect.Snapshot.Record) != 0 || binding.ActorKind != authorization.SubjectServiceAccount || binding.AnonymousFlowID != string(r.AttemptID) {
+	if binding.ActorKind == authorization.SubjectServiceAccount {
+		if len(effect.Snapshot.Record) != 0 || binding.UserID != "" || binding.AnonymousFlowID != string(r.AttemptID) {
 			return nil, false, identity.UnavailableError{}
 		}
 		return nil, true, nil
 	}
 	original, err := decodeRecord(effect.Snapshot.Record, s.config().Configuration)
-	if err != nil || original.ID != apikey.KeyID(binding.ActorID) || original.Owner.Spec().TenantID != r.TenantID || original.Owner.Spec().UserID != binding.UserID || binding.ActorKind != authorization.SubjectAPIKey {
+	if err != nil || original.ID != apikey.KeyID(binding.ActorID) || original.Owner.Spec().TenantID != r.TenantID || original.Owner.Spec().UserID != binding.UserID || binding.ActorKind != authorization.SubjectAPIKey || !verificationOwnerBinding(original, identity.CommandBinding(binding)) {
 		return nil, false, identity.UnavailableError{}
 	}
 	return &original, true, nil
@@ -262,7 +273,7 @@ func (p *verificationPhase) restoreOriginal(ctx context.Context) error {
 	if observed.Absent {
 		return nil
 	}
-	feature := kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: verificationOperation(p.binding.UserID == "")}
+	feature := kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: verificationBindingOperation(p.binding)}
 	wire, generation, err := p.coordinator.QueryFeaturePreparation(ctx, q, caller, feature, p)
 	defer clear(wire)
 	if err != nil {
@@ -280,8 +291,11 @@ func (p *verificationPhase) originalCommand() (identity.Command, error) {
 	b := identity.CommandBinding{CommandID: identity.CommandID(r.AttemptID), TenantID: r.TenantID, ActorKind: authorization.SubjectServiceAccount, ActorID: identity.ActorID(c.Configuration.Spec().ID), AnonymousFlowID: string(r.AttemptID), OperationID: "identity.apikey.verify", SchemaVersion: 1, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, CorrelationID: string(r.AttemptID)}
 	if p.candidate != nil {
 		b.UserID, b.ActorID, b.ActorKind, b.AnonymousFlowID = p.candidate.Owner.Spec().UserID, identity.ActorID(p.candidate.ID), authorization.SubjectAPIKey, ""
+		if p.candidate.Owner.Spec().Kind == apikey.OwnerOrganization {
+			b.AnonymousFlowID = string(r.AttemptID)
+		}
 	}
-	op := verificationOperation(p.candidate == nil)
+	op := verificationBindingOperation(b)
 	b.SchemaID = op.SchemaID
 	p.binding = b
 	wire, err := json.Marshal(struct {
@@ -315,7 +329,7 @@ func (p *verificationPhase) caller(kind, id string) authorization.DecisionContex
 
 func (p *verificationPhase) plan() (kernel.CommandPlan, error) {
 	b := p.binding
-	op := verificationOperation(b.UserID == "")
+	op := verificationBindingOperation(b)
 	plan := kernel.CommandPlan{Contributors: p.registry.Descriptors(), Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}, SubjectType: "authentication_attempt", APIKeyVerification: &kernel.APIKeyVerificationPlan{}, Lifecycle: &kernel.LifecyclePlan{EventType: "api_key.permissions_changed.v1"}}
 	target := string(b.AnonymousFlowID)
 	events := []string{"identity.api_key.authenticate"}
@@ -364,6 +378,9 @@ func (s *Service) verificationEffect(ctx context.Context, out apikey.AtomicVerif
 		return out, apikey.ErrDenied
 	}
 	result, err := effect.result(s.config().Configuration)
+	if err == nil && result.Owner.Spec().Kind == apikey.OwnerOrganization && (s.organization == nil || s.organization.repository == nil) {
+		return out, apikey.ErrDenied
+	}
 	now, clockErr := s.primaryTime(ctx)
 	if err != nil || clockErr != nil || result.ValidateAt(s.config().Configuration, now) != nil {
 		return out, apikey.ErrDenied
@@ -387,11 +404,26 @@ func (e verificationEffect) result(c apikey.Configuration) (apikey.VerificationR
 	if err != nil {
 		return apikey.VerificationResult{}, err
 	}
-	owner, err := apikey.NewOwner(apikey.OwnerSpec{TenantID: r.Owner.Spec().TenantID, Kind: apikey.OwnerUser, UserID: r.Owner.Spec().UserID, Version: e.Snapshot.UserSecurity})
+	owner, err := e.Snapshot.owner(r)
 	if err != nil {
 		return apikey.VerificationResult{}, err
 	}
 	return apikey.VerificationResult{Record: r, Owner: owner, Grant: slices.Clone(e.Grant), PolicyVersion: e.Snapshot.PolicyVersion, ConfigurationAuthority: apikey.ConfigurationAuthorityBinding{TenantID: r.Owner.Spec().TenantID, ConfigurationID: c.Spec().ID, Version: e.Snapshot.ConfigurationVersion}, ReadStartedAt: e.Snapshot.Started, VerifiedAt: e.Snapshot.Verified, ValidUntil: e.Snapshot.Until}, nil
+}
+
+func verificationOwnerBinding(r apikey.Record, b identity.CommandBinding) bool {
+	o := r.Owner.Spec()
+	if b.ActorKind != authorization.SubjectAPIKey || b.ActorID != identity.ActorID(r.ID) || b.TenantID != o.TenantID {
+		return false
+	}
+	switch o.Kind {
+	case apikey.OwnerUser:
+		return o.UserID == b.UserID && b.UserID != "" && b.AnonymousFlowID == ""
+	case apikey.OwnerOrganization:
+		return b.UserID == "" && b.AnonymousFlowID == string(b.CommandID)
+	default:
+		return false
+	}
 }
 
 func sameRecord(a, b apikey.Record, c apikey.Configuration) bool {

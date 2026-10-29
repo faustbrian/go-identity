@@ -185,7 +185,7 @@ func (s *Service) importSource(ctx context.Context, r apikey.ImportRequest) (ide
 		return identity.CommandBinding{}, false, identity.ConflictError{}
 	}
 	var b storedBinding
-	if len(bound) > 4096 || decodeCanonical(bound, &b) != nil || string(b.CommandID) != command || b.TenantID != r.Record.Owner.Spec().TenantID || b.UserID != r.Record.Owner.Spec().UserID || b.RecordID != string(r.Record.ID) || identity.CommandBinding(b).ValidateFor(importOperation()) != nil {
+	if len(bound) > 4096 || decodeCanonical(bound, &b) != nil || string(b.CommandID) != command || b.TenantID != r.Record.Owner.Spec().TenantID || !s.managementOwnerMatches(r.Record, identity.CommandBinding(b)) || b.RecordID != string(r.Record.ID) || identity.CommandBinding(b).ValidateFor(s.managementOperation("identity.apikey.import")) != nil {
 		return identity.CommandBinding{}, false, identity.UnavailableError{}
 	}
 	return identity.CommandBinding(b), true, nil
@@ -263,7 +263,12 @@ func (p *creationPhase) requireImportTarget(ctx context.Context, w kernel.Work) 
 	if p.imported == nil {
 		return nil
 	}
-	rows, err := w.Query(ctx, `SELECT user_id,pepper_version,lookup_digest,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND key_id=$2 FOR UPDATE`, string(p.input.Binding.TenantID), p.input.Binding.RecordID)
+	query := `SELECT user_id,pepper_version,lookup_digest,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND key_id=$2 FOR UPDATE`
+	organizationOwned := p.input.Record.Owner.Spec().Kind == apikey.OwnerOrganization
+	if organizationOwned {
+		query = `SELECT coalesce(user_id::text,''),organization_id::text,pepper_version,lookup_digest,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND key_id=$2 FOR UPDATE`
+	}
+	rows, err := w.Query(ctx, query, string(p.input.Binding.TenantID), p.input.Binding.RecordID)
 	if err != nil {
 		return err
 	}
@@ -280,15 +285,20 @@ func (p *creationPhase) requireImportTarget(ctx context.Context, w kernel.Work) 
 	if !p.applied {
 		return identity.ConflictError{}
 	}
-	var user string
+	var user, organizationID string
 	var pepper int64
 	var digest, record []byte
-	if rows.Scan(&user, &pepper, &digest, &record) != nil || rows.Next() || rows.Err() != nil {
+	if organizationOwned {
+		err = rows.Scan(&user, &organizationID, &pepper, &digest, &record)
+	} else {
+		err = rows.Scan(&user, &pepper, &digest, &record)
+	}
+	if err != nil || rows.Next() || rows.Err() != nil {
 		return identity.UnavailableError{}
 	}
 	want, err := encodeRecord(p.input.Record, p.input.Configuration)
 	sum := p.imported.Digest.Sum()
-	if err != nil || user != string(p.input.Binding.UserID) || pepper != 0 || !bytes.Equal(digest, sum[:]) || !bytes.Equal(record, want) {
+	if err != nil || user != string(p.input.Record.Owner.Spec().UserID) || organizationOwned && organizationID != string(p.input.Record.Owner.Spec().OrganizationID) || pepper != 0 || !bytes.Equal(digest, sum[:]) || !bytes.Equal(record, want) {
 		return identity.ConflictError{}
 	}
 	return nil

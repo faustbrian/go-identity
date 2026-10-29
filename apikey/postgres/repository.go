@@ -64,7 +64,12 @@ func (p *creationPhase) requirePrevious(ctx context.Context, w kernel.Work) erro
 	if err != nil {
 		return err
 	}
-	rows, err := w.Query(ctx, `SELECT user_id,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 FOR UPDATE`, string(p.input.Binding.TenantID), configuration.Spec().ID, string(expected.ID))
+	query := `SELECT user_id,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 FOR UPDATE`
+	organizationOwned := expected.Owner.Spec().Kind == apikey.OwnerOrganization
+	if organizationOwned {
+		query = `SELECT coalesce(user_id::text,''),organization_id::text,record FROM identity_api_keys.keys WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3 FOR UPDATE`
+	}
+	rows, err := w.Query(ctx, query, string(p.input.Binding.TenantID), configuration.Spec().ID, string(expected.ID))
 	if err != nil {
 		return err
 	}
@@ -72,15 +77,20 @@ func (p *creationPhase) requirePrevious(ctx context.Context, w kernel.Work) erro
 	if !rows.Next() {
 		return identity.ConflictError{}
 	}
-	var user string
+	var user, organizationID string
 	var wire []byte
-	if err := rows.Scan(&user, &wire); err != nil {
+	if organizationOwned {
+		err = rows.Scan(&user, &organizationID, &wire)
+	} else {
+		err = rows.Scan(&user, &wire)
+	}
+	if err != nil {
 		return err
 	}
 	if rows.Next() || rows.Err() != nil {
 		return identity.UnavailableError{}
 	}
-	if user != string(p.input.Binding.UserID) || !bytes.Equal(want, wire) {
+	if user != string(expected.Owner.Spec().UserID) || organizationOwned && organizationID != string(expected.Owner.Spec().OrganizationID) || !bytes.Equal(want, wire) {
 		return identity.ConflictError{}
 	}
 	return nil
@@ -164,7 +174,7 @@ func (s *Service) originalRecord(ctx context.Context, b identity.CommandBinding)
 		return apikey.Record{}, identity.UnavailableError{}
 	}
 	record, err := decodeRecord(wire, s.config().Configuration)
-	if err != nil || record.ID != apikey.KeyID(b.RecordID) || record.Owner.Spec().TenantID != b.TenantID || record.Owner.Spec().UserID != b.UserID {
+	if err != nil || record.ID != apikey.KeyID(b.RecordID) || record.Owner.Spec().TenantID != b.TenantID || !s.managementOwnerMatches(record, b) {
 		return apikey.Record{}, identity.UnavailableError{}
 	}
 	return record, nil

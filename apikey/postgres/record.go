@@ -57,7 +57,7 @@ type keyRecord struct {
 
 func encodeRecord(r apikey.Record, c apikey.Configuration) ([]byte, error) {
 	owner := r.Owner.Spec()
-	if r.Validate(c) != nil || owner.Kind != apikey.OwnerUser || !utf8.ValidString(r.Name) || !exactTime(r.CreatedAt) || !exactTime(r.ExpiresAt) {
+	if r.Validate(c) != nil || !utf8.ValidString(r.Name) || !exactTime(r.CreatedAt) || !exactTime(r.ExpiresAt) {
 		return nil, apikey.ErrInvalid
 	}
 	grant := append([]string{}, r.Grant...)

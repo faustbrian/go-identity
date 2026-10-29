@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add explicitly selected organization-owned creation, digest-only import,
+  verification, rotation, revocation and original status recovery through the
+  existing native coordinator. Creator membership removal denies that person's
+  management without revoking the organization's independent key; owner archive
+  and restore cannot revive its previous credential epoch. Required effects,
+  reveal-once custody and original non-renewable validity remain atomic.
+- Add optional populated-state organization-owner migration without rewriting
+  user records or historical checksums. Existing user management and canonical
+  bytes retain their shape; ordinary unselected services deny organization paths.
+
 - Add an explicit user-owned verify-only SHA-256 import profile through the
   existing native authority/coordinator, preserving canonical IDs, distinct
   source/record versions, original absolute times, restrictions and tombstones.

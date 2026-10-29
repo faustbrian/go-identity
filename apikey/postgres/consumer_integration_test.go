@@ -265,6 +265,7 @@ type nativeConsumerFixture struct {
 	user                          identity.UserID
 	maximumGrants                 []string
 	deniedGrant, deniedManagement *atomic.Bool
+	register                      func() (apikey.Authentication, identity.UserID)
 }
 
 func setupNativeConsumer(t *testing.T) nativeConsumerFixture {
@@ -406,7 +407,9 @@ func setupNativeConsumer(t *testing.T) nativeConsumerFixture {
 		t.Fatal(err)
 	}
 	c := apikeypg.ServiceConfig{Configuration: configuration, Clock: clock.System{}, MaximumDuration: 4 * time.Second, Sessions: sessions, Session: sessionStore, Profile: profile, LookupKeys: map[uint32]session.DigestKey{11: lookup}, Authorization: authorize, PolicyID: "api-key-policy", PolicyVersion: 9, Pepper: pepper, Counters: counters, Risk: risk.ProtectedProviderAdmissionCustodyConfig{Evaluation: evaluation, ConfigurationID: "api-key-providers-v1", Keys: []risk.EvidenceKey{evidence}}, CounterPolicy: policy, Coordinator: kernel.CoordinatorConfig{MaximumDuration: 4 * time.Second, LeaseDuration: 5 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: keys["fingerprint"]}, QueryPolicy: &query, AdmissionPolicy: &query}, RequestKeys: requestKeys, ActiveEnvelopeKeyID: "api-key-envelope", RetainedEnvelopeKeys: map[string][]byte{"api-key-envelope": material("api-key-envelope")}}
-	return nativeConsumerFixture{ctx: ctx, pool: pool, db: db, config: c, caller: caller, user: user, maximumGrants: maximumGrants, deniedGrant: &deniedGrant, deniedManagement: &deniedManagement}
+	return nativeConsumerFixture{ctx: ctx, pool: pool, db: db, config: c, caller: caller, user: user, maximumGrants: maximumGrants, deniedGrant: &deniedGrant, deniedManagement: &deniedManagement, register: func() (apikey.Authentication, identity.UserID) {
+		return genuineUser(t, ctx, pool, graph, server, origin, mailbox, sessions, material)
+	}}
 }
 
 func TestGenuinePasswordCreateCommitsBeforeOneTimeReveal(t *testing.T) {
@@ -768,7 +771,7 @@ func exerciseRotationRevocation(t *testing.T, ctx context.Context, pool *databas
 // transaction or audit implementation participates in the operation.
 func rejectMutationAudit(t *testing.T, ctx context.Context, pool *database.Pool, action string, operation func()) {
 	t.Helper()
-	if action != "identity.api_key.rotate" && action != "identity.api_key.revoke" && action != "identity.api_key.update" && action != "identity.api_key.import" {
+	if action != "identity.api_key.create" && action != "identity.api_key.rotate" && action != "identity.api_key.revoke" && action != "identity.api_key.update" && action != "identity.api_key.import" {
 		t.Fatal("invalid fault action")
 	}
 	_, err := pool.Raw().Exec(ctx, `CREATE FUNCTION public.reject_api_key_mutation_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = '`+action+`' THEN RAISE EXCEPTION 'injected required audit outage'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_api_key_mutation_audit BEFORE INSERT ON audit.records FOR EACH ROW EXECUTE FUNCTION public.reject_api_key_mutation_audit()`)

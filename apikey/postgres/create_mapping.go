@@ -13,6 +13,7 @@ import (
 	"github.com/faustbrian/go-identity/apikey"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	organization "github.com/faustbrian/go-organization"
 )
 
 func createOperation() identity.FeatureOperation {
@@ -40,7 +41,11 @@ func operationFor(id string) identity.FeatureOperation {
 	}
 }
 func intentField(op identity.FeatureOperation) string {
-	switch op {
+	base := operationFor(op.OperationID)
+	if op != base && op != organizationManagementOperation(op.OperationID) {
+		return ""
+	}
+	switch base {
 	case createOperation():
 		return "apikey.create.intent"
 	case rotateOperation():
@@ -85,6 +90,7 @@ type creationInput struct {
 	ConfigurationAuthority                apikey.ConfigurationAuthorityBinding
 	ReadStartedAt, VerifiedAt, ValidUntil time.Time
 	Network                               string
+	Organization                          *organization.CredentialAuthorityObservation
 }
 
 func (x creationInput) validate() error {
@@ -97,19 +103,25 @@ func (x creationInput) validate() error {
 	o := r.Owner.Spec()
 	ip, ipErr := netip.ParseAddr(x.Network)
 	s, err := x.Session.Bindings()
-	op := operationFor(b.OperationID)
+	op := managementOperationForBinding(b)
 	ownerVersionValid := x.OwnerStatus.AuthorityVersion == o.Version || op == importOperation() && x.OwnerStatus.AuthorityVersion >= o.Version
-	if err != nil || intentField(op) == "" || b.ValidateFor(op) != nil || x.Configuration.Validate() != nil || r.Validate(x.Configuration) != nil || o.Kind != apikey.OwnerUser || b.TenantID != o.TenantID || b.UserID != o.UserID || b.ActorID != identity.ActorID(o.UserID) || b.ActorKind != authorization.SubjectUser || b.RecordID != string(r.ID) || op == createOperation() && len(r.Name) == 0 || c.Algorithm == apikey.AlgorithmModernHMACSHA256 && c.MaximumLifetime < minimumKeyLifetime || x.OwnerStatus.User.Validate(b.TenantID) != nil || x.OwnerStatus.User.ID != b.UserID || x.OwnerStatus.User.Status != identity.StatusActive || !ownerVersionValid || x.ConfigurationAuthority.Validate(b.TenantID, c.ID) != nil || s.TenantID != b.TenantID || s.UserID != b.UserID || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != "password" || s.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || x.Session.MFAAuthentication() != (session.MFAAuthentication{}) || ipErr != nil || ip.Zone() != "" || ip.Unmap().String() != x.Network || ip.IsUnspecified() || ip.IsMulticast() || !exactTime(x.ReadStartedAt) || !exactTime(x.VerifiedAt) || !exactTime(x.ValidUntil) || x.VerifiedAt.Before(x.ReadStartedAt) || x.VerifiedAt.Sub(x.ReadStartedAt) > c.MaximumRead || !x.ValidUntil.After(x.VerifiedAt) || x.ValidUntil.Sub(x.ReadStartedAt) > 20*time.Second || r.CreatedAt.After(x.VerifiedAt) {
+	ownerMatches := o.Kind == apikey.OwnerUser && o.UserID == b.UserID && x.Organization == nil && op == operationFor(b.OperationID)
+	if o.Kind == apikey.OwnerOrganization && x.Organization != nil {
+		query := organization.CredentialAuthorityQuery{TenantID: b.TenantID, OrganizationID: organization.ID(o.OrganizationID), ActorID: b.UserID}
+		ownerMatches = op == organizationManagementOperation(b.OperationID) && x.Organization.Validate(query, x.VerifiedAt) == nil && !x.ValidUntil.After(x.Organization.ValidUntil)
+		ownerVersionValid = o.Version == x.Organization.CredentialVersion || b.OperationID == "identity.apikey.import" && r.Status == apikey.KeyRevoked && o.Version <= x.Organization.CredentialVersion
+	}
+	if err != nil || intentField(op) == "" || b.ValidateFor(op) != nil || x.Configuration.Validate() != nil || r.Validate(x.Configuration) != nil || !ownerMatches || b.TenantID != o.TenantID || b.ActorID != identity.ActorID(b.UserID) || b.ActorKind != authorization.SubjectUser || b.RecordID != string(r.ID) || b.OperationID == "identity.apikey.create" && len(r.Name) == 0 || c.Algorithm == apikey.AlgorithmModernHMACSHA256 && c.MaximumLifetime < minimumKeyLifetime || x.OwnerStatus.User.Validate(b.TenantID) != nil || x.OwnerStatus.User.ID != b.UserID || x.OwnerStatus.User.Status != identity.StatusActive || !ownerVersionValid || x.ConfigurationAuthority.Validate(b.TenantID, c.ID) != nil || s.TenantID != b.TenantID || s.UserID != b.UserID || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != "password" || s.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || x.Session.MFAAuthentication() != (session.MFAAuthentication{}) || ipErr != nil || ip.Zone() != "" || ip.Unmap().String() != x.Network || ip.IsUnspecified() || ip.IsMulticast() || !exactTime(x.ReadStartedAt) || !exactTime(x.VerifiedAt) || !exactTime(x.ValidUntil) || x.VerifiedAt.Before(x.ReadStartedAt) || x.VerifiedAt.Sub(x.ReadStartedAt) > c.MaximumRead || !x.ValidUntil.After(x.VerifiedAt) || x.ValidUntil.Sub(x.ReadStartedAt) > 20*time.Second || r.CreatedAt.After(x.VerifiedAt) {
 		return apikey.ErrInvalid
 	}
 	if !x.VerifiedAt.Before(managementProofDeadline(s)) || x.ValidUntil.After(managementProofDeadline(s)) {
 		return apikey.ErrDenied
 	}
-	if op == importOperation() {
+	if b.OperationID == "identity.apikey.import" {
 		if x.Import == nil || x.PreviousRecord != nil || x.PreviousConfiguration != nil || x.PreviousConfigurationAuthority != nil || c.Algorithm != apikey.AlgorithmLegacySHA256V1 || c.State != apikey.ConfigurationVerifyOnly || !scope(x.Import.SourceID) || x.Import.SourceVersion == 0 || x.Import.Digest == ([32]byte{}) || r.Status == apikey.KeyActive && (r.Version == ^uint64(0) || r.AuthorityVersion == ^uint64(0) || x.ConfigurationAuthority.Version == ^uint64(0)) {
 			return apikey.ErrInvalid
 		}
-	} else if op == createOperation() {
+	} else if b.OperationID == "identity.apikey.create" {
 		if x.Import != nil || x.PreviousConfiguration != nil || x.PreviousConfigurationAuthority != nil {
 			return apikey.ErrInvalid
 		}
@@ -127,18 +139,18 @@ func (x creationInput) validate() error {
 		previousConfiguration := x.Configuration
 		if x.PreviousConfiguration != nil {
 			previousConfiguration = *x.PreviousConfiguration
-			if op != rotateOperation() || x.PreviousConfigurationAuthority == nil || x.PreviousConfigurationAuthority.Validate(b.TenantID, previousConfiguration.Spec().ID) != nil || x.PreviousConfigurationAuthority.Version == ^uint64(0) || previousConfiguration.Spec().Algorithm != apikey.AlgorithmLegacySHA256V1 {
+			if b.OperationID != "identity.apikey.rotate" || x.PreviousConfigurationAuthority == nil || x.PreviousConfigurationAuthority.Validate(b.TenantID, previousConfiguration.Spec().ID) != nil || x.PreviousConfigurationAuthority.Version == ^uint64(0) || previousConfiguration.Spec().Algorithm != apikey.AlgorithmLegacySHA256V1 {
 				return apikey.ErrInvalid
 			}
 		} else if x.PreviousConfigurationAuthority != nil {
 			return apikey.ErrInvalid
 		}
-		if prior.Validate(previousConfiguration) != nil || !prior.Owner.SameIdentity(r.Owner) || prior.Owner.Version() > r.Owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
+		if prior.Validate(previousConfiguration) != nil || !prior.Owner.SameIdentity(r.Owner) || prior.Owner.Version() > r.Owner.Version() || o.Kind == apikey.OwnerOrganization && prior.Owner.Version() != r.Owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
 			return apikey.ErrInvalid
 		}
 		want := prior
 		want.Owner = r.Owner
-		if op == rotateOperation() {
+		if b.OperationID == "identity.apikey.rotate" {
 			if !x.Configuration.AllowsIssuance() || !x.VerifiedAt.Before(prior.ExpiresAt) || r.ID == prior.ID || r.CreatedAt.Before(x.ReadStartedAt) {
 				return apikey.ErrInvalid
 			}
@@ -212,10 +224,11 @@ func (x creationInput) commitment() ([32]byte, error) {
 		ConfigurationVersion                  uint64
 		ReadStartedAt, VerifiedAt, ValidUntil time.Time
 		Network                               string
-		PreviousConfiguration                 *apikey.ConfigurationSpec `json:",omitempty"`
-		PreviousAuthority                     uint64                    `json:",omitempty"`
-		Import                                *legacyImportBinding      `json:",omitempty"`
-	}{x.Binding.OperationID, record, previous, x.Configuration.Spec(), x.OwnerStatus.User.Version, x.OwnerStatus.AuthorityVersion, a.TenantID, a.ConfigurationID, a.Version, x.ReadStartedAt.UTC(), x.VerifiedAt.UTC(), x.ValidUntil.UTC(), x.Network, previousConfiguration, previousAuthority, x.Import})
+		PreviousConfiguration                 *apikey.ConfigurationSpec                    `json:",omitempty"`
+		PreviousAuthority                     uint64                                       `json:",omitempty"`
+		Import                                *legacyImportBinding                         `json:",omitempty"`
+		Organization                          *organization.CredentialAuthorityObservation `json:",omitempty"`
+	}{x.Binding.OperationID, record, previous, x.Configuration.Spec(), x.OwnerStatus.User.Version, x.OwnerStatus.AuthorityVersion, a.TenantID, a.ConfigurationID, a.Version, x.ReadStartedAt.UTC(), x.VerifiedAt.UTC(), x.ValidUntil.UTC(), x.Network, previousConfiguration, previousAuthority, x.Import, x.Organization})
 	if err != nil {
 		return [32]byte{}, apikey.ErrInvalid
 	}
@@ -231,7 +244,7 @@ func mapCreation(x creationInput) (identity.Command, error) {
 	if err != nil {
 		return identity.Command{}, apikey.ErrDenied
 	}
-	op := operationFor(x.Binding.OperationID)
+	op := managementOperationForBinding(x.Binding)
 	fields = append(fields, identity.FeatureField{Name: intentField(op), Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest[:]}})
 	return identity.NewFeatureSessionCommand(identity.FeatureCommandSpec{Binding: x.Binding, Operation: op, Fields: fields}, x.Bearer)
 }
