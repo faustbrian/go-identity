@@ -282,6 +282,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	apiKey                   bool
 	apiKeyUpgrade            bool
+	apiKeyLegacy             bool
 	organization             bool
 	organizationUpgrade      bool
 	organizationTransfer     bool
@@ -1820,7 +1821,7 @@ END $$`); err != nil {
 	}
 	if extensions.apiKey {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
-			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade)
+			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade, extensions.apiKeyLegacy)
 		}
 	}
 	if extensions.passkey {

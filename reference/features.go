@@ -1170,6 +1170,17 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 					return err
 				}
 			}
+			if owner.legacy {
+				if err := owner.native.InitializeLegacyConfiguration(w, tenant); err != nil {
+					var conflict identity.ConflictError
+					if !errors.As(err, &conflict) {
+						return err
+					}
+					if err := owner.native.CheckLegacyConfiguration(w, tenant); err != nil {
+						return err
+					}
+				}
+			}
 		}
 	}
 	s.mu.Lock()

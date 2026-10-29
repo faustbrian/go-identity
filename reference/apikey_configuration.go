@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -15,8 +16,10 @@ import (
 	"github.com/faustbrian/go-postgres"
 )
 
-// APIKeyConfiguration selects the native modern self-owned password-bearer
-// profile, independently of HTTP. Current session/profile, policy, coordinator,
+// APIKeyConfiguration selects the native self-owned password-bearer profiles,
+// independently of HTTP. Modern issuance remains mandatory; legacy digest
+// import and verification require explicit selection. Current session/profile,
+// policy, coordinator,
 // request-key and risk-evaluator ownership are derived from this graph; callers
 // supply no replacement authority or domain store. Counters must select the
 // same protected policy/version and schema, with lockout enforcement. Pepper,
@@ -32,11 +35,19 @@ type APIKeyConfiguration struct {
 	RiskKeys             []risk.EvidenceKey
 	ActiveEnvelopeKeyID  string
 	RetainedEnvelopeKeys map[string][]byte
+	// LegacyConfiguration independently selects one verify-only SHA-256 profile.
+	// Zero preserves modern-only storage, startup and operation selection.
+	LegacyConfiguration apikey.Configuration
+	// ValidateCanonicalKeyID is required only with LegacyConfiguration. It must
+	// honor cancellation, preserve existing canonical IDs and be concurrency-safe.
+	// It supplies identifier policy, never owner or import-source authority.
+	ValidateCanonicalKeyID func(context.Context, apikey.KeyID) error
 }
 
 type apiKeyState struct {
 	native  *apikeypg.Service
 	maximum time.Duration
+	legacy  bool
 }
 
 func composeAPIKey(c StoreConfiguration, pool *postgres.Pool, sessions *sessionState, policy risk.Policy, evaluation risk.Evaluator) (*apiKeyState, error) {
@@ -72,11 +83,11 @@ func composeAPIKey(c StoreConfiguration, pool *postgres.Pool, sessions *sessionS
 	query.Clock = clock.System{}
 	coordinator := c.OTP.Coordinator
 	coordinator.QueryPolicy, coordinator.AdmissionPolicy = &query, &query
-	native, err := apikeypg.NewService(pool, apikeypg.ServiceConfig{Configuration: n.Configuration, Clock: clock.System{}, MaximumDuration: n.MaximumDuration, Sessions: sessions.reader, Session: c.Session.Native.Execution.Repository, Profile: *selection.Verified, LookupKeys: lookup, Authorization: query.Authorization, PolicyID: n.PolicyID, PolicyVersion: query.PolicyVersion, Pepper: n.Pepper, Counters: counters, Risk: risk.ProtectedProviderAdmissionCustodyConfig{Evaluation: evaluation, ConfigurationID: n.RiskConfigurationID, Keys: n.RiskKeys}, CounterPolicy: policy, Coordinator: coordinator, RequestKeys: c.OTP.RequestKeys, ActiveEnvelopeKeyID: n.ActiveEnvelopeKeyID, RetainedEnvelopeKeys: n.RetainedEnvelopeKeys})
+	native, err := apikeypg.NewService(pool, apikeypg.ServiceConfig{Configuration: n.Configuration, LegacyConfiguration: n.LegacyConfiguration, ValidateCanonicalKeyID: n.ValidateCanonicalKeyID, Clock: clock.System{}, MaximumDuration: n.MaximumDuration, Sessions: sessions.reader, Session: c.Session.Native.Execution.Repository, Profile: *selection.Verified, LookupKeys: lookup, Authorization: query.Authorization, PolicyID: n.PolicyID, PolicyVersion: query.PolicyVersion, Pepper: n.Pepper, Counters: counters, Risk: risk.ProtectedProviderAdmissionCustodyConfig{Evaluation: evaluation, ConfigurationID: n.RiskConfigurationID, Keys: n.RiskKeys}, CounterPolicy: policy, Coordinator: coordinator, RequestKeys: c.OTP.RequestKeys, ActiveEnvelopeKeyID: n.ActiveEnvelopeKeyID, RetainedEnvelopeKeys: n.RetainedEnvelopeKeys})
 	if err != nil {
 		return nil, invalid
 	}
-	return &apiKeyState{native: native, maximum: n.MaximumDuration}, nil
+	return &apiKeyState{native: native, maximum: n.MaximumDuration, legacy: n.LegacyConfiguration != (apikey.Configuration{})}, nil
 }
 
 func (APIKeyConfiguration) Format(s fmt.State, _ rune) {

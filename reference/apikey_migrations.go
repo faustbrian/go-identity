@@ -26,9 +26,17 @@ func (s StoreSet) apiKeyMigrationCatalog(ctx context.Context, catalog []migratio
 		}
 		catalog = append(catalog, migrationHistory{namespace: "identity_risk_lockouts", history: steps[len(steps)-1:], owners: map[migrations.Version]ModuleID{5: "identity/risk/postgres"}, guards: []migrationGuard{{version: 5, schema: schema, tables: []string{"counter_lockouts"}}}})
 	}
-	steps, err := (apikeypg.MigrationSource{Version: 1}).Load(ctx)
+	var source migrations.Source = apikeypg.MigrationSource{Version: 1}
+	owners := map[migrations.Version]ModuleID{1: "identity/apikey/postgres"}
+	guards := []migrationGuard{{version: 1, schema: "identity_api_keys", tables: []string{"configurations", "keys", "command_effects"}}}
+	if s.state.features.apiKey.legacy {
+		source = apikeypg.LegacyMigrationSource{Base: source, Version: 2}
+		owners[2] = "identity/apikey/postgres"
+		guards = append(guards, migrationGuard{version: 2, schema: "identity_api_keys", tables: []string{"legacy_imports"}})
+	}
+	steps, err := source.Load(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return append(catalog, migrationHistory{namespace: "identity_api_keys", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/apikey/postgres"}, guards: []migrationGuard{{version: 1, schema: "identity_api_keys", tables: []string{"configurations", "keys", "command_effects"}}}}), nil
+	return append(catalog, migrationHistory{namespace: "identity_api_keys", history: steps, owners: owners, guards: guards}), nil
 }

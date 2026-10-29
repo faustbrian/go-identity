@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose opt-in digest-only legacy API-key import, unchanged bare SHA-256
+  verification and modern successor rotation through the existing guarded
+  owner. Selected legacy history is additive to populated modern installations;
+  startup checks exact configuration without reviving disabled authority.
+  Existing bearer HTTP rotates imported canonical IDs to modern successors
+  and revokes those successors.
+  Native selection adds no import route or default legacy capability.
+
 - Compose modern self-owned API-key issuance, atomic verification, rotation,
   revocation and original recovery through guarded native handles. Independently
   opt into strict-bearer keyed HTTP create/rotate/delete with shared rate

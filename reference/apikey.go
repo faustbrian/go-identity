@@ -56,6 +56,17 @@ func (a *APIKeyService) Create(ctx context.Context, r apikey.CreateRequest) (api
 	return n.native.Create(w, r)
 }
 
+// Import retains the selected native digest-only workflow, current source and
+// owner authorization, and original outcome recovery. It never issues a key.
+func (a *APIKeyService) Import(ctx context.Context, r apikey.ImportRequest) (identity.CommandResult, error) {
+	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
+	if err != nil {
+		return identity.CommandResult{}, err
+	}
+	defer done()
+	return n.native.Import(w, r)
+}
+
 // Rotate retains zero-overlap native successor issuance without widening grants.
 func (a *APIKeyService) Rotate(ctx context.Context, r apikey.Rotation) (apikey.IssuanceResult, error) {
 	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
@@ -114,3 +125,4 @@ func (APIKeyService) MarshalJSON() ([]byte, error) { return nil, apikey.ErrDiscl
 func (APIKeyService) MarshalText() ([]byte, error) { return nil, apikey.ErrDisclosure }
 
 var _ apikey.Service = (*APIKeyService)(nil)
+var _ apikey.LegacyImporter = (*APIKeyService)(nil)

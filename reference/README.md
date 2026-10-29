@@ -3,7 +3,10 @@
 ## Optional API-key backend
 
 Select native `APIKey` and independently select `HTTPAPIKey.Create`, `Rotate`
-and `Revoke` for modern self-owned password-bearer keys. The graph owns the
+and `Revoke` for self-owned password-bearer keys. Modern issuance remains the
+default; explicit `APIKey.LegacyConfiguration` and `ValidateCanonicalKeyID`
+add digest-only legacy import and unchanged bare-key verification. Rotation
+uses the existing modern issuer. The graph owns the
 actual session, risk, transaction, migration and secret-custody composition.
 Disabled operations expose no routes or OpenAPI metadata. See the
 [configuration and consumer walkthrough](APIKEY.md) for initialization,

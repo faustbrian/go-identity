@@ -38,7 +38,7 @@ type ReferenceDependencies struct {
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
-	// APIKey independently selects native modern human-owned key workflows.
+	// APIKey selects native modern issuance and optional legacy human-owned keys.
 	APIKey *APIKeyConfiguration
 	// HTTPAPIKey independently selects strict-bearer management routes.
 	HTTPAPIKey *HTTPAPIKeyConfiguration

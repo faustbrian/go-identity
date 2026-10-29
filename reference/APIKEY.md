@@ -1,8 +1,8 @@
-# Optional modern self-owned API keys
+# Optional self-owned API keys
 
 This selected backend composes public native owners. It is not an API-key
 authentication session issuer, an administrative UI or complete M21 support.
-Organization ownership, legacy import, finite quotas and cache projections
+Organization ownership, no-expiry legacy keys, finite quotas and cache projections
 remain separate profiles.
 
 ## Configuration and ownership
@@ -74,7 +74,7 @@ the same key and complete input. None of these routes falls back to cookies.
 | Route | JSON body | Result |
 | --- | --- | --- |
 | `POST /v1/apikey/create` | `name`, explicit `permissions` array, absolute RFC3339 `expiresAt` | Committed key metadata and original invocation's secret |
-| `POST /v1/apikey/rotate` | `keyID`, `expectedVersion` | Modern successor with unchanged permissions/absolute expiry; predecessor denies immediately |
+| `POST /v1/apikey/rotate` | `keyID`, `expectedVersion` | Modern successor with unchanged permissions; modern expiry is preserved, legacy expiry is bounded by both original expiry and current modern lifetime; predecessor denies immediately |
 | `POST /v1/apikey/delete` | `keyID`, `expectedVersion` | Terminal revocation; no secret |
 
 Persist the returned credential only through the application's explicit secret
@@ -90,6 +90,38 @@ Current user/configuration/policy and the original sensitive-proof freshness
 remain native-owned; retries and recent reads cannot renew that freshness.
 Responses are non-cacheable and contain no session cookie or CSRF credential.
 
+## Digest-only legacy import
+
+Opt in with `APIKey.LegacyConfiguration`, a distinct verify-only
+`AlgorithmLegacySHA256V1` configuration sharing the modern issuer, environment
+and audience. Supply `APIKey.ValidateCanonicalKeyID`, a bounded,
+concurrency-safe policy that accepts the deployment's canonical historical IDs
+unchanged, including ULIDs. It cannot supply owner or import-source authority.
+This finite native profile requires absolute expiry, unlimited quota, no cache
+and Narrow permission reduction; unsupported alternatives reject rather than
+fall back. Leaving the legacy configuration zero retains modern-only behavior.
+
+Re-plan and apply `identity/apikey/postgres` through the same operator APIs.
+The selected native legacy migration is version 2 in the existing API-key
+namespace; version 1 and populated modern key/account/session history remain
+unchanged. Initialization installs or checks both exact selected configurations.
+Reconstruction never enables a disabled configuration or replaces its policy.
+
+Use `FeatureSet.APIKeys().Import` with the fresh genuine password bearer, an
+original idempotency key, exact typed record, source ID/version and
+`LegacyDigest`. Import accepts no plaintext and creates no issuance/reveal.
+Native authorization separately checks the current owner, source and grants.
+Original/source recovery, conflicts, terminal tombstones and required effects
+remain native-owned; reconstructing the graph cannot rerun an original import.
+
+Use `VerifyAndConsume` with `LegacySecret` and the exact server-selected legacy
+configuration. Existing bare bytes are hashed unchanged; token text selects no
+profile and cannot trigger a fallback. The guarded native API adds no HTTP
+import route. The independently selected existing rotation route accepts the
+imported canonical ID and creates a modern successor without extending expiry;
+the revocation route retains terminal denial for that successor. Current session logout also
+denies original management retries. No browser session is issued by key use.
+
 ## Executable acceptance
 
 The integration test uses real PostgreSQL and the supported public module pins:
@@ -103,3 +135,8 @@ With a task-owned PostgreSQL fixture configured through the existing
 `IDENTITY_REFERENCE_POSTGRES_PORT` contract, run the Reference module's
 `TestReferencePostgresAPIKeyHTTPS` integration test with race detection. Use
 task-owned Go caches and remove the fixture/caches after the bounded run.
+
+`TestReferencePostgresLegacyAPIKeyHTTPS` additionally proves populated modern
+migration, source-version-preserving import, unchanged bare verification, graph
+reconstruction/original recovery, actual HTTPS rotation/revocation, logout and
+disabled-configuration startup denial through the same public owners.
