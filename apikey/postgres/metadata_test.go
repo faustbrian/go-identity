@@ -12,7 +12,12 @@ import (
 
 func TestMetadataCursorIsOnlyABoundedScopedPosition(t *testing.T) {
 	scope := [32]byte{1}
-	for _, id := range []apikey.KeyID{"canonical-key", "01ARZ3NDEKTSV4RRFFQ69G5FAV", apikey.KeyID(strings.Repeat("k", 128))} { // gitleaks:allow -- Public metadata cursor positions, not credentials.
+	positions := []apikey.KeyID{
+		"canonical-position",
+		"01ARZ3NDEKTSV4RRFFQ69G5FAV",
+		apikey.KeyID(strings.Repeat("k", 128)),
+	}
+	for _, id := range positions {
 		cursor := encodeMetadataCursor(id, scope)
 		got, err := decodeMetadataCursor(cursor, scope)
 		if err != nil || got != id || len(cursor) > 512 {
