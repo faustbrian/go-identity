@@ -1,5 +1,128 @@
 # Identity Implementation — Current Milestone
 
+2026-10-29 13:01 UTC — independent native M32 managed workload lane SELECTED.
+Owner oauth_managed_workload, go-oauth-server/mainaf9690ec only. Writable: new
+workload-management source/tests; narrowly affected root client_management.go,
+service.go/discovery.go and module-local docs/go.mod/go.sum; native client_registry,
+client_management/config/workload/store/phase/recovery plus new focused source/
+tests, necessary forward-only client-registry migrations and native docs/pins.
+No HTTP/Reference, shared identity/kernel/session/risk, exchange, organization,
+SSO/SCIM or root inventory/CI/tooling writes. No children or Git delivery. Others
+share code; preserve their work. Parent owns publication and integration.
+Consumed: actual root/native af9690ec; native root5102ba3e public; real kernel
+directory/authorization and native managed-client/session/key-custody owners
+pinned in postgres/go.mod. Configured static workload issue/introspect/revoke
+already delivered28444ed; preserve, do not rebuild it. Readiness source report
+oauth_workload_readiness confirms required upstream behaviors exist, no stub.
+Outcome: genuine fresh authorized platform manager registers one confidential
+machine client from a trusted workload allowlist; original reveal-once secret
+obtains access-only tokens; owning client introspects/revokes; terminal client
+deletion denies subsequent issuance/use. Preserve owner/actor/tenant/workload
+separation, current authority and original <=20s evidence, non-expanding scopes
+and audiences. No caller-selected customer/actor, fabricated human or private
+session/grant/replay/authority engine. Existing registry/coordinator owns it.
+Cases: scope/tenant/resource/client-type denial, CSRF/fresh/current manager denial,
+reveal/restart, no code/refresh/ID-token issuance, authority withdrawal/outage,
+delete-versus-issue/introspect contention, required-effect rollback, original
+unknown metadata-only recovery, populated histories and unchanged static flows.
+Rotation/other auth methods only if the selected profile advertises them; missing
+variants fail closed and remain in full goals. Checks: root TDD then native real
+PG/race integration, affected static/module/fuzz/scans, one complete independent
+review per published prerequisite and actual public consumer. Stop for parent
+alignment at FIRST public shape/usage; parent publishes root before native pin.
+HEAVY SLOT granted only initial bounded root TDD/race/vet module session, with
+owned caches/cleanup and actual pinned Go1.27.3. No native PG until separate
+grant. Primary meanwhile owns next API-key Update HTTP/Reference integration.
+
+2026-10-29 12:58 UTC — bounded independent OAuth M32 readiness inspection.
+Owner oauth_workload_readiness; READ ONLY, no writable paths/Git/Go/services/
+children. Exact current go-oauth-server mainaf9690ec5d07b96f5d167df2d507679fcaa9d407,
+clean. Consume preceding actual public native code/refresh/OIDC contracts and
+current committed shared identity/session/client authority, not private engines.
+Inspect only whether one platform-owned workload client-credentials issue /
+introspection / revocation consumer can proceed independently while primary
+integrates API-key Update HTTP/Reference. Return ready/missing actual prerequisite,
+existing owners/source pins, finite path ownership and smallest success/denial/
+recovery tests. No implementation or speculative protocol stubs. Primary does
+not wait for this inspection; all integration/acceptance and future assignment
+remain primary-owned. No SSO/SCIM rediscovery or unrelated OAuth profile fan-out.
+
+2026-10-29 12:58 UTC — native keyed Update prerequisite DELIVERED.
+Main/origin cdf551ebe813e0983115d9870021d22407852ebf, exact CI SUCCESS
+https://github.com/faustbrian/go-identity/actions/runs/40877093883.
+Complete native16 manifest63d197e7 independently APPROVED by same native reviewer;
+final report /tmp/identity-apikey-update-native.auaCRA/review-final.md. Full ordinary
+module115.917s and affected race47.834s PASS; vet/tidy/module/fuzz654/strictV2scan/
+structure0. Initial full race201.488s remains FAILED; failed authentication setup
+partitions subsequently pass targeted current-source race; no claimed root cause
+or weakened limits. Core counter wording corrected98f935b, CI40874894602SUCCESS,
+no runtime change. Actual public native v0.0.0-20261029125337-cdf551ebe813 origin
+exact/all16 source equal before/after; all four genuine Update consumers race
+38.301s PASS. SQL credential identity unchanged; self/org/legacy/null-expiry,
+terminal/config/expired denial, current creator removal, audit rollback,
+once-only admitted charge, actual lostCOMMIT recovery and contention proven.
+Native service is public and usable; HTTP/Reference Update selection is still
+unfinished, whole M21 and unit qualification remain open. Owned PG/cache cleanup
+completed0; exact build/modules/tmp/pg absence verified. No primary service or
+Go run remains. OAuth worker owns initial root TDD slot; no native PG grant yet.
+
+2026-10-29 12:05 UTC — additive Update CORE prerequisite DELIVERED, not consumer.
+Five-path55d36e78 independently APPROVED by apikey_update_core_review; native
+report in /tmp/identity-apikey-update-core.jifCUN/review.md. Main/origin exact
+ace04b00c0e70ba8de68d7959e32edb93a5bb8a8; CI SUCCESS
+https://github.com/faustbrian/go-identity/actions/runs/40870174108.
+Actual public apikey v0.0.0-20261029120310-ace04b00c0e7 origin exact, all five
+source files match before/after; standalone public core race1.224s PASS.
+Owned build/modules/tmp cleanup0 and absent verified; no local services/jobs.
+Primary next: adopt actual public core into native, add genuine PG Update tests,
+reuse original management participant/Work/counters/recovery; no new engine.
+Name-only marker must retain original configuration epoch; narrowing advances
+existing epoch once. Existing command_effects owns historical outcome custody;
+do not introduce a second journal. Native/HTTP/Reference remain unfinished.
+
+2026-10-29 11:59 UTC — Update lane now PRIMARY-owned after worker usage limit.
+Former41228 handle missing; runtime-red/status prove expected missing validators/
+recovery exit1. Core five-path55d36e78 now implements optional Updater request/
+result shape, explicit self/org schemas, diagnostic redaction and recovery
+routing without changing Service. Initial workspace race1.268s is not standalone
+proof; explicit GOWORK=off Go1.27.2 race1.296s/vet/tidy-diff/modverify all exit0.
+Selected strictscan/structure0. Independent apikey_update_core_review reads
+complete five paths vs41375d3; pending, no publication/native/consumer closure.
+No native writes; no completed metadata/claims reruns. Existing frozen cases,
+path ownership and primary integration retained. No user decision pending.
+
+2026-10-29 11:39 UTC — finite native M21 keyed Update lane selected.
+Owner apikey_metadata: new apikey/update.go/update_test.go, core README/CHANGELOG;
+service.go only additive recovery validation; new apikey/postgres/update*.go/tests,
+native README/CHANGELOG/go.mod/go.sum; narrow native service.go/create_phase.go/
+create_mapping.go/repository.go/organization.go, legacy.go only if dispatch needs
+adjustment. Preserve existing Service implementations, old encodings/migrations
+and every prior consumer. No HTTP/Reference/shared kernel/session/risk/Git/children
+writes. Others share tree; never revert their changes. Parent owns integration.
+Consume committed coreef01/native099 plus unchanged kernel/session/risk6fd24+
+945b17/org3ab779+02c55 contracts proven by preceding public native/Reference
+consumers; current repository main41375d3 has metadata/claims delivery recorded.
+Outcome: genuine fresh human renames and/or explicitly narrows an existing self
+or selected organization modern/legacy key without changing its credential,
+owner, configuration or expiry. Preserve legacy absent expiry. No arbitraryJSON,
+expiry extension, quota/cache/admin or grant expansion in this profile.
+Name-only advances record CAS; narrowing advances existing credential/root and
+configuration authority as the current native reduction contract requires.
+Do not mislabel name-only lifecycle/audit as permission reduction. Use existing
+management participant/coordinator/protected CredentialMutation counters and
+original request-key recovery, not a new authority, Work or replay engine.
+Cases: current policy/fresh-proof/tenant/user/config/member denial; removed
+creator denied while org survives; stale CAS/terminal/expansion denial; retained
+secret verifies only narrowed permissions; digest/owner/lineage/expiry preserved;
+Update/rotate/revoke contention one winner; counter/required-effect rollback;
+exact replay/conflicting intent/reconstruction/actual unknown recovery; no secret
+generation/reveal. Checks: core runtime TDD/race/shape bounds, real native PG/race
+Update and retained mutations/Narrow; affected fuzz/vet/tidy/module/secrets,
+one complete independent final review per published owning prerequisite and
+actual downloaded consumer. Publish reviewed additive core before native pin
+adoption. Stop at first public API boundary for parent alignment; no repeat
+planning inventory. Primary HTTP/Reference follows actual native readiness.
+
 2026-10-29 11:31 UTC — selected M21 metadata HTTP/Reference outcome DELIVERED.
 HTTP5e371f7 and Reference498a983eba17629fbf35ae97d2100141e7e644cf reviewed/main-
 pushed; exact ReferenceCI SUCCESS https://github.com/faustbrian/go-identity/actions/runs/40865463859.

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-29 11:31 UTC
+## Current TL;DR — 2026-10-29 13:09 UTC
 
 - **Overall: ~25%, low-confidence estimate; 10/39 whole milestones closed.**
   Two more selected consumer profiles are delivered below, but whole M21/API
@@ -23,9 +23,29 @@
   [CI-green](https://github.com/faustbrian/go-oauth-server/actions/runs/40864592269).
   Actual public native matches all7 files; fresh/populated RP/contact-removal
   race passes28.020s. HTTP/Reference OAuth composition is still unfinished.
-- **Current:** one bounded read-only map is selecting the next actually ready
-  native API-key management outcome. No successor implementation has started.
-  Previous metadata/claims checks are closed, not being restarted. All owned
+- **Current:** keyed API-key Update core contracts and recovery routing are
+  reviewed and main-pushed ace04b0 with
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40870174108).
+  Standalone Go1.27.2 race/vet/tidy/module and selected security/structure checks
+  pass. All five downloaded public files match; public core race passes1.224s.
+  Durable rename/narrowing is now reviewed and main-pushed cdf551e with
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40877093883).
+  The actual downloaded native module matches all16 reviewed files and passes
+  four real PostgreSQL/race Update journeys38.301s. Current managers can rename
+  or narrow self/organization keys without replacing credentials or expiry,
+  including legacy absent expiry and creator removal. Original snapshots,
+  required effects, uncertain recovery and contention are proven. Local full
+  ordinary115.917s and affected race47.834s pass. The earlier aggregate race
+  remains failed; its failing setup partitions later pass targeted checks, with
+  no claimed environmental repair or weakened security limits. HTTP/Reference
+  Update integration is next; whole M21 and full unit qualification remain open.
+- **Parallel:** a separate worker is implementing managed workload-client OAuth
+  registration using existing client and authority owners. The configured static
+  workload flow already exists and is not being rebuilt. Root TDD has started;
+  this new managed profile is not yet delivered. Primary retains HTTP/Reference
+  integration and final acceptance. Native Update's disposable test services
+  and caches have been removed.
+  Previous metadata/claims checks are closed, not being restarted. Their owned
   test services/caches are removed; nothing waits on a user decision.
 - **Qualification:** the separate historical secret scan still fails. Changed-
   range CI and selected consumers do not establish complete release qualification.
