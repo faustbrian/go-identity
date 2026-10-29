@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep legacy credential and verifier custody redacted inside private diagnostic
+  wrappers as well as direct formatting, without changing digest bytes or APIs.
 - Add explicit verify-only bare SHA-256 credential and digest-only import
   contracts, preserving stable typed metadata and source versions without
   changing modern parsing, HMAC digests or retained configuration bytes.

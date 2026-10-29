@@ -57,7 +57,7 @@ func (r AtomicVerificationRequest) Validate(c Configuration) error {
 	if _, err := ParseVerificationAttemptID(string(r.AttemptID)); err != nil {
 		return ErrInvalid
 	}
-	credentialValid := c.spec.Algorithm == AlgorithmModernHMACSHA256 && r.Secret.state != nil && r.LegacySecret.wire == "" || c.spec.Algorithm == AlgorithmLegacySHA256V1 && r.Secret.state == nil && r.LegacySecret.wire != ""
+	credentialValid := c.spec.Algorithm == AlgorithmModernHMACSHA256 && r.Secret.state != nil && r.LegacySecret.state == nil || c.spec.Algorithm == AlgorithmLegacySHA256V1 && r.Secret.state == nil && r.LegacySecret.state != nil
 	if c.Validate() != nil || !scope(string(r.TenantID), 128) || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || !credentialValid || !validPermissions(r.RequiredPermissions) || r.DebitAmount != 0 {
 		return ErrInvalid
 	}

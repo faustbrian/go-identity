@@ -15,9 +15,12 @@ import (
 )
 
 // LegacySecret is a bounded historical bare credential for verification only.
+// Copies share immutable private state so fmt's traversal through a caller's
+// unexported field cannot bypass Format and print credential bytes.
 // It has no reveal, issuance or serialization operation. Its bytes are hashed
 // unchanged: no normalization, invented prefix or historical-format guessing.
-type LegacySecret struct{ wire string }
+type LegacySecret struct{ state *legacySecretState }
+type legacySecretState struct{ wire string }
 
 // ParseLegacySecret accepts 1..4096 unchanged bytes before any hashing/copy.
 // Parsing proves no authority and does not select the verification algorithm.
@@ -25,13 +28,15 @@ func ParseLegacySecret(wire string) (LegacySecret, error) {
 	if len(wire) == 0 || len(wire) > 4096 {
 		return LegacySecret{}, ErrInvalid
 	}
-	return LegacySecret{wire: strings.Clone(wire)}, nil
+	return LegacySecret{state: &legacySecretState{wire: strings.Clone(wire)}}, nil
 }
 
 // LegacyDigest holds a historical SHA-256 verifier, never a bearer credential.
 // The importer obtains it from authenticated source data, not a raw token.
-// Copies are immutable; formatting and serialization redact the digest.
-type LegacyDigest struct{ sum [32]byte }
+// Copies share immutable private state; even private diagnostic wrappers cannot
+// print verifier bytes by bypassing formatting methods. Serialization rejects.
+type LegacyDigest struct{ state *legacyDigestState }
+type legacyDigestState struct{ sum [32]byte }
 
 // NewLegacyDigest admits exactly a nonzero SHA-256 verifier. It performs no
 // credential verification, source authentication or durable import.
@@ -39,23 +44,36 @@ func NewLegacyDigest(sum [32]byte) (LegacyDigest, error) {
 	if sum == ([32]byte{}) {
 		return LegacyDigest{}, ErrInvalid
 	}
-	return LegacyDigest{sum: sum}, nil
+	return LegacyDigest{state: &legacyDigestState{sum: sum}}, nil
 }
 
 // Sum returns digest-only persistence metadata, not plaintext. Consumers must
 // not log it, expose it as authentication or substitute it for current policy.
-func (d LegacyDigest) Sum() [32]byte                 { return d.sum }
-func (d LegacyDigest) Validate() error               { _, err := NewLegacyDigest(d.sum); return err }
-func (d LegacyDigest) Equal(other LegacyDigest) bool { return hmac.Equal(d.sum[:], other.sum[:]) }
+func (d LegacyDigest) Sum() [32]byte {
+	if d.state == nil {
+		return [32]byte{}
+	}
+	return d.state.sum
+}
+func (d LegacyDigest) Validate() error {
+	if d.state == nil || d.state.sum == ([32]byte{}) {
+		return ErrInvalid
+	}
+	return nil
+}
+func (d LegacyDigest) Equal(other LegacyDigest) bool {
+	a, b := d.Sum(), other.Sum()
+	return hmac.Equal(a[:], b[:])
+}
 
 // Digest computes precisely historical SHA-256 only under a valid, explicit
 // server-selected legacy configuration. Disabled configurations remain
 // representable for retained metadata; they cannot authorize verification.
 func (s LegacySecret) Digest(c Configuration) (LegacyDigest, error) {
-	if s.wire == "" || c.Validate() != nil || c.spec.Algorithm != AlgorithmLegacySHA256V1 {
+	if s.state == nil || c.Validate() != nil || c.spec.Algorithm != AlgorithmLegacySHA256V1 {
 		return LegacyDigest{}, ErrInvalid
 	}
-	return NewLegacyDigest(sha256.Sum256([]byte(s.wire)))
+	return NewLegacyDigest(sha256.Sum256([]byte(s.state.wire)))
 }
 
 // ImportRequest is one authenticated self-owned digest-only source snapshot.

@@ -222,3 +222,47 @@ func FuzzLegacySecretHashesOnlyBoundedUnchangedBytes(f *testing.F) {
 		}
 	})
 }
+
+func TestLegacyCustodyStaysRedactedInsidePrivateDiagnosticWrappers(t *testing.T) {
+	const raw = "private-wrapper-legacy-custody-sentinel"
+	secret, err := apikey.ParseLegacySecret(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sum [32]byte
+	for i := range sum {
+		sum[i] = 0xa5
+	}
+	digest, err := apikey.NewLegacyDigest(sum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// fmt does not invoke methods on an unexported enclosing field. Custody
+	// must remain safe even when that reflection path bypasses Format itself.
+	secretWrapper := struct{ credential apikey.LegacySecret }{secret}
+	digestWrapper := struct{ metadata apikey.LegacyDigest }{digest}
+	nestedSecret := struct{ packet any }{secretWrapper}
+	nestedDigest := struct{ packet any }{digestWrapper}
+	requestWrapper := struct {
+		request apikey.AtomicVerificationRequest
+	}{apikey.AtomicVerificationRequest{LegacySecret: secret}}
+	t.Run("secret", func(t *testing.T) {
+		for _, format := range []string{"%v", "%+v", "%#v"} {
+			for _, value := range []any{secretWrapper, &secretWrapper, nestedSecret, &nestedSecret, requestWrapper, &requestWrapper} {
+				if strings.Contains(fmt.Sprintf(format, value), raw) {
+					t.Fatal("private diagnostic wrapper disclosed legacy plaintext")
+				}
+			}
+		}
+	})
+	t.Run("digest", func(t *testing.T) {
+		for _, format := range []string{"%v", "%+v", "%#v"} {
+			for _, value := range []any{digestWrapper, &digestWrapper, nestedDigest, &nestedDigest} {
+				text := fmt.Sprintf(format, value)
+				if strings.Contains(text, "165 165") || strings.Contains(text, "0xa5, 0xa5") {
+					t.Fatal("private diagnostic wrapper disclosed legacy verifier bytes")
+				}
+			}
+		}
+	})
+}
