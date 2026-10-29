@@ -6,7 +6,7 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
-func operationWire(action string, first bool) *identityhttp.WireOperation {
+func operationWire(action string, first, organizations bool) *identityhttp.WireOperation {
 	text := func(maximum int) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": maximum} }
 	object := func(required []string, properties map[string]any) any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
@@ -17,7 +17,11 @@ func operationWire(action string, first bool) *identityhttp.WireOperation {
 	expected := map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 1, "description": "Exact advanceable unsigned decimal version; fractions, exponent notation and overflow deny."}
 	request := object([]string{"keyID", "expectedVersion"}, map[string]any{"keyID": id, "expectedVersion": expected})
 	if action == "create" {
-		request = object([]string{"name", "permissions", "expiresAt"}, map[string]any{"name": text(128), "permissions": permissions, "expiresAt": map[string]any{"type": "string", "format": "date-time", "description": "Explicit absolute expiry at microsecond precision; native configuration and current authority enforce its lifetime."}})
+		fields := map[string]any{"name": text(128), "permissions": permissions, "expiresAt": map[string]any{"type": "string", "format": "date-time", "description": "Explicit absolute expiry at microsecond precision; native configuration and current authority enforce its lifetime."}}
+		if organizations {
+			fields["organizationID"] = text(128)
+		}
+		request = object([]string{"name", "permissions", "expiresAt"}, fields)
 	}
 	errorCode := map[string]any{"type": "string", "enum": []string{"invalid_request", "forbidden", "conflict", "in_progress", "unavailable", "rate_limited", "not_found", "method_not_allowed", "misdirected_request"}}
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
@@ -43,6 +47,9 @@ func operationWire(action string, first bool) *identityhttp.WireOperation {
 	}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}, "description": "Known shared rate denial; bounded ceiling seconds, no automatic retry."}}
 	definition := map[string]any{"operationId": "identity.apikey." + action, "description": "Opt-in modern self-owned unlimited uncached Narrow API-key management. Exactly one native password session Authorization Bearer and original Idempotency-Key; ambient cookies never provide authority. Exact HTTPS tenant host and transport-derived full client IP; closed JSON, no owner/actor/tenant/configuration/network override. Native current policy and original exclusive15m authentication freshness remain mandatory. Shared IP10/10m and tenant/subject10/10m secret-rate admission is separate from native protected-risk admission. Native owner retains atomic mutation/audit/outbox, zero-overlap rotation, immutable grants/expiry and terminal revocation. Same-key retries disclose original outcome only and cannot reveal a new secret. Unknown or lost response does not authorize replacement issuance; use retained original input/key or direct current-authorized native status recovery. No recovery route or API-key-as-session, organization, legacy, quota or cache profile is selected.", "security": []any{map[string]any{"APIKeyManagementBearer": []string{}}}, "parameters": []any{map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$"}}}, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}}, "responses": responses}
+	if organizations {
+		definition["description"] = "Opt-in user/organization unlimited uncached Narrow API-key management. An optional organizationID on create selects the independent credential owner, never the authenticated human actor or tenant. Native current membership and permission policy authorize management; creator removal preserves organization keys but denies that human's management. Rotate/delete use the key's immutable actual owner. Exactly one password bearer and original Idempotency-Key, trusted HTTPS host/client IP, shared rate admission, atomic effects and reveal-once/unknown custody remain mandatory. No organization key is a user session; legacy import and status recovery remain direct native operations."
+	}
 	wire, _ := json.Marshal(definition)
 	out := &identityhttp.WireOperation{Definition: wire}
 	if first {

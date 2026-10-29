@@ -21,23 +21,25 @@ import (
 const maximumResponseBytes = 131072
 
 type createBody struct {
-	Name        string    `json:"name"`
-	Permissions *[]string `json:"permissions"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	OrganizationID apikey.OrganizationID `json:"organizationID,omitempty"`
+	Name           string                `json:"name"`
+	Permissions    *[]string             `json:"permissions"`
+	ExpiresAt      time.Time             `json:"expiresAt"`
 }
 type mutationBody struct {
 	KeyID           apikey.KeyID `json:"keyID"`
 	ExpectedVersion uint64       `json:"expectedVersion"`
 }
 type input struct {
-	action   string
-	facts    identityhttp.NetworkFacts
-	auth     apikey.Authentication
-	key      identity.IdempotencyKey
-	create   createBody
-	mutation mutationBody
-	observed session.GetResult
-	actor    identity.UserID
+	action        string
+	facts         identityhttp.NetworkFacts
+	auth          apikey.Authentication
+	key           identity.IdempotencyKey
+	create        createBody
+	mutation      mutationBody
+	observed      session.GetResult
+	actor         identity.UserID
+	organizations bool
 }
 
 func (in *input) createRequest() apikey.CreateRequest {
@@ -89,7 +91,7 @@ func reject(w http.ResponseWriter, _ *http.Request, err error) {
 	}{f.code})
 }
 
-func newHandler(c Config, action string, network *identityhttp.NetworkResolver, decoder *identityhttp.RequestDecoder) (http.Handler, error) {
+func newHandler(c Config, action string, network *identityhttp.NetworkResolver, decoder *identityhttp.RequestDecoder, organizations bool) (http.Handler, error) {
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[*input]{MaximumDuration: c.MaximumDuration,
 		Decode: func(r *http.Request) (*input, error) {
 			if r == nil || r.URL == nil {
@@ -126,7 +128,7 @@ func newHandler(c Config, action string, network *identityhttp.NetworkResolver, 
 			if facts.Scheme() != "https" {
 				return nil, identityhttp.ErrInvalidInput
 			}
-			in := &input{action: action, facts: facts, auth: apikey.Authentication{TenantID: facts.TenantID(), Bearer: bearer}, key: key}
+			in := &input{action: action, facts: facts, auth: apikey.Authentication{TenantID: facts.TenantID(), Bearer: bearer}, key: key, organizations: organizations}
 			body, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
 			if err != nil {
 				return nil, identityhttp.ErrInvalidInput
@@ -139,10 +141,20 @@ func newHandler(c Config, action string, network *identityhttp.NetworkResolver, 
 				return json.Unmarshal(value, target)
 			}
 			if action == "create" {
-				if len(body) != 3 || field("name", &in.create.Name) != nil || field("permissions", &in.create.Permissions) != nil || field("expiresAt", &in.create.ExpiresAt) != nil || in.create.Permissions == nil {
+				fields := 3
+				if _, present := body["organizationID"]; present {
+					if !organizations || field("organizationID", &in.create.OrganizationID) != nil || in.create.OrganizationID == "" {
+						return nil, identityhttp.ErrInvalidInput
+					}
+					fields++
+				}
+				if len(body) != fields || field("name", &in.create.Name) != nil || field("permissions", &in.create.Permissions) != nil || field("expiresAt", &in.create.ExpiresAt) != nil || in.create.Permissions == nil {
 					return nil, identityhttp.ErrInvalidInput
 				}
 				err = in.createRequest().Validate()
+				if in.create.OrganizationID != "" {
+					err = (apikey.OrganizationCreateRequest{CreateRequest: in.createRequest(), OrganizationID: in.create.OrganizationID}).Validate()
+				}
 			} else {
 				if len(body) != 2 || field("keyID", &in.mutation.KeyID) != nil || field("expectedVersion", &in.mutation.ExpectedVersion) != nil {
 					return nil, identityhttp.ErrInvalidInput
@@ -199,7 +211,11 @@ func newHandler(c Config, action string, network *identityhttp.NetworkResolver, 
 			var result apikey.IssuanceResult
 			var err error
 			if action == "create" {
-				result, err = c.Creator.Create(r.Context(), in.createRequest())
+				if in.create.OrganizationID != "" {
+					result, err = c.OrganizationCreator.CreateOrganization(r.Context(), apikey.OrganizationCreateRequest{CreateRequest: in.createRequest(), OrganizationID: in.create.OrganizationID})
+				} else {
+					result, err = c.Creator.Create(r.Context(), in.createRequest())
+				}
 			} else {
 				result, err = c.Rotator.Rotate(r.Context(), in.rotation())
 			}
@@ -211,7 +227,7 @@ func newHandler(c Config, action string, network *identityhttp.NetworkResolver, 
 			status, out := projectReceipt(in, receipt, err)
 			if out.Committed {
 				record, ok := result.Record()
-				if !ok || record.ID != apikey.KeyID(receipt.Binding.RecordID) || record.Owner.Spec().TenantID != in.auth.TenantID || record.Owner.Spec().UserID != in.actor || action == "rotate" && record.PreviousID != in.mutation.KeyID {
+				if !ok || record.ID != apikey.KeyID(receipt.Binding.RecordID) || !in.matchesOwner(record.Owner) || action == "rotate" && record.PreviousID != in.mutation.KeyID {
 					writeJSON(w, 503, commandResponse{CommitOutcome: "unknown", Error: "unavailable"})
 					return
 				}
@@ -232,6 +248,17 @@ func newHandler(c Config, action string, network *identityhttp.NetworkResolver, 
 		return nil, err
 	}
 	return &protectedHandler{pipeline: pipeline}, nil
+}
+
+func (in *input) matchesOwner(owner apikey.Owner) bool {
+	o := owner.Spec()
+	if o.TenantID != in.auth.TenantID {
+		return false
+	}
+	if o.Kind == apikey.OwnerOrganization {
+		return in.organizations && o.UserID == "" && o.OrganizationID != "" && (in.action != "create" || in.create.OrganizationID == o.OrganizationID)
+	}
+	return o.Kind == apikey.OwnerUser && o.UserID == in.actor && in.create.OrganizationID == ""
 }
 
 func nonNil(err, fallback error) error {
@@ -273,6 +300,13 @@ func projectReceipt(in *input, r identity.CommandResult, err error) (int, comman
 		return f.status, commandResponse{CommitOutcome: "none", Error: f.code}
 	}
 	b := r.Binding
+	orgSchema := "apikey-" + in.action + "-organization-v1"
+	if in.action == "delete" {
+		orgSchema = "apikey-revoke-organization-v1"
+	}
+	if b.SchemaID == orgSchema && !in.organizations || in.action == "create" && (b.SchemaID == orgSchema) != (in.create.OrganizationID != "") {
+		return 503, commandResponse{CommitOutcome: "unknown", Error: "unavailable"}
+	}
 	if r.Validate() != nil || b.TenantID != in.auth.TenantID || b.UserID != in.actor || b.ActorID != identity.ActorID(in.actor) || b.ActorKind != authorization.SubjectUser || b.OperationID != "identity.apikey."+in.action || b.AnonymousFlowID != "" || b.LinkMode != 0 || r.Feature == nil || r.Feature.Operation.Owner != "identity/apikey" || in.action == "delete" && b.RecordID != string(in.mutation.KeyID) {
 		return 503, commandResponse{CommitOutcome: "unknown", Error: "unavailable"}
 	}

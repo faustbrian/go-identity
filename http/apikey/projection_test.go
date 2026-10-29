@@ -13,17 +13,23 @@ import (
 	"github.com/faustbrian/go-identity/apikey"
 )
 
-func wireFixtureResult(t *testing.T, f fixture, action string, outcome identity.CommitOutcome, empty bool) (apikey.IssuanceResult, identity.CommandResult) {
+func wireFixtureResult(t *testing.T, f fixture, action string, outcome identity.CommitOutcome, empty bool, owners ...apikey.Owner) (apikey.IssuanceResult, identity.CommandResult) {
 	t.Helper()
 	c, err := apikey.NewConfiguration(apikey.ConfigurationSpec{ID: "automation", Revision: 1, State: apikey.ConfigurationActive, Issuer: "https://issuer.example", Environment: "test", Audience: "resource-api", PermissionReduction: apikey.PermissionReductionNarrow, MaximumLifetime: 90 * 24 * time.Hour, MaximumRead: time.Second, ClockUncertainty: time.Second, DecisionRaceBudget: time.Second, Quota: apikey.QuotaUnlimited, Cache: apikey.CacheDisabled})
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner, _ := apikey.NewOwner(apikey.OwnerSpec{TenantID: "tenant-a", Kind: apikey.OwnerUser, UserID: "user-a", Version: 1})
+	if len(owners) == 1 {
+		owner = owners[0]
+	}
 	command, _ := identity.NewCommandID()
 	schema := "apikey-" + action + "-v1"
 	if action == "delete" {
 		schema = "apikey-revoke-v1"
+	}
+	if owner.Spec().Kind == apikey.OwnerOrganization {
+		schema = strings.TrimSuffix(schema, "-v1") + "-organization-v1"
 	}
 	op := identity.FeatureOperation{Owner: "identity/apikey", OperationID: "identity.apikey." + action, SchemaID: schema, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	id := apikey.KeyID("issued-key")

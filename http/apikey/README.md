@@ -30,8 +30,9 @@ absent. Construction performs no database, policy, credential or provider IO.
 ## Input and output custody
 
 - Exact HTTPS tenant hosts and trusted full IP come from `NetworkConfig`, not
-  body fields or untrusted forwarding headers. Owner, actor, tenant and native
+  body fields or untrusted forwarding headers. Actor, tenant and native
   configuration are not request-selected. Query inputs are forbidden.
+  The explicit organization profile below accepts only its typed owner target.
 - JSON fields are exact, closed and duplicate-free. Names are at most128 UTF-8
   bytes. Permissions are an explicit array of at most64 bytewise-sorted unique
   strings, each at most128 UTF-8 bytes; `[]` is a zero-permission ceiling.
@@ -55,12 +56,38 @@ absent. Construction performs no database, policy, credential or provider IO.
 
 ## Supported profile and remaining work
 
-This slice selects modern self-owned human password-bearer management with
-unlimited quota, no cache and native Narrow permission reduction. Organization,
-legacy import, finite quota, projections and API-key-as-session authentication
+This slice selects modern self-owned and explicitly selected organization-owned
+human password-bearer management with unlimited quota, no cache and native Narrow
+permission reduction. Legacy import, finite quota, projections and API-key-as-session authentication
 are separate profiles, not fallback behavior. Full Reference composition,
 release qualification and complete M21 acceptance remain in progress.
 
 The tests distinguish wire-port doubles from the genuine PostgreSQL/HTTPS
 consumer in the owning native module. Local workspace integration is not proof
 that an unpublished module is available to a clean public consumer.
+
+## Explicit organization profile
+
+Set `FeatureConfig.OrganizationOwned` and supply `Config.OrganizationCreator`
+when selecting `Create`. The existing create route then accepts optional
+`organizationID`; its absence still selects the ordinary self-key port. Unknown,
+null, empty, duplicate, aliased and oversized owner fields deny before session,
+rate or native work. The optional property appears only in the selected OpenAPI
+request schema. Actor and tenant still come exclusively from the genuine bearer
+and trusted host; an organization target is not a supplied principal.
+
+Supply the actual native `NewOrganizationService` for selected organization
+management. Its current-member policy, protected authority fences and independent
+credential epoch own permission to act; HTTP neither reads membership tables nor
+creates an organization store. Rotation/revocation select the key's immutable
+actual owner. The response's recovery actor remains the human manager rather
+than a fabricated credential-owning user. Retain the target organization with
+the original key/input for direct `RecoverOrganization` status queries.
+
+For user-only HTTP, supply native `NewService` mutation ports. The wire flag is
+not a replacement for that domain restriction, and HTTP cannot undo effects
+from a wrongly supplied port. Reference composition must select the matching
+native profile even when its separate direct API enables organization support.
+Unselected organization input and organization result projections fail closed;
+neither failed nor unknown output reveals a key, and wrong-owner committed
+output is reported as unavailable without disclosure.
