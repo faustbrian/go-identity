@@ -57,7 +57,8 @@ func (r *ContributorRegistry) FeatureOperations() []FeatureRegistration {
 }
 
 // Only trusted coordinator preparation can select this registered identity.
-// The complete descriptor (including record policy) must match, not its name.
+// The complete descriptor (including record and version policy) must match,
+// not its name. One schema cannot register competing version policies.
 func (r *ContributorRegistry) selectFeatureOperation(p FeatureRegistration) (registeredContributor, error) {
 	if r == nil || r.state == nil || p.Operation.Validate() != nil {
 		return registeredContributor{}, invalidRegistry()

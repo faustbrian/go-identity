@@ -52,12 +52,17 @@ func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.Fea
 			}
 			binding.CommandID = identity.CommandID(base64.RawURLEncoding.EncodeToString(r.data[:16]))
 			r.data = r.data[16:]
-		case "policy_version", "schema_version", "link_mode", "record_requirement", "subject_requirement":
+		case "policy_version", "schema_version", "link_mode", "record_requirement", "subject_requirement", "version_policy":
 			value, ok := r.head(0)
 			if !ok {
 				return invalid()
 			}
 			switch key {
+			case "version_policy":
+				if value != uint64(identity.FeatureVersionSnapshotImport) {
+					return invalid()
+				}
+				feature.VersionPolicy = identity.FeatureVersionSnapshotImport
 			case "subject_requirement":
 				if value != uint64(identity.FeatureSubjectAnonymousFlow) {
 					return invalid()
@@ -118,7 +123,7 @@ func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.Fea
 			}
 		}
 	}
-	if seen["feature_owner"] || seen["record_requirement"] || seen["subject_requirement"] {
+	if seen["feature_owner"] || seen["record_requirement"] || seen["subject_requirement"] || seen["version_policy"] {
 		feature.OperationID, feature.SchemaID, feature.SchemaVersion = binding.OperationID, binding.SchemaID, binding.SchemaVersion
 		if !seen["feature_owner"] || !seen["record_requirement"] || len(r.data) != 0 || binding.ValidateFor(feature) != nil || !bytes.Equal(encoded, commandSafeFields(binding, &feature)) {
 			return invalid()

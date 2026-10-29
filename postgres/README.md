@@ -1,5 +1,16 @@
 # Identity PostgreSQL
 
+## Source-version snapshot imports
+
+Trusted feature schemas may explicitly select `FeatureVersionSnapshotImport`
+when importing an absent local record with a positive source version. The
+coordinator binds that exact policy in command intent, collision scope,
+request-preparation identity, historical plans, lifecycle and journal receipts.
+Existing sequential schemas retain their bytes and adjacent-version rules.
+Policy changes cannot borrow a registered schema or its original preparation.
+The native importing owner must authorize the source and atomically fence local
+absence; this declaration grants neither import authority nor overwrite rights.
+
 ## Atomic API-key verification effects
 
 The native verifier uses `ExecutePreparedAPIKeyVerification` to submit original

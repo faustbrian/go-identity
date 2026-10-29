@@ -235,6 +235,9 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		if feature.SubjectRequirement != identity.FeatureSubjectUser {
 			scope["subject_requirement"] = cborUint(uint64(feature.SubjectRequirement))
 		}
+		if feature.VersionPolicy != identity.FeatureVersionSequential {
+			scope["version_policy"] = cborUint(uint64(feature.VersionPolicy))
+		}
 	}
 	safe := cborMap(scope)
 	scope["payload"] = cborMap(payload)
@@ -252,6 +255,9 @@ func commandSafeFields(b identity.CommandBinding, feature *identity.FeatureOpera
 		scope["record_requirement"] = cborUint(uint64(feature.RecordRequirement))
 		if feature.SubjectRequirement != identity.FeatureSubjectUser {
 			scope["subject_requirement"] = cborUint(uint64(feature.SubjectRequirement))
+		}
+		if feature.VersionPolicy != identity.FeatureVersionSequential {
+			scope["version_policy"] = cborUint(uint64(feature.VersionPolicy))
 		}
 	}
 	return cborMap(scope)

@@ -287,6 +287,15 @@ func FuzzDecodeFeaturePlan(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(wire)
+	p.Feature.Operation.VersionPolicy = identity.FeatureVersionSnapshotImport
+	p.Lifecycle.AfterVersion = 3
+	wire, err = encodeFeaturePlan(s.Binding, [32]byte{1}, p)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(wire)
+	p.Feature.Operation.VersionPolicy = identity.FeatureVersionSequential
+	p.Lifecycle.AfterVersion = 1
 	p.SubjectType = "session"
 	p.Audits[0].RetentionClass = "standard"
 	wire, err = encodeFeaturePlan(s.Binding, [32]byte{1}, p)

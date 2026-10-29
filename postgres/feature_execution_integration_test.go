@@ -22,6 +22,7 @@ import (
 // the coordinator, not a real session issuer or production adapter composition.
 type featureExecutionPhase struct {
 	anonymous                                       bool
+	snapshotVersion                                 uint64
 	fail, wrongReceipt, panicApply, unknownRecovery bool
 	panicValidate                                   bool
 	calls                                           int
@@ -41,6 +42,9 @@ func (phase *featureExecutionPhase) FeatureOperations() []identity.FeatureOperat
 	if phase.anonymous {
 		operations[0].SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}
+	if phase.snapshotVersion > 0 {
+		operations[0].VersionPolicy = identity.FeatureVersionSnapshotImport
+	}
 	return operations
 }
 func (phase *featureExecutionPhase) ValidateFeatureCommand(command identity.Command, p CommandPlan) error {
@@ -48,7 +52,11 @@ func (phase *featureExecutionPhase) ValidateFeatureCommand(command identity.Comm
 		panic("private validation diagnostic")
 	}
 	s, ok := command.Feature()
-	if !ok || s.Operation != phase.FeatureOperations()[0] || len(s.Fields) != 1 || s.Fields[0].Name != "value" || s.Fields[0].Value.Kind != identity.FeatureText || s.Fields[0].Value.Text == "" || p.SubjectType != "session" || len(p.Audits) < 1 || len(p.Audits) > 2 || p.Audits[0].EventType != "session.issue" || p.Lifecycle == nil || p.Lifecycle.EventType != "session.created.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != 1 {
+	after := uint64(1)
+	if phase.snapshotVersion > 0 {
+		after = phase.snapshotVersion
+	}
+	if !ok || s.Operation != phase.FeatureOperations()[0] || len(s.Fields) != 1 || s.Fields[0].Name != "value" || s.Fields[0].Value.Kind != identity.FeatureText || s.Fields[0].Value.Text == "" || p.SubjectType != "session" || len(p.Audits) < 1 || len(p.Audits) > 2 || p.Audits[0].EventType != "session.issue" || p.Lifecycle == nil || p.Lifecycle.EventType != "session.created.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != after {
 		return invalidPlan()
 	}
 	if len(p.Audits) == 2 && (p.Audits[1].EventType != "session.authority" || p.Audits[1].RetentionClass != "protected") {
@@ -61,6 +69,7 @@ func (phase *featureExecutionPhase) ValidateFeatureCommand(command identity.Comm
 // it does not replace the production audit adapter's interoperability gate.
 type featureExecutionAuditPhase struct {
 	fail, anonymous bool
+	snapshotVersion uint64
 	afterPersist    func(context.Context, Work) error
 }
 
@@ -73,7 +82,7 @@ func (p *featureExecutionAuditPhase) PersistAudits(ctx context.Context, w Work) 
 		return err
 	}
 	for _, record := range records {
-		if record.Feature != (&featureExecutionPhase{anonymous: p.anonymous}).FeatureOperations()[0] || record.SubjectType != "session" {
+		if record.Feature != (&featureExecutionPhase{anonymous: p.anonymous, snapshotVersion: p.snapshotVersion}).FeatureOperations()[0] || record.SubjectType != "session" {
 			return identity.InvalidInputError{Field: "staged_feature_scope"}
 		}
 		if _, err := w.Exec(ctx, `INSERT INTO public.identity_test_feature_audits(event_id,command_id,event_index,retention_class) VALUES($1,$2,$3,$4)`, record.Record.ID(), string(w.state.binding.CommandID), int64(record.Plan.EventIndex), record.Record.Attributes()["retention.class"]); err != nil {
@@ -161,6 +170,9 @@ func (p *featureExecutionPhase) ApplyFeature(ctx context.Context, w Work, comman
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
 	result := identity.FeatureReceipt{Operation: s.Operation, AfterVersion: 1}
+	if p.snapshotVersion > 0 {
+		result.AfterVersion = p.snapshotVersion
+	}
 	if p.wrongReceipt {
 		result.BeforeVersion, result.AfterVersion = 1, 2
 	}
@@ -212,7 +224,10 @@ func testFeatureExecution(t *testing.T, ctx context.Context, pool *database.Pool
 		base.Audits[0].RetentionClass = "standard"
 		base.SubjectType = "session"
 		base.Feature = &FeatureRegistration{Contributor: phase.Descriptor(), Operation: s.Operation}
-		seed, e := securityMutationAudit(ctx, s.Binding, 0, 1, time.Now().UTC().Truncate(time.Microsecond), "committed", "session.issue", "session", s.Binding.RecordID, "standard", true)
+		if phase.snapshotVersion > 0 {
+			base.Lifecycle.AfterVersion = phase.snapshotVersion
+		}
+		seed, e := securityMutationAudit(ctx, s.Binding, 0, base.Lifecycle.AfterVersion, time.Now().UTC().Truncate(time.Microsecond), "committed", "session.issue", "session", s.Binding.RecordID, "standard", true)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -242,6 +257,78 @@ func testFeatureExecution(t *testing.T, ctx context.Context, pool *database.Pool
 			t.Fatalf("feature atomic state %d/%d/%d: %v", d, a, o, err)
 		}
 	}
+	t.Run("snapshot import commit rollback and original recovery", func(t *testing.T) {
+		originalRegistry := c.registry
+		phase.snapshotVersion, auditing.snapshotVersion = 3, 3
+		defer func() {
+			c.registry = originalRegistry
+			phase.snapshotVersion, auditing.snapshotVersion = 0, 0
+			auditing.fail, lifecycle.fail = false, false
+		}()
+		c.registry, err = NewContributorRegistry([]Contributor{repo, auditing, lifecycle, phase})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, mode := range []string{"commit", "audit failure", "outbox failure"} {
+			t.Run(mode, func(t *testing.T) {
+				b, command, p := prepare(t)
+				r := reserve(t, b, command, p)
+				w, err := c.Begin(ctx, r)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer c.Abort(w, identity.UnavailableError{})
+				auditing.fail, lifecycle.fail = mode == "audit failure", mode == "outbox failure"
+				defer func() { auditing.fail, lifecycle.fail = false, false }()
+				result, err := c.ApplyFeature(ctx, w, command)
+				if err != nil {
+					t.Fatal("snapshot Apply rejected source version", err)
+				}
+				result, err = c.Commit(w, result)
+				if mode == "audit failure" {
+					// The unavailable audit owner also prevents the required
+					// terminal-failure audit: rollback is not a durable receipt.
+					if err == nil || result.Outcome != identity.CommitOutcomeUnknown {
+						t.Fatal("unavailable failure audit fabricated a terminal outcome", err)
+					}
+					counts(t, b, 0, 0, 0)
+					auditing.fail = false
+					id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+					if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id); err != nil {
+						t.Fatal(err)
+					}
+				} else if mode != "commit" {
+					if err == nil || result.Outcome != identity.CommitOutcomeNotCommitted || result.Feature == nil || result.Feature.BeforeVersion != 0 || result.Feature.AfterVersion != 0 {
+						t.Fatal("failed snapshot fabricated a committed source version", err)
+					}
+					counts(t, b, 0, 1, 0)
+				} else {
+					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Feature == nil || result.Feature.BeforeVersion != 0 || result.Feature.AfterVersion != 3 {
+						t.Fatal("snapshot commitment changed original source version", err)
+					}
+					counts(t, b, 1, 1, 1)
+				}
+				calls := phase.calls
+				q, caller := queryInputs(b)
+				recovered, err := c.RecoverFeatureCommand(ctx, q, caller)
+				want := identity.FeatureReceipt{Operation: p.Feature.Operation}
+				wantOutcome, validError := identity.CommitOutcomeNotCommitted, false
+				var unavailable identity.UnavailableError
+				if mode == "commit" {
+					want.AfterVersion = 3
+					wantOutcome, validError = identity.CommitOutcomeCommitted, err == nil
+				} else {
+					validError = errors.As(err, &unavailable)
+				}
+				if !validError || recovered.Feature == nil || *recovered.Feature != want || recovered.Outcome != wantOutcome || recovered.Binding != b || phase.calls != calls {
+					t.Fatal("snapshot recovery changed original receipt or reran import", err)
+				}
+				if mode != "commit" {
+					counts(t, b, 0, 1, 0)
+				}
+			})
+		}
+	})
 	t.Run("final native admission follows persisted effects", func(t *testing.T) {
 		originalRegistry := c.registry
 		defer func() { c.registry = originalRegistry; auditing.afterPersist = nil }()

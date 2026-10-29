@@ -22,12 +22,15 @@ type LifecycleContributor interface {
 	PersistLifecycle(context.Context, Work) error
 }
 
-// LifecyclePlan declares the single current kernel lifecycle event before SQL.
-// EventType is the exact supported command mapping, not caller-selected text.
-// Versions describe one aggregate transition; AfterVersion must be the checked
-// successor. User creation and identifier attachment start at 0. Account
-// linking starts at 0 only for a never-used ID; a relink preserves its current
-// tombstone version. Every other operation starts above 0.
+// LifecyclePlan declares one kernel or registered feature lifecycle event
+// before SQL. Kernel EventType is the exact supported command mapping. Kernel
+// and record-targeted sequential feature versions use the checked successor.
+// Kernel user creation and identifier attachment start at 0; account linking
+// starts at 0 only for a never-used ID and otherwise preserves its tombstone
+// predecessor. Other kernel operations start above 0. Record-free features use
+// zero versions; explicit snapshot-import features preserve a positive source
+// version from an absent-local predecessor of 0. Native owners fence that
+// absence and source authority; lifecycle declaration grants neither.
 // The full cascade consumer/checkpoint profile is separate and still pending.
 type LifecyclePlan struct {
 	EventType     string
@@ -86,12 +89,8 @@ func bindLifecyclePlan(w Work, plan *LifecyclePlan) error {
 	if valid && w.state.feature == nil {
 		valid = validateLifecyclePlan(w.state.binding, plan) == nil
 	} else if valid {
-		valid = featureEventName(plan.EventType) && auditName(w.state.subjectType)
-		if w.state.feature.Operation.RecordRequirement == identity.FeatureRecordRequired {
-			valid = valid && plan.BeforeVersion != ^uint64(0) && plan.AfterVersion == plan.BeforeVersion+1
-		} else {
-			valid = valid && plan.BeforeVersion == 0 && plan.AfterVersion == 0
-		}
+		valid = featureEventName(plan.EventType) && auditName(w.state.subjectType) &&
+			w.state.feature.Operation.ValidateRecordVersions(plan.BeforeVersion, plan.AfterVersion) == nil
 	}
 	if w.state.lifecycle != nil || w.state.sqlStarted || !valid {
 		return invalidLifecycle()

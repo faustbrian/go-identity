@@ -119,7 +119,7 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	r.consume(cborMap(commandScope(binding)))
 	r.key("feature")
 	featureFields, featureOK := r.head(5)
-	if !featureOK || featureFields != 6 && featureFields != 7 {
+	if !featureOK || featureFields < 6 || featureFields > 8 {
 		return fail()
 	}
 	f := &FeatureRegistration{}
@@ -133,6 +133,17 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	f.Operation.OperationID = r.string(128)
 	r.key("schema_version")
 	f.Operation.SchemaVersion = uint32(r.number(math.MaxUint32))
+	// Canonical key order places the optional version policy before record
+	// and subject requirements. Omission preserves existing plan bytes; the
+	// final re-encode rejects explicit zero, unknown or duplicate policies.
+	if bytes.HasPrefix(r.data, cborText("version_policy")) {
+		r.key("version_policy")
+		f.Operation.VersionPolicy = identity.FeatureVersionPolicy(r.number(math.MaxUint8))
+		featureFields--
+	}
+	if featureFields != 6 && featureFields != 7 {
+		return fail()
+	}
 	r.key("record_requirement")
 	f.Operation.RecordRequirement = identity.FeatureRecordRequirement(r.number(math.MaxUint8))
 	if featureFields == 7 {

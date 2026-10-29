@@ -32,6 +32,9 @@ func encodeFeature(s identity.FeatureCommandSpec, key [32]byte) (map[string][]by
 	if s.Operation.SubjectRequirement != identity.FeatureSubjectUser {
 		result["subject_requirement"] = cborUint(uint64(s.Operation.SubjectRequirement))
 	}
+	if s.Operation.VersionPolicy != identity.FeatureVersionSequential {
+		result["version_policy"] = cborUint(uint64(s.Operation.VersionPolicy))
+	}
 	return result, nil
 }
 

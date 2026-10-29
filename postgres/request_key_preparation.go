@@ -103,12 +103,16 @@ func (c *Coordinator) requestPreparationBinding(scope RequestKeyScope, admission
 }
 
 func requestPreparationIdentity(f FeatureRegistration) [32]byte {
-	wire := cborMap(map[string][]byte{
+	fields := map[string][]byte{
 		"profile": cborText("identity-request-preparation-v1"),
 		"owner":   cborText(f.Contributor.Owner), "contract": cborText(f.Contributor.ContractID), "contract_version": cborUint(uint64(f.Contributor.Version)),
 		"feature_owner": cborText(f.Operation.Owner), "operation": cborText(f.Operation.OperationID), "schema": cborText(f.Operation.SchemaID), "schema_version": cborUint(uint64(f.Operation.SchemaVersion)),
 		"record": cborUint(uint64(f.Operation.RecordRequirement)), "subject": cborUint(uint64(f.Operation.SubjectRequirement)),
-	})
+	}
+	if f.Operation.VersionPolicy != identity.FeatureVersionSequential {
+		fields["version_policy"] = cborUint(uint64(f.Operation.VersionPolicy))
+	}
+	wire := cborMap(fields)
 	return sha256.Sum256(wire)
 }
 

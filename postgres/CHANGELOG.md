@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve explicit snapshot-import source versions through native command,
+  request preparation, plans, lifecycle and journal recovery. Only absent-local
+  zero-to-positive transitions are admitted by that trusted policy; existing
+  sequential policy and canonical history remain unchanged. Importing adapters
+  still own source authorization and the atomic absence fence.
+
 - Add native API-key attempt commitment observation and fingerprint-bound
   recovery through the existing coordinator. Retained-key retries preserve
   original identity; a different fingerprint cannot terminalize pending work
