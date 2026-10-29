@@ -40,6 +40,12 @@ func (s StoreSet) apiKeyMigrationCatalog(ctx context.Context, catalog []migratio
 		return nil, err
 	}
 	catalog = append(catalog, migrationHistory{namespace: "identity_api_keys", history: steps, owners: owners, guards: guards})
+	if s.state.features.apiKey.metadataPaging {
+		catalog, err = apiKeyMetadataMigrationCatalog(ctx, catalog, false)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if !s.state.features.apiKey.organization {
 		return catalog, nil
 	}
@@ -61,5 +67,22 @@ func (s StoreSet) apiKeyMigrationCatalog(ctx context.Context, catalog []migratio
 		}
 		catalog = append(catalog, migrationHistory{namespace: extension.namespace, history: steps, owners: map[migrations.Version]ModuleID{1: extension.owner}, guards: []migrationGuard{extension.guard}})
 	}
+	if s.state.features.apiKey.metadataPaging {
+		return apiKeyMetadataMigrationCatalog(ctx, catalog, true)
+	}
 	return catalog, nil
+}
+
+func apiKeyMetadataMigrationCatalog(ctx context.Context, catalog []migrationHistory, organizations bool) ([]migrationHistory, error) {
+	namespace, index := "identity_api_key_metadata_user", "identity_api_keys_metadata_user_page"
+	var source migrations.Source = apikeypg.MetadataMigrationSource{Version: 1}
+	if organizations {
+		namespace, index = "identity_api_key_metadata_organization", "identity_api_keys_metadata_org_page"
+		source = apikeypg.OrganizationMetadataMigrationSource{Version: 1}
+	}
+	steps, err := source.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(catalog, migrationHistory{namespace: namespace, history: steps, owners: map[migrations.Version]ModuleID{1: "identity/apikey/postgres"}, guards: []migrationGuard{{version: 1, schema: "identity_api_keys", tables: []string{index}}}}), nil
 }

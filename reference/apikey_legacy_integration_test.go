@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestReferencePostgresLegacyNoExpiryAPIKeyHTTPS(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{apiKey: true, apiKeyLegacy: true, apiKeyLegacyNoExpiry: true, postgresBaseline: true})
 }
 
-func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workers []deliverypg.WorkerConfig, config reference.ReferenceConfig, originalStores reference.StoreSet, originalFeatures reference.FeatureSet, caller apikey.Authentication, user identity.UserID, noExpiry bool) {
+func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workers []deliverypg.WorkerConfig, config reference.ReferenceConfig, originalStores reference.StoreSet, originalFeatures reference.FeatureSet, caller apikey.Authentication, user identity.UserID, noExpiry, metadataRead bool) {
 	t.Helper()
 	key := func(label string) identity.IdempotencyKey {
 		t.Helper()
@@ -75,6 +76,12 @@ func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores,
 		return nil
 	}
 	c.APIKey = &selected
+	if metadataRead {
+		selected.MetadataPaging = true
+		h := *c.HTTPAPIKey
+		h.Get, h.List = true, true
+		c.HTTPAPIKey = &h
+	}
 	invalid := c
 	missingPolicy := selected
 	missingPolicy.ValidateCanonicalKeyID = nil
@@ -193,6 +200,14 @@ func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores,
 	t.Cleanup(api.Close)
 	client := api.Client()
 	client.Timeout = 5 * time.Second
+	if metadataRead {
+		if status, out := referenceMetadataHTTPS(t, ctx, api, "/v1/apikey/get?keyID="+string(canonical), caller.Bearer.Token()); status != 200 || out.Key.ID != canonical || out.Key.ExpiresAt == nil != noExpiry || out.Key.ExpiresAt != nil && !out.Key.ExpiresAt.Equal(record.ExpiresAt) {
+			t.Fatal("legacy metadata changed canonical identity or absent expiry", status, out.Error)
+		}
+		if status, out := referenceMetadataHTTPS(t, ctx, api, "/v1/apikey/list?limit=1&configurationIDs="+url.QueryEscape(`["reference-legacy"]`), caller.Bearer.Token()); status != 200 || len(out.Keys) != 1 || out.Keys[0].ID != canonical || out.NextCursor != "" {
+			t.Fatal("legacy metadata filter crossed into modern profile", status, out.Error)
+		}
+	}
 	type reply struct {
 		Committed bool   `json:"committed"`
 		Secret    string `json:"secret"`
@@ -228,6 +243,11 @@ func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores,
 		t.Fatal("legacy HTTP rotation did not create a distinct modern successor")
 	}
 	verify(legacy, raw, false)
+	if metadataRead {
+		if status, out := referenceMetadataHTTPS(t, ctx, api, "/v1/apikey/get?keyID="+string(canonical), caller.Bearer.Token()); status != 200 || out.Key.ID != canonical || out.Key.Status != "revoked" || out.Key.ExpiresAt == nil != noExpiry {
+			t.Fatal("terminal legacy metadata was lost or gained invented expiry", status, out.Error)
+		}
+	}
 	successor := verify(c.APIKey.Configuration, rotated.Secret, true)
 	if !successor.Result.Record.ExpiresAt.Equal(successor.Result.Record.CreatedAt.Add(c.APIKey.Configuration.Spec().MaximumLifetime)) || !record.ExpiresAt.IsZero() && successor.Result.Record.ExpiresAt.After(record.ExpiresAt) {
 		t.Fatal("legacy HTTP successor expanded original or modern expiry")

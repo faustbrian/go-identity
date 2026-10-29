@@ -52,7 +52,7 @@ func (referenceAPIKeyPolicy) Decide(ctx context.Context, c authorization.Decisio
 		allow := false
 		if r.Subject.Kind == authorization.SubjectUser {
 			switch r.Action {
-			case "identity.apikey.create", "identity.apikey.import", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.update":
+			case "identity.apikey.create", "identity.apikey.import", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.update", "identity.apikey.get", "identity.apikey.list":
 				allow = r.Resource.Type == "api-key" && (r.Resource.ID == "reference-automation" || r.Resource.ID == "reference-legacy") || r.Resource.Type == "identity.user" && string(r.Resource.ID) == string(r.Subject.ID) || r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action) || r.Action == "identity.apikey.import" && r.Resource.Type == "api-key-import-source" && r.Resource.ID == "reference-import-source"
 			case "invoice.read":
 				allow = r.Resource.Type == "api-key" && (r.Resource.ID == "reference-automation" || r.Resource.ID == "reference-legacy")
@@ -139,7 +139,7 @@ func proveReferenceAPIKeyOnlyRateMigrations(t *testing.T, ctx context.Context, f
 
 // Reuse the actual registration/verification/browser baseline, then explicitly
 // select native bearer signin. No token is reclassified and no CSRF is stripped.
-func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, server *reference.Server, client *http.Client, origin string, user identity.UserID, cookies []*http.Cookie, upgrade, legacy, noExpiry bool) {
+func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, server *reference.Server, client *http.Client, origin string, user identity.UserID, cookies []*http.Cookie, upgrade, legacy, noExpiry, metadataRead bool) {
 	t.Helper()
 	if upgrade {
 		for _, op := range server.OpenAPI().Operations() {
@@ -224,8 +224,12 @@ func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c ref
 		t.Fatal("API-key upgrade lost baseline session", err)
 	}
 	caller := referenceAPIKeyBearer(t, ctx, features, c, origin, user)
+	if metadataRead && !legacy {
+		proveReferenceAPIKeyMetadata(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller)
+		return
+	}
 	if legacy {
-		proveReferenceLegacyAPIKey(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller, user, noExpiry)
+		proveReferenceLegacyAPIKey(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller, user, noExpiry, metadataRead)
 		return
 	}
 	selectedServer, err := reference.NewServer(config, deps, features)

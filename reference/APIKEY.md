@@ -202,3 +202,55 @@ rollback. It also proves user-only HTTP cannot mutate an organization key even
 while direct organization support is selected. The regression was observed
 failing under an intentionally wrong native view and passes with that view
 restored. These profiles are not whole M21 or final release qualification.
+
+## Safe metadata reads
+
+The native guarded handle exposes `Get(ctx, apikey.GetRequest{...})` and
+`List(ctx, apikey.ListRequest{...})`. Supply the genuine current password bearer
+and tenant; omit `OrganizationID` for the caller's own keys. An explicit
+organization target requires current native membership and policy, never the
+creator's retained identity. Reads return copied stored records, not current
+effective grants or authentication evidence. Expired/revoked records remain
+metadata, and selected legacy absent expiry remains absent.
+
+Exact-key Get requires only the existing schema. For List, select
+`APIKey.MetadataPaging=true`, plan/apply `identity/apikey/postgres`, then
+initialize the graph. Its user and optional organization indexes have separate
+additive histories; historical base, legacy and organization SQL stays unchanged.
+The bounded transactional index build may block concurrent writers: retain the
+native migration/lock deadlines and schedule populated upgrades accordingly.
+PostgreSQL selects its physical plan; result limits do not guarantee an examined
+row bound or a particular index. Native read deadlines still apply.
+
+Select `HTTPAPIKey.Get` and/or `.List` independently. A read-only selection needs
+no `SecretNamespace`/`SecretKey` or mutation routes. If another session/MFA/email/
+passkey safe reader exists, leave `StandaloneRate=nil`; metadata borrows exactly
+that owner and emergency budget. Otherwise explicitly supply its namespace,
+emergency-key ceiling and bounded synchronous `Degraded` recorder. Neither rate
+admission nor emergency fallback replaces current native key authority.
+
+Use HTTPS with exactly one `Authorization: Bearer ...` header, no body,
+`Idempotency-Key` or alternate credentials:
+
+```text
+GET /v1/apikey/get?keyID=<canonical-key-id>
+GET /v1/apikey/list?limit=50
+GET /v1/apikey/list?limit=50&cursor=<unchanged-returned-position>
+```
+
+Optionally encode `configurationIDs` as one URL-encoded sorted JSON array,
+for example `["reference-automation","reference-legacy"]`. The native maximum
+is16 configurations and200 records per page. `organizationID` is accepted only
+with both native and HTTP organization selection. Cursors are scoped live-view
+positions, not held snapshots or reusable authorization. Each page repeats the
+current policy/session/member checks; revocation, logout or graph closure denies.
+Responses expose no secret/digest, issue no session and do not verify, debit or
+mutate a key. Disabled reads appear in neither routes nor OpenAPI.
+
+`TestReferencePostgresAPIKeyMetadataHTTPS` exercises genuine registration,
+verification and bearer issuance, populated paging migration, read-only HTTPS,
+terminal records, cursor reconstruction, shared/standalone safe ownership and
+logout/closure. The organization and legacy metadata consumers exercise creator
+removal, independent owner access, explicit transport selection, canonical legacy
+IDs, absent expiry and profile filtering. These are selected-profile consumers,
+not whole M21 or final release qualification.

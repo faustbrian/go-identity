@@ -27,6 +27,9 @@ import (
 // envelope and risk key history must be retained for original pending commands.
 // Construction copies custody; MaximumDuration is positive and at most5s.
 type APIKeyConfiguration struct {
+	// MetadataPaging selects the native additive owner paging indexes. Exact-key
+	// Get needs no extra schema; selected HTTP List requires this explicit choice.
+	MetadataPaging bool
 	// OrganizationOwned selects the actual organization repository and its
 	// independent credential epoch. Organization must also be configured.
 	OrganizationOwned    bool
@@ -49,11 +52,12 @@ type APIKeyConfiguration struct {
 }
 
 type apiKeyState struct {
-	native       *apikeypg.Service
-	selfOnly     *apikeypg.Service
-	maximum      time.Duration
-	legacy       bool
-	organization bool
+	native         *apikeypg.Service
+	selfOnly       *apikeypg.Service
+	maximum        time.Duration
+	legacy         bool
+	organization   bool
+	metadataPaging bool
 }
 
 func composeAPIKey(c StoreConfiguration, pool *postgres.Pool, sessions *sessionState, organizations *organizationState, policy risk.Policy, evaluation risk.Evaluator) (*apiKeyState, error) {
@@ -106,7 +110,7 @@ func composeAPIKey(c StoreConfiguration, pool *postgres.Pool, sessions *sessionS
 	}
 	// Both immutable views borrow the same native owners/pool. HTTP selection
 	// must narrow authority before mutation, not merely suppress its response.
-	return &apiKeyState{native: native, selfOnly: selfOnly, maximum: n.MaximumDuration, legacy: n.LegacyConfiguration != (apikey.Configuration{}), organization: n.OrganizationOwned}, nil
+	return &apiKeyState{native: native, selfOnly: selfOnly, maximum: n.MaximumDuration, legacy: n.LegacyConfiguration != (apikey.Configuration{}), organization: n.OrganizationOwned, metadataPaging: n.MetadataPaging}, nil
 }
 
 func (APIKeyConfiguration) Format(s fmt.State, _ rune) {

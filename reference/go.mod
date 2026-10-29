@@ -15,14 +15,14 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261029011001-cc0c343afad6
 	github.com/faustbrian/go-identity/anonymous v0.0.0-20261023043948-50a36bd23473
 	github.com/faustbrian/go-identity/anonymous/postgres v0.0.0-20261023055944-d2f004fd7b32
-	github.com/faustbrian/go-identity/apikey v0.0.0-20261029074756-35e4d0d91c25
-	github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029081445-7bf2127d80ca
+	github.com/faustbrian/go-identity/apikey v0.0.0-20261029084325-ef01c92202bf
+	github.com/faustbrian/go-identity/apikey/postgres v0.0.0-20261029095700-099632385cd2
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
 	github.com/faustbrian/go-identity/http v0.0.0-20261028190930-3ea02a30241e
 	github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93
-	github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029062506-514aec4c1966
+	github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029105935-5e371f7f07c7
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231
 	github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261025150519-83149c8dcdf6

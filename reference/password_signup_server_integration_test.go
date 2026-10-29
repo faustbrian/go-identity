@@ -282,10 +282,12 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	organizationKey          bool
 	organizationKeyUpgrade   bool
+	organizationKeyMetadata  bool
 	apiKey                   bool
 	apiKeyUpgrade            bool
 	apiKeyLegacy             bool
 	apiKeyLegacyNoExpiry     bool
+	apiKeyMetadata           bool
 	organization             bool
 	organizationUpgrade      bool
 	organizationTransfer     bool
@@ -1833,12 +1835,12 @@ END $$`); err != nil {
 	}
 	if extensions.apiKey {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
-			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade, extensions.apiKeyLegacy, extensions.apiKeyLegacyNoExpiry)
+			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade, extensions.apiKeyLegacy, extensions.apiKeyLegacyNoExpiry, extensions.apiKeyMetadata)
 		}
 	}
 	if extensions.organizationKey {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
-			proveReferenceOrganizationKey(t, ctx, f, c, deps, features, workers, workerConfigs, config, client, network.URL, origin, messages, user, extensions.organizationKeyUpgrade)
+			proveReferenceOrganizationKey(t, ctx, f, c, deps, features, workers, workerConfigs, config, client, network.URL, origin, messages, user, extensions.organizationKeyUpgrade, extensions.organizationKeyMetadata)
 		}
 	}
 	if extensions.passkey {

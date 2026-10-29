@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add guarded native API-key Get/List and independently selected bearer HTTP
+  metadata reads. Optional user/organization paging histories preserve existing
+  keys and installed migration prefixes. Read-only composition borrows the
+  existing safe limiter, requires no mutation ports or secret-rate credentials,
+  and preserves legacy absent expiry and terminal metadata without exposing
+  credentials, verifying keys or changing their state.
+
 - Adopt explicitly selected absent-expiry legacy API-key import and verification
   through the native owner. Populated modern keys, original recovery, current
   authority and bounded evidence remain intact; existing HTTPS rotation creates

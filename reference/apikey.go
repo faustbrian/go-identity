@@ -121,6 +121,30 @@ func (a *APIKeyService) Recover(ctx context.Context, r apikey.RecoveryRequest) (
 	return n.native.Recover(w, r)
 }
 
+// Get returns copied stored metadata under current native human/owner policy.
+// It retains this graph's tenant/startup/shutdown guards and never verifies or
+// debits a key. Exact-key lookup requires no optional paging migration.
+func (a *APIKeyService) Get(ctx context.Context, r apikey.GetRequest) (apikey.GetResult, error) {
+	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
+	if err != nil {
+		return apikey.GetResult{}, err
+	}
+	defer done()
+	return n.native.Get(w, r)
+}
+
+// List returns a bounded live-view page under repeated current native policy.
+// Its cursor grants no authority or held snapshot. Select MetadataPaging and
+// apply its owned migrations first; otherwise the native read fails closed.
+func (a *APIKeyService) List(ctx context.Context, r apikey.ListRequest) (apikey.ListResult, error) {
+	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
+	if err != nil {
+		return apikey.ListResult{}, err
+	}
+	defer done()
+	return n.native.List(w, r)
+}
+
 // VerifyAndConsume retains native atomic current-authority verification and
 // narrowing, including persisted denial. It never issues a browser session.
 func (a *APIKeyService) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificationRequest) (apikey.AtomicVerificationResult, error) {
@@ -151,3 +175,4 @@ func (APIKeyService) MarshalText() ([]byte, error) { return nil, apikey.ErrDiscl
 var _ apikey.Service = (*APIKeyService)(nil)
 var _ apikey.OrganizationService = (*APIKeyService)(nil)
 var _ apikey.LegacyImporter = (*APIKeyService)(nil)
+var _ apikey.MetadataService = (*APIKeyService)(nil)

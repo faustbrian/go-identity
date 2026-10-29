@@ -540,15 +540,6 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	httpAPIKey, err := composeAPIKeyHTTP(c, apiKeyOwner, s.httpRate)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if !retainedResetHTTP {
-			httpAPIKey.close()
-		}
-	}()
 	httpOrganization, err := composeOrganizationHTTP(c, organizationOwner, s.httpRate)
 	if err != nil {
 		return err
@@ -803,6 +794,17 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	defer func() {
 		if !retainedResetHTTP {
 			httpPasskey.close()
+		}
+	}()
+	// Safe readers must borrow the already composed limiter, including its
+	// emergency budget, rather than create a second route-local owner.
+	httpAPIKey, err := composeAPIKeyHTTP(c, apiKeyOwner, s.httpRate, httpSession, httpMFAList, httpEmailAddresses, httpPasskey)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			httpAPIKey.close()
 		}
 	}()
 	httpEmailRequests, err := composeEmailRequestsHTTP(c, emailOwner, passwordVerificationOwner, s.httpRate, httpPasswordChange, httpRegistrationVerification)

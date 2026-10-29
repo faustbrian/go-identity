@@ -26,6 +26,19 @@ authority and original bounded evidence; HTTPS rotation creates a finite modern
 successor. Default legacy and all modern issuance remain expiry-bound. See the
 [API-key walkthrough](APIKEY.md).
 
+Independently select `HTTPAPIKey.Get`/`List` for strict-bearer stored metadata
+without enabling mutation routes or secret-rate credentials. `APIKeys().Get`
+and `.List` retain startup, tenant and shutdown guards. Get needs no new schema;
+select native `APIKey.MetadataPaging` and apply its owned plan before List.
+Self and organization paging use separate optional histories, preserving all
+installed base/legacy/organization prefixes. Reads borrow the existing
+session/MFA/email/passkey safe limiter, including its emergency budget. Only
+when none exists supply `HTTPAPIKey.StandaloneRate` explicitly; competing budgets
+are rejected. Organization metadata needs both native and HTTP organization
+selection. Stored grants/status are historical metadata, not current authority;
+reads expose no secret or digest and never verify/debit a key. See the
+[metadata walkthrough](APIKEY.md#safe-metadata-reads).
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

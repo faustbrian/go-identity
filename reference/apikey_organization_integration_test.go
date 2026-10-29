@@ -45,7 +45,7 @@ func (referenceOrganizationKeyPolicy) Decide(ctx context.Context, c authorizatio
 	if string(r.Tenant) == otpTenant && c.PolicyRevision == 9 && (r.Subject.Kind == authorization.SubjectUser || r.Subject.Kind == authorization.SubjectAPIKey) {
 		if r.Resource.Type == "organization-api-key" {
 			switch r.Action {
-			case "identity.apikey.create", "identity.apikey.import", "identity.apikey.rotate", "identity.apikey.delete", "invoice.read":
+			case "identity.apikey.create", "identity.apikey.import", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.get", "identity.apikey.list", "invoice.read":
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
 		}
@@ -73,7 +73,7 @@ func configureReferenceOrganizationKey(t *testing.T, c *reference.StoreConfigura
 // The existing genuine baseline supplies registered/verified humans. Only
 // deployment policy and sender/provider seams are configured; all domain
 // stores, migration plans, session issuance and handlers remain public owners.
-func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, baseline reference.FeatureSet, workers reference.WorkerSet, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, client *http.Client, base, origin string, messages <-chan string, user identity.UserID, upgrade bool) {
+func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, baseline reference.FeatureSet, workers reference.WorkerSet, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, client *http.Client, base, origin string, messages <-chan string, user identity.UserID, upgrade, metadataRead bool) {
 	t.Helper()
 	recipient := registerReferenceOrganizationHuman(t, ctx, client, base, origin, baseline, workers, messages)
 	var retainedSelf apikey.Record
@@ -108,6 +108,10 @@ func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStor
 			t.Fatal(err)
 		}
 		configureReferenceOrganizationKey(t, &c, origin)
+	}
+	if metadataRead {
+		c.APIKey.MetadataPaging = true
+		c.HTTPAPIKey.Get, c.HTTPAPIKey.List = true, true
 	}
 	signin := *c.PasswordSignin
 	signin.Native.Transport, signin.Native.CSRFKey, signin.Native.Issuance.Cookie = password.BearerSignin, session.CSRFKey{}, session.CookiePolicy{}
@@ -247,6 +251,9 @@ func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStor
 		}
 	}
 	verify(secret, true)
+	if metadataRead {
+		proveReferenceOrganizationMetadata(t, ctx, f, api, orgID, issued.Key.ID, creator, second)
+	}
 	userOnlyConfig := c
 	userOnlyHTTP := *c.HTTPAPIKey
 	userOnlyHTTP.OrganizationOwned = false
@@ -263,6 +270,11 @@ func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStor
 	t.Cleanup(userOnlyAPI.Close)
 	userOnlyClient := userOnlyAPI.Client()
 	userOnlyClient.Timeout = 5 * time.Second
+	if metadataRead {
+		if status, out := referenceMetadataHTTPS(t, ctx, userOnlyAPI, "/v1/apikey/get?organizationID="+string(orgID)+"&keyID="+string(issued.Key.ID), second.Bearer.Token()); status != 400 || out.Key.ID != "" {
+			t.Fatal("native organization selection expanded unselected HTTP metadata")
+		}
+	}
 	userOnlyCode, userOnlyOut := callAt(userOnlyClient, userOnlyAPI.URL, "delete", "unselected-organization-revoke", map[string]any{"keyID": issued.Key.ID, "expectedVersion": issued.Key.Version}, second)
 	var userOnlyRecord []byte
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT record FROM identity_api_keys.keys WHERE tenant_id=$1 AND key_id=$2`, otpTenant, string(issued.Key.ID)).Scan(&userOnlyRecord); err != nil {

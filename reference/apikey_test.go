@@ -24,6 +24,12 @@ func TestAPIKeySelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	if _, err := absent.Create(t.Context(), apikey.CreateRequest{}); !errors.As(err, &unavailable) {
 		t.Fatal("nil handle reached native issuance")
 	}
+	if _, err := absent.Get(t.Context(), apikey.GetRequest{}); !errors.As(err, &unavailable) {
+		t.Fatal("nil handle reached native metadata get")
+	}
+	if _, err := absent.List(t.Context(), apikey.ListRequest{}); !errors.As(err, &unavailable) {
+		t.Fatal("nil handle reached native metadata list")
+	}
 	if _, err := absent.CreateOrganization(t.Context(), apikey.OrganizationCreateRequest{}); !errors.As(err, &unavailable) {
 		t.Fatal("nil handle reached native organization issuance")
 	}
@@ -43,6 +49,12 @@ func TestAPIKeySelectionAndRetainedHandlesFailClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	caller := apikey.Authentication{TenantID: "tenant"}
+	if _, err := handle.Get(t.Context(), apikey.GetRequest{Authentication: caller}); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed handle reached native metadata get")
+	}
+	if _, err := handle.List(t.Context(), apikey.ListRequest{Authentication: caller}); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed handle reached native metadata list")
+	}
 	if _, err := handle.Create(t.Context(), apikey.CreateRequest{Authentication: caller}); !errors.As(err, &unavailable) {
 		t.Fatal("retained closed handle reached native issuance")
 	}
