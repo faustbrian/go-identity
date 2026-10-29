@@ -84,7 +84,7 @@ type VerificationResult struct {
 // A recorded successful replay is historical after this bound, not fresh
 // authentication. Copying/reconciliation cannot extend any timestamp.
 func (r VerificationResult) ValidateAt(c Configuration, now time.Time) error {
-	if r.Record.Validate(c) != nil || !c.AllowsVerification() || r.Record.Status != KeyActive || r.Owner.Validate() != nil || !r.Owner.SameIdentity(r.Record.Owner) || !r.Owner.admitsEpoch(r.Record.Owner) || r.PolicyVersion == 0 || r.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(r.Grant) || r.ReadStartedAt.IsZero() || r.VerifiedAt.Before(r.ReadStartedAt) || r.VerifiedAt.After(now) || r.VerifiedAt.Sub(r.ReadStartedAt) > c.spec.MaximumRead || !r.ValidUntil.After(r.VerifiedAt) || r.ValidUntil.Sub(r.ReadStartedAt) > 20*time.Second || !now.Before(r.ValidUntil) || !now.Before(r.Record.ExpiresAt) {
+	if r.Record.Validate(c) != nil || !c.AllowsVerification() || r.Record.Status != KeyActive || r.Owner.Validate() != nil || !r.Owner.SameIdentity(r.Record.Owner) || !r.Owner.admitsEpoch(r.Record.Owner) || r.PolicyVersion == 0 || r.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(r.Grant) || r.ReadStartedAt.IsZero() || r.VerifiedAt.Before(r.ReadStartedAt) || r.VerifiedAt.After(now) || r.VerifiedAt.Sub(r.ReadStartedAt) > c.spec.MaximumRead || !r.ValidUntil.After(r.VerifiedAt) || r.ValidUntil.Sub(r.ReadStartedAt) > 20*time.Second || !now.Before(r.ValidUntil) || !r.Record.ExpiresAt.IsZero() && !now.Before(r.Record.ExpiresAt) {
 		return ErrDenied
 	}
 	for _, permission := range r.Grant {

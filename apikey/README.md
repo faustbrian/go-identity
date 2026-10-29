@@ -119,9 +119,15 @@ must validate canonical IDs, retain tombstones, and use the existing coordinator
 atomic effects and original status recovery. A digest constructor or request
 validator alone establishes neither authentication nor a durable import.
 Imports are not issuance, and cannot reveal or regenerate historical plaintext.
-This finite import profile requires explicit positive absolute expiry; an absent
-expiry is unsupported and is never replaced with an invented deadline. Legacy
-record eligibility does not apply modern issuance-age limits to original times.
+Legacy imports require explicit positive absolute expiry by default. A trusted
+verify-only configuration may explicitly set `AllowLegacyNoExpiry` to preserve
+an absent historical expiry as zero `Record.ExpiresAt`, never an invented
+deadline. This option is rejected for modern configurations. Present expiries
+retain their exact validation and enforcement; current owner, revocation and
+original evidence freshness remain mandatory even for a key without expiry.
+Legacy record eligibility does not apply modern issuance-age limits to original
+times. The owning native adapter must implement this selected profile before
+it is usable; these core contracts alone do not provide durable verification.
 
 Organization-owned and administrator management, finite quota, cache, API-key
 session adapters and OAuth delegation remain separate profiles, not fallbacks.

@@ -78,7 +78,8 @@ func (s LegacySecret) Digest(c Configuration) (LegacyDigest, error) {
 
 // ImportRequest is one digest-only source snapshot submitted by a real human.
 // Record preserves the supplied canonical ID, owner, versions, grant, absolute
-// times, terminal status and replacement lineage. SourceVersion orders source
+// times (including explicitly allowed absent expiry), terminal status and
+// replacement lineage. SourceVersion orders source
 // snapshots; it never confers human, tenant or directory authority. Import is
 // not issuance and must emit no created-key/billing event or reveal material.
 // An organization owner remains distinct from the authenticated human; native
@@ -106,7 +107,7 @@ func (StaleImportError) Error() string { return "apikey: stale import" }
 // every immutable permission, validate canonical IDs through configured policy,
 // and atomically fence source versions, tombstones and current authority.
 func (r ImportRequest) Validate(c Configuration) error {
-	if r.Authentication.Validate() != nil || r.IdempotencyKey == (identity.IdempotencyKey{}) || c.Validate() != nil || c.spec.Algorithm != AlgorithmLegacySHA256V1 || c.spec.State != ConfigurationVerifyOnly || r.Record.Validate(c) != nil || r.Record.Owner.spec.TenantID != r.Authentication.TenantID || !utf8.ValidString(r.Record.Name) || !importTime(r.Record.CreatedAt) || !importTime(r.Record.ExpiresAt) || r.Digest.Validate() != nil || !scope(r.SourceID, 128) || r.SourceVersion == 0 || len(r.CorrelationID) > 128 || !canonicalNetwork(r.Network) {
+	if r.Authentication.Validate() != nil || r.IdempotencyKey == (identity.IdempotencyKey{}) || c.Validate() != nil || c.spec.Algorithm != AlgorithmLegacySHA256V1 || c.spec.State != ConfigurationVerifyOnly || r.Record.Validate(c) != nil || r.Record.Owner.spec.TenantID != r.Authentication.TenantID || !utf8.ValidString(r.Record.Name) || !importTime(r.Record.CreatedAt) || !r.Record.ExpiresAt.IsZero() && !importTime(r.Record.ExpiresAt) || r.Digest.Validate() != nil || !scope(r.SourceID, 128) || r.SourceVersion == 0 || len(r.CorrelationID) > 128 || !canonicalNetwork(r.Network) {
 		return ErrInvalid
 	}
 	return nil

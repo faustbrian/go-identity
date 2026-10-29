@@ -57,8 +57,10 @@ func (r Record) Validate(c Configuration) error {
 	}
 	// Shared-issuer SI-07 preserves historical absolute times. A verification-
 	// only import is not new issuance and cannot rebase an old creation time to
-	// fit today's issuance ceiling; modern records keep the original bound.
-	if c.Validate() != nil || r.Owner.Validate() != nil || r.Version == 0 || r.AuthorityVersion == 0 || r.RootID != r.ID || r.RootVersion != r.AuthorityVersion || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || r.Issuer != c.spec.Issuer || r.Environment != c.spec.Environment || r.Audience != c.spec.Audience || r.Status < KeyActive || r.Status > KeyRevoked || !validPermissions(r.Grant) || len(r.Name) > 128 || r.CreatedAt.IsZero() || !r.ExpiresAt.After(r.CreatedAt) || c.spec.Algorithm == AlgorithmModernHMACSHA256 && r.ExpiresAt.Sub(r.CreatedAt) > c.spec.MaximumLifetime {
+	// fit today's issuance ceiling. Absent expiry needs its own trusted legacy
+	// selection rather than an invented far-future time; modern bounds remain.
+	expiryValid := r.ExpiresAt.After(r.CreatedAt) || r.ExpiresAt.IsZero() && c.spec.Algorithm == AlgorithmLegacySHA256V1 && c.spec.AllowLegacyNoExpiry
+	if c.Validate() != nil || r.Owner.Validate() != nil || r.Version == 0 || r.AuthorityVersion == 0 || r.RootID != r.ID || r.RootVersion != r.AuthorityVersion || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || r.Issuer != c.spec.Issuer || r.Environment != c.spec.Environment || r.Audience != c.spec.Audience || r.Status < KeyActive || r.Status > KeyRevoked || !validPermissions(r.Grant) || len(r.Name) > 128 || r.CreatedAt.IsZero() || !expiryValid || c.spec.Algorithm == AlgorithmModernHMACSHA256 && r.ExpiresAt.Sub(r.CreatedAt) > c.spec.MaximumLifetime {
 		return ErrInvalid
 	}
 	return nil
@@ -82,7 +84,7 @@ type CurrentAuthority struct {
 type ScopePolicy struct{}
 
 func (ScopePolicy) EffectiveGrant(r Record, a CurrentAuthority, c Configuration, now time.Time) ([]string, error) {
-	if r.Validate(c) != nil || !c.AllowsVerification() || r.Status != KeyActive || !now.Before(r.ExpiresAt) || !a.Owner.SameIdentity(r.Owner) || !a.Owner.admitsEpoch(r.Owner) || !a.OwnerActive || !a.TenantActive || a.PolicyVersion == 0 || a.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(a.Permissions) || a.ReadStartedAt.IsZero() || a.VerifiedAt.Before(a.ReadStartedAt) || a.VerifiedAt.After(now) || a.VerifiedAt.Sub(a.ReadStartedAt) > c.spec.MaximumRead || !a.ValidUntil.After(a.VerifiedAt) || a.ValidUntil.Sub(a.ReadStartedAt) > 20*time.Second || !now.Before(a.ValidUntil) {
+	if r.Validate(c) != nil || !c.AllowsVerification() || r.Status != KeyActive || !r.ExpiresAt.IsZero() && !now.Before(r.ExpiresAt) || !a.Owner.SameIdentity(r.Owner) || !a.Owner.admitsEpoch(r.Owner) || !a.OwnerActive || !a.TenantActive || a.PolicyVersion == 0 || a.ConfigurationAuthority.Validate(r.Owner.spec.TenantID, c.spec.ID) != nil || !validPermissions(a.Permissions) || a.ReadStartedAt.IsZero() || a.VerifiedAt.Before(a.ReadStartedAt) || a.VerifiedAt.After(now) || a.VerifiedAt.Sub(a.ReadStartedAt) > c.spec.MaximumRead || !a.ValidUntil.After(a.VerifiedAt) || a.ValidUntil.Sub(a.ReadStartedAt) > 20*time.Second || !now.Before(a.ValidUntil) {
 		return nil, ErrDenied
 	}
 	grant := make([]string, 0, len(r.Grant))

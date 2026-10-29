@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicitly selected no-expiry legacy import and verification contracts,
+  preserving an absent historical expiry without inventing a deadline. Default
+  legacy and all modern profiles still require expiry; current owner eligibility
+  and the original bounded authority evidence remain mandatory.
+
 - Add an explicit organization creation extension that cannot be ignored by
   an older self-owned service. Organization create/rotate results retain the
   real human manager separately from their owner, require exact selected

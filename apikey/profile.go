@@ -171,7 +171,11 @@ const (
 // selected from stored metadata, never inferred from presented secret text.
 // Read, clock and decision budgets fit the shared issuer's 30-second bound.
 type ConfigurationSpec struct {
-	Algorithm                                                          ConfigurationAlgorithm `json:",omitempty"`
+	Algorithm ConfigurationAlgorithm `json:",omitempty"`
+	// AllowLegacyNoExpiry preserves an absent historical expiry only for a
+	// selected verify-only legacy profile. It never permits modern issuance
+	// without expiry or extends authoritative validity evidence.
+	AllowLegacyNoExpiry                                                bool `json:",omitempty"`
 	ID                                                                 string
 	Revision                                                           uint64
 	State                                                              ConfigurationState
@@ -213,6 +217,9 @@ func (ConfigurationAuthorityBinding) Format(s fmt.State, _ rune) {
 func (ConfigurationAuthorityBinding) MarshalJSON() ([]byte, error) { return nil, ErrDisclosure }
 
 func NewConfiguration(s ConfigurationSpec) (Configuration, error) {
+	if s.AllowLegacyNoExpiry && s.Algorithm != AlgorithmLegacySHA256V1 {
+		return Configuration{}, ErrInvalid
+	}
 	stateValid := s.Algorithm == AlgorithmModernHMACSHA256 && (s.State == ConfigurationActive || s.State == ConfigurationDisabled) || s.Algorithm == AlgorithmLegacySHA256V1 && (s.State == ConfigurationVerifyOnly || s.State == ConfigurationDisabled)
 	if !scope(s.ID, 128) || s.Revision == 0 || !stateValid || !scope(s.Issuer, 256) || !scope(s.Environment, 128) || !scope(s.Audience, 256) || s.PermissionReduction < PermissionReductionNarrow || s.PermissionReduction > PermissionReductionRevoke || s.MaximumLifetime <= 0 || s.Algorithm == AlgorithmModernHMACSHA256 && s.MaximumLifetime > 365*24*time.Hour || s.MaximumRead <= 0 || s.MaximumRead > 10*time.Second || s.ClockUncertainty < 0 || s.DecisionRaceBudget < 0 || s.ClockUncertainty > 10*time.Second || s.DecisionRaceBudget > 10*time.Second-s.ClockUncertainty || s.Quota != QuotaUnlimited || s.Cache != CacheDisabled {
 		return Configuration{}, ErrInvalid
