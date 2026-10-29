@@ -23,12 +23,21 @@ func operationWire(action string, first, organizations bool) *identityhttp.WireO
 		}
 		request = object([]string{"name", "permissions", "expiresAt"}, fields)
 	}
+	if action == "update" {
+		fields := map[string]any{"keyID": id, "expectedVersion": expected, "name": text(128), "permissions": permissions}
+		if organizations {
+			fields["organizationID"] = text(128)
+		}
+		request = object([]string{"keyID", "expectedVersion", "name", "permissions"}, fields)
+	}
 	errorCode := map[string]any{"type": "string", "enum": []string{"invalid_request", "forbidden", "conflict", "in_progress", "unavailable", "rate_limited", "not_found", "method_not_allowed", "misdirected_request"}}
 	errorSchema := object([]string{"error"}, map[string]any{"error": errorCode})
 	command := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$", "not": map[string]any{"const": "AAAAAAAAAAAAAAAAAAAAAA"}}
 	scope := object([]string{"commandID", "tenantID", "userID", "actorID", "actorKind", "operationID", "recordID"}, map[string]any{"commandID": command, "tenantID": id, "userID": id, "actorID": id, "actorKind": map[string]any{"const": "user"}, "operationID": map[string]any{"const": "identity.apikey." + action}, "recordID": id})
 	fields := map[string]any{"committed": map[string]any{"type": "boolean"}, "commitOutcome": map[string]any{"type": "string", "enum": []string{"none", "committed", "not_committed", "unknown", "conflict", "in_progress"}}, "commandID": command, "recovery": scope, "error": errorCode}
-	if action != "delete" {
+	if action == "update" {
+		fields["key"] = metadataRecordSchema()
+	} else if action != "delete" {
 		fields["key"] = object([]string{"id", "version", "name", "permissions", "expiresAt"}, map[string]any{"id": id, "version": version, "name": text(128), "permissions": permissions, "expiresAt": map[string]any{"type": "string", "format": "date-time"}})
 		fields["secret"] = map[string]any{"type": "string", "pattern": "^idk_[A-Za-z0-9_-]{43}$", "readOnly": true, "description": "Only original invocation-local proven-committed reveal-once material. Absent on replay/recovery/unknown/failure; never reconstructed."}
 	}
@@ -49,6 +58,9 @@ func operationWire(action string, first, organizations bool) *identityhttp.WireO
 	definition := map[string]any{"operationId": "identity.apikey." + action, "description": "Opt-in modern self-owned unlimited uncached Narrow API-key management. Exactly one native password session Authorization Bearer and original Idempotency-Key; ambient cookies never provide authority. Exact HTTPS tenant host and transport-derived full client IP; closed JSON, no owner/actor/tenant/configuration/network override. Native current policy and original exclusive15m authentication freshness remain mandatory. Shared IP10/10m and tenant/subject10/10m secret-rate admission is separate from native protected-risk admission. Native owner retains atomic mutation/audit/outbox, zero-overlap rotation, immutable grants/expiry and terminal revocation. Same-key retries disclose original outcome only and cannot reveal a new secret. Unknown or lost response does not authorize replacement issuance; use retained original input/key or direct current-authorized native status recovery. No recovery route or API-key-as-session, organization, legacy, quota or cache profile is selected.", "security": []any{map[string]any{"APIKeyManagementBearer": []string{}}}, "parameters": []any{map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$"}}}, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}}, "responses": responses}
 	if organizations {
 		definition["description"] = "Opt-in user/organization unlimited uncached Narrow API-key management. An optional organizationID on create selects the independent credential owner, never the authenticated human actor or tenant. Native current membership and permission policy authorize management; creator removal preserves organization keys but denies that human's management. Rotate/delete use the key's immutable actual owner. Exactly one password bearer and original Idempotency-Key, trusted HTTPS host/client IP, shared rate admission, atomic effects and reveal-once/unknown custody remain mandatory. No organization key is a user session; legacy import and status recovery remain direct native operations."
+	}
+	if action == "update" {
+		definition["description"] = "Opt-in strict password-bearer API-key name and permission replacement. Requires the original Idempotency-Key, exact advanceable record version, nonempty bounded name and an explicit sorted distinct permissions array; empty removes every permission. An optional organizationID is admitted only with organization selection and requires current native member/management authority. The existing fresh proof, tenant/current policy, shared keyed rate.secret and native protected-attempt checks remain mandatory. No owner, credential, configuration, lineage or expiry replacement, grant expansion, arbitrary metadata or quota edits are accepted. Committed responses contain the original copied safe metadata snapshot, preserving absent legacy expiry; no key secret or digest is generated or revealed. Original unknown recovery bindings do not authorize replacement execution or disclose snapshots. No cookie fallback or recovery route is selected."
 	}
 	wire, _ := json.Marshal(definition)
 	out := &identityhttp.WireOperation{Definition: wire}

@@ -37,6 +37,7 @@ type input struct {
 	key           identity.IdempotencyKey
 	create        createBody
 	mutation      mutationBody
+	update        updateBody
 	observed      session.GetResult
 	actor         identity.UserID
 	organizations bool
@@ -155,6 +156,18 @@ func newHandler(c Config, action string, network *identityhttp.NetworkResolver, 
 				if in.create.OrganizationID != "" {
 					err = (apikey.OrganizationCreateRequest{CreateRequest: in.createRequest(), OrganizationID: in.create.OrganizationID}).Validate()
 				}
+			} else if action == "update" {
+				fields := 4
+				if _, present := body["organizationID"]; present {
+					if !organizations || field("organizationID", &in.update.OrganizationID) != nil || in.update.OrganizationID == "" {
+						return nil, identityhttp.ErrInvalidInput
+					}
+					fields++
+				}
+				if len(body) != fields || field("keyID", &in.mutation.KeyID) != nil || field("expectedVersion", &in.mutation.ExpectedVersion) != nil || field("name", &in.update.Name) != nil || field("permissions", &in.update.Permissions) != nil || in.update.Permissions == nil {
+					return nil, identityhttp.ErrInvalidInput
+				}
+				err = in.updateRequest().Validate()
 			} else {
 				if len(body) != 2 || field("keyID", &in.mutation.KeyID) != nil || field("expectedVersion", &in.mutation.ExpectedVersion) != nil {
 					return nil, identityhttp.ErrInvalidInput
@@ -196,6 +209,11 @@ func newHandler(c Config, action string, network *identityhttp.NetworkResolver, 
 		Handle: func(w http.ResponseWriter, r *http.Request, in *input) {
 			if r.Context().Err() != nil || in.observed.ValidateAt(c.Now()) != nil {
 				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
+			if action == "update" {
+				result, err := c.Updater.Update(r.Context(), in.updateRequest())
+				writeUpdate(w, r, in, result, err, c.Now)
 				return
 			}
 			if action == "delete" {
@@ -304,20 +322,26 @@ func projectReceipt(in *input, r identity.CommandResult, err error) (int, comman
 	if in.action == "delete" {
 		orgSchema = "apikey-revoke-organization-v1"
 	}
-	if b.SchemaID == orgSchema && !in.organizations || in.action == "create" && (b.SchemaID == orgSchema) != (in.create.OrganizationID != "") {
+	if b.SchemaID == orgSchema && !in.organizations || in.action == "create" && (b.SchemaID == orgSchema) != (in.create.OrganizationID != "") || in.action == "update" && (b.SchemaID != "apikey-update-v1" && b.SchemaID != orgSchema || (b.SchemaID == orgSchema) != (in.update.OrganizationID != "")) {
 		return 503, commandResponse{CommitOutcome: "unknown", Error: "unavailable"}
 	}
-	if r.Validate() != nil || b.TenantID != in.auth.TenantID || b.UserID != in.actor || b.ActorID != identity.ActorID(in.actor) || b.ActorKind != authorization.SubjectUser || b.OperationID != "identity.apikey."+in.action || b.AnonymousFlowID != "" || b.LinkMode != 0 || r.Feature == nil || r.Feature.Operation.Owner != "identity/apikey" || in.action == "delete" && b.RecordID != string(in.mutation.KeyID) {
+	if r.Validate() != nil || b.TenantID != in.auth.TenantID || b.UserID != in.actor || b.ActorID != identity.ActorID(in.actor) || b.ActorKind != authorization.SubjectUser || b.OperationID != "identity.apikey."+in.action || b.AnonymousFlowID != "" || b.LinkMode != 0 || r.Feature == nil || r.Feature.Operation.Owner != "identity/apikey" || (in.action == "delete" || in.action == "update") && b.RecordID != string(in.mutation.KeyID) {
 		return 503, commandResponse{CommitOutcome: "unknown", Error: "unavailable"}
 	}
 	if _, parseErr := apikey.ParseKeyID(b.RecordID); parseErr != nil {
 		return 503, commandResponse{CommitOutcome: "unknown", Error: "unavailable"}
 	}
+	if in.action == "update" {
+		op := identity.FeatureOperation{Owner: "identity/apikey", OperationID: "identity.apikey.update", SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+		if r.Feature.Operation != op || b.ValidateFor(op) != nil {
+			return 503, commandResponse{CommitOutcome: "unknown", Error: "unavailable"}
+		}
+	}
 	if r.Outcome == identity.CommitOutcomeCommitted {
 		// Native creation/rotation issues a distinct version1 credential;
 		// revocation must advance the exact requested existing version.
 		before := uint64(0)
-		if in.action == "delete" {
+		if in.action == "delete" || in.action == "update" {
 			before = in.mutation.ExpectedVersion
 		}
 		if r.Feature.BeforeVersion != before || r.Feature.AfterVersion != before+1 {

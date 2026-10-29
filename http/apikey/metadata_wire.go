@@ -6,7 +6,7 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
-func metadataWire(action string, first, organizations bool) *identityhttp.WireOperation {
+func metadataRecordSchema() any {
 	text := func(maximum int) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": maximum} }
 	object := func(required []string, properties map[string]any) any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
@@ -29,7 +29,16 @@ func metadataWire(action string, first, organizations bool) *identityhttp.WireOp
 		"issuer": text(512), "environment": text(128), "audience": text(128),
 	}
 	required := []string{"id", "version", "authorityVersion", "owner", "configurationID", "configurationRevision", "name", "status", "permissions", "createdAt", "expiresAt", "rootID", "rootVersion", "issuer", "environment", "audience"}
-	key := object(required, properties)
+	return object(required, properties)
+}
+
+func metadataWire(action string, first, organizations bool) *identityhttp.WireOperation {
+	text := func(maximum int) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": maximum} }
+	object := func(required []string, properties map[string]any) any {
+		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
+	}
+	id := text(128)
+	key := metadataRecordSchema()
 	cursor := map[string]any{"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$"}
 	response := object([]string{"key"}, map[string]any{"key": key})
 	parameters := []any{}

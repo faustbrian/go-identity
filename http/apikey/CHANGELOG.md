@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add independently selected keyed strict-bearer Update for exact name and
+  permission replacement. Native current self/organization authority and fresh
+  proof remain mandatory; expansion and credential/owner/expiry edits deny.
+  Committed metadata preserves selected absent legacy expiry, with original
+  replay/unknown recovery and no secret generation or disclosure.
+
 - Add independently selected strict-bearer metadata Get/List with exact self or
   optional organization ownership, bounded live-view pagination and safe stored
   modern/legacy/terminal record projections. Reads require current native

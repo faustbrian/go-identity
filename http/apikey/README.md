@@ -12,11 +12,12 @@ policy engine, replay journal, transaction or migration.
 | `Create` | `POST /v1/apikey/create` | `name`, `permissions`, `expiresAt` |
 | `Rotate` | `POST /v1/apikey/rotate` | `keyID`, `expectedVersion` |
 | `Revoke` | `POST /v1/apikey/delete` | `keyID`, `expectedVersion` |
+| `Update` | `POST /v1/apikey/update` | `keyID`, `expectedVersion`, `name`, `permissions` |
 | `Get` | `GET /v1/apikey/get` | query `keyID` |
 | `List` | `GET /v1/apikey/list` | query `limit`, optional `cursor`, `configurationIDs` |
 
 Every route requires exactly one `Authorization: Bearer <native password session>`.
-The three mutations additionally require one original `Idempotency-Key` and use
+The selected mutations additionally require one original `Idempotency-Key` and use
 keyed native custody; reads forbid the header. This is
 the explicit strict-bearer profile of the canonical operation IDs, not the
 draft rotate/repeat transport labels. Cookie profiles are not selected, and
@@ -42,8 +43,8 @@ absent. Construction performs no database, policy, credential or provider IO.
   Missing/null permissions deny. Absolute expiry must have microsecond precision.
 - Configure body limits at least64KiB, decoded limits at least16KiB and at least
   72 fields so supported native grants do not become unusable through HTTP.
-  Creation additionally requires nesting depth at least2 for its permissions
-  array; independently selected scalar-only rotation/revocation allows depth1.
+  Creation and update require nesting depth at least2 for their permissions
+  arrays; independently selected scalar-only rotation/revocation allows depth1.
   The native owner independently enforces current permissions, original primary
   authentication freshness, allowed lifetime and non-expanding rotation.
 - Responses are bounded no-store JSON and never issue cookies or redirect.
@@ -56,6 +57,24 @@ absent. Construction performs no database, policy, credential or provider IO.
   No automatic retry occurs. Reuse exactly the original input/key for retry.
 - Shared HTTP IP/subject budgets are separate from native protected-risk
   counters. Neither admission grants domain authority. Mutation outages fail closed.
+
+## Name and permission updates
+
+Select `FeatureConfig.Update` with the native `Config.Updater` port. Supply the
+exact advanceable `expectedVersion`, a nonempty name and explicit permissions.
+Rename-only sends the unchanged grant; narrowing replaces it with a strict
+subset, and `[]` removes every permission. Native current policy can deny a
+retained permission; HTTP cannot authorize expansion or restore removed grants.
+Organization updates require `OrganizationOwned` and an explicit
+`organizationID`; omission selects self ownership. The actual native manager,
+fresh proof, protected admission and final transaction remain authoritative.
+
+Update cannot change owner, credential, configuration, lineage or expiry, and
+accepts no arbitrary metadata or quota fields. Its committed `key` uses the same
+safe metadata projection as Get, including `expiresAt: null` for selected legacy
+keys without expiry. It contains no secret or digest. Original replay returns
+the historical post-update snapshot; unknown outcomes retain safe recovery
+bindings without snapshots and do not retry or regenerate a credential.
 
 ## Safe metadata reads
 
