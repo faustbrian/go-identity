@@ -1,5 +1,30 @@
 # API keys
 
+`MetadataService` is an additive `Get`/`List` contract; the existing `Service`
+interface is unchanged. Requests retain the genuine human bearer. An empty
+`OrganizationID` means that human's own keys, not an arbitrary user override;
+organization reads require an explicit target and current membership/permission.
+The owned native adapter supplies actual session, tenant, owner and selected
+configuration checks, including on every later page. Root shape validation alone
+does not provide any of those authorities.
+
+Results are copied stored `Record` metadata, including revoked/expired records,
+never a secret, digest, verification result or current effective permission.
+The stored grant is only a historical immutable ceiling. Reading metadata does
+not verify a credential, debit quota, narrow grants or authorize later actions.
+Implicit request serialization and diagnostics remain credential-redacted.
+
+`ListRequest` accepts 1..200 records and up to sixteen sorted distinct selected
+configuration IDs; absence selects all configured profiles. IDs retain the
+existing configuration contract of 1..128 bytes rather than a different read-only
+normalization. Cursors are opaque, at most 512 bytes, bound to the exact
+tenant/human/owner/configuration scope, and carry no authentication authority.
+Paging is a deterministic ascending-key-ID live view, not a historical snapshot:
+inserts behind the cursor are omitted, inserts ahead may appear, and existing
+keys are not repeated. No transaction is retained between pages. The actual
+native implementation and its PostgreSQL consumer must be adopted before this
+new contract is usable; no metadata HTTP/Reference profile is provided here.
+
 `github.com/faustbrian/go-identity/apikey` defines explicit user/organization
 ownership and an explicit verify-only legacy profile. New issuance uses fixed
 `idk_` plus 32 CSPRNG bytes in unpadded base64url, with

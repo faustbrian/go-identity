@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add optional safe metadata Get/List contracts without expanding the existing
+  Service interface. Explicit self/organization ownership, selected configuration
+  filters and bounded live-view pagination grant no credential or mutation
+  authority and never expose secrets or digests.
+
 - Add explicitly selected no-expiry legacy import and verification contracts,
   preserving an absent historical expiry without inventing a deadline. Default
   legacy and all modern profiles still require expiry; current owner eligibility
