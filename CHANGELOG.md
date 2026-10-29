@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit snapshot-import record version policy to trusted feature
+  declarations and committed receipts. Absent-local imports can preserve a
+  positive source version without fabricating prior local history. Existing
+  sequential transitions and zero-default declaration bytes remain unchanged;
+  this structural policy grants no import or execution authority.
+
 - Reserve a distinct anonymous-placeholder identifier namespace for anonymous
   lifecycle ownership. It cannot become a verified/primary contact or enter
   generic attachment, verification, replacement or removal workflows. Existing

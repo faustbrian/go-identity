@@ -4,8 +4,10 @@ import "time"
 
 // FeatureReceipt is a storage-neutral safe primary-record receipt, never a
 // feature-native response or authentication proof. Operation retains the exact
-// trusted descriptor on every outcome. A committed record-target operation has
+// trusted descriptor on every outcome. Sequential record-target operations have
 // AfterVersion == BeforeVersion+1 without overflow; creation starts at 0 -> 1.
+// Explicit snapshot imports instead preserve a positive source version from
+// absent-local BeforeVersion zero. This never authorizes overwriting a record.
 // Record-free operations and every noncommitted outcome keep both versions zero.
 // The target ID is CommandResult.Binding.RecordID, not an alternate locator.
 // Feature owners validate their native result and complete command schema;
@@ -38,10 +40,7 @@ func validFeatureResult(r CommandResult) bool {
 		if r.RetryAfter != 0 || !validDirectoryID(r.AuditEventID) {
 			return false
 		}
-		if f.Operation.RecordRequirement == FeatureRecordRequired {
-			return f.BeforeVersion < ^uint64(0) && f.AfterVersion == f.BeforeVersion+1
-		}
-		return f.BeforeVersion == 0 && f.AfterVersion == 0
+		return f.Operation.ValidateRecordVersions(f.BeforeVersion, f.AfterVersion) == nil
 	case CommitOutcomeNotCommitted, CommitOutcomeUnknown, CommitOutcomeConflict:
 		return f.BeforeVersion == 0 && f.AfterVersion == 0 && r.AuditEventID == "" && r.RetryAfter == 0
 	case CommitOutcomeInProgress:

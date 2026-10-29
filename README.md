@@ -225,6 +225,13 @@ ceremonies remain required before these become complete public workflows.
 Feature adapters can structurally match common command scope to a trusted
 `FeatureOperation` with `CommandBinding.ValidateFor`: exact operation/schema,
 safe identities, positive policy version and explicit required/omitted record.
+`VersionPolicy` defaults to sequential creation and updates. Explicit
+`FeatureVersionSnapshotImport` preserves a positive source record version only
+from absent-local version zero; it cannot overwrite a local record or bypass
+source authentication. `ValidateRecordVersions` supplies the same structural
+predicate for receipts and native planning. The owning import transaction must
+still fence actual absence, authorization, source/tombstone metadata and effects.
+The zero default remains omitted from existing serialized declarations.
 The default subject policy remains user-only. A trusted descriptor can instead
 select `FeatureSubjectAnonymousFlow`: `AnonymousFlowID` is required and `UserID`
 must be empty. The actual verified user/API-key/service actor stays separate;

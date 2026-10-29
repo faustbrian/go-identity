@@ -28,6 +28,19 @@ const (
 	FeatureSubjectAnonymousFlow
 )
 
+// FeatureVersionPolicy fixes a record's version transition at trusted schema
+// composition. It is not selected by request data or a stored source snapshot.
+type FeatureVersionPolicy uint8
+
+const (
+	// FeatureVersionSequential preserves creation at 0 -> 1 and one-step updates.
+	FeatureVersionSequential FeatureVersionPolicy = iota
+	// FeatureVersionSnapshotImport preserves a positive source version only
+	// when no local record exists. The native owner must fence that absence;
+	// this policy cannot perform an update or establish source authority.
+	FeatureVersionSnapshotImport
+)
+
 // FeatureOperation identifies one storage-neutral feature-owned operation.
 // Trusted composition supplies a compile-time descriptor, never request data.
 // Owner is a canonical lowercase slash-separated module label; OperationID is
@@ -47,6 +60,9 @@ type FeatureOperation struct {
 	// SubjectRequirement is frozen schema policy, not selected by request data.
 	// Zero retains the original user-only contract and serialized shape.
 	SubjectRequirement FeatureSubjectRequirement `json:",omitempty"`
+	// VersionPolicy defaults to the existing sequential contract and omitted
+	// serialized shape. Snapshot import requires a record-targeted operation.
+	VersionPolicy FeatureVersionPolicy `json:",omitempty"`
 }
 
 // Validate checks structural descriptor identity, not ownership authenticity.
@@ -55,8 +71,32 @@ type FeatureOperation struct {
 // before admission. Names alone never enable an execution phase. Invalid input
 // returns a redacted InvalidInputError; zero is invalid.
 func (d FeatureOperation) Validate() error {
-	if !validFeatureName(d.Owner, '/') || d.Owner == "identity" || !validFeatureName(d.OperationID, '.') || kernelOperationID(d.OperationID) || !validDirectoryID(d.SchemaID) || d.SchemaVersion == 0 || (d.RecordRequirement != FeatureRecordOmitted && d.RecordRequirement != FeatureRecordRequired) || d.SubjectRequirement > FeatureSubjectAnonymousFlow {
+	if !validFeatureName(d.Owner, '/') || d.Owner == "identity" || !validFeatureName(d.OperationID, '.') || kernelOperationID(d.OperationID) || !validDirectoryID(d.SchemaID) || d.SchemaVersion == 0 || (d.RecordRequirement != FeatureRecordOmitted && d.RecordRequirement != FeatureRecordRequired) || d.SubjectRequirement > FeatureSubjectAnonymousFlow || d.VersionPolicy > FeatureVersionSnapshotImport || d.VersionPolicy == FeatureVersionSnapshotImport && d.RecordRequirement != FeatureRecordRequired {
 		return InvalidInputError{Field: "feature_operation"}
+	}
+	return nil
+}
+
+// ValidateRecordVersions checks the selected structural transition, not a
+// commit, existing record, authentication or import authority. Native owners
+// must bind the exact descriptor and fence actual prior state in the mutation.
+// Sequential declarations retain their existing overflow rule. Snapshot import
+// admits only absent-local 0 -> positive source versions, including full width;
+// it never permits overwriting an existing record or resetting a version.
+func (d FeatureOperation) ValidateRecordVersions(before, after uint64) error {
+	if err := d.Validate(); err != nil {
+		return err
+	}
+	valid := before == 0 && after == 0
+	if d.RecordRequirement == FeatureRecordRequired {
+		if d.VersionPolicy == FeatureVersionSnapshotImport {
+			valid = before == 0 && after > 0
+		} else {
+			valid = before < ^uint64(0) && after == before+1
+		}
+	}
+	if !valid {
+		return InvalidInputError{Field: "feature_record_versions"}
 	}
 	return nil
 }
