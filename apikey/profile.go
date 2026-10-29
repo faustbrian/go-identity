@@ -1,4 +1,4 @@
-// Package apikey owns modern API-key secret custody, immutable grants and
+// Package apikey owns API-key secret custody, immutable grants and
 // current-authority reduction. Durable workflows are supplied by owned adapters,
 // not application-written stores. The selected profile is user-owned, uncached
 // and unlimited; other profiles must not silently fall back to it.
@@ -117,8 +117,8 @@ const (
 )
 
 // ConfigurationState distinguishes issuance from retained verification.
-// VerifyOnly/Deprecated are reserved but unsupported until an explicit bounded
-// migration profile is selected. NewConfiguration rejects both for now.
+// VerifyOnly is admitted solely for explicitly selected legacy SHA-256;
+// Deprecated remains unsupported.
 type ConfigurationState uint8
 
 const (
@@ -143,11 +143,23 @@ const (
 	CacheDisabled
 )
 
-// ConfigurationSpec is the finite modern HMAC-SHA-256/32-byte idk_ profile.
+// ConfigurationAlgorithm is selected by trusted server configuration, never by
+// the presented token. Zero preserves the existing modern HMAC-SHA-256 profile
+// and its exact retained JSON/fingerprint representation.
+type ConfigurationAlgorithm uint8
+
+const (
+	AlgorithmModernHMACSHA256 ConfigurationAlgorithm = iota
+	AlgorithmLegacySHA256V1
+)
+
+// ConfigurationSpec selects modern HMAC-SHA-256/32-byte idk_ issuance or an
+// explicit verify-only historical bare SHA-256 profile.
 // Revision identifies immutable behavior; server-owned ID/revision must be
 // selected from stored metadata, never inferred from presented secret text.
 // Read, clock and decision budgets fit the shared issuer's 30-second bound.
 type ConfigurationSpec struct {
+	Algorithm                                                          ConfigurationAlgorithm `json:",omitempty"`
 	ID                                                                 string
 	Revision                                                           uint64
 	State                                                              ConfigurationState
@@ -189,7 +201,8 @@ func (ConfigurationAuthorityBinding) Format(s fmt.State, _ rune) {
 func (ConfigurationAuthorityBinding) MarshalJSON() ([]byte, error) { return nil, ErrDisclosure }
 
 func NewConfiguration(s ConfigurationSpec) (Configuration, error) {
-	if !scope(s.ID, 128) || s.Revision == 0 || s.State != ConfigurationActive && s.State != ConfigurationDisabled || !scope(s.Issuer, 256) || !scope(s.Environment, 128) || !scope(s.Audience, 256) || s.PermissionReduction < PermissionReductionNarrow || s.PermissionReduction > PermissionReductionRevoke || s.MaximumLifetime <= 0 || s.MaximumLifetime > 365*24*time.Hour || s.MaximumRead <= 0 || s.MaximumRead > 10*time.Second || s.ClockUncertainty < 0 || s.DecisionRaceBudget < 0 || s.ClockUncertainty > 10*time.Second || s.DecisionRaceBudget > 10*time.Second-s.ClockUncertainty || s.Quota != QuotaUnlimited || s.Cache != CacheDisabled {
+	stateValid := s.Algorithm == AlgorithmModernHMACSHA256 && (s.State == ConfigurationActive || s.State == ConfigurationDisabled) || s.Algorithm == AlgorithmLegacySHA256V1 && (s.State == ConfigurationVerifyOnly || s.State == ConfigurationDisabled)
+	if !scope(s.ID, 128) || s.Revision == 0 || !stateValid || !scope(s.Issuer, 256) || !scope(s.Environment, 128) || !scope(s.Audience, 256) || s.PermissionReduction < PermissionReductionNarrow || s.PermissionReduction > PermissionReductionRevoke || s.MaximumLifetime <= 0 || s.Algorithm == AlgorithmModernHMACSHA256 && s.MaximumLifetime > 365*24*time.Hour || s.MaximumRead <= 0 || s.MaximumRead > 10*time.Second || s.ClockUncertainty < 0 || s.DecisionRaceBudget < 0 || s.ClockUncertainty > 10*time.Second || s.DecisionRaceBudget > 10*time.Second-s.ClockUncertainty || s.Quota != QuotaUnlimited || s.Cache != CacheDisabled {
 		return Configuration{}, ErrInvalid
 	}
 	return Configuration{spec: s}, nil

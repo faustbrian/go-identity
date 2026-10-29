@@ -36,7 +36,7 @@ type issuanceState struct {
 // attach its invocation's fresh secret only for proven committed issuance.
 // Noncommitted/unknown observations discard secret custody and forbid records.
 func NewIssuanceResult(c Configuration, receipt identity.CommandResult, record *Record, secret Secret) (IssuanceResult, error) {
-	if c.Validate() != nil || receipt.Validate() != nil || receipt.Feature == nil || receipt.Feature.Operation.Owner != "identity/apikey" || receipt.Binding.OperationID != "identity.apikey.create" && receipt.Binding.OperationID != "identity.apikey.rotate" {
+	if c.Validate() != nil || c.spec.Algorithm != AlgorithmModernHMACSHA256 || receipt.Validate() != nil || receipt.Feature == nil || receipt.Feature.Operation.Owner != "identity/apikey" || receipt.Binding.OperationID != "identity.apikey.create" && receipt.Binding.OperationID != "identity.apikey.rotate" {
 		return IssuanceResult{}, ErrInvalid
 	}
 	copyReceipt := receipt

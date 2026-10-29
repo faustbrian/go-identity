@@ -106,7 +106,7 @@ func (r RecoveryRequest) Validate() error {
 	if _, err := identity.ParseCommandID(string(q.CommandID)); err != nil {
 		return ErrInvalid
 	}
-	if q.OperationID != "identity.apikey.create" && q.OperationID != "identity.apikey.rotate" && q.OperationID != "identity.apikey.delete" {
+	if q.OperationID != "identity.apikey.create" && q.OperationID != "identity.apikey.rotate" && q.OperationID != "identity.apikey.delete" && q.OperationID != "identity.apikey.import" {
 		return ErrInvalid
 	}
 	_, err := ParseKeyID(q.RecordID)

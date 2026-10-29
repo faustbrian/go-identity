@@ -111,7 +111,7 @@ func (Digest) MarshalJSON() ([]byte, error) { return nil, ErrDisclosure }
 // then the full canonical secret. The configuration, not the prefix, selects
 // verification policy. Digest remains usable after Reveal but cannot reveal.
 func (s Secret) Digest(p Pepper, tenant string, c Configuration) (Digest, error) {
-	if s.state == nil || p.state == nil || !scope(tenant, 128) || c.Validate() != nil {
+	if s.state == nil || p.state == nil || !scope(tenant, 128) || c.Validate() != nil || c.spec.Algorithm != AlgorithmModernHMACSHA256 {
 		return Digest{}, ErrInvalid
 	}
 	h := hmac.New(sha256.New, p.state.material[:])

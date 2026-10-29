@@ -55,7 +55,10 @@ func (r Record) Validate(c Configuration) error {
 			return ErrInvalid
 		}
 	}
-	if c.Validate() != nil || r.Owner.Validate() != nil || r.Version == 0 || r.AuthorityVersion == 0 || r.RootID != r.ID || r.RootVersion != r.AuthorityVersion || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || r.Issuer != c.spec.Issuer || r.Environment != c.spec.Environment || r.Audience != c.spec.Audience || r.Status < KeyActive || r.Status > KeyRevoked || !validPermissions(r.Grant) || len(r.Name) > 128 || r.CreatedAt.IsZero() || !r.ExpiresAt.After(r.CreatedAt) || r.ExpiresAt.Sub(r.CreatedAt) > c.spec.MaximumLifetime {
+	// Shared-issuer SI-07 preserves historical absolute times. A verification-
+	// only import is not new issuance and cannot rebase an old creation time to
+	// fit today's issuance ceiling; modern records keep the original bound.
+	if c.Validate() != nil || r.Owner.Validate() != nil || r.Version == 0 || r.AuthorityVersion == 0 || r.RootID != r.ID || r.RootVersion != r.AuthorityVersion || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || r.Issuer != c.spec.Issuer || r.Environment != c.spec.Environment || r.Audience != c.spec.Audience || r.Status < KeyActive || r.Status > KeyRevoked || !validPermissions(r.Grant) || len(r.Name) > 128 || r.CreatedAt.IsZero() || !r.ExpiresAt.After(r.CreatedAt) || c.spec.Algorithm == AlgorithmModernHMACSHA256 && r.ExpiresAt.Sub(r.CreatedAt) > c.spec.MaximumLifetime {
 		return ErrInvalid
 	}
 	return nil

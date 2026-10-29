@@ -1,7 +1,8 @@
 # API keys
 
-`github.com/faustbrian/go-identity/apikey` defines the user-owned modern API-key
-profile. It uses fixed `idk_` plus 32 CSPRNG bytes in unpadded base64url, with
+`github.com/faustbrian/go-identity/apikey` defines user-owned modern API-key
+issuance and an explicit verify-only legacy profile. New issuance uses fixed
+`idk_` plus 32 CSPRNG bytes in unpadded base64url, with
 HMAC-SHA-256 lookup separated by tenant, configuration/revision, pepper version,
 issuer, environment and audience. Raw keys are transient and reveal once across
 copies. No key plaintext belongs in a durable preparation, receipt or journal.
@@ -80,10 +81,31 @@ only the original coordinator status, including for revocation. Every management
 mutation belongs to the existing sole coordinator, with required audit/lifecycle
 effects and original-key recovery.
 
-Organization-owned and administrator management, legacy digest import, finite
-quota, cache, API-key session adapters and OAuth delegation are retained goals,
-not selected fallback profiles. Verify-only and deprecated configurations deny
-construction until an explicit bounded migration policy is implemented.
+Legacy configuration explicitly selects `AlgorithmLegacySHA256V1` and
+`ConfigurationVerifyOnly`; it cannot issue keys. The zero algorithm retains the
+modern profile and its exact historical configuration serialization and HMAC
+digest. `ParseSecret` remains modern-only. `ParseLegacySecret` instead preserves
+1..4096 historical bytes without normalization or an invented prefix, and offers
+only the configured SHA-256 digest, never reveal. `AtomicVerificationRequest`
+requires exactly the credential arm selected by the server configuration; the
+wire value cannot select an algorithm or trigger profile scanning.
+
+`LegacyImporter` is additive to the unchanged modern `Service` interface.
+`ImportRequest` carries only a nonzero `LegacyDigest`, bounded source ID/version
+and the exact typed metadata record, including stable canonical key ID, owner,
+permission ceiling, absolute expiry, terminal status and replacement lineage.
+Native import must authenticate and authorize the real self-owner and source,
+validate canonical IDs, retain tombstones, and use the existing coordinator for
+atomic effects and original status recovery. A digest constructor or request
+validator alone establishes neither authentication nor a durable import.
+Imports are not issuance, and cannot reveal or regenerate historical plaintext.
+This finite import profile requires explicit positive absolute expiry; an absent
+expiry is unsupported and is never replaced with an invented deadline. Legacy
+record eligibility does not apply modern issuance-age limits to original times.
+
+Organization-owned and administrator management, finite quota, cache, API-key
+session adapters and OAuth delegation remain separate profiles, not fallbacks.
+Deprecated configurations still deny construction.
 Reference/native expiry remains the selected 1-day..365-day profile; a shorter
 positive core `MaximumLifetime` cap describes an explicitly stricter alternate
 configuration, not a change to that Reference policy.

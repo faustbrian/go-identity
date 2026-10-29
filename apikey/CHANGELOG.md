@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add explicit verify-only bare SHA-256 credential and digest-only import
+  contracts, preserving stable typed metadata and source versions without
+  changing modern parsing, HMAC digests or retained configuration bytes.
 - Add modern tenant/configuration-bound HMAC API-key secret custody with
   reveal-once delivery and status-only unknown-outcome recovery contracts.
 - Add explicit self-owned management, current-authority grant intersection,

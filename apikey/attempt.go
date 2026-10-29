@@ -44,8 +44,11 @@ type AtomicVerificationRequest struct {
 	ConfigurationRevision uint64
 	Candidate             KeyID
 	Secret                Secret
-	RequiredPermissions   []string
-	DebitAmount           uint64
+	// LegacySecret is admitted only under an explicitly server-selected
+	// verify-only legacy configuration; supplying both arms is invalid.
+	LegacySecret        LegacySecret
+	RequiredPermissions []string
+	DebitAmount         uint64
 }
 
 // Validate checks the finite unlimited shape, not the presented secret against
@@ -54,7 +57,8 @@ func (r AtomicVerificationRequest) Validate(c Configuration) error {
 	if _, err := ParseVerificationAttemptID(string(r.AttemptID)); err != nil {
 		return ErrInvalid
 	}
-	if c.Validate() != nil || !scope(string(r.TenantID), 128) || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || r.Secret.state == nil || !validPermissions(r.RequiredPermissions) || r.DebitAmount != 0 {
+	credentialValid := c.spec.Algorithm == AlgorithmModernHMACSHA256 && r.Secret.state != nil && r.LegacySecret.wire == "" || c.spec.Algorithm == AlgorithmLegacySHA256V1 && r.Secret.state == nil && r.LegacySecret.wire != ""
+	if c.Validate() != nil || !scope(string(r.TenantID), 128) || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || !credentialValid || !validPermissions(r.RequiredPermissions) || r.DebitAmount != 0 {
 		return ErrInvalid
 	}
 	if r.Candidate != "" {
