@@ -50,8 +50,10 @@ type UpdateRequest struct {
 // does not advance the credential AuthorityVersion, RootVersion or shared
 // configuration authority. Permission narrowing advances those existing
 // security dimensions exactly once; it creates no new key, credential root or
-// lineage. Required counters, audit and attributable lifecycle effects belong
-// to the same sole protected transaction as the update.
+// lineage. The existing protected-preparation owner charges an admitted attempt
+// once before generation and retains that charge if final application fails.
+// The record change, required audit and attributable lifecycle effects share
+// the sole final transaction; recovery never repeats admission or charges.
 //
 // Matching replay/recovery can return the original terminal result only after
 // current human/owner authorization. An uncertain result retains Receipt's

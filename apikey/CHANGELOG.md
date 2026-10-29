@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Clarify Update's existing protected-preparation charging contract: an admitted
+  attempt is charged once before generation, including when final application
+  fails. Domain, required audit and lifecycle effects remain atomic together;
+  original recovery cannot charge or execute the intent again.
+
 - Add optional keyed name/permission Update contracts without expanding Service.
   Explicit self/organization ownership, non-expanding grants, version fencing
   and original recovery preserve credential identity and legacy absent expiry.
