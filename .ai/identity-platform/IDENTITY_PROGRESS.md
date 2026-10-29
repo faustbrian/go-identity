@@ -1,6 +1,36 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-29 08:30 UTC
+## Current TL;DR — 2026-10-29 11:31 UTC
+
+- **Overall: ~25%, low-confidence estimate; 10/39 whole milestones closed.**
+  Two more selected consumer profiles are delivered below, but whole M21/API
+  keys and M31/OIDC remain incomplete. No new fully qualified unit out of67 is
+  claimed; federation, SCIM, remaining capability profiles and final gates
+  remain substantial work.
+- **Delivered now:** consumers can Get/List self or explicitly selected
+  organization API-key metadata through the real Reference PostgreSQL/HTTPS
+  backend. This includes creator removal, legacy canonical IDs, absent expiry,
+  revoked records, paging/restart, current authorization and logout/closure.
+  Main498a983 is independently reviewed and
+  [CI-green](https://github.com/faustbrian/go-identity/actions/runs/40865463859).
+  All16 actual public-module files match; its six-case HTTPS/race consumer
+  passes45.472s. Local affected/retained race68.278s and module/static checks
+  pass. No secret, key verification/debit or key-state mutation is exposed.
+- **Delivered in parallel:** managed public OIDC clients can explicitly select
+  consented name/email/phone UserInfo through native current identity/contact
+  owners, with independent RP validation, refresh, withdrawal and recovery.
+  Native mainaf9690ec is independently reviewed and
+  [CI-green](https://github.com/faustbrian/go-oauth-server/actions/runs/40864592269).
+  Actual public native matches all7 files; fresh/populated RP/contact-removal
+  race passes28.020s. HTTP/Reference OAuth composition is still unfinished.
+- **Current:** one bounded read-only map is selecting the next actually ready
+  native API-key management outcome. No successor implementation has started.
+  Previous metadata/claims checks are closed, not being restarted. All owned
+  test services/caches are removed; nothing waits on a user decision.
+- **Qualification:** the separate historical secret scan still fails. Changed-
+  range CI and selected consumers do not establish complete release qualification.
+
+## Retained checkpoint — 2026-10-29 11:08 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
   closed.** No additional fully release-qualified unit out of67 is claimed.
@@ -35,9 +65,35 @@
   logout. Native organization tests also prove surviving-owner legacy rotation
   and direct revocation after creator removal. An earlier setup-timeout cause
   remains unproved; it is not described as fixed.
-- **Current:** a disjoint worker is implementing metadata Get/List against
-  the delivered API-key owners. HTTP/Reference integration follows native
-  publication; no additional authority, quota debit or mutation comes from reads.
+- **Delivered native metadata:** current authorized humans can Get/List their
+  own or explicitly selected organization keys, including modern/legacy,
+  absent-expiry and terminal records. Reads repeat current authority, paginate
+  across reconstruction and change no key/configuration/attempt state. Native
+  source0094 plus fixture correction0996323 is reviewed/main-pushed with
+  [passing push CI](https://github.com/faustbrian/go-identity/actions/runs/40853658432).
+  The actual authenticated public module matches all11 reviewed files and passes
+  unit race1.375s and real PostgreSQL metadata/DDL/planner race35.477s. Selected
+  paging indexes are opt-in; physical access paths remain optimizer-dependent.
+  This closes the native profile, not HTTP/Reference or wholeM21.
+- **Delivered HTTP metadata:** opt-in bearer Get/List is reviewed and pushed
+  on main5e371f7 with [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40861918908).
+  It supports read-only selection, shared safe-rate admission and bounded
+  stored metadata without secrets, key verification or mutation dependencies.
+  Local race4.014s and bounded query fuzz16041 executions pass. Actual downloaded
+  HTTP input authenticates to the published source. Reference composition is
+  being implemented; its new populated-state/HTTPS consumer has not run yet.
+- **Parallel OAuth:** selected public account-claims policy is reviewed and
+  published on main5102 with [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40857432344).
+  Native direct consent/refresh scope rejection and retained pure-OAuth controls
+  pass80.991s. The complete claims consumer remains unfinished: its email
+  expectation was corrected against the real verified non-primary contact
+  contract; the next run fails genuine phone verification. The worker is tracing
+  that authority failure, not claiming native acceptance. A separate password
+  hash exceeded the fixture's original admission deadline; its cause/disposition
+  remains open. OAuth uses its own pinned Go1.27.3.
+- **Qualification boundary:** the separate scheduled full-history scanner
+  [still fails](https://github.com/faustbrian/go-identity/actions/runs/40853677810).
+  Passing changed-range push CI is not full-history or release qualification.
 - **Next:** finish remaining API-key lifetime/quota/cache/management profiles.
   Federation, SCIM, other retained
   capability profiles and final qualification remain substantial work.

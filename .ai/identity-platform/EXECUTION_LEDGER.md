@@ -1,5 +1,130 @@
 # Identity Implementation — Current Milestone
 
+2026-10-29 11:31 UTC — selected M21 metadata HTTP/Reference outcome DELIVERED.
+HTTP5e371f7 and Reference498a983eba17629fbf35ae97d2100141e7e644cf reviewed/main-
+pushed; exact ReferenceCI SUCCESS https://github.com/faustbrian/go-identity/actions/runs/40865463859.
+Reference16 manifest92f491 reviewed APPROVE by apikey_metadata_reference_review.
+Actualpublic v0.0.0-20261029112608-498a983eba17 Origin exact/all16 beforeafter
+equal; real6case user/org/legacy PostgreSQL+HTTPSrace45.472s. Local affected/
+retainedrace68.278s, ordinaryreference5.610s/cmd9.642s, taggedvet/tidy/module/
+structure/strictselectedscan0. Boundedrun+PG/cachecleanup0, exact owned dirs
+absent. Raw NnTFPp evidence retained. Consumer can page/get metadata across
+restart/legacy/null-expiry/terminal records, remove creator yet retain independent
+org access, deny absent native/HTTP selection, logout and graph closure; no
+secret/digest/verify/debit/key mutation. No fullM21 or unitqualification claim.
+Parallel nativeM31 claims af9690ec actualpublic/CI proof below is also accepted;
+wholeM31 and its HTTP/Reference composition remain unfinished. Current nextstep
+is the bounded read-only readiness map, not further metadata qualification.
+
+2026-10-29 — next native M21 readiness map (read-only, bounded).
+Owner apikey_metadata; no writable paths/Go/services/Git/children. Inspect
+actual core/native main498a983, full applicable package goals and current typed
+operation rows for the next complete key-management consumer after Get/List.
+Prefer one genuinely dependency-ready native update/lifetime outcome, not quota/
+cache fan-out or a new engine. Return exact missing behavior, consumed committed
+owners/proof and writable-path proposal, finite success/denial/recovery cases
+and smallest checks. Do not implement before parent records the selected lane.
+Primary retains Reference/HTTP/shared kernel/session/risk/Git/aggregate notes.
+Current metadata Reference candidate is reviewed/main-pushed498a983 and exact
+CI40865463859SUCCESS; actual public Reference6case race live50897, no closure
+claim until terminal. Its PG/cache job owns heavy slot. OAuthnativeaf9690ec
+actual public RP race28.020/module/all7source beforeafter/CI40864592269SUCCESS,
+all owned PG/cache removed. Selected native M31 claims outcome delivered, not
+wholeM31. Preserve prior native/applicable qualification debt.
+
+2026-10-29 11:08 UTC — HTTP metadata prerequisite DELIVERED.
+Complete10 d9bd3693 reviewed APPROVE by apikey_metadata_http_review; committed/
+main-pushed5e371f7f07c70eeb1bc7bac1d5b1bb1180b25c7a. Exact pushCI SUCCESS
+https://github.com/faustbrian/go-identity/actions/runs/40861918908. Local actual
+Go1.27.2 race4.014s/vet/tidy/module0/fuzz16041; strict selected secrets and
+five structure checks0. Raw /tmp/identity-apikey-http-metadata.RBQGpt. Caches
+removed. PublicHTTP v0.0.0-20261029105935-5e371f7f07c7 authenticated with exact
+origin; Reference consumes it with coreef01/native099, no replace/sibling.
+Primary now owns existing frozen Reference remainder. New genuine user/populated
+key/paging/HTTPS/reconstruction/logout consumer prepared; not run yet. Only
+configuration declarations are production edits; no composition implemented
+before expected runtime RED. Resource root NnTFPp holds disposable caches for
+the one bounded Reference red/green/regression run; clean at its terminal end.
+Data shape: graph-selected metadata paging and Get/List narrow ports; borrow
+one existing safe limiter (session/MFA/email/passkey) or an explicit standalone
+owner only when none exists. Prefer extending existing feature/guard/migration
+composition over a new metadata server, authority or migration executor.
+Caller usage: APIKey.MetadataPaging=true and HTTPAPIKey.Get/List=true, then
+native guarded APIKeys().Get/List or selected existing router paths. Native
+Get needs no paging schema; HTTPList without selected paging must fail closed.
+Independent paging histories preserve installed key and organization prefixes.
+
+2026-10-29 10:04 UTC — selected native M21 metadata profile DELIVERED.
+Complete11 final source8f216cb reviewed by apikey_metadata_native_review against
+ef01; main0094e30 plus fixture-only099632385cd268e5cdce44dc5034f6ad770019ea.
+Push Required SUCCESS https://github.com/faustbrian/go-identity/actions/runs/40853658432.
+Actual public nativev0.0.0-20261029095700-099632385cd2 Origin exact/all11equal,
+unitrace1.375s/genuine native PostgreSQL metadata+DDL+plans race35.477s,
+modverify0; exact ownedPG55493/caches removed. Source/raw results in
+/tmp/identity-apikey-metadata-public.J4nDlC; no HTTP/Reference/wholeM21 claim.
+Prior0094 pushCI failed public-position fixture; strict ignore-inline scan
+reproduced it and correction removed suppression without weakening scanner.
+Unrelated scheduled full-history scan40853677810 remains failed; final history
+qualification is open, not a reason to restart delivered runtime or Tools work.
+OAuth root review F1 invalid claim-scope narrowing/F2 repo-toolchain mismatch
+are accepted. Its lane extends only to shared root complete-OIDC-scope predicate,
+root consent/refresh guards and native direct-store counterparts/regressions.
+PureOAuth narrowing stays valid. Root final reruns use actual repo Go1.27.3;
+original1.27.2 evidence remains labeled. No root publication/native adoption yet.
+
+2026-10-29 09:58 UTC — primary finite M21 metadata HTTP/Reference consumer.
+Own http/apikey/** and affected reference API-key/config/migration/composition
+files/tests/docs/pins only; no domain/session/risk replacement. Consume public
+coreef01/native0094 plus fixture-only corrective0996323 (native public acceptance
+and corrective CI pending, not yet a delivered-profile claim). Native current
+owner/read behavior has committed focused PostgreSQL proof and public source
+identity; downstream acceptance cannot close before corrected native CI/public
+consumer. Preserve all existing modern/legacy/org write profiles.
+Outcome: explicitly selected GET /v1/apikey/get and /v1/apikey/list expose safe
+copied self or explicitly selected organization metadata, stable bounded pages,
+modern/legacy/absent-expiry/terminal records through genuine current password
+bearers and native owners. No Idempotency-Key/body/tenant/user/actor override,
+cookie fallback, raw key/digest, new proof requirement or key verification/debit.
+Native selection alone exposes no HTTP route or OpenAPI capability. Selected
+List requires only its optional owner paging histories; existing installations
+and historical checksums remain unchanged. Reference direct handles retain
+startup/tenant/shutdown guards; actual SafeRate owner is shared, not copied.
+No admin/update/delete-expired/quota/cache/session-auth expansion in this profile.
+Use one constructor extension with narrow selected Get/List ports rather than
+a competing feature/composition path; keep required mutation dependencies
+conditional so read-only selection needs no mutation/risk/reveal port.
+Checks: focused wire/parser/projection/selection/current-authority/rate denial,
+bounded hostile-query fuzz and affected module race/vet/tidy; genuine Reference
+fresh/populated PostgreSQL+HTTPS journey with safe paging/reconstruction,
+creator removal/other-owner read, no-key-state mutation, native-off/HTTP-off
+absence, current withdrawal and logout; affected retained API-key consumers.
+Publish reviewed HTTP prerequisite before Reference pin adoption, then one
+complete Reference final review and actual downloaded consumer. Primary coding
+may overlap immutable downloaded-native checks; local heavy runs stay serial.
+
+2026-10-29 09:38 UTC — parallel finite M31 managed public account-claims lane.
+Worker oauth_next_ready_outcome owns go-oauth-server root client_management.go,
+client_read.go, affected management/read tests and new public-claims tests;
+root README/CHANGELOG/docs/selected-oidc-profile.md; native new
+postgres/client_public_claims_integration_test.go and module-local go.mod/go.sum/
+README/CHANGELOG only. No shared identity/OIDC-child/schema/HTTP/Reference/Tools/
+Git writes or children. Consumes current root601704f/nativebb5c83e/oidcbaa3ff6
+and unchanged actual identity/session/email/phone pins in native go.mod.
+Outcome: an explicitly trusted managed public default-subject RP completes
+genuine manager-create -> consent/code/S256 -> independent RP ID-token validation
+-> same-sub UserInfo with only its consented profile/email/phone claims. Existing
+PublicOIDC selection remains openid-only; do not add claims implicitly. Retain
+the established real configured-client catalog; zero-static, confidential/
+pairwise claims, address/offline/custom attributes, metadata replacement, exchange
+and HTTP/Reference are excluded from this finite profile, not eventual scope.
+Prove current real name/contact changes, scope minimization, refresh/reconstruction,
+client/user/contact withdrawal, required-effect rollback and original unknown
+recovery. Root runtime red/green/affected race/vet/static; then actual public-root
+native PG/race plus retained managed/claims and actual downloaded native consumer.
+Primary inspects first boundary and owns review/publication/integration. Publish
+reviewed root prerequisite before native adoption. Heavy runs wait for metadata
+DB experiment slot; coding can overlap. No new owner/transaction/claim engine.
+
 2026-10-29 08:30 UTC — selected no-expiry legacy-key consumer DELIVERED.
 Core35/native7bf/Reference132 all independently reviewed/main-pushed/CI-green.
 Reference Required SUCCESS https://github.com/faustbrian/go-identity/actions/runs/40841968960.
