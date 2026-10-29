@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add current-human safe metadata Get/List for exact self or explicit
+  organization ownership across selected modern/legacy profiles, including
+  revoked, expired and no-expiry records. Reads expose neither credentials nor
+  digests and do not verify, debit or mutate keys. Pagination survives native
+  reconstruction and repeats current authorization on every live-view page.
+- Add independent opt-in user/organization metadata paging indexes and
+  per-configuration result limits. Access paths remain optimizer-dependent;
+  native/caller deadlines bound the complete read. Apply the selected migration before
+  using List; old issuance, verification and exact-key Get remain compatible.
+  Ordinary transactional index builds require bounded deployment/lock deadlines
+  and temporarily block key writers. Uninstalled selected indexes fail closed.
+
 - Support digest-only legacy imports with an absent expiry under an explicitly
   selected `AllowLegacyNoExpiry` configuration. Preserve canonical source
   metadata and original bounded authority evidence through verification and

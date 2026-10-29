@@ -7,6 +7,84 @@ identity coordinator, PostgreSQL authority, password bearer sessions,
 authorization, risk counters, audit and transactional outbox owners. It does
 not issue browser sessions or treat the creator as the API key's human actor.
 
+## Safe metadata reads
+
+The additive public `apikey.MetadataService` is implemented by `*Service`.
+`Get` and `List` authenticate a genuine current password bearer through the
+same native session owner and require an active current human/tenant plus the
+explicit `identity.apikey.get` or `identity.apikey.list` policy. No fresh
+sensitive-change proof, API-key verification, protected counter, quota debit,
+coordinator command or mutation is performed. A returned record is metadata,
+not a principal, current effective permission or reusable authorization proof.
+Its `Grant` is the stored immutable ceiling only. No raw API key or API-key
+digest is selected from PostgreSQL or returned.
+
+An empty request `OrganizationID` means that actual human's own user keys; no
+user override is accepted. An explicit organization target requires
+`NewOrganizationService`, actual current membership and organization-key policy
+for the exact stored configuration. A creator's membership removal denies the
+creator's next read without hiding the independent organization's keys from
+another current authorized member. Self-only deployments never query the
+optional organization column. Every request/page repeats actual authority;
+stored revoked/expired and selected legacy no-expiry records remain metadata,
+not newly usable credentials. Missing and unauthorized key IDs both deny.
+Unselected, disabled, unavailable or mismatched configuration authority fails
+closed; a similarly named/prefixed profile is never substituted.
+
+`Get` uses the existing exact-key access path. Before selecting self-owned
+`List`, apply `MetadataMigrationSource` through the public migration runner
+after the existing key history, using a deployment-owned unused version.
+Organization paging separately requires `OrganizationMetadataMigrationSource`
+after `OrganizationMigrationSource`. The histories are independent and add only
+partial owner/configuration/key indexes; neither rewrites historical migration
+checksums or key records. Each key belongs to only one of the partial indexes.
+Existing issuance/verification and exact-key reads do not require either new
+index. A selected `List` with an absent/incomplete index on the actual keys
+relation returns unavailable rather than ignoring the selected schema requirement.
+
+These are ordinary transactional index builds, not concurrent builds. They scan
+the existing key table, need index-build disk/WAL headroom and block key writers
+until commit. Use a bounded migration window and explicit DDL/lock deadlines.
+A lock timeout or later transaction failure rolls the new index back; retry
+through the owning migration runner rather than ignoring an existing name.
+The executable populated-state regression covers lock timeout, rollback and
+subsequent additive application, including optional organization composition.
+The indexed columns are immutable key ownership/identity/configuration, not
+mutable record bytes; this preserves the existing conditions for HOT updates,
+but available page space and actual row churn still determine whether HOT is
+used. Inserts/deletes incur one additional owner index entry per key. Production
+write frequency, build headroom and throughput remain deployment-specific.
+
+Pages accept 1..200 records, up to sixteen sorted distinct configuration IDs
+(the native service currently selects at most modern plus legacy), and a cursor
+of at most 512 bytes. An absent filter selects all configured profiles.
+Each selected profile returns at most `Limit+1` rows, followed by a merge of
+at most two such subsets in bytewise ascending key-ID order. Owner-prefixed
+indexes provide selective access paths, but PostgreSQL chooses the plan: normal
+dense-owner execution can use the primary-key index and filter by owner.
+`LIMIT` bounds returned rows, not physical rows examined; the native maximum
+duration and any earlier caller deadline bound the complete call. The tested
+empty tail used the owner index efficiently, not a guaranteed physical scan
+bound for every data distribution. A public
+scope hash binds cursor positions to the actual tenant, human, owner target
+and exact profiles; it is deliberately not a signature or credential. Forging
+a position grants no authority and cannot escape owner-constrained SQL.
+Callers must retain cursors opaquely. This is a live keyset view, not a frozen
+snapshot: inserts behind a cursor are omitted, inserts ahead may appear, and
+existing IDs are not repeated. No transaction or in-memory handle spans pages;
+native service reconstruction preserves the same positions and current checks.
+
+`metadata_*_integration_test.go` exercises genuine signup/verification/password
+bearers, native modern issuance and digest-only legacy import, independent
+organization membership, terminal metadata, current denial and unchanged
+key/configuration/attempt state. Separate planner-only volume uses the actual
+migrated C-collated ID domain, sparse/dense owner classes and normal pgx
+preparation; synthetic lookup digests are not credential acceptance evidence.
+It records baseline/candidate plans, partial-index storage and rolled-back
+insert/record-update work. These local instrumented samples do not establish
+production latency, frequency or an install/rollout result on another target.
+No metadata HTTP or Reference feature is selected by this module alone.
+
 ## Composition and use
 
 1. Apply the selected owners' migrations, including identity preparation,
