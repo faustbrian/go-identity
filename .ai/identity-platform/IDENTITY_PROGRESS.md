@@ -1,5 +1,41 @@
 # Identity Platform Progress
 
+## Current TL;DR — 2026-10-29 05:56 UTC
+
+- **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
+  closed.** The native organization-owned-key profile is delivered; its selected
+  HTTP/Reference consumer and the rest of M21 remain unfinished. No new
+  fully release-qualified unit out of 67 is claimed.
+- **New prerequisite behavior:** current organization ownership can now be read
+  without borrowing a creator's identity. Actual member removal preserves its
+  independent credential epoch; archive/restore and older writers cannot rewind
+  revocation. Native organization main02c55d2 is independently reviewed and
+  [CI-green](https://github.com/faustbrian/go-organization/actions/runs/40821174390).
+  Actual public source matches all eight reviewed files. The complete integration
+  attempt had one fixture-host failure; that exact consumer passed on corrected
+  loopback PostgreSQL. The original aggregate remains recorded as failed.
+- **Key contracts:** exact nonhuman verification, organization epoch equality,
+  explicit organization creation and manager/owner-separated reveal-once results
+  are main-pushed9d77699 with [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40821192546).
+  Actual public core source matches all eleven reviewed files and its organization
+  contract race tests pass. Native organization management, modern/bare-key
+  verification and recovery are now main-pushed8de0410 with
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40825977307).
+  All20 actual public-module files match the independently approved candidate;
+  both public PostgreSQL/race organization consumers pass14.492s. Consumers can
+  issue/import keys without fabricated creator ownership, remove the creator
+  while preserving verification, deny removed-manager recovery, rotate/revoke
+  as another owner and enforce archive/restore non-resurrection. Actual audit
+  failure rolls back authority; lost-COMMIT recovery never re-reveals material.
+  Populated migrations preserve an existing user key, and current policy Narrow
+  is atomic and cannot re-expand. Final local tagged race67.193s, ordinary
+  race1.327s and affected static checks pass. Review exposed and corrected exact
+  cross-clock interval nesting without renewing original freshness.
+- **Current/next:** integrate this delivered native profile into selected
+  opt-in HTTP/Reference management with exact migrations and advertised schemas.
+  No user decision is pending. Quotas, caches, broader management and remaining
+  platform families remain substantial work; native delivery is not M21 closure.
+
 ## Current TL;DR — 2026-10-29 03:56 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones

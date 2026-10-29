@@ -1,5 +1,143 @@
 # Identity Implementation — Current Milestone
 
+2026-10-29 05:56 UTC — M21 native organization-owned profile DELIVERED.
+Main8de0410c02792a2311eeab2101e6b9d0fcd755fa, exact Required CI success:
+https://github.com/faustbrian/go-identity/actions/runs/40825977307
+Complete20 native candidate4b4b4b766b9e940dccd8798b23aac0cc7cc1eb54d21450538c50b9d9babc1c27
+independent final review organization_key_native_final_review APPROVE after
+F1 cross-clock restore regression and F2/F3 policy/isolation acceptance. Final
+tagged race67.193s, ordinary race1.327s, ordinary/tagged vet/tidy/modverify0.
+Selected source Gitleaks8.30.1/no leaks, structural config/repo/cohesion/spec/docs0.
+Codec/seeds unchanged since bounded fuzz5seeds/7execs; not broad assurance.
+Actual authenticated public native v0.0.0-20261029055312-8de0410c0279 matches
+all20 files; both real organization consumers pass14.492s. Creator removal
+preserves modern and unchanged bare keys, denies management/recovery, another
+owner rotates/revokes; stale observed membership cannot issue, required-effect
+rollback and original lost-COMMIT recovery preserve no-reveal custody; owner
+archive/restore cannot revive old keys. Existing populated user key preserved.
+Independent policy fixture proves durable Narrow/rollback/nonexpansion; it also
+proves independent authorized creation after reduction. No fabricated stores.
+Selected HTTP/Reference composition remains next; uncached/unlimited Narrow
+native profile is not whole M21, final unit qualification or platform completion.
+
+2026-10-29 05:12 UTC — M21 disjoint native verification implementation lane.
+Worker owns ONLY apikey/postgres/verification.go, verification_phase.go and new
+verification_organization_test.go. Primary owns all service/management/config,
+record/migration, consumer tests, module pins, docs/HTTP/Reference and Git.
+Consumes public core9d77699/kernel601e478/organization-native02c55d2/root3ab7798,
+already pin-adopted. Same-package organizationComposition holds the actual native
+repository; primary record codec admits tagged organization ownership after
+observed red/green. Neither is substitute authority. CreateOrganization stub
+does not unlock issuance; worker extends only existing implemented Verify and
+original recovery against real organization authority. It may not claim full
+consumer delivery from fixture plans; genuine protected Work/creator-removal/
+replay/rollback acceptance remains primary-owned. Preserve old user/unknown
+bytes and actor routing, exact original freshness and no synthetic human.
+Focused runtime reds/greens and bounded existing verification regressions first;
+all heavy runs serialized. One complete combined native review at integration.
+
+2026-10-29 05:06 UTC — M21 prerequisites delivered, native consumer coding.
+Core9d776996c632a718044b390a57301b97f6ff58bc main/Required40821192546SUCCESS;
+complete11 independent APPROVE, final focused0.196s/race1.220s/vet/tidy/modverify0.
+Actual public core11 byteequal, public organization contract race1.213s.
+Organization native02c55d2b5bc029c0daa5941158521d8c839d4546 main/Required
+40821174390SUCCESS, complete8 independent APPROVE and actual public8 byteequal.
+Whole ordinary race2.197s. Whole tagged attemptFAILED524.273s solely because one
+genuine consumer requires loopback but fixture was Unix-only; that unchanged
+test passed42.371s on corrected owned loopback. Other executed Unix-compatible
+tests retain original proof, not a fabricated aggregate green. Both fixtures
+stopped/removed. Ordinary/taggedvet/tidy/modverify/source/structure0.
+
+Primary actual key-record runtime red88690: organization encoding rejected without
+a creator0.264s. Green60251 after tagged record admission0.260s. Current native
+consumer uses proven public core9d/kernel601e/organization02c, no replace. New
+genuine owner-create/add/remove/independent verify/other-owner rotate/revoke test
+and second genuine registration fixture are local; compile/integration not yet
+proven. Optional organization service/migration signatures are deliberately
+fail-closed scaffolding for runtime red, not delivered or dependency readiness.
+No wholeM21 or native organization-key usable claim until actual full path passes.
+
+2026-10-29 04:40 UTC — M21 owning prerequisites main-pushed, consumer OPEN.
+Organization root3ab7798be548eb00011f4b6f97effb5d6338f1d3 reviewed4/public4
+byte-equal, public root race1.301s, Required40818532241 SUCCESS. Native organization
+worker now implements real reader/fence and optional credential epoch migration;
+owned isolated UTF8 PG only. Identity kernel601e478a297c7057bce511b0da7000b2ef3cd205
+reviewed11, final whole-module race4.009s/vet0, Required40818864733 SUCCESS;
+nonhuman known attempts, actual-key audit and original preparation uncertainty
+are supported without changing old schemas. Actual native key consumer still
+required: these owning prerequisites are NOT milestone closure.
+
+Core8 worker aligned and independently reviewed; whole core race1.220s/vet0.
+Organization Owner.Version is terminal CredentialVersion and must equal recorded
+epoch in all three validators; existing user>= policy semantics unchanged.
+Primary completes the same core prerequisite with explicit OrganizationCreateRequest
+and OrganizationService (old self-user Create cannot silently ignore an owner),
+plus exact org-native create/rotate issuance schema selection preserving manager/
+owner separation and reveal-once custody. Rejected adding an optional owner field
+to existing CreateRequest: old implementations could ignore it and issue a self-key.
+Current public authority/membership remains native-owned, never request shape.
+
+2026-10-29 04:33 UTC — M21 parallel core contract lane, same frozen outcome.
+API-key core worker owns ONLY apikey/attempt.go, attempt_test.go, legacy.go,
+legacy_test.go, README.md and CHANGELOG.md (not nested adapters). Consumes current
+committed API-key core9a9666, existing tagged OwnerOrganization and root identity
+contracts; no new kernel dependency/adoption. Extend exact nonhuman attempt/
+result routing and organization digest-import shape while retaining self-user and
+unknown denials. Root DTO validation supplies no membership/current authority.
+Public management entry-point/issuance selection and native/HTTP/Reference stay
+primary-owned. Native consumers must use their actual trusted owners; no fake
+creator user, new journal or root organization store. Focused runtime reds/greens,
+whole affected core race/vet, current freshness/tenant/secret custody regressions;
+primary integrates with actual native key consumer and serializes all heavy/Git
+work. Do not commit this partial core work as a delivered organization journey.
+
+2026-10-29 04:16 UTC — M21 organization-owned keys FROZEN, one consumer outcome.
+Primary owns go-identity shared postgres verification profile and API-key/native/
+Reference integration. Organization worker owns ONLY go-organization root and
+postgres credential-authority contracts/owned migrations/tests/module docs.
+Baseidentitycc8723a; baseorganization02af2204ba4792ea55cb9f2870cacc2605ad14e9.
+Consume proven user/legacy native3930442, Referencef66303d, real organization
+creation/membership/lifecycle and current authorization/session owners. No worker
+may consume an unimplemented stub or touch another owner's paths/Git/children.
+
+Outcome: genuine fresh manager creates/imports an organization-owned key, native
+verification has no fabricated human, creator membership removal preserves the
+key but denies that actor's next management/recovery/delegation, another current
+authorized member can rotate/revoke, and owner archive/revoke denies without
+restore resurrection. Retain exact source IDs/versions/tombstones, nonexpanding
+grants/expiry, tenant isolation, 20-second original evidence bound, required
+audit/outbox rollback, original replay and unknown recovery. Selected native and
+opt-in Reference/HTTP management must use the same owners. No browser sessions
+from organization keys. Finite profile remains uncached/unlimited Narrow;
+quota/cache, no-expiry and full external lifecycle cleanup remain later required
+work, not waived or represented as complete by this profile.
+
+Chosen kernel model: explicit registered apikey-verify-organization-v1 schema,
+attempt-scoped AnonymousFlowID and actual API-key actor with no UserID. Existing
+KeyVersion plan, canonical encoding, audit/effects/journal owners remain; native
+command fields/producer fence bind actual organization ID/epochs. Rejected fake
+creator UserID (violates ownership) and duplicate organization fields/authority
+in the generic kernel when existing typed feature payload already binds them.
+Existing user/unknown schemas and canonical bytes stay unchanged. This is a
+new known nonhuman variant, never promotion of an unknown-key attempt.
+
+Organization authority has separate current policy/aggregate epoch and durable
+credential revocation epoch. Member/role changes cannot revoke independent keys;
+archive/delete advances credential epoch atomically and restore cannot rewind it.
+Mixed older writers must preserve this invariant. The owning optional migration
+may enforce the row transition centrally; no copied SQL/private authority engine.
+Trusted ObserveCredentialAuthority query takes tenant/org plus optional real actor;
+no actor means owner-only verification, not an invented member. The corresponding
+Work fence checks current owner/optional membership and original freshness; core
+organization types stay storage-neutral. Source adapters perform no caller policy
+decisions or independent transactions. Primary reviews first public boundary.
+
+Checks: focused runtime reds/greens, unchanged user/unknown plan/history/recovery,
+real PostgreSQL owner/membership/lifecycle/current-fence races, actual full key
+journey, affected modern/legacy regressions, public source/consumer and one complete
+independent review per coherent owner change. Reuse unchanged evidence; no full
+fleet reset, Tools changes, new review factory or verification machinery.
+
 2026-10-29 03:56 UTC — managed confidential pairwise native profile DELIVERED.
 go-oauth-server0196c2a9d8e786f9736854dc827128fc2ee6161e reviewed/main-pushed,
 Required40814554861 SUCCESS. Actual authenticated public postgres
