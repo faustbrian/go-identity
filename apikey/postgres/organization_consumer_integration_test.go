@@ -45,7 +45,7 @@ func (p organizationKeyConsumerPolicy) Evaluate(ctx context.Context, r authoriza
 	}
 	if (r.Subject.Kind == authorization.SubjectUser || r.Subject.Kind == authorization.SubjectAPIKey) && r.Resource.Type == "organization-api-key" && r.Resource.ID == authorization.ResourceID(p.org) {
 		switch r.Action {
-		case "identity.apikey.create", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.import", "invoice.read", "invoice.write":
+		case "identity.apikey.create", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.update", "identity.apikey.import", "invoice.read", "invoice.write":
 			if r.Action == "identity.apikey.create" && p.beforeCreate != nil {
 				if err := p.beforeCreate(ctx); err != nil {
 					return authorization.Decision{}, err

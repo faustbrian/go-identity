@@ -171,6 +171,15 @@ func TestManagementMappingBoundsOriginalPrimaryFreshnessNotRecentSessionRead(t *
 			if (err == nil) != tc.accept {
 				t.Fatal("management mapping confused current read with sensitive authentication freshness", err)
 			}
+			prior := x.Record
+			x.PreviousRecord = &prior
+			x.Record.Version++
+			x.Record.Name = "freshness-bound update"
+			op := updateOperation()
+			x.Binding.OperationID, x.Binding.SchemaID = op.OperationID, op.SchemaID
+			if _, err := mapCreation(x); (err == nil) != tc.accept {
+				t.Fatal("Update renewed original primary freshness from a recent session read", err)
+			}
 		})
 	}
 }

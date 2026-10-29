@@ -33,7 +33,7 @@ func (s *Service) currentRecord(ctx context.Context, tenant identity.TenantID, i
 }
 
 func (p *creationPhase) tombstone() apikey.Record {
-	if p.revocation {
+	if p.revocation || p.updating() {
 		return p.input.Record
 	}
 	r := *p.input.PreviousRecord
@@ -165,19 +165,24 @@ func (s *Service) configurationAuthority(ctx context.Context, tenant identity.Te
 }
 
 func (s *Service) originalRecord(ctx context.Context, b identity.CommandBinding) (apikey.Record, error) {
+	record, _, err := s.originalMetadata(ctx, b)
+	return record, err
+}
+
+func (s *Service) originalMetadata(ctx context.Context, b identity.CommandBinding) (apikey.Record, *apikey.ConfigurationAuthorityBinding, error) {
 	var binding, wire []byte
 	if err := s.pool.Raw().QueryRow(ctx, `SELECT binding,record FROM identity_api_keys.command_effects WHERE tenant_id=$1 AND command_id=$2 AND key_id=$3`, string(b.TenantID), string(b.CommandID), b.RecordID).Scan(&binding, &wire); err != nil {
-		return apikey.Record{}, nativeError(ctx, err)
+		return apikey.Record{}, nil, nativeError(ctx, err)
 	}
 	want, _ := json.Marshal(storedBinding(b))
 	if !bytes.Equal(binding, want) {
-		return apikey.Record{}, identity.UnavailableError{}
+		return apikey.Record{}, nil, identity.UnavailableError{}
 	}
-	record, err := decodeRecord(wire, s.config().Configuration)
+	record, authority, err := decodeEffectRecord(wire, s.config().Configuration, b.OperationID)
 	if err != nil || record.ID != apikey.KeyID(b.RecordID) || record.Owner.Spec().TenantID != b.TenantID || !s.managementOwnerMatches(record, b) {
-		return apikey.Record{}, identity.UnavailableError{}
+		return apikey.Record{}, nil, identity.UnavailableError{}
 	}
-	return record, nil
+	return record, authority, nil
 }
 
 func positive(wire string) (uint64, error) {

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Support keyed name and non-expanding permission updates for current self or
+  explicitly selected organization owners, preserving modern/legacy credential
+  identity, lineage and expiry. Name-only changes do not advance security epochs;
+  narrowing advances the existing epochs once. Domain/audit/outbox effects are
+  atomic; the existing preparation owner charges an admitted attempt once, even
+  if final apply fails. Exact retries/recovery retain original snapshots
+  without generating or revealing keys. Metadata changes emit `api_key.updated.v1`
+  without representing permission removal or renewed authentication authority.
+
 - Add current-human safe metadata Get/List for exact self or explicit
   organization ownership across selected modern/legacy profiles, including
   revoked, expired and no-expiry records. Reads expose neither credentials nor

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
@@ -333,25 +334,25 @@ func fixtureGraph(ctx context.Context, origin string, fixtureKeys map[string][32
 	dependencies := reference.ReferenceDependencies{PostgreSQL: pool, EnvelopeKeys: envelope, DeliverySender: sender}
 	g.stores, err = reference.ComposeStores(configured, dependencies)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("native fixture stores: %w", err)
 	}
 	providers, err := reference.ComposeProviders(g.stores)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("native fixture providers: %w", err)
 	}
 	worker := deliverypg.WorkerConfig{ProviderConfigVersion: 1, Scope: authorization.DecisionContext{PolicyRevision: 9, CorrelationID: "local-worker", Request: authorization.Request{Tenant: baselineTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "baseline-worker"}, Action: "identity.delivery.process", Resource: authorization.Resource{Type: "identity.delivery-worker", ID: "baseline-worker"}}}}
 	g.workers, err = reference.ComposeWorkers(g.stores, providers, worker)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("native fixture workers: %w", err)
 	}
 	g.features, err = reference.ComposeFeatures(g.stores, providers, g.workers)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("native fixture features: %w", err)
 	}
 	parsedOrigin, _ := url.Parse(origin) // The fixture constructs this exact HTTPS origin.
 	g.server, err = reference.NewServer(reference.ReferenceConfig{Profile: reference.PostgresOnly, Policies: fixturePolicies(authorize), HTTP: identityhttp.TransportPolicy{Network: identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 4096, MaximumBodyBytes: 16384, MaximumDecodedBytes: 16384, MaximumFields: 64, MaximumDepth: 8}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: parsedOrigin.Hostname(), TenantID: baselineTenant}}}, HandlerTimeout: 5 * time.Second, Document: identityhttp.DocumentConfig{Title: "Local identity baseline", Version: "1"}}, Migration: reference.MigrationPolicy{LockTimeout: time.Second, CommandRetention: time.Hour}, Workers: reference.WorkerPolicy{MaxConcurrency: 1, LeaseDuration: time.Minute, DrainTimeout: 5 * time.Second}, Tenant: reference.TenantPolicy{Resolver: &fixedTenant{}}}, dependencies, g.features)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("native fixture server: %w", err)
 	}
 	return g, nil
 }

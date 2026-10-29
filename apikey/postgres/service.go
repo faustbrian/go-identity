@@ -80,6 +80,9 @@ type Service struct {
 	issuanceConfiguration apikey.Configuration
 	organization          *organizationComposition
 	organizationID        apikey.OrganizationID
+	// update belongs only to a private per-invocation copy, never the shared
+	// configured service. Existing creation phases retain transaction ownership.
+	update *apikey.UpdateRequest
 }
 
 func validateServiceConfigurations(c ServiceConfig) error {
@@ -220,9 +223,10 @@ func mutationRequest(r apikey.Rotation) apikey.CreateRequest {
 }
 
 type nativeResult struct {
-	receipt identity.CommandResult
-	record  *apikey.Record
-	secret  apikey.Secret
+	receipt                identity.CommandResult
+	record                 *apikey.Record
+	secret                 apikey.Secret
+	configurationAuthority *apikey.ConfigurationAuthorityBinding
 }
 
 func (s *Service) issuance(result nativeResult, executionErr error) (apikey.IssuanceResult, error) {
@@ -278,7 +282,10 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 		if record.Owner.Spec().Kind == apikey.OwnerOrganization {
 			organizationID = record.Owner.Spec().OrganizationID
 		}
-		if revoke {
+		if s.update != nil && (s.update.OrganizationID != organizationID || organizationID == "" && record.Owner.Spec().UserID != b.UserID) {
+			return out, apikey.ErrDenied
+		}
+		if revoke || s.update != nil {
 			s = s.withConfiguration(profile)
 		}
 	}
@@ -290,6 +297,9 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 			action = "identity.apikey.delete"
 		} else if mutation != nil {
 			action = "identity.apikey.rotate"
+		}
+		if s.update != nil {
+			action = "identity.apikey.update"
 		}
 		s, err = s.selectOrganization(ctx, b.TenantID, b.UserID, organizationID, action, r.CorrelationID)
 		if err != nil {
@@ -304,7 +314,7 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 	if err := s.allow(ctx, s.decision(r.Authentication.TenantID, b.UserID, op.OperationID, "api-key", s.config().Configuration.Spec().ID, r.CorrelationID)); err != nil {
 		return out, err
 	}
-	if mutation == nil {
+	if mutation == nil || s.update != nil {
 		if err := s.authorizePermissions(ctx, r.Authentication.TenantID, b.UserID, r.Permissions, r.CorrelationID); err != nil {
 			return out, err
 		}
@@ -338,6 +348,9 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 	}
 	if imported != nil {
 		intent, err = s.importIntent(*imported)
+	}
+	if s.update != nil {
+		intent, err = s.updateIntent(*s.update)
 	}
 	if err != nil {
 		return out, err
@@ -388,7 +401,7 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 		receipt, recoveryErr := p.coordinator.RecoverPreparedFeatureCommand(ctx, recoveryQuery(original), s.decision(original.TenantID, b.UserID, original.OperationID, "identity.user", string(original.UserID), r.CorrelationID), kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}, p)
 		out.receipt = receipt
 		if receipt.Outcome == identity.CommitOutcomeCommitted {
-			record, readErr := s.originalRecord(ctx, original)
+			record, authority, readErr := s.originalMetadata(ctx, original)
 			if readErr != nil {
 				return out, readErr
 			}
@@ -398,6 +411,7 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 				}
 			}
 			out.record = &record
+			out.configurationAuthority = authority
 			return out, nativeError(ctx, recoveryErr)
 		}
 		return out, nativeError(ctx, recoveryErr)
@@ -415,6 +429,13 @@ func (s *Service) manage(ctx context.Context, r apikey.CreateRequest, mutation *
 		copy := p.input.Record
 		out.record = &copy
 		out.secret = p.secret
+		if p.updating() {
+			authority := p.input.ConfigurationAuthority
+			if p.advancesAuthority() {
+				authority.Version++
+			}
+			out.configurationAuthority = &authority
+		}
 	}
 	return out, nativeError(ctx, executionErr)
 }
@@ -524,7 +545,7 @@ func (s *Service) mutationIntent(r apikey.Rotation, op identity.FeatureOperation
 	return identity.NewRequestIntent([]identity.FeatureField{{Name: intentField(op), Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest[:]}}})
 }
 
-// Recover queries only an exact original create/rotate/revoke command after
+// Recover queries only an exact original management command after
 // authenticating and authorizing its current self-owner. It never prepares,
 // executes, regenerates or reveals material, including for missing commands.
 func (s *Service) Recover(ctx context.Context, r apikey.RecoveryRequest) (result identity.CommandResult, err error) {
@@ -559,7 +580,7 @@ func (s *Service) Recover(ctx context.Context, r apikey.RecoveryRequest) (result
 			return result, apikey.ErrDenied
 		}
 		s = s.withConfiguration(s.config().LegacyConfiguration)
-	} else if r.Query.OperationID == "identity.apikey.delete" {
+	} else if r.Query.OperationID == "identity.apikey.delete" || r.Query.OperationID == "identity.apikey.update" {
 		_, configuration, lookupErr := s.managementRecord(ctx, b.TenantID, apikey.KeyID(r.Query.RecordID))
 		if lookupErr != nil {
 			return result, lookupErr
@@ -570,6 +591,11 @@ func (s *Service) Recover(ctx context.Context, r apikey.RecoveryRequest) (result
 		return result, err
 	}
 	p := &creationPhase{service: s}
+	if r.Query.OperationID == "identity.apikey.update" {
+		selected := *s
+		selected.update = &apikey.UpdateRequest{}
+		p.service = &selected
+	}
 	if r.Query.OperationID == "identity.apikey.import" {
 		p.imported = &apikey.ImportRequest{}
 	} else if r.Query.OperationID != "identity.apikey.create" {

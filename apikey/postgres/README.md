@@ -7,6 +7,57 @@ identity coordinator, PostgreSQL authority, password bearer sessions,
 authorization, risk counters, audit and transactional outbox owners. It does
 not issue browser sessions or treat the creator as the API key's human actor.
 
+## Keyed name and permission updates
+
+`*Service` implements the optional public `apikey.Updater`. Use its genuine
+human bearer, stable idempotency key, exact `ExpectedVersion`, required name
+and explicit sorted permission ceiling. A nonnil empty slice removes every
+permission; nil is invalid. Send the unchanged grant to rename only. Every
+retained permission requires current policy admission and must already belong
+to the key's stored grant. Configuration, credential bytes/digest, owner identity,
+lineage and expiry cannot be selected or replaced. Selected legacy keys retain
+their finite or absent expiry, with no modern reissuance or implicit rotation.
+
+An empty `OrganizationID` selects self ownership. Organization updates require
+an explicit target, `NewOrganizationService`, current native membership and
+policy permission. Removing a creator denies that human's updates and original
+recovery without transferring or deleting the organization's key; another
+authorized current owner can manage it.
+
+Updates use the existing sole coordinator and original request-key custody.
+Its protected-preparation owner charges each admitted attempt once before
+generation; that abuse charge remains if final domain application fails.
+The key change, required audit and lifecycle outbox commit atomically in the
+final transaction. Retrying a known failed command never applies or charges it
+again. This retains the kernel's existing preparation/recovery policy rather
+than creating a separate transaction or refund owner.
+Name-only changes advance the record CAS version but not credential/root or
+configuration security epochs. A strict-subset update advances those existing
+security dimensions once; it does not create another credential root. Exact
+retries retain the original metadata/configuration snapshot, even after a later
+mutation. Unknown commitment returns the original receipt without a snapshot;
+retry with the original request or use scoped `Recover`/`RecoverOrganization`.
+No path generates, reveals, encrypts for recovery or reconstructs a raw key.
+
+### Scoped lifecycle catalog addition
+
+For the core Update contract at `ace04b00c0e70ba8de68d7959e32edb93a5bb8a8`,
+this row supplements the retained `lifecycle.events.api_key` catalog's issuance,
+rotation, narrowing and revocation rows:
+
+| Owner | Transition | Required event | Authority effect |
+| --- | --- | --- | --- |
+| `identity/apikey` | Committed name-only Update | `api_key.updated.v1` | Record CAS only; no security epoch change |
+| `identity/apikey` | Committed strict-subset Update | `api_key.permissions_changed.v1` | Existing credential/root and configuration epochs advance once |
+
+The metadata event carries the existing bounded structural lifecycle envelope,
+not the name, grant, bearer or digest. Consumer impact: audit/investigation may
+correlate the change, but authentication, cache validity and revocation consumers
+must not treat this metadata notification as renewed authority. The new event
+does not replace a permission-reduction event or introduce another cascade,
+acknowledgement or replay owner. Older stored records and command encodings
+remain unchanged; only new Update command effects carry the original snapshot.
+
 ## Safe metadata reads
 
 The additive public `apikey.MetadataService` is implemented by `*Service`.

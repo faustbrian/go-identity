@@ -36,6 +36,8 @@ func operationFor(id string) identity.FeatureOperation {
 		return revokeOperation()
 	case "identity.apikey.import":
 		return importOperation()
+	case "identity.apikey.update":
+		return updateOperation()
 	default:
 		return identity.FeatureOperation{}
 	}
@@ -54,6 +56,8 @@ func intentField(op identity.FeatureOperation) string {
 		return "apikey.revoke.intent"
 	case importOperation():
 		return "apikey.import.intent"
+	case updateOperation():
+		return "apikey.update.intent"
 	default:
 		return ""
 	}
@@ -132,7 +136,7 @@ func (x creationInput) validate() error {
 		if x.Import != nil {
 			return apikey.ErrInvalid
 		}
-		if x.PreviousRecord == nil || x.ConfigurationAuthority.Version == ^uint64(0) {
+		if x.PreviousRecord == nil || b.OperationID != "identity.apikey.update" && x.ConfigurationAuthority.Version == ^uint64(0) {
 			return apikey.ErrInvalid
 		}
 		prior := *x.PreviousRecord
@@ -145,12 +149,17 @@ func (x creationInput) validate() error {
 		} else if x.PreviousConfigurationAuthority != nil {
 			return apikey.ErrInvalid
 		}
-		if prior.Validate(previousConfiguration) != nil || !prior.Owner.SameIdentity(r.Owner) || prior.Owner.Version() > r.Owner.Version() || o.Kind == apikey.OwnerOrganization && prior.Owner.Version() != r.Owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
+		if prior.Validate(previousConfiguration) != nil || !prior.Owner.SameIdentity(r.Owner) || prior.Owner.Version() > r.Owner.Version() || o.Kind == apikey.OwnerOrganization && prior.Owner.Version() != r.Owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || b.OperationID != "identity.apikey.update" && prior.AuthorityVersion == ^uint64(0) {
 			return apikey.ErrInvalid
 		}
 		want := prior
 		want.Owner = r.Owner
-		if b.OperationID == "identity.apikey.rotate" {
+		if b.OperationID == "identity.apikey.update" {
+			if !validUpdateProjection(x, prior) {
+				return apikey.ErrInvalid
+			}
+			want = r
+		} else if b.OperationID == "identity.apikey.rotate" {
 			if !x.Configuration.AllowsIssuance() || !prior.ExpiresAt.IsZero() && !x.VerifiedAt.Before(prior.ExpiresAt) || r.ID == prior.ID || r.CreatedAt.Before(x.ReadStartedAt) {
 				return apikey.ErrInvalid
 			}

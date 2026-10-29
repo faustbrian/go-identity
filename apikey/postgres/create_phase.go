@@ -50,6 +50,9 @@ type creationPhase struct {
 }
 
 func (p *creationPhase) operation() identity.FeatureOperation {
+	if p.updating() {
+		return p.service.managementOperation("identity.apikey.update")
+	}
 	if p.imported != nil {
 		return p.service.managementOperation("identity.apikey.import")
 	}
@@ -62,6 +65,9 @@ func (p *creationPhase) operation() identity.FeatureOperation {
 	return p.service.managementOperation("identity.apikey.create")
 }
 func (p *creationPhase) action() string {
+	if p.updating() {
+		return "identity.api_key.update"
+	}
 	if p.imported != nil {
 		return "identity.api_key.import"
 	}
@@ -74,6 +80,13 @@ func (p *creationPhase) action() string {
 	return "identity.api_key.create"
 }
 func (p *creationPhase) lifecycle() kernel.LifecyclePlan {
+	if p.updating() {
+		event := "api_key.updated.v1"
+		if p.advancesAuthority() {
+			event = "api_key.permissions_changed.v1"
+		}
+		return kernel.LifecyclePlan{EventType: event, BeforeVersion: p.input.Record.Version - 1, AfterVersion: p.input.Record.Version}
+	}
 	if p.imported != nil {
 		return kernel.LifecyclePlan{EventType: "api_key.imported.v1", AfterVersion: p.input.Record.Version}
 	}
@@ -143,7 +156,9 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 		return err
 	}
 	var keyID apikey.KeyID
-	if p.imported != nil {
+	if p.updating() {
+		keyID = p.mutation.KeyID
+	} else if p.imported != nil {
 		keyID = p.imported.Record.ID
 	} else {
 		keyID, err = apikey.NewKeyID()
@@ -200,7 +215,7 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 		if err != nil {
 			return err
 		}
-		if !prior.Owner.SameIdentity(owner) || owner.Spec().Kind == apikey.OwnerOrganization && prior.Owner.Version() != owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || prior.AuthorityVersion == ^uint64(0) {
+		if !prior.Owner.SameIdentity(owner) || owner.Spec().Kind == apikey.OwnerOrganization && prior.Owner.Version() != owner.Version() || prior.Status != apikey.KeyActive || prior.Version == ^uint64(0) || !p.updating() && prior.AuthorityVersion == ^uint64(0) {
 			return apikey.ErrDenied
 		}
 		if prior.Version != p.mutation.ExpectedVersion {
@@ -209,7 +224,19 @@ func (p *creationPhase) prepare(ctx context.Context, b kernel.RequestKeyPreparat
 		previous = &prior
 		record = prior
 		record.Owner = owner
-		if p.revocation {
+		if p.updating() {
+			if !prior.ExpiresAt.IsZero() && !verified.Before(prior.ExpiresAt) {
+				return apikey.ErrDenied
+			}
+			record, err = updatedRecord(record, p.request.Name, p.request.Permissions)
+			if err != nil {
+				return err
+			}
+			if record.AuthorityVersion != prior.AuthorityVersion && authority.Version == ^uint64(0) {
+				return apikey.ErrDenied
+			}
+			binding.RecordID = string(prior.ID)
+		} else if p.revocation {
 			record.Version++
 			record.AuthorityVersion++
 			record.RootVersion++
@@ -421,7 +448,7 @@ func (p *creationPhase) admit(ctx context.Context, w kernel.Work, c identity.Com
 	if err != nil {
 		return err
 	}
-	if p.observed.ValidateAt(at) != nil || at.Before(p.input.VerifiedAt) || !at.Before(p.input.ValidUntil) || !p.revocation && p.imported == nil && !at.Before(p.input.Record.ExpiresAt) {
+	if p.observed.ValidateAt(at) != nil || at.Before(p.input.VerifiedAt) || !at.Before(p.input.ValidUntil) || !p.revocation && p.imported == nil && !p.input.Record.ExpiresAt.IsZero() && !at.Before(p.input.Record.ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	return nil
@@ -468,7 +495,7 @@ func (p *creationPhase) requireConfigurationFence(ctx context.Context, w kernel.
 	}
 	want, _ := configurationDigest(fence.configuration)
 	expected := fence.version
-	if p.applied && p.mutation != nil {
+	if p.applied && p.advancesAuthority() {
 		expected++
 	}
 	if !enabled || version != strconv.FormatUint(expected, 10) || !bytes.Equal(fingerprint, want[:]) {
@@ -566,7 +593,7 @@ func (p *creationPhase) generate(ctx context.Context, generation uint64, admissi
 	secret, digest := apikey.Secret{}, apikey.Digest{}
 	if p.imported != nil {
 		digest = apikey.Digest{Sum: p.imported.Digest.Sum()}
-	} else if !p.revocation {
+	} else if !p.revocation && !p.updating() {
 		secret, err = apikey.GenerateSecret()
 		if err != nil {
 			return nil, err
@@ -610,7 +637,7 @@ func (p *creationPhase) restoreOutput(ctx context.Context, generation uint64, wi
 	if decodeCanonical(plain, &output) != nil || output.Schema != 1 || output.Generation != generation || output.Commitment != commitment {
 		return identity.UnavailableError{}
 	}
-	validDigest := p.revocation && output.PepperVersion == 0 && output.Digest == ([32]byte{}) || p.imported != nil && output.PepperVersion == 0 && output.Digest == p.imported.Digest.Sum() || p.imported == nil && !p.revocation && output.PepperVersion != 0 && output.Digest != ([32]byte{})
+	validDigest := (p.revocation || p.updating()) && output.PepperVersion == 0 && output.Digest == ([32]byte{}) || p.imported != nil && output.PepperVersion == 0 && output.Digest == p.imported.Digest.Sum() || p.imported == nil && !p.revocation && !p.updating() && output.PepperVersion != 0 && output.Digest != ([32]byte{})
 	if !validDigest {
 		return identity.UnavailableError{}
 	}
@@ -670,7 +697,7 @@ func (p *creationPhase) ApplyFeature(ctx context.Context, w kernel.Work, c ident
 		return identity.FeatureReceipt{}, err
 	}
 	var n int64
-	if !p.revocation {
+	if !p.revocation && !p.updating() {
 		if p.input.Record.Owner.Spec().Kind == apikey.OwnerOrganization {
 			n, err = w.Exec(ctx, `INSERT INTO identity_api_keys.keys(tenant_id,configuration_id,key_id,organization_id,pepper_version,lookup_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, string(b.TenantID), p.input.Record.ConfigurationID, b.RecordID, string(p.input.Record.Owner.Spec().OrganizationID), int64(p.digest.PepperVersion), p.digest.Sum[:], record)
 		} else {
@@ -700,12 +727,14 @@ func (p *creationPhase) ApplyFeature(ctx context.Context, w kernel.Work, c ident
 		if n != 1 {
 			return identity.FeatureReceipt{}, identity.ConflictError{}
 		}
-		n, err = w.Exec(ctx, `UPDATE identity_api_keys.configurations SET authority_version=authority_version+1 WHERE tenant_id=$1 AND configuration_id=$2 AND authority_version=$3::numeric`, string(b.TenantID), p.input.Record.ConfigurationID, strconv.FormatUint(p.input.ConfigurationAuthority.Version, 10))
-		if err != nil {
-			return identity.FeatureReceipt{}, err
-		}
-		if n != 1 {
-			return identity.FeatureReceipt{}, identity.ConflictError{}
+		if p.advancesAuthority() {
+			n, err = w.Exec(ctx, `UPDATE identity_api_keys.configurations SET authority_version=authority_version+1 WHERE tenant_id=$1 AND configuration_id=$2 AND authority_version=$3::numeric`, string(b.TenantID), p.input.Record.ConfigurationID, strconv.FormatUint(p.input.ConfigurationAuthority.Version, 10))
+			if err != nil {
+				return identity.FeatureReceipt{}, err
+			}
+			if n != 1 {
+				return identity.FeatureReceipt{}, identity.ConflictError{}
+			}
 		}
 		if p.input.PreviousConfiguration != nil {
 			n, err = w.Exec(ctx, `UPDATE identity_api_keys.configurations SET authority_version=authority_version+1 WHERE tenant_id=$1 AND configuration_id=$2 AND authority_version=$3::numeric`, string(b.TenantID), previousConfiguration.Spec().ID, strconv.FormatUint(p.input.PreviousConfigurationAuthority.Version, 10))
@@ -723,6 +752,10 @@ func (p *creationPhase) ApplyFeature(ctx context.Context, w kernel.Work, c ident
 	bound, err := json.Marshal(storedBinding(b))
 	if err != nil {
 		return identity.FeatureReceipt{}, apikey.ErrInvalid
+	}
+	record, err = p.effectRecord(record)
+	if err != nil {
+		return identity.FeatureReceipt{}, err
 	}
 	n, err = w.Exec(ctx, `INSERT INTO identity_api_keys.command_effects(command_id,tenant_id,key_id,binding,fingerprint,generation,record) VALUES($1,$2,$3,$4,$5,$6::numeric,$7)`, string(b.CommandID), string(b.TenantID), b.RecordID, bound, fingerprint[:], strconv.FormatUint(executionGeneration, 10), record)
 	if err != nil {
@@ -770,8 +803,8 @@ func (p *creationPhase) RecoverParticipant(ctx context.Context, w kernel.Recover
 		return kernel.RecoveryUnknown, identity.UnavailableError{}
 	}
 	want, _ := json.Marshal(storedBinding(b))
-	restored, err := decodeRecord(record, p.service.config().Configuration)
-	if err != nil || !bytes.Equal(binding, want) || restored.ID != apikey.KeyID(b.RecordID) || !p.service.managementOwnerMatches(restored, b) || restored.Owner.Spec().TenantID != b.TenantID || restored.Version != life.AfterVersion || p.operation().ValidateRecordVersions(life.BeforeVersion, life.AfterVersion) != nil || p.revocation && (life.EventType != "api_key.revoked.v1" || restored.Status != apikey.KeyRevoked || len(restored.Grant) != 0) || p.imported != nil && life.EventType != "api_key.imported.v1" || !p.revocation && p.imported == nil && (restored.Version != 1 || restored.Status != apikey.KeyActive || p.mutation != nil && (life.EventType != "api_key.rotated.v1" || restored.PreviousID == "") || p.mutation == nil && life.EventType != "api_key.created.v1") {
+	restored, _, err := decodeEffectRecord(record, p.service.config().Configuration, b.OperationID)
+	if err != nil || !bytes.Equal(binding, want) || restored.ID != apikey.KeyID(b.RecordID) || !p.service.managementOwnerMatches(restored, b) || restored.Owner.Spec().TenantID != b.TenantID || restored.Version != life.AfterVersion || p.operation().ValidateRecordVersions(life.BeforeVersion, life.AfterVersion) != nil || p.revocation && (life.EventType != "api_key.revoked.v1" || restored.Status != apikey.KeyRevoked || len(restored.Grant) != 0) || p.imported != nil && life.EventType != "api_key.imported.v1" || p.updating() && (restored.Status != apikey.KeyActive || life.EventType != "api_key.updated.v1" && life.EventType != "api_key.permissions_changed.v1") || !p.updating() && !p.revocation && p.imported == nil && (restored.Version != 1 || restored.Status != apikey.KeyActive || p.mutation != nil && (life.EventType != "api_key.rotated.v1" || restored.PreviousID == "") || p.mutation == nil && life.EventType != "api_key.created.v1") {
 		return kernel.RecoveryUnknown, identity.UnavailableError{}
 	}
 	if p.imported != nil {

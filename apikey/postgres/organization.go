@@ -74,6 +74,8 @@ func organizationManagementOperation(id string) identity.FeatureOperation {
 		op.SchemaID = "apikey-revoke-organization-v1"
 	case "identity.apikey.import":
 		op.SchemaID = "apikey-import-organization-v1"
+	case "identity.apikey.update":
+		op.SchemaID = "apikey-update-organization-v1"
 	}
 	return op
 }

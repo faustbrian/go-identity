@@ -13,7 +13,7 @@ require (
 	github.com/faustbrian/go-http-client/v2 v2.1.0
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
 	github.com/faustbrian/go-identity v0.0.0-20261029011001-cc0c343afad6
-	github.com/faustbrian/go-identity/apikey v0.0.0-20261029084325-ef01c92202bf
+	github.com/faustbrian/go-identity/apikey v0.0.0-20261029123802-98f935b75f0e
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
