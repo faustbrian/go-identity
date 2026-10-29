@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## Current TL;DR — 2026-10-29 07:34 UTC
+## Current TL;DR — 2026-10-29 08:30 UTC
 
 - **Overall: ~25%, low-confidence effort estimate; 10/39 whole milestones
   closed.** No additional fully release-qualified unit out of67 is claimed.
@@ -16,12 +16,30 @@
   All15 downloaded public-module files match; its genuine fresh/populated
   PostgreSQL/HTTPS race consumer passes19.382s. This closes the selected
   organization-key consumer profile, not all API-key variants.
-- **Parallel OAuth:** public pairwise-client policy is reviewed/main-pushed
-  d8d18fb with [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40835306698).
-  The worker has reproduced and fixed its native key-bootstrap gap; the complete
-  secretless manager/independent-RP PostgreSQL journey remains in progress.
-- **Next:** finish remaining API-key lifetime/quota/cache/management profiles;
-  continue the independent OAuth lane. Federation, SCIM, other retained
+- **Delivered parallel OAuth:** public pairwise-client policy d8d18fb and its
+  native PostgreSQL composition bb5c83e are reviewed/main-pushed with
+  [passing native CI](https://github.com/faustbrian/go-oauth-server/actions/runs/40837528055).
+  All7 downloaded native files match; its complete independent-RP PostgreSQL/race
+  consumer passes59.387s. This proves fresh/populated secretless code/refresh,
+  stable same-sector and isolated cross-sector subjects, key reconstruction,
+  authority withdrawal, required-effect rollback and original unknown recovery.
+  HTTP/Reference, other OIDC profiles and wholeM31 remain incomplete.
+- **Delivered no-expiry legacy keys:** explicitly selected digest-only import
+  preserves absent expiry without weakening modern issuance or current authority.
+  Core35e4d0d/native7bf2127 and Reference132ff64 are reviewed, main-pushed and
+  [CI-green](https://github.com/faustbrian/go-identity/actions/runs/40841968960).
+  Actual public native matches all11 files and passes real user/organization
+  no-expiry consumers20.122s. Reference matches all8 files and passes its actual
+  public populated-state/HTTPS consumer8.862s: import, unchanged verification,
+  reconstruction/original recovery, finite modern rotation, revocation and
+  logout. Native organization tests also prove surviving-owner legacy rotation
+  and direct revocation after creator removal. An earlier setup-timeout cause
+  remains unproved; it is not described as fixed.
+- **Current:** a disjoint worker is implementing metadata Get/List against
+  the delivered API-key owners. HTTP/Reference integration follows native
+  publication; no additional authority, quota debit or mutation comes from reads.
+- **Next:** finish remaining API-key lifetime/quota/cache/management profiles.
+  Federation, SCIM, other retained
   capability profiles and final qualification remain substantial work.
   Nothing waits on a user decision. The earlier intermittent preauth503 cause
   remains unproved; later passing consumers do not establish its repair.

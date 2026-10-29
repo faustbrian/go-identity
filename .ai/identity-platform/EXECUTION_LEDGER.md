@@ -1,5 +1,94 @@
 # Identity Implementation — Current Milestone
 
+2026-10-29 08:30 UTC — selected no-expiry legacy-key consumer DELIVERED.
+Core35/native7bf/Reference132 all independently reviewed/main-pushed/CI-green.
+Reference Required SUCCESS https://github.com/faustbrian/go-identity/actions/runs/40841968960.
+Public native all11 equal/no-expiry user+org PostgreSQLrace20.122s; public Ref
+all8 equal/populated real HTTPS journey8.862s. Local Ref affected62.119s,
+ordinary9.757s/vets/tidy/module/source/docs0. No modern unbounded issuance,
+invented historical expiry, new import route or changed owner/freshness authority.
+Current metadata worker now has heavy slot for root red/green/race/fuzz only;
+parent no Go jobs. Source/public review precedes native adoption. FullM21 open.
+
+2026-10-29 08:23 UTC — parallel finite M21 metadata Get/List native lane.
+Worker apikey_metadata owns only new apikey/metadata*.go and tests, core
+README/CHANGELOG, native postgres/metadata*.go and tests plus native module-local
+README/CHANGELOG/go.mod/go.sum. Existing service/query/record helpers may be
+requested narrowly for a demonstrated gap, not silently rewritten. Base main7bf2127,
+actual public core35e4d0d/native7bf2127 and genuine user/org key consumers unlock
+this lane. Primary owns all shared kernel/session/HTTP/Reference/inventory/Git.
+Outcome: a genuine current human can get and stably paginate only authorized
+self/organization key metadata across selected modern/legacy profiles, including
+terminal records, without secrets/digests or a second authentication authority.
+Prove real issue/import -> get/list/pages, tenant/owner/configuration/current
+membership/session/policy denial, bounded input/cursor semantics, no quota debit
+or mutation from reads, reconstruction and public composition. Read results are
+metadata, never current verification principals. Preserve existing Service API;
+no admin/CRUD/update/quota/cache/session adapter expansion or speculative cursor
+authority. Smallest checks: core shape/ownership tests, real native PostgreSQL
+consumer/denials/pages/race, changed-boundary fuzz and affected static checks.
+Root prerequisite must be reviewed/public before native consumption; no replace
+or stub readiness. Worker stops at first public boundary for parent alignment,
+requests heavy slot, never Git/spawn. Primary closes current Reference no-expiry
+slice in parallel; metadata HTTP/Reference follows owning native delivery.
+
+2026-10-29 08:17 UTC — no-expiry native reviewed/main-pushed7bf2127; public
+consumer62678 and CI40840775584 pending. Core35e4d0d already public/CI-green.
+Native reviewF1 resolved with actual imported-org-key rotation and independent
+direct revocation. Final changed org race21.744s and native taggedvet0; unchanged
+83.144s aggregate retained, not described as rerun. First affected attempt failed
+preauth setup deadlines; cause unproved. Reference selected consumer/pins next.
+SSO readiness verdict withdrawn: fixed five-contributor org execution cannot
+enlist SSO challenge consumption in domain-evidence Work. No worker/source
+assigned until upstream typed participant exists. SSO clean main1edc51b selected
+by ordinary FF from old local main; old chore branch preserved, no source edits.
+
+2026-10-29 07:54 UTC — selected native public-pairwise M31 profile DELIVERED.
+Native seven-file review oauth_public_pairwise_native_review APPROVE exact62d62717;
+mainbb5c83e9f7cc8cabaebfbcddad9001d115f546dc with Required40837528055SUCCESS.
+Actual authenticated public native v0.0.0-20261029074544-bb5c83e9f7cc matches all7
+and complete independent-RP PostgreSQL/race public-pairwise selection passes59.387s.
+Fresh/populated stable/isolated subjects, secretless code/refresh, key reconstruction,
+withdrawal, required effects and original unknown recovery proven. Owned PG/caches
+cleaned. HTTP/Reference, other profiles and wholeM31 remain open. Root pending
+documentation corrected separately601704f; no runtime inputs changed by that prose.
+
+Bounded SSO successor readiness check is read-only in go-sso546d36e (currently
+clean chore/go-1.27, not main). Inspect actual committed organization/session/
+generic-feature authority for domain verification/provider registration before
+assigning writes; no JIT/SCIM/private-engine substitution or branch mutation.
+
+2026-10-29 07:40 UTC — frozen M21 retained no-expiry legacy-key consumer.
+Primary owns apikey core and postgres/Reference adoption on main0b5e9d0.
+Consumes delivered native8de0410/core9d77699/Referenceec4b98d and real public
+import/verification/rotation/organization consumers; no prerequisite restart.
+Outcome: an explicitly selected legacy configuration imports a digest-only
+historical key whose expiry is absent, verifies unchanged under current owner
+authority and original <=20s freshness, reconstructs/reconciles original commands,
+and rotates to a modern finite successor or terminally revokes. Preserve source
+ID/version/owner/grant/creation time and old finite-profile canonical bytes.
+Default legacy and every modern profile still require positive finite expiry.
+Trusted AllowLegacyNoExpiry opt-in is immutable configuration, not wire fallback;
+zero ExpiresAt denotes absent expiry only after that exact profile validates.
+Reject inventing a far-future deadline or permitting unbounded modern issuance.
+Tests: root selected/default/modern/denial/freshness and original byte regressions;
+native canonical snapshots plus genuine PostgreSQL user/org import/rotate/revoke,
+required-effects rollback/original recovery; affected Reference public consumer.
+No new SQL history anticipated: expiry is in existing canonical record bytes.
+If source proves otherwise, reopen this bounded assumption, not the full plan.
+No quota/cache/metadata-management expansion in this lane. One full independent
+review per coherent owner publication; actual public pin before native adoption.
+
+2026-10-29 07:37 UTC — bounded independent SCIM dependency-readiness check.
+Read-only owner scim_next_ready_outcome inspects current go-scim main4297d91,
+the complete SCIM/core/native goals and actually committed identity/org/public
+authorization contracts. No Go, services, source writes, Git/network mutation,
+children or substitute authority. Return one finite real discovery/User
+provisioning consumer that is currently implementable, exact consumed pins,
+missing owner behavior, proposed owned paths and smallest checks. Do not claim
+a parser/interface unlocks provisioning. Primary retains shared kernel, all
+Reference/HTTP/pins and final integration. Parent continues M21 and does not wait.
+
 2026-10-29 07:34 UTC — selected M21 organization-key Reference profile DELIVERED.
 Reference15 exact manifestd05c9ce5 independently APPROVED, main-pushed ec4b98d,
 Required SUCCESS https://github.com/faustbrian/go-identity/actions/runs/40835960572.
