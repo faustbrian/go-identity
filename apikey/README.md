@@ -1,5 +1,22 @@
 # API keys
 
+`Updater` is an optional name/permission-management extension; it does not
+change the existing `Service` interface. Supply the genuine human bearer,
+stable idempotency key, exact record version, required name and explicit sorted
+permission ceiling. Send the unchanged grant to rename only; an empty nonnil
+grant explicitly removes all permissions, while nil is invalid. No owner,
+credential, configuration or expiry replacement is accepted. Organization
+updates select an explicit target and require current membership/permission.
+
+`UpdateResult` retains the sole coordinator's receipt and only attaches safe
+record/configuration snapshots for proven commitment. Exact user and organization
+schemas remain distinct: `apikey-update-v1` and
+`apikey-update-organization-v1`. A name-only change advances the record CAS
+version, not the credential or configuration security epochs; narrowing advances
+the existing security dimensions once. Current native authorization, atomic
+required effects and original request-key recovery are mandatory; these shape
+contracts alone do not implement a durable update. No secret is revealed.
+
 `MetadataService` is an additive `Get`/`List` contract; the existing `Service`
 interface is unchanged. Requests retain the genuine human bearer. An empty
 `OrganizationID` means that human's own keys, not an arbitrary user override;

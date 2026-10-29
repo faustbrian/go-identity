@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add optional keyed name/permission Update contracts without expanding Service.
+  Explicit self/organization ownership, non-expanding grants, version fencing
+  and original recovery preserve credential identity and legacy absent expiry.
+  Only proven committed results may carry safe metadata; no secret is returned.
+
 - Add optional safe metadata Get/List contracts without expanding the existing
   Service interface. Explicit self/organization ownership, selected configuration
   filters and bounded live-view pagination grant no credential or mutation
