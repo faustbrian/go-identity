@@ -70,6 +70,13 @@ type CommandPlan struct {
 	// Capability declares a typed one-use participant input. Identifier reservation
 	// requires its registered reservation contributor; domain execution is disabled.
 	Capability *CapabilityPlan
+	// AccountLinkState freezes the distinct original OAuth callback-state input
+	// only for the closed explicit-self prepared account-link profile. Capability
+	// remains nil before exchange and names the final canonical link grant after
+	// authenticated output attachment. State is never substituted for that grant.
+	// Nil preserves all historical single-input plan bytes. Metadata alone does
+	// not enable preparation or execution; both inputs require complete phases.
+	AccountLinkState *CapabilityPlan
 	// OTP freezes one server-issued submission and its native scope versions.
 	// Declaration alone cannot enable reservation, counted denial or execution.
 	// Nil preserves historical plan bytes; the full native phases are required.
@@ -134,6 +141,9 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
 	if plan.APIKeyVerification != nil || plan.OrganizationInvitationOrigin != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.PasskeyRegistration != nil || plan.MagicLinkRequestAcceptance {
 		return nil, invalidPlan()
+	}
+	if plan.AccountLinkState != nil {
+		return encodeAccountLinkStatePlan(binding, fingerprint, plan)
 	}
 	if accountLinkBinding(binding) && plan.CommandCounters != nil {
 		return encodeAccountLinkPlan(binding, fingerprint, plan)
@@ -237,6 +247,7 @@ type admittedKernelPlan struct {
 	audits                     []AuditPlan
 	lifecycle                  *LifecyclePlan
 	capability                 *CapabilityPlan
+	accountLinkState           *CapabilityPlan
 	risk                       *RiskEvidencePlan
 	counters                   *CommandCounterPlan
 	captchaReplay              bool
@@ -250,6 +261,15 @@ type admittedKernelPlan struct {
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
+	return r.admitKernelPlanMode(binding, fingerprint, p, false)
+}
+
+func (r *ContributorRegistry) admitKernelPlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, preparation bool) (*admittedKernelPlan, error) {
+	// An original declaration has no final signed grant. Only the closed
+	// preparation route may admit it; Begin must still reject that stage.
+	if p.AccountLinkState != nil && p.Capability == nil && !preparation {
+		return nil, invalidPlan()
+	}
 	digest, err := KernelPlanDigest(binding, fingerprint, p)
 	if err != nil || digest != p.Digest {
 		return nil, invalidPlan()
@@ -298,6 +318,11 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 		if !ok || !sameParticipant(participant, participant) {
 			return nil, invalidPlan()
 		}
+		if p.AccountLinkState != nil {
+			if _, ok := participant.(AccountLinkPreparationContributor); !ok {
+				return nil, invalidPlan()
+			}
+		}
 		if _, ok := entries[3].contributor.(CapabilityExecutionContributor); !ok {
 			return nil, invalidPlan()
 		}
@@ -328,7 +353,12 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 		snapshot := *p.Capability
 		capability = &snapshot
 	}
-	admitted := &admittedKernelPlan{accountLink: linkOwner, counters: counters, identifierAdmission: checker, registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}
+	var state *CapabilityPlan
+	if p.AccountLinkState != nil {
+		copy := *p.AccountLinkState
+		state = &copy
+	}
+	admitted := &admittedKernelPlan{accountLink: linkOwner, accountLinkState: state, counters: counters, identifierAdmission: checker, registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}
 	if counters != nil && counterAdmissionParticipant(admitted) == nil {
 		return nil, invalidPlan()
 	}

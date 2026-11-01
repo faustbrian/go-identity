@@ -109,9 +109,21 @@ func (c *Coordinator) releaseCapabilityAfterRollback(ctx context.Context, work W
 }
 
 func (c *Coordinator) releaseCapabilityWithProof(ctx context.Context, work Work, p *admittedKernelPlan, previous uint64, proof capabilityReleaseProof) (err error) {
-	if p.capability == nil {
+	if p.capability == nil && p.accountLinkState == nil {
 		return nil
 	}
+	for _, slot := range [...]capabilityInputSlot{capabilityOriginalAccountLinkState, capabilityPrimaryInput} {
+		if p.capabilityInput(slot) == nil {
+			continue
+		}
+		if err := c.releaseCapabilityInput(ctx, work, p, previous, proof, slot); err != nil {
+			return err
+		}
+	}
+	return work.usable()
+}
+
+func (c *Coordinator) releaseCapabilityInput(ctx context.Context, work Work, p *admittedKernelPlan, previous uint64, proof capabilityReleaseProof, slot capabilityInputSlot) (err error) {
 	for _, entry := range p.contributors {
 		if entry.descriptor.Owner != "capability/postgres" || entry.descriptor.ContractID != "capability.one-use" {
 			continue
@@ -120,7 +132,7 @@ func (c *Coordinator) releaseCapabilityWithProof(ctx context.Context, work Work,
 		if !ok {
 			return invalidWork()
 		}
-		state := &capabilityReservationState{coordinator: c, work: work, plan: p, previousGeneration: previous, active: true, contributor: participant, releaseProof: proof}
+		state := &capabilityReservationState{coordinator: c, work: work, plan: p, previousGeneration: previous, active: true, contributor: participant, releaseProof: proof, inputSlot: slot}
 		defer func() {
 			state.active = false
 			if recover() != nil {

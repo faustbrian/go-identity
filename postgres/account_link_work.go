@@ -110,6 +110,28 @@ func (h AccountLinkWork) Command(p AccountLinkContributor) (identity.AccountLink
 	return spec, h.state.phase >= accountLinkFinalCheck, nil
 }
 
+// Preparation lends the exact original typed callback/session input, an owned
+// copy of retained authenticated ciphertext and its original generation only to
+// the currently invoked native preparation owner. It permits local restoration
+// and current checks, never exchange, generation or freshness renewal. Callback
+// custody retains its shared bounded lifetime; do not destroy it before the
+// enclosing operation returns. No SQL, callbacks or raw transaction escape run.
+// Ordinary links, foreign owners, zero and returned invocations deny.
+func (h AccountLinkWork) Preparation(p AccountLinkPreparationContributor) (identity.Command, []byte, uint64, error) {
+	if _, _, err := h.Command(p); err != nil {
+		return identity.Command{}, nil, 0, err
+	}
+	e := h.state.work.state.execution
+	if e == nil || e.coordinator == nil || e.reservation == nil || !e.coordinator.owns(h.state.work) || e.reservation.coordinator != e.coordinator || e.reservation.plan == nil || e.reservation.plan.accountLinkState == nil || e.reservation.request.source == nil {
+		return identity.Command{}, nil, 0, h.deny()
+	}
+	r := e.reservation
+	if _, err := accountLinkExecutionRequest(r); err != nil {
+		return identity.Command{}, nil, 0, h.deny()
+	}
+	return *r.request.source, bytes.Clone(r.preparation.ciphertext), r.preparation.generation, nil
+}
+
 // Query borrows bounded primary reads. Check phases must use read/locking SQL,
 // not mutations; the native implementation is a trusted owner, not a sandbox.
 func (h AccountLinkWork) Query(ctx context.Context, sql string, args ...any) (*WorkRows, error) {
@@ -223,7 +245,8 @@ func (c *Coordinator) runAccountLinkPhase(ctx context.Context, w Work, command i
 		return w.fail(ctx, invalidPlan())
 	}
 	q, err := prepareClaim(command, c.keys.retained[c.keys.current])
-	if err != nil || !bytes.Equal(q.canonical, r.request.canonical) {
+	expected, expectedErr := accountLinkExecutionRequest(r)
+	if err != nil || expectedErr != nil || !bytes.Equal(q.canonical, expected.canonical) {
 		return w.fail(ctx, invalidPlan())
 	}
 	owner, ok := p.accountLink.contributor.(AccountLinkContributor)

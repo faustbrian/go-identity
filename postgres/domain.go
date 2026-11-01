@@ -45,6 +45,9 @@ type domainExecution struct {
 // contributor. Begin grants no counter allowance: ApplyFeature and Commit each
 // recheck under domain tenant exclusion, without recharging or renewing evidence.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
+	if r.state != nil && r.state.plan != nil && r.state.plan.accountLinkState != nil && (r.state.plan.capability == nil || r.state.executionRequest == nil || r.state.preparation == nil) {
+		return Work{}, invalidWork()
+	}
 	// Original challenge preparation has no signed child yet. It may admit
 	// preparation only; domain start must not consume the primary proof until
 	// the retained final output enlists its exact child issuance.
@@ -153,6 +156,10 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	if p.capability != nil {
 		copy := *p.capability
 		result.Capability = &copy
+	}
+	if p.accountLinkState != nil {
+		copy := *p.accountLinkState
+		result.AccountLinkState = &copy
 	}
 	if p.risk != nil {
 		copy := *p.risk

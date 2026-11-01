@@ -72,6 +72,31 @@ type capabilityReservationState struct {
 	active             bool
 	contributor        CapabilityReservationContributor
 	releaseProof       capabilityReleaseProof
+	inputSlot          capabilityInputSlot
+}
+
+// A fixed private selector lends one actual frozen input per invocation. The
+// original OAuth state is never relabeled as the post-exchange link grant.
+type capabilityInputSlot uint8
+
+const (
+	capabilityPrimaryInput capabilityInputSlot = iota
+	capabilityOriginalAccountLinkState
+)
+
+func (p *admittedKernelPlan) capabilityInput(slot capabilityInputSlot) *CapabilityPlan {
+	if p == nil {
+		return nil
+	}
+	switch slot {
+	case capabilityPrimaryInput:
+		return p.capability
+	case capabilityOriginalAccountLinkState:
+		if p.accountLink != nil && accountLinkBinding(p.binding) {
+			return p.accountLinkState
+		}
+	}
+	return nil
 }
 
 // Format hides the retained transaction and participant state.
@@ -91,7 +116,7 @@ func (w CapabilityReservationWork) usable() error {
 }
 
 func (s *capabilityReservationState) usable() error {
-	if s == nil || !s.active || s.coordinator == nil || s.plan == nil || s.plan.capability == nil || s.work.state == nil || s.plan.belongsTo(s.coordinator.registry) != nil || s.work.state.registry != s.plan.registry || s.work.state.binding != s.plan.binding || s.plan.fingerprint == ([32]byte{}) || s.work.state.generation == 0 {
+	if s == nil || !s.active || s.coordinator == nil || s.plan == nil || s.plan.capabilityInput(s.inputSlot) == nil || s.work.state == nil || s.plan.belongsTo(s.coordinator.registry) != nil || s.work.state.registry != s.plan.registry || s.work.state.binding != s.plan.binding || s.plan.fingerprint == ([32]byte{}) || s.work.state.generation == 0 {
 		return invalidWork()
 	}
 	return s.work.usable()
@@ -114,7 +139,11 @@ func (s *capabilityReservationState) binding(contributor CapabilityReservationCo
 	if nilContributor(contributor) || !reflect.TypeOf(contributor).Comparable() || contributor != s.contributor {
 		return CapabilityReservationBinding{}, invalidWork()
 	}
-	return CapabilityReservationBinding{Command: s.plan.binding, Plan: *s.plan.capability, Fingerprint: s.plan.fingerprint, Generation: s.work.state.generation, PreviousGeneration: s.previousGeneration}, nil
+	input := s.plan.capabilityInput(s.inputSlot)
+	if input == nil {
+		return CapabilityReservationBinding{}, invalidWork()
+	}
+	return CapabilityReservationBinding{Command: s.plan.binding, Plan: *input, Fingerprint: s.plan.fingerprint, Generation: s.work.state.generation, PreviousGeneration: s.previousGeneration}, nil
 }
 
 // Exec executes one trusted participant statement, never transaction closure.
@@ -142,7 +171,11 @@ func (w CapabilityReservationWork) DatabaseTime(ctx context.Context) (time.Time,
 }
 
 func (c *Coordinator) reserveCapability(ctx context.Context, tx pgx.Tx, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte) (err error) {
-	if p.capability == nil {
+	return c.reserveCapabilityInput(ctx, tx, q, p, j, owner, capabilityPrimaryInput)
+}
+
+func (c *Coordinator) reserveCapabilityInput(ctx context.Context, tx pgx.Tx, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte, slot capabilityInputSlot) (err error) {
+	if p.capabilityInput(slot) == nil {
 		return nil
 	}
 	var operation *identity.FeatureOperation
@@ -170,7 +203,7 @@ func (c *Coordinator) reserveCapability(ctx context.Context, tx pgx.Tx, q claimR
 		return err
 	}
 	work.state.registry = c.registry.state
-	state := &capabilityReservationState{coordinator: c, work: work, plan: p, previousGeneration: j.previousGeneration, active: true, contributor: contributor}
+	state := &capabilityReservationState{coordinator: c, work: work, plan: p, previousGeneration: j.previousGeneration, active: true, contributor: contributor, inputSlot: slot}
 	defer func() {
 		state.active = false
 		invalidateWork(work)

@@ -154,9 +154,22 @@ func (c *Coordinator) runCapabilityExecution(ctx context.Context, w Work, finali
 		return w.fail(ctx, err)
 	}
 	plan := w.state.execution.reservation.plan
-	if plan == nil || plan.capability == nil {
+	if plan == nil || plan.capability == nil && plan.accountLinkState == nil {
 		return w.fail(ctx, invalidPlan())
 	}
+	for _, slot := range [...]capabilityInputSlot{capabilityOriginalAccountLinkState, capabilityPrimaryInput} {
+		if plan.capabilityInput(slot) == nil {
+			continue
+		}
+		if err := c.runCapabilityExecutionInput(ctx, w, finalize, slot); err != nil {
+			return err
+		}
+	}
+	return w.usable()
+}
+
+func (c *Coordinator) runCapabilityExecutionInput(ctx context.Context, w Work, finalize bool, slot capabilityInputSlot) (err error) {
+	plan := w.state.execution.reservation.plan
 	var participant CapabilityExecutionContributor
 	for _, entry := range plan.contributors {
 		if entry.descriptor.Owner == "capability/postgres" && entry.descriptor.ContractID == "capability.one-use" {
@@ -166,7 +179,7 @@ func (c *Coordinator) runCapabilityExecution(ctx context.Context, w Work, finali
 	if nilContributor(participant) {
 		return w.fail(ctx, invalidPlan())
 	}
-	s := &capabilityExecutionState{reservation: capabilityReservationState{coordinator: c, work: w, plan: plan, active: true, contributor: participant}, finalize: finalize}
+	s := &capabilityExecutionState{reservation: capabilityReservationState{coordinator: c, work: w, plan: plan, active: true, contributor: participant, inputSlot: slot}, finalize: finalize}
 	defer func() {
 		s.reservation.active = false
 		if recover() != nil {

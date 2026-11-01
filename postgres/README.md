@@ -28,13 +28,41 @@ receipt. Expired pending recovery requires every frozen owner to prove noncommit
 provider uncertainty leaves custody reserved. Current rows never reconstruct a
 successful receipt. Historical bare-link bytes remain unchanged.
 
-This native transaction contract does **not** implement an OIDC callback or
-session-producing social flow. OAuth must still supply actual provider/session
-composition, reserve state before PKCE decryption/exchange, and retain original
-exchange output through the same journal. No network exchange is permitted in
-an open `AccountLinkWork`; no feature wrapper or second ledger substitutes for
-the root link owner. Implicit/administrative linking and unlink remain outside
-this explicit-self execution profile.
+### Original OAuth callback preparation
+
+The trusted native adapter calls `AccountLinkUnitOfWork.ExecutePrepared` with
+the root `AccountLinkPreparationCommand` and its closed declaration. Original
+code/state/session intent uses the existing keyed command claim; the later
+verified subject and signed link command do not replace it. This is an adapter
+seam, not an application callback API or permission to invent missing owners.
+
+Install `AccountLinkPreparationMigrationSource` after the existing
+`CounterPreparationMigrationSource` and all installed successors. The forward
+profile preserves earlier migration checksums and rejects other operations.
+The declaration fixes six consuming/domain owners, original callback-state
+capability, counters, audit and lifecycle, with no final link grant yet. The
+registry additionally contains the actual `capability.issuance` owner.
+
+Original state reservation, current native admission, counter charge and start
+marker commit before the native owner may decrypt PKCE, exchange or sign.
+Lost start acknowledgment does not permit generation. Started-without-output
+stays pending; retained authenticated ciphertext resumes under its original
+generation without another exchange or renewed expiry. Matching terminal replay
+does not restore provider output. `AccountLinkWork.Preparation` lends original
+typed input and copied ciphertext only during that exact owner's invocation.
+
+Attachment persists and reserves the one matching final grant atomically via
+the existing issuer/consumer. The issuer is a preparation prerequisite, not a
+final domain recovery participant: its positive issuance row must not turn a
+rolled-back account link into a committed result. Both distinct one-use inputs
+then apply/finalize with the protected mutation; proven rollback releases both.
+
+This contract still does **not** provide the actual OIDC provider/session owner,
+token vault, HTTP callback or session-producing social flow. Native OAuth owns
+those required implementations and their current policy, fresh credential and
+source-proof expiry checks. No network exchange runs in open `AccountLinkWork`;
+no feature wrapper or second ledger substitutes for the root owner. Implicit,
+administrative linking and unlink remain outside this explicit-self profile.
 
 ## Provider-account storage and trusted reads
 

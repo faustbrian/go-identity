@@ -36,7 +36,7 @@ func reservePreparationJournal(ctx context.Context, tx pgx.Tx, q claimRequest, d
 	if len(selected) == 1 {
 		expectedProfile = selected[0]
 	}
-	if expectedProfile < 1 || expectedProfile > 4 {
+	if expectedProfile < 1 || expectedProfile > 5 || expectedProfile == 5 && (q.purpose != "identity.account.link-token" || q.feature != nil) {
 		return preparationReservation{}, invalidPreparation()
 	}
 	if !validJournalInput(ctx, tx, q, owner, lease) || (d != claimNew && d != claimReplay) {
@@ -179,7 +179,7 @@ func lockPreparationOwner(ctx context.Context, tx pgx.Tx, q claimRequest, r jour
 	var matched bool
 	var until time.Time
 	// Read time after the row lock, never before a competing transaction wait.
-	err := tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5 AND preparation_profile IN (1,2,3,4) AND command_plan IS NULL,lease_until FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &until)
+	err := tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5 AND preparation_profile IN (1,2,3,4,5) AND command_plan IS NULL,lease_until FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &until)
 	if err != nil {
 		return readFailure(ctx, err)
 	}

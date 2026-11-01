@@ -467,7 +467,7 @@ func (c *Coordinator) freezePlanMode(ctx context.Context, tx pgx.Tx, binding ide
 	if p.Feature != nil {
 		admitted, err = c.registry.admitFeaturePlanMode(binding, retained, p, preparation)
 	} else {
-		admitted, err = c.registry.admitKernelPlan(binding, retained, p)
+		admitted, err = c.registry.admitKernelPlanMode(binding, retained, p, preparation)
 	}
 	if err != nil {
 		return nil, err

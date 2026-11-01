@@ -182,6 +182,13 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e != nil {
 		return result, e
 	}
+	if preparationOnly && plan.AccountLinkState != nil {
+		// OAuth exchange is external work, unlike entropy-only preparation.
+		// An absent final attachment cannot prove the code was not exchanged.
+		// Preserve pending custody and generation; resumption of retained output
+		// belongs to the original prepared route, never generic negative recovery.
+		return result, nil
+	}
 	var admitted *admittedKernelPlan
 	if result.Feature != nil {
 		admitted, e = c.registry.admitFeaturePlanMode(result.Binding, fingerprint, plan, preparationOnly)
@@ -358,6 +365,28 @@ FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j ON j.co
 }
 
 func invokeRecovery(ctx context.Context, p RecoveryContributor, w RecoveryWork) (status RecoveryStatus, err error) {
+	if w.state != nil && w.state.plan != nil && w.state.plan.accountLinkState != nil && w.state.entry.descriptor == (ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}) {
+		if w.state.plan.capabilityInput(capabilityOriginalAccountLinkState) == nil {
+			return RecoveryUnknown, invalidPlan()
+		}
+		for _, slot := range [...]capabilityInputSlot{capabilityOriginalAccountLinkState, capabilityPrimaryInput} {
+			if w.state.plan.capabilityInput(slot) == nil {
+				continue
+			}
+			owned := *w.state
+			owned.capabilityInput = slot
+			status, err := invokeRecoveryOne(ctx, p, RecoveryWork{state: &owned})
+			owned.active = false
+			if err != nil || status != RecoveryNotCommitted {
+				return status, err
+			}
+		}
+		return RecoveryNotCommitted, nil
+	}
+	return invokeRecoveryOne(ctx, p, w)
+}
+
+func invokeRecoveryOne(ctx context.Context, p RecoveryContributor, w RecoveryWork) (status RecoveryStatus, err error) {
 	defer func() {
 		if recover() != nil {
 			status, err = RecoveryUnknown, identity.UnavailableError{}

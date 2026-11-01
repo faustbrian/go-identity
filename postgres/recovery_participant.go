@@ -46,10 +46,11 @@ type RecoveryContributor interface {
 type RecoveryWork struct{ state *recoveryWorkState }
 
 type recoveryWorkState struct {
-	work   Work
-	entry  registeredContributor
-	plan   *admittedKernelPlan
-	active bool
+	work            Work
+	entry           registeredContributor
+	plan            *admittedKernelPlan
+	active          bool
+	capabilityInput capabilityInputSlot
 }
 
 // Format hides runtime evidence scope and retained composition.
@@ -134,7 +135,7 @@ func (w RecoveryWork) CapabilityBinding(p CapabilityReleaseContributor) (Capabil
 	if r == nil {
 		return CapabilityReservationBinding{}, invalidWork()
 	}
-	s := &capabilityReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true, releaseProof: capabilityReleaseRecovery}
+	s := &capabilityReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true, releaseProof: capabilityReleaseRecovery, inputSlot: w.state.capabilityInput}
 	var ok bool
 	s.contributor, ok = capabilityReservationParticipant(w.state.entry.contributor)
 	if !ok {

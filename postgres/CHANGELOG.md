@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add original OAuth account-link preparation to the existing command journal.
+  State reservation, counters and the acknowledged start precede exchange;
+  authenticated retained output preserves its original generation. The actual
+  issuer attaches the separate final grant without becoming false evidence of
+  account commitment. Both one-use inputs finalize with the link or release on
+  proven rollback. Install the forward account-link preparation migration after
+  counter preparation. Concrete OAuth/session/HTTP composition remains required.
+
 - Add the protected explicit-self account-link unit of work using the existing
   coordinator, counters and one-use capability phases. Identity link/credential
   changes, provider effects, account-target audit and lifecycle commit together;

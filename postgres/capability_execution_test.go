@@ -13,17 +13,25 @@ import (
 
 type capabilityExecutionProbe struct {
 	capabilityReservationProbe
-	apply      CapabilityApplyWork
-	finalize   CapabilityFinalizeWork
-	failure    error
-	panicPhase bool
-	inspect    func(*capabilityExecutionState)
+	apply           CapabilityApplyWork
+	finalize        CapabilityFinalizeWork
+	failure         error
+	panicPhase      bool
+	inspect         func(*capabilityExecutionState)
+	inspectRelease  func(CapabilityReleaseWork) error
+	inspectRecovery func(RecoveryWork) (RecoveryStatus, error)
 }
 
-func (*capabilityExecutionProbe) RecoverParticipant(context.Context, RecoveryWork) (RecoveryStatus, error) {
+func (p *capabilityExecutionProbe) RecoverParticipant(_ context.Context, w RecoveryWork) (RecoveryStatus, error) {
+	if p.inspectRecovery != nil {
+		return p.inspectRecovery(w)
+	}
 	return RecoveryUnknown, nil
 }
-func (*capabilityExecutionProbe) ReleaseCapability(context.Context, CapabilityReleaseWork) error {
+func (p *capabilityExecutionProbe) ReleaseCapability(_ context.Context, w CapabilityReleaseWork) error {
+	if p.inspectRelease != nil {
+		return p.inspectRelease(w)
+	}
 	return nil
 }
 func (p *capabilityExecutionProbe) ApplyCapability(_ context.Context, w CapabilityApplyWork) error {

@@ -48,6 +48,9 @@ func NewAccountLinkUnitOfWork(c *Coordinator, r *Repository, config AccountLinkU
 			if owner == "identity/oauth/postgres" && entry.descriptor != accountLinkOwnerDescriptor() {
 				continue
 			}
+			if owner == "capability/postgres" && entry.descriptor != (ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}) {
+				continue
+			}
 			if selected != nil {
 				return nil, coordinatorError()
 			}
@@ -138,6 +141,15 @@ func (o *AccountLinkUnitOfWork) Execute(ctx context.Context, original identity.C
 	if err != nil || reservation.state == nil {
 		return coreCreationReceipt(result, err)
 	}
+	return o.executeReservation(bounded, reservation, command)
+}
+
+func (o *AccountLinkUnitOfWork) executeReservation(bounded context.Context, reservation Reservation, command identity.Command) (result identity.CommandResult, err error) {
+	spec, _, ok := command.AccountLinkCounterCommand()
+	if !ok || reservation.state == nil {
+		return result, invalidPreparation()
+	}
+	c := o.coordinator
 	result = identity.CommandResult{Binding: spec.Binding, Outcome: identity.CommitOutcomeUnknown}
 	var work Work
 	defer func() {

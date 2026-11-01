@@ -136,7 +136,7 @@ func readObservedCounterPreparation(ctx context.Context, reader interface {
 			err = identity.UnavailableError{}
 		}
 	}()
-	_, feature, err := decodeObservedScope(observed.scope)
+	binding, feature, err := decodeObservedScope(observed.scope)
 	if err == nil && observed.plan == nil && feature != nil && isAPIKeyVerificationOperation(*feature) && observed.state != nil && *observed.state == "pending" && observed.until != nil {
 		// API-key preparations have no counters or declaration column. Read
 		// only their existing original-output profile, preserving compatibility
@@ -146,7 +146,8 @@ FROM identity.identity_command_id_claims c JOIN identity.commands j USING(comman
 WHERE c.command_id=$1 AND c.tenant_id=$2 AND c.purpose=$3 AND c.safe_fields=$4 AND c.fingerprint=$5
 AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL AND j.state=$6 AND j.lease_until=$7`, id, observed.tenant, observed.purpose, observed.scope, observed.fingerprint, *observed.state, *observed.until).Scan(&observed.preparationProfile)
 	}
-	if err != nil || observed.plan != nil || feature == nil || feature.OperationID != "identity.mfa.otp-verify" && !organizationInvitationIssuanceOperation(*feature) || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
+	selected := feature == nil && accountLinkBinding(binding) || feature != nil && (feature.OperationID == "identity.mfa.otp-verify" || organizationInvitationIssuanceOperation(*feature))
+	if err != nil || observed.plan != nil || !selected || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
 		return nil
 	}
 	return reader.QueryRow(ctx, `SELECT j.preparation_profile,CASE WHEN octet_length(j.preparation_declaration) BETWEEN 1 AND 65536 THEN j.preparation_declaration END
@@ -325,15 +326,23 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 }
 
 // An authenticated preparation declaration permits observation of pending or
-// aborted history, never success. Only recovery under claim/journal exclusion
-// can use absent final attachment as evidence that consuming/domain effects did
-// not begin. Generated credentials and original code/browser are not restored.
+// aborted history, never success. Entropy-only feature recovery can use absent
+// final attachment under claim/journal exclusion. Original OAuth preparation
+// instead preserves uncertainty about external exchange. Neither observation
+// restores generated credentials or original code/browser custody.
 func observedCommandPlan(binding identity.CommandBinding, feature *identity.FeatureOperation, observed commandObservation) (CommandPlan, bool, error) {
 	if len(observed.fingerprint) != 32 {
 		return CommandPlan{}, false, identity.UnavailableError{}
 	}
 	fp := [32]byte(observed.fingerprint)
 	if observed.plan == nil {
+		if feature == nil && accountLinkBinding(binding) && observed.state != nil && (*observed.state == "pending" || *observed.state == "aborted") && observed.preparationProfile != nil && *observed.preparationProfile == 5 {
+			plan, err := decodeKernelPlan(binding, fp, observed.declaration)
+			if err != nil || plan.AccountLinkState == nil || plan.Capability != nil || plan.CommandCounters == nil {
+				return CommandPlan{}, false, identity.UnavailableError{}
+			}
+			return plan, true, nil
+		}
 		if feature == nil || observed.state == nil || (*observed.state != "pending" && *observed.state != "aborted") || observed.preparationProfile == nil || (*observed.preparationProfile != 3 && *observed.preparationProfile != 4) {
 			return CommandPlan{}, false, identity.UnavailableError{}
 		}

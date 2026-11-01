@@ -100,8 +100,7 @@ func (c *Coordinator) prepareAccountLink(b identity.CommandBinding, command iden
 	if !ok || spec.Binding != b || !accountLinkBinding(b) || plan.Capability == nil || plan.Lifecycle == nil || plan.CommandCounters == nil {
 		return fail()
 	}
-	proof := spec.Proof.Payload()
-	if plan.Capability.CapabilityID != proof.ID || plan.Capability.Purpose != "identity.account.link-token" || plan.Capability.ProofFingerprint != spec.Proof.EnvelopeDigest() || !plan.Capability.ExpiresAt.Equal(proof.ExpiresAt) || plan.Capability.MaxUses != proof.MaxUses || plan.Lifecycle.BeforeVersion != spec.Change.ExpectedAccountVersion || plan.Lifecycle.AfterVersion != spec.Change.Account.Version {
+	if !accountLinkProofPlan(spec, plan) {
 		return fail()
 	}
 	q, err := prepareClaim(command, c.keys.retained[c.keys.current])
@@ -125,6 +124,14 @@ func (c *Coordinator) prepareAccountLink(b identity.CommandBinding, command iden
 		return fail()
 	}
 	return q, owned, admitted, nil
+}
+
+func accountLinkProofPlan(spec identity.AccountLinkCommand, plan CommandPlan) bool {
+	if plan.Capability == nil || plan.Lifecycle == nil {
+		return false
+	}
+	proof := spec.Proof.Payload()
+	return plan.Capability.CapabilityID == proof.ID && plan.Capability.Purpose == "identity.account.link-token" && plan.Capability.ProofFingerprint == spec.Proof.EnvelopeDigest() && plan.Capability.ExpiresAt.Equal(proof.ExpiresAt) && plan.Capability.MaxUses == proof.MaxUses && plan.Lifecycle.BeforeVersion == spec.Change.ExpectedAccountVersion && plan.Lifecycle.AfterVersion == spec.Change.Account.Version
 }
 
 func validateAccountLink(p AccountLinkContributor, command identity.Command, plan CommandPlan) (err error) {

@@ -28,6 +28,14 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 	var attrs []identity.AttributeUpdate
 	attributeCommand := false
 	switch {
+	case isAccountLinkPreparation(c):
+		spec, _, _, _ := c.AccountLinkPreparationInput()
+		binding = spec.Binding
+		var err error
+		payload, err = encodeAccountLinkPreparation(c, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
 	case isCreation(c):
 		s, _ := c.CreateUser()
 		binding = s.Binding
@@ -82,18 +90,10 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		if err != nil {
 			return claimRequest{}, err
 		}
-		network, err := commandSecret(key, "account.link.counter.network", []byte(counters.Network), 128)
-		if err != nil || !postgresExactTime(counters.PreparedAt) {
-			return claimRequest{}, codecError()
+		payload["protected_counters"], err = encodeAccountLinkCounters(counters, key)
+		if err != nil {
+			return claimRequest{}, err
 		}
-		versions := make([][]byte, len(counters.KeyVersions))
-		for i, version := range counters.KeyVersions {
-			versions[i] = cborUint(uint64(version))
-		}
-		payload["protected_counters"] = cborMap(map[string][]byte{
-			"network": cborBytes(network), "prepared_at": cborInt(counters.PreparedAt.UnixMicro()),
-			"key_versions": cborArray(versions),
-		})
 	case isLink(c):
 		s, _ := c.LinkAccount()
 		binding = s.Binding
@@ -289,10 +289,14 @@ func isProfile(c identity.Command) bool     { _, ok := c.UpdateProfile(); return
 func isStatus(c identity.Command) bool      { _, ok := c.UserStatus(); return ok }
 func isLink(c identity.Command) bool        { _, ok := c.LinkAccount(); return ok }
 func isCounterLink(c identity.Command) bool { _, _, ok := c.AccountLinkCounterCommand(); return ok }
-func isUnlink(c identity.Command) bool      { _, ok := c.UnlinkAccount(); return ok }
-func isIdentifier(c identity.Command) bool  { _, ok := c.ChangeIdentifier(); return ok }
-func isPrivacy(c identity.Command) bool     { _, ok := c.RequestPrivacyExport(); return ok }
-func isFeature(c identity.Command) bool     { _, ok := commandFeature(c); return ok }
+func isAccountLinkPreparation(c identity.Command) bool {
+	_, _, _, ok := c.AccountLinkPreparationInput()
+	return ok
+}
+func isUnlink(c identity.Command) bool     { _, ok := c.UnlinkAccount(); return ok }
+func isIdentifier(c identity.Command) bool { _, ok := c.ChangeIdentifier(); return ok }
+func isPrivacy(c identity.Command) bool    { _, ok := c.RequestPrivacyExport(); return ok }
+func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return ok }
 
 // Explicit native selection is necessary: the legacy Feature accessor denies
 // password custody so older coordinators cannot silently omit its fingerprint.

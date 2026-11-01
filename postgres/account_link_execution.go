@@ -31,7 +31,8 @@ func (r *Repository) applyAccountLink(ctx context.Context, w Work, command ident
 		return fail(invalidWork())
 	}
 	q, err := prepareClaim(command, c.keys.retained[c.keys.current])
-	if err != nil || !bytes.Equal(q.canonical, reservation.request.canonical) {
+	expected, expectedErr := accountLinkExecutionRequest(reservation)
+	if err != nil || expectedErr != nil || !bytes.Equal(q.canonical, expected.canonical) {
 		return fail(identity.ConflictError{})
 	}
 	if err = validateAccountLink(p.accountLink.contributor.(AccountLinkContributor), command, p.snapshot()); err != nil {

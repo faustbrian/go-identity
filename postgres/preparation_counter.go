@@ -26,6 +26,9 @@ func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, 
 	retained := [32]byte(fingerprint)
 	declaration := p.snapshot()
 	wire, err := encodeFeaturePlan(p.binding, retained, declaration)
+	if p.accountLinkState != nil {
+		wire, err = encodeKernelPlan(p.binding, retained, declaration)
+	}
 	if err != nil || len(wire) > 65536 {
 		return nil, invalidPreparation()
 	}
@@ -41,7 +44,7 @@ func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	if stored == nil {
-		tag, err := tx.Exec(ctx, `UPDATE identity.commands SET preparation_declaration=$4 WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 AND preparation_profile IN (3,4) AND preparation_declaration IS NULL AND preparation_started_generation IS NULL`, id, string(q.tenant), q.purpose, wire)
+		tag, err := tx.Exec(ctx, `UPDATE identity.commands SET preparation_declaration=$4 WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 AND preparation_profile IN (3,4,5) AND preparation_declaration IS NULL AND preparation_started_generation IS NULL`, id, string(q.tenant), q.purpose, wire)
 		if err != nil {
 			return nil, readFailure(ctx, err)
 		}
@@ -52,5 +55,8 @@ func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, 
 		return nil, identity.ConflictError{}
 	}
 	// This remains the original code-free declaration, not generated issuance.
+	if p.accountLinkState != nil {
+		return c.registry.admitKernelPlanMode(p.binding, retained, declaration, true)
+	}
 	return c.registry.admitFeaturePlanMode(p.binding, retained, declaration, true)
 }
