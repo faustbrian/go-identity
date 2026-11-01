@@ -1,5 +1,48 @@
 # Identity PostgreSQL
 
+## Provider-account storage and trusted reads
+
+Append `AccountMigrationSource{Base: installedHistory, Version: nextVersion}`
+after the credential-reference migration and every installed successor. Apply
+it through the normal migrations runner; do not alter an installed migration.
+The forward source preserves existing users, passwords, sessions and epochs.
+It installs identity-owned account/link tombstones and credential associations,
+not a provider engine, token vault or public account-link workflow.
+
+`Repository.ListAccounts` implements the existing bounded `AccountRepository`:
+one primary statement, exact tenant/user partition, account-ID ordering, no
+partial result on overflow, and `ErrUserAbsent` for a missing user. It returns
+stored status rather than turning blocked users into active users. Configure
+`MaximumAccounts` in `1..100` and the repository's finite operation budget.
+
+`Repository.GetAccountLinkState` reads the same user's complete account set,
+candidate/tombstone versions, credential epoch/references and tenant-wide exact
+provider/issuer/subject collision in one read-only repeatable-read transaction.
+The explicit and administrative query modes are structural reads, not authority
+to use either policy. Implicit linking is unavailable until its consistent
+identifier projection is composed. Returned methods conservatively have
+`Usable=false`: reference enablement alone cannot prove provider, factor or
+credential-owner eligibility. A disabled provider reference whose link was
+removed remains a retained tombstone, not a live login method.
+Disabled non-provider references, including removed passkeys, likewise remain
+in storage without consuming the bound on current methods. Enabled references
+and provider methods associated with live links still count; missing or invalid
+associations fail closed rather than being silently omitted.
+
+The live subject index uses a database-checked SHA-256 commitment of the
+length-framed UTF-8 provider tuple so valid maximum-size metadata does not exceed
+PostgreSQL's B-tree entry bound. Lookups compare original exact tuple bytes;
+a collision denies instead of selecting another identity. No bearer, token or
+PKCE verifier is stored here. Account IDs and historical versions are retained;
+an absent account in a user's list never proves tenant-wide subject absence.
+
+These are trusted storage ports. Consumers must not write account rows directly
+or treat these snapshots as authorization, provider proof, authentication,
+usable-final-access evidence or a renewable validity lease. The protected link
+owner must recheck current state, consume proof/risk, and commit account,
+credential, audit, lifecycle and recovery effects through the sole coordinator.
+That consumer workflow and its session/HTTP composition remain unfinished.
+
 ## Source-version snapshot imports
 
 Trusted feature schemas may explicitly select `FeatureVersionSnapshotImport`

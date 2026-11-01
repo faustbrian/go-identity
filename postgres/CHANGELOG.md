@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add forward-only identity-owned provider-account storage, live subject
+  uniqueness, retained link versions and credential associations. Trusted
+  account listing and explicit-link state reads are complete bounded primary
+  snapshots; overflow, corruption and missing authority fail without partial
+  results. Installing the source does not activate linking, authentication or
+  implicit-link policy, and reference metadata does not grant login usability.
+
 - Admit an explicitly registered organization-owned API-key verification schema
   without fabricating a human owner. Retain the actual key actor/version,
   authentication and conditional narrowing audits, original command commitment
