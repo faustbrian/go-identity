@@ -18,6 +18,7 @@ use (
 	./http/organization
 	./http/organization/consumer
 	./http/otp
+	./http/oauthserver
 	./http/password
 	./http/passkey
 	./http/phone
