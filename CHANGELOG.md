@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Retain explicit account-link counter preparation beside the original canonical
+  link intent/proof in opaque command custody. Legacy link/feature accessors
+  reject this variant so executors cannot silently omit attribution or counter
+  checks. The existing exported link-command struct and signed payload are
+  unchanged; native fingerprinting, current checks and atomic effects remain
+  required before execution.
+
 - Add explicit snapshot-import record version policy to trusted feature
   declarations and committed receipts. Absent-local imports can preserve a
   positive source version without fabricating prior local history. Existing

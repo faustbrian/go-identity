@@ -28,6 +28,19 @@ retain their formats; verification still does not consume a proof. The root
 capability PostgreSQL legacy-store migration is separate from the identity
 adapter's coordinator-owned ledger and must not be applied to those tables.
 
+## Protected account-link command context
+
+Trusted native risk composition can enrich a bare explicit self-user link with
+`NewAccountLinkCounterCommand`. `AccountLinkCounterCommand` then returns both
+the unchanged link intent/proof and an owned counter-context snapshot. Network
+attribution, original primary preparation time and retained key-version aliases
+must all enter the native keyed fingerprint and existing protected counter phases.
+Copies cannot replace or renew preparation; no counter, proof or session authority
+is granted. Legacy `LinkAccount` and generic feature accessors reject the enriched
+variant instead of silently dropping its required context. This is not a social
+login service or an enabled execution path; provider/session/policy, risk and
+atomic effects/recovery still require their concrete owning composition.
+
 ## Original password-reset preparation
 
 The separate `NewFeaturePhonePasswordResetInputCommand` and generated

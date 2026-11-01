@@ -105,6 +105,7 @@ type Command struct {
 	status          *UserStatusCommand
 	unlink          *AccountUnlinkCommand
 	link            *AccountLinkCommand
+	linkCounters    *AccountLinkCounterContext
 	identifier      *IdentifierCommand
 	identifierProof *capability.Proof
 	feature         *featureCommandState
