@@ -23,7 +23,10 @@ any of those authorities. It does not complete M17, M18 or unit qualification.
    PKCE under its authenticated transaction. `Authorization` builds the fixed
    code/query/S256 redirect; only deliberate `AuthorizationRequest.URL()` access
    reveals it to the intended browser. Never log it.
-4. At callback, the native owner validates exact provider/client/issuer/redirect,
+4. Parse `r.URL.RawQuery` with `ParseQueryCallback(ctx, rawQuery, boundProfile)`.
+   `boundProfile` is the exact immutable provider profile frozen into the native
+   transaction, never a configuration/version/issuer selected by callback data.
+   The native owner then validates exact provider/client/issuer/redirect,
    response transport, transaction/tenant/operation/session and other required
    bindings, **reserves one-use state before decrypting PKCE**, and supplies
    the original `identity.OAuthCallbackInput` plus `NewPKCEVerifier` custody.
@@ -52,6 +55,61 @@ return result.Tokens.Use(ctx, func(ctx context.Context, tokens oauth.TokenBytes)
 The names above represent native-owned inputs and encryption, not missing
 pluggable domain stores consumers must invent. The composed native workflow is
 not yet provided by this module.
+
+## Query callback boundary
+
+`ParseQueryCallback` accepts only the query authorization-code profile. It
+requires exactly one nonempty `code` or `error`, canonical 32-byte state, and
+`iss` equal to the exact expected issuer, including on provider denial. It
+rejects all decoded duplicate parameter names (including percent-encoded
+aliases), conflicting security members, and known token/hybrid/JARM members.
+The full RFC 6749 Appendix A.11 code grammar is preserved without trimming or
+truncation. Malformed input returns typed `InvalidInput`; local cancellation
+returns `Unavailable`. Neither outcome performs provider or database I/O.
+
+Success exposes the existing opaque root `identity.OAuthCallbackInput` through
+`Input()`. A coherent provider error instead has `Denied() == true` and no code
+custody. `UseDeniedState` synchronously lends a private bounded state copy for
+native transaction lookup and auditing. It is **not authentication, admission,
+or a state capability**. Provider error codes, descriptions and URIs are checked
+for bounded protocol syntax and deliberately discarded, not exposed as
+diagnostics or redirects. Unknown valid error codes remain typed denials.
+
+```go
+parsed, err := oauth.ParseQueryCallback(ctx, rawQuery, boundProfile)
+if err != nil {
+    return err // malformed/cancelled, never exchange
+}
+defer parsed.Destroy()
+if parsed.Denied() {
+    return parsed.UseDeniedState(ctx, lookupAndAuditNativeDenial)
+}
+originalCallback, _ := parsed.Input()
+// Authenticate complete native bindings and reserve state before decrypt/exchange.
+```
+
+The example names native-owned values and the required native denial handler;
+it is not a provided endpoint or completed native workflow. Callers must freeze
+the exact trusted profile at initiation and enforce the native transaction's
+authenticated expiry and one-use rules. Parsing adds no clock, expiry or new
+lifetime, and a parsed result does not make expired/replayed state valid.
+Destroy promptly on every exit. Aliases share destruction; an admitted
+synchronous borrow may finish on its private copy, which clears on return.
+Concurrent/reentrant denial borrows deny; consumers must not retain bytes,
+copies or asynchronous access. The raw query belongs to the caller and cannot
+be erased by the parser; do not log request URLs or retain callback data.
+
+Before percent decoding, the parser bounds total raw input to
+`3*MaxCodeBytes + 16 KiB` and 32 members. Decoded names are at most 64 bytes;
+values are bounded to the configured code limit, 43-byte state, 2048-byte
+issuer/error URI, 256-byte error, 1024-byte description, or 4096-byte extension.
+Encoded values cannot exceed three times their decoded ceiling. Security
+members use their RFC ASCII grammar; ignored extension values must be valid
+UTF-8. Unknown response extensions are ignored after these checks, as required
+by [RFC 6749 section 4.1.2](https://www.rfc-editor.org/rfc/rfc6749#section-4.1.2).
+Required exact decoded issuer comparison follows
+[RFC 9207 section 2.4](https://www.rfc-editor.org/rfc/rfc9207#section-2.4).
+These are rejection limits, never truncation or additional callback authority.
 
 ## Outcomes and recovery
 
