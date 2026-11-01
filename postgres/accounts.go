@@ -122,6 +122,21 @@ func (r *Repository) GetAccountLinkState(ctx context.Context, q identity.Account
 		return zero, readFailure(bounded, err)
 	}
 	defer func() { _ = tx.Rollback(bounded) }()
+	out, err := readAccountLinkState(bounded, tx, q)
+	if err != nil {
+		return zero, err
+	}
+	if err := tx.Commit(bounded); err != nil {
+		return zero, readFailure(bounded, err)
+	}
+	return out, nil
+}
+
+// The same bounded projection serves repeatable reads and the private locked
+// mutation phase. The latter already owns the tenant and aggregate fences.
+func readAccountLinkState(bounded context.Context, tx pgx.Tx, q identity.AccountLinkQuery) (identity.AccountLinkState, error) {
+	zero := identity.AccountLinkState{}
+	a := q.Account
 	rows, err := tx.Query(bounded, accountListSQL, string(a.TenantID), string(a.UserID), 101)
 	if err != nil {
 		return zero, readFailure(bounded, err)
@@ -171,23 +186,32 @@ func (r *Repository) GetAccountLinkState(ctx context.Context, q identity.Account
 	if out.Access.Methods, err = readAccountMethods(bounded, tx, a.TenantID, a.UserID, list.Accounts); err != nil {
 		return zero, err
 	}
-	if err := tx.Commit(bounded); err != nil {
-		return zero, readFailure(bounded, err)
-	}
 	return out, nil
 }
 
 func readAccountMethods(ctx context.Context, tx pgx.Tx, tenant identity.TenantID, user identity.UserID, accounts []identity.Account) ([]identity.LoginMethod, error) {
 	// Disabled non-provider references include permanently removed passkeys
 	// (RemovePasskeyCredential); they must not exhaust a current-method budget.
-	// A live account still retains its provider method even when disabled.
-	// Missing/invalid associations remain selected for fail-closed validation.
+	// A live account still retains its current provider method when disabled.
+	// Disabled unassociated provider references are retained credential tombstones:
+	// exact relinking retires those current associations without deleting history.
+	// Enabled missing and all invalid associations still fail closed.
+	// AccountMigrationSource enforces at most one row for each lookup below.
+	// Preserve those bounds explicitly: with fresh, sparse history statistics,
+	// an unconstrained join can repeatedly scan entire owner partitions (the
+	// retained-history fixture in TestAccountAuthorityStorage reproduces this).
 	rows, err := tx.Query(ctx, `SELECT c.credential_id,c.kind,c.owner,c.version::text,c.expires_at,a.account_id,l.linked
- FROM identity.credential_references c LEFT JOIN identity.account_credentials a
- ON a.tenant_id=c.tenant_id AND a.user_id=c.user_id AND a.credential_id=c.credential_id
- LEFT JOIN identity.accounts l ON l.tenant_id=a.tenant_id AND l.user_id=a.user_id AND l.account_id=a.account_id
+ FROM identity.credential_references c
+ LEFT JOIN LATERAL (
+  SELECT m.account_id FROM identity.account_credentials m
+  WHERE m.tenant_id=c.tenant_id AND m.user_id=c.user_id AND m.credential_id=c.credential_id LIMIT 1
+ ) a ON true
+ LEFT JOIN LATERAL (
+  SELECT owned.linked FROM identity.accounts owned
+  WHERE owned.tenant_id=c.tenant_id AND owned.user_id=c.user_id AND owned.account_id=a.account_id LIMIT 1
+ ) l ON true
  WHERE c.tenant_id=$1 AND c.user_id=$2
- AND (c.enabled OR (c.kind=3 AND l.linked IS DISTINCT FROM false)
+ AND (c.enabled OR (c.kind=3 AND a.account_id IS NOT NULL AND l.linked IS DISTINCT FROM false)
   OR (c.kind<>3 AND a.account_id IS NOT NULL))
  ORDER BY c.credential_id LIMIT 129`, string(tenant), string(user))
 	if err != nil {

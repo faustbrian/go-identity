@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Add the private locked account-link storage phase: conserve exact provider
+  ownership and tombstone history, atomically advance account/user/credential
+  versions, and keep credential associations in the original transaction.
+  Rollback, retired credential collisions and concurrent subject claims leave
+  no partial link. Public linking remains disabled until provider proof,
+  session/policy, risk, required effects and recovery are composed.
+  Exact relinks retire disabled current associations without deleting credential
+  tombstones; disabled unassociated provider references no longer consume the
+  current-method budget. Enabled missing and malformed associations still deny.
+
+- Add a trusted native current-provider-account fence under the existing Work.
+  Exact link/association/credential versions and kernel epochs remain locked;
+  expiry is checked after link-lock acquisition and ignored denials still abort.
+  The check grants no provider proof, linking policy, session or new validity.
+
+- Keep provider-reference reads scoped to unique credential/account lookups
+  even before populated history has fresh planner statistics. Retained links
+  no longer cause repeated whole-owner joins; exact history, corruption and
+  current-method bounds are unchanged.
+
 - Add forward-only identity-owned provider-account storage, live subject
   uniqueness, retained link versions and credential associations. Trusted
   account listing and explicit-link state reads are complete bounded primary

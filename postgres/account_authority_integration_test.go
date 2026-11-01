@@ -26,9 +26,10 @@ import (
 
 // These rows are storage fixtures, not provider identity proof or an account
 // linking workflow. The consumer journey must use the actual protected owner.
-func TestAccountAuthorityStorage(t *testing.T) {
+func newAccountAuthorityStore(t *testing.T) (context.Context, *database.Pool, *Repository) {
+	t.Helper()
 	ctx, stop := context.WithTimeout(t.Context(), 30*time.Second)
-	defer stop()
+	t.Cleanup(stop)
 	dsn, directory := os.Getenv("IDENTITY_POSTGRES_TEST_DSN"), os.Getenv("IDENTITY_POSTGRES_TEST_DATA_DIRECTORY")
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil || dsn == "" || cfg.Host != "127.0.0.1" || cfg.Database != "identity_test" || !filepath.IsAbs(directory) {
@@ -108,6 +109,15 @@ func TestAccountAuthorityStorage(t *testing.T) {
 	repo, err := NewRepository(pool, Config{MaximumDuration: 2 * time.Second})
 	if err != nil {
 		t.Fatal(err)
+	}
+	return ctx, pool, repo
+}
+
+func TestAccountAuthorityStorage(t *testing.T) {
+	ctx, pool, repo := newAccountAuthorityStore(t)
+	exec := func(sql string, args ...any) error {
+		_, err := pool.Raw().Exec(ctx, sql, args...)
+		return err
 	}
 	query := identity.AccountQuery{TenantID: "tenant-a", UserID: "owner", MaximumAccounts: 100}
 	empty, err := repo.ListAccounts(ctx, query)
@@ -276,8 +286,17 @@ func TestAccountAuthorityStorage(t *testing.T) {
 	if err := exec(`DELETE FROM identity.account_credentials WHERE tenant_id='tenant-a' AND user_id='owner' AND credential_id='provider'`); err != nil {
 		t.Fatal(err)
 	}
+	if out, err := repo.GetAccountLinkState(ctx, linkQuery); err != nil || len(out.Access.Methods) != 1 || out.Access.Methods[0].Credential.ID != "password" {
+		t.Fatal("unassociated disabled provider tombstone became a current method", err)
+	}
+	if err := exec(`UPDATE identity.credential_references SET enabled=true WHERE tenant_id='tenant-a' AND user_id='owner' AND credential_id='provider'`); err != nil {
+		t.Fatal(err)
+	}
 	if out, err := repo.GetAccountLinkState(ctx, linkQuery); !errors.As(err, &unavailable) || out.Access.User.ID != "" || out.Access.Methods != nil {
-		t.Fatal("missing provider association became proven retirement", err)
+		t.Fatal("enabled provider missing its association did not fail closed", err)
+	}
+	if err := exec(`UPDATE identity.credential_references SET enabled=false WHERE tenant_id='tenant-a' AND user_id='owner' AND credential_id='provider'`); err != nil {
+		t.Fatal(err)
 	}
 	if err := exec(`INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant-a','owner','provider','account')`); err != nil {
 		t.Fatal(err)
@@ -320,21 +339,23 @@ func TestAccountAuthorityStorage(t *testing.T) {
 	if err := exec(`UPDATE identity.accounts SET linked=true WHERE tenant_id='tenant-a' AND account_id='account'; UPDATE identity.credential_references SET enabled=true WHERE tenant_id='tenant-a' AND user_id='owner' AND credential_id='provider'`); err != nil {
 		t.Fatal(err)
 	}
-	setEpoch := func(version uint64) error {
-		tx, err := pool.Raw().Begin(ctx)
+	setEpoch := func(call context.Context, version uint64) error {
+		tx, err := pool.Raw().Begin(call)
 		if err != nil {
 			return err
 		}
-		defer func() { _ = tx.Rollback(ctx) }()
+		defer func() { _ = tx.Rollback(call) }()
 		v := strconv.FormatUint(version, 10)
-		for _, sql := range []string{`UPDATE identity.users SET version=$1::numeric,credential_version=$1::numeric WHERE tenant_id='tenant-a' AND user_id='owner'`, `UPDATE identity.accounts SET version=$1::numeric,social_link_version=$1::numeric WHERE tenant_id='tenant-a' AND account_id='account'`, `UPDATE identity.credential_references SET version=$1::numeric WHERE tenant_id='tenant-a' AND user_id='owner'`} {
-			if _, err := tx.Exec(ctx, sql, v); err != nil {
+		// Only the two current references participate in the snapshot invariant;
+		// rewriting retained history would multiply unrelated fixture work.
+		for _, sql := range []string{`UPDATE identity.users SET version=$1::numeric,credential_version=$1::numeric WHERE tenant_id='tenant-a' AND user_id='owner'`, `UPDATE identity.accounts SET version=$1::numeric,social_link_version=$1::numeric WHERE tenant_id='tenant-a' AND account_id='account'`, `UPDATE identity.credential_references SET version=$1::numeric WHERE tenant_id='tenant-a' AND user_id='owner' AND enabled=true`} {
+			if _, err := tx.Exec(call, sql, v); err != nil {
 				return err
 			}
 		}
-		return tx.Commit(ctx)
+		return tx.Commit(call)
 	}
-	if err := setEpoch(1); err != nil {
+	if err := setEpoch(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	concurrent, stopConcurrent := context.WithCancel(ctx)
@@ -348,7 +369,7 @@ func TestAccountAuthorityStorage(t *testing.T) {
 				writerResult <- nil
 				return
 			}
-			if err := setEpoch(uint64(i + 2)); err != nil {
+			if err := setEpoch(concurrent, uint64(i+2)); err != nil {
 				writerResult <- err
 				return
 			}

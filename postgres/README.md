@@ -26,8 +26,10 @@ credential-owner eligibility. A disabled provider reference whose link was
 removed remains a retained tombstone, not a live login method.
 Disabled non-provider references, including removed passkeys, likewise remain
 in storage without consuming the bound on current methods. Enabled references
-and provider methods associated with live links still count; missing or invalid
-associations fail closed rather than being silently omitted.
+and provider methods currently associated with live links still count. Disabled
+provider references without an association are retained credential tombstones,
+not current methods. Enabled references missing their association, and invalid
+or non-provider associations, still fail closed rather than being omitted.
 
 The live subject index uses a database-checked SHA-256 commitment of the
 length-framed UTF-8 provider tuple so valid maximum-size metadata does not exceed
@@ -42,6 +44,30 @@ usable-final-access evidence or a renewable validity lease. The protected link
 owner must recheck current state, consume proof/risk, and commit account,
 credential, audit, lifecycle and recovery effects through the sole coordinator.
 That consumer workflow and its session/HTTP composition remain unfinished.
+
+For a known-user native feature invocation, `Work.RequireActiveProviderAccount`
+fences an original `ProviderAccountAdmission`: exact account/provider tuple,
+account and social-link versions, associated provider credential and independent
+kernel user/identifier/credential epochs. It retains user, credential, account
+and association share locks and checks credential expiry again after obtaining
+the link locks. Denials poison the original Work even when ignored. These are
+read/locking checks only; they do not mutate a link, resolve an anonymous flow,
+validate provider cryptographic proof or current provider configuration, choose
+factor policy, consume risk/capability state or issue a session. A prior success
+cannot renew the original evidence or be cached as a new validity lease.
+
+The private link writer now locks the current partition and applies the core's
+pure `ApplyAccountLink` transition in that same transaction. Account records,
+credential associations and independent epochs commit or roll back together;
+retained IDs cannot be reassigned or revive an old disabled credential. The
+tenant exclusion and live-subject unique constraint serialize competing owners.
+Relinking retires only disabled credential associations on that exact account;
+credential-reference tombstones and their versions remain stored. Association
+rows describe current access, not historical credential lineage. This prevents
+repeated same-ID relinks from reattaching the entire retired credential history.
+This is an internal storage phase, not a callable account-link service: public
+canonical-link execution remains disabled until its proof, original session,
+policy, risk, audit/lifecycle and recovery participants are integrated.
 
 ## Source-version snapshot imports
 
