@@ -21,6 +21,9 @@ func TestAPIKeySelectionAndRetainedHandlesFailClosed(t *testing.T) {
 	}
 	var absent *APIKeyService
 	var unavailable identity.UnavailableError
+	if _, err := absent.Update(t.Context(), apikey.UpdateRequest{}); !errors.As(err, &unavailable) {
+		t.Fatal("nil handle reached native metadata update")
+	}
 	if _, err := absent.Create(t.Context(), apikey.CreateRequest{}); !errors.As(err, &unavailable) {
 		t.Fatal("nil handle reached native issuance")
 	}
@@ -49,6 +52,9 @@ func TestAPIKeySelectionAndRetainedHandlesFailClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	caller := apikey.Authentication{TenantID: "tenant"}
+	if _, err := handle.Update(t.Context(), apikey.UpdateRequest{Authentication: caller}); !errors.As(err, &unavailable) {
+		t.Fatal("retained closed handle reached native metadata update")
+	}
 	if _, err := handle.Get(t.Context(), apikey.GetRequest{Authentication: caller}); !errors.As(err, &unavailable) {
 		t.Fatal("retained closed handle reached native metadata get")
 	}

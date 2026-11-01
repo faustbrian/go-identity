@@ -31,7 +31,7 @@ func TestReferencePostgresLegacyNoExpiryAPIKeyHTTPS(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{apiKey: true, apiKeyLegacy: true, apiKeyLegacyNoExpiry: true, postgresBaseline: true})
 }
 
-func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workers []deliverypg.WorkerConfig, config reference.ReferenceConfig, originalStores reference.StoreSet, originalFeatures reference.FeatureSet, caller apikey.Authentication, user identity.UserID, noExpiry, metadataRead bool) {
+func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workers []deliverypg.WorkerConfig, config reference.ReferenceConfig, originalStores reference.StoreSet, originalFeatures reference.FeatureSet, caller apikey.Authentication, user identity.UserID, noExpiry, metadataRead, update bool) {
 	t.Helper()
 	key := func(label string) identity.IdempotencyKey {
 		t.Helper()
@@ -200,6 +200,10 @@ func proveReferenceLegacyAPIKey(t *testing.T, ctx context.Context, f liveStores,
 	t.Cleanup(api.Close)
 	client := api.Client()
 	client.Timeout = 5 * time.Second
+	if update {
+		proveReferenceKeyUpdate(t, ctx, f, c, deps, workers, config, stores, features, caller, apikey.Authentication{}, "", canonical, raw)
+		return
+	}
 	if metadataRead {
 		if status, out := referenceMetadataHTTPS(t, ctx, api, "/v1/apikey/get?keyID="+string(canonical), caller.Bearer.Token()); status != 200 || out.Key.ID != canonical || out.Key.ExpiresAt == nil != noExpiry || out.Key.ExpiresAt != nil && !out.Key.ExpiresAt.Equal(record.ExpiresAt) {
 			t.Fatal("legacy metadata changed canonical identity or absent expiry", status, out.Error)

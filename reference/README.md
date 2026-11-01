@@ -2,6 +2,14 @@
 
 ## Optional API-key backend
 
+`HTTPAPIKey.Update` independently selects keyed name/permission replacement
+through strict password-bearer HTTPS. `APIKeys().Update` exposes the same native
+owner with graph startup/tenant/shutdown guards. Current fresh self or explicitly
+selected organization management authority is mandatory; grants can only narrow,
+and owner, credential and expiry remain unchanged. Responses contain copied
+metadata, preserving legacy absent expiry, never a key secret or digest. See
+the [update walkthrough](APIKEY.md#name-and-permission-updates).
+
 Select native `APIKey` and independently select `HTTPAPIKey.Create`, `Rotate`
 and `Revoke` for self-owned password-bearer keys. Modern issuance remains the
 default; explicit `APIKey.LegacyConfiguration` and `ValidateCanonicalKeyID`

@@ -45,7 +45,7 @@ func (referenceOrganizationKeyPolicy) Decide(ctx context.Context, c authorizatio
 	if string(r.Tenant) == otpTenant && c.PolicyRevision == 9 && (r.Subject.Kind == authorization.SubjectUser || r.Subject.Kind == authorization.SubjectAPIKey) {
 		if r.Resource.Type == "organization-api-key" {
 			switch r.Action {
-			case "identity.apikey.create", "identity.apikey.import", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.get", "identity.apikey.list", "invoice.read":
+			case "identity.apikey.create", "identity.apikey.import", "identity.apikey.rotate", "identity.apikey.delete", "identity.apikey.update", "identity.apikey.get", "identity.apikey.list", "invoice.read":
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
 		}
@@ -73,7 +73,7 @@ func configureReferenceOrganizationKey(t *testing.T, c *reference.StoreConfigura
 // The existing genuine baseline supplies registered/verified humans. Only
 // deployment policy and sender/provider seams are configured; all domain
 // stores, migration plans, session issuance and handlers remain public owners.
-func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, baseline reference.FeatureSet, workers reference.WorkerSet, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, client *http.Client, base, origin string, messages <-chan string, user identity.UserID, upgrade, metadataRead bool) {
+func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, baseline reference.FeatureSet, workers reference.WorkerSet, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, client *http.Client, base, origin string, messages <-chan string, user identity.UserID, upgrade, metadataRead, update bool) {
 	t.Helper()
 	recipient := registerReferenceOrganizationHuman(t, ctx, client, base, origin, baseline, workers, messages)
 	var retainedSelf apikey.Record
@@ -251,6 +251,10 @@ func proveReferenceOrganizationKey(t *testing.T, ctx context.Context, f liveStor
 		}
 	}
 	verify(secret, true)
+	if update {
+		proveReferenceKeyUpdate(t, ctx, f, c, deps, workerConfigs, config, stores, features, second, creator, apikey.OrganizationID(orgID), issued.Key.ID, issued.Secret)
+		return
+	}
 	if metadataRead {
 		proveReferenceOrganizationMetadata(t, ctx, f, api, orgID, issued.Key.ID, creator, second)
 	}

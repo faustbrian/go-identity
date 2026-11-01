@@ -48,7 +48,7 @@ stores.HTTPAPIKey = &reference.HTTPAPIKeyConfiguration{
 secret-rate namespace/key as other selected secret integrations when budgets
 must be shared. Changing that identity resets budget and debit correlation.
 Keep transport limits at least 64 KiB body, 16 KiB decoded data, 72 fields and
-depth 2 when Create is enabled; selected scalar-only mutations can use depth 1.
+depth 2 when Create or Update is enabled; selected scalar-only mutations can use depth 1.
 
 ## Explicit migration and startup
 
@@ -89,6 +89,46 @@ verification and permission narrowing. This is not session authentication.
 Current user/configuration/policy and the original sensitive-proof freshness
 remain native-owned; retries and recent reads cannot renew that freshness.
 Responses are non-cacheable and contain no session cookie or CSRF credential.
+
+## Name and permission updates
+
+Independently select `HTTPAPIKey.Update = true`. It uses the same immutable
+secret-rate namespace/key and real protected native owner, but generates no
+credential. The guarded direct method is `FeatureSet.APIKeys().Update`.
+No additional migration or metadata-paging selection is required.
+
+Send exactly one password bearer and original `Idempotency-Key` to
+`POST /v1/apikey/update` with this closed JSON shape:
+
+```json
+{
+  "keyID": "the-existing-canonical-key-id",
+  "expectedVersion": 1,
+  "name": "renamed integration",
+  "permissions": ["invoice.read"]
+}
+```
+
+Use the actual current record version. Permissions must be an explicit sorted
+distinct array; omission/null denies. Rename-only retains the existing grant;
+a strict subset narrows it and `[]` removes every permission. Current policy
+may deny a retained permission; update cannot add or restore grants. The
+existing credential verifies unchanged after rename and enforces a narrowed
+grant immediately. Fresh native sensitive-change authority is still required.
+
+Organization updates require both native and HTTP organization selection and
+an explicit `organizationID` in the body. Creator removal denies that human's
+update/recovery authority without revoking the independently owned key; another
+current authorized owner can manage it. No owner, credential, configuration,
+lineage or expiry edits, arbitrary metadata or quota fields are accepted.
+
+Committed `key` is the original copied post-update metadata, not fresh authority.
+It includes `expiresAt: null` for a selected legacy key with no expiry, and no
+secret/digest field. Same-input/key replay after reconstruction retains the
+original command and snapshot. Unknown commitment returns safe original recovery
+scope without a snapshot; native `Recover`/`RecoverOrganization` observes status
+under current authority without re-executing the update. HTTP adds no recovery
+route, automatic retry, secret reveal or replacement credential.
 
 ## Digest-only legacy import
 

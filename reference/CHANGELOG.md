@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add guarded native API-key Update and independently selected strict-bearer
+  HTTPS name/permission replacement. Current fresh self/organization authority,
+  exact version and original-key custody remain native-owned. Renaming preserves
+  credential authority; narrowing immediately restricts the existing credential.
+  Safe original metadata and recovery preserve selected absent legacy expiry
+  without generating or disclosing key material. No additional migration is needed.
+
 - Add guarded native API-key Get/List and independently selected bearer HTTP
   metadata reads. Optional user/organization paging histories preserve existing
   keys and installed migration prefixes. Read-only composition borrows the

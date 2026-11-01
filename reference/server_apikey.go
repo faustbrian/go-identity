@@ -20,7 +20,10 @@ import (
 // StandaloneRate only when none exists; parallel emergency budgets are rejected.
 type HTTPAPIKeyConfiguration struct {
 	Create, Rotate, Revoke bool
-	Get, List              bool
+	// Update independently selects exact name/permission replacement. It uses
+	// the existing keyed secret-rate owner and never generates a credential.
+	Update    bool
+	Get, List bool
 	// OrganizationOwned separately selects organization management on HTTP.
 	// Native organization support alone must not expand transport authority.
 	OrganizationOwned bool
@@ -59,7 +62,7 @@ func composeAPIKeyHTTP(c StoreConfiguration, owner *apiKeyState, shared *httpRat
 	}
 	h := *c.HTTPAPIKey
 	invalid := identity.InvalidInputError{Field: "reference_http_api_key"}
-	mutations, reads := h.Create || h.Rotate || h.Revoke, h.Get || h.List
+	mutations, reads := h.Create || h.Rotate || h.Revoke || h.Update, h.Get || h.List
 	if owner == nil || shared == nil || c.HTTPRate == nil || !mutations && !reads || h.OrganizationOwned && !owner.organization || h.List && !owner.metadataPaging || !reads && h.StandaloneRate != nil {
 		return nil, invalid
 	}
@@ -122,7 +125,7 @@ func (s *Server) apiKeyFeature(network identityhttp.NetworkConfig) (*identityhtt
 			organizationCreator = native
 		}
 	}
-	feature, err := apikeyhttp.NewFeature(apikeyhttp.FeatureConfig{Config: apikeyhttp.Config{Network: network, Sessions: f.session.reader, Creator: native, OrganizationCreator: organizationCreator, Rotator: native, Revoker: native, Getter: native, Lister: native, SecretRate: h.limiter, SafeRate: h.safe, Now: time.Now, MaximumDuration: n.maximum}, Create: h.config.Create, Rotate: h.config.Rotate, Revoke: h.config.Revoke, Get: h.config.Get, List: h.config.List, OrganizationOwned: h.config.OrganizationOwned})
+	feature, err := apikeyhttp.NewFeature(apikeyhttp.FeatureConfig{Config: apikeyhttp.Config{Network: network, Sessions: f.session.reader, Creator: native, OrganizationCreator: organizationCreator, Rotator: native, Revoker: native, Updater: native, Getter: native, Lister: native, SecretRate: h.limiter, SafeRate: h.safe, Now: time.Now, MaximumDuration: n.maximum}, Create: h.config.Create, Rotate: h.config.Rotate, Revoke: h.config.Revoke, Update: h.config.Update, Get: h.config.Get, List: h.config.List, OrganizationOwned: h.config.OrganizationOwned})
 	if err != nil {
 		return nil, err
 	}

@@ -139,7 +139,7 @@ func proveReferenceAPIKeyOnlyRateMigrations(t *testing.T, ctx context.Context, f
 
 // Reuse the actual registration/verification/browser baseline, then explicitly
 // select native bearer signin. No token is reclassified and no CSRF is stripped.
-func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, server *reference.Server, client *http.Client, origin string, user identity.UserID, cookies []*http.Cookie, upgrade, legacy, noExpiry, metadataRead bool) {
+func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, deps reference.ReferenceDependencies, workerConfigs []deliverypg.WorkerConfig, config reference.ReferenceConfig, server *reference.Server, client *http.Client, origin string, user identity.UserID, cookies []*http.Cookie, upgrade, legacy, noExpiry, metadataRead, update bool) {
 	t.Helper()
 	if upgrade {
 		for _, op := range server.OpenAPI().Operations() {
@@ -229,7 +229,7 @@ func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c ref
 		return
 	}
 	if legacy {
-		proveReferenceLegacyAPIKey(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller, user, noExpiry, metadataRead)
+		proveReferenceLegacyAPIKey(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller, user, noExpiry, metadataRead, update)
 		return
 	}
 	selectedServer, err := reference.NewServer(config, deps, features)
@@ -316,6 +316,10 @@ func proveReferenceAPIKey(t *testing.T, ctx context.Context, f liveStores, c ref
 		}
 	}
 	verify(created.Secret, true)
+	if update {
+		proveReferenceKeyUpdate(t, ctx, f, c, deps, workerConfigs, config, stores, features, caller, apikey.Authentication{}, "", created.Key.ID, created.Secret)
+		return
+	}
 	// Restart only the owned graph, retaining the native primary, immutable
 	// custody and original command. The retry must not mint or reveal again.
 	nextStores, nextFeatures := composeReferenceAPIKeyGraph(t, c, deps, workerConfigs)

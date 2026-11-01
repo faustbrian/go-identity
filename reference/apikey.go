@@ -111,6 +111,18 @@ func (a *APIKeyService) Revoke(ctx context.Context, r apikey.Revocation) (identi
 	return n.native.Revoke(w, r)
 }
 
+// Update replaces only a key's name and non-expanding permission ceiling under
+// native current fresh authority. It retains graph lifetime/tenant guards and
+// exact original-key recovery, returning copied metadata without key material.
+func (a *APIKeyService) Update(ctx context.Context, r apikey.UpdateRequest) (apikey.UpdateResult, error) {
+	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
+	if err != nil {
+		return apikey.UpdateResult{}, err
+	}
+	defer done()
+	return n.native.Update(w, r)
+}
+
 // Recover observes the exact original command under current native authority.
 func (a *APIKeyService) Recover(ctx context.Context, r apikey.RecoveryRequest) (identity.CommandResult, error) {
 	w, done, n, err := a.enter(ctx, r.Authentication.TenantID)
@@ -176,3 +188,4 @@ var _ apikey.Service = (*APIKeyService)(nil)
 var _ apikey.OrganizationService = (*APIKeyService)(nil)
 var _ apikey.LegacyImporter = (*APIKeyService)(nil)
 var _ apikey.MetadataService = (*APIKeyService)(nil)
+var _ apikey.Updater = (*APIKeyService)(nil)
