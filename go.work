@@ -28,6 +28,7 @@ use (
 	./magiclink/postgres
 	./mfa
 	./mfa/postgres
+	./oauth
 	./otp
 	./otp/postgres
 	./password
