@@ -74,6 +74,26 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 			items[i] = cborText(v)
 		}
 		payload["required_consumers"] = cborArray(items)
+	case isCounterLink(c):
+		s, counters, _ := c.AccountLinkCounterCommand()
+		binding = s.Binding
+		var err error
+		payload, err = encodeLink(s, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
+		network, err := commandSecret(key, "account.link.counter.network", []byte(counters.Network), 128)
+		if err != nil || !postgresExactTime(counters.PreparedAt) {
+			return claimRequest{}, codecError()
+		}
+		versions := make([][]byte, len(counters.KeyVersions))
+		for i, version := range counters.KeyVersions {
+			versions[i] = cborUint(uint64(version))
+		}
+		payload["protected_counters"] = cborMap(map[string][]byte{
+			"network": cborBytes(network), "prepared_at": cborInt(counters.PreparedAt.UnixMicro()),
+			"key_versions": cborArray(versions),
+		})
 	case isLink(c):
 		s, _ := c.LinkAccount()
 		binding = s.Binding
@@ -263,15 +283,16 @@ func commandSafeFields(b identity.CommandBinding, feature *identity.FeatureOpera
 	return cborMap(scope)
 }
 
-func isCreation(c identity.Command) bool   { _, ok := c.CreateUser(); return ok }
-func isUpdate(c identity.Command) bool     { _, ok := c.UpdateUser(); return ok }
-func isProfile(c identity.Command) bool    { _, ok := c.UpdateProfile(); return ok }
-func isStatus(c identity.Command) bool     { _, ok := c.UserStatus(); return ok }
-func isLink(c identity.Command) bool       { _, ok := c.LinkAccount(); return ok }
-func isUnlink(c identity.Command) bool     { _, ok := c.UnlinkAccount(); return ok }
-func isIdentifier(c identity.Command) bool { _, ok := c.ChangeIdentifier(); return ok }
-func isPrivacy(c identity.Command) bool    { _, ok := c.RequestPrivacyExport(); return ok }
-func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return ok }
+func isCreation(c identity.Command) bool    { _, ok := c.CreateUser(); return ok }
+func isUpdate(c identity.Command) bool      { _, ok := c.UpdateUser(); return ok }
+func isProfile(c identity.Command) bool     { _, ok := c.UpdateProfile(); return ok }
+func isStatus(c identity.Command) bool      { _, ok := c.UserStatus(); return ok }
+func isLink(c identity.Command) bool        { _, ok := c.LinkAccount(); return ok }
+func isCounterLink(c identity.Command) bool { _, _, ok := c.AccountLinkCounterCommand(); return ok }
+func isUnlink(c identity.Command) bool      { _, ok := c.UnlinkAccount(); return ok }
+func isIdentifier(c identity.Command) bool  { _, ok := c.ChangeIdentifier(); return ok }
+func isPrivacy(c identity.Command) bool     { _, ok := c.RequestPrivacyExport(); return ok }
+func isFeature(c identity.Command) bool     { _, ok := commandFeature(c); return ok }
 
 // Explicit native selection is necessary: the legacy Feature accessor denies
 // password custody so older coordinators cannot silently omit its fingerprint.

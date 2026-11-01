@@ -3,6 +3,22 @@
 Experimental, Go 1.27. This module is being built as the durable owner of risk
 evidence and decisions. It is **not yet an executable durable risk service**.
 
+## Canonical account-link counters
+
+`PrepareAccountLinkCommandCounters` accepts a bare explicit self-user identity
+link command and trusted server-resolved network attribution. User and session
+must exactly match the canonical command; undeclared dimensions are rejected.
+The returned opaque variant preserves its signed proof and original primary
+preparation time. Existing counter restoration authenticates scope and retained
+key aliases. As with feature counters, the logical counter fingerprint excludes
+preparation time: the kernel's keyed command binds it, and the current-check
+phase compares the locked charge's exact original `prepared_at`. Stateless
+restoration alone grants neither allowance nor permission to renew freshness.
+It remains a preparatory contract: the protected native link owner must compose
+provider/session/policy checks,
+same-command reservation, required audit/effects and recovery. No independent
+counter transaction or generic feature-command conversion is introduced.
+
 ## Implemented boundary
 
 - `ValidateCounterOnlyOperation(action)` checks this repository's configured

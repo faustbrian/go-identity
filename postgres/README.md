@@ -69,6 +69,13 @@ This is an internal storage phase, not a callable account-link service: public
 canonical-link execution remains disabled until its proof, original session,
 policy, risk, audit/lifecycle and recovery participants are integrated.
 
+Native command fingerprinting recognizes the separate canonical protected-link
+counter variant. It binds network attribution through a keyed, domain-separated
+commitment and retains the original preparation time and digest-version aliases.
+The original link command ID, scope, proof and bare-link byte format stay intact;
+safe journal metadata contains no raw network. This codec support does not enable
+unsupported reservation, `Begin`, or a public linking service by itself.
+
 ## Source-version snapshot imports
 
 Trusted feature schemas may explicitly select `FeatureVersionSnapshotImport`

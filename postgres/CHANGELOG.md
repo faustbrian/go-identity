@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind the canonical protected account-link command's original counter network,
+  preparation time and retained key aliases into its keyed command intent.
+  Raw attribution is not persisted; existing bare-link history is unchanged.
+  Fingerprinting alone does not enable reservation or protected link execution.
+
 - Add the private locked account-link storage phase: conserve exact provider
   ownership and tombstone history, atomically advance account/user/credential
   versions, and keep credential associations in the original transaction.

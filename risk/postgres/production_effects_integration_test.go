@@ -12,8 +12,8 @@ import (
 	auditpostgres "github.com/faustbrian/go-audit/postgres"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
-	outboxpostgres "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
+	outboxpostgres "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 )
 
 // One owned fresh database shares the exact production schema across selected

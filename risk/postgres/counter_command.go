@@ -319,6 +319,9 @@ func (r *Repository) ValidateCommandCounters(c identity.Command, p identitypostg
 }
 func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.CommandCounterPlan) (restoredCounter, error) {
 	fail := func() (restoredCounter, error) { return restoredCounter{}, risk.ErrInvalidCounterCommand }
+	if _, _, ok := c.AccountLinkCounterCommand(); ok {
+		return r.restoreAccountLinkCounter(c, p)
+	}
 	s, ok := counterCommandFeature(c)
 	if !ok || r == nil || r.counters == nil || p.PolicyVersion != r.policy {
 		return fail()
@@ -428,15 +431,29 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 	if count != expectedCount {
 		return fail()
 	}
+	aliases := make([]uint32, 0, len(versions)/4)
+	for off := 0; off < len(versions); off += 4 {
+		aliases = append(aliases, binary.BigEndian.Uint32(versions[off:]))
+	}
+	return r.restorePreparedCounter(scope, subject, capabilityID, at, aliases, p)
+}
+
+// Both canonical kernel commands and native feature commands use the same
+// retained-key reconstruction. A current key set cannot renew original time,
+// invent an old alias, or replace the original command's counter fingerprint.
+func (r *Repository) restorePreparedCounter(scope risk.Context, subject risk.Subject, capabilityID string, at time.Time, versions []uint32, p identitypostgres.CommandCounterPlan) (restoredCounter, error) {
+	fail := func() (restoredCounter, error) { return restoredCounter{}, risk.ErrInvalidCounterCommand }
+	if r == nil || r.counters == nil || p.PolicyVersion != r.policy || len(versions) < 1 || len(versions) > 4 {
+		return fail()
+	}
 	current, e := prepareNativeCounter(r.counterPolicy, scope, subject, capabilityID, at)
 	if e != nil {
 		return fail()
 	}
 	b := current.Bindings()
 	var selected []risk.CounterDigestKey
-	for off := 0; off < len(versions); off += 4 {
-		version := binary.BigEndian.Uint32(versions[off:])
-		if version == 0 || off > 0 && binary.BigEndian.Uint32(versions[off-4:]) <= version {
+	for index, version := range versions {
+		if version == 0 || index > 0 && versions[index-1] <= version {
 			return fail()
 		}
 		found := false

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Prepare and restore protected counters for canonical explicit self-user
+  account-link commands without converting them into generic feature commands.
+  Bind the exact original user/session, trusted network, time and retained digest
+  aliases; changed context, missing keys and expired original intervals deny.
+  Existing charge/current-check/recovery owners remain responsible for durable
+  allowance, and this preparation alone enables no account-link execution.
+
 - Expose `Repository.ValidateCounterOnlyOperation` for native workflows without
   provider-evidence admission. It validates the repository's actual protected
   velocity-only profile and rejects unenforced mandatory provider signals,
