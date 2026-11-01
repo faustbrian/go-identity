@@ -25,7 +25,7 @@ jobs:
         with:
           go-version-file: .go-version
           cache: false
-      - uses: faustbrian/go-library-tools/.github/actions/setup-golib@09b43f49385650c44dd4151a12b0877ca6b48a88 # v2.5.1
+      - uses: faustbrian/go-library-tools/.github/actions/setup-golib@19b3394729db02c823fadf127398c1ffcb101760 # v2.5.3
         with:
           source_bootstrap: 'false'
       - name: Verify planning structure and every-change secrets
@@ -64,7 +64,7 @@ jobs:
           export GOCACHE="${GOLIB_TASK_CACHE_ROOT}/cache"
           export GOMODCACHE="${GOLIB_TASK_CACHE_ROOT}/mod"
           export GOTMPDIR="${TMPDIR}"
-          # Compile the same pinned scanner used by golib v2.5.1 before the
+          # Compile the same pinned scanner used by golib v2.5.3 before the
           # scan deadline. Only verifiers borrow these isolated owned caches;
           # repository/runtime commands cannot populate them.
           timeout --signal=TERM --kill-after=5s 120s env \
@@ -91,7 +91,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          for path in "${RUNNER_TEMP}/golib-v2.5.1" "${RUNNER_TEMP}/golib-bin"; do
+          for path in "${RUNNER_TEMP}/golib-v2.5.3" "${RUNNER_TEMP}/golib-bin"; do
             if [[ -d "${path}" ]]; then
               chmod -R u+w "${path}"
               find "${path}" -depth -delete
