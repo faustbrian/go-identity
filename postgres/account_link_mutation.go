@@ -10,8 +10,8 @@ import (
 // These private storage phases do not authorize execution. The enclosing
 // protected owner must validate provider proof, current actor session/policy and
 // risk, consume one-use inputs, stage required effects, and own final closure.
-// Public Begin remains closed for canonical link commands until that composition
-// exists. There is no second transaction, journal or provider-owned link store.
+// The closed explicit-link profile requires those typed phases before Begin.
+// There is no second transaction, journal or provider-owned link store.
 func lockAccountLinkState(ctx context.Context, w Work, change identity.AccountLinkChange) (identity.AccountLinkState, time.Time, error) {
 	zero := identity.AccountLinkState{}
 	if err := w.usable(); err != nil {

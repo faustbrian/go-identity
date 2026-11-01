@@ -60,6 +60,7 @@ type workState struct {
 	status                    *identity.CommandResult
 	identifier                *identifierWorkResult
 	identifierAdmission       *identifierAdmissionProgress
+	accountLink               *accountLinkProgress
 	feature                   *FeatureRegistration
 	subjectType               string
 	featureAttempted          bool

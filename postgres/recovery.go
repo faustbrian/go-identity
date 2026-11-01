@@ -170,7 +170,7 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if observed.until.After(observed.now) {
 		return result, nil
 	}
-	if result.Feature == nil && q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" && !statusOperation(q.OperationID) {
+	if result.Feature == nil && q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" && q.OperationID != "identity.account.link-token" && !statusOperation(q.OperationID) {
 		return result, identity.UnavailableError{}
 	}
 	fingerprint := [32]byte(observed.fingerprint)
@@ -189,6 +189,9 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 		admitted, e = c.registry.admitKernelPlan(result.Binding, fingerprint, plan)
 	}
 	if e != nil {
+		return result, identity.UnavailableError{}
+	}
+	if q.OperationID == "identity.account.link-token" && admitted.accountLink == nil {
 		return result, identity.UnavailableError{}
 	}
 	if !preparationOnly && admitted.otp != nil && otpExecutionOwner(admitted) == nil {

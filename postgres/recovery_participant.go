@@ -209,6 +209,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		return RecoveryUnknown, invalidWork()
 	}
 	b, err := recovery.Scope()
+	if err == nil && recovery.state.plan.accountLink != nil {
+		return recoverAccountLink(ctx, recovery)
+	}
 	if err == nil && recovery.state.plan.feature != nil {
 		if recovery.state.plan.feature.Operation == phoneChangeOperation() {
 			return recoverPhoneChange(ctx, recovery)

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/faustbrian/go-audit"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/jackc/pgx/v5"
 )
@@ -253,7 +254,14 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 	if err != nil {
 		return false, err
 	}
-	records, err := featureMutationAudits(ctx, p, now, "denied")
+	var records []audit.Record
+	if p.accountLink != nil {
+		var record audit.Record
+		record, err = kernelMutationAudit(ctx, p.binding, p.lifecycle.BeforeVersion, now, "denied")
+		records = []audit.Record{record}
+	} else {
+		records, err = featureMutationAudits(ctx, p, now, "denied")
+	}
 	if err != nil {
 		return false, err
 	}
@@ -268,7 +276,7 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 	if work.state.rows != nil || work.usable() != nil {
 		return false, invalidWork()
 	}
-	result := featureOutcome(p.binding, &p.feature.Operation, identity.CommitOutcomeNotCommitted, 0)
+	result := featureOutcome(p.binding, q.feature, identity.CommitOutcomeNotCommitted, 0)
 	if err = terminalizeJournal(ctx, tx, q, j, owner, result, "denied"); err != nil {
 		return false, err
 	}

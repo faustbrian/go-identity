@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the protected explicit-self account-link unit of work using the existing
+  coordinator, counters and one-use capability phases. Identity link/credential
+  changes, provider effects, account-target audit and lifecycle commit together;
+  ignored denials and late admission/finalization failures roll back. Exact
+  replay preserves the original receipt, and expired pending recovery requires
+  unanimous native noncommit evidence before release. Complete typed provider,
+  current-risk and recovery phases are mandatory; this does not yet supply an
+  OIDC callback/session workflow or implicit/administrative/unlink execution.
+
 - Bind the canonical protected account-link command's original counter network,
   preparation time and retained key aliases into its keyed command intent.
   Raw attribution is not persisted; existing bare-link history is unchanged.

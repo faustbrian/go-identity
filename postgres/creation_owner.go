@@ -284,6 +284,8 @@ func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before 
 	target, kind := string(b.UserID), "user"
 	if strings.HasPrefix(b.OperationID, "identity.identifier.") {
 		target, kind = b.RecordID, "identifier"
+	} else if strings.HasPrefix(b.OperationID, "identity.account.") {
+		target, kind = b.RecordID, "account"
 	}
 	return securityMutationAudit(ctx, b, before, before+1, now, class, kernelCommandAudit(b.OperationID), kind, target, retention, false)
 }

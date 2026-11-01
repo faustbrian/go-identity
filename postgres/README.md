@@ -1,5 +1,41 @@
 # Identity PostgreSQL
 
+## Protected explicit account linking
+
+`NewAccountLinkUnitOfWork(coordinator, repository,
+AccountLinkUnitOfWorkConfig{RetentionPolicyVersion: revision})` implements the
+root `identity.UnitOfWork` for `AccountLinkService`. The exact repository,
+audit/lifecycle, capability, current-counter and native OAuth account-link
+participants must already be registered with their complete typed recovery
+and execution phases. Missing phases fail before reservation. This is trusted
+backend composition, not an application SQL gateway or provider proof API.
+
+The native `AccountLinkContributor` enriches the original signed command with
+its retained counter context without changing that intent. Current provider,
+original session, policy and factor admission run inside the kernel transaction;
+the native owner must enforce them rather than accepting caller assertions.
+`AccountLinkWork` expires with each invocation and poisons ignored denials.
+It reuses the kernel's directory, credential and authorization checks. Its
+credential-authority getter permits only the original epoch initially and this
+transaction's actual successor at the final check, never a refreshed session.
+
+One coordinator reserves the command/counters/proof, applies identity-owned
+link/credential changes and provider-owned effects, persists audit/lifecycle,
+rechecks admission and finalizes proof/provider custody. A failed phase rolls
+back all provisional changes. Required denial auditing and proof release follow
+the existing proven-rollback protocol. Exact replay returns its historical
+receipt. Expired pending recovery requires every frozen owner to prove noncommit;
+provider uncertainty leaves custody reserved. Current rows never reconstruct a
+successful receipt. Historical bare-link bytes remain unchanged.
+
+This native transaction contract does **not** implement an OIDC callback or
+session-producing social flow. OAuth must still supply actual provider/session
+composition, reserve state before PKCE decryption/exchange, and retain original
+exchange output through the same journal. No network exchange is permitted in
+an open `AccountLinkWork`; no feature wrapper or second ledger substitutes for
+the root link owner. Implicit/administrative linking and unlink remain outside
+this explicit-self execution profile.
+
 ## Provider-account storage and trusted reads
 
 Append `AccountMigrationSource{Base: installedHistory, Version: nextVersion}`
@@ -65,9 +101,9 @@ Relinking retires only disabled credential associations on that exact account;
 credential-reference tombstones and their versions remain stored. Association
 rows describe current access, not historical credential lineage. This prevents
 repeated same-ID relinks from reattaching the entire retired credential history.
-This is an internal storage phase, not a callable account-link service: public
-canonical-link execution remains disabled until its proof, original session,
-policy, risk, audit/lifecycle and recovery participants are integrated.
+This storage phase alone is not a callable account-link service. The protected
+unit of work above requires proof, original session/policy, risk, required
+effects and recovery participants; missing native composition fails closed.
 
 Native command fingerprinting recognizes the separate canonical protected-link
 counter variant. It binds network attribution through a keyed, domain-separated

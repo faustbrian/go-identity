@@ -14,9 +14,9 @@ import (
 // the exact command and its authoritative retained-key fingerprint. Callers
 // must not mutate its slices during admission. Admission owns copies, so later
 // changes do not affect execution. Zero is invalid. This value conveys no
-// transaction authority. Typed Capability input can be frozen and inspected,
-// but its execution phases remain under development; no one-time contributor
-// can be admitted by name or declaration alone.
+// transaction authority. Typed Capability input can be frozen and inspected;
+// execution requires its complete selected native profile, never contributor
+// names or declaration metadata alone.
 // Lifecycle, when present, requires the typed outbox contributor and declares
 // the successful mutation notification. Nil preserves the older audit-only
 // admission profile; it is not sufficient for a future successful mutation
@@ -108,6 +108,9 @@ type CommandPlan struct {
 // field. Digest itself is excluded. This is binding, not authentication or
 // proof that the fingerprint is authoritative: the sole coordinator must
 // resolve retained fingerprint keys and compute it from the typed command.
+// Canonical explicit-self account links use a distinct closed envelope with
+// mandatory counter and native provider declarations in addition to the four
+// kernel/capability participants. This preserves older kernel-plan bytes.
 // Exactly one identity/postgres and one audit/postgres contributor are required;
 // a lifecycle declaration additionally requires exactly one outbox/postgres
 // identity.lifecycle v1 contributor. A capability declaration requires lifecycle
@@ -131,6 +134,9 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
 	if plan.APIKeyVerification != nil || plan.OrganizationInvitationOrigin != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.PasskeyRegistration != nil || plan.MagicLinkRequestAcceptance {
 		return nil, invalidPlan()
+	}
+	if accountLinkBinding(binding) && plan.CommandCounters != nil {
+		return encodeAccountLinkPlan(binding, fingerprint, plan)
 	}
 	if plan.Delivery != nil {
 		return encodeDeliveryWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
@@ -214,6 +220,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
+	accountLink                *registeredContributor
 	apiKeyVerification         *APIKeyVerificationPlan
 	invitationOrigin           *OrganizationInvitationOriginPlan
 	mfaCompletion              *MFACompletionPlan
@@ -276,6 +283,31 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 	}
 	var lifecycle *LifecyclePlan
 	var checker *registeredContributor
+	var linkOwner *registeredContributor
+	var counters *CommandCounterPlan
+	if p.CommandCounters != nil {
+		if !accountLinkBinding(binding) || len(entries) != 6 {
+			return nil, invalidPlan()
+		}
+		for _, entry := range entries {
+			if _, ok := entry.contributor.(RecoveryContributor); !ok {
+				return nil, invalidPlan()
+			}
+		}
+		participant, ok := entries[5].contributor.(AccountLinkContributor)
+		if !ok || !sameParticipant(participant, participant) {
+			return nil, invalidPlan()
+		}
+		if _, ok := entries[3].contributor.(CapabilityExecutionContributor); !ok {
+			return nil, invalidPlan()
+		}
+		if _, ok := entries[4].contributor.(RecoveryContributor); !ok {
+			return nil, invalidPlan()
+		}
+		linkOwner = &entries[5]
+		copy := *p.CommandCounters
+		counters = &copy
+	}
 	if p.IdentifierAdmission != nil {
 		selected, err := r.selectContributors([]ContributorDescriptor{*p.IdentifierAdmission})
 		if err != nil || len(selected) != 1 {
@@ -296,7 +328,11 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 		snapshot := *p.Capability
 		capability = &snapshot
 	}
-	return &admittedKernelPlan{identifierAdmission: checker, registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
+	admitted := &admittedKernelPlan{accountLink: linkOwner, counters: counters, identifierAdmission: checker, registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}
+	if counters != nil && counterAdmissionParticipant(admitted) == nil {
+		return nil, invalidPlan()
+	}
+	return admitted, nil
 }
 
 func (p *admittedKernelPlan) belongsTo(r *ContributorRegistry) error {
