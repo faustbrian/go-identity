@@ -41,6 +41,24 @@ variant instead of silently dropping its required context. This is not a social
 login service or an enabled execution path; provider/session/policy, risk and
 atomic effects/recovery still require their concrete owning composition.
 
+## Original OAuth account-link preparation
+
+`NewAccountLinkPreparationCommand` retains the final explicit-self root link
+binding and known provider/flow/session/counter intent before exchange has
+established a provider subject or signed link proof. `NewOAuthCallbackInput`
+owns the original authorization code and raw RP state separately from the real
+session bearer. Configure provider-specific `OAuthCallbackLimits`; code bytes
+are preserved rather than normalized into OTP or bearer syntax. Borrow with
+`Use` only during bounded native preparation, and call `Destroy` on every exit.
+Aliases share destruction; callback borrows are private and cleared on return.
+
+Only `AccountLinkPreparationInput` selects this variant. Legacy link, counter-
+link and feature accessors reject it. It grants no exchange, session or provider
+authority and enables no endpoint. Native composition must bind original inputs
+in its existing keyed claim, reserve one-use state before exchange, retain
+authenticated output without replacing that claim, and atomically apply the
+canonical generated link and all required effects.
+
 ## Original password-reset preparation
 
 The separate `NewFeaturePhonePasswordResetInputCommand` and generated

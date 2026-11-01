@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add closed original OAuth callback custody and explicit-self account-link
+  preparation intent. Exact code/state/session inputs remain separate from a
+  generated provider subject or signed link proof; legacy command accessors
+  deny preparation rather than dropping its custody. Callback aliases share
+  destruction and bounded borrows are cleared on return. This does not enable
+  an OAuth endpoint or bypass native state reservation and current authority.
+
 - Retain explicit account-link counter preparation beside the original canonical
   link intent/proof in opaque command custody. Legacy link/feature accessors
   reject this variant so executors cannot silently omit attribution or counter

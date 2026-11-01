@@ -106,6 +106,7 @@ type Command struct {
 	unlink          *AccountUnlinkCommand
 	link            *AccountLinkCommand
 	linkCounters    *AccountLinkCounterContext
+	linkPreparation *accountLinkPreparationState
 	identifier      *IdentifierCommand
 	identifierProof *capability.Proof
 	feature         *featureCommandState
@@ -143,7 +144,7 @@ func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
 // CreateUser returns a private copy and false for an invalid/zero command.
 // Returned contents are for trusted adapters, never diagnostics or snapshots.
 func (c Command) CreateUser() (CreateUserCommand, bool) {
-	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
+	if c.create == nil || c.linkPreparation != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
 		return CreateUserCommand{}, false
 	}
 	spec := *c.create

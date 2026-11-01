@@ -15,6 +15,7 @@ func TestPhonePasswordResetMixedVariantsDenyEveryAccessor(t *testing.T) {
 	bearer := auth.NewBearerCredential("synthetic")
 	recovery, _ := auth.NewRecoveryCode("synthetic-recovery-code")
 	for _, corrupt := range []func(*Command){
+		func(c *Command) { c.linkPreparation = &accountLinkPreparationState{} },
 		func(c *Command) { c.create = &CreateUserCommand{} },
 		func(c *Command) { c.update = &UpdateUserCommand{} },
 		func(c *Command) { c.profile = &ProfileUpdateCommand{} },

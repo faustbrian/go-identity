@@ -123,7 +123,7 @@ func phonePasswordResetOperation(op FeatureOperation) bool {
 
 func (c Command) phonePasswordResetState(input bool) (phonePasswordResetCommandState, bool) {
 	f := c.feature
-	if f == nil || f.phonePasswordReset == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.privacy != nil || f.code != nil || f.recovery != nil || f.preAuthCookie != nil || f.sessionToken != nil || f.passwordHash != nil || f.passwordChange != nil || f.passwordReset != nil || f.passwordResetInput != nil || f.passwordSignin != nil || f.passwordSignup != nil || f.passwordSignupInput != nil || !phonePasswordResetOperation(f.spec.Operation) {
+	if f == nil || f.phonePasswordReset == nil || c.linkPreparation != nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.privacy != nil || f.code != nil || f.recovery != nil || f.preAuthCookie != nil || f.sessionToken != nil || f.passwordHash != nil || f.passwordChange != nil || f.passwordReset != nil || f.passwordResetInput != nil || f.passwordSignin != nil || f.passwordSignup != nil || f.passwordSignupInput != nil || !phonePasswordResetOperation(f.spec.Operation) {
 		return phonePasswordResetCommandState{}, false
 	}
 	state := f.phonePasswordReset()

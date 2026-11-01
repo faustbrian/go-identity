@@ -119,7 +119,7 @@ func NewPrivacyExportRequestCommand(c PrivacyExportRequestCommand) (Command, err
 // RequestPrivacyExport returns an owned projection copy only for this variant.
 // Contents are sensitive trusted-adapter input, never public diagnostics.
 func (c Command) RequestPrivacyExport() (PrivacyExportRequestCommand, bool) {
-	if c.privacy == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil {
+	if c.privacy == nil || c.linkPreparation != nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil {
 		return PrivacyExportRequestCommand{}, false
 	}
 	r := *c.privacy
