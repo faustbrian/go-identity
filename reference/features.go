@@ -86,6 +86,7 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	oauthWorkload                *oauthWorkloadState
 	apiKey                       *apiKeyState
 	httpAPIKey                   *apiKeyHTTPState
 	organization                 *organizationState
@@ -169,6 +170,12 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.OAuthWorkload != nil {
+		return s.composeOAuthWorkloads(c, d)
+	}
+	if c.HTTPOAuthWorkload != nil {
+		return identity.InvalidInputError{Field: "reference_http_oauth_workload"}
+	}
 	if c.Passkey != nil && c.Passkey.Standalone != nil {
 		return s.composeStandalonePasskeys(c, d)
 	}
@@ -1103,6 +1110,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	s.features.initializing = true
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); s.features.initializing = false; s.mu.Unlock() }()
+	if owner := s.features.oauthWorkload; owner != nil {
+		if err := owner.initialize(w); err != nil {
+			return err
+		}
+	}
 	if s.features.delivery != nil {
 		if err := s.features.delivery.Initialize(w); err != nil {
 			return err

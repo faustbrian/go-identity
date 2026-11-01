@@ -99,6 +99,11 @@ func (s *Server) readiness(ctx context.Context) Readiness {
 	if !present {
 		return deny("schema_incompatible")
 	}
+	if owner := state.features.oauthWorkload; owner != nil {
+		if err := owner.check(bounded); err != nil {
+			return deny("native_unavailable")
+		}
+	}
 	for _, tenant := range selected {
 		if err := tenant.health.check(bounded); err != nil {
 			return deny("native_unavailable")

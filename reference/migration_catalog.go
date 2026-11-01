@@ -156,6 +156,9 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 	if s.state.features == nil {
 		return catalog, nil
 	}
+	if s.state.features.oauthWorkload != nil {
+		return s.oauthWorkloadMigrationCatalog(ctx, catalog)
+	}
 	c := s.state.features.migrations
 	if c.signinSchema == "" && c.passwordSigninSchema != "" {
 		c.signinSchema = c.passwordSigninSchema
@@ -206,37 +209,9 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 	if c.singleSessionRevocation {
 		catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1417, schema: c.signinSchema, tables: []string{"session_revocations"}})
 	}
-	for _, source := range []struct {
-		owner     ModuleID
-		namespace string
-		files     fs.FS
-		guard     migrationGuard
-	}{
-		{"audit/postgres", "audit", auditpg.Migrations(), migrationGuard{version: 1, schema: "audit", roles: []string{"audit_writer", "audit_reader", "audit_retention"}}},
-		{"outbox/postgres", "outbox", outboxpg.Migrations(), migrationGuard{version: 1, schema: "public", tables: []string{"outbox_messages", "outbox_replay_audit"}}},
-		{"outbox/postgres/identity", "identity_outbox", lifecyclepg.Migrations(), migrationGuard{version: 1, schema: "public", tables: []string{"identity_outbox_bindings"}}},
-	} {
-		native, err := migrations.NewFSSource(ownedMigrationFiles{source.files}, ".")
-		if err != nil {
-			return nil, err
-		}
-		steps, err := native.Load(ctx)
-		if err != nil {
-			return nil, err
-		}
-		owned := migrationHistory{namespace: source.namespace, history: steps, owners: make(map[migrations.Version]ModuleID), guards: []migrationGuard{source.guard}}
-		if source.owner == "audit/postgres" {
-			owned.preflight = auditpg.FreshInstallPreflightSQL()
-			owned.guards = append(owned.guards,
-				migrationGuard{version: 2, schema: "audit", tables: []string{"records_accepted_order_idx", "retention_events_record_order_idx"}, columns: []string{"records.accepted_order", "retention_events.accepted_order"}},
-				migrationGuard{version: 4, schema: "audit", tables: []string{"record_identities"}, functions: []string{"reject_record_identity_change", "canonical_json_string", "canonical_timestamp", "canonical_string_map", "canonical_actor", "canonical_record", "validate_record", "capture_record_identity"}},
-				migrationGuard{version: 5, schema: "audit", tables: []string{"identity_command_bindings"}, functions: []string{"append_identity_record"}},
-				migrationGuard{version: 6, schema: "audit", functions: []string{"identity_record_status"}})
-		}
-		for _, step := range steps {
-			owned.owners[step.Version()] = source.owner
-		}
-		catalog = append(catalog, owned)
+	catalog, err = infrastructureMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
 	}
 	if c.resetSchema != "" {
 		reset, err := passwordResetMigrationCatalog(ctx, shared.history, c.resetSchema)
@@ -392,6 +367,44 @@ func (g migrationGuard) exists(ctx context.Context, s *storeState) (bool, error)
 	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.proname=ANY($6::text[]))
 	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_constraint k JOIN pg_catalog.pg_class c ON c.oid=k.conrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND (c.relname::text||'.'||k.conname::text)=ANY($7::text[]) AND ($8::text='' OR position($8::text IN pg_catalog.pg_get_constraintdef(k.oid))>0))`, g.schema, len(g.tables) == 0 && len(g.columns) == 0 && len(g.functions) == 0 && len(g.constraints) == 0, g.tables, g.roles, g.columns, g.functions, g.constraints, g.constraintValue).Scan(&exists)
 	return exists, err
+}
+
+// All profiles consume the same immutable audit/outbox sources and guards.
+// Selecting another profile must not create another installation authority.
+func infrastructureMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	for _, source := range []struct {
+		owner     ModuleID
+		namespace string
+		files     fs.FS
+		guard     migrationGuard
+	}{
+		{"audit/postgres", "audit", auditpg.Migrations(), migrationGuard{version: 1, schema: "audit", roles: []string{"audit_writer", "audit_reader", "audit_retention"}}},
+		{"outbox/postgres", "outbox", outboxpg.Migrations(), migrationGuard{version: 1, schema: "public", tables: []string{"outbox_messages", "outbox_replay_audit"}}},
+		{"outbox/postgres/identity", "identity_outbox", lifecyclepg.Migrations(), migrationGuard{version: 1, schema: "public", tables: []string{"identity_outbox_bindings"}}},
+	} {
+		native, err := migrations.NewFSSource(ownedMigrationFiles{source.files}, ".")
+		if err != nil {
+			return nil, err
+		}
+		steps, err := native.Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		owned := migrationHistory{namespace: source.namespace, history: steps, owners: make(map[migrations.Version]ModuleID), guards: []migrationGuard{source.guard}}
+		if source.owner == "audit/postgres" {
+			owned.preflight = auditpg.FreshInstallPreflightSQL()
+			owned.guards = append(owned.guards,
+				migrationGuard{version: 2, schema: "audit", tables: []string{"records_accepted_order_idx", "retention_events_record_order_idx"}, columns: []string{"records.accepted_order", "retention_events.accepted_order"}},
+				migrationGuard{version: 4, schema: "audit", tables: []string{"record_identities"}, functions: []string{"reject_record_identity_change", "canonical_json_string", "canonical_timestamp", "canonical_string_map", "canonical_actor", "canonical_record", "validate_record", "capture_record_identity"}},
+				migrationGuard{version: 5, schema: "audit", tables: []string{"identity_command_bindings"}, functions: []string{"append_identity_record"}},
+				migrationGuard{version: 6, schema: "audit", functions: []string{"identity_record_status"}})
+		}
+		for _, step := range steps {
+			owned.owners[step.Version()] = source.owner
+		}
+		catalog = append(catalog, owned)
+	}
+	return catalog, nil
 }
 
 // Only immutable embedded files supplied by the selected upstream owners enter

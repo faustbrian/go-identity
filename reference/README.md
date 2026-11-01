@@ -1,5 +1,15 @@
 # Identity reference composition
 
+## Optional workload OAuth backend
+
+`OAuthWorkload` selects a configured confidential Basic client-credentials
+profile over the real OAuth PostgreSQL owner. Select `HTTPOAuthWorkload.Token`,
+`Introspect` and `Revoke` independently for canonical HTTPS routes. The normal
+public graph owns native services, migrations, shared strict HTTP admission,
+current-authority checks and shutdown; consumers do not implement domain stores
+or handlers. No human login, OTP, delivery or device bootstrap is selected.
+See the [selected profile and operator walkthrough](OAUTH_WORKLOAD.md).
+
 ## Optional API-key backend
 
 `HTTPAPIKey.Update` independently selects keyed name/permission replacement

@@ -63,7 +63,7 @@ func (s storeMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 		return nil, err
 	}
 	legacy := append(kernel, history...)
-	if s.state.features == nil {
+	if s.state.features == nil || s.state.features.oauthWorkload != nil {
 		return legacy, nil
 	}
 	if err := s.state.features.migrations.validateNamespaces(s.state.config.Schema); err != nil {

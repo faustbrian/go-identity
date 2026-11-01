@@ -159,6 +159,13 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 		return nil, invalid
 	}
 	contributions := []identityhttp.Feature{probe}
+	oauthFeature, err := server.oauthWorkloadFeature(c.HTTP.Network)
+	if err != nil {
+		return nil, err
+	}
+	if oauthFeature != nil {
+		contributions = append(contributions, *oauthFeature)
+	}
 	apiKeyFeature, err := server.apiKeyFeature(c.HTTP.Network)
 	if err != nil {
 		return nil, err

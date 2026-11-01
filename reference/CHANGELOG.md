@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicitly selected configured-workload OAuth reference profile over
+  the public PostgreSQL service. Owned migration planning/application, explicit
+  one-time authority bootstrap, startup/readiness checks and independently
+  selected token/introspection/revocation HTTP routes require no human session,
+  OTP, delivery or device bootstrap. Existing profiles and histories are unchanged;
+  unsupported mixed profiles are rejected rather than partially activated.
+
 - Add guarded native API-key Update and independently selected strict-bearer
   HTTPS name/permission replacement. Current fresh self/organization authority,
   exact version and original-key custody remain native-owned. Renaming preserves
