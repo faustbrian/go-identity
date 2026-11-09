@@ -86,7 +86,7 @@ func NewAuthRateLimiter(c AuthRateConfig) (*AuthRateLimiter, error) {
 	}
 	operations := make(map[string]RatePolicyID)
 	for id, row := range readCatalog() {
-		if row.Rate == "rate.signup" || row.Rate == "rate.signin" || row.Rate == "rate.delivery" {
+		if row.Rate == "rate.signup" || row.Rate == "rate.signin" || row.Rate == "rate.delivery" || row.Rate == "rate.provider" || row.Rate == "rate.provider-callback" {
 			operations[id] = row.Rate
 		}
 		if row.Rate == "rate.auth" && (id == "identity.passkey.register-options" || id == "identity.passkey.signin-options") {

@@ -30,6 +30,12 @@ type Config struct {
 	// Nil preserves issuance-only setup. All retained keys are copied; removal
 	// requires durable retirement, which this initial profile does not yet expose.
 	CommandCounters *risk.CommandCounterPolicyConfig
+	// RetainCounterKeyVersions records nonsecret original aliases with each
+	// new charge in the same root transaction. Install
+	// CounterKeyVersionMigrationSource first. Historical NULL metadata cannot
+	// be reconstructed or backfilled from current keys. False retains legacy
+	// SQL without requiring the optional suffix.
+	RetainCounterKeyVersions bool
 	// EnforceLockouts selects current durable lockout admission for protected
 	// command counters. Install LockoutMigrationSource first. False preserves the
 	// earlier counter-only development profile, not complete risk enforcement.
@@ -84,17 +90,18 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // domain/factor authority. Counter retirement and pruning remain unsupported.
 // Selection is not a complete consumer workflow service.
 type Repository struct {
-	schema          string
-	policy          uint64
-	keys            []risk.EvidenceKey
-	cipher          recordCipher
-	counters        *risk.CommandCounterPolicyConfig
-	counterPolicy   risk.CommandCounterPolicy
-	useIssuer       *risk.PhoneEvidenceIssuer
-	useCounters     *durableCounterState
-	lockouts        bool
-	lockoutMutation *lockoutMutationState
-	captcha         []risk.CaptchaEvidenceCustody
+	schema             string
+	policy             uint64
+	keys               []risk.EvidenceKey
+	cipher             recordCipher
+	counters           *risk.CommandCounterPolicyConfig
+	counterPolicy      risk.CommandCounterPolicy
+	counterKeyVersions bool
+	useIssuer          *risk.PhoneEvidenceIssuer
+	useCounters        *durableCounterState
+	lockouts           bool
+	lockoutMutation    *lockoutMutationState
+	captcha            []risk.CaptchaEvidenceCustody
 }
 
 // Format hides runtime custody configuration and retained key material.
@@ -114,6 +121,9 @@ var _ identitypostgres.FeatureExecutionContributor = (*Repository)(nil)
 // The returned instance must be enlisted in the same coordinator registry used
 // by execution and recovery; matching descriptor names do not confer authority.
 func NewRepository(c Config) (*Repository, error) {
+	if c.RetainCounterKeyVersions && c.CommandCounters == nil {
+		return nil, risk.ErrInvalidPolicy
+	}
 	if c.EnforceLockouts && c.CommandCounters == nil {
 		return nil, risk.ErrInvalidPolicy
 	}
@@ -135,6 +145,7 @@ func NewRepository(c Config) (*Repository, error) {
 		return nil, err
 	}
 	r := &Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), policy: c.PolicyVersion, keys: append([]risk.EvidenceKey(nil), c.EvidenceKeys...), cipher: cipher, lockouts: c.EnforceLockouts}
+	r.counterKeyVersions = c.RetainCounterKeyVersions
 	if len(c.CaptchaCustody) > 32 {
 		return nil, risk.ErrInvalidPolicy
 	}

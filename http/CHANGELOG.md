@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Admit native session-bound synchronizers for explicit OAuth link initiation,
+  without origin-only fallback or an independently aged token. Validate the
+  selected callback's actual 303 redirect contract without inventing a 2xx
+  response; other operation and document diagnostics remain rejecting.
+
+- Add fail-closed provider admission using the shared strong rate owner:
+  IP/provider30-per10-minute and original transaction5/lifetime for callbacks
+  (10/lifetime for other provider operations). These methods enable no routes
+  or exchange authority; native custody must authenticate transaction inputs.
+
 - Admit opt-in strict-bearer API-key update descriptors with the original
   idempotency key and existing secret-rate policy. Cookie profiles retain
   their CSRF requirements; descriptor selection grants no domain authority.

@@ -15,6 +15,25 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
+func TestCanonicalOAuthLinkStartStoredSynchronizer(t *testing.T) {
+	stored := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
+	c := identityhttp.CanonicalOperationConfig{Owner: "identity/oauth", OperationID: "identity.account.link-start", Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), CSRF: stored, MaximumSerializedBytes: 16384}
+	if _, err := identityhttp.NewCanonicalOperation(c); err != nil {
+		t.Fatal("native stored synchronizer rejected", err)
+	}
+	for _, p := range []identityhttp.CSRFPolicy{
+		{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-Other", RefererFallback: identityhttp.RefererFallbackDeny},
+		{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", TokenMaximumAge: time.Minute, RefererFallback: identityhttp.RefererFallbackDeny},
+		{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackSameOriginHTTPS},
+		{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny},
+	} {
+		c.CSRF = p
+		if _, err := identityhttp.NewCanonicalOperation(c); err == nil {
+			t.Fatal("weaker or independently aged policy accepted")
+		}
+	}
+}
+
 func TestCanonicalEmailStoredSynchronizerPolicy(t *testing.T) {
 	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	stored := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}

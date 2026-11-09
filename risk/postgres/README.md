@@ -19,6 +19,19 @@ provider/session/policy checks,
 same-command reservation, required audit/effects and recovery. No independent
 counter transaction or generic feature-command conversion is introduced.
 
+Selected native OAuth linking enables `Config.RetainCounterKeyVersions` after
+installing `CounterKeyVersionMigrationSource{Schema, Version}`. The optional
+column records immutable newest-first aliases with the original charge. Existing
+rows remain NULL and fail historical reconstruction rather than receiving a
+guessed key set. `OriginalOAuthLinkCounterKeys` performs bounded primary reads
+after the workflow authenticates its original browser and flow. Its result is
+metadata, never allowance or current authority. The two
+`Prepare*WithRetainedKeys` methods reconstruct original commands without
+renewing time or changing subject/network. The actual current repository must
+remain enlisted: new charges require every current alias, and removed original
+keys deny restoration. Default configuration retains the previous SQL and
+requires no additional migration.
+
 ## Implemented boundary
 
 - `ValidateCounterOnlyOperation(action)` checks this repository's configured

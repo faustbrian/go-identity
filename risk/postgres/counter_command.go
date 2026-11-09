@@ -319,6 +319,9 @@ func (r *Repository) ValidateCommandCounters(c identity.Command, p identitypostg
 }
 func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.CommandCounterPlan) (restoredCounter, error) {
 	fail := func() (restoredCounter, error) { return restoredCounter{}, risk.ErrInvalidCounterCommand }
+	if _, _, _, ok := c.AccountLinkPreparationInput(); ok {
+		return r.restoreAccountLinkPreparationCounter(c, p)
+	}
 	if _, _, ok := c.AccountLinkCounterCommand(); ok {
 		return r.restoreAccountLinkCounter(c, p)
 	}

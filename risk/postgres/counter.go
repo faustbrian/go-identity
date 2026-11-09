@@ -91,7 +91,19 @@ func (r *Repository) ReserveCommandCounters(ctx context.Context, w identitypostg
 			allowed = false
 		}
 	}
-	n, e := w.Exec(ctx, `INSERT INTO `+r.schema+`.counter_charges(command_id,tenant_id,operation,command_fingerprint,counter_fingerprint,policy_version,generation,allowed,observed_at,prepared_at) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9,$10)`, raw, string(b.Command.TenantID), b.Command.OperationID, b.Fingerprint[:], b.Plan.Fingerprint[:], strconv.FormatUint(b.Plan.PolicyVersion, 10), strconv.FormatUint(b.Generation, 10), allowed, now, binding.PreparedAt)
+	statement := `INSERT INTO ` + r.schema + `.counter_charges(command_id,tenant_id,operation,command_fingerprint,counter_fingerprint,policy_version,generation,allowed,observed_at,prepared_at) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9,$10)`
+	args := []any{raw, string(b.Command.TenantID), b.Command.OperationID, b.Fingerprint[:], b.Plan.Fingerprint[:], strconv.FormatUint(b.Plan.PolicyVersion, 10), strconv.FormatUint(b.Generation, 10), allowed, now, binding.PreparedAt}
+	if r.counterKeyVersions {
+		// Aliases come from the actually admitted current complete key set,
+		// never caller metadata. Scalar encoding preserves sealed Work bounds.
+		versions := make([]string, len(binding.Targets[0].Keys))
+		for i, k := range binding.Targets[0].Keys {
+			versions[i] = strconv.FormatUint(uint64(k.Version), 10)
+		}
+		statement = `INSERT INTO ` + r.schema + `.counter_charges(command_id,tenant_id,operation,command_fingerprint,counter_fingerprint,policy_version,generation,allowed,observed_at,prepared_at,key_versions) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9,$10,string_to_array($11,',')::bigint[])`
+		args = append(args, strings.Join(versions, ","))
+	}
+	n, e := w.Exec(ctx, statement, args...)
 	if e != nil {
 		return 0, e
 	}

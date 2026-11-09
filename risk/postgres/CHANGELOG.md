@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Add opt-in `RetainCounterKeyVersions` and the forward-only
+  `CounterKeyVersionMigrationSource`. Original protected charges retain their
+  immutable key versions in the same transaction; existing rows remain unknown
+  rather than receiving invented history. OAuth linking can read those versions
+  and reconstruct its original counter intent across retained-key additions
+  without changing time, network, allowance or expiry. New charges still require
+  the complete current key set; missing original keys deny. Unselected profiles
+  keep their existing schema prerequisites and SQL.
+
+- Prepare original OAuth account-link callback counters without inventing a
+  provider subject or signed grant. Use the existing protected policy,
+  reservation and current-check participants; original user/session/network,
+  primary time and retained key aliases survive restoration without renewal.
+  This grants no provider, session, policy or account-link authority.
+
 - Prepare and restore protected counters for canonical explicit self-user
   account-link commands without converting them into generic feature commands.
   Bind the exact original user/session, trusted network, time and retained digest

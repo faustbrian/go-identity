@@ -130,6 +130,7 @@ func documentedOperations(ctx context.Context, config DocumentConfig, ops []Oper
 		return nil, OpenAPIDocument{}, err
 	}
 	paths, schemas, security := map[string]any{}, map[string]any{}, map[string]any{}
+	callbackRedirect := false
 	for _, op := range ops {
 		if op.Wire == nil {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
@@ -139,6 +140,10 @@ func documentedOperations(ctx context.Context, config DocumentConfig, ops []Oper
 			return nil, OpenAPIDocument{}, ErrInvalidInput
 		}
 		definition["x-identity-policy"] = map[string]any{"operation": op.Record.OperationID, "owner": op.Record.HandlerOwner, "access": op.Record.Access, "rate": op.Record.RatePolicy, "idempotency": op.Record.Idempotency}
+		if op.Record.OperationID == "identity.oauth.callback" && op.Route.Method == "GET" && op.Route.Path == "/v1/oauth/callback" {
+			responses, _ := definition["responses"].(map[string]any)
+			_, callbackRedirect = responses["303"].(map[string]any)
+		}
 		path, ok := paths[op.Route.Path].(map[string]any)
 		if !ok {
 			path = map[string]any{}
@@ -203,7 +208,12 @@ func documentedOperations(ctx context.Context, config DocumentConfig, ops []Oper
 		return nil, OpenAPIDocument{}, wireError(ctx)
 	}
 	for _, diagnostic := range report.Diagnostics() {
-		if diagnostic.Severity != validate.SeverityWarning || diagnostic.Code != "openapi.operation-id.nonportable" {
+		// OAS 3.1.1 Responses Object permits every HTTP status. This callback's
+		// successful outcome is the RFC 9110 section 15.4.4 redirect, not a 2xx
+		// body. Only its exact generic 2xx advice is
+		// inapplicable when the actual selected wire declares that 303.
+		redirectAdvice := callbackRedirect && diagnostic.Code == "openapi.responses.success.missing" && diagnostic.InstanceLocation == "/paths/~1v1~1oauth~1callback/get/responses"
+		if diagnostic.Severity != validate.SeverityWarning || diagnostic.Code != "openapi.operation-id.nonportable" && !redirectAdvice {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
 		}
 	}

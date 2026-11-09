@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence the original known-empty MFA generation during native explicit-self
+  OAuth link initiation, callback preparation and protected account linking.
+  Missing, enrolled, corrupt or changed authority denies without initializing
+  factors, renewing authentication or widening password-session admission.
+
 - Fence the original confirmed TOTP enrollment and factor generation in the
   exact native passkey removal-options and assertion transactions. Require
   original command/lifecycle custody without broadening known-empty admission

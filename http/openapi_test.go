@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -13,6 +14,37 @@ import (
 
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
+
+func TestDocumentedOAuthCallbackRedirectAdviceIsNarrow(t *testing.T) {
+	for _, tc := range []struct {
+		name, responses string
+		valid           bool
+	}{
+		{"actual redirect", `{"303":{"description":"Original application callback","headers":{"Location":{"schema":{"type":"string"}}}},"503":{"description":"Unavailable"}}`, true},
+		{"no success", `{"503":{"description":"Unavailable"}}`, false},
+		{"other redirect", `{"302":{"description":"Not the selected callback result"}}`, false},
+		{"malformed redirect", `{"303":{}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/oauth", OperationID: "identity.oauth.callback", Handler: http.NotFoundHandler(), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+			if err != nil {
+				t.Fatal(err)
+			}
+			op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.oauth.callback","security":[],"responses":` + tc.responses + `}`)}
+			f := feature(t, "identity/oauth", nil, op)
+			_, _, err = identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Callback", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
+			if (err == nil) != tc.valid {
+				t.Fatal("incorrect selected redirect validation", err)
+			}
+		})
+	}
+	op := extensionDescriptor(t, "wire", "read")
+	op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"` + op.Record.OpenAPIOperationID + `","security":[],"responses":{"303":{"description":"Redirect"}}}`)}
+	f := feature(t, "wire", nil, op)
+	if _, _, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Other", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{f}}); err == nil {
+		t.Fatal("callback advice exception leaked to another operation")
+	}
+}
 
 func TestDocumentedSelectionExportsRealProbeWire(t *testing.T) {
 	checks := 0
