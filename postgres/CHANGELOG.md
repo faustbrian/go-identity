@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Observe and recover the exact native public-client registration declaration
+  when a crash occurs before final preparation attachment. Original scope,
+  protected counters, lease/generation, audit and noncommit fences remain with
+  the existing coordinator; unrelated or externally effectful preparations do
+  not gain this recovery profile. No new migration or execution authority.
+
 - Require the registered OAuth denial owner to erase exchange secrets before
   abort or negative recovery releases state and records noncommit. Missing or
   failed cleanup retains pending custody. Authenticated retained link refusal

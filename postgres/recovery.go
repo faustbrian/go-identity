@@ -309,7 +309,9 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	// All negative evidence was collected while old writers and tenant mutations
 	// were excluded. For preparation-only MFA OTP and invitation send, final
 	// attachment and all consuming/domain effects commit together: its absence under
-	// these locks proves none began. Takeover fenced any late generator. The
+	// these locks proves none began. The closed native public-client registration
+	// likewise cannot create a client or consume its initial token before final
+	// attachment. Takeover fenced any late generator. The
 	// separately committed protected attempt charge remains; no participant is
 	// released or a competing command's OTP/child touched.
 	// Required failure evidence and the receipt close atomically.

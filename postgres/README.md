@@ -1,5 +1,24 @@
 # Identity PostgreSQL
 
+## Interrupted native public-client registration
+
+The closed `identity.oauth-server.dynamic-register.native-public-v1` preparation
+can be observed and recovered before generated output or final-plan attachment.
+It requires the original anonymous flow/service actor, exact native owner and
+five enlisted contributors, protected counters, client-creation lifecycle and
+required protected audit. Install the existing counter-preparation history before
+selecting this native workflow; this correction introduces no new migration.
+
+A live original lease remains in progress. After expiry, recovery excludes the
+original claim/journal writer before using absent attachment as noncommit
+evidence: client creation and initial-token consumption cannot begin before
+attachment in this profile. The original protected attempt charge is retained;
+required failure audit and original noncommit receipt close atomically. This
+does not restore generated custody, validate a token, select a client owner or
+permit execution. Corrupt, foreign and externally effectful preparation profiles
+do not inherit it. The native OAuth owner still authenticates original token,
+configuration and caller intent before invoking protected recovery.
+
 ## Protected explicit account linking
 
 `NewAccountLinkUnitOfWork(coordinator, repository,
