@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose storage-neutral immutable final-link intent, explicit preserve-access
+  policy and injected participant selection. Provisional application and durable
+  observation are distinct results; these contracts grant no execution authority.
+
 - Add closed original OAuth callback custody and explicit-self account-link
   preparation intent. Exact code/state/session inputs remain separate from a
   generated provider subject or signed link proof; legacy command accessors
