@@ -88,7 +88,11 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if err != nil {
 		return nil, err
 	}
-	return s.apiKeyMigrationCatalog(ctx, catalog)
+	catalog, err = s.apiKeyMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	return s.socialOAuthMigrationCatalog(ctx, catalog)
 }
 
 func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory, error) {

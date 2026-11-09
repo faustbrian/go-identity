@@ -30,6 +30,7 @@ type completionCommitFault struct {
 	emailVerification        bool
 	registrationVerification bool
 	emailFactorUse           bool
+	socialLinkAttachment     bool
 	armed                    atomic.Bool
 	hit                      atomic.Bool
 }
@@ -46,6 +47,7 @@ type completionCommitConn struct {
 	net.Conn
 	fault    *completionCommitFault
 	mutation atomic.Bool
+	linkPlan atomic.Bool
 	pending  []byte // The sole pgx backend-message reader owns this bounded buffer.
 }
 
@@ -112,6 +114,14 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	if c.fault.emailFactorUse {
 		selected = bytes.Contains(p, []byte("UPDATE identity_mfa.factor_verifications SET used_command_id="))
 	}
+	if c.fault.socialLinkAttachment {
+		// DescribeExec may send Parse and Bind separately. Retain only the
+		// selected SQL shape until this transaction ends; no values are saved.
+		if bytes.Contains(p, []byte("UPDATE identity.commands SET command_plan=$4")) {
+			c.linkPlan.Store(true)
+		}
+		selected = c.linkPlan.Load() && bytes.Contains(p, []byte("identity.account.link-token"))
+	}
 	if c.fault.armed.Load() && selected {
 		c.mutation.Store(true)
 	}
@@ -145,6 +155,7 @@ func (c *completionCommitConn) Read(p []byte) (int, error) {
 		}
 		if message[0] == 'Z' && len(message) == 6 && message[5] == 'I' {
 			c.mutation.Store(false)
+			c.linkPlan.Store(false)
 		}
 		c.pending = c.pending[len(message):]
 	}

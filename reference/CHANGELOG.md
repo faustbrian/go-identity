@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Preserve original session authority across concurrent OIDC link flows and
+  erase exchange secrets on known terminal refusal. Unsupported social-signin
+  selection still fails at composition rather than advertising a login route.
+
+- Select the risk owner's additive counter-alias history for native social
+  linking. Recomposition with added retained keys preserves original initiation
+  and committed-callback retries without renewing expiry or exchanging again.
+  Existing non-social migration selections remain unchanged.
+
+- Add independently selected native OIDC account-link and HTTP configuration
+  over existing password/session authority, with forward account/preparation
+  and RP/token-vault migrations. The link-only profile uses a fixed provider
+  and exposes no social-signin route; full OAuth qualification is in progress.
+
 - Add an explicitly selected configured-workload OAuth reference profile over
   the public PostgreSQL service. Owned migration planning/application, explicit
   one-time authority bootstrap, startup/readiness checks and independently

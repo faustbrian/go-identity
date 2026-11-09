@@ -86,6 +86,7 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	socialOAuth                  *socialOAuthState
 	oauthWorkload                *oauthWorkloadState
 	apiKey                       *apiKeyState
 	httpAPIKey                   *apiKeyHTTPState
@@ -535,6 +536,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.singleSessionRevocation = sessionOwner != nil
+	socialOAuthOwner, err := composeSocialOAuth(c, d, sessionOwner)
+	if err != nil {
+		return err
+	}
 	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
 	if err != nil {
 		return err
@@ -921,6 +926,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		s.features.verificationSessionLineage = c.PasswordSignup.VerificationSessionLineage
 	}
 	s.features.session = sessionOwner
+	s.features.socialOAuth = socialOAuthOwner
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

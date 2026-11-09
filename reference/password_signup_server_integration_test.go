@@ -37,6 +37,7 @@ import (
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
 	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
+	oauthpg "github.com/faustbrian/go-identity/oauth/postgres"
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -280,61 +281,70 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
-	organizationKey          bool
-	organizationKeyUpgrade   bool
-	organizationKeyMetadata  bool
-	organizationKeyUpdate    bool
-	apiKey                   bool
-	apiKeyUpgrade            bool
-	apiKeyLegacy             bool
-	apiKeyLegacyNoExpiry     bool
-	apiKeyMetadata           bool
-	apiKeyUpdate             bool
-	organization             bool
-	organizationUpgrade      bool
-	organizationTransfer     bool
-	organizationExpiry       bool
-	organizationLifecycle    bool
-	organizationTeams        bool
-	organizationTeamCRUD     bool
-	organizationRoles        bool
-	organizationBindings     bool
-	organizationTeamBindings bool
-	passkey                  bool
-	passkeyUpgrade           bool
-	passkeyDiscovery         bool
-	passkeySessionHTTP       bool
-	passkeyKeyed             bool
-	passkeyHTTP              bool
-	passkeyManagement        bool
-	passkeyDeletion          bool
-	passkeySignup            bool
-	passkeySignupHTTP        bool
-	passkeyTOTP              bool
-	passkeyTOTPManagement    bool
-	passkeyTOTPEnrollment    bool
-	passkeyTOTPDeletion      bool
-	mfaOTPDisable            bool
-	mfaOTPDisableAll         bool
-	mfaOTPActiveCase         string
-	mfaOTPManage             bool
-	mfaOTPRemoval            bool
-	mfaOTPRemovalRace        bool
-	mfaOTPActive             bool
-	mfaOTPEnrollment         bool
-	mfaOTPEnrollmentOnly     bool
-	mfaOTPListing            bool
-	mfaOTPListingHTTP        bool
-	phoneEnrollment          bool
-	phonePassword            bool
-	phoneTOTP                bool
-	phoneTOTPOnly            bool
-	phonePasswordReset       bool
-	phoneResetRollback       bool
-	phoneTOTPRollback        bool
-	phoneOTP                 string
-	phoneRemoval             string
-	phoneChange              bool
+	socialOIDC                bool
+	socialOIDCPersistent      bool
+	socialOIDCLinkOnly        bool
+	socialOIDCRotateCounters  bool
+	socialOIDCCollision       bool
+	socialOIDCStartupSnapshot bool
+	socialOIDCFailure         socialOIDCFailure
+	socialOIDCConcurrent      bool
+	socialOIDCRejectSignin    bool
+	organizationKey           bool
+	organizationKeyUpgrade    bool
+	organizationKeyMetadata   bool
+	organizationKeyUpdate     bool
+	apiKey                    bool
+	apiKeyUpgrade             bool
+	apiKeyLegacy              bool
+	apiKeyLegacyNoExpiry      bool
+	apiKeyMetadata            bool
+	apiKeyUpdate              bool
+	organization              bool
+	organizationUpgrade       bool
+	organizationTransfer      bool
+	organizationExpiry        bool
+	organizationLifecycle     bool
+	organizationTeams         bool
+	organizationTeamCRUD      bool
+	organizationRoles         bool
+	organizationBindings      bool
+	organizationTeamBindings  bool
+	passkey                   bool
+	passkeyUpgrade            bool
+	passkeyDiscovery          bool
+	passkeySessionHTTP        bool
+	passkeyKeyed              bool
+	passkeyHTTP               bool
+	passkeyManagement         bool
+	passkeyDeletion           bool
+	passkeySignup             bool
+	passkeySignupHTTP         bool
+	passkeyTOTP               bool
+	passkeyTOTPManagement     bool
+	passkeyTOTPEnrollment     bool
+	passkeyTOTPDeletion       bool
+	mfaOTPDisable             bool
+	mfaOTPDisableAll          bool
+	mfaOTPActiveCase          string
+	mfaOTPManage              bool
+	mfaOTPRemoval             bool
+	mfaOTPRemovalRace         bool
+	mfaOTPActive              bool
+	mfaOTPEnrollment          bool
+	mfaOTPEnrollmentOnly      bool
+	mfaOTPListing             bool
+	mfaOTPListingHTTP         bool
+	phoneEnrollment           bool
+	phonePassword             bool
+	phoneTOTP                 bool
+	phoneTOTPOnly             bool
+	phonePasswordReset        bool
+	phoneResetRollback        bool
+	phoneTOTPRollback         bool
+	phoneOTP                  string
+	phoneRemoval              string
+	phoneChange               bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -362,6 +372,9 @@ type signupGraphExtensions struct {
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
 	budget := 60 * time.Second
+	if extensions.socialOIDCFailure == socialAttachedRPExpiry {
+		budget = 90 * time.Second
+	}
 	if extensions.mfaOTPManage {
 		// Two genuine OTP logins span two required resend intervals. This is
 		// a whole-journey budget, not a changed product or security timeout.
@@ -396,6 +409,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.usernameTOTPOnly = extensions.usernameTOTPOnly
 	f.usernameTOTPWithdrawal = extensions.usernameTOTPWithdrawal
 	f.usernameTOTPPersistent = extensions.usernameTOTPPersistent
+	f.passwordSigninPersistent = extensions.socialOIDCPersistent
 	f.disable, f.disableAll = extensions.disable, extensions.disableAll
 	f.disablePending = extensions.disablePending
 	f.disableHTTP = extensions.disableHTTP
@@ -422,6 +436,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.mfaListRecheck = extensions.mfaListRecheck
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
+	var socialRollbackClock *referenceSocialRollbackClock
+	if extensions.socialOIDCFailure == socialExpiredCleanup {
+		deps.PostgreSQL, socialRollbackClock = newReferenceSocialRollbackClockPool(t, ctx, f.pool)
+	}
 	if strings.HasPrefix(extensions.phoneRemoval, "fence-") {
 		deps.PostgreSQL, f.phoneRemovalTrace = newPhoneRemovalFencePool(t, ctx, f.pool)
 	}
@@ -439,6 +457,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
 		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown" || extensions.verificationHooks == "unknown"
 		f.completionFault.mfaChallenge = extensions.verificationSignin == "totp-child-unknown"
+		f.completionFault.socialLinkAttachment = extensions.socialOIDCFailure == socialAttachedProofExpiry || extensions.socialOIDCFailure == socialAttachedRPExpiry
 		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
 			f.completionFault.factorProof = false
 			f.completionFault.emailFactorUse = extensions.emailChangeCase == "totp-change-unknown-request"
@@ -449,7 +468,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			if f.verificationMFAHook != nil {
 				pc.ConnConfig.Tracer = f.verificationMFAHook
 			}
-			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification || f.completionFault.phonePasswordReset {
+			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification || f.completionFault.phonePasswordReset || f.completionFault.socialLinkAttachment {
 				// Keep parameterized extended queries, but send their SQL rather
 				// than a previously cached statement name to the fault boundary.
 				pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
@@ -496,6 +515,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	var socialPolicy *referenceSocialOIDCPolicy
+	if extensions.socialOIDC {
+		socialPolicy = &referenceSocialOIDCPolicy{}
+		selectedAuthorization = socialPolicy
+	}
 	if extensions.apiKey {
 		selectedAuthorization = referenceAPIKeyPolicy{}
 	}
@@ -551,6 +575,21 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectedAuthorization = f.adminEmailGrant
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
+	var socialIssuer *referenceSocialOIDCIssuer
+	if extensions.socialOIDC {
+		socialPolicy.actor = authorization.SubjectID(c.PasswordSignup.PreAuth.ActorID)
+		socialIssuer = configureReferenceSocialOIDC(t, &c, origin, extensions.socialOIDCLinkOnly)
+		if socialRollbackClock != nil {
+			c.SocialOAuth.Issuer.Crypto.Clock = socialRollbackClock.now
+			c.PasswordSignup.Preparation.Clock = socialRollbackClock.now
+		}
+		if extensions.socialOIDCFailure == socialExchangeUnknown || extensions.socialOIDCFailure == socialAttachedProofExpiry || extensions.socialOIDCFailure == socialAttachedRPExpiry || extensions.socialOIDCFailure == socialProviderDenialRollback {
+			c.SocialOAuth.Coordinator.LeaseDuration = 3 * time.Second
+		}
+		if extensions.socialOIDCFailure == socialAttachedRPExpiry {
+			c.SocialOAuth.StateLifetime = time.Minute
+		}
+	}
 	if extensions.apiKey && !extensions.apiKeyUpgrade {
 		configureReferenceAPIKey(t, &c, origin)
 	}
@@ -1200,6 +1239,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 	}
 	stores, err := reference.ComposeStores(c, deps)
+	if extensions.socialOIDCRejectSignin {
+		var invalid identity.InvalidInputError
+		if !errors.As(err, &invalid) || invalid.Field != "reference_social_oauth" {
+			if err == nil {
+				_ = stores.Close(ctx)
+			}
+			t.Fatal("unsupported social signin was not rejected at composition")
+		}
+		return
+	}
 	if err != nil {
 		var invalid identity.InvalidInputError
 		if errors.As(err, &invalid) {
@@ -1254,6 +1303,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Fatal(err)
 	}
 	modules := []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/password/postgres", "identity/mfa/postgres", "capability/postgres/identity"}
+	if c.SocialOAuth != nil {
+		modules = append(modules, "identity/oauth/postgres")
+	}
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
@@ -1617,10 +1669,42 @@ END $$`); err != nil {
 	} else if seen["identity.phone.remove"] {
 		t.Fatal("native phone removal implicitly exposed HTTP")
 	}
+	for _, selected := range []struct {
+		id      string
+		enabled bool
+	}{
+		{"identity.account.link-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.LinkStart},
+		{"identity.oauth.callback", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.Callback},
+	} {
+		if selected.enabled {
+			wantOperations++
+		}
+		if seen[selected.id] != selected.enabled {
+			t.Fatal("social route selection diverged", selected.id)
+		}
+	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
 	}
+	if extensions.socialOIDCStartupSnapshot {
+		// Configuration storage is caller-owned after construction. Mutating its
+		// containers must not rewrite already selected execution or replay policy.
+		c.SocialOAuth.Coordinator.AdmissionPolicy.PolicyVersion++
+		c.SocialOAuth.Coordinator.QueryPolicy.PolicyVersion++
+		for version := range c.SocialOAuth.Coordinator.RetainedFingerprintKeys {
+			c.SocialOAuth.Coordinator.RetainedFingerprintKeys[version] = [32]byte{247}
+		}
+		for version := range c.SocialOAuth.Issuer.RetainedReplayKeys {
+			c.SocialOAuth.Issuer.RetainedReplayKeys[version] = [32]byte{248}
+		}
+	}
 	network.Config.Handler = server.Handler()
+	var socialHandler atomic.Pointer[http.Handler]
+	if extensions.socialOIDCRotateCounters {
+		initial := server.Handler()
+		socialHandler.Store(&initial)
+		network.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { (*socialHandler.Load()).ServeHTTP(w, r) })
+	}
 	var organizationHandler atomic.Pointer[http.Handler]
 	if extensions.organization {
 		initial := server.Handler()
@@ -1647,6 +1731,28 @@ END $$`); err != nil {
 	client.Timeout = 5 * time.Second
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if extensions.socialOIDCFailure == socialVaultRollback || extensions.socialOIDCFailure == socialExpiredCleanup {
+		// Only a failing token-vault write is injected. Public workflows still
+		// establish every user, session, state, proof and domain transition.
+		expireClock := ""
+		if extensions.socialOIDCFailure == socialExpiredCleanup {
+			expireClock = "RAISE NOTICE 'controlled-vault-expire'; "
+		}
+		_, err := deps.PostgreSQL.Raw().Exec(ctx, `CREATE FUNCTION identity_social.reject_test_vault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN `+expireClock+`RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='controlled vault refusal'; END $$;
+CREATE TRIGGER reject_test_vault BEFORE INSERT ON identity_social.token_sets FOR EACH ROW EXECUTE FUNCTION identity_social.reject_test_vault()`)
+		if err != nil {
+			t.Fatal("install controlled vault fault")
+		}
+	}
+	if extensions.socialOIDCFailure == socialProviderDenialRollback || extensions.socialOIDCFailure == socialLinkErasureRollback {
+		// Fail only the RP owner's erasure. State release, failure auditing and
+		// terminal noncommit must still come from the real shared coordinator.
+		_, err := deps.PostgreSQL.Raw().Exec(ctx, `CREATE FUNCTION identity_social.reject_test_denial() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='controlled denial erasure refusal'; END $$;
+CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions FOR EACH ROW WHEN (NEW.secrets_erased_at IS NOT NULL) EXECUTE FUNCTION identity_social.reject_test_denial()`)
+		if err != nil {
+			t.Fatal("install controlled cancellation fault")
+		}
 	}
 	if _, err := stores.RecoverVelocity(ctx, otpTenant); err == nil {
 		t.Fatal("fresh journal fabricated coverage")
@@ -1838,6 +1944,145 @@ END $$`); err != nil {
 	if extensions.apiKey {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
 			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade, extensions.apiKeyLegacy, extensions.apiKeyLegacyNoExpiry, extensions.apiKeyMetadata, extensions.apiKeyUpdate)
+		}
+	}
+	if extensions.socialOIDC {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
+			sessions, err := features.Sessions()
+			if err != nil || len(cookies) != 1 {
+				t.Fatal("original password session unavailable")
+			}
+			token, err := session.ParseToken(cookies[0].Value)
+			if err != nil {
+				t.Fatal("original password cookie is invalid")
+			}
+			credential, err := session.NewCredential(session.CredentialCookie, token)
+			if err != nil {
+				t.Fatal("original password credential is invalid")
+			}
+			current, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential})
+			if err != nil || !current.Authenticated {
+				t.Fatal("original password session did not authenticate")
+			}
+			original, err := current.Session.Bindings()
+			if err != nil || (original.Remember.Choice() == session.PersistentSession) != extensions.socialOIDCPersistent || (cookies[0].MaxAge > 0) != extensions.socialOIDCPersistent {
+				t.Fatal("original password session did not select the requested remember policy")
+			}
+			rememberQuery := `SELECT record->'Remember' FROM ` + pgx.Identifier{c.Session.Native.Execution.Repository.Schema}.Sanitize() + `.sessions WHERE tenant_id=$1 AND session_id=$2`
+			var rememberBefore []byte
+			if err := deps.PostgreSQL.Raw().QueryRow(ctx, rememberQuery, otpTenant, original.SessionID).Scan(&rememberBefore); err != nil {
+				t.Fatal("read original stored remember policy")
+			}
+			accounts, err := kernel.NewRepository(deps.PostgreSQL, kernel.Config{MaximumDuration: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var rotate func()
+			if extensions.socialOIDCRotateCounters {
+				rotate = func() {
+					rotateReferenceSocialCounters(t, ctx, &c, deps, workerConfigs, config, func(next http.Handler) { socialHandler.Store(&next) })
+				}
+			}
+			awaitExpiry := func(_ string) { awaitReferenceSocialCallbackLease(t, ctx, deps, "identity.account.link-token") }
+			if extensions.socialOIDCFailure == socialProviderDenialRollback {
+				awaitExpiry = func(transaction string) {
+					var pending, reserved, intact, audits int
+					if err := deps.PostgreSQL.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.commands WHERE tenant_id=$1 AND purpose='identity.oauth.callback' AND state='pending' AND result IS NULL),(SELECT count(*) FROM public.capability_identity_one_use WHERE tenant_id=$1 AND purpose='identity.oauth.callback' AND state='reserved' AND uses=0),(SELECT count(*) FROM identity_social.transactions WHERE tenant_id=$1 AND transaction_id=$2 AND secrets_erased_at IS NULL AND pkce_ciphertext IS NOT NULL AND state_proof_ciphertext IS NOT NULL),(SELECT count(*) FROM audit.records WHERE tenant_id=$1 AND action='identity.oauth.handle_callback')`, otpTenant, transaction).Scan(&pending, &reserved, &intact, &audits); err != nil || pending != 1 || reserved != 1 || intact != 1 || audits != 0 {
+						t.Fatalf("failed denial erasure custody: pending=%d reserved=%d intact=%d audits=%d error=%v", pending, reserved, intact, audits, err)
+					}
+					if _, err := deps.PostgreSQL.Raw().Exec(ctx, `DROP TRIGGER reject_test_denial ON identity_social.transactions`); err != nil {
+						t.Fatal("restore controlled RP erasure storage", err)
+					}
+					awaitReferenceSocialCallbackLease(t, ctx, deps, "identity.oauth.callback")
+				}
+			}
+			if extensions.socialOIDCFailure == socialAttachedProofExpiry {
+				f.completionFault.armed.Store(true)
+				awaitExpiry = func(_ string) { awaitReferenceSocialAttachmentExpiry(t, ctx, deps) }
+			}
+			if extensions.socialOIDCFailure == socialAttachedRPExpiry {
+				f.completionFault.armed.Store(true)
+				awaitExpiry = func(transaction string) {
+					awaitReferenceSocialRPExpiry(t, ctx, deps, transaction)
+					// Reconstruct the public native owner from the retained server
+					// configuration, proving cold recovery without browser custody.
+					n := c.SocialOAuth
+					validation := c.Session.Native.Validation
+					validation.Clock = c.Session.Native.Execution.Clock
+					owner, err := oauthpg.NewLinkService(deps.PostgreSQL, oauthpg.LinkServiceConfig{
+						Schema: n.Schema, ConfigurationID: n.ConfigurationID, PolicyID: n.PolicyID, Origin: n.Origin,
+						Providers: n.Providers, CallbackAllowlist: n.CallbackAllowlist,
+						Session:  sessionpg.SessionServiceConfig{Repository: c.Session.Native.Execution.Repository, Profile: c.PasswordSignin.Native.Profile, Validation: validation},
+						CSRFKeys: c.Session.CSRFKeys, Coordinator: n.Coordinator, Counters: n.Counters,
+						Capability: n.Issuer, CapabilityPreparation: c.PasswordSignup.Preparation,
+						MaximumDuration: n.MaximumDuration, StateLifetime: n.StateLifetime,
+						AuditRetentionPolicyVersion: c.Session.Native.Execution.AuditRetentionVersion,
+						IntentKey:                   n.IntentKey, CurrentStateKeyVersion: n.CurrentStateKeyVersion, StateKeys: n.StateKeys,
+						CurrentPKCEKeyVersion: n.CurrentPKCEKeyVersion, PKCECommitmentKeys: n.PKCECommitmentKeys,
+						CurrentEnvelopeKey: n.CurrentEnvelopeKey, EnvelopeKeys: n.EnvelopeKeys,
+					})
+					if err != nil {
+						t.Fatal("reconstruct native expired-RP maintenance owner", err)
+					}
+					maintenance, ok := any(owner).(interface {
+						RecoverExpiredAttached(context.Context, identity.TenantID, int, string) (int, string, error)
+					})
+					if !ok {
+						t.Fatal("expired attached RP has no native historical recovery route")
+					}
+					for sweep := range 2 {
+						total, cursor := 0, ""
+						// The journey starts two RPs: the issuer-mismatch control
+						// and this callback. One-row pages need a final empty page.
+						for range 3 {
+							recovered, next, err := maintenance.RecoverExpiredAttached(ctx, otpTenant, 1, cursor)
+							if err != nil || recovered < 0 || recovered > 1 || next != "" && next == cursor {
+								t.Fatal("expired RP recovery lost bounded cursor progress", err)
+							}
+							total += recovered
+							cursor = next
+							if cursor == "" {
+								break
+							}
+						}
+						if cursor != "" || total != 1-sweep {
+							t.Fatal("expired RP recovery did not settle once across complete sweeps", total)
+						}
+					}
+				}
+			}
+			proveReferenceSocialOIDC(t, ctx, client, network.URL, origin, socialIssuer, user, cookies, csrf, fresh, readSession, extensions.socialOIDCPersistent, extensions.socialOIDCLinkOnly, accounts, rotate, extensions.socialOIDCCollision, extensions.socialOIDCFailure, awaitExpiry, extensions.socialOIDCConcurrent)
+			if (extensions.socialOIDCFailure == socialAttachedProofExpiry || extensions.socialOIDCFailure == socialAttachedRPExpiry) && !f.completionFault.hit.Load() {
+				t.Fatal("callback never lost its actual attachment COMMIT acknowledgement")
+			}
+			var rememberAfter []byte
+			if err := deps.PostgreSQL.Raw().QueryRow(ctx, rememberQuery, otpTenant, original.SessionID).Scan(&rememberAfter); err != nil || !bytes.Equal(rememberBefore, rememberAfter) {
+				t.Fatal("callback replaced the original stored remember policy")
+			}
+			proveReferenceSocialLinkAudits(t, ctx, deps, extensions.socialOIDCCollision, extensions.socialOIDCFailure)
+			if extensions.socialOIDCFailure != 0 {
+				if socialRollbackClock != nil && !socialRollbackClock.expired.Load() {
+					t.Fatal("rollback scenario never expired original execution authority")
+				}
+				proveReferenceSocialFailureStorage(t, ctx, deps, extensions.socialOIDCFailure)
+				return
+			}
+			if extensions.socialOIDCRotateCounters {
+				proveReferenceSocialCounterAliases(t, ctx, deps, c.SocialOAuth)
+			}
+			// Observe committed storage only after the public journey. No account,
+			// session, token or authority row is seeded to make that journey pass.
+			var vaults, erased int
+			if err := deps.PostgreSQL.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_social.token_sets v JOIN identity.accounts a ON (a.tenant_id,a.user_id,a.account_id)=(v.tenant_id,v.user_id,v.account_id) WHERE v.tenant_id=$1 AND v.user_id=$2 AND a.linked AND a.version=v.account_version AND a.social_link_version=v.social_link_version AND v.requested_scopes=ARRAY['openid','profile'] AND v.granted_scopes=ARRAY['openid','profile'] AND octet_length(v.token_ciphertext)>0 AND v.origin_operation='identity.account.link-token'`, otpTenant, string(user)).Scan(&vaults); err != nil || vaults != 1 {
+				t.Fatal("public linking did not retain its actual encrypted provider tokens atomically")
+			}
+			wantErased := 1
+			if extensions.socialOIDCCollision {
+				wantErased = 2
+			}
+			if err := deps.PostgreSQL.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_social.transactions WHERE tenant_id=$1 AND user_id=$2 AND version=2 AND secrets_erased_at IS NOT NULL AND pkce_ciphertext IS NULL AND state_proof_ciphertext IS NULL`, otpTenant, string(user)).Scan(&erased); err != nil || erased != wantErased {
+				t.Fatal("committed linking retained exchange-secret custody")
+			}
 		}
 	}
 	if extensions.organizationKey {
@@ -2154,7 +2399,11 @@ func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores,
 	}
 	issue := func(method string) (sessionhttp.PreAuthResponse, []*http.Cookie) {
 		t.Helper()
-		r, p := invoke("/v1/session/preauth-issue", map[string]string{"method": method}, "", nil)
+		input := map[string]any{"method": method}
+		if method == "password" && f.passwordSigninPersistent {
+			input["remember"] = true
+		}
+		r, p := invoke("/v1/session/preauth-issue", input, "", nil)
 		var out sessionhttp.PreAuthResponse
 		if r.StatusCode != 200 || json.Unmarshal(p, &out) != nil || !out.Issued {
 			t.Fatal("original method initiation", r.StatusCode)
@@ -2205,6 +2454,9 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	}
 	login, loginCookies := issue("password")
 	loginBody := map[string]any{"flowID": string(login.FlowID), "identifier": "registered@example.invalid", "password": "synthetic-registration-password", "callbackURL": origin + "/reset"}
+	if f.passwordSigninPersistent {
+		loginBody["remember"] = true
+	}
 	r, _ = invoke("/v1/password/signin", loginBody, "", loginCookies)
 	if r.StatusCode == 200 || len(r.Cookies()) != 0 {
 		t.Fatal("unverified registration authenticated")

@@ -1,5 +1,55 @@
 # Identity reference composition
 
+## Optional OIDC account linking
+
+`SocialOAuth` composes configured explicit-self linking with the real password,
+session, capability, risk, audit and PostgreSQL owners. Select
+`HTTPSocialOAuth.LinkStart` and `HTTPSocialOAuth.Callback` independently. This
+profile links an external account to an existing verified password user; it
+does not sign in, create another session, refresh provider tokens or unlink.
+`SigninStart` fails at configuration rather than exposing an incomplete route.
+
+Start with the existing password-signup/signin, session and OTP configuration.
+Supply one `oauth.NewOIDCProvider` with fixed HTTPS issuer/endpoints/client,
+`response_mode=query`, S256, an explicit signing-algorithm/key-set policy and
+redirect URL `<origin>/v1/oauth/callback`. `SocialOAuth` also requires a dedicated
+RP schema, stable configuration/intent key, independently versioned state/PKCE/
+envelope keys, exact success/error callback allowlists, bounded lifetimes and
+the same coordinator policy/counter authority as the password graph. HTTP
+selection requires the shared `HTTPRate`; no application domain store or
+transaction implementation is needed. Apply the selected graph's migration
+plan before startup, including its forward preparation-erasure, counter-alias
+and RP/token-vault histories. Keep original provider/key versions available
+until their in-flight custody has drained.
+
+Consumer journey:
+
+1. Register, receive verification, verify and sign in through the existing
+   password routes. Retain the original session cookie and CSRF token.
+2. Send `POST /v1/account/link-start` with that cookie, exact `Origin`,
+   `X-CSRF-Token` and a stable `Idempotency-Key`. Its JSON body contains
+   `provider`, allowlisted `callback` and `errorCallback`, the configured
+   `scopes` array and `signupDisabled: true`.
+3. Navigate the same browser to the returned `redirectURI`. The provider returns
+   `GET /v1/oauth/callback` with its exact issuer, original state and either a
+   code or provider error. Do not add an idempotency header to the callback.
+4. A committed result redirects with 303 to the original allowlisted URL.
+   Linking preserves the original session's remember-me policy and issues no
+   cookie. Exact callback replay never exchanges the code again. The native
+   credential-epoch change can invalidate the old session: use the existing
+   password signin route for subsequent authenticated work, not social signin.
+
+The executable public-API fixture is
+`TestReferencePostgresConfiguredOIDCLink` in
+[social_oidc_integration_test.go](social_oidc_integration_test.go). It bootstraps
+real PostgreSQL owners and captures verification delivery; only the external
+TLS OIDC provider is controlled. Its companion cases exercise persistent
+sessions, collisions, concurrent callbacks, original-key rotation, refusal,
+rollback and expired-proof recovery. See the
+[native service contract](../oauth/postgres/README.md) and
+[HTTP contract](../http/oauth/README.md) for trusted maintenance and failure
+semantics. Full social OAuth and platform qualification remain unfinished.
+
 ## Optional workload OAuth backend
 
 `OAuthWorkload` selects a configured confidential Basic client-credentials
