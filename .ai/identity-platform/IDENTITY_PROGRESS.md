@@ -1,5 +1,480 @@
 # Identity Platform Progress
 
+## Current TL;DR — 2026-11-09 20:54 UTC
+
+- **Overall: ~25% estimated, LOW confidence; latest table has 10/39 selected
+  milestones closed.** Full 67-unit qualification remains unfinished; these
+  deliveries do not close whole M17/M18 or M28.
+- **Delivered identity prerequisites:** neutral final-link contract `8901e7f`
+  and OAuth/PostgreSQL callback/preparation/recovery contracts `e77387b` are
+  pushed to main. [Current core CI is green](https://github.com/faustbrian/go-identity/actions/runs/42689045168).
+  Public-dependency ordinary/vet, affected real-PostgreSQL race and required
+  structure/history/current-tree secret checks pass.
+- **Delivered SCIM Users protocol:** source `085e4ea`, incoming-main merge
+  `a2ad500` and registration/runtime-CI `3df153b` are on main with
+  [passing CI](https://github.com/faustbrian/go-scim/actions/runs/42689460371).
+  Independent complete source/integration reviews approve; the authenticated
+  public download matches all 24 Go/module files and its race suite/vet/module
+  verification pass (5.229s). This is storage-neutral protocol behavior, not
+  native provisioning, Groups/Bulk or an HTTP backend.
+- **Local actual OIDC linking:** successful/persistent linking, collisions,
+  concurrency, original session/Remember preservation, definitive refusal and
+  failed-erasure retry are exercised through real PostgreSQL/controlled TLS.
+  Original-RP-expiry recovery now passes pinned race (63.783s): target-bound
+  expiry, cursor draining, exactly one settlement and a zero-effect repeat sweep.
+  Complete source review approves; the earlier failing full run is retained,
+  with affected F7 regression/vet corrected rather than relabelled green.
+- **Native linking is now main-published:** MFA/risk/HTTP8112 prerequisites,
+  capabilityb329 and native OAuth/PostgreSQL + opt-in HTTP0b5aa5a are pushed with
+  [green native CI](https://github.com/faustbrian/go-identity/actions/runs/42696001515)
+  and [green capability CI](https://github.com/faustbrian/go-capability/actions/runs/42695431774).
+  Public-dependency native ordinary/race/vet and final required root checks pass;
+  independent complete runtime and publication-pin reviews approve.
+- **Delivered consumer profile:** Reference `e836a23` is main-pushed with
+  [green CI](https://github.com/faustbrian/go-identity/actions/runs/42697205858).
+  Actual public-graph ordinary suites, the complete selected PostgreSQL/race
+  linking cohort (128.400s), tagged vet and module verification pass. Independent
+  final integration review approves. Authenticated downloaded Reference
+  `v0.0.0-20261109205256-e836a23b1d2f` matches all 419 Go/module files; its real
+  PostgreSQL/race consumer passes normal/persistent linking, collision, concurrent
+  callback and token-refusal journeys (12.906s), with verified public dependencies.
+- **Next:** social signin through the linked account, then retained unlink/refresh
+  profiles. Whole M17/M18 and full-unit qualification remain open. The independent
+  SSO dependency check is finishing; no user decision is pending.
+
+## Retained checkpoint — 2026-11-09 17:31 UTC
+
+### Resumed implementation results (Nov 9)
+
+- **Local working behavior:** configured real-provider explicit-self linking now
+  passes real PostgreSQL acceptance for ordinary and persistent sessions, account
+  collision, exact audits/replay and expiry-during-execution refusal/cleanup.
+  Initializing execution before binding its closed audit profile fixed the
+  reproduced callback400. This is local, not a new main delivery or milestone.
+- **Lifecycle corrections now proven locally:** abandoned unused expiry erases
+  real encrypted PKCE/state custody, excludes live/claimed/locked transactions,
+  rejects corrupt metadata and pages past uncertain callbacks. Terminal prepared
+  response erasure/replay and older-profile compatibility pass ordinary/race
+  checks with forward migrations; real Reference requalification is pending.
+- **Public prerequisite:** the storage-neutral root contract passes isolated
+  public-dependency ordinary/vet checks and independent source review. Its real
+  protected-counter preservation test catches a dropped-key defect in a
+  disposable overlay. Structural/secret checks and delivery remain.
+- **Remaining linking work:** crash-after-attachment expired-proof recovery is
+  being corrected after real RED with passing positive/unknown controls. Then
+  requalify real Reference composition, review the corrected slice and finish
+  public pins/main delivery. Heavy Go/PostgreSQL checks are serialized; separate
+  source implementation continues in parallel.
+- **SCIM:** all seven original root Users corrections and both parser actions
+  pass retained root ordinary/race/vet/fuzz checks. Independent review found three
+  additional advertised Users defects (PRECIS comparisons, empty relational
+  values and omitted primary defaults); each is reproduced and its worker is
+  implementing the bounded corrections. Provisioning/Groups/Bulk/HTTP remain.
+- **Overall remains ~25% estimated, low confidence; 10/39 rows closed.** No new
+  fully qualified unit or main delivery is claimed from these local results.
+
+## Earlier retained checkpoint — 2026-11-09 16:43 UTC
+
+- **Overall: ~25% estimated, low confidence; latest closure table records 10/39.**
+  No new whole OAuth/SCIM milestone or fully qualified unit out of67.
+  An older embedded11/39 summary counts M08 differently and is not reconciled.
+- **Resumed from preserved source, not restarted.** Identity/capability remote
+  main heads are unchanged; pending implementation is local/uncommitted.
+- **Current verified result:** real PostgreSQL token-vault storage checks pass,
+  including scope containment, foreign ownership/account/command rejection,
+  forward history, exact timestamps/envelope custody and rollback.
+- **Primary account-link lane:** added positive persistent-session coverage and
+  original RememberPolicy preservation. The real callback run fails after one
+  exchange. Source tracing found kernel audit declarations using a feature-only
+  retention field; the local correction preserves kernel admission and standard
+  record retention. Corrected integration/affected final checks are pending.
+- **Parallel SCIM:** Sol6.1/high/default worker reproduced all seven review
+  witnesses and both bounded parser actions, with supported controls passing.
+  It is implementing their bounded root Users corrections; native provisioning,
+  Groups/Bulk/HTTP and M28 closure are not claimed.
+- **Review/delivery:** account-link source is frozen for one independent complete
+  resulting-diff review while checks proceed when the serialized Go slot returns.
+  Configuration and repository structure checks pass using authenticated tool2.5.3.
+  Public pins/clean consumers, final review/gates, commits/main delivery and CI remain.
+- **Remaining broader scope:** social signin/unlink/refresh, federation,
+  provisioning, remaining authentication/administration/privacy/session profiles
+  and full67-unit qualification retain their original obligations.
+- Old temporary logs are gone; prior passes are historical, not current proof.
+  New results are copied beside the ignored handoff. Nothing needs user input.
+
+## Retained earlier checkpoints
+- **Prepared linking is delivered:** native original-state reservation before
+  exchange, retained-output restart, separate final-grant attachment, dual-proof
+  rollback/replay/recovery are pushed as `b01fd26b2c48` with
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/41330649265).
+  The actual capability consumer pins that public source and is pushed as
+  `f510d494786e`; [exact-source carrier CI passed](https://github.com/faustbrian/go-capability/actions/runs/41331487824).
+  Public whole-composition and twice-run race checks pass; provider/session/risk
+  authority in this consumer is still explicitly doubled, not a live social flow.
+- **Current work:** strict issuer-bound query parsing is delivered on main.
+  The real browser/persistent social-link/signin consumer is written but still
+  fails because native composition is missing. Local PostgreSQL contract tests
+  now pass for original callback-state issuance, preserving real user versus
+  anonymous-flow subjects, atomic effects, rollback and replay, including race.
+  Those are transaction-level fixtures, not a usable social-login backend yet.
+  Private encrypted recoverable PKCE custody and populated native storage now
+  pass their focused tests. Start-output erasure preserves replay and pending
+  recovery; the existing complete capability composition still passes.
+  These remain local/unreviewed. Primary is completing authenticated provider
+  linking first, then sign-in through that linked account. The whole scope is
+  unchanged; no new whole milestone or qualified unit is counted.
+- **New delivered native behavior:** the explicit-self link unit of work runs through
+  the existing coordinator and real PostgreSQL. Link/credential changes,
+  provider effects, one-use proof, account audit and lifecycle share its
+  transaction. Focused tests prove success, exact replay, historical recovery,
+  counted denial, normal rollback/release and uncertain pending recovery.
+- **Review:** one blocking finding reproduced and fixed: original risk evidence
+  could expire during finalization. The new primary-time regression requires
+  rollback with released proof and a durable denial. Normal rollback tests now
+  require a known receipt and matching recovery, not merely absence of success.
+  Fresh complete-diff review approves; final affected checks pass, including
+  twice-run PostgreSQL race, decoder fuzz and required/native gates. Commit
+  `2770316191ffb7aee020e457f01e0d200016233e` is pushed to main with
+  [passing exact-head CI](https://github.com/faustbrian/go-identity/actions/runs/41307349332).
+  Disposable PostgreSQL, socket and Go caches are removed.
+- **Still missing for a usable social flow:** the actual native OAuth/session
+  participant, state reservation before PKCE decryption/exchange, retained
+  provider output attachment and callback-to-session/reference composition.
+- **Capability consumer delivered:** canonical explicit-link proof preparation,
+  reservation/consumption/finalization and conservative recovery are integrated
+  with the actual native link unit, capability participant, audit and lifecycle
+  in real PostgreSQL tests. Capability main is now
+  `a1de6218fb7aba8b100934caeeecd35a9213050b`, read back from the remote;
+  [required exact-source CI passes](https://github.com/faustbrian/go-capability/actions/runs/41312062690).
+  Provider/session/policy/risk are explicit other-owner doubles in that fixture.
+- **Root callback prerequisite delivered:** original callback code/state/session custody and
+  exact root claim mapping, without invented subject/proof or a feature wrapper.
+  Missing-API, spare-capacity and mixed-variant failures were reproduced;
+  focused custody/codec, root ordinary/race/fuzz/vet and configured gates pass.
+  The independently approved batch is pushed to main as
+  `b8da8022ba26afdbdcacb404119e9ed2c10e5197`, with
+  [passing exact-head CI](https://github.com/faustbrian/go-identity/actions/runs/41313563094).
+  Native preparation now consumes its authenticated public module version.
+- **OIDC protocol client delivered:** configured HTTPS code/S256
+  exchange and strict signed-ID-token validation work against controlled TLS
+  integration tests, with opaque token custody and bounded failure handling.
+  Review found and fixed serialization leakage and a typed-nil constructor
+  panic. Ordinary/race/fuzz and complete local module/repository checks pass.
+  The two analyzer drivers now accept their respective statement-local
+  acknowledgments without removing the TLS guard or test. Independent final
+  review approves. Commit `c9e6fa7816e18f5ba8f5d82ee8a0b3811de40308` is pushed
+  to main with [passing exact-head CI](https://github.com/faustbrian/go-identity/actions/runs/41322227837).
+- **Primary native work remains in progress:** the existing coordinator plan
+  now represents original OAuth state and the separate final link proof;
+  focused regressions cover both inputs during apply, finalization, release
+  and recovery. The final attached command can execute without replacing the
+  original keyed intent. Real PostgreSQL tests of the forward preparation
+  profile prove lost-start acknowledgment cannot authorize another exchange,
+  retained output keeps its original generation, stale owners cannot restart,
+  and other operations cannot select this profile. The fixture is removed.
+  This is journal proof, not actual provider/session composition.
+  The new prepared unit now passes real capability-owner success, exact replay,
+  known rollback with both inputs released and ambiguous exchange without a
+  second attempt. The selected cohort also passed race twice. Native provider,
+  session and risk checks remain explicit other-owner test doubles here.
+  A historical-query gap was reproduced and fixed: original pending OAuth
+  preparation must remain observable without treating missing output as proof
+  of noncommit. The latest regressions prove a missing issuer denies before
+  any claim, reservation or exchange, and a fresh coordinator with rotated
+  fingerprint keys resumes retained output without signing again or renewing
+  its original generation. Full native PostgreSQL regression and affected
+  twice-run race checks pass. Independent complete-diff review is in progress.
+  That native/capability prerequisite has since passed independent review and
+  delivery as summarized above. Actual OAuth/session composition remains open.
+- **Next:** connect capability/OAuth preparation and the missing native owners
+  under the frozen M17/M18 consumer journey. Native transaction delivery alone
+  is not a usable social-login backend.
+
+## Current TL;DR — 2026-11-01 11:28 UTC
+
+- **Overall: ~25% estimated, low confidence; 10/39 whole milestones closed.**
+  No new whole M17/M18 or fully qualified unit out of67 is claimed.
+- **New deliveries:** root command context0b1377c and native codec/risk
+  adoptioncd5194d are pushed onmain with passing CI:
+  [root](https://github.com/faustbrian/go-identity/actions/runs/41300350815),
+  [native adoption](https://github.com/faustbrian/go-identity/actions/runs/41301837660).
+  The native modules use the actual public root version, not a local replace.
+- **Working native preparation:** canonical explicit link commands retain their
+  original proof/user/session and counter attribution/time/key history. Native
+  keyed intent binds the context; risk restores the existing protected policy
+  and retained aliases. Legacy executors reject rather than omit this context.
+  Focused/race/full ordinary tests, vet, module integrity, required/native gates
+  and independent complete-diff reviews pass. Disposable caches are removed.
+- **Still unfinished:** protected link transaction/provider and current-session
+  admission, atomic proof/effect finalization/recovery, real OIDC callback and
+  session issuance. Preparation is not a usable social-login backend. The full
+  federation/SCIM and other retained variants/qualification remain in the goal.
+- **Next:** finish the protected command composition and the frozen real
+  link/logout/social-signin/session-read/logout consumer journey. No new
+  planning/Tools lane or broader verification restart is required.
+
+## Current TL;DR — 2026-11-01 10:28 UTC
+
+- **Overall: ~25% estimated, low confidence; 10/39 whole milestones closed.**
+  No full M17/M18 or newly fully qualified unit out of67 is claimed.
+- **New native code pushed:** bd115111cc9bb94bd3031aba071dbd94e6bd5651
+  adds locked account-link storage and current provider-account authority checks.
+  Account, association and user/credential/social epochs share one transaction;
+  stale/blocked/colliding changes deny and rollback leaves no partial link.
+  [Exact-head CI passes](https://github.com/faustbrian/go-identity/actions/runs/41297636137).
+- **Behavior proven locally:** real PostgreSQL atomic commit/rollback,
+  concurrent subject ownership, same-ID relink after128retired credentials,
+  retained credential non-reuse and expiry during account/association lock waits.
+  Focused race runs twice6.530s; full ordinary tests0.757s; tagged vet, tidy,
+  integrity, formatting and required/native gates pass. Independent complete
+  final-diff review approves after one reproduced relink-history finding/fix.
+- **Still disconnected:** public canonical-link execution, genuine provider
+  callback/proof, current session/risk/effects/recovery and social session
+  issuance. The writer remains private; it is not a usable social-login backend.
+- **Next:** finish that protected command composition in the same frozen
+  link/logout/social-signin/session/logout profile. No new planning/Tools lane.
+  Owned PostgreSQL/cache resources are removed; no implementation worker is active.
+
+## Current TL;DR — 2026-11-01 09:59 UTC
+
+- **Overall: ~25% estimated, low confidence; 10/39 whole milestones closed.**
+  No additional whole milestone or fully qualified unit out of67 is claimed.
+- **Pushed and CI-green:** account persistence/read prerequisite396a272 and
+  reviewed HIBP callback-boundary testsafd143f. HIBP coverage537/554(96.9%) is
+  not full qualification. [Latest CI](https://github.com/faustbrian/go-identity/actions/runs/41293025378).
+- **New local working code:** current provider-account/credential authority
+  checks with12realPostgreSQL current/stale/disabled/expiry/locking/rollback cases.
+  Their full consumer integration and independent final review remain pending.
+- **Snapshot failure resolved locally:** a bad sparse-history join plan was
+  reproduced and replaced with bounded unique-key lookups. The same storage
+  case now takes0.30s; both affected tests pass twice under race2.990s. Full native
+  ordinary tests and taggedvet pass. Original deadlines and checks are unchanged.
+- **Next:** atomic protected account linking, then genuine OIDC callback to
+  session. The current native batch is uncommitted; full M17/M18 remains open.
+
+### Previous checkpoint — 2026-11-01 09:41 UTC
+
+- **Overall remains ~25%, low confidence; 10/39 whole milestones closed.**
+  No additional whole milestone or fully qualified unit out of67 is claimed.
+- **Delivered:** account-storage/read prerequisite396a272, plus independently
+  reviewed HIBP boundary tests on mainafd143f. [Latest CI passes](https://github.com/faustbrian/go-identity/actions/runs/41293025378).
+  HIBP full leaf tests/race/vet pass; coverage537/554(96.9%), not full qualification.
+- **Local only:** provider-link authority fence passes malformed-scope tests
+  and12realPostgreSQL current/stale/disabled/association/locking/rollback cases.
+  It is uncommitted/unreviewed and not a usable social-login backend.
+- **Current gap:** the shared account-snapshot stress test has intermittent
+  deadline failures. Its actual query waits/plan are being inspected; no
+  timeout increase, skipped check or production performance claim is made.
+- **Next:** resolve the concrete failure, then complete atomic linking and
+  genuine OIDC callback/session composition. The full M17/M18 path remains open.
+
+### Previous checkpoint — 2026-11-01 09:10 UTC
+
+- **Overall remains ~25%, low confidence; 10/39 whole milestones closed.**
+  No additional whole milestone or fully qualified unit out of67 is claimed.
+- **New Go implementation on main:**396a2724bf1f0bc260df1deb3ddc90489bb9e163
+  adds identity-owned provider-account migrations, exact live subject uniqueness,
+  retained link history and bounded consistent account/credential snapshots.
+  Real PostgreSQL checks cover populated upgrades, tenant/collision isolation,
+  fulluint64, maximum tuples, concurrent snapshots and retained credential
+  history. Final focused race passes twice30.285s; ordinary, taggedvet,
+  tidy/verify/format and required native/repository gates pass. Independent final
+  source review approves; [exact-head CI is running](https://github.com/faustbrian/go-identity/actions/runs/41291896529).
+- **Still unfinished:** protected account-link mutation, genuine OIDC callback
+  proof/state/exchange ownership and provider-to-session composition. The new
+  read/storage prerequisite is not usable social signin or M17/M18 completion.
+- **Parallel lane:** a HIBP worker has added public-boundary coverage tests;
+  they are unverified and excluded from396a272. No production change there.
+- **Next:** protected linking inside the existing coordinator, then the frozen
+  explicit link/logout/social-signin/session/logout journey. Existing workload
+  OAuth public delivery below remains closed; it is not being restarted.
+
+### Previous checkpoint — 2026-11-01 08:12 UTC
+
+- **Overall: ~25%, low-confidence estimate; 10/39 whole milestones closed.**
+  No new fully qualified unit out of67 is claimed.
+- **Closed consumer profile:** configured confidential workload OAuth through
+  Reference: explicit owned PostgreSQL migrations/bootstrap, initialization and
+  readiness, HTTPS token issuance, owning introspection, revocation/inactivity,
+  native-only handle, reopened state, required-effect rollback, authority/rate
+  outages, shared limits and shutdown. It is backend functionality, not a UI.
+- **Published:** Identitymain46aff3573fbac1412b58e5bb040ff957f7e3eb62,
+  [passing exact-head CI](https://github.com/faustbrian/go-identity/actions/runs/41287384351).
+  Native startup prerequisite0a520d6 also has passing CI. Complete independent
+  review approves the exact19-file Reference source; all required local checks
+  pass, including existing API-key variants and the original login baseline.
+- **Actual public consumption:** Reference
+  `v0.0.0-20261101080527-46aff3573fba`, public proxy/SumDB, Go1.27.3,
+  `GOWORK=off`, no local replacement. All18 module files match review; real
+  PostgreSQL/HTTPS selected suite passes under race9.277s. Owned caches,
+  PostgreSQL clusters, sockets and test binaries are removed.
+- **Remaining:** wholeM32/Reference qualification and unselected managed/mixed
+  profiles remain open; broader OAuth/OIDC/exchange, federation/SCIM and retained
+  authentication/session variants remain part of the full67-unit goal. The prior
+  separate public API-key runtime gap is not relabelled as closed by this OAuth
+  public run. No release tag, deployment or production qualification is claimed.
+
+### Previous checkpoint — 2026-11-01 07:56 UTC
+
+- **Overall remains ~25%, low confidence; 10/39 whole milestones closed.**
+- **New delivery:** native workload constructor validation is reviewed and on
+  OAuth main0a520d6, with [passing exact-source CI](https://github.com/faustbrian/go-oauth-server/actions/runs/41285358661).
+  Invalid leases/fingerprint/request-key config now fail before startup, using
+  the existing kernel owner without SQL or a duplicate validator.
+- **Reference remains local:** adoption of that actual public native version
+  passes the complete workload path twice under race, existing API-key variants
+  and the original authentication baseline. A subsequent independent review
+  found HTTP/native tenant disagreement; its two-tenant regression reproduced
+  the defect, and configuration now rejects conflicting selections. Native-only
+  multiple workload tenants remain supported. Final affected checks and complete
+  review are running; Reference commit/push/CI/public consumption remain pending.
+- No full M32 or fully qualified unit out of67 is counted from these profiles.
+
+### Previous checkpoint — 2026-11-01 07:19 UTC
+
+- **Overall remains ~25%, low confidence; 10/39 whole milestones closed.**
+  New Reference OAuth composition is local and uncommitted, not full M32.
+- **New working local behavior:** fresh and populated PostgreSQL bootstrap,
+  HTTPS issuance/introspection/revocation, durable reopen, epoch withdrawal,
+  authority/rate outages, mandatory outbox rollback, native-only selection and
+  graph shutdown now pass twice under race instrumentation. Three independent
+  startup/migration findings were reproduced and fixed; a second complete
+  final-diff review is active. Ordinary tests, tagged vet, tidy and module
+  integrity pass. Existing-profile compatibility and final native gates remain
+  in progress; commit/push, CI and public Reference consumption are pending.
+- **Rate-check failure resolved without changing security:** the old oracle
+  treated a continuously refilling token bucket as a fixed120 window and
+  counted an authentication failure as a client debit. Observed durable state
+  retained3 tokens after120 counted calls. The corrected test requires denial
+  from both graphs and bounds combined successes by120 plus actual server-time
+  refill; two focused race runs pass. Original failure logs are retained.
+
+### Previous checkpoint — 2026-11-01 06:27 UTC
+
+- **Overall: ~25%, low-confidence estimate; 10/39 whole milestones closed.**
+  The following are delivered profiles, not additional fully qualified units.
+  Full federation, SCIM, remaining authentication/session/organization variants,
+  reference composition and final qualification remain open.
+- **New local working behavior:** Reference workload OAuth now completes real
+  PostgreSQL bootstrap, initialization/readiness, HTTPS access-token issuance,
+  owning introspection, revocation and an exactly inactive response without
+  creating users or consents. The positive journey passed0.83s and two
+  consecutive fresh databases passed2.25s/2.20s, including owned-role cleanup.
+  Production wiring is written but uncommitted and not independently reviewed.
+- **Current:** the native lifetime-guarded handle was added after its sole
+  missing-API RED. Expanded fresh/populated-prefix, reopen, authority, required
+  outbox rollback, shared-rate and Close tests are still unqualified. The first
+  expanded run found two invalid fixture inputs; token-safe encoded retry data
+  and canonical trusted network attribution are corrected, and the affected
+  check is running. Nil/native-only selection checks, race, final review and
+  main delivery remain. No additional whole milestone or qualified unit is
+  counted from these local results.
+- **New delivery:** main9379ea5 has
+  [passing exact-head CI](https://github.com/faustbrian/go-identity/actions/runs/41272378691).
+  It delivers the reviewed Reference API-key Update, optional OAuth workload
+  HTTP backend, HIBP cancellation/drain regression and authenticated tool pin.
+  No deployment or complete M21/M32 claim is made.
+- **Working public OAuth HTTP backend:** actual authenticated module
+  `v0.0.0-20261101041037-9379ea5895ca`, `GOWORK=off`, real PostgreSQL/HTTPS/race
+  passes2.143s. A configured confidential client obtains access, introspects,
+  revokes and observes inactivity; authority/rate outages and a rejected required
+  outbox effect deny safely. No caller-written domain store or handler is used.
+  All12 downloaded module files match independent review. Reference OAuth
+  integration is the next unfinished delivery, not another protocol rewrite.
+- **Reference Update:** all13 public files authenticate/match review. Current
+  Go1.27.3 full ordinary tests and six real PostgreSQL/HTTPS/race cases pass
+  (33.388s), with tagged vet/tidy/verify/format. The additional actual downloaded
+  Reference-package integration run is in progress; older Go1.27.2 results are
+  preserved as historical, not relabelled. The additional downloaded-package
+  run subsequently failed at deadline-bound stages (115.127s); its public
+  runtime qualification remains pending. Host load reached331 and remains
+  above200, a strong environmental lead but not a proven sole cause. No
+  timeout was increased or unrelated process stopped; owned cluster/caches
+  are removed. Local passing evidence is not relabelled as this failed run.
+- **Publication obstacle resolved:** immutable
+  [Tools v2.5.3](https://github.com/faustbrian/go-library-tools/releases/tag/v2.5.3)
+  is published and authenticated: exact ten assets, source-bound attestations,
+  checksums/manifest and four archive license checks. Identity's full-history
+  and current-tree secret scans now pass with that actual released binary.
+  No scanner bypass or historical Tools programme was resumed.
+- **Parallel HIBP result:** the bounded new cancellation/drain/admission test
+  is independently reviewed and on main. Full native tests/race/vet pass;
+  526/554 statements (94.9%) is not exact100 or full qualification. Mutation,
+  interoperability, lifecycle-event integration and other final gates remain
+  open. The worker has released its heavy slot and is idle.
+
+### Previous checkpoint — 2026-11-01 03:36 UTC
+
+- **New runtime result:** the selected workload HTTP lifecycle passes against
+  real public native PostgreSQL owners over HTTPS: issue, introspect, revoke,
+  inactive; authoritative epoch withdrawal and authority/rate outages deny;
+  a rejected required outbox effect rolls back issuance. No user or consent is
+  manufactured. HTTPf2f3c38 is independently approved and locally committed;
+  complete selected native tests/race/analyzers/format/documentation pass.
+  Reference integration and actual published
+  HTTP consumption remain unfinished; this does not close M32 or another unit.
+- **Publication:** the finite [Tools correction](https://github.com/faustbrian/go-library-tools/pull/346)
+  is merged as19b3394. Its exact
+  [main CI](https://github.com/faustbrian/go-library-tools/actions/runs/41267621705)
+  passed. New annotated tagv2.5.3 is pushed, and the
+  [release workflow](https://github.com/faustbrian/go-library-tools/actions/runs/41269677305)
+  is running. Artifact authentication/adoption and Reference Update publication
+  are not yet done. Nothing waits on user approval.
+- **Independent parallel lane:** a GPT-6.1 Sol high worker owns only the existing
+  HIBP leaf's remaining native requirements/qualification. Its initial bounded
+  pass finds no new runtime defect; exact coverage/mutation, interoperability
+  and clean-consumer completion remain to be established. Shared contracts,
+  Reference/HTTP, tooling and delivery stay primary-owned.
+
+### Retained delivery detail
+
+- **Overall: ~25%, low-confidence estimate; 10/39 whole milestones closed.**
+  The updates below advance M21/M32; they do not complete their remaining profiles
+  or qualify another unit out of67. Federation, SCIM, remaining authentication
+  and session variants, full composition and final qualification remain open.
+- **Delivered:** native API-key name/permission Update and strict-bearer HTTP
+  Update are reviewed and on main. HTTP3291fee has
+  [passing CI](https://github.com/faustbrian/go-identity/actions/runs/40886723503).
+  All11 downloaded public files match; actual public Update race passes2.498s.
+  Current authorized managers can rename or narrow keys without replacing
+  credentials, owners or expiry; original uncertain outcomes retain recovery
+  and disclose no key material.
+- **Current:** Reference Update is locally committed as18ccc48, not pushed.
+  Six real PostgreSQL/HTTPS cases passed60.416s and final race44.169s, covering
+  self/organization, legacy absent expiry, creator removal, restart/replay,
+  narrowing and logout. Full module tests, vet, tidy, module verification and
+  complete formatting checks pass. Independent review finds no source defects;
+  delivery is explicitly not approved while the required history scan fails.
+  The interrupted run was recovered; delivered predecessors are not restarted.
+- **OAuth HTTP in development:** optional workload token/introspection/revocation
+  handlers now pass selected wire, actual Basic authentication, shared-rate,
+  denial, outcome-custody and router/OpenAPI tests. The native authentication
+  prerequisite is delivered on main d442cee with
+  [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/41264565619)
+  and is consumed from the actual public module. HTTP remains uncommitted,
+  unreviewed and without its real PostgreSQL/Reference journey; no milestone
+  closure or full native persistence proof comes from transport test seams.
+- **Delivered in parallel:** public native managed OAuth client registration,
+  access-only workload issuance, owning-client introspection/revocation, safe
+  private inventory and terminal deletion are on main eb9eb52 with
+  [passing CI](https://github.com/faustbrian/go-oauth-server/actions/runs/41262332506).
+  All16 public files match the independent review. Complete affected local
+  PostgreSQL/race selection passes120.730s; actual downloaded-module populated
+  human-client/deadline consumer passes13.498s. Native and root required local
+  checks, including OAuth's full secret scan, pass. Owned caches/databases are
+  removed. The earlier signin timing failure is retained, not claimed fixed;
+  no timeout/security policy was weakened. HTTP/Reference OAuth composition
+  remains unfinished, so whole M32 and full unit qualification stay open.
+- **Publication constraint:** the pinned old scanner policy still blocks
+  Reference publication. All26 findings are independently proven nonsecret
+  fixtures/prose/operation names/catalog digests. The exact six-file correction
+  passes local regression, complete analyzers and actual Identity history/tree
+  scans; [release PR346](https://github.com/faustbrian/go-library-tools/pull/346)
+  is awaiting hosted CI. Publish v2.5.3 and adopt its authenticated pin before
+  claiming the required Identity gate passed. No detector or history bypass.
+  Releases and recommended defaults are now explicitly authorized.
+
+
 ## Current TL;DR — 2026-10-29 13:09 UTC
 
 - **Overall: ~25%, low-confidence estimate; 10/39 whole milestones closed.**
@@ -3503,7 +3978,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
 | M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Native/HTTP/Reference ES256 and selected Ed/mixed lifecycle profiles are delivered; retained browser `22462f7` covers internal/USB CTAP2.1 fresh/upgrade. Completed passkey/TOTP sessions now support native and actual HTTP inventory/rename, additional enrollment and removal, with surviving-key TOTP and original recovery. Latest Reference `fabdc74` is reviewed/main/CI-green; all four identified/discoverable and fresh/upgrade HTTP removal journeys pass in the authenticated downloaded module (119.022s). Remaining protocol/method profiles, physical hardware/conditional-autofill interoperability and full-unit qualification keep the full row open. Earlier startup/deadline uncertainties are historical, not claimed fixed. |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
-| M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |
+| M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Selected configured HTTPS OIDC/query/S256 explicit-self link profile is delivered through real native/HTTP/Reference owners. Native `0b5aa5a` and Reference `e836a23` are independently approved, main-pushed and exact-CI green; public-graph PostgreSQL/race cohort128.400s and authenticated downloaded-Reference five-case consumer12.906s pass. Original browser/Remember policy, current authority, one exchange, terminal replay/erasure and refusal/rollback/expiry recovery are proven. Social signin, unlinking, provider-token refresh, remaining profiles and full-unit qualification keep the whole row open. |
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Modern self-owned issuance/verification/rotation/revocation and absolute-expiry legacy digest import/unchanged bare verification/modern successor are delivered natively and in opt-in Reference/HTTPS. Native3930442 and Referencef66303d are independently reviewed/main/CI-green; actual public native/reference PostgreSQL journeys pass6.880s/14.831s. Organization ownership, no-expiry legacy import, finite quotas, caches and remaining management/session operations keep the whole row open; full-unit qualification is separate. |

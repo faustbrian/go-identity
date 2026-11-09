@@ -1,5 +1,838 @@
 # Identity Implementation — Current Milestone
 
+2026-11-09 20:49 UTC — Primary is finishing the same configured HTTPS
+OIDC/query/S256 explicit-self account-link consumer, not restarting it. Full
+67/39/19/10 scope remains. Root/OAuth/kernel prerequisites8901/e773 and
+MFA/risk/HTTP8112 are main/CI-green. Capability native adapterb329 is main and
+[CI-green](https://github.com/faustbrian/go-capability/actions/runs/42695431774).
+Native OAuth/PostgreSQL and opt-in HTTP are independently approved, committed
+and main-pushed as0b5aa5a; [CI](https://github.com/faustbrian/go-identity/actions/runs/42696001515)
+is green. Native public-dependency ordinary/race/vet and final make check pass.
+
+Primary owns Reference, public pins, composition docs, Git and heavy
+Go/PostgreSQL slot. Its frozen consumer is actual password
+signup/verification/signin then explicit-self link with original browser,
+Remember policy, one exchange, current authority, encrypted custody, terminal
+replay/erasure and rollback/expiry recovery. Social signin/unlink/refresh are
+excluded from this finite profile, not the goal. Public versions of both new
+modules are v0.0.0-20261109204517-0b5aa5a03d24. Reuse complete runtime approval
+and original RED/GREEN; run the affected Reference ordinary, configured-OIDC
+real-PostgreSQL race and tagged vet against GOWORK=off public dependencies,
+then review its final pin/docs delta and deliver. No new machinery or matrix.
+
+20:54 UTC — This finite link profile is CLOSED. Reference e836a23 is main,
+[exact CI green](https://github.com/faustbrian/go-identity/actions/runs/42697205858).
+Public-graph ordinary + selected PG/race128.400s/tagged vet/mod verify pass;
+independent complete integration review approves, and its three nonblocking
+catalog additions are applied exactly. Authenticated downloaded Reference
+v0.0.0-20261109205256-e836a23b1d2f matches all419 Go/module files; selected
+real PG/race consumer12.906s + mod verify pass. Fixture cluster is stopped and
+removed. Retained nonblocking cold-maintenance tests remain follow-up acceptance
+within the full goal. Start social signin as the next primary outcome; do not
+claim whole M17/M18 or any new fully qualified unit. No source is uncommitted.
+
+SCIM worker/reviews are finished and integrated: storage-neutral Users3df153b
+is main/CI-green with authenticated downloaded-module race/vet/verify proof.
+Native provisioning/Groups/Bulk/HTTP and M28 remain open. No implementation
+worker is active. SCIM native requires its not-yet-consumed synchronization
+authority; provider/signin successors share the currently frozen native and
+Reference owners, so do not dispatch speculative overlapping implementation.
+Reconsider dependency-ready parallel outcomes once this publication closes.
+
+20:54 UTC — Bounded dependency investigation alongside frozen Reference checks:
+Sol6.1/high/default read-only owner examines go-sso M25 bootstrap against
+committed organization02c55d2 domain proof/transition and identity0b5 native
+contracts. No writes, Go/services, Git mutation, child agents or publication.
+Return one concrete independent complete consumer slice and any exact missing
+behavior, not a broad plan or interface-only task. Primary retains integration
+and will assign implementation only after that actual dependency check.
+Investigation is now terminal: organization02c55d2 has real proof apply/read/
+revoke/recovery, but its five-participant native profile excludes capability
+custody and its public mapper excludes domain-evidence commands. Kernel
+feature admission likewise has no SSO domain profile, and risk still defaults
+those SSO actions to deny. Do not invent a second challenge/proof transaction.
+The independent successor is a typed atomic SSO-challenge/domain-proof path
+in those owners before go-sso's DNS challenge-to-proof backend; this is retained
+work within M25, not a reason to stop social signin or repeat investigation.
+
+The following notes are retained history, not live worker/process state.
+
+2026-11-03 04:55 UTC — bounded parallel MFA fixture correction owner, only
+mfa/postgres/oauth_link_authority_integration_test.go, Sol6.1/high/default/nochildren.
+No Go/services/Git/production/module edits; parent owns test slot and acceptance.
+Fix round2F5 genuine positive RP-preparation issuance fixture, preserving all
+factor authority assertions and closed runtime profile. Actual root/native
+source current789096fff1c1; no alternate authority or missing contract fabrication.
+
+2026-11-03 04:48 UTC — resumed active work, no restart. SCIM eleven-item
+correction worker is terminal0; final raw report/checks retained. Frozen25-file
+source enters one fresh non-fast Sol6.1/high complete review, same root ownership,
+identity789096fff1c1/organization02c55d2b5bc0 contract pins and exclusions. Native
+provisioning/M28 remains incomplete. Parent owns OAuth corrections/Go slot:
+round2 source findings are counter-denial cleanup, expired-proof cleanup,
+successful OAuth action audits and two invalid integration fixtures. Current
+native tests capture counter-denial atomic erasure/replay/failure before a fix.
+
+2026-11-02 07:46 UTC — SCIM same-lane review correction, not a new milestone.
+Owner: persistent non-fast Sol6.1/high worker thread01a19ab6-8ea5-72e0-805a-faf9aca34bf4.
+Same root go-scim writable paths/pins/exclusions as05:24; no native/Groups/Bulk/
+organization/HTTP/manifest/Git work. Source review identified eleven finite
+protocol defects (complex PATCH/immutable descendants, pre-allocation response
+and expansion bounds, expired error disclosure, selector identity, scalar
+comparison/representations, read projection normalization, no-op time and
+canonical path aliases). Parent verified representative actual failing source;
+worker must adjudicate every item and observe focused RED before its fix.
+Complete exactly this reviewed Users profile, no neighboring variants. Worker
+holds local Go slot after parent50284 terminal timeout: first complete full race
+pass succeeded; second pass unfinished, not a passing aggregate. Parent retains
+OAuth source/docs/pins and final SCIM review/integration/delivery.
+
+2026-11-02 07:41 UTC — complete link review returned four concrete findings.
+F1 stale initiating epoch reproduced (delayed callback303), corrected to original
+session authority; twice-race real two-flow proof passes. F2 collision ciphertext
+retention reproduced, corrected through optional AccountLinkRollbackContributor
+in the existing coordinator's fenced terminal transaction; collision+epoch
+regressions pass twice-race19.264s. Independent after-abort transactions were
+rejected: erasure/audit/proof-release/noncommit must remain atomic. No new journal.
+F3 catalog action/retention tests are RED; F4 replaces the unsupported positive
+signin test with explicit fail-closed composition proof. These remain in the
+same finite link slice. SCIM source worker finished all local checks/cleanup;
+its independent standard-tier Sol6.1/high reviewer is live. Primary holds Go
+slot. No new delivery/milestone claim; public pins/review/gates remain pending.
+
+2026-11-02 06:13 UTC — current link consumer, implementation not yet accepted.
+Neutral final-link contracts now drive the actual prepared transaction/writer;
+base reference journey passed after adoption. Provider-error callback completion
+and exact state/audit/erasure/rollback tests are implemented using the existing
+coordinator, pending focused/native consumer execution. No new journal or tooling.
+SCIM worker has root Users source and passing acceptance plus an initial race/
+fuzz pass; final checks follow its latest failed-mutation retry correction.
+Parent retains integration/review/delivery; neither OAuth nor M28 closes here.
+SCIM owns the heavy slot until its bounded run returns. Nothing waits on user.
+
+2026-11-02 05:24 UTC — dependency-ready parallel root SCIM Users protocol lane.
+Owner: standard-tier Sol6.1/high CLI implementation worker, fresh context/no
+children, separate clean go-scim main4297d91. Writable root Go/tests/docs/module
+files only; no nested adapters, inventories/CI/workspaces/Git or other repos.
+Finite outcome: discovery plus connection-scoped User create/read/replace/PATCH/
+list/search/delete, exact schemas/ETags/errors and disabled-feature disclosure.
+Protocol-boundary doubles are explicit; no durable provisioning/M28 claim.
+Consumed committed boundary: identity789096fff1c1 and organization02c55d2b5bc0,
+verified required symbols before first source adoption. Core SCIM does not wait
+for all SSO; scim/postgres DOES wait for scim/organization, so no premature native
+adapter is assigned. Parent waits for first public contract/tests before source
+integration, retains review/delivery and all root identity composition. First
+worker checkpoint is READY_FOR_RED; parent owns Go/service slot until explicitly
+granted, and the worker must not invent missing upstream authority. Existing
+Go1.27/cache/security/final qualification obligations remain unchanged.
+
+2026-11-02 05:07 UTC — same finite link consumer, neutral transaction integration.
+Chosen data shape: root-owned immutable LinkCommand with unchanged original
+signed command, explicit additive/preserve-existing-access policy and copied
+logical contributor set; LinkParticipants supplies the actual linker selection.
+LinkResult separates provisional application from durable observation. OAuth
+re-exports neutral vocabulary, never native plan/Work/SQL. The existing prepared
+owner will hand off a reservation-bound UoW after actual issuance attachment;
+WithinLink will bind the selected native writer to invocation-local Work and
+invoke its substantive ApplyLink before existing coordinator finalization/commit.
+No Work lives on the shared repository or in command/context. Rejected carrying
+an opaque transaction capability in replayable intent; it couples authority
+lifetime to copied data and makes reuse unsafe. Preserve old Execute APIs as
+real adapters to the new execution route, not alternate owners. Unit tests first
+cover proof/policy/contributor copying and provisional-versus-durable outcomes;
+existing public PG journeys remain the consumer integration oracle. No new
+review/planning framework, journal, migration or fingerprint authority is needed.
+
+2026-11-02 04:57 UTC — selected link failure/concurrency profile proven locally.
+TestReferencePostgresConfiguredOIDCLink plus CounterRotation, Collision,
+StartupSnapshot, ConcurrentCallbacks and Failures all pass twice under race
+against fresh isolated PostgreSQL (66.538s). Failure scenarios distinguish real
+vault-write rollback from exchange uncertainty, preserving original generation
+and refusing another exchange even after primary lease expiry. Root/current
+account authority, password access, original counters/expiry and token-vault
+atomicity remain intact. Concurrent fixture initially exceeded the declared
+five-per-flow HTTP rate budget (429); correcting its contender count, not
+weakening production limits, proves native pending/concurrency behavior.
+Native module race twice passes1.968s; integration-tagged risk/native/reference
+vet and diff checks pass. CLI investigation88421 finished with explicit Sol6.1/
+high/default tier and read-only sandbox; no child/source/Go/service operations.
+Its neutral-contract map points to root-owned preparation/handoff and a scoped
+authoritative writer, not a second transaction engine. Parent must verify/design
+and implement that seam plus terminal provider denial before complete-slice
+review/public pins/delivery. No whole OAuth milestone/unit closes; no Git delivery.
+
+2026-11-02 04:46 UTC — bounded read-only neutral-link contract investigation.
+Primary retains every write and final acceptance. One CLI worker is requested
+with explicit gpt-6.1-sol/high/service_tier=default, fresh context and read-only
+sandbox, no children/Go/services/Git mutations. Inspect actual root/link/native
+boundaries at main789096fff1c1 plus current dirty source against the existing
+identity/oauth goal's exact ApplyLink/WithinLink contracts. Return the smallest
+real ownership-preserving wiring and data shape, not stubs or another engine.
+Parent waits before implementing that affected contract. Current local Go slot
+remains solely the already-live concurrent-callback reference test.
+
+2026-11-02 04:32 UTC — original counter rotation/retry correction is locally proven.
+Base and retained-key reference journeys both pass twice under race (16.704s),
+including immutable original charge aliases, unchanged redirect/transaction/
+expiry and no repeated exchange. Native OAuth module race twice also passes
+(2.039s). Real duplicate-provider collision RED503 after exchange is fixed:
+retain verified output and let the sole locked identity Apply own its decision;
+durable NotCommitted maps to a redacted terminal denial. Ordinary real consumer
+GREEN2.218s preserves account/password session and replay never re-exchanges.
+Current next acceptance: caller mutation cannot rewrite selected startup policy,
+then provider-denial/rollback/unknown and neutral linking composition. No whole
+milestone/unit closure, review or Git delivery is claimed; full scope unchanged.
+
+2026-11-02 03:39 UTC — same link consumer: retained-key retry correction.
+Original root/start claims currently change when the risk key set gains a key.
+Keep the existing risk counter_charges owner and persist only its original
+nonsecret key-version aliases atomically with charge. Restore those aliases
+through that owner before reconstructing the original native command; retain
+original time and original flow network. Current complete-key admission still
+controls new charges. Missing historical metadata denies; never infer aliases.
+This is a nullable forward suffix for selected native OAuth; old profiles keep
+their existing SQL and no row is retroactively backfilled with invented history.
+Rejected storing a second callback journal or weakening claim fingerprints.
+Acceptance: actual protected original-key replay after key rotation (no exchange),
+retained alias ownership/immutability, old-key removal denial, unchanged expiry,
+fresh commands still charged against current complete history. Existing reference
+journey remains the integration oracle; no new planning/review programme.
+
+2026-11-02 03:31 UTC — actual configured OIDC link consumer now passes locally.
+The selected reference graph installs its native migration suffixes and uses
+real signup/verification/password-session authority, strict HTTPS query/S256
+provider exchange, root prepared linking, encrypted token-vault commitment and
+exchange-secret erasure. Exact callback retry does not exchange again; password
+login remains usable and unselected social signin remains absent. Wrong issuer
+and foreign browser deny before exchange. TestReferencePostgresConfiguredOIDCLink
+passes twice under race against isolated PostgreSQL, with committed account/
+token/erasure observations after the public journey. No domain rows are seeded.
+HTTP whole-module race/vet and native ordinary/race/tagged-vet checks pass.
+Temporary stage diagnostics were removed; original failure logs are retained.
+Root request-key admission resource, native plan-digest comparison and scalar
+scope persistence defects were reproduced and fixed at their owning boundaries.
+New http/oauth is optional and registered; no Tools changes or gate machinery.
+Remaining inside this same consumer: retained counter-alias intent across key
+rotation, provider denial/rollback/recovery, neutral linking contract wiring,
+complete-slice independent non-fast review, actual public pins and delivery gates.
+All changes LOCAL/unreviewed/uncommitted. Full67/39/19/10 remains unchanged;
+10/39 whole milestones closed, no new unit qualified. Primary continues directly.
+
+2026-11-02 02:32 UTC — same frozen authenticated-link consumer, primary-owned.
+Native callback now uses the actual root prepared-link owner, original state,
+real provider exchange and issuer checkpoint, and same-transaction vault/erasure.
+Component/race checks pass; actual complete callback transaction remains unproven.
+Real PostgreSQL callback attribution/erasure passes; shared provider HTTP budgets
+have focused RED/GREEN, race and outage/transaction-isolation tests. HTTP/reference
+composition and exact counter-alias retry across rotation remain next, not a new
+preflight or helper publication. All new source is local/unreviewed/uncommitted.
+Prior workers finished; none are running and no priority-only worker is started.
+The full67/39/19/10 scope and10/39 whole-milestone count remain unchanged.
+
+2026-11-02 01:27 UTC — resumed bounded native-link implementation lanes.
+User confirms worker allowance reset. All workers GPT-6.1 Sol high, isolated
+context/no children, no Git, preserve concurrent work. Parent remains hands-on
+on actual callback/root link composition and owns shared inputs/phase/output,
+core API/HTTP/reference/manifests/pins/Git/final acceptance. No planning restart.
+- capability_oauth_rp_issuance owns only capability identity issuer grant
+  projection plus focused tests/docs. Existing parent-implemented callback-state
+  consumption code stays unchanged. Consume actual local Issuer/checkpoint;
+  original verified grant metadata must be obtained without duplicating local
+  key-policy conversion or running remote callbacks under SQL locks.
+- oauth_start_output owns only new native token_vault*.go/tests/schema source
+  in oauth/postgres (excludes all existing link_start*, callback*, rp_verifier*,
+  shared migration.go and manifests). Finite outcome: real opaque TokenSet
+  encrypted with exact provider/account/tenant/client/version context, atomically
+  persisted through supplied root AccountLinkWork only after kernel account
+  creation; real FK/version mismatch and rollback tests, no own link authority.
+- Original SL01-SL10 and selected authenticated link consumer remain frozen.
+  Current identity main789096fff1c1 and cap selected mainf510d494786e; runtime
+  owner behavior proven by retained focused tests, current changes local and
+  not clean-public-consumer qualification. New task-owned cache session is
+  /private/tmp/identity-link-runtime.OyaXu0; all heavy Go/service runs serialize.
+  Workers report first real boundary; parent integrates and reviews one complete
+  consumer, not separate helper publication. Checks are focused TDD, actual
+  crypto/PG boundaries, selected race/vet/format, then complete consumer review.
+
+2026-11-01 14:02 UTC — dependency-ready generic OIDC client lane.
+Owner oauth_oidc_client (GPT-6.1 Sol high, no children); parent waits for its
+real boundary before native provider composition. Writable scope only new
+oauth root-module .go files/tests/go.mod/go.sum/README/CHANGELOG/LICENSE/docs;
+NOT oauth/postgres/providers/onetap/proxy, shared root/native/session/risk,
+HTTP/Reference, root manifests/configuration/progress or Git operations.
+Consume public root b8da8022ba26afdbdcacb404119e9ed2c10e5197 (original callback
+custody, actual tests/race/fuzz/current CI) and existing OIDC module v1.0.1 at
+authentication b3c1969fcba320013912b2b5534eef28c5eaf1ec. Local oidc tree is
+byte-unchanged from that tag; worker authenticates public bytes and runs a
+focused consumed-validator characterization before behavioral implementation.
+Finite outcome: configured HTTPS generic OIDC authorization-code/S256 client
+through real controlled TLS token endpoint and existing strict OIDC validator,
+returning bounded opaque token custody and verified provider identity only.
+No state store/reservation, account/link/session/recovery authority is invented.
+Excludes provider catalog/signup/refresh/native-token/Apple/popup/OneTap/proxy,
+HTTP/native composition; those remain full-goal work. No vendor OAuth engine.
+Prove exact redirect/client/code/verifier transport, issuer/audience/azp/nonce/
+signature/time denial, bounded response/duplicate-member parsing, cancellation/
+no redirects/no retries, token redaction/lifetime, valid vs known rejected vs
+ambiguous exchange. Parent inspects first public boundary and final tested batch.
+Shared local heavy slot requires parent coordination; coding/hosted work overlap.
+Checks: focused TDD and controlled TLS/real signed-ID-token integration, targeted
+race and bounded parsing fuzz, module ordinary/vet/tidy/format, then one independent
+final-diff review and actual primary-owned native consumer before milestone close.
+Primary continues original coordinator state-before-exchange/prepared-root bridge;
+contracts not yet implemented there do not block this protocol-only boundary.
+
+2026-11-01 13:53 UTC — capability lane delivered; primary callback input bridge.
+Capability main a1de6218fb7aba8b100934caeeecd35a9213050b read back exact after
+independent complete-eight-file approval, real native PostgreSQL composition,
+focused race and final public native/repository/security gates. Required CI:
+https://github.com/faustbrian/go-capability/actions/runs/41312062690 .
+Protected main required exact-source CI first; used existing CI-only carrier
+chore/identity-link-consumer-a1de621-ci, then advanced main to that identical
+green commit. No PR, workflow edit, history rewrite or protection bypass.
+Primary stays in frozen M17/M18. Root closed original callback custody now has
+intended missing-API RED/GREEN, exact-borrow clearing RED/GREEN and mixed-phone
+variant RED/GREEN. Original-claim codec RED rejects unsupported original input;
+GREEN binds every original code/state/session/provider/flow/counter input while
+retaining final canonical root safe scope. No placeholder subject/proof or new
+journal. Root review oauth_callback_input_review owns exact nineteen-file
+manifest55c8d3ddba844220b2a990f68aa685ee3a3e4d36e2ed8280683c59a72158b661.
+Native local codec tests use task-owned go.work, not releasable replacements;
+public source-pin adoption follows root review/delivery. Root ordinary/race/
+bounded fuzz/vet/tidy/integrity, format and required/native gates pass.
+Existing one-use state reservation BEFORE exchange, retained generated output
+and final native/session/reference composition still need implementation.
+No whole M17/M18 closure or fully qualified unit claimed. Earlier SL01-SL10
+acceptance and ownership map stay frozen; no new planning or Tools programme.
+
+2026-11-01 12:43 UTC — dependency-ready capability link-consumer lane.
+Owner capability_link_consumer (GPT-6.1 Sol high, no children). Writable scope:
+only postgres/identity consumption/link-consumer implementation, focused tests,
+README and CHANGELOG in clean main checkout
+/Users/brian/Developer/.worktrees/golib-go-capability-identity-main at
+9c2e204461690e2922ddbc9f1a1ee6690f9a50c1. Parent owns module pins and Git.
+Consumed native contract: identity main2770316191ffb7aee020e457f01e0d200016233e,
+actual transaction/replay/rollback/recovery proof and passing exact-head CI above;
+root canonical link contracts0b1377c3454cdbcacc62cf61dc36494084cf8f91.
+Finite outcome: actual capability owner prepares/re-verifies an already-issued
+canonical explicit-link proof and enforces its reserve/apply/finalize/release/
+recovery through the real AccountLinkUnitOfWork, not SQL capability doubles.
+Prove success/one-use/replay, substituted proof/scope/expiry denial, rollback
+release, uncertain outcomes and current-generation fencing using existing native
+store/phases. Preserve other consuming profiles, token formats and schema.
+No OAuth-state-before-exchange or post-exchange issuance attachment substitute;
+those still need the primary-owned closed coordinator preparation extension.
+Worker first reads existing seams and waits for parent-owned native public pin
+before production writes/heavy Go. Use one existing bounded mapping/QA scope,
+focused TDD/native integration and one independent final-diff review. Primary
+retains shared kernel/preparation/session/risk/reference, cross-module pins,
+review, commit/push and consumer acceptance; no unproven API invented by worker.
+
+2026-11-01 12:39 UTC — native account-link transaction delivered as
+2770316191ffb7aee020e457f01e0d200016233e, main push read back exact.
+CI success: https://github.com/faustbrian/go-identity/actions/runs/41307349332 .
+Independent protected_account_link_review_round2 APPROVE on 19-file manifest
+e015adbfb2b04ccc3e8d30f668c7c559291bd642c38e2cf1adcb2c81e75d82f4;
+all committed files match reviewed bytes. Primary-time late expiry RED and
+GREEN4.886s; final race twice18.044s, bounded decoder fuzz4.410s, actual ./...
+ordinary/vet, tidy-diff/module integrity/format, required/native gates0.
+Disposable PG/socket/cache removed. Only the two live notes remain dirty.
+Full goal active: no new whole M17/M18 or fully qualified unit claimed.
+Next capability/OAuth state-before-exchange and retained canonical attachment,
+then actual native provider/session/reference journey; no Tools salvage.
+
+2026-11-01 12:31 UTC — protected explicit-link native transaction local.
+Same frozen M17/M18, same original coordinator/Work/journal. Focused real-PG
+acceptance passes (4.886s), including atomic success, replay, historical and
+expired-pending recovery, proof release, counted denial and all required effect
+rollback paths. Independent review found finalization could outlive the last
+counter check; actual primary-time expiry reproduced a committed link and the
+post-finalization original-counter check fixes it. Strong rollback oracles now
+require NotCommitted, released proof, one correctly classified no-change audit
+and matching recovery; audit-write failure stays Unknown/reserved separately.
+19-file candidate manifest e015adbfb2b04ccc3e8d30f668c7c559291bd642c38e2cf1adcb2c81e75d82f4
+at /private/tmp/identity-link-owner.TnlSc0/review-source-round2.sha256.
+Fresh independent complete-diff review and final affected checks underway.
+No new commit/delivery/milestone claim yet; actual OAuth state/exchange/native
+session/reference composition remains missing. No Tools or planning programme.
+
+2026-11-01 11:34UTC — same frozenM17/M18, primarynowimplementsprotectedlinkowner.
+Data shape: canonical enrichedaccountlinkcommand, one existing signedlinkgrant,
+existingcounterplan, identity-ownedmutationreceipt and nativeproviderparticipant
+phases on soleWork. Preserve publicCommandPlan struct: select a closed native
+plan envelope from existing exactbinding/capability/counter/contributor fields,
+not a genericpurposewhitelist. A typednativeparticipant must prepare original
+custody beforetransaction, validatefullcommand, check currentprovider/session/
+policy+provider-riskfacts underlocks, and apply/finalize owned flow/vaulteffects.
+Separate sealedAccountLinkUOW sharesCoordinator/journal/recovery. No creation
+dispatchgrowth, Featurewrapper, callback/networkunderlocks or privateengine.
+Alternative genericfeaturecallbackwouldlosecanonicalidentity-linkownership;
+rejectit. OAuthstart'sstatecap reservation/exchange remains a DISTINCT earlier
+nativeflowowner; do notclaim thispost-proof linkunitimplements thatcallback.
+Fullflow must finalize requiredstate custody throughactualnativeparticipant;
+unknownexchange neverretried. Initialtests cover exactclosedplans/lifetime,
+then actualPGproof/domain/effect/receipt atomicity, denial/expiry/replay/recovery.
+No newQA/map/reviewperhelper. Nativeproviderimplementationrequiredbeforeusable
+publicsocialjourney, and completephase-setneededbeforeBegincanadmitlinkprofile.
+
+2026-11-01 11:28UTC — root/native canonicalcounteradoption delivered.
+Root0b1377c3454cdbcacc62cf61dc36494084cf8f91 andnativecd5194d3a57238b9626ede1abebab24ae6688c58
+bothpushedmain/remotereadbackexact andCIgreen:
+https://github.com/faustbrian/go-identity/actions/runs/41300350815
+https://github.com/faustbrian/go-identity/actions/runs/41301837660 .
+Rootactualpublicversionv0.0.0-20261101110541-0b1377c3454c authenticated byboth
+native modules; all6downloadedrootfilesmatchreviewedsource. Root6filesreview
+APPROVE7d1d5c47b9fa6c061a7e67f8855b739c4f79f33703b5d1ebe6078573c47c26c9;
+native14filesreviewAPPROVE483e7928cc2bc0458c9e644612115d4c84159727be939e947fa3845dd8876aa3.
+Nativewholeordinary/race/vet/integrity/requiredgatespass; existing2import-order
+formatfailure corrected withgofmt andrequiredrisknativegate rerun0. Original
+failurelogs/time-oraclefailure retained, notcountedaspasses. Cacheowner79477,
+final49448 andpush88613terminal0; exacttaskcacheabsent. NoPGcreatedthisbatch.
+No publiccanonicalBegin orwholeM17/M18/unitclosure. Primarycontinues full
+protectedlinktransaction/provider/current-session/risk/effects/recovery owner;
+singlecapabilitystate/issuedlinkproof topology must follow real callback's
+reserve-before-PKCE-decrypt rule, notsubstitute a scalarproof orsecondengine.
+
+2026-11-01 11:15UTC — samecanonicalcounterbatch, no new outcome claim.
+Root0b1377c3454cdbcacc62cf61dc36494084cf8f91 pushed/CIgreen41300350815;
+actualpublicroot downloaded by bothnative modules withoutreplace orauthbypass.
+Nativecodec and dedicatedrisk prepare/restore had intended RED then GREEN,
+affectedrace andordinarypass. Added retainedkeyrotation/denialcases; one false
+testoracle expected statelesscounterfingerprint tobindPreparedAt. Existing
+risk.CounterBinding explicitlyexcludesit fromlogicalreplayidentity; actualkernel
+codec bindsit in originalkeyedcommand and nativeCheckCommandCounters compares
+lockedcharge.prepared_at. Preserve those owners, notnew timeproof/engine. Fixed
+that oracle/comment withoutchangingproductionpolicy; actual originalexclusive
+expiry/codec-time-substitution testsstaymandatory. Originalfailedlogsretained.
+Nativefinal72289 terminal1 at riskordinarytest, not a gatepass; rerunaffected
+checksaftertestcorrection. No publiccanonicalBegin/wholemilestoneenabled.
+
+2026-11-01 10:34UTC — continue sameM17/M18 canonical link composition.
+Native account storagebd11511 alreadypushed/CIgreen; do not restart it. Actual
+remaining risk boundary: durable counter preparation supports Feature/password
+change only, so canonical LinkAccount currently cannot retain the trusted
+network, original preparation time and retained digest-key aliases it needs.
+Data shape: bounded typed account-link counter context attached privately to
+opaque identity.Command, with cloned aliases and no proof/session/allowance
+claim. Caller usage: risk owner prepares canonical command -> native codec
+binds context in original command fingerprint -> existing counter phases restore
+and charge it. Preserve AccountLinkCommand's public struct and proof payload.
+Alternatives: add a field to exported AccountLinkCommand (breaks unkeyed Go
+literal consumers), or enrich opaque Command through a closed typed constructor/
+accessor. Choose the opaque extension; old LinkAccount executors must reject
+the enriched variant rather than silently dropping its counter context. The
+new typed accessor returns both original link spec and copied context. No feature wrapper, new journal, global
+per-request map or replacement risk engine. Metadata alone enables no Begin.
+Primary owns root typed contract, native keyed codec and risk projection. Frozen
+SL01-SL10 remains; checks start with original-proof/variant/copy/bounds RED/GREEN,
+then actual public-pin codec/counter preparation+restoration and existing gate.
+
+2026-11-01 10:28UTC — native account-link batch delivered onmain bd115111cc9bb94bd3031aba071dbd94e6bd5651.
+Remote readbackexact.9files match independent round2 APPROVE snapshot
+9a89e0f1ddf9c251a8b36de9e3570cb4541a4a10ab00a8fe47a347eecd833cd6.
+Real same-ID retired-history RED first reproduced postcommitUnavailable; exact
+relink now retires only disabled current associations while preserving every
+credential tombstone/version. Disabled unassociated provider refs are explicitly
+retired state; enabled missing/invalid associations stilldeny. No new schema.
+Actual finalPG focusedrace twice6.530s, fullordinary0.757s, taggedvet/tidy/verify/
+format/required/native all0 in /private/tmp/identity-account-link.E79eyh.
+Original expiryzeroaudit oracle failure preserved; corrected cases require the
+real no-change denialaudit,0domain,0lifecycle andNotCommitted after lockwaits.
+CI success verified10:31UTC: https://github.com/faustbrian/go-identity/actions/runs/41297636137 .
+All ownedPG/cache/socket removed, runner59048+checks29750+push86617 terminal0.
+Same frozenM17/M18 continues: canonical linkUOW, actual session/provider proof,
+risk/counter mapping, finalization/effects/receiptrecovery remain unimplemented;
+publicBegin staysclosed. Not fullsocialsignin/M17/M18/unitclosure. No restart
+of native storage diagnosis, prior QA/map or deliveredworkloadOAuth composition.
+
+2026-11-01 10:14UTC — same frozen M17/M18; actual private account-link write.
+Primary owns postgres/account_link_mutation.go and its integration test, plus
+shared account reader extraction in accounts.go. Exact explicit self-owned
+partition locks, core ApplyAccountLink, account/tombstone CAS, credential
+association and user/credential/social-link epochs share original Work. No
+new journal or public gate enablement. Expected missing-method RED precedes
+production; selected real PostgreSQL GREEN covers rollback, atomic effects,
+stale/duplicate/foreign ownership, data-only preservation, retired credential
+collision, exact relink, tuple immutability, blocking and concurrent owners.
+Full affected race rerun is active in /private/tmp/identity-account-link.E79eyh;
+review/public composition remain pending. Still not social sign-in completion.
+
+Bounded test-only lane provider_expiry_wait_test (assignment recorded here after
+dispatch) owned ONLY postgres/provider_account_admission_integration_test.go,
+against identity main afd143fb90c590af8bd09e0ad8a82fb1efe2e1c8 and actual pending
+guard. It added account/association expiry-during-lock-wait cases, no production
+or Git edits. First real run denied correctly but its zero-audit oracle was
+wrong: original Coordinator.Abort rolls back domain then commits denial audit.
+Corrected exact no-change denial-audit/zero-domain/zero-lifecycle assertions;
+current rerun pending. Primary alone owns Go/service execution and integration.
+Read-only account_link_pipeline_map confirmed canonical codec already exists;
+actual session/provider/risk/counter and finalization/recovery remain required.
+No new planning pass, feature wrapper or whitelist-only execution unlock.
+
+2026-11-01 09:59UTC — actual sparse-history query cause measured/fixed locally.
+Plain nullablejoins rescanned ownerpartitions (66,306accountindexsearches,
+752,052bufferhits,741-1049ms). PK-bounded LATERAL lookups on samefixture:
+129searches,971hits,0.879ms; actualproductionvariant preserves all history/
+corruption/overflow states. Storagetest0.30s; latesttargetedrace twice2.990s,
+ordinary0.839s, taggedvet0. Originalfailure/logs retained; temporarydiagnostic
+code removed, finalPGjit=on, no timeouts/gates weakened. Same7-file native
+authority batch remains uncommitted/unreviewed; not socialsignin completion.
+Next actualprotected accountlink mutation/CAS/effects/recovery inside existing
+Coordinator, then genuineOIDC/session consumer. No newplanning/Tools mechanism.
+
+2026-11-01 09:41UTC — HIBPcoverage contribution delivered, primarylinkguardlocal.
+Mainafd143fb90c590af8bd09e0ad8a82fb1efe2e1c8 is pushed with exactCI success
+https://github.com/faustbrian/go-identity/actions/runs/41293025378 . HIBPworker
+only243-line test file; independentreviewAPPROVE, fullordinary/race/vet/integrity
+pass,537/554statements96.9%, not exact100/fullunit. Resourcecleanupverified.
+ProviderAccountAdmission uncommitted: expectedmissingAPIRED->negativeGREEN;
+12realPGcurrent/stale/deny/locking/rollback cases pass. Originalstoragestress
+hitdeadline; live-onlyfixturewriter and JIT-off didnotestablishcause. Source
+temporaryEXPLAINdiagnostic in account_authority_integration_test.go mustbe
+removedbeforepublication. Actualplanrun16081/ownPG56211 active. No deadline
+increased, gate skipped or milestone/unitclosed. SameM17/M18 profilecontinues.
+
+2026-11-01 09:10UTC — native account storage prerequisite committed/pushed.
+Identitymain396a2724bf1f0bc260df1deb3ddc90489bb9e163, remote readbackexact.
+Sixsourcefiles match independent /root/social_account_storage_round3 APPROVE;
+manifest account-source-round3.sha256 digest00010e4d3be7b5ac63373090c218a2f8f991c7e60a06b56aa952eeb979eba395
+in /private/tmp/identity-account-native.fQiDCd. Real current-method-final-race
+passes2 executions30.285s; delivery ordinary/vet/tidy/verify/format/required/
+native all0. Two original retention defects have actualRED logs, not skipped.
+CI41291896529 running: https://github.com/faustbrian/go-identity/actions/runs/41291896529 .
+This does not unlock a stubbed OAuth flow: protected link/provider/session
+admission remains primary-owned work inside the same frozen M17/M18 profile.
+No whole milestone/unit added. Two live .ai notes and worker HIBP test excluded.
+
+2026-11-01 09:05UTC — independent HIBP qualification lane resumed.
+Owner hibp_native_completion; writable risk/hibp/** only, excluding new public
+APIs/events or shared risk contracts without a demonstrated owning defect.
+Identitybase46aff3573fbac1412b58e5bb040ff957f7e3eb62; retained reviewed HIBP
+38b9597 and native results526/554statements remain unchanged input evidence.
+Finite outcome: close remaining checker behavior/test-confidence gaps behind
+the existing public Check/Close contracts, including a bounded exact-coverage
+measurement; full mutation/interoperability/lifecycle/release qualification is
+reported separately, never implied by added tests. No speculative architecture,
+event owner, counter or state machine; primary retains password/reference/risk
+integration, manifests/pins, review and Git. Initial coverage map once, then
+test/fix actual uncovered behavior; no receipt/validator programme. No Go/service
+run until primary grants the serialized heavy slot. Worker may inspect/write
+tests now; a production defect must first get its executed RED within that slot.
+
+2026-11-01 08:32UTC — M17/M18 EXISTING-ACCOUNT SOCIAL PROFILE FROZEN.
+Primary owns shared identity/postgres/session/risk contracts, new oauth/native/
+HTTP/Reference wiring, manifests/pins and Git. BaseIdentity46aff3573fbac1412b58e5bb040ff957f7e3eb62.
+Outcome: genuine verified password user explicitly links one configured query-
+mode OIDC provider via code/S256; logout; provider signin yields same user and
+real session/read/logout. Existing password remains an access path. Browser and
+persistent RememberPolicy conserved. No signup/implicit/admin link, catalog
+fanout, refresh, native tokens, popup/OneTap/proxy or federation in this profile;
+all remain fullgoal requirements. MFA-required/unknown state denies unless its
+existing actual independent completion is composed, never silently SFA.
+
+Exact missing owners confirmed by independent social_oauth_dependency_map:
+root link admission/puretransitions exist, native provider-link authority and
+atomic mutation do not; no callback/proof/session bridge. SSO is NOT worker-
+ready: its atomic issued-challenge/organization-proof boundary is also missing.
+No downstream worker dispatched against a stub. One independent QA pass
+social_link_signin_qa SL01-SL10 defines success/config/binding/provider-proof/
+authority/risk/MFA/collision/concurrency/rollback/unknown/custody/adoption; its
+metadata hashes are informational, not another receipt gate.
+
+First implementation step is real identity-owned account persistence/read/
+atomic link authority using canonical AccountLinkService, capability and
+Coordinator; NEVER a provider-owned link store or private transaction engine.
+Data shape: tenant/account stable ID+tombstone, exact provider/issuer/subject
+uniqueness, social-link version, provider-credential association and existing
+user credential epoch. Initial readonly adapters are prerequisites, not a
+closed consumer milestone or readiness for downstream work.
+Design alternatives: extend the growing CreationUnitOfWork dispatch or add a
+sealed account-link facade sharing the same Coordinator/Work. Choose the latter
+to keep genuine session/provider admission separate from unrelated creation
+while preserving the single journal/transaction/recovery owner. No generic
+purpose whitelist expansion without complete native current/apply/finalize/
+recovery behavior. Preserve all installed migrations; new forward source.
+
+Checks: focused native account PG/schema/uniqueness/snapshot/tenant/tombstone
+regressions first, then actual link/proof/risk/audit/outbox/unknown races; public
+callback/session journey and controlled independent OIDC issuer, callback fuzz,
+affected ordinary/race/vet/tidy/format/native gates, independent finaldiff review
+and main/publicconsumer delivery. No Tools/preflight/repeated fullrepo matrix.
+
+2026-11-01 08:12UTC — CLOSED frozen configured-Basic workload Reference profile,
+not wholeM32/unit. Identitymain46aff3573fbac1412b58e5bb040ff957f7e3eb62 pushed,
+readbackexact, CI41287384351 success. Independent finalreview4 approves complete
+19file snapshot3811b75ce377bd5cf904a5521db5478aa0597b3bf5bd4df013d4fc272ba1d90a;
+no remaining findings. All local required/static/format/ordinary/taggedvet/tidy/
+verify, selected PG/HTTPS race twice and sixAPIkey+baseline compatibility pass.
+PublicReferencev0.0.0-20261101080527-46aff3573fba authenticatespublicSumDB;
+18sourcefiles matchreview and actualpublic selectedPG/HTTPS/race passes9.277s
+(`/private/tmp/identity-reference-public-final.deJGaO/public-race.log`). All owned
+cache/data/socket/binaries absent in green/final/public-final roots. Two local
+live .ai notes intentionally excluded from codepush; all19sourcefiles committed.
+Wholeplatform remainsactive;10/39,~25%lowconfidence unchanged. No neighboring
+variant added before profile delivery. Next consumer outcome must be selected
+from retained dependencies after this closed checkpoint, without QA/preflight
+restart or Tools history work.
+
+2026-11-01 07:56UTC — native prerequisite3files reviewed/delivered on OAuthmain
+0a520d6e4aa75612a3babdb2e46b49e7fed92827; exactCI success41285358661.
+Reference adopts publicPGversionv0.0.0-20261101073444-0a520d6e4aa7. Complete
+focusedrace twice, ordinary/vet/tidy/verify, sixAPI-key+baseline compatibility
+and requiredroot gate0. Review3 foundHTTPtenantA/nativeworkloadB rate/authority
+conflict; actualtwo-tenant RED0.61s. Added recommended Reference HTTP config
+validation (allworkloads equalissuerTenantHost; public-only denied), preserving
+native-onlymultiple tenants. Final19file source3811b75ce377bd5cf904a5521db5478aa0597b3bf5bd4df013d4fc272ba1d90a
+under completeindependentreview4. Actualfinalrun session22578, taskroot
+/private/tmp/identity-reference-final.QFNcYJ, sourcefrozen. No Reference commit
+or wholemilestone/unit closure; no newtoolingprogramme. OldTTY quote-corruption
+stopped ownedresources; currentfreshscript avoids interactive commandpasting.
+
+2026-11-01 07:23UTC — bounded prerequisite repair lane, same frozen outcome:
+`oauth_workload_coordinator_fix` owns only go-oauth-server/postgres/config.go,
+a focused new workload constructor regression test and postgres/CHANGELOG.md;
+base OAuthmain d442ceeccf145dd0405c8518f3c79c4a76a541b9, native implementation
+eb9eb5201b9a1772d4922586fd1cba7c68ecd5e7. Outcome: invalid configured-workload
+coordinator config rejected by native construction using existing kernel
+validation; no duplicated validator, SQL, new API or protocol changes. Cases:
+zero lease, missing fingerprint keys and valid accepted config. Coding may
+overlap; Go execution waits for primary heavy-slot grant. No worker Git changes
+or children. Primary retains Reference effects-table readiness repair, final
+review, prerequisite commit/push/public pin and integrated delivery.
+
+2026-11-01 07:19UTC — frozen Reference workload slice: all focused cases pass
+twice under race instrumentation (`green.mweExZ/rate-green.log`), ordinary
+tests/tagged vet/tidy/module integrity pass; existing API-key profile six-case
+race compatibility passes. Three independent round1 startup/migration findings
+reproduced RED and fixed through existing owners (active envelope key, unmanaged
+schema, audit schema). Original native report retained in task root
+`native-review-round1.md`; full19-file review2 active, manifest
+84c045d8cc09d679dceab9161f316f2541916e67a5361e7c80e633525d4da06d,
+base9379ea5895cadd21c8bd972da35aa0b43c8609b6. Original race failure was an
+incorrect fixed120-window oracle; numeric observation onebucket/tokens3 after
+120 counted calls. Corrected test counts only successes and bounds combined
+admissions by actual authoritative server-time refill, with denial from both
+graphs. Native security policy unchanged. Required native gates still in
+progress; no commit/push or whole milestone/unit closure claimed.
+
+2026-11-01 05:19UTC — first Reference workload public integration RED captured:
+/private/tmp/identity-reference-oauth-red.LiKjk4/red.log, expected compile errors
+only absent OAuthWorkload/HTTPOAuthWorkload config and BootstrapOAuthWorkloads.
+Session21032 terminated1; cache absence verified. No PostgreSQL started, no
+production OAuth Reference writes yet. Tidy added only public OAuth core pin;
+currently unused nativePG/HTTP pins removed normally and must be restored when
+production imports consume those exact reviewed versions. No existing pin
+upgrade. Next implement frozen native/HTTP/lifetime/migration/bootstrap wiring.
+
+2026-11-01 05:01UTC — M32 Reference workload profile frozen. Primary owns
+reference/**, its three actual public OAuth pins, necessary module ownership
+registration and live notes. Consume OAuth rootd442cee/nativePGeb9eb52 and
+HTTP9379ea5; keep their existing complete native/transport proofs unchanged.
+Public graph must install selected owned migrations explicitly, bootstrap only
+configured machine authority explicitly, initialize/check existing authority,
+serve HTTPS access-only issue/introspect/revoke/inactive, survive graph reopen,
+and fail closed on authority/rate/outbox/shutdown failures. No human session,
+OTP/delivery/device/managed/exchange/OIDC bootstraps or routes. Nil selection
+preserves existing histories/routes; unsupported mixed histories reject.
+Seven independently planned acceptance partitions: fresh/populated bootstrap,
+durable HTTPS lifecycle/reopen, authority epoch/outage, outbox rollback, shared
+rate/outage, readiness/Close/pool ownership, nil/native-only selection. Reuse
+unchanged native/HTTP parsing and recovery proofs rather than duplicate them.
+Focused new integration cases, ordinary Reference tests/vet/tidy/format and
+targeted race precede one final independent review and ordinary main delivery.
+Data shape: explicit bounded workload configuration projected into existing
+native owner; no caller domain stores or competing application constructor.
+Design choice: reject broad native Config passthrough (silently selectable
+session/managed variants) in favor of a narrow workload deployment projection.
+Keep native protocol validation/secret/counter/transaction owners, not copies.
+Source-only compatibility audit confirms older Reference pin is an external
+integration-test dependency, not demonstrated production/import or gate loop.
+Actual MVS/runtime compatibility still to prove. No Tools changes needed.
+
+2026-11-01 04:30UTC — actual delivery checkpoint: origin/main9379ea5895cadd21c8bd972da35aa0b43c8609b6,
+exactCI41272378691 SUCCESS. Independent deliveryaudit no blocker; ordinary
+push/readback complete. Four coherent reviewed commits18ccc48/f2f3c38/38b9597/
+9379ea5; live notes excluded. Tools2.5.3 immutable published+authenticated,
+actualreleasedbinary rootrequired/fullhistory/currenttree0. ReferenceCURRENT
+Go1.27.3 wholeordinary+SIX actualPG/HTTPS/race33.388s+taggedvet/tidy/verify/format0
+at /private/tmp/identity-reference-go1273.g24nOH, allownPG/cacheclean. Older1.27.2
+evidence remainsoriginal. ActualpublicHTTP v0.0.0-20261101041037-9379ea5895ca
+GOWORKoff/SumDB/no replacements realPG/HTTPS/race2.143s PASS, consumer
+/tmp/identity-oauth-consumer.cMQ8e0/public-race.log; allowncache/PGcleaned.
+Initial publicconsumer tidy traversed its nonhidden modcache; fixture-only
+placement corrected to hiddenownedcache, originalfailurelogretained; no product
+code workaround. PublicHTTP12+Reference13 allmatch source manifests via actual
+GoProxy/SumDB lookup /private/tmp/identity-public-lookup.RYFWgt/public-bindings.log.
+ActualdownloadedReferencepackage PG/HTTPS/race6case run39105 terminated1,
+/private/tmp/identity-reference-public.wc1w9v/public-race.log,115.127s, deadline-
+bound failures; owned cluster/socket/build/modules/tmp absent at04:49UTC.
+Host load331 then218 is a strong environmental lead, not proven sole cause;
+public Reference runtime remainspending. No timeout/control was weakened and
+no unrelated process stopped. Avoid heavy retries while overload persists.
+Mapper oauth_managed_workload_resume extends existing Reference hook/history/
+startup map read-only; no protocolredo/no code/Go/services. Primary next genuine
+opt-in configured workload Reference flow. FullM32/all67 remainopen; no further
+Tools changes/release or ceremony needed for that implementation.
+
+2026-11-01 03:34UTC — dependency-ready parallel lane: hibp_native_completion
+owns only risk/hibp/**, not root manifests, shared risk/password contracts,
+Reference/HTTP, Git or tools. Adopt delivered4e0bab3755d58928fe076dbb28c4ce519d2f1855
+without restarting its completed freshness/profile consumers. Existing module
+pins riskf43df0429695, identity5afeba0ac471, password4eb0fefa60ff,
+http-clientv2.1.0; current committed integration proves their consumed behavior.
+Finite outcome is full native checker/risk-adapter requirements and qualification
+of this stable leaf, retaining prior public integration and independently reviewed
+behavior. Primary alone owns final qualification/dependency status, manifests,
+review and delivery; no full-unit claim from coverage alone. Exclude new provider
+products, password policy, shared APIs/tooling and new evidence mechanisms.
+First bounded pass checks actual contract gaps and exact native test/coverage/
+race/parser-fuzz commands, then implements/tests only justified leaf gaps. Own
+disposable caches and bounded runs; sole local heavy lease through03:44UTC,
+then report/release it before any further compile/service work. Primary handles
+the in-flight Tools release and pending identity publication independently.
+
+2026-11-01 03:12UTC — actual selected OAuth native PostgreSQL/HTTPS lifecycle
+passes in task-owned /tmp/identity-oauth-consumer.cMQ8e0, using local HTTP module
+and actual public domain owners (not a clean-public HTTP claim): terminal
+test.log0,0.753s. Complete issue/introspect/revoke/inactive; real rate/authority
+outages, authority epoch withdrawal and required-outbox rollback; no users or
+consents. Earlier compilation/configuration/token-shape fixture failures retained;
+all task caches/cluster resources removed. HTTP14-file candidate manifest
+5e217a7156b4a917f6f2a22e17e56224b17a6035036484e3332bb240f546b8d0, base18ccc48.
+Independent oauth_http_final_review and full selected native module check run
+concurrently. No HTTP source changes while review reads its frozen snapshot.
+Tools sourcePR346 merged19b3394729db02c823fadf127398c1ffcb101760; merged tree
+equals reviewed3b2bf109 source. Exact mainCI41267621705 running. Native review
+and bounded independent merge audit have no open findings. Normal v2.5.3
+publication then authenticated identity pin remain required before Reference
+Update push. Release/recommended authority is settled; no bypass/history work.
+
+2026-11-01 02:41UTC — supporting correction remains finite and product work
+continues. Tools exact6 source on reviewed commit3b2bf109e3cb6d76aca07c1f6ae5081b86024d9a,
+baseef9ae418 (also exactv2.5.2 source). User authorizes scoped patch release,
+then says releases always authorized/recommended defaults. Six-file release
+carrier https://github.com/faustbrian/go-library-tools/pull/346 is open, not
+merged/released; code was prepared/committed on main in an isolated clone.
+Mandatory release automation requires a merged source PR; no gate changed.
+Independent identity_secret_policy_review APPROVE exact6 after one selector
+finding was fixed. Local regression/vet/GolangCI/native importer-compatible
+Staticcheck/tidy/module/completeformat/source-docs/config/repository/cohesion/
+workflow/securityrecords/secrets/releasemetadata passed. Raw logs and six hashes
+in /tmp/identity-tools-secret-fix.1h4d65; initial incorrect bare Staticcheck and
+optional-cache invocations remain failed records, corrected native routes0.
+Actual Identity history/current scans0 with exactcandidatepolicy, recorded
+commands+exits; no finding suppression. Wait exactPR CI, then merge/tag/release,
+verify authentic artifacts and adopt only identity pin. No historical migration.
+
+OAuth root AuthenticateClient exact4 is delivered maind442cee with exactCI
+https://github.com/faustbrian/go-oauth-server/actions/runs/41264565619 SUCCESS;
+native source review APPROVE and independent delivery audit complete. Actual
+public root v0.0.0-20261101021712-d442ceeccf14 all4 equal and HTTP consumer passes.
+Primary new http/oauthserver now has actual code/tests/wire/rate and manifests.
+Selected ordinary tests0.262s include Basic denial before client debit,
+scope/grant restrictions, outcomes, router/OpenAPI agreement and disabled paths.
+Issuer-host construction regression observed RED, then fixed and GREEN.
+This is transport/core-seam proof, NOT durable PostgreSQL/Reference acceptance.
+Bounded full wire ordinary/race/fuzz/vet/tidy/format run live76848, owns sole
+local heavy slot and automatic cleanup of identity-oauth-http.f3rFOI caches.
+No HTTP commit or independent finaldiff review yet; fullM32/all67 stay open.
+
+2026-11-01 — M32 selected HTTP workload-token profile frozen after bounded
+consumer-contract inspection. Primary owns http/oauthserver (new optional
+module), necessary base HTTP protocol-rate support, root module/package
+registration and subsequent Reference wiring. Outcome: a genuine managed or
+configured confidential workload client uses HTTPS client_credentials, reads
+own introspection, revokes and observes inactivity through the existing native
+OAuth owner; no consumer-written handlers or domain stores. Consume native
+eb9eb5201b9a1772d4922586fd1cba7c68ecd5e7 and public root47be6ec; preceding real
+public PostgreSQL/race proof is retained. Exclude code/refresh/exchange/OIDC,
+browser cookies, device and client-management HTTP from this selected profile;
+disabled routes/metadata remain absent. Full M32/all67 remain open.
+Exact catalog rates: token authenticated-client60/min + trustedIP120/min;
+introspection/revocation client120/min + IP240/min + applicable tenant600/min.
+No local fallback, parsed-client assertion or duplicate credential authority.
+Prerequisite worker oauth_managed_workload_resume owns ONLY OAuth root new
+client_preflight.go/client_preflight_test.go and additive README/CHANGELOG.
+It adds bounded Service.AuthenticateClient using existing current-client and
+authentication owners, for client-rate admission before effects; final native
+authentication remains mandatory. No cached proof or new authentication engine.
+Worker root TDD/ordinary/race/vet has the sole local heavy slot; primary does
+lightweight transport coding. Worker performs no Git or child-agent operations.
+Checks: parser/HTTP denial matrix, route/OpenAPI selection, strict Basic/form
+custody, rate exhaustion/outage/cancellation, actual PostgreSQL/HTTPS complete
+journey and independent complete-final-diff review before delivery. Frozen
+commands will name new module tests plus the selected Reference integration
+test; existing root required gates remain mandatory, not replaced by unit tests.
+
+Historical scanner diagnosis CLOSED: all26 dated exact historical findings are
+noncredential prose/test inputs/operation names/catalog checksums; independent
+identity_history_scan_diagnosis confirms exact head18ccc48 and source provenance.
+Command-only log.date=default preserves26 findings while restoring all26 Commit
+fields; ambient relative dates caused missing provenance, not false positives.
+No exclusions/history/control changed. Exact policy correction in released
+Tools remains needed; scoped Tools patch-release authority requested, pending.
+Reference18ccc48 publication stays parked; product work continues, goal active.
+
+2026-11-01 01:50 UTC — finite native managed-workload profile DELIVERED.
+go-oauth-server/main and remote eb9eb5201b9a1772d4922586fd1cba7c68ecd5e7;
+complete16 manifest e91f3fbe independently APPROVED by
+oauth_managed_native_final_review. Final ordinary/race/full10-test PG/race
+120.730s/fuzz65143/taggedvet/tidy/verify/gofmt/diff all0. Initial135.847s PG/race
+setup failure remains failed; isolated retry7.269s and full unchanged selector
+subsequently pass. No original3s security deadline weakened or timingcause fixed.
+Root full makecheck including history/currenttree secrets0; parent exact root
+contract and native docs/compilation0 before push. Hosted CI SUCCESS
+https://github.com/faustbrian/go-oauth-server/actions/runs/41262332506.
+Actual public native v0.0.0-20261101014341-eb9eb5201b9a Origin exact/all16 equal;
+downloaded-module realPG/race composite and originalsecretdeadline PASS13.498s.
+Independent delivery auditor verifies remote/head/review/CI/publicproof and
+cleanup. Source/runtime resources under native-resume.Yy6mgn and publication.
+tRoz9y are now evidence-only, all owned cache/PG dirs absent. This closes only
+native selected profile, NOT wholeM32/nativeexchange/HTTPReference/unitrelease.
+Identity Reference18ccc48 remains local, blocked by its own required26generic
+history findings. Metadata-only pinned scanner diagnosis underway, no policy,
+Tools, ignoredfinding, history or threshold changes. Full goal stays active.
+
+2026-11-01 01:21 UTC — resumed existing M21 Reference and M32 native lanes.
+Reference API-key Update13 is implemented on main3291fee; interrupted actual
+six-case PG/HTTPS run recovered PASS60.416s. Final race/checks and independent
+review ongoing, no new whole milestone/unit closure. No native/HTTP restart.
+New user mandatory local pre-push tests/analyzer/formatter gate applies; every
+required failure prevents push, even if hosted CI previously passed.
+OAuth existing dirty native15 remains the same frozen managed-workload outcome
+and ownership below; previous worker no longer live. Reassign to
+oauth_managed_workload_resume without root/API/HTTP/Reference/shared-owner writes.
+Consume actual public root47be6ec, preserving existing human/static histories
+and current finite cases. Initial native registration RED exists in
+/tmp/oauth-managed-workload-native-red.peJdV5/red.log. Next discriminating case
+is original nonrotation matched-secret deadline, not another policy design.
+Worker may recover/inspect and implement assigned native owners; no Git or
+children. No Go/PG until primary releases compile-heavy slot; current primary
+final Reference race32718 owns it. Primary retains review/publication/acceptance.
+
+2026-10-29 13:44 UTC — primary M21 HTTP/Reference keyed Update SELECTED.
+Owner primary; writable http/apikey feature/handler/wire and new update source/
+tests, module pins/docs/changelog; then reference APIKeyService/HTTP selection,
+integration tests and module pins/docs/changelog. Consume public core98f935b
+and nativecdf551e; preceding real PostgreSQL/race consumers prove exact keyed
+rename/narrowing, self/org/legacy/no-expiry, current authority, rollback/recovery
+and contention. Reuse unchanged native proof. Outcome: opt-in POST
+/v1/apikey/update through real Reference HTTPS performs exact name/grant
+replacement under current fresh bearer authority and shared keyed rate.secret,
+returns copied committed metadata only, preserves original recovery on unknown,
+and never reveals a key. Organization target is explicit; disabled selection
+exposes no route/schema. Nil/null/duplicate/alternate authority, grant expansion,
+stale version and expired session deny; explicit empty grant is deny-all.
+No expiry/quota/arbitrary metadata/admin/cache/recovery-route profile added.
+Choose existing mutation pipeline plus typed Update body/result projection,
+not a second authenticate/admit/workflow pipeline. Reuse metadata projection
+for legacy absent expiry rather than extending secret-bearing issuance output.
+Checks: HTTP focused RED/GREEN then affected full module/race/vet/tidy/verify,
+bounded parser fuzz and strict diff scan; independent complete-diff review;
+Reference real PG/HTTPS fresh/populated/restart/denial/replay cases, public
+module consumer, normal main delivery and applicable CI. Native prerequisite
+and complete unit qualification remain separate claims. No new planning pass.
+
 2026-10-29 13:01 UTC — independent native M32 managed workload lane SELECTED.
 Owner oauth_managed_workload, go-oauth-server/mainaf9690ec only. Writable: new
 workload-management source/tests; narrowly affected root client_management.go,
@@ -15370,3 +16203,188 @@ and its finite affected checks. No new flow, engine, retry or authority bypass;
 no shared-owner edits, staging, commit/push/branches/children. Parent integrates
 pins/Git and accepts final review. Worker exclusively owns heavy Go/PG slot
 when dispatched; primary does source work until the slot is returned.
+2026-11-01 17:38UTC — Native prepared linking b01fd26b2c48 and public cap consumer
+f510d494786e delivered to main; exact-source CI passed. Same M17/M18, no whole
+milestone closure. Primary owns local original callback risk adaptation and the
+actual native/session/reference composition. Worker oauth_query_callback_parser
+(Sol6.1high/forknone/nochildren) owns oauth/callback_query*.go plus oauth docs;
+finite strict issuer-bound query parsing only, no exchange/SQL/session authority.
+Worker currently holds the serialized Go slot. Existing SL01-SL10 stands.
+2026-11-01 17:51UTC — Parser worker completed all module checks and released
+the Go slot. Independent oauth_query_callback_review is completing the frozen
+five-file review. Parent repository gate38616 passed; delivery waits on review.
+2026-11-01 18:58UTC — Same frozen M17/M18 profile. Parser delivered789096f;
+actual reference browser/persistent provider-link/signin journey remains RED
+because native composition is missing. Local actual capability/native RP-start
+contract now proves link/anonymous subjects, acknowledged generation, atomic
+RP-record/state issuance/audit/lifecycle, terminal replay and late rollback.
+Published native predecessor fails both success cases; current local composition
+passes, including twice-run race. A terminal denial correctly retains its audit
+but no domain/grant/lifecycle effects. No whole milestone/unit closure or new
+publication claimed. Primary continues real native service/session/reference.
+
+Worker oauth_query_callback_parser (Sol6.1high/forknone/nochildren) now owns ONLY
+new oauth/postgres/rp_verifier.go, rp_verifier_test.go and go.mod/go.sum. It
+consumes public oauth789096f and secret-envelope/v2 v2.0.1. Finite private outcome:
+actual envelope-AEAD recoverable PKCE, exact immutable AAD, independent keyed
+commitment, original <=10m/exclusive deadlines and retained-key recovery.
+Focused TDD/ordinary/race/vet; no SQL, admission, journal/replay, public decrypt,
+Git or reference/root edits. Primary owns real callback admission and integration.
+Worker has the serialized Go slot; primary does source work. Native selected
+AAD values explicitly reject >1024 bytes (actual envelope Context limit), never
+truncate/hash or silently narrow the core provider profile. No other active lane.
+2026-11-01 19:23UTC — Worker complete: real private PKCE AEAD/HMAC custody
+RED/GREEN, ordinary/race/vet pass. Primary added forward RP storage and actual
+PostgreSQL constraints/erasure tests: missing MigrationSource RED, then GREEN;
+populated identities preserved, no invented anonymous user, original-journal
+FK retained. A fixture-only unused SQL parameter was corrected, not waived.
+Registered the new oauth/postgres module in existing manifests/workspace;
+make inventory passes. No Tools change or new evidence framework.
+
+Integration exposed duplicate recoverable RP secrets in terminal start output.
+Primary added exact-profile terminal erasure, a forward kernel guard migration
+and receipt-only replay after erasure. Pending/unknown custody remains intact;
+terminal resurrection is rejected. Initial SQL accidentally referenced optional
+columns for legacy installs; existing terminal test reproduced it, then passed
+with SQL selected only for RP starts. Runtime guard/replay failures were fixed,
+not hidden. Final six-case RP race twice19095=0; complete local actual capability
+composition76558=0, including predecessor prepared-link consumers. Native and
+capability ordinary/tagged-vet; custody ordinary/race/tagged-vet/integrity pass.
+No independent review, full gates, new commit or push for this local batch yet.
+
+Stop-loss sequencing: finish authenticated provider linking as a complete usable
+consumer profile first; then finish sign-in through that linked account. This
+splits the oversized combined M17/M18 path without dropping either or changing
+the 39/67 denominators. New link-only reference acceptance proves controlled
+provider -> real authoritative account row, callback replay without exchange,
+password access preserved, and unselected sign-in route absent. The original
+browser/persistent social-signin test remains required. Adopted public native
+b01fd26 in Reference for its actual AccountRepository API; new link-only RED36967
+now has EXACT4 missing SocialOAuth/HTTPSocialOAuth configuration fields/types.
+Do not add stubs for green: next implement actual RP start/callback native owner,
+vault/root-link participant and selected HTTP/reference composition. Original
+SL01-SL10 security/failure requirements remain. Overall~25 lowconfidence10/39
+unchanged. Last full status19:13UTC; no user question pending.
+2026-11-01 19:40UTC — Native linking service in progress; existing bounded
+mapping stands. Public core LinkStartRequest/Result, exact callback URL and
+scope values have intended missing-API RED and focused GREEN. Native design
+uses the existing OriginalSessionFields/FromFields mapping, SessionService.Get,
+CSRF/credential digest custody, prepared request-key journal and acknowledged
+generation. No new session serializer, replay store or private authority engine.
+
+Dependency-ready worker oauth_link_factor_authority (Sol6.1high/forknone,
+nochildren) owns ONLY mfa/postgres/oauth_link_authority.go, its tests and
+module-local go.mod/go.sum/CHANGELOG. Consume public nativeb01/rootb8; add native
+known-empty factor reads/locks for exact RP link-start and canonical root-link
+preparation/check phases. Missing/enrolled/stale state denies. Real factor-row
+and closed-owner tests, ordinary/tagged-vet/targeted-race; no native session,
+reference, root contracts, SQL outside its owned factor rows, Git or publication.
+Primary owns integration and complete-slice acceptance/review. Worker has the
+serialized heavy Go/service slot; primary implements native service source.
+# Nov 9 resumed correction ownership
+
+Primary continues real explicit-self OIDC linking on main. The previous status-only
+turn was no progress; fresh PostgreSQL reference tests now prove ordinary/persistent
+linking, collision and expiry-during-execution cleanup after correcting Begin's audit
+binding order. This is local proof, not delivery or whole M17/M18 closure.
+
+- Primary owns abandoned-unused RP expiry, reference/HTTP integration, shared pins
+  and delivery. Existing current source/committed pins are retained.
+- Terminal-erasure worker (Sol6.1/high/default non-fast) owns only terminal.go,
+  preparation_journal.go and its new integration test: clear temporary prepared
+  provider response on terminal success/refusal, retain pending custody/replay.
+- Attached-recovery worker (same model/tier) owns account_link_prepared_execution.go,
+  account_link_cleanup.go, recovery.go/recovery_participant.go, OAuth callback.go/
+  callback_owner.go and affected tests: crash after attachment then expired-proof
+  retry closes through historical noncommit custody without renewing authority.
+- Both implementation workers initially write regressions only; Go/service slot
+  transfers explicitly. Source-only work and independent SCIM review overlap.
+- SCIM root source is frozen at base4297d91 plus dirty tree manifest71a5433cbd66;
+  complete independent read-only review running. Root ordinary/targeted race/vet/
+  bounded fuzz pass. Native provisioning/Groups/Bulk/HTTP remain excluded here.
+
+No other source writer, Git operation, dependency or milestone closure is assigned
+to workers. Primary reviews boundaries, final acceptance and coherent main delivery.
+
+### Resumed correction checkpoint — 2026-11-09
+
+Root neutral-link prerequisite is reviewed and pushed as 8901e7f098125a25108ea7c017c5424cb0c3b760;
+remote read back. Root pinned public tests/vet, formatting, structural and full
+history/current-tree secret checks pass; exact-head hosted CI is pending.
+This prerequisite closes no additional whole milestone or unit.
+
+Primary retains Reference/HTTP/shared ownership and now composes actual lost
+attachment acknowledgement -> real proof expiry -> native refusal/erasure,
+without another provider exchange or a replacement session. Existing traced
+RED/fixes remain, not a new investigation/planning lifecycle.
+
+SCIM SAME worker 01a1c119-61e2-7832-a561-b441714a0a6a resumes on main4297d91,
+consuming committed identity789096f/organization02c55d2 and fixed x/text0.42.0.
+Owns root Go/tests, named Users/security docs and necessary go.mod/go.sum only.
+Acceptance: full RFC8265 admission/uniqueness, legal substring fragments, lexical
+empty comparisons and omitted primary=false, with existing Users/replay/freshness
+controls. Excludes nested/native provisioning/Groups/Bulk/HTTP/Git/CI/.ai/children.
+Checks: authenticated tidy/verify, attributable fragment RED then focused/root
+GREEN, targeted race/vet and bounded10s affected fuzz. Sol6.1 HIGH/default NON-FAST.
+Worker NOW owns heavy Go slot; primary source-only integration/review proceeds.
+Primary owns incoming-main reconciliation, independent final review and delivery.
+
+SCIM writer released the Go slot after real fragment RED, focused/root GREEN,
+targeted race/vet and three bounded fuzz smokes. Its source is frozen at
+manifest7a6035a5b7ff4c4200d3144dfc8f50ad2fd1477ceed375e1a253c70923c58217
+for the same independent complete resulting-slice reviewer. Reviewer is read-only,
+no Go/services/children/publication. Primary now owns the heavy slot for the
+actual Reference attachment-ack-loss/expiry journey and defect-detection overlay.
+
+The actual Reference journey passes (21.632s); disabling recovery in an owned Go
+overlay reproduces the stuck expired-retry503 (21.426s). Native source is frozen
+for independent complete resulting-diff review: identity base8901e7f with145paths,
+manifest0fd9b41f1331822dcf080646c8653e7f8fe15d5a653290e6e1eddb190eef2833;
+capability basef510d494 with11paths, unchanged manifest0cd66939b390cd7247a1acc092ef108a033129117c88f69910ae73d6bf169433.
+Reviewer01a1c130-35c0-78b3-9089-aedba1a17ffe is read-only/no Go/services/children.
+Primary owns pending pinned-Go1.27.2 affected native/Reference race, tagged vet,
+expiry-cursor bounded fuzz and later public pins/consumer/delivery. No new row closed.
+
+SCIM independent complete review48094 is terminal REQUEST_CHANGES: one canonical-
+set/no-op mismatch, omitted primary versus explicit false. Parent traced the
+lost multi-valued element context at schema equality/key callers. Same writer
+resumes TESTS ONLY while primary95022 retains heavy slot. Original root ownership,
+committed dependencies and exclusions remain. Complete source is thawed only for
+this bounded defect; no new scope/factory. Recheck all owning comparison/key paths,
+not merely query selectors, without materializing defaults in stored resources.
+
+Native reviewer43699 is terminal REQUEST_CHANGES: after-RP-expiry attached
+cleanup route, recoverable denial-erasure failure and retained definitive token-
+endpoint refusal are still missing. These are original terminal/recovery criteria,
+not extra provider variants. Primary owns their implementation and actual Reference
+acceptance. Same reviewer resumes a bounded read-only existing-mechanisms question
+for F5/F6, not another review/factory; no Go/services/writes/children.
+Pinned native4package race and full selected Reference race PASS83.711s. Tagged
+vet passes. Actual expiry fuzz found noncanonical hour cursor; saved seed retained,
+five-line roundtrip validation correction is under focused regression/fuzz now.
+
+Cursor regression and bounded fuzz now pass, saved original crash retained.
+Primary owns F3 expired-attached RP maintenance (new rp_recovery.go), existing
+rp_expiry/callback-input/owner paths and all Reference composition/acceptance.
+Provider-failure worker Sol6.1 HIGH/default NON-FAST owns only root prepared-
+execution/preparation/domain/recovery plus new refusal/feature-cleanup helpers,
+native callback denial/exchange/output and focused new tests. Consumes current
+committed root8901e7f and frozen existing native/capability contracts. First phase
+TESTS ONLY until Go slot grant; no Git/config/pins/Reference/HTTP/.ai/children.
+Acceptance is F5 atomic failed-terminal erasure and F6 retained typed definitive
+refusal/replay/recovery, including expired RP cleanup; genuine ambiguity stays
+pending and no Grant/session/account/token-vault or duplicate exchange is invented.
+Primary inspects first typed seam and final integration. Full67 scope unchanged.
+SCIM writer8353 currently owns heavy slot for canonical-primary-set RED/fix/checks.
+
+SCIM8353 terminal: primary-set RED/fix/focused/root/race/vet/query+operand fuzz PASS.
+Recheck26084 confirms F1 closed, finds configured Primary/PRIMARY casing across
+validation/filter/sort/PATCH. Parent traced hardcoded accesses; same worker resumes
+tests-only with one centralized descriptor-semantic correction planned across all
+owning paths, not per-condition patches. No source qualification/delivery yet.
+Primary expired-attached-RP RED39836 failed on the missing native route after a
+real minute. New rp_recovery.go tenant-scoped/cursor-bounded historical operation
+reuses canonical UoW.Recover, no browser/Grant/SQL mutation authority duplication.
+Actual cold public-native/Reference GREEN85056 PASS60.607s, full RP/state expiry,
+generation2, two releases, erasure/audits/session conservation. Primary native
+source now stable while provider worker82085 owns Go for F5/F6 RED/implementation.
