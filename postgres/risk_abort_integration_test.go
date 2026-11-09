@@ -121,7 +121,7 @@ func testRiskOwnerAbort(t *testing.T, ctx context.Context, pool *database.Pool, 
 				t.Fatal(err)
 			}
 			if mode != "no-audit" {
-				w.state.execution.featureAbortAudits = map[string][]audit.Record{"dependency-failure": records}
+				w.state.execution.composedAbortAudits = map[string][]audit.Record{"dependency-failure": records}
 			}
 			if _, err := w.Exec(bounded, `INSERT INTO identity.risk_abort_domain(command_id) VALUES($1)`, string(b.CommandID)); err != nil {
 				t.Fatal(err)

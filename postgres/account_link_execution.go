@@ -3,6 +3,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"slices"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
@@ -10,12 +11,16 @@ import (
 
 // The only account writer remains the kernel. Native provider effects and
 // one-use consumption are provisional in this same original transaction.
-func (r *Repository) applyAccountLink(ctx context.Context, w Work, command identity.Command) (identity.CommandResult, error) {
-	fail := func(err error) (identity.CommandResult, error) {
-		return identity.CommandResult{}, w.fail(w.state.ctx, err)
+func (writer *accountLinkWriter) ApplyLink(ctx context.Context, intent identity.LinkCommand) (identity.LinkResult, error) {
+	if writer == nil {
+		return identity.LinkResult{}, invalidWork()
+	}
+	w, r := writer.work, writer.repository
+	fail := func(err error) (identity.LinkResult, error) {
+		return identity.LinkResult{}, w.fail(w.state.ctx, err)
 	}
 	if err := w.usable(); err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	if ctx == nil || r == nil || r.read == nil || w.state.execution == nil || w.state.accountLink != nil || w.state.creation != nil || w.state.profile != nil || w.state.update != nil || w.state.status != nil || w.state.identifier != nil || w.state.feature != nil {
 		return fail(invalidWork())
@@ -26,6 +31,10 @@ func (r *Repository) applyAccountLink(ctx context.Context, w Work, command ident
 		return fail(invalidWork())
 	}
 	p := reservation.plan
+	command, valid := intent.Command()
+	if !valid || intent.FinalAccessPolicy() != identity.LinkPreserveExistingAccess || !slices.Equal(intent.Contributors(), neutralLinkOwners(p.snapshot().Contributors)) {
+		return fail(invalidWork())
+	}
 	spec, _, ok := command.AccountLinkCounterCommand()
 	if !ok || spec.Binding != w.state.binding || len(p.contributors) != 6 || p.contributors[0].contributor != r {
 		return fail(invalidWork())
@@ -39,14 +48,14 @@ func (r *Repository) applyAccountLink(ctx context.Context, w Work, command ident
 		return fail(err)
 	}
 	if err = c.runAccountLinkPhase(ctx, w, command, accountLinkCheck); err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	if err = c.checkCommandCounters(ctx, w, command); err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	state, now, err := lockAccountLinkState(ctx, w, spec.Change)
 	if err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	if !accountLinkProofCurrent(spec, now) {
 		return fail(identity.ForbiddenError{})
@@ -56,13 +65,13 @@ func (r *Repository) applyAccountLink(ctx context.Context, w Work, command ident
 		return fail(err)
 	}
 	if err = c.runCapabilityExecution(ctx, w, false); err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	if err = c.runAccountLinkPhase(ctx, w, command, accountLinkPersist); err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	if err = persistAccountLinkMutation(ctx, w, spec.Change, mutation); err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	progress := w.state.accountLink
 	progress.user = mutation.Access.User
@@ -73,22 +82,24 @@ func (r *Repository) applyAccountLink(ctx context.Context, w Work, command ident
 	progress.applied = true
 	original := command
 	w.state.counterCommand = &original
-	record, err := kernelMutationAudit(ctx, spec.Binding, spec.Change.ExpectedAccountVersion, now, "committed")
+	records, err := accountLinkMutationAudits(ctx, p, now, "committed")
 	if err != nil {
 		return fail(err)
 	}
-	if err = w.StageAudit(p.audits[0].EventIndex, record); err != nil {
-		return identity.CommandResult{}, err
+	for i, record := range records {
+		if err = w.StageAudit(p.audits[i].EventIndex, record); err != nil {
+			return identity.LinkResult{}, err
+		}
 	}
 	if err = w.StageLifecycle(p.lifecycle.EventIndex, now); err != nil {
-		return identity.CommandResult{}, err
+		return identity.LinkResult{}, err
 	}
 	receipt := progress.receipt
-	result := identity.CommandResult{Binding: spec.Binding, Outcome: identity.CommitOutcomeCommitted, User: progress.user, ExpectedVersion: spec.Change.ExpectedUserVersion, Link: &receipt, AuditEventID: record.ID()}
+	result := identity.CommandResult{Binding: spec.Binding, Outcome: identity.CommitOutcomeCommitted, User: progress.user, ExpectedVersion: spec.Change.ExpectedUserVersion, Link: &receipt, AuditEventID: records[0].ID()}
 	if result.Validate() != nil {
 		return fail(invalidWork())
 	}
-	return result, nil
+	return identity.NewAppliedLinkResult(identity.LinkApplication{Binding: spec.Binding, User: progress.user, ExpectedVersion: spec.Change.ExpectedUserVersion, Link: receipt, AuditEventID: records[0].ID()})
 }
 
 func accountLinkProofCurrent(spec identity.AccountLinkCommand, now time.Time) bool {

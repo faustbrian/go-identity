@@ -30,6 +30,15 @@ func encodeAccountLinkStatePlan(b identity.CommandBinding, fp [32]byte, p Comman
 	}
 	base := p
 	base.AccountLinkState, base.CommandCounters = nil, nil
+	version := uint64(1)
+	profile := "identity-account-link-state-plan-v1"
+	if len(p.Audits) == 3 {
+		if validateOAuthAccountLinkAudits(b, p.Audits) != nil {
+			return nil, invalidPlan()
+		}
+		base.Audits = p.Audits[:1]
+		version, profile = 2, "identity-account-link-state-plan-v2"
+	}
 	count := 3
 	if p.Capability != nil {
 		count = 4
@@ -42,7 +51,7 @@ func encodeAccountLinkStatePlan(b identity.CommandBinding, fp [32]byte, p Comman
 	encoded := cborMap(map[string][]byte{
 		"base": cborBytes(wire), "state": encodeCapabilityPlan(state),
 		"counter": encodeCommandCounterPlan(*p.CommandCounters),
-		"profile": cborText("identity-account-link-state-plan-v1"), "version": cborUint(1),
+		"profile": cborText(profile), "version": cborUint(version),
 		"provider": cborMap(map[string][]byte{"owner": cborText(p.Contributors[5].Owner), "contract_id": cborText(p.Contributors[5].ContractID), "version": cborUint(uint64(p.Contributors[5].Version))}),
 	})
 	if len(encoded) > 65536 {
@@ -94,9 +103,18 @@ func decodeAccountLinkStatePlan(b identity.CommandBinding, fp [32]byte, data []b
 	r.key("policy_version")
 	counters.PolicyVersion = r.number(math.MaxUint64)
 	r.key("profile")
-	r.consume(cborText("identity-account-link-state-plan-v1"))
+	profile := r.string(64)
+	version := uint64(1)
+	switch profile {
+	case "identity-account-link-state-plan-v1":
+	case "identity-account-link-state-plan-v2":
+		version = 2
+		base.Audits = oauthAccountLinkAuditPlans(base.Audits[0])
+	default:
+		return fail()
+	}
 	r.key("version")
-	r.consume(cborUint(1))
+	r.consume(cborUint(version))
 	r.key("provider")
 	provider := readFeaturePlanContributor(&r)
 	if !r.ok || len(r.data) != 0 {

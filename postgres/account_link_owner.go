@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/faustbrian/go-audit"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -145,46 +144,14 @@ func (o *AccountLinkUnitOfWork) Execute(ctx context.Context, original identity.C
 }
 
 func (o *AccountLinkUnitOfWork) executeReservation(bounded context.Context, reservation Reservation, command identity.Command) (result identity.CommandResult, err error) {
-	spec, _, ok := command.AccountLinkCounterCommand()
-	if !ok || reservation.state == nil {
-		return result, invalidPreparation()
-	}
-	c := o.coordinator
-	result = identity.CommandResult{Binding: spec.Binding, Outcome: identity.CommitOutcomeUnknown}
-	var work Work
-	defer func() {
-		panicked := recover() != nil
-		if work.state != nil && !work.state.closed {
-			result, err = c.Abort(work, identity.UnavailableError{})
-		}
-		if panicked {
-			cleanup, stop := context.WithTimeout(context.Background(), c.maximumDuration)
-			defer stop()
-			result, err = c.recoverCommandReceipt(cleanup, creationRecoveryQuery(spec.Binding))
-		}
-		result, err = coreCreationReceipt(result, err)
-	}()
-	work, err = c.Begin(bounded, reservation)
+	prepared, err := o.reservedLink(bounded, reservation, command)
 	if err != nil {
 		return result, err
 	}
-	now, err := work.DatabaseTime(bounded)
-	if err != nil {
-		return c.Abort(work, err)
-	}
-	work.state.execution.abortAudits = make(map[string]audit.Record, 5)
-	for _, class := range []string{"denied", "conflict", "cancelled", "deadline-exceeded", "dependency-failure"} {
-		record, e := kernelMutationAudit(bounded, spec.Binding, spec.Change.ExpectedAccountVersion, now, class)
-		if e != nil {
-			return c.Abort(work, e)
-		}
-		work.state.execution.abortAudits[class] = record
-	}
-	result, err = o.repository.applyAccountLink(bounded, work, command)
-	if err != nil {
-		return c.Abort(work, err)
-	}
-	return c.Commit(work, result)
+	intent, participants, _ := prepared.Intent()
+	out, err := prepared.WithinLink(bounded, intent, participants)
+	result, _ = out.Receipt()
+	return result, err
 }
 
 func (o *AccountLinkUnitOfWork) prepare(ctx context.Context, original identity.Command) (command identity.Command, counters CommandCounterPlan, capability CapabilityPlan, err error) {

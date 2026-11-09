@@ -146,10 +146,12 @@ func (w Work) StageLifecycle(index uint16, occurredAt time.Time) error {
 }
 
 // StagedLifecycle returns one owned record only after the declared event was
-// staged and its successful audit agrees on the exact aggregate and versions.
+// staged and its required audit outcome agrees on the exact aggregate and versions.
 // Conflicting audit evidence poisons Work. An authentication denial in the
 // closed API-key verification profile may accompany its independent successful
 // permission-reduction audit; only that actual update produces its lifecycle.
+// The closed provider-error callback records denial while committing only its
+// RP-secret erasure lifecycle, never a signin/session success notification.
 // Other denied/failed mutations cannot produce success notifications.
 // Missing or invalid Work returns no records.
 // The outbox contributor
@@ -172,9 +174,17 @@ func (w Work) StagedLifecycle() ([]StagedLifecycle, error) {
 		}
 		return []StagedLifecycle{*r}, nil
 	}
+	outcome := audit.OutcomeSucceeded
+	denial := w.state.feature != nil && w.state.feature.Operation == oauthCallbackDenialOperation()
+	if denial {
+		if w.state.feature.Contributor != oauthCallbackDenialDescriptor() || r.EventType != "oauth.rp_transaction.denied.v1" || r.SubjectType != "oauth_transaction" || r.BeforeVersion != 1 || r.AfterVersion != 2 {
+			return nil, w.fail(w.state.ctx, invalidLifecycle())
+		}
+		outcome = audit.OutcomeDenied
+	}
 	for _, record := range w.state.audits.records {
 		attributes := record.Attributes()
-		if record.Outcome() != audit.OutcomeSucceeded || record.Subject().Type() != r.SubjectType || record.Subject().ID() != r.SubjectID || attributes["aggregate.before_version"] != strconv.FormatUint(r.BeforeVersion, 10) || attributes["aggregate.after_version"] != strconv.FormatUint(r.AfterVersion, 10) {
+		if record.Outcome() != outcome || denial && (record.ReasonCode() != "provider_denied" || !record.Changes().Redacted()) || record.Subject().Type() != r.SubjectType || record.Subject().ID() != r.SubjectID || attributes["aggregate.before_version"] != strconv.FormatUint(r.BeforeVersion, 10) || attributes["aggregate.after_version"] != strconv.FormatUint(r.AfterVersion, 10) {
 			return nil, w.fail(w.state.ctx, invalidLifecycle())
 		}
 	}

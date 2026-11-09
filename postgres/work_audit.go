@@ -35,7 +35,7 @@ type AuditPlan struct {
 	MaxAggregateBytes      uint32
 	Required               bool
 	// RetentionClass is required by native v2 feature plans: standard or
-	// protected, selected by the owning native policy. Kernel/v1 plans leave
+	// protected, selected by the owning native policy. Kernel plans leave
 	// it empty and preserve their established action-to-retention mapping.
 	RetentionClass string
 }
@@ -156,9 +156,9 @@ func bindAuditPlans(w Work, plans []AuditPlan) error {
 	if err := w.usable(); err != nil {
 		return err
 	}
-	// Each currently implemented kernel command has exactly one mandatory
-	// action. Feature composition will declare its own exhaustive multi-action
-	// mapping; do not accept an empty or duplicated kernel action meanwhile.
+	// Ordinary kernel commands declare one action. The closed OAuth link
+	// profile additionally requires its two orchestration actions; feature
+	// composition declares its own exhaustive mapping. Slots freeze before IO.
 	if w.state.audits != nil || w.state.sqlStarted {
 		return invalidAudit()
 	}
@@ -171,6 +171,12 @@ func bindAuditPlans(w Work, plans []AuditPlan) error {
 
 func validateWorkAuditPlans(w Work, plans []AuditPlan) error {
 	if w.state.feature == nil {
+		if len(plans) == 3 && w.state.execution != nil {
+			plan := w.state.execution.reservation.plan
+			if plan != nil && plan.accountLinkState != nil {
+				return validateOAuthAccountLinkAudits(w.state.binding, plans)
+			}
+		}
 		return validateKernelAuditPlans(w.state.binding, plans)
 	}
 	if !auditName(w.state.subjectType) || len(plans) == 0 || len(plans) > 64 {

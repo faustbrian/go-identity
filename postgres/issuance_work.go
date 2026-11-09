@@ -168,43 +168,58 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	v, payload := d.plan.Grants[index], grant.Payload()
-	subject := w.state.binding.UserID
-	if w.state.binding.OperationID == organizationInvitationSendOperation().OperationID || w.state.binding.OperationID == organizationInvitationResendOperation().OperationID {
+	subject := string(w.state.binding.UserID)
+	if w.state.binding.OperationID == "identity.account.link-start" || w.state.binding.OperationID == "identity.oauth.signin-start" {
 		var err error
-		subject, err = organizationInvitationIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		subject, err = oauthRPInitiationGrantSubject(w.state.binding, w.state.execution.reservation.plan.snapshot(), payload)
 		if err != nil {
 			return w.fail(w.state.ctx, err)
 		}
+	}
+	if w.state.binding.OperationID == organizationInvitationSendOperation().OperationID || w.state.binding.OperationID == organizationInvitationResendOperation().OperationID {
+		var err error
+		var selected identity.UserID
+		selected, err = organizationInvitationIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		if err != nil {
+			return w.fail(w.state.ctx, err)
+		}
+		subject = string(selected)
 	}
 	if d.plan.RegistrationUserID != "" {
 		created := w.state.registrationUser
 		if !validRegistrationIssuance(w.state.binding, w.state.execution.reservation.plan.snapshot()) || created == nil || created.ID != d.plan.RegistrationUserID || created.Validate(w.state.binding.TenantID) != nil || created.Status != identity.StatusActive || created.Version != 1 {
 			return w.fail(w.state.ctx, invalidWork())
 		}
-		subject = created.ID
+		subject = string(created.ID)
 	}
 	if d.plan.ResetRecipientUserID != "" {
 		var err error
-		subject, err = resetIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		var selected identity.UserID
+		selected, err = resetIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
 		if err != nil {
 			return w.fail(w.state.ctx, err)
 		}
+		subject = string(selected)
 	}
 	if d.plan.MagicLinkRecipientUserID != "" {
 		var err error
-		subject, err = magicLinkIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		var selected identity.UserID
+		selected, err = magicLinkIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
 		if err != nil {
 			return w.fail(w.state.ctx, err)
 		}
+		subject = string(selected)
 	}
 	if d.plan.MFAContinuationUserID != "" {
 		var err error
-		subject, err = magicLinkMFAIssuanceSubject(w, payload)
+		var selected identity.UserID
+		selected, err = magicLinkMFAIssuanceSubject(w, payload)
 		if err != nil {
 			return w.fail(w.state.ctx, err)
 		}
+		subject = string(selected)
 	}
-	if payload.ID != v.CapabilityID || payload.Operation != string(v.Purpose) || payload.Tenant != string(w.state.binding.TenantID) || payload.Subject != string(subject) || payload.Subject == "" || payload.Bearer || payload.MaxUses != v.MaxUses || payload.ExpiresAt != v.ExpiresAt {
+	if payload.ID != v.CapabilityID || payload.Operation != string(v.Purpose) || payload.Tenant != string(w.state.binding.TenantID) || payload.Subject != subject || payload.Subject == "" || payload.Bearer || payload.MaxUses != v.MaxUses || payload.ExpiresAt != v.ExpiresAt {
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	// Grant is opaque, copied authority already validated by capability.Verify

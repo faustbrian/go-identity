@@ -107,7 +107,7 @@ func (h AccountLinkWork) Command(p AccountLinkContributor) (identity.AccountLink
 		return identity.AccountLinkCommand{}, false, h.deny()
 	}
 	spec, _ := c.LinkAccount()
-	return spec, h.state.phase >= accountLinkFinalCheck, nil
+	return spec, h.state.phase == accountLinkFinalCheck || h.state.phase == accountLinkFinalize, nil
 }
 
 // Preparation lends the exact original typed callback/session input, an owned
@@ -145,7 +145,7 @@ func (h AccountLinkWork) Query(ctx context.Context, sql string, args ...any) (*W
 	return rows, h.failure(ctx, err)
 }
 
-// Exec borrows provisional writes only during persistence or finalization.
+// Exec borrows provisional writes during persistence or finalization.
 func (h AccountLinkWork) Exec(ctx context.Context, sql string, args ...any) (int64, error) {
 	if err := h.usable(); err != nil {
 		return 0, err

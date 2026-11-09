@@ -3,6 +3,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -27,36 +28,84 @@ import (
 // Matching terminal replay returns its original receipt without restoration.
 // Earlier deadlines win; uncertain durable outcomes reveal no partial result.
 func (o *AccountLinkUnitOfWork) ExecutePrepared(ctx context.Context, original identity.Command, declaration CommandPlan) (result identity.CommandResult, err error) {
+	prepared, err := o.PrepareLink(ctx, original, declaration)
+	if observed, ok := prepared.Observation(); ok {
+		return observed, err
+	}
+	if err != nil {
+		return result, err
+	}
+	command, participants, ok := prepared.Intent()
+	if !ok {
+		return result, invalidPreparation()
+	}
+	out, err := prepared.WithinLink(ctx, command, participants)
+	result, _ = out.Receipt()
+	return result, err
+}
+
+// PrepareLink performs the existing acknowledged state-reservation, exchange,
+// retained-output and final-grant attachment protocol, but does not begin the
+// protected domain transaction. A ready result implements the neutral
+// identity.LinkUnitOfWork. Invoke it with the exact Intent participant selection;
+// keep borrowed original callback/browser custody usable through that call.
+// Terminal replay and uncertainty return observations, never a ready handle.
+// The original preparation deadline, proof and counter intervals are retained;
+// a later context cannot renew them. Abandoned handles resume only through the
+// existing original-command preparation/recovery protocol, never re-exchange.
+func (o *AccountLinkUnitOfWork) PrepareLink(ctx context.Context, original identity.Command, declaration CommandPlan) (PreparedAccountLink, error) {
+	prepared, result, err := o.prepareAccountLink(ctx, original, declaration)
+	if prepared.state != nil {
+		return prepared, err
+	}
+	if result.Validate() != nil {
+		if err == nil {
+			err = invalidPreparation()
+		}
+		return PreparedAccountLink{}, err
+	}
+	observed, shape := observedAccountLink(result)
+	if shape != nil {
+		return PreparedAccountLink{}, shape
+	}
+	return observed, err
+}
+
+func (o *AccountLinkUnitOfWork) prepareAccountLink(ctx context.Context, original identity.Command, declaration CommandPlan) (next PreparedAccountLink, result identity.CommandResult, err error) {
 	if o == nil || o.coordinator == nil || o.repository == nil || ctx == nil {
-		return result, coordinatorError()
+		return next, result, coordinatorError()
 	}
 	c := o.coordinator
 	if _, err := c.accountLinkPreparationIssuer(); err != nil {
-		return result, invalidPreparation()
+		return next, result, invalidPreparation()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
 	defer cancel()
 	q, admitted, phase, err := c.prepareAccountLinkPreparation(original, declaration)
 	if err != nil || !sameParticipant(phase, o.provider) || admitted.audits[0].RetentionPolicyVersion != o.retention {
-		return result, invalidPreparation()
+		return next, result, invalidPreparation()
 	}
 	b := admitted.binding
 	defer func() {
 		if recover() != nil {
+			next = PreparedAccountLink{}
 			result, err = identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeUnknown}, identity.UnknownCommitError{CommandID: b.CommandID}
 		}
 		result, err = coreCreationReceipt(result, err)
 	}()
+	if recovered, handled, err := c.recoverExpiredAccountLinkAttachment(bounded, original, q, admitted); handled {
+		return next, recovered, err
+	}
 	var owner [16]byte
 	if _, err := rand.Read(owner[:]); err != nil || owner == ([16]byte{}) {
-		return result, identity.UnavailableError{}
+		return next, result, identity.UnavailableError{}
 	}
 	r, result, err := c.startAccountLinkPreparation(bounded, original, q, admitted, phase, owner)
 	if err != nil || r.journal.disposition != journalOwned {
-		return result, err
+		return next, result, err
 	}
-	unknown := func() (identity.CommandResult, error) {
-		return identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeUnknown}, identity.UnknownCommitError{CommandID: b.CommandID}
+	unknown := func() (PreparedAccountLink, identity.CommandResult, error) {
+		return PreparedAccountLink{}, identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeUnknown}, identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	wire := r.output
 	if r.generate {
@@ -70,6 +119,12 @@ func (o *AccountLinkUnitOfWork) ExecutePrepared(ctx context.Context, original id
 		}
 		r.outputGeneration = r.journal.generation
 	}
+	if refusal, handled, err := c.finishAccountLinkRefusal(bounded, q, admitted, r, owner, wire); handled {
+		if refusal.Outcome == identity.CommitOutcomeInvalid {
+			return unknown()
+		}
+		return next, refusal, err
+	}
 	generated, final, issuance, err := phase.RestoreAccountLinkPreparation(bounded, original, r.outputGeneration, bytes.Clone(wire))
 	if err != nil || bounded.Err() != nil || !sameAccountLinkDeclaration(b, admitted.snapshot(), final) {
 		return unknown()
@@ -82,7 +137,55 @@ func (o *AccountLinkUnitOfWork) ExecutePrepared(ctx context.Context, original id
 	if err != nil {
 		return unknown()
 	}
-	return o.executeReservation(bounded, reservation, generated)
+	next, err = o.reservedLink(bounded, reservation, generated)
+	return next, identity.CommandResult{}, err
+}
+
+// Expired final authority cannot be restored for execution. The retained final
+// plan instead enters the existing unanimous-negative recovery protocol before
+// a new preparation lease could hide the abandoned generation. Original input
+// and declaration are rechecked under both recovery locks; an unattached
+// exchange is never selected here, even when its output is missing.
+func (c *Coordinator) recoverExpiredAccountLinkAttachment(ctx context.Context, original identity.Command, q claimRequest, admitted *admittedKernelPlan) (identity.CommandResult, bool, error) {
+	observed, err := c.readCommand(ctx, q.commandID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.CommandResult{}, false, nil
+	}
+	if err != nil {
+		return identity.CommandResult{}, true, readFailure(ctx, err)
+	}
+	if observed.state == nil || *observed.state != "pending" || observed.plan == nil {
+		return identity.CommandResult{}, false, nil
+	}
+	check := func(o commandObservation) error {
+		if o.fingerprintKeyVersion < 1 || o.fingerprintKeyVersion > 4294967295 || len(o.fingerprint) != 32 {
+			return identity.UnavailableError{}
+		}
+		key, ok := c.keys.retained[uint32(o.fingerprintKeyVersion)]
+		if !ok {
+			return identity.UnavailableError{}
+		}
+		retained, err := prepareClaim(original, key)
+		if err != nil {
+			return err
+		}
+		fp := claimFingerprint(key, retained.canonical)
+		if !bytes.Equal(retained.safeFields, o.scope) || !hmac.Equal(fp[:], o.fingerprint) {
+			return identity.ConflictError{}
+		}
+		final, err := decodeKernelPlan(admitted.binding, fp, o.plan)
+		if err != nil || !sameAccountLinkDeclaration(admitted.binding, admitted.snapshot(), final) || o.now.Before(final.Capability.ExpiresAt) {
+			return invalidPreparation()
+		}
+		return nil
+	}
+	// A preliminary mismatch falls through to ordinary claim admission, which
+	// retains its established conflict classification without any recovery.
+	if check(observed) != nil {
+		return identity.CommandResult{}, false, nil
+	}
+	result, err := c.recoverCommandReceiptChecked(ctx, creationRecoveryQuery(admitted.binding), check)
+	return result, true, err
 }
 
 // Preparation must not discover a missing persistence owner only after an

@@ -20,8 +20,13 @@ import (
 type QueryCallback struct {
 	input   identity.OAuthCallbackInput
 	denial  func() *queryDeniedState
+	profile ProviderProfile
 	success bool
 }
+
+// Callback is the selected query-only callback contract. It is an alias, not a
+// second custody owner, and does not accept hybrid or form-post responses.
+type Callback = QueryCallback
 
 // queryDeniedState owns only denial lookup state; it cannot mint callback/code
 // custody or confer native authority. mu owns value and busy.
@@ -57,6 +62,7 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 	if ctx.Err() != nil {
 		return QueryCallback{}, failure(Unavailable, ctx)
 	}
+	profile = queryProfileSnapshot(profile)
 	if len(rawQuery) == 0 || len(rawQuery) > 3*profile.MaxCodeBytes+16*1024 || rawQuery[0] == '?' || strings.ContainsAny(rawQuery, "#") || strings.Count(rawQuery, "&") >= 32 {
 		return QueryCallback{}, failure(InvalidInput, ctx)
 	}
@@ -124,7 +130,7 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 		if err != nil {
 			return QueryCallback{}, failure(InvalidInput, ctx)
 		}
-		return QueryCallback{input: input, success: true}, nil
+		return QueryCallback{input: input, profile: profile, success: true}, nil
 	}
 	if !queryErrorText(values["error"]) || seen["error_description"] && !queryErrorText(values["error_description"]) || seen["error_uri"] && !queryErrorURI(values["error_uri"]) {
 		return QueryCallback{}, failure(InvalidInput, ctx)
@@ -132,7 +138,25 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 	state := make([]byte, len(values["state"]))
 	copy(state, values["state"])
 	owner := &queryDeniedState{value: state}
-	return QueryCallback{denial: func() *queryDeniedState { return owner }}, nil
+	return QueryCallback{denial: func() *queryDeniedState { return owner }, profile: profile}, nil
+}
+
+func queryProfileSnapshot(profile ProviderProfile) ProviderProfile {
+	profile.Scopes = slices.Clone(profile.Scopes)
+	profile.Algorithms = slices.Clone(profile.Algorithms)
+	return profile
+}
+
+// ValidateQueryCallback checks the complete supported code/query/S256 profile
+// without parsing input, allocating secret custody or performing IO. Transport
+// constructors use it to reject unsupported configuration before serving. It
+// does not authenticate the provider, a stored transaction or callback state.
+// Invalid configuration returns a redacted InvalidInput error.
+func (p ProviderProfile) ValidateQueryCallback() error {
+	if !queryProfileValid(p) {
+		return failure(InvalidInput, nil)
+	}
+	return nil
 }
 
 func queryProfileValid(p ProviderProfile) bool {
@@ -277,6 +301,14 @@ func queryErrorURI(value []byte) bool {
 // Input returns the original root code/state custody only for success. The bool
 // identifies the parsed variant, not its liveness or native authentication.
 func (q QueryCallback) Input() (identity.OAuthCallbackInput, bool) { return q.input, q.success }
+
+// Profile returns a defensive secret-free copy of the exact validated profile
+// given to ParseQueryCallback, for success and denial. Zero/invalid callbacks
+// return the zero profile; safe metadata survives Destroy. This records parsing
+// provenance, not authentication, current configuration or native admission.
+// Native consumers must independently match the original flow and current or
+// retained configuration, validate lifetime/bindings and reserve actual state.
+func (q QueryCallback) Profile() ProviderProfile { return queryProfileSnapshot(q.profile) }
 
 // Denied distinguishes a coherent issuer-bound provider error from malformed
 // input. It does not authenticate the provider or native state. Provider-supplied

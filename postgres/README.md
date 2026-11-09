@@ -43,6 +43,22 @@ The declaration fixes six consuming/domain owners, original callback-state
 capability, counters, audit and lifecycle, with no final link grant yet. The
 registry additionally contains the actual `capability.issuance` owner.
 
+Before enabling terminal prepared-link output erasure, append
+`AccountLinkPreparationErasureMigrationSource` and then
+`AccountLinkPreparationErasureValidationMigrationSource` after that history and
+any selected `OAuthRPPreparationErasureMigrationSource`. Apply these forward
+schema changes before the new writer. They preserve installed checksums and
+rows, relax the custody check without scanning under its DDL lock, then validate
+it in a separate transaction. Both use a bounded lock timeout. A failed migration
+must be retried before enabling the writer; reverting code cannot restore erased
+secrets and there is no destructive down migration.
+
+Terminal success and proven refusal remove the temporary provider-response and
+issuance-checkpoint ciphertext with the receipt. Original intent, declaration,
+started generation and final plan remain for exact receipt-only replay; a
+legitimate token vault remains its separate owner. Pending and uncertain work
+retains its original ciphertext. Erased terminal output cannot be restored.
+
 Original state reservation, current native admission, counter charge and start
 marker commit before the native owner may decrypt PKCE, exchange or sign.
 Lost start acknowledgment does not permit generation. Started-without-output

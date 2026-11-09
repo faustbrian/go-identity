@@ -182,18 +182,30 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e != nil {
 		return result, e
 	}
+	knownAccountLinkRefusal := false
 	if preparationOnly && plan.AccountLinkState != nil {
 		// OAuth exchange is external work, unlike entropy-only preparation.
 		// An absent final attachment cannot prove the code was not exchanged.
-		// Preserve pending custody and generation; resumption of retained output
-		// belongs to the original prepared route, never generic negative recovery.
-		return result, nil
+		// Only the exact owner's authenticated retained refusal supplies definitive
+		// negative evidence here. Other unattached exchanges keep pending custody.
+		candidate, failure := c.registry.admitKernelPlanMode(result.Binding, fingerprint, plan, true)
+		if failure != nil {
+			return result, identity.UnavailableError{}
+		}
+		refusal, failure := retainedAccountLinkRefusal(bounded, tx, candidate)
+		if failure != nil {
+			return result, identity.UnavailableError{}
+		}
+		if refusal == (AccountLinkPreparationRefusal{}) {
+			return result, nil
+		}
+		knownAccountLinkRefusal = true
 	}
 	var admitted *admittedKernelPlan
 	if result.Feature != nil {
 		admitted, e = c.registry.admitFeaturePlanMode(result.Binding, fingerprint, plan, preparationOnly)
 	} else {
-		admitted, e = c.registry.admitKernelPlan(result.Binding, fingerprint, plan)
+		admitted, e = c.registry.admitKernelPlanMode(result.Binding, fingerprint, plan, preparationOnly)
 	}
 	if e != nil {
 		return result, identity.UnavailableError{}
@@ -212,8 +224,11 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	// An old persistence-only registration remains readable, but cannot supply
 	// evidence. No takeover or prefix callback occurs without the full phase set.
 	for _, entry := range admitted.contributors {
-		if preparationOnly {
+		if preparationOnly && !knownAccountLinkRefusal {
 			break
+		}
+		if knownAccountLinkRefusal && entry.descriptor != (ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}) {
+			continue
 		}
 		if _, ok := entry.contributor.(RecoveryContributor); !ok {
 			return result, identity.UnavailableError{}
@@ -268,8 +283,15 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 		return result, e
 	}
 	for _, entry := range admitted.contributors {
-		if preparationOnly {
+		if preparationOnly && !knownAccountLinkRefusal {
 			break
+		}
+		// Under both historical locks, no attachment means no final issuance or
+		// domain Begin was possible. Authenticated retained refusal additionally
+		// proves the external result. Only original-state reservation evidence
+		// remains to collect; the attached-output native recovery path is not run.
+		if knownAccountLinkRefusal && entry.descriptor != (ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}) {
+			continue
 		}
 		if e = work.usable(); e != nil {
 			return result, e
@@ -296,12 +318,20 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 		return result, e
 	}
 	var records []audit.Record
+	terminalClass := "dependency-failure"
+	if knownAccountLinkRefusal {
+		terminalClass = "denied"
+	}
 	if admitted.feature != nil {
 		records, e = featureMutationAudits(bounded, admitted, now, "dependency-failure")
 	} else {
-		var record audit.Record
-		record, e = kernelMutationAudit(bounded, result.Binding, admitted.lifecycle.BeforeVersion, now, "dependency-failure")
-		records = []audit.Record{record}
+		if admitted.accountLink != nil {
+			records, e = accountLinkMutationAudits(bounded, admitted, now, terminalClass)
+		} else {
+			var record audit.Record
+			record, e = kernelMutationAudit(bounded, result.Binding, admitted.lifecycle.BeforeVersion, now, "dependency-failure")
+			records = []audit.Record{record}
+		}
 	}
 	if e != nil {
 		return result, e
@@ -321,7 +351,13 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e = c.persistAuditPhase(work); e != nil {
 		return result, identity.UnavailableError{}
 	}
-	if !preparationOnly {
+	if e = c.cleanupPreparedAccountLink(bounded, work); e != nil {
+		return result, identity.UnavailableError{}
+	}
+	if e = c.cleanupFeatureTerminal(bounded, work); e != nil {
+		return result, identity.UnavailableError{}
+	}
+	if !preparationOnly || knownAccountLinkRefusal {
 		if e = c.releaseCapability(bounded, work, admitted, journal); e != nil {
 			return result, identity.UnavailableError{}
 		}
@@ -340,7 +376,7 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 		return result, e
 	}
 	aborted := featureOutcome(result.Binding, request.feature, identity.CommitOutcomeNotCommitted, 0)
-	if e = terminalizeJournal(work.state.ctx, tx, request, journal, owner, aborted, "dependency-failure"); e != nil {
+	if e = terminalizeJournal(work.state.ctx, tx, request, journal, owner, aborted, terminalClass); e != nil {
 		return result, e
 	}
 	deadline, _ := work.state.ctx.Deadline()
@@ -351,13 +387,16 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e = tx.Commit(commit); e != nil {
 		return featureOutcome(result.Binding, request.feature, identity.CommitOutcomeUnknown, 0), readFailure(commit, e)
 	}
+	if knownAccountLinkRefusal {
+		return aborted, identity.ForbiddenError{}
+	}
 	return aborted, identity.UnavailableError{}
 }
 
 func readRecoveryObservation(ctx context.Context, tx pgx.Tx, id []byte) (commandObservation, error) {
 	var o commandObservation
-	err := tx.QueryRow(ctx, `SELECT coalesce(c.tenant_id::text,''),coalesce(c.purpose,''),c.safe_fields,c.retired,j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.result,j.command_plan,c.fingerprint
-FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose WHERE c.command_id=$1`, id).Scan(&o.tenant, &o.purpose, &o.scope, &o.retired, &o.state, &o.until, &o.now, &o.resultVersion, &o.class, &o.result, &o.plan, &o.fingerprint)
+	err := tx.QueryRow(ctx, `SELECT coalesce(c.tenant_id::text,''),coalesce(c.purpose,''),c.safe_fields,c.retired,j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.result,j.command_plan,c.fingerprint,coalesce(c.fingerprint_key_version,0)
+FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose WHERE c.command_id=$1`, id).Scan(&o.tenant, &o.purpose, &o.scope, &o.retired, &o.state, &o.until, &o.now, &o.resultVersion, &o.class, &o.result, &o.plan, &o.fingerprint, &o.fingerprintKeyVersion)
 	if err == nil {
 		err = readObservedCounterPreparation(ctx, tx, id, &o)
 	}

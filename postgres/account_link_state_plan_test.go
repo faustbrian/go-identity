@@ -9,6 +9,46 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
+func TestAccountLinkStatePlanPreservesOAuthAuditActions(t *testing.T) {
+	_, command, p := accountLinkOwnerPlanFixture(t)
+	spec, _, _ := command.AccountLinkCounterCommand()
+	state := *p.Capability
+	state.Purpose, state.CapabilityID = "identity.oauth.callback", "original-state"
+	state.ReplayDigest, state.ProofFingerprint = [32]byte{8}, [32]byte{9}
+	p.AccountLinkState = &state
+	for i, action := range []string{"identity.oauth.handle_callback", "identity.oauth.link_account"} {
+		plan := p.Audits[0]
+		plan.EventType, plan.EventIndex = action, uint16(i+1)
+		p.Audits = append(p.Audits, plan)
+	}
+	wire, err := encodeKernelPlan(spec.Binding, [32]byte{1}, p)
+	if err != nil {
+		t.Fatal("composed callback cannot declare its required audit actions", err)
+	}
+	got, err := decodeKernelPlan(spec.Binding, [32]byte{1}, wire)
+	if err != nil || !reflect.DeepEqual(got.Audits, p.Audits) {
+		t.Fatal("callback audit actions did not survive durable plan history", err)
+	}
+	for n := range wire {
+		if _, err := decodeKernelPlan(spec.Binding, [32]byte{1}, wire[:n]); err == nil {
+			t.Fatal("truncated composed callback audit history admitted")
+		}
+	}
+	for _, mutate := range []func([]AuditPlan) []AuditPlan{
+		func(plans []AuditPlan) []AuditPlan { return plans[:2] },
+		func(plans []AuditPlan) []AuditPlan { plans[1].EventType = "identity.oauth.signin"; return plans },
+		func(plans []AuditPlan) []AuditPlan { plans[2].RetentionClass = "protected"; return plans },
+		func(plans []AuditPlan) []AuditPlan { plans[2].EventIndex = plans[1].EventIndex; return plans },
+		func(plans []AuditPlan) []AuditPlan { plans[1].BindingDigest = [32]byte{17}; return plans },
+	} {
+		invalid := p
+		invalid.Audits = mutate(append([]AuditPlan(nil), p.Audits...))
+		if _, err := encodeKernelPlan(spec.Binding, [32]byte{1}, invalid); err == nil {
+			t.Fatal("changed OAuth audit action, retention, scope or slot admitted")
+		}
+	}
+}
+
 func TestAccountLinkStatePlanRetainsBothInputsWithoutChangingLegacyBytes(t *testing.T) {
 	_, command, original := accountLinkOwnerPlanFixture(t)
 	spec, _, _ := command.AccountLinkCounterCommand()
@@ -123,6 +163,12 @@ func FuzzAccountLinkStatePlanDecoder(f *testing.F) {
 		}
 		f.Add(seed)
 	}
+	p.Audits = oauthAccountLinkAuditPlans(p.Audits[0])
+	seed, err := encodeAccountLinkStatePlan(b, fp, p)
+	if err != nil {
+		f.Fatal("invalid composed OAuth audit decoder corpus seed", err)
+	}
+	f.Add(seed)
 	f.Add([]byte{0xa6})
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		decoded, err := decodeAccountLinkStatePlan(b, fp, raw)

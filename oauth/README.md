@@ -75,6 +75,17 @@ or a state capability**. Provider error codes, descriptions and URIs are checked
 for bounded protocol syntax and deliberately discarded, not exposed as
 diagnostics or redirects. Unknown valid error codes remain typed denials.
 
+`Callback` is an alias for the selected query-only `QueryCallback`, not another
+wrapper or support for hybrid/form-post responses. For success and denial,
+`Profile()` returns a defensive secret-free snapshot of the exact validated
+parse-time profile, including configuration version, issuer, client, redirect,
+scopes, algorithms and limits. Source and returned slice changes cannot alter
+it. This metadata remains readable after `Destroy`; a zero/invalid callback
+returns the zero profile. The snapshot preserves parsing provenance only. The
+native consumer must independently match it against the original flow and
+current or retained configuration, authenticate bindings/lifetime and reserve
+actual state. The projection adds no authentication, admission or new lifetime.
+
 ```go
 parsed, err := oauth.ParseQueryCallback(ctx, rawQuery, boundProfile)
 if err != nil {

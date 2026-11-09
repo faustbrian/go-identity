@@ -256,9 +256,7 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 	}
 	var records []audit.Record
 	if p.accountLink != nil {
-		var record audit.Record
-		record, err = kernelMutationAudit(ctx, p.binding, p.lifecycle.BeforeVersion, now, "denied")
-		records = []audit.Record{record}
+		records, err = accountLinkMutationAudits(ctx, p, now, "denied")
 	} else {
 		records, err = featureMutationAudits(ctx, p, now, "denied")
 	}
@@ -272,6 +270,9 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 	}
 	if err = c.persistAuditPhase(work); err != nil {
 		return false, identity.UnavailableError{}
+	}
+	if err = c.cleanupPreparedAccountLink(ctx, work); err != nil {
+		return false, err
 	}
 	if work.state.rows != nil || work.usable() != nil {
 		return false, invalidWork()

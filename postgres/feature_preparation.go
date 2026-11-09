@@ -417,6 +417,9 @@ func consumptionAuthenticationPreparation(p CommandPlan) bool {
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
+	if oauthRPInitiationSelected(original) && (!validOAuthRPInitiation(b, original) || !validOAuthRPInitiation(b, final) || final.CapabilityIssuance == nil) {
+		return false
+	}
 	if (original.APIKeyVerification == nil) != (final.APIKeyVerification == nil) || original.APIKeyVerification != nil && *original.APIKeyVerification != *final.APIKeyVerification {
 		return false
 	}
@@ -445,7 +448,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	// original admission stays issuance-free and cannot introduce consumption.
 	withoutIssuance := final
 	withoutIssuance.CapabilityIssuance = nil
-	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) && !validOrganizationInvitationIssuance(b, final) && !phoneResetRequestPreparation(final) && !validAnonymousUpgradePreparation(b, final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
+	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) && !validOrganizationInvitationIssuance(b, final) && !phoneResetRequestPreparation(final) && !validAnonymousUpgradePreparation(b, final) && !validOAuthRPInitiation(b, final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
 		return false
 	}
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || original.MagicLinkRequestAcceptance != final.MagicLinkRequestAcceptance || len(original.Audits) != len(final.Audits) {

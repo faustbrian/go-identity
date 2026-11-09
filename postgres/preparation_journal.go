@@ -68,7 +68,13 @@ FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR U
 		return preparationReservation{}, readFailure(ctx, err)
 	}
 	deniedBeforeGeneration := expectedProfile >= 3 && state == "aborted" && started == nil
-	if profile == nil || *profile != expectedProfile || plan != nil && output == nil && !deniedBeforeGeneration || !postgresExactTime(until) {
+	// Terminal RP starts and prepared root links deliberately erase temporary
+	// encrypted secrets while preserving the original start/declaration/plan.
+	// reserveJournal below still validates the exact original persisted receipt;
+	// this exception never admits pending/missing output or regeneration.
+	erasureProfile := expectedProfile <= 4 && oauthRPInitiationClaim(q) || expectedProfile == 5 && q.purpose == "identity.account.link-token" && q.feature == nil
+	erasedOutput := erasureProfile && (state == "committed" || state == "aborted") && started != nil && output == nil && provenance == nil
+	if profile == nil || *profile != expectedProfile || plan != nil && output == nil && !deniedBeforeGeneration && !erasedOutput || !postgresExactTime(until) {
 		return preparationReservation{}, identity.ConflictError{}
 	}
 	gen, err := strconv.ParseUint(generation, 10, 64)

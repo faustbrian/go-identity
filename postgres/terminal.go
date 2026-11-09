@@ -38,17 +38,33 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 		return e
 	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.commandID))
-	var matched bool
-	e = tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5
-FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched)
+	var matched, preparedAccountLink bool
+	e = tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
+CASE WHEN $6 THEN coalesce(to_jsonb(j)->>'preparation_profile','')='5' ELSE false END
+FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:], q.purpose == "identity.account.link-token" && q.feature == nil).Scan(&matched, &preparedAccountLink)
 	if e != nil {
 		return readFailure(ctx, e)
 	}
 	if !matched {
 		return identity.ConflictError{}
 	}
+	// RP-start preparation temporarily carries encrypted PKCE/state custody.
+	// Once terminal, its native transaction row is the sole secret owner so the
+	// RP profile's later erasure cannot leave a recoverable journal duplicate
+	// (REFERENCE_CONFIGURATION.md, struct:ref.oauth.rp_transaction). Pending and
+	// uncertain starts retain original recovery output. Prepared root links also
+	// erase their temporary provider-response/issuance checkpoint only alongside
+	// the definitive receipt (TRANSACTION_CONTRACT.md, provider effects). Profile
+	// detection uses row metadata so ordinary schemas need no optional columns;
+	// scope-only recovery does not require the original request's secret input.
+	preparationErasure := ""
+	if oauthRPInitiationClaim(q) || preparedAccountLink {
+		preparationErasure = ",preparation_ciphertext=NULL,preparation_ciphertext_generation=NULL"
+	}
+	// Ordinary installations need not select the optional preparation schema.
+	// Their unchanged SQL must not even reference its absent columns.
 	tag, e := tx.Exec(ctx, `WITH instant AS (SELECT clock_timestamp() AS now)
-UPDATE identity.commands SET state=$4,result_version=1,terminal_class=$5,result=$6,terminal_at=instant.now,updated_at=instant.now
+UPDATE identity.commands SET state=$4,result_version=1,terminal_class=$5,result=$6,terminal_at=instant.now,updated_at=instant.now`+preparationErasure+`
 FROM instant WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 AND lease_until>instant.now`, id, string(q.tenant), q.purpose, state, class, body)
 	if e != nil {
 		return readFailure(ctx, e)

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +28,63 @@ func queryProfile() oauth.ProviderProfile {
 
 func queryResponse(member string) string {
 	return member + "&state=" + testNonce + "&iss=https%3A%2F%2Fissuer.example"
+}
+
+func TestQueryCallbackProfileSnapshotsParseProvenance(t *testing.T) {
+	for _, member := range []string{"code=synthetic", "error=access_denied"} {
+		source := queryProfile()
+		source.Version = 7
+		source.Scopes = append(source.Scopes, "profile")
+		source.Algorithms = append(source.Algorithms, "RS256")
+		want := source
+		want.Scopes = slices.Clone(source.Scopes)
+		want.Algorithms = slices.Clone(source.Algorithms)
+		parsed, err := oauth.ParseQueryCallback(context.Background(), queryResponse(member), source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer parsed.Destroy()
+		var alias oauth.Callback = parsed
+		if !reflect.DeepEqual(parsed.Profile(), want) {
+			t.Fatal("parse-time profile not retained")
+		}
+		source.Scopes[0], source.Algorithms[0] = "changed", "none"
+		source.Version = 99
+		source.ID, source.Issuer, source.ClientID, source.RedirectURI = "changed", "https://changed.example", "changed", "https://changed.example/callback"
+		projection := alias.Profile()
+		projection.Scopes[0], projection.Algorithms[0] = "changed-again", "none"
+		projection.Version = 100
+		projection.Issuer, projection.ClientID, projection.RedirectURI = "https://changed-again.example", "changed-again", "https://changed-again.example/callback"
+		if !reflect.DeepEqual(parsed.Profile(), want) || !reflect.DeepEqual(alias.Profile(), want) {
+			t.Fatal("source or returned profile mutated parse provenance")
+		}
+		alias.Destroy()
+		if !reflect.DeepEqual(parsed.Profile(), want) || !reflect.DeepEqual(alias.Profile(), want) {
+			t.Fatal("destruction erased safe profile metadata")
+		}
+		if input, ok := parsed.Input(); ok {
+			if err := input.Use(context.Background(), func(context.Context, []byte, []byte) error {
+				t.Fatal("alias destruction did not clear input")
+				return nil
+			}); err == nil {
+				t.Fatal("destroyed input admitted")
+			}
+		} else if err := parsed.UseDeniedState(context.Background(), func(context.Context, []byte) error {
+			t.Fatal("alias destruction did not clear denial state")
+			return nil
+		}); err == nil {
+			t.Fatal("destroyed denial state admitted")
+		}
+	}
+	var zero oauth.Callback
+	if !reflect.DeepEqual(zero.Profile(), oauth.ProviderProfile{}) {
+		t.Fatal("zero callback has profile provenance")
+	}
+	invalid, err := oauth.ParseQueryCallback(context.Background(), "invalid", queryProfile())
+	defer invalid.Destroy()
+	if err == nil || !reflect.DeepEqual(invalid.Profile(), oauth.ProviderProfile{}) {
+		t.Fatal("invalid callback has profile provenance")
+	}
 }
 
 func requireQueryError(t *testing.T, raw string, profile oauth.ProviderProfile) {

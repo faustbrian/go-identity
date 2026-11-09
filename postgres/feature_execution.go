@@ -154,6 +154,12 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		return validateMFAContinuation(phase, command, plan)
 	}
 	if plan.Capability != nil {
+		if plan.Feature != nil && plan.Feature.Operation == oauthCallbackDenialOperation() {
+			if _, ok := phase.(FeatureCommitContributor); !ok {
+				return invalidPlan()
+			}
+			return nil
+		}
 		if plan.Feature != nil && plan.Feature.Operation == anonymousUpgradeOperation() {
 			return validateAnonymousUpgrade(phase, command, plan)
 		}
@@ -224,7 +230,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != oauthCallbackDenialOperation() && p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -368,7 +374,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		}
 	}
 	if p.Capability != nil {
-		if p.Feature.Operation == anonymousUpgradeOperation() {
+		if p.Feature.Operation == oauthCallbackDenialOperation() {
+			if _, ok := feature.contributor.(FeatureCommitContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else if p.Feature.Operation == anonymousUpgradeOperation() {
 			if _, ok := feature.contributor.(AnonymousUpgradeContributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -647,13 +657,13 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if oauthReauthenticationOperation(p.feature.Operation) {
 		classes = append(classes, "reauthentication-required")
 	}
-	w.state.execution.featureAbortAudits = make(map[string][]audit.Record, len(classes))
+	w.state.execution.composedAbortAudits = make(map[string][]audit.Record, len(classes))
 	for _, class := range classes {
 		records, e := featureMutationAudits(ctx, p, now, class)
 		if e != nil {
 			return result, w.fail(ctx, e)
 		}
-		w.state.execution.featureAbortAudits[class] = records
+		w.state.execution.composedAbortAudits[class] = records
 	}
 	if e = lockManagedEmailFamily(ctx, w, command); e != nil {
 		return result, e
@@ -743,7 +753,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 	}
 	if p.capability != nil {
-		if p.feature.Operation == anonymousUpgradeOperation() {
+		if p.feature.Operation == oauthCallbackDenialOperation() {
+			if e := c.runCapabilityExecution(ctx, w, false); e != nil {
+				return result, e
+			}
+		} else if p.feature.Operation == anonymousUpgradeOperation() {
 			if e := prepareAnonymousUpgradeConsumption(ctx, w); e != nil {
 				return result, e
 			}
@@ -967,6 +981,9 @@ func invokeFeature(p FeatureExecutionContributor, ctx context.Context, w Work, c
 }
 
 func featureMutationAudits(ctx context.Context, p *admittedKernelPlan, now time.Time, class string) ([]audit.Record, error) {
+	if class == "committed" && p.feature != nil && p.feature.Operation == oauthCallbackDenialOperation() {
+		class = "provider-denied"
+	}
 	if p.apiKeyVerification != nil {
 		if class == "committed" {
 			return nil, invalidAudit()

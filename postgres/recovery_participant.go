@@ -76,6 +76,18 @@ func (w RecoveryWork) Scope() (identity.CommandBinding, error) {
 	return w.state.work.Scope()
 }
 
+// AccountLinkScope exposes historical attached-plan metadata only to the exact
+// registered account-link owner during its recovery invocation. A final grant
+// attachment records acknowledged provider output, not domain commitment or
+// current authority. Unattached/ordinary plans, foreign and returned handles
+// deny; no callback, checkpoint or executable proof is exposed.
+func (w RecoveryWork) AccountLinkScope(owner AccountLinkContributor) (identity.CommandBinding, CapabilityPlan, CapabilityPlan, error) {
+	if w.usable() != nil || w.state.entry.descriptor != accountLinkOwnerDescriptor() || w.state.plan.accountLink == nil || w.state.plan.accountLinkState == nil || w.state.plan.capability == nil || !sameParticipant(owner, w.state.entry.contributor) || !sameParticipant(owner, w.state.plan.accountLink.contributor) {
+		return identity.CommandBinding{}, CapabilityPlan{}, CapabilityPlan{}, invalidWork()
+	}
+	return w.state.plan.binding, *w.state.plan.accountLinkState, *w.state.plan.capability, nil
+}
+
 // Query reads only this contributor's authoritative evidence using bounded
 // coordinator-owned rows. Close/drain every cursor before returning; failures
 // poison recovery and rows do not survive the invocation.

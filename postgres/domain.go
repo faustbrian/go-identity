@@ -23,8 +23,8 @@ type domainExecution struct {
 	cancel      context.CancelFunc
 	// Only the owned service bridge supplies prebuilt failure records. They
 	// never unpoison Work or permit more domain SQL; Abort stages after rollback.
-	abortAudits        map[string]audit.Record
-	featureAbortAudits map[string][]audit.Record
+	abortAudits         map[string]audit.Record
+	composedAbortAudits map[string][]audit.Record
 }
 
 // Begin opens one bounded primary domain transaction after rechecking the
@@ -62,7 +62,7 @@ func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 	if r.state != nil && r.state.plan != nil && r.state.plan.captchaUse != nil && captchaExecutionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
-	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && r.state.plan.accountLink == nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(r.state.plan.feature.Operation) && !credentialResetSelected(r.state.plan.feature.Operation) && r.state.plan.feature.Operation != magicLinkConsumeOperation() && r.state.plan.feature.Operation != organizationInvitationAcceptOperation() && r.state.plan.feature.Operation != anonymousUpgradeOperation() && r.state.plan.mfaCompletion == nil) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
+	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && r.state.plan.accountLink == nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != oauthCallbackDenialOperation() && r.state.plan.feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(r.state.plan.feature.Operation) && !credentialResetSelected(r.state.plan.feature.Operation) && r.state.plan.feature.Operation != magicLinkConsumeOperation() && r.state.plan.feature.Operation != organizationInvitationAcceptOperation() && r.state.plan.feature.Operation != anonymousUpgradeOperation() && r.state.plan.mfaCompletion == nil) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -100,11 +100,14 @@ func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 		return fail(err)
 	}
 	w.state.registry = c.registry.state
+	// Binding validates the registered execution's closed audit profile. Set
+	// that owner before binding so OAuth's three slots cannot fall back to the
+	// ordinary one-action kernel profile.
+	w.state.execution = &domainExecution{coordinator: c, reservation: r.state, ctx: bounded, cancel: cancel}
 	if err := r.state.plan.bindWork(w); err != nil {
 		invalidateWork(w)
 		return fail(err)
 	}
-	w.state.execution = &domainExecution{coordinator: c, reservation: r.state, ctx: bounded, cancel: cancel}
 	if err := configureKernelWork(bounded, w); err != nil {
 		invalidateWork(w)
 		return fail(err)
@@ -301,9 +304,13 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 		}
 	} else {
 		lifecycle := plan.lifecycle
+		outcome, reason := audit.OutcomeSucceeded, "completed"
+		if plan.feature != nil && plan.feature.Operation == oauthCallbackDenialOperation() {
+			outcome, reason = audit.OutcomeDenied, "provider_denied"
+		}
 		for i, record := range w.state.audits.records {
 			attrs := record.Attributes()
-			if i == 0 && record.ID() != result.AuditEventID || record.Outcome() != audit.OutcomeSucceeded || record.ReasonCode() != "completed" || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(lifecycle.BeforeVersion, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(lifecycle.AfterVersion, 10) {
+			if i == 0 && record.ID() != result.AuditEventID || record.Outcome() != outcome || record.ReasonCode() != reason || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(lifecycle.BeforeVersion, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(lifecycle.AfterVersion, 10) {
 				return c.Abort(w, invalidAudit())
 			}
 		}
@@ -435,6 +442,14 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if err := c.finalizeMFACompletionConsumption(w); err != nil {
 		return c.Abort(w, err)
 	}
+	if plan.feature != nil && plan.feature.Operation == oauthCallbackDenialOperation() {
+		if w.state.featureReceipt == nil || w.state.featureReceipt.Operation != oauthCallbackDenialOperation() {
+			return c.Abort(w, invalidWork())
+		}
+		if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
+			return c.Abort(w, err)
+		}
+	}
 	if err := c.checkAuthenticatedCommand(w.state.ctx, w, true); err != nil {
 		return c.Abort(w, err)
 	}
@@ -488,12 +503,10 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 			complete = complete && staged
 		}
 	}
-	if w.state.feature != nil {
-		if candidates, exists := execution.featureAbortAudits[class]; exists {
-			records, complete = candidates, true
-		} else if complete {
-			records = w.state.audits.records
-		}
+	if candidates, exists := execution.composedAbortAudits[class]; exists {
+		records, complete = candidates, true
+	} else if w.state.feature != nil && complete {
+		records = w.state.audits.records
 	} else if candidate, exists := execution.abortAudits[class]; exists {
 		records, complete = []audit.Record{candidate}, true
 	} else if complete {
@@ -570,6 +583,12 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 		}
 	}
 	if err := c.persistAuditPhase(terminal); err != nil {
+		return fail(identity.UnavailableError{})
+	}
+	if err := c.cleanupPreparedAccountLink(cleanup, terminal); err != nil {
+		return fail(identity.UnavailableError{})
+	}
+	if err := c.cleanupFeatureTerminal(cleanup, terminal); err != nil {
 		return fail(identity.UnavailableError{})
 	}
 	if err := c.releaseCapabilityAfterRollback(cleanup, terminal, r.plan, r.journal); err != nil {

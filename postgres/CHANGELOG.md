@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+- Require the registered OAuth denial owner to erase exchange secrets before
+  abort or negative recovery releases state and records noncommit. Missing or
+  failed cleanup retains pending custody. Authenticated retained link refusal
+  can settle through the original journal without restoring execution authority.
+
+- Recover abandoned attached account-link preparation after its final proof
+  expires without restoring execution authority. Proven noncommit atomically
+  erases provider custody, releases both inputs and retains the refusal receipt;
+  an uncertain exchange remains pending.
+
+- Erase temporary prepared-link provider-response and issuance ciphertext with
+  its terminal receipt, retaining pending/unknown custody and exact replay.
+  Install the new forward erasure and validation migrations before enabling the
+  writer; published preparation and RP-start migration checksums are unchanged.
+
+- Persist the exact OAuth callback and account-link audit actions together with
+  the kernel account-link event, including terminal refusal and recovery. Their
+  closed declaration preserves existing single-event journal history.
+
+- Erase original RP secrets on protected-counter denial before exchange and
+  after proven rollback even when the final execution proof has expired.
+  Cleanup uses scoped historical custody and never renews mutation authority.
+
+- Let trusted prepared-link owners erase exchange secrets after proven rollback
+  inside the coordinator's fenced terminal transaction. Erasure, failure audit,
+  proof release and noncommit remain atomic; failed cleanup preserves uncertainty.
+  Existing contributors without provider-owned cleanup remain compatible.
+
+- Hand prepared account linking to a one-use storage-neutral unit of work.
+  Exact intent, owner selection and the original deadline remain binding; the
+  invocation-local authoritative writer uses the existing atomic coordinator.
+  Existing `Execute` and `ExecutePrepared` use the same route.
+
+- Admit only the closed provider-error callback profile to atomically consume
+  original state and erase RP exchange secrets. Durable cancellation records a
+  denied authentication outcome, not a successful signin, and issues no session.
+
+- Support the closed native OAuth RP-initiation profiles with one original
+  callback-state grant scoped to the actual user or anonymous pre-auth flow.
+  Install `OAuthRPPreparationErasureMigrationSource` after preparation history
+  before enabling these profiles. Terminal starts erase duplicate encrypted
+  journal output while preserving receipts; pending/unknown output remains
+  recoverable, and erased terminal secrets cannot be restored. Ordinary
+  installations still work without optional preparation columns. Native
+  OAuth/session/HTTP composition remains in development.
+
 - Add original OAuth account-link preparation to the existing command journal.
   State reservation, counters and the acknowledged start precede exchange;
   authenticated retained output preserves its original generation. The actual
