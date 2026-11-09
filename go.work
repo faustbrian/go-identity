@@ -15,6 +15,7 @@ use (
 	./http/email
 	./http/magiclink
 	./http/mfa
+	./http/oauth
 	./http/organization
 	./http/organization/consumer
 	./http/otp
@@ -29,6 +30,7 @@ use (
 	./mfa
 	./mfa/postgres
 	./oauth
+	./oauth/postgres
 	./otp
 	./otp/postgres
 	./password
