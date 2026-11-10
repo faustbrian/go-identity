@@ -78,12 +78,17 @@ func TestOAuthSigninConsumptionPlanPreservesOriginalStateAndScope(t *testing.T) 
 
 func FuzzOAuthSigninConsumptionPlan(f *testing.F) {
 	f.Add(uint16(0), []byte{})
+	f.Add(uint16(1), []byte{})
 	f.Add(uint16(3), []byte{0xff})
 	f.Fuzz(func(t *testing.T, position uint16, replacement []byte) {
 		if len(replacement) > 65536 {
 			return
 		}
 		binding, plan := oauthSigninConsumptionPlanFixture(t)
+		if position%2 == 1 {
+			plan.CommandCounters = nil
+			plan.Contributors = append(plan.Contributors[:4:4], plan.Contributors[5])
+		}
 		fingerprint := [32]byte{7}
 		wire, err := encodeFeaturePlan(binding, fingerprint, plan)
 		if err != nil {
@@ -128,6 +133,29 @@ func TestOAuthSigninPreparationRetainsOriginalStateDeclaration(t *testing.T) {
 	withoutState.Capability = nil
 	if preparationFinalDeclaration(binding, withoutState, original) {
 		t.Fatal("generation introduced new callback-state authority")
+	}
+}
+
+func TestOAuthSigninAuthenticationAdmissionKeepsOriginalState(t *testing.T) {
+	binding, plan := oauthSigninConsumptionPlanFixture(t)
+	// The canonical OAuth callback is Authentication/BeforeCredential, not a
+	// protected CredentialMutation/Privileged counter operation. Its native
+	// admission owner carries the existing risk custody through preparation.
+	plan.CommandCounters = nil
+	plan.Contributors = append(plan.Contributors[:4:4], plan.Contributors[5])
+	fingerprint := [32]byte{1}
+	wire, err := encodeFeaturePlan(binding, fingerprint, plan)
+	if err != nil {
+		t.Fatal("authentication-admitted callback incorrectly requires protected counters", err)
+	}
+	decoded, err := decodeFeaturePlan(binding, fingerprint, wire)
+	if err != nil || decoded.CommandCounters != nil || decoded.Capability == nil || *decoded.Capability != *plan.Capability || len(decoded.Contributors) != 5 || !preparationFinalDeclaration(binding, decoded, decoded) {
+		t.Fatal("authentication preparation lost original one-use state", err)
+	}
+	state, profile := "pending", int16(4)
+	observed := commandObservation{fingerprint: fingerprint[:], state: &state, preparationProfile: &profile, declaration: wire}
+	if original, preparationOnly, err := observedCommandPlan(binding, &plan.Feature.Operation, observed); err != nil || !preparationOnly || original.Capability == nil || *original.Capability != *plan.Capability {
+		t.Fatal("authentication preparation cannot observe original reserved state", err)
 	}
 }
 

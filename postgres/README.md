@@ -180,6 +180,15 @@ email as provider identity. Missing/ineligible scope denies uniformly; ambiguous
 or corrupt associations fail without a partial selection. This is metadata to
 freeze and fence, not positive authentication evidence or renewed freshness.
 
+The canonical OAuth callback uses authentication risk admission before provider
+work, not protected-mutation counters. Its registered native owner must implement
+`FeatureAdmissionPreparationContributor` when the plan omits `CommandCounters`.
+Install the existing `CounterPreparationMigrationSource` history for the frozen
+original declaration even in this profile: state is reserved before external
+admission/exchange and its declaration must remain recoverable. The same retained
+admission is checked before final commit; restoration cannot renew its lifetime.
+Existing counted plan histories remain readable and keep their original encoding.
+
 The private link writer now locks the current partition and applies the core's
 pure `ApplyAccountLink` transition in that same transaction. Account records,
 credential associations and independent epochs commit or roll back together;

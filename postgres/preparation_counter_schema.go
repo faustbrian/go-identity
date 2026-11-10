@@ -12,6 +12,10 @@ import (
 // declaration before a counter charge and retain it across retries. Old readers
 // reject these profiles; legacy rows and checksums remain unchanged. Install
 // before selecting counters with ExecutePreparedFeature. No down SQL is provided.
+// The closed authentication-admitted OAuth callback also uses this frozen
+// declaration history for its pre-exchange state reservation, without charging
+// protected-mutation counters. It still requires the native external admission
+// owner; the migration and declaration grant no authentication authority.
 type CounterPreparationMigrationSource struct {
 	Base    migrations.Source
 	Version migrations.Version

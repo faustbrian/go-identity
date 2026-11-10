@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit the closed OAuth callback through the existing retained authentication
+  admission owner without reclassifying it as a protected counter operation.
+  Its original state/declaration stays durable before provider work; missing
+  external admission denies. Existing counted histories keep their encoding.
+
 - Admit exact native existing-account OAuth callback-state consumption through
   the existing capability/coordinator phases, with a closed historical plan and
   Apply-only consumed-state custody. Reserve its original state before provider

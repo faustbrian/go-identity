@@ -11,7 +11,7 @@ import (
 )
 
 func oauthSigninPreparation(p CommandPlan) bool {
-	return p.Feature != nil && p.Feature.Operation == oauthSigninAccountOperation() && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1}) && p.Capability != nil && p.Capability.Purpose == "identity.oauth.callback" && p.Capability.MaxUses == 1 && p.CommandCounters != nil
+	return p.Feature != nil && p.Feature.Operation == oauthSigninAccountOperation() && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1}) && p.Capability != nil && p.Capability.Purpose == "identity.oauth.callback" && p.Capability.MaxUses == 1
 }
 
 // Only this fixed-depth envelope admits callback-state consumption for native
@@ -19,7 +19,7 @@ func oauthSigninPreparation(p CommandPlan) bool {
 // by the native contributor, not by a second coordinator or replay authority.
 func encodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
 	capabilityOwner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
-	if p.Feature == nil || p.Capability == nil || p.CommandCounters == nil || p.Lifecycle == nil {
+	if p.Feature == nil || p.Capability == nil || p.Lifecycle == nil {
 		return nil, invalidPlan()
 	}
 	if p.Feature.Operation != oauthSigninAccountOperation() || p.Feature.Contributor != (ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1}) {
@@ -31,7 +31,11 @@ func encodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32
 	if p.SubjectType != "authentication_attempt" || validateCapabilityPlan(b, p.Capability) != nil || *p.Lifecycle != (LifecyclePlan{EventType: "session.created.v1"}) {
 		return nil, invalidPlan()
 	}
-	if len(p.Contributors) != 6 || p.Contributors[5] != capabilityOwner || len(p.Audits) != 1 {
+	owners := 5
+	if p.CommandCounters != nil {
+		owners++
+	}
+	if len(p.Contributors) != owners || p.Contributors[owners-1] != capabilityOwner || len(p.Audits) != 1 {
 		return nil, invalidPlan()
 	}
 	if p.Audits[0].EventType != "identity.oauth.handle_callback" || p.Audits[0].RetentionClass != "protected" {
@@ -44,7 +48,7 @@ func encodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32
 	}
 	base := p
 	base.Capability = nil
-	base.Contributors = p.Contributors[:5]
+	base.Contributors = p.Contributors[:owners-1]
 	wire, err := encodeFeaturePlanMode(b, fingerprint, base, true)
 	if err != nil {
 		return nil, err

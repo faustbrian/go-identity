@@ -11,10 +11,11 @@ import (
 )
 
 // Freeze the complete code-free declaration in the existing journal before any
-// charge. It is distinct from the generated final plan, whose audit/delivery
-// custody can depend on output. Retained claim keys, not the current key, bind
-// charge provenance across process restart and key rotation.
-func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, q claimRequest, p *admittedKernelPlan, command identity.Command) (*admittedKernelPlan, error) {
+// charge or original OAuth-state reservation. It is distinct from the generated
+// final plan, whose audit/delivery custody can depend on output. Retained claim
+// keys, not the current key, bind original provenance across process restart
+// and key rotation.
+func (c *Coordinator) freezePreparationDeclaration(ctx context.Context, tx pgx.Tx, q claimRequest, p *admittedKernelPlan, command identity.Command) (*admittedKernelPlan, error) {
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.commandID))
 	var fingerprint, stored []byte
 	if err := tx.QueryRow(ctx, `SELECT c.fingerprint,j.preparation_declaration FROM identity.identity_command_id_claims c JOIN identity.commands j USING(command_id) WHERE c.command_id=$1 AND j.tenant_id=$2 AND j.purpose=$3 FOR UPDATE OF j`, id, string(q.tenant), q.purpose).Scan(&fingerprint, &stored); err != nil {

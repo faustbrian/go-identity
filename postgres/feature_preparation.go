@@ -419,6 +419,13 @@ func consumptionAuthenticationPreparation(p CommandPlan) bool {
 	return oauthSigninPreparation(p) || resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1 || p.MFACompletion != nil && p.Feature != nil && mfaCompletionOperation(p.Feature.Operation) && p.Capability != nil && p.Capability.Purpose == "identity.mfa.complete" && p.Capability.MaxUses == 1
 }
 
+func preparationRetainsDeclaration(p CommandPlan) bool {
+	// The OAuth Authentication/BeforeCredential profile uses retained external
+	// admission, not protected-mutation counters. Its state is nevertheless
+	// reserved before exchange, so recovery needs the same frozen declaration.
+	return p.CommandCounters != nil || oauthSigninPreparation(p)
+}
+
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
 	if oauthRPInitiationSelected(original) && (!validOAuthRPInitiation(b, original) || !validOAuthRPInitiation(b, final) || final.CapabilityIssuance == nil) {
 		return false
@@ -554,15 +561,15 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 	if external {
 		profile = 2
 	}
-	if p.counters != nil {
+	if preparationRetainsDeclaration(p.snapshot()) {
 		profile += 2
 	}
 	r, err = reservePreparationJournal(ctx, tx, q, d, owner, c.leaseDuration, profile)
 	if err != nil {
 		return r, result, err
 	}
-	if p.counters != nil {
-		p, err = c.freezePreparationCounters(ctx, tx, q, p, original)
+	if preparationRetainsDeclaration(p.snapshot()) {
+		p, err = c.freezePreparationDeclaration(ctx, tx, q, p, original)
 		if err != nil {
 			return preparationReservation{}, result, err
 		}
@@ -887,7 +894,7 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	}
 	p := w.state.execution.reservation.preparation
 	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
+	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || plan.feature.Operation == oauthSigninAccountOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
 		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
 			return invalidPreparation()
 		}

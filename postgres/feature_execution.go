@@ -381,6 +381,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 			if _, ok := feature.contributor.(OAuthSigninContributor); !ok {
 				return nil, invalidPlan()
 			}
+			if p.CommandCounters == nil {
+				if _, ok := feature.contributor.(FeatureAdmissionPreparationContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
 		} else if p.Feature.Operation == oauthCallbackDenialOperation() {
 			if _, ok := feature.contributor.(FeatureCommitContributor); !ok {
 				return nil, invalidPlan()

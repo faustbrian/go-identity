@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"strconv"
@@ -40,13 +41,50 @@ func (p *signinPreparationPhase) CheckFeatureCommit(context.Context, Work, ident
 	return nil
 }
 func (p *signinPreparationPhase) ApplyFeature(ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
-	consumed, err := w.OAuthSigninConsumption(p)
+	return p.apply(ctx, w, command, p)
+}
+func (*signinPreparationPhase) apply(ctx context.Context, w Work, command identity.Command, owner FeatureExecutionContributor) (identity.FeatureReceipt, error) {
+	consumed, err := w.OAuthSigninConsumption(owner)
 	spec, ok := command.Feature()
-	if err != nil || !ok || consumed.Command != spec.Binding || consumed.Plan.Purpose != "identity.oauth.callback" || consumed.Generation != 2 {
+	if err != nil || !ok || consumed.Command != spec.Binding || consumed.Plan.Purpose != "identity.oauth.callback" || consumed.Generation == 0 {
 		return identity.FeatureReceipt{}, invalidWork()
 	}
 	_, err = w.Exec(ctx, `INSERT INTO public.signin_session_effect(command_id) VALUES($1)`, string(spec.Binding.CommandID))
 	return identity.FeatureReceipt{Operation: spec.Operation}, err
+}
+
+// The closed authentication profile must opt into acknowledged external
+// admission. This fixture proves that coordinator phase boundary, not risk's
+// cryptographic admission or canonical counter algorithms.
+type signinAuthenticationPreparation struct{ *signinPreparationPhase }
+
+func (p *signinAuthenticationPreparation) AdmitFeaturePreparation(_ context.Context, w Work, _ identity.Command) error {
+	_, _, _, err := w.FeatureScope(p)
+	return err
+}
+func (p *signinAuthenticationPreparation) ApplyFeature(ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
+	return p.apply(ctx, w, command, p)
+}
+func (*signinAuthenticationPreparation) PrepareFeatureAdmission(ctx context.Context, _ identity.Command) (FeaturePreparationAdmission, error) {
+	return signinPreparationAdmission{}, ctx.Err()
+}
+func (*signinAuthenticationPreparation) RestoreFeatureAdmission(ctx context.Context, _ identity.Command, _ uint64, _ []byte) (FeaturePreparationAdmission, error) {
+	return signinPreparationAdmission{}, ctx.Err()
+}
+
+type signinPreparationAdmission struct {
+	now       *time.Time
+	expiresAt time.Time
+}
+
+func (a signinPreparationAdmission) Check(ctx context.Context) error {
+	if a.now != nil && !a.now.Before(a.expiresAt) {
+		return identity.ForbiddenError{}
+	}
+	return ctx.Err()
+}
+func (signinPreparationAdmission) Generate(context.Context, uint64) ([]byte, error) {
+	return nil, invalidPreparation()
 }
 func (*signinPreparationPhase) GenerateFeaturePreparation(context.Context, identity.Command, uint64) ([]byte, error) {
 	return nil, invalidPreparation()
@@ -136,6 +174,14 @@ func TestOAuthSigninPreparationReservesStateBeforeGenerationAndRebindsOnce(t *te
 	}
 }
 
+func TestOAuthSigninAuthenticationPreparationRequiresGatedOriginalState(t *testing.T) {
+	for _, mode := range []string{"authentication-admission", "missing-authentication-admission", "generic-authentication-bypass", "expired-authentication-admission"} {
+		t.Run(mode, func(t *testing.T) {
+			testOAuthSigninPreparedExecution(t, mode)
+		})
+	}
+}
+
 func testOAuthSigninPreparedExecution(t *testing.T, mode string) {
 	ctx, pool, repo := newAccountAuthorityStore(t)
 	for _, schema := range []string{preparationSchemaSQL, admissionPreparationSchemaSQL, counterPreparationSchemaSQL, `CREATE TABLE public.signin_preparation_state(command_id text PRIMARY KEY,fingerprint bytea NOT NULL,generation numeric NOT NULL,state text NOT NULL);
@@ -150,7 +196,19 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 	phase := &signinPreparationPhase{denyCommit: mode == "late-native-denial"}
 	capability := &signinPreparationCapability{denyFinalize: mode == "finalization-denial"}
 	auditOwner, lifecycleOwner := &recoveryAuditPhase{}, &recoveryLifecyclePhase{}
-	registry, err := NewContributorRegistry([]Contributor{repo, auditOwner, lifecycleOwner, phase, &signinPreparationCounter{}, capability})
+	var native FeaturePreparationContributor = phase
+	authentication := mode == "authentication-admission" || mode == "missing-authentication-admission" || mode == "generic-authentication-bypass" || mode == "expired-authentication-admission"
+	if authentication && mode != "missing-authentication-admission" {
+		native = &signinAuthenticationPreparation{phase}
+	}
+	owners := []Contributor{repo, auditOwner, lifecycleOwner, native}
+	if authentication {
+		plan.CommandCounters = nil
+	} else {
+		owners = append(owners, &signinPreparationCounter{})
+	}
+	owners = append(owners, capability)
+	registry, err := NewContributorRegistry(owners)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,17 +221,57 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 	plan.Capability.ExpiresAt = time.Now().UTC().Add(4 * time.Minute).Truncate(time.Second)
 	plan.Audits[0].BindingDigest = securityAuditScopeDigest(spec.Binding, &spec.Operation, plan.SubjectType, featureAuditTargetID(spec.Binding, spec.Operation), audit.ActorService, "identity-feature-audit-binding-v1")
 	q, admitted, native, err := c.prepareFeaturePreparation(command, plan)
+	if mode == "missing-authentication-admission" {
+		if err == nil || admitted != nil || native != nil {
+			t.Fatal("authentication callback admitted without its external admission owner")
+		}
+		return
+	}
 	if err != nil {
 		t.Fatal("original callback cannot prepare", err)
 	}
+	if mode == "generic-authentication-bypass" {
+		prepared, err := c.PrepareCommandPlan(spec.Binding, command, plan)
+		if err != nil {
+			t.Fatal("generic route declaration", err)
+		}
+		reservation, _, err := c.ReserveCommand(ctx, spec.Binding, command, prepared)
+		if err != nil {
+			t.Fatal("generic route reservation", err)
+		}
+		w, err := c.Begin(ctx, reservation)
+		if err != nil {
+			t.Fatal("generic route Begin", err)
+		}
+		defer c.Abort(w, identity.UnavailableError{})
+		if _, err := c.ApplyFeature(ctx, w, command); err == nil {
+			t.Fatal("generic route bypassed original external authentication admission")
+		}
+		if _, err := c.Abort(w, identity.UnavailableError{}); err == nil {
+			t.Fatal("generic admission refusal was lost")
+		}
+		var effects int
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM public.signin_session_effect`).Scan(&effects); err != nil || effects != 0 {
+			t.Fatal("unadmitted generic callback persisted session effects", err)
+		}
+		return
+	}
+	admissionTime := time.Now().UTC()
+	authenticationAdmission := signinPreparationAdmission{now: &admissionTime, expiresAt: admissionTime.Add(time.Second)}
 	firstOwner := [16]byte{1}
-	first, _, err := c.startFeaturePreparation(ctx, command, q, admitted, native, firstOwner, false)
+	first, _, err := c.startFeaturePreparation(ctx, command, q, admitted, native, firstOwner, authentication)
 	if err != nil || !first.generate || first.journal.generation != 1 {
 		t.Fatal("original start failed", err)
 	}
 	var generation string
 	if err := pool.Raw().QueryRow(ctx, `SELECT generation::text FROM public.signin_preparation_state WHERE command_id=$1`, string(spec.Binding.CommandID)).Scan(&generation); err != nil || generation != "1" || capability.reserves != 1 || capability.rebinds != 0 {
 		t.Fatal("acknowledged generation began without original state reservation", err)
+	}
+	if authentication {
+		first.admission = authenticationAdmission
+		if err := c.markAdmittedPreparation(ctx, command, q, admitted, native, first, firstOwner); err != nil {
+			t.Fatal("original authentication admission cannot acknowledge generation", err)
+		}
 	}
 	// The one-use state must already be durable before Generate can exchange a
 	// provider code. Retain output, expire its owner and resume that same output.
@@ -193,12 +291,15 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 		t.Fatal("metadata recovery changed original-state custody", err)
 	}
 	secondOwner := [16]byte{2}
-	resumed, _, err := c.startFeaturePreparation(ctx, command, q, admitted, native, secondOwner, false)
+	resumed, _, err := c.startFeaturePreparation(ctx, command, q, admitted, native, secondOwner, authentication)
 	if err != nil || resumed.generate || resumed.outputGeneration != 1 || resumed.journal.generation != 2 || capability.reserves != 1 || capability.rebinds != 1 {
 		t.Fatal("retained preparation failed to transfer original reservation once", err)
 	}
 	if err := pool.Raw().QueryRow(ctx, `SELECT generation::text FROM public.signin_preparation_state WHERE command_id=$1`, string(spec.Binding.CommandID)).Scan(&generation); err != nil || generation != "2" {
 		t.Fatal("resumed owner lacks durable original-state custody", err)
+	}
+	if authentication {
+		resumed.admission = authenticationAdmission
 	}
 	generated, final, _, err := c.prepareRestoredFeature(spec.Binding, command, plan)
 	if err != nil {
@@ -207,6 +308,14 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 	reservation, err := c.attachFeaturePreparation(ctx, q, generated, final, resumed, secondOwner, wire)
 	if err != nil || reservation.state == nil || capability.reserves != 1 || capability.rebinds != 1 {
 		t.Fatal("attachment tried to reserve/rebind already-owned state again", err)
+	}
+	observed, err := c.readCommand(ctx, spec.Binding.CommandID)
+	if err != nil {
+		t.Fatal("original attached observation", err)
+	}
+	retained, originalGeneration, err := c.readFeaturePreparation(ctx, query, spec.Binding, *plan.Feature, native, observed)
+	if err != nil || originalGeneration != 1 || !bytes.Equal(retained, wire) {
+		t.Fatal("attached preparation lost original admission/output provenance", err)
 	}
 	w, err := c.Begin(ctx, reservation)
 	if err != nil {
@@ -217,9 +326,12 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 	if err != nil {
 		t.Fatal("actual callback dispatch did not provisionally consume state before native Apply", err)
 	}
+	if mode == "expired-authentication-admission" {
+		admissionTime = authenticationAdmission.expiresAt
+	}
 	result, err = c.Commit(w, result)
 	wantState, wantEffects, wantLifecycle := "finalized", 1, 1
-	if mode == "committed" {
+	if mode == "committed" || mode == "authentication-admission" {
 		if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
 			t.Fatal("selected callback did not finalize atomically", err)
 		}

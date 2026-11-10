@@ -116,7 +116,8 @@ AND j.command_plan IS NOT DISTINCT FROM $5::bytea AND j.state=$6`, id, observed.
 	_, gated := owner.(FeatureAdmissionPreparationContributor)
 	validProfile := !gated && (profile == 1 || profile == 3) || gated && (profile == 2 || profile == 4)
 	if attached != nil {
-		validProfile = validProfile && ((attached.CommandCounters == nil && profile <= 2) || (attached.CommandCounters != nil && profile >= 3))
+		retainedDeclaration := preparationRetainsDeclaration(*attached)
+		validProfile = validProfile && ((!retainedDeclaration && profile <= 2) || (retainedDeclaration && profile >= 3))
 	}
 	if err != nil || generation == 0 || started != original || currentErr != nil || currentGeneration < generation || !validProfile || len(output) == 0 {
 		return nil, 0, identity.UnavailableError{}

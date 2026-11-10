@@ -266,7 +266,7 @@ func (c *Coordinator) startAccountLinkPreparation(ctx context.Context, original 
 	if err != nil {
 		return r, result, err
 	}
-	p, err = c.freezePreparationCounters(ctx, tx, q, p, original)
+	p, err = c.freezePreparationDeclaration(ctx, tx, q, p, original)
 	if err != nil {
 		return preparationReservation{}, result, err
 	}
