@@ -2,11 +2,30 @@
 
 ## Unreleased
 
+- Admit exact native existing-account OAuth callback-state consumption through
+  the existing capability/coordinator phases, with a closed historical plan and
+  Apply-only consumed-state custody. Reserve its original state before provider
+  preparation; retained-output takeover transfers that same reservation once.
+  Metadata recovery preserves unattached external-exchange uncertainty instead
+  of inferring rollback or releasing state. This is not a standalone signin
+  service.
+
 - Observe and recover the exact native public-client registration declaration
   when a crash occurs before final preparation attachment. Original scope,
   protected counters, lease/generation, audit and noncommit fences remain with
   the existing coordinator; unrelated or externally effectful preparations do
   not gain this recovery profile. No new migration or execution authority.
+
+- Fence the original provider account and credential during the exact native
+  anonymous OAuth-signin callback without changing its flow, actor or command
+  custody. The closed scalar account projection preserves independent link and
+  security epochs; invalid input and current denial poison the existing Work.
+  Provider proof and complete signin/session composition remain native-owned.
+
+- Resolve an exact existing provider subject to its linked account, associated
+  provider credential and independent user epochs using one bounded primary
+  snapshot. Ineligible, ambiguous and foreign associations never select a user;
+  the observation still requires protected current-authority admission.
 
 - Require the registered OAuth denial owner to erase exchange secrets before
   abort or negative recovery releases state and records noncommit. Missing or

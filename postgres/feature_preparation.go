@@ -384,6 +384,9 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if owned.MFACompletion != nil && validateMFACompletion(phase, original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
+	if oauthSigninPreparation(owned) && validateOAuthSigninConsumption(phase, original, admitted.snapshot()) != nil {
+		return q, nil, nil, invalidPreparation()
+	}
 	if owned.OTP != nil && (otpReservationOwner(admitted) == nil || validateOTPAttempt(otpAttemptOwner(admitted), original, *owned.OTP) != nil) {
 		return q, nil, nil, invalidPreparation()
 	}
@@ -413,7 +416,7 @@ func resetAuthenticationPreparation(p CommandPlan) bool {
 // session, never introduce or replace its authentication input. The ordinary
 // closed plan codec and native owner still validate the complete envelope.
 func consumptionAuthenticationPreparation(p CommandPlan) bool {
-	return resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1 || p.MFACompletion != nil && p.Feature != nil && mfaCompletionOperation(p.Feature.Operation) && p.Capability != nil && p.Capability.Purpose == "identity.mfa.complete" && p.Capability.MaxUses == 1
+	return oauthSigninPreparation(p) || resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1 || p.MFACompletion != nil && p.Feature != nil && mfaCompletionOperation(p.Feature.Operation) && p.Capability != nil && p.Capability.Purpose == "identity.mfa.complete" && p.Capability.MaxUses == 1
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
@@ -587,6 +590,14 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 			return preparationReservation{}, result, err
 		}
 	}
+	if !denied && oauthSigninPreparation(p.snapshot()) {
+		// A provider code may be exchanged only after this original state is
+		// durably reserved. A retained-output takeover transfers that same
+		// reservation now, before any restore/attachment or external work.
+		if err := c.reserveCapability(ctx, tx, q, p, r.journal, owner); err != nil {
+			return preparationReservation{}, result, err
+		}
+	}
 	if r.generate && !denied {
 		if err := c.advanceOAuthContinuationPreparation(ctx, tx, original, q, p, phase, r.journal, owner, external); err != nil {
 			return preparationReservation{}, result, err
@@ -748,7 +759,8 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 			}
 		}
 	}
-	if admitted.otp != nil || admitted.risk != nil || admitted.capability != nil {
+	stateReservedBeforeGeneration := oauthSigninPreparation(admitted.snapshot())
+	if admitted.otp != nil || admitted.risk != nil || admitted.capability != nil && !stateReservedBeforeGeneration {
 		// Denial must roll back the entire consuming prefix, not just its last
 		// participant. Otherwise a rejected command can strand the child's
 		// one-use reservation, or retain OTP after a later child conflict.
@@ -770,7 +782,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 			// later failure cannot strand a legitimate remaining one-use proof.
 			err = c.reserveRisk(ctx, participants, original, admitted, journal, owner)
 		}
-		if err == nil && admitted.capability != nil {
+		if err == nil && admitted.capability != nil && !stateReservedBeforeGeneration {
 			// Preserve capability-last enlistment for the joined OTP profile.
 			err = c.reserveCapability(ctx, participants, original, admitted, journal, owner)
 		}

@@ -62,7 +62,7 @@ func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 	if r.state != nil && r.state.plan != nil && r.state.plan.captchaUse != nil && captchaExecutionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
-	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && r.state.plan.accountLink == nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != oauthCallbackDenialOperation() && r.state.plan.feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(r.state.plan.feature.Operation) && !credentialResetSelected(r.state.plan.feature.Operation) && r.state.plan.feature.Operation != magicLinkConsumeOperation() && r.state.plan.feature.Operation != organizationInvitationAcceptOperation() && r.state.plan.feature.Operation != anonymousUpgradeOperation() && r.state.plan.mfaCompletion == nil) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
+	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && r.state.plan.accountLink == nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != oauthCallbackDenialOperation() && r.state.plan.feature.Operation != oauthSigninAccountOperation() && r.state.plan.feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(r.state.plan.feature.Operation) && !credentialResetSelected(r.state.plan.feature.Operation) && r.state.plan.feature.Operation != magicLinkConsumeOperation() && r.state.plan.feature.Operation != organizationInvitationAcceptOperation() && r.state.plan.feature.Operation != anonymousUpgradeOperation() && r.state.plan.mfaCompletion == nil) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -431,6 +431,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 		return c.Abort(w, err)
 	}
 	if err := c.finalizeMagicLinkConsumption(w); err != nil {
+		return c.Abort(w, err)
+	}
+	if err := c.finalizeOAuthSigninConsumption(w); err != nil {
 		return c.Abort(w, err)
 	}
 	if err := c.finalizeOrganizationInvitationConsumption(w); err != nil {

@@ -54,6 +54,10 @@ func (w Work) RequireActiveProviderAccount(ctx context.Context, p FeatureExecuti
 	if err != nil {
 		return time.Time{}, w.fail(ctx, invalidWork())
 	}
+	return w.requireActiveProviderAccount(ctx, b, expected)
+}
+
+func (w Work) requireActiveProviderAccount(ctx context.Context, b identity.CommandBinding, expected ProviderAccountAdmission) (time.Time, error) {
 	a, c := expected.Account, expected.Credential
 	if a.Validate(b.TenantID, b.UserID) != nil || expected.SocialLinkVersion == 0 || c.Credential.Validate(b.TenantID, b.UserID) != nil || c.Credential.Kind != identity.CredentialProvider || c.UserAuthorityVersion == 0 || c.IdentifierAuthorityVersion == 0 || c.CredentialAuthorityVersion == 0 {
 		return time.Time{}, w.fail(ctx, invalidWork())

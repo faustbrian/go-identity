@@ -155,6 +155,31 @@ validate provider cryptographic proof or current provider configuration, choose
 factor policy, consume risk/capability state or issue a session. A prior success
 cannot renew the original evidence or be cached as a new validity lease.
 
+For an existing-account anonymous signin callback, freeze that same native
+snapshot with `OAuthSigninAccountFields` in the original preauth-custodied
+`oauth-signin-callback-v1` command. `OAuthSigninAccount` decodes the closed
+projection without authenticating it. Only the exact live
+`identity.oauth.signin` participant can call
+`Work.RequireOAuthSigninProviderAccount` with the original command instance.
+It uses the selected user only as a local lookup key; Work retains the original
+anonymous flow, service actor and command identity. Account, association and
+credential locks and exclusive-expiry checks remain owned by the existing
+provider-account fence. A reconstructed command or stale snapshot cannot gain
+this custody. Actual provider assertion, original browser/preauth possession,
+known-empty factor policy, current authorization/risk and atomic state/session
+effects must still be implemented by the native OAuth owner. This seam alone
+does not enable social signin or issue a session.
+
+After validating the configured provider's cryptographic assertion,
+`Repository.GetProviderSigninAccount` can resolve its exact
+`ProviderSigninAccountQuery` in the original transaction's tenant. The bounded
+single primary snapshot returns the linked account, one associated provider
+credential and independent user epochs. It never case-folds or trims subjects,
+selects another association after a denial, links an unknown account or treats
+email as provider identity. Missing/ineligible scope denies uniformly; ambiguous
+or corrupt associations fail without a partial selection. This is metadata to
+freeze and fence, not positive authentication evidence or renewed freshness.
+
 The private link writer now locks the current partition and applies the core's
 pure `ApplyAccountLink` transition in that same transaction. Account records,
 credential associations and independent epochs commit or roll back together;

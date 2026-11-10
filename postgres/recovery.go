@@ -182,6 +182,12 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e != nil {
 		return result, e
 	}
+	if preparationOnly && oauthSigninPreparation(plan) {
+		// No final attachment does not prove that an external provider code was
+		// never exchanged. Keep the original state reservation and generation;
+		// metadata recovery must not turn uncertainty into rollback or release.
+		return result, nil
+	}
 	knownAccountLinkRefusal := false
 	if preparationOnly && plan.AccountLinkState != nil {
 		// OAuth exchange is external work, unlike entropy-only preparation.
