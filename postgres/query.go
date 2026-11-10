@@ -146,7 +146,7 @@ FROM identity.identity_command_id_claims c JOIN identity.commands j USING(comman
 WHERE c.command_id=$1 AND c.tenant_id=$2 AND c.purpose=$3 AND c.safe_fields=$4 AND c.fingerprint=$5
 AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL AND j.state=$6 AND j.lease_until=$7`, id, observed.tenant, observed.purpose, observed.scope, observed.fingerprint, *observed.state, *observed.until).Scan(&observed.preparationProfile)
 	}
-	selected := feature == nil && accountLinkBinding(binding) || feature != nil && (feature.OperationID == "identity.mfa.otp-verify" || organizationInvitationIssuanceOperation(*feature) || *feature == oauthRegistrationPreparationOperation() || *feature == oauthSigninAccountOperation())
+	selected := feature == nil && accountLinkBinding(binding) || feature != nil && (feature.OperationID == "identity.mfa.otp-verify" || organizationInvitationIssuanceOperation(*feature) || oauthRegistrationPreparationSelected(*feature) || *feature == oauthSigninAccountOperation())
 	if err != nil || observed.plan != nil || !selected || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
 		return nil
 	}
@@ -353,9 +353,9 @@ func observedCommandPlan(binding identity.CommandBinding, feature *identity.Feat
 			}
 			return plan, true, nil
 		}
-		if *feature == oauthRegistrationPreparationOperation() {
+		if oauthRegistrationPreparationSelected(*feature) {
 			plan, err := decodeFeaturePlan(binding, fp, observed.declaration)
-			if err != nil || !validOAuthRegistrationPreparation(binding, plan) {
+			if err != nil || !validOAuthRegistrationPreparation(binding, plan) || plan.Feature.Operation != *feature {
 				return CommandPlan{}, false, identity.UnavailableError{}
 			}
 			return plan, true, nil

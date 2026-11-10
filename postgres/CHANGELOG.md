@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve the distinct native confidential OAuth client-registration schema
+  during original preparation observation/recovery. Public history cannot be
+  reinterpreted as confidential, and protected counters/effects remain required.
+
 - Admit the closed OAuth callback through the existing retained authentication
   admission owner without reclassifying it as a protected counter operation.
   Its original state/declaration stays durable before provider work; missing

@@ -72,6 +72,39 @@ func TestOAuthRegistrationUnattachedPreparationObservation(t *testing.T) {
 	}
 }
 
+func TestOAuthConfidentialRegistrationRetainsDistinctOriginalPreparation(t *testing.T) {
+	b, p := registrationPreparationFixture(t)
+	b.SchemaID = "identity.oauth-server.dynamic-register.native-confidential-v1"
+	p.Feature.Operation.SchemaID = b.SchemaID
+	fingerprint := [32]byte{1}
+	wire, err := encodeFeaturePlan(b, fingerprint, p)
+	if err != nil {
+		t.Fatal("confidential registration declaration", err)
+	}
+	state, profile := "pending", int16(3)
+	observed := commandObservation{fingerprint: fingerprint[:], state: &state, preparationProfile: &profile, declaration: wire}
+	decoded, preparationOnly, err := observedCommandPlan(b, &p.Feature.Operation, observed)
+	if err != nil || !preparationOnly || decoded.Feature == nil || *decoded.Feature != *p.Feature {
+		t.Fatal("confidential original preparation cannot be observed", err)
+	}
+	public := oauthRegistrationPreparationOperation()
+	if _, _, err := observedCommandPlan(b, &public, observed); err == nil {
+		t.Fatal("public registration query adopted confidential history")
+	}
+	for _, change := range []func(*CommandPlan){
+		func(p *CommandPlan) { p.CommandCounters = nil },
+		func(p *CommandPlan) { p.CapabilityIssuance = issuanceTestPlan() },
+		func(p *CommandPlan) { p.Feature.Contributor.ContractID = "different" },
+	} {
+		_, bad := registrationPreparationFixture(t)
+		bad.Feature.Operation.SchemaID = b.SchemaID
+		change(&bad)
+		if validOAuthRegistrationPreparation(b, bad) {
+			t.Fatal("confidential declaration widened original authority")
+		}
+	}
+}
+
 func TestOAuthRegistrationPreparationRejectsDifferentNativeAuthority(t *testing.T) {
 	for name, mutate := range map[string]func(*identity.CommandBinding, *CommandPlan){
 		"user":           func(b *identity.CommandBinding, _ *CommandPlan) { b.UserID = "user" },

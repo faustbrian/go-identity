@@ -9,7 +9,15 @@ func oauthRegistrationPreparationOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "oauth-server", OperationID: "identity.oauth-server.dynamic-register", SchemaID: "identity.oauth-server.dynamic-register.native-public-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 }
 
-// This is the existing public-client preparation declaration, not a new grant
+func oauthRegistrationPreparationSelected(op identity.FeatureOperation) bool {
+	want := oauthRegistrationPreparationOperation()
+	if op.SchemaID == "identity.oauth-server.dynamic-register.native-confidential-v1" {
+		want.SchemaID = op.SchemaID
+	}
+	return op == want
+}
+
+// These are the exact native public/confidential preparation declarations, not a new grant
 // or general-purpose recovery profile. Before final attachment, the coordinator
 // cannot invoke client creation or consume the native initial token. Under its
 // original claim/journal locks, absent attachment can therefore prove noncommit.
@@ -17,9 +25,12 @@ func oauthRegistrationPreparationOperation() identity.FeatureOperation {
 // that conclusion. Token validity, current policy and metadata remain native-
 // owned; this projection only permits historical observation and recovery.
 func validOAuthRegistrationPreparation(b identity.CommandBinding, p CommandPlan) bool {
-	op := oauthRegistrationPreparationOperation()
+	// Confidential registration retains its own wire schema; a public query
+	// cannot reinterpret its history. Both classes generate only local output
+	// before attachment: secret delivery and token/client mutation remain native
+	// effects of the original coordinator Work, never preparation side effects.
 	native := ContributorDescriptor{Owner: "oauth-server/postgres", ContractID: "identity.oauth-server", Version: 1}
-	if p.Feature == nil || p.Feature.Operation != op || p.Feature.Contributor != native || b.ValidateFor(op) != nil || b.ActorKind != authorization.SubjectServiceAccount || b.UserID != "" || b.RecordID != string(b.CommandID) || b.AnonymousFlowID != b.RecordID || p.SubjectType != "oauth_client" {
+	if p.Feature == nil || !oauthRegistrationPreparationSelected(p.Feature.Operation) || p.Feature.Contributor != native || b.ValidateFor(p.Feature.Operation) != nil || b.ActorKind != authorization.SubjectServiceAccount || b.UserID != "" || b.RecordID != string(b.CommandID) || b.AnonymousFlowID != b.RecordID || p.SubjectType != "oauth_client" {
 		return false
 	}
 	if p.Lifecycle == nil || *p.Lifecycle != (LifecyclePlan{EventType: "oauth_client.created.v1", AfterVersion: 1}) || p.CommandCounters == nil || p.CommandCounters.PolicyVersion == 0 || p.CommandCounters.Fingerprint == ([32]byte{}) {
