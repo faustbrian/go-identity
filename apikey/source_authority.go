@@ -8,7 +8,7 @@ import (
 )
 
 // SourceAuthorityBinding retains the nonsecret immutable ceiling of an already
-// authenticated modern user-owned key. It is not a bearer credential, human
+// authenticated user-owned key. It is not a bearer credential, human
 // actor, session or authority proof. ConfigurationAuthority is the historical
 // configuration epoch; an unrelated key mutation may advance the current
 // aggregate without changing this key's independent security epoch.
@@ -56,13 +56,15 @@ func NewSourceAuthorityBinding(r VerificationResult, c Configuration, now time.T
 	return b, nil
 }
 
-// Validate checks modern user-only shape and exact configuration, not current
-// storage, bearer authentication or permission. Mutable fields remain borrowed
-// until their invoking bounded call returns.
+// Validate checks user-only shape and exact modern or verify-only legacy
+// configuration, not current storage, bearer authentication or permission.
+// Mutable fields remain borrowed until their invoking bounded call returns.
 func (b SourceAuthorityBinding) Validate(c Configuration) error {
 	profile := c.Spec()
 	owner := b.Owner.Spec()
-	configurationSelected := c.Validate() == nil && c.AllowsVerification() && profile.Algorithm == AlgorithmModernHMACSHA256
+	modern := profile.Algorithm == AlgorithmModernHMACSHA256
+	legacy := profile.Algorithm == AlgorithmLegacySHA256V1 && profile.State == ConfigurationVerifyOnly
+	configurationSelected := c.Validate() == nil && c.AllowsVerification() && (modern || legacy)
 	if !configurationSelected || b.ConfigurationRevision != profile.Revision {
 		return ErrInvalid
 	}
@@ -80,6 +82,9 @@ func (b SourceAuthorityBinding) Validate(c Configuration) error {
 		return ErrInvalid
 	}
 	expiryRepresentable := !b.ExpiresAt.IsZero() && b.ExpiresAt.Year() >= 1 && b.ExpiresAt.Year() <= 9999 && b.ExpiresAt.Nanosecond()%1000 == 0
+	if legacy && profile.AllowLegacyNoExpiry && b.ExpiresAt.IsZero() {
+		expiryRepresentable = true
+	}
 	if !expiryRepresentable {
 		return ErrInvalid
 	}
@@ -155,7 +160,8 @@ func (o SourceAuthorityObservation) Validate(b SourceAuthorityBinding, c Configu
 	if !readTimesValid || !o.VerifiedAt.Before(o.ValidUntil) {
 		return ErrDenied
 	}
-	if o.ValidUntil.After(deadline) || o.ValidUntil.After(b.ExpiresAt) || !now.Before(o.ValidUntil) {
+	exceedsSourceExpiry := !b.ExpiresAt.IsZero() && o.ValidUntil.After(b.ExpiresAt)
+	if o.ValidUntil.After(deadline) || exceedsSourceExpiry || !now.Before(o.ValidUntil) {
 		return ErrDenied
 	}
 	return nil

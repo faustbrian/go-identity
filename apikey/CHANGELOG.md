@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit already-authenticated USER sources from an explicit verify-only
+  legacy SHA-256 configuration, preserving imported expiry or selected absence.
+  Source observations remain bounded by their original read-start deadline;
+  modern validation/issuance and verifier/service signatures are unchanged.
+
 - Add modern user-key `SourceAuthorityBinding` and separate current
   `SourceAuthorityObservation` contracts for already-authenticated delegation
   sources. Retain exact roots, non-expanding grants and original expiry without

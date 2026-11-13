@@ -4,7 +4,11 @@
 
 `NewSourceAuthorityBinding` snapshots the nonsecret root and effective ceiling of
 a still-fresh `VerificationResult` supplied by the real `AtomicVerifier`.
-The binding selects modern user-owned keys only. `SourceAuthorityObservation`
+The binding selects user-owned keys under the exact modern or explicitly
+verify-only legacy SHA-256 configuration. Existing imported IDs, restrictions
+and expiry remain unchanged; absent historical expiry is allowed only by
+`AllowLegacyNoExpiry`. It never permits unbounded validity evidence or new
+legacy issuance. `SourceAuthorityObservation`
 represents a separate, bounded primary read of current key/owner/policy facts;
 neither value nor structural validation authenticates a bearer or proves a human
 actor/session. Existing `Service` and `AtomicVerifier` interfaces are unchanged.
@@ -14,8 +18,10 @@ The owned native adapter supplies `ObserveSourceAuthority` and an existing-Work
 timestamps separately, retain exact root/security versions and credential expiry,
 intersect grants and use the earliest contributing current deadline. A genuine
 later primary read is distinct from copying or replaying an expired observation.
-User ownership never converts the API-key actor into a human. Organization and
-legacy source profiles remain excluded; this seam is not an OAuth exchange.
+User ownership never converts the API-key actor into a human. Organization
+sources remain excluded. Legacy observation/fencing additionally requires a
+native adapter that explicitly adopts `LegacyConfiguration`; this root extension
+alone does not provide that adoption. This seam is not an OAuth exchange.
 Bindings/observations deny implicit JSON export. A composing durable owner must
 use its explicit nonsecret projection, not a public proof factory or raw key.
 
