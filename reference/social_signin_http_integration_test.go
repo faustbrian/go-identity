@@ -22,9 +22,10 @@ func TestReferencePostgresConfiguredOIDCSigninHTTP(t *testing.T) {
 	for _, scenario := range []struct {
 		name             string
 		remember, denied bool
-	}{{"browser", false, false}, {"persistent", true, false}, {"provider-denial", false, true}} {
+		postAuth         bool
+	}{{"browser", false, false, false}, {"persistent", true, false, false}, {"provider-denial", false, true, false}, {"post-authentication", false, false, true}} {
 		t.Run(scenario.name, func(t *testing.T) {
-			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, socialOIDC: true, socialOIDCLinkOnly: true, socialOIDCHTTPSignin: true, socialOIDCHTTPRemember: scenario.remember, socialOIDCHTTPDenial: scenario.denied}, true)
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, socialOIDC: true, socialOIDCLinkOnly: true, socialOIDCHTTPSignin: true, socialOIDCHTTPRemember: scenario.remember, socialOIDCHTTPDenial: scenario.denied, socialOIDCPostAuth: scenario.postAuth}, true)
 		})
 	}
 }

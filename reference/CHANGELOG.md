@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support configured OIDC providers that explicitly require POST client
+  credentials through the existing linking/signin/session/logout composition.
+  Public and Basic selections retain their original behavior; no built-in
+  Google profile or automatic authentication-method fallback is added.
+
 - Independently select native existing-account OIDC signin and its HTTP
   original-browser start/shared callback. Reuse real preauth, risk, session and
   migration owners; committed callbacks deliver an HttpOnly session plus a

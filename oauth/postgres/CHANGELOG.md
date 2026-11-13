@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Adopt the explicit `client_secret_post` provider profile for native linking
+  and existing-account signin. The selected token credential channel remains
+  bound to original state/configuration; no migration or automatic fallback
+  between public, Basic and POST profiles is introduced.
+
 - Resolve shared link/signin callback routing from the native keyed state
   commitment, including retained terminal metadata within its original lifetime.
   Routing grants no browser or exchange authority; the selected native callback

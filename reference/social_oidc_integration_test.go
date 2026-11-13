@@ -508,19 +508,26 @@ type referenceSocialOIDCIssuer struct {
 	failExchange      atomic.Bool
 	refuseExchange    atomic.Bool
 	denyAuthorization atomic.Bool
+	formCredentials   bool
 	gate              atomic.Pointer[referenceSocialExchangeGate]
 }
 
-func configureReferenceSocialOIDC(t *testing.T, c *reference.StoreConfiguration, origin string, linkOnly bool) *referenceSocialOIDCIssuer {
+func configureReferenceSocialOIDC(t *testing.T, c *reference.StoreConfiguration, origin string, linkOnly, postAuthentication bool) *referenceSocialOIDCIssuer {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal("create controlled provider key")
 	}
-	p := &referenceSocialOIDCIssuer{key: key, redirect: origin + "/v1/oauth/callback", grants: make(map[string]referenceSocialOIDCGrant)}
+	p := &referenceSocialOIDCIssuer{key: key, redirect: origin + "/v1/oauth/callback", grants: make(map[string]referenceSocialOIDCGrant), formCredentials: postAuthentication}
 	p.server = httptest.NewTLSServer(http.HandlerFunc(p.serve))
 	t.Cleanup(p.server.Close)
-	provider, err := oauth.NewOIDCProvider(oauth.OIDCConfig{ID: "reference-oidc", Version: 1, Issuer: p.server.URL, AuthorizationEndpoint: p.server.URL + "/authorize", TokenEndpoint: p.server.URL + "/token", RedirectURI: p.redirect, ClientID: "reference-social-client", ClientAuthentication: oauth.PublicClient, Scopes: []string{"openid", "profile"}, Algorithms: []string{"ES256"}, KeySet: p, HTTPClient: p.server.Client(), Timeout: 2 * time.Second})
+	providerConfig := oauth.OIDCConfig{ID: "reference-oidc", Version: 1, Issuer: p.server.URL, AuthorizationEndpoint: p.server.URL + "/authorize", TokenEndpoint: p.server.URL + "/token", RedirectURI: p.redirect, ClientID: "reference-social-client", ClientAuthentication: oauth.PublicClient, Scopes: []string{"openid", "profile"}, Algorithms: []string{"ES256"}, KeySet: p, HTTPClient: p.server.Client(), Timeout: 2 * time.Second}
+	if postAuthentication {
+		providerConfig.ClientAuthentication = oauth.ClientAuthentication("client_secret_post")
+		providerConfig.ClientSecret = []byte("reference-post-credential:+ & value")
+	}
+	provider, err := oauth.NewOIDCProvider(providerConfig)
+	clear(providerConfig.ClientSecret)
 	if err != nil {
 		t.Fatal("configure controlled provider", err)
 	}
@@ -573,6 +580,20 @@ func (p *referenceSocialOIDCIssuer) serve(w http.ResponseWriter, r *http.Request
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
 	if err := r.ParseForm(); err != nil || r.Form.Get("grant_type") != "authorization_code" || r.Form.Get("client_id") != "reference-social-client" || r.Form.Get("redirect_uri") != p.redirect {
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	// Both profiles must keep credentials out of query and Basic channels.
+	// A POST profile must prove its exact form credential before consuming code.
+	if r.URL.RawQuery != "" || r.Header.Get("Authorization") != "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	validSecret := !r.PostForm.Has("client_secret")
+	if p.formCredentials {
+		validSecret = len(r.PostForm["client_secret"]) == 1 && r.PostForm.Get("client_secret") == "reference-post-credential:+ & value"
+	}
+	if !validSecret {
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	p.mu.Lock()

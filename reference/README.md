@@ -23,6 +23,12 @@ plan before startup, including its forward preparation-erasure, counter-alias
 and RP/token-vault histories. Keep original provider/key versions available
 until their in-flight custody has drained.
 
+The provider may explicitly select `oauth.ClientSecretPost` when required by
+its configured profile. Client credentials then remain in the HTTPS token form,
+not a browser URL or Basic header. The complete PostgreSQL HTTP fixture includes
+this linking/signin/session/logout profile alongside the public-client journey;
+it is controlled-provider evidence, not Google or Apple live interoperability.
+
 Consumer journey:
 
 1. Register, receive verification, verify and sign in through the existing

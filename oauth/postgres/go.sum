@@ -71,6 +71,8 @@ github.com/faustbrian/go-identity/oauth v0.0.0-20261109200157-e77387b87860 h1:DZ
 github.com/faustbrian/go-identity/oauth v0.0.0-20261109200157-e77387b87860/go.mod h1:tArfhscVyCw81qD/ssVw5PAI7AcHT+LbSV/siIRZhrw=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261113005611-82309c273c6c h1:2xOBnrMA8nhs3ksLcyCvQs3TP8pu4CNAs3WtvQmgr/w=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261113005611-82309c273c6c/go.mod h1:tArfhscVyCw81qD/ssVw5PAI7AcHT+LbSV/siIRZhrw=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261113053708-2bf4fa020011 h1:+KmdoJdmihV1MGY7BPk+w/j6HMc0xELpy5B8EF7wPk0=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261113053708-2bf4fa020011/go.mod h1:tArfhscVyCw81qD/ssVw5PAI7AcHT+LbSV/siIRZhrw=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261109200157-e77387b87860 h1:+YeQjCBVzJ9y6iK769bBrPW73G6HPcVC0ecjWVrgl4E=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261109200157-e77387b87860/go.mod h1:YYj5HFplHAg9Xx4sUA0Sb4dChjutZQnAFQptTVoHGVs=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261113005611-82309c273c6c h1:QPk+02H0S/7YDiL/X8dpifHyENy8dQd+0xRTFUM4fuE=

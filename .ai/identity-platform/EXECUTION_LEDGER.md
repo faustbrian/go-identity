@@ -1,5 +1,17 @@
 # Identity Implementation — Current Milestone
 
+Current delivery checkpoint: generic POST credential prerequisite main2bf4fa0
+is public/CI green. Its eight selected source/manifest files match authenticated
+public bytes. Native/Reference public-dependency POST + retained public browser
+journeys pass actual PG/race15.087s after observed old-pin RED; ordinary native/
+Reference race1.787s/8.276s, tagged vets and module verifies pass. Complete final
+11-file composition review approves. Primary delivers this batch separately
+from the independently approved Apple module; whole M17/catalog stay open.
+Apple F1 expiry overflow was runtime-reproduced and fixed with no calendar
+restriction. Original reviewer approves final source plus root registration;
+ordinary0.120s/race1.332s/vet pass. Full catalog/Apple login/unit qualification
+remain unclaimed. Both source workers are finished; primary owns publication.
+
 Parallel leaf assignment: package_status_platform owns only new
 oauth/providers/** for the existing direct Apple client-secret-sign operation.
 This is independent of unfinished Google claims/native-token/hybrid flows:

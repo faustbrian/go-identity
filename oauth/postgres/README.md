@@ -7,6 +7,11 @@ Both use native authority owners and the existing kernel coordinator, not
 application-written domain stores. Publication and complete OAuth qualification
 remain unfinished.
 
+Configured providers may explicitly select `oauth.ClientSecretPost` as well as
+the existing public or Basic profiles. Original native state binds that choice;
+credentials are sent only in the HTTPS token form. This does not add a built-in
+provider catalog, automatic credential-channel fallback or Apple hybrid flow.
+
 ## Existing-account signin
 
 This selected profile uses query callbacks, S256 PKCE and nonce-bound OIDC.

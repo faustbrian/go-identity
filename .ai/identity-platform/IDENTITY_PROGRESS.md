@@ -14,6 +14,23 @@ historical detail. Do not rerun qualification just to refresh a status report.
 
 ## Current TL;DR — 2026-11-13
 
+**Latest local consumer batch:** the explicit POST-credential OIDC profile and
+retained public-client profile both pass real PostgreSQL HTTP linking, signin,
+session-read and strict logout under race (15.087s) with public dependencies.
+The missing profile first failed against the old public root. Its prerequisite
+is pushed at `2bf4fa0` with
+[passing CI](https://github.com/faustbrian/go-identity/actions/runs/43373259153).
+Native/Reference ordinary race passes1.787s/8.276s; tagged vet and module
+verification pass. Independent complete-diff review approves; composition
+publication is still pending. This is not Google live interoperability.
+
+**Independent Apple batch:** the direct encrypted-key-to-client-secret encoder
+operation is implemented and independently approved, including its root module
+registration. Review found a representational expiry overflow; actual RED
+reproduced it, and the fix passes both denial and the adjacent valid boundary.
+Ordinary/race/vet pass. Publication remains pending. This is not Apple login,
+hybrid callbacks or completion of the 43-provider catalog.
+
 **Current consumer integration:** the actual configured PostgreSQL backend
 passes HTTP OIDC signin, common session reads and strict logout using downloaded
 public dependencies (`GOWORK=off`), not local workspace substitutes. Browser,
@@ -47,12 +64,11 @@ fixture and 3.3GB scratch were removed after retaining the proof.
 This is a selected M30 profile, not full M30 or whole-unit qualification.
 RFC7592 remains excluded. Primary retains final acceptance and publication.
 
-**Current assignments:** primary is adding the generic POST credential channel
-required by the Google catalog, then owns catalog/native/Reference adoption.
-`package_status_platform` owns the independent direct Apple client-secret
-signing operation in `oauth/providers`, not Apple login or hybrid callbacks.
-The public-client worker and its reviewer have finished. All other units remain
-queued with their dependencies visible below; completed workers are not active.
+**Current assignments:** primary owns delivery of the native/Reference POST
+profile and the independent Apple signing batch. Both implementation and review
+workers have finished; no finished worker is counted as actively implementing.
+Catalog adoption and remaining OAuth workflows follow their actual dependencies.
+All other units remain queued with their dependencies visible below.
 
 ## All 67 units — functional scope and remaining work
 
@@ -134,7 +150,7 @@ and in EXECUTION_LEDGER.md; earlier completed workers are not active workers.
 |---|---:|---|---|
 | `identity/oauth` |30–50%,M|D: configured OIDC/query/S256 linking and existing-account signin|Signup/unlink/stored-token refresh, more modes/providers/native-token workflows|
 | `identity/oauth/postgres` |30–50%,M|D: original browser/state/PKCE, link/signin/session and tokenless recovery|Signup/MFA/organization variants, unlink and durable provider refresh|
-| `identity/oauth/providers` |0–5%,M|P: generic configured provider is not this catalog unit|Built-in catalog/mappings/native-token proofs after generic OAuth|
+| `identity/oauth/providers` |0–5%,M|I: direct Apple client-secret signing prepared locally; full catalog absent|Publish selected operation, then built-in catalog/mappings/native-token proofs after generic OAuth|
 | `identity/oauth/onetap` |0–5%,M|P: no mapped runtime found|One Tap browser/nonce/origin proofs and real identity/session composition|
 | `identity/oauth/proxy` |0–5%,M|P: no mapped runtime found|Registered previews, one-use proxy state and intended-application completion|
 | `identity/apikey` |60–80%,M|D: selected modern/legacy user/organization keys, reads and narrowing update|Finite quotas/caches and remaining session/delegation/management profiles|

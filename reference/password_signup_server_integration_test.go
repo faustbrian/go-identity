@@ -297,6 +297,7 @@ type signupGraphExtensions struct {
 	socialOIDCHTTPRemember      bool
 	socialOIDCHTTPDenial        bool
 	socialOIDCHTTPForeignOrigin bool
+	socialOIDCPostAuth          bool
 	organizationKey             bool
 	organizationKeyUpgrade      bool
 	organizationKeyMetadata     bool
@@ -590,7 +591,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			socialOrigin = "https://other-origin.example"
 			c.PasswordSignin.Native.Origins = append(c.PasswordSignin.Native.Origins, socialOrigin)
 		}
-		socialIssuer = configureReferenceSocialOIDC(t, &c, socialOrigin, extensions.socialOIDCLinkOnly)
+		socialIssuer = configureReferenceSocialOIDC(t, &c, socialOrigin, extensions.socialOIDCLinkOnly, extensions.socialOIDCPostAuth)
 		if socialRollbackClock != nil {
 			c.SocialOAuth.Issuer.Crypto.Clock = socialRollbackClock.now
 			c.PasswordSignup.Preparation.Clock = socialRollbackClock.now
