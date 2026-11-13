@@ -102,6 +102,10 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// A SCIM schema alias must not skip its mandatory kernel creation effect.
+	if op.OperationID == "identity.scim.user-create" {
+		return op == scimUserCreationOperation() && d == scimUserCreationDescriptor()
+	}
 	// The device child owns RFC8628 semantics, while the existing OAuth native
 	// participant owns client, consent and token mutations in the same Work.
 	// Freeze each exact schema/subject mode; no cross-owner family wildcard.

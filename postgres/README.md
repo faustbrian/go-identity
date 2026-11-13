@@ -1,5 +1,43 @@
 # Identity PostgreSQL
 
+## Atomic SCIM kernel creation
+
+`NewSCIMUserCreationDomain(repository)` is a trusted native-adapter seam, not a
+SCIM endpoint or authorization API. It borrows the exact enlisted repository and
+reuses existing kernel user/attribute SQL, transaction, command and recovery
+owners. No new migration, coordinator, independent journal or pool is introduced.
+The SCIM native store and connection/policy authority remain separate requirements.
+
+The selected participant descriptor is `scim/postgres`, contract `identity.scim`,
+version1. Its exact operation is owner`scim`, `identity.scim.user-create`, schema
+`identity.scim.user-create.native-v1` version1 with a required projection RecordID
+and user target. Its subject type is `scim_user`, lifecycle
+`identity.scim.user_created.v1`, version0 to1. Schema aliases cannot skip kernel
+creation. The native participant must implement the existing final-commit check
+and retain current connection/token/policy admission; this seam cannot supply it.
+
+Before reservation, map the prepared `identity.CreateUserCommand` through
+`SCIMUserCreationFields`. Include all returned `scim.creation.*` fields in the
+original immutable feature command. The kernel binding retains the same command,
+tenant, actor, target, policy and correlation, uses operation`identity.user.create`,
+its declared attribute schema, and omits the projection RecordID. Attribute values
+are committed rather than emitted as plaintext fields. Current support is active
+initial users only; inactive creation, SCIM updates and organization mapping are
+not silently approximated by this profile.
+
+During the sole coordinator's exact `ApplyFeature` invocation, the native owner
+calls `domain.Apply(ctx, work, participant, originalCommand, creation)`. Changed
+or reconstructed commands, different kernel intent, a foreign repository,
+duplicates and out-of-invocation calls deny and poison Work. The returned user
+and `work.SCIMUserCreation(participant)` are provisional, scalar-only evidence,
+not credentials, authentication or durable success. The getter is unavailable at
+final commit. Missing kernel creation prevents the feature receipt from committing.
+Only native projection plus required audit/lifecycle/result in the same successful
+commit establish provisioning. Failures roll back together; unknown commit and
+original replay remain with the existing coordinator. Recovery never reconstructs
+success from a present user; all frozen participants must prove noncommit before
+releasing an expired pending command.
+
 ## Interrupted native public-client registration
 
 The closed `identity.oauth-server.dynamic-register.native-public-v1` preparation

@@ -226,6 +226,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		return recoverAccountLink(ctx, recovery)
 	}
 	if err == nil && recovery.state.plan.feature != nil {
+		if recovery.state.plan.feature.Operation == scimUserCreationOperation() {
+			return recoverCreatedUser(ctx, recovery)
+		}
 		if recovery.state.plan.feature.Operation == phoneChangeOperation() {
 			return recoverPhoneChange(ctx, recovery)
 		}
@@ -351,6 +354,16 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 			return RecoveryUnknown, nil
 		}
 		return RecoveryNotCommitted, nil
+	}
+	return recoverCreatedUser(ctx, recovery)
+}
+
+// Creation recovery never fabricates success from a present row. Absence is
+// only this participant's negative evidence; all frozen owners must agree.
+func recoverCreatedUser(ctx context.Context, recovery RecoveryWork) (RecoveryStatus, error) {
+	b, err := recovery.Scope()
+	if err != nil {
+		return RecoveryUnknown, err
 	}
 	rows, err := recovery.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.users WHERE tenant_id=$1 AND user_id=$2)`, string(b.TenantID), string(b.UserID))
 	if err != nil {

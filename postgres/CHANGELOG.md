@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add a closed SCIM user-creation domain seam that inserts kernel-owned users
+  and attributes inside the native projection's existing command transaction.
+  Exact original-command/input/participant custody and a final-check owner are
+  required; missing or duplicate kernel effects deny. SCIM creation recovery
+  inspects the kernel effect rather than assuming the feature touched no user.
+  This does not provide the SCIM native store, credentials or mapping policy.
+
 - Fence OAuth session reads and logout against the current linked provider
   credential and account association. Support anonymous provider denial as a
   distinct atomic callback profile without changing existing user-owned history.

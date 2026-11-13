@@ -195,6 +195,9 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.feature == nil && result.User == owned.User && result.ExpectedVersion == owned.ExpectedVersion && result.Revocation != nil && owned.Revocation != nil && result.Revocation.CascadeID == owned.Revocation.CascadeID && result.Revocation.Generation == owned.Revocation.Generation && result.Revocation.AuthorityVersion == owned.Revocation.AuthorityVersion && result.Revocation.Status == owned.Revocation.Status && slices.Equal(result.Revocation.Owners, owned.Revocation.Owners) && slices.Equal(result.Revocation.ExternalLimitations, owned.Revocation.ExternalLimitations)
 	}
 	if w.state.feature != nil {
+		if w.state.feature.Operation == scimUserCreationOperation() && w.state.scimUserCreation == nil {
+			return false
+		}
 		if (w.state.feature.Operation == anonymousDisposalOperation() || w.state.feature.Operation == anonymousExpiryDisposalOperation()) && w.state.anonymousDisposal == nil {
 			return false
 		}

@@ -36,6 +36,7 @@ type workState struct {
 	sqlStarted                bool
 	execution                 *domainExecution
 	creation                  *identity.User
+	scimUserCreation          *identity.User
 	registrationUser          *identity.User
 	passkeySignupSessionID    string
 	anonymousCreation         *anonymousCreationProgress

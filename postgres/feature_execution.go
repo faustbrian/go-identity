@@ -818,6 +818,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if p.passkeyRegistration != nil && w.state.registrationUser == nil {
 		return result, w.fail(ctx, invalidPasskeyRegistration())
 	}
+	if p.feature.Operation == scimUserCreationOperation() && w.state.scimUserCreation == nil {
+		return result, w.fail(ctx, invalidSCIMCreation())
+	}
 	if oauthConsentSelected(p.snapshot()) && w.state.oauthConsent == nil || p.feature.Operation == organizationInvitationAcceptOperation() && w.state.invitationMembership == nil {
 		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})
 	}
