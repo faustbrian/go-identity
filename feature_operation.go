@@ -39,6 +39,11 @@ const (
 	// when no local record exists. The native owner must fence that absence;
 	// this policy cannot perform an update or establish source authority.
 	FeatureVersionSnapshotImport
+	// FeatureVersionSequentialOrUnchanged admits a positive unchanged record
+	// version or a sequential transition, including creation at 0 -> 1. The
+	// native owner must fence actual no-op/current state; this grants no write
+	// authority. Only record-targeted operations may select this policy.
+	FeatureVersionSequentialOrUnchanged
 )
 
 // FeatureOperation identifies one storage-neutral feature-owned operation.
@@ -61,7 +66,7 @@ type FeatureOperation struct {
 	// Zero retains the original user-only contract and serialized shape.
 	SubjectRequirement FeatureSubjectRequirement `json:",omitempty"`
 	// VersionPolicy defaults to the existing sequential contract and omitted
-	// serialized shape. Snapshot import requires a record-targeted operation.
+	// serialized shape. Nondefault policies require a record-targeted operation.
 	VersionPolicy FeatureVersionPolicy `json:",omitempty"`
 }
 
@@ -71,7 +76,7 @@ type FeatureOperation struct {
 // before admission. Names alone never enable an execution phase. Invalid input
 // returns a redacted InvalidInputError; zero is invalid.
 func (d FeatureOperation) Validate() error {
-	if !validFeatureName(d.Owner, '/') || d.Owner == "identity" || !validFeatureName(d.OperationID, '.') || kernelOperationID(d.OperationID) || !validDirectoryID(d.SchemaID) || d.SchemaVersion == 0 || (d.RecordRequirement != FeatureRecordOmitted && d.RecordRequirement != FeatureRecordRequired) || d.SubjectRequirement > FeatureSubjectAnonymousFlow || d.VersionPolicy > FeatureVersionSnapshotImport || d.VersionPolicy == FeatureVersionSnapshotImport && d.RecordRequirement != FeatureRecordRequired {
+	if !validFeatureName(d.Owner, '/') || d.Owner == "identity" || !validFeatureName(d.OperationID, '.') || kernelOperationID(d.OperationID) || !validDirectoryID(d.SchemaID) || d.SchemaVersion == 0 || (d.RecordRequirement != FeatureRecordOmitted && d.RecordRequirement != FeatureRecordRequired) || d.SubjectRequirement > FeatureSubjectAnonymousFlow || d.VersionPolicy > FeatureVersionSequentialOrUnchanged || d.VersionPolicy != FeatureVersionSequential && d.RecordRequirement != FeatureRecordRequired {
 		return InvalidInputError{Field: "feature_operation"}
 	}
 	return nil
@@ -83,6 +88,8 @@ func (d FeatureOperation) Validate() error {
 // Sequential declarations retain their existing overflow rule. Snapshot import
 // admits only absent-local 0 -> positive source versions, including full width;
 // it never permits overwriting an existing record or resetting a version.
+// Sequential-or-unchanged additionally admits positive equal versions, even at
+// maximum width; zero -> zero, jumps and overflowing successors remain invalid.
 func (d FeatureOperation) ValidateRecordVersions(before, after uint64) error {
 	if err := d.Validate(); err != nil {
 		return err
@@ -93,6 +100,9 @@ func (d FeatureOperation) ValidateRecordVersions(before, after uint64) error {
 			valid = before == 0 && after > 0
 		} else {
 			valid = before < ^uint64(0) && after == before+1
+			if d.VersionPolicy == FeatureVersionSequentialOrUnchanged && before > 0 && after == before {
+				valid = true
+			}
 		}
 	}
 	if !valid {

@@ -8,6 +8,8 @@ import "time"
 // AfterVersion == BeforeVersion+1 without overflow; creation starts at 0 -> 1.
 // Explicit snapshot imports instead preserve a positive source version from
 // absent-local BeforeVersion zero. This never authorizes overwriting a record.
+// Explicit sequential-or-unchanged operations may retain one positive version
+// for an owner-fenced no-op; they cannot invent a prior record or reset a version.
 // Record-free operations and every noncommitted outcome keep both versions zero.
 // The target ID is CommandResult.Binding.RecordID, not an alternate locator.
 // Feature owners validate their native result and complete command schema;

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an explicit record-targeted sequential-or-unchanged feature version policy
+  for owner-fenced no-ops. Positive unchanged versions, including maximum width,
+  are preserved without fabricating a mutation. Existing sequential/import
+  policies and default declaration bytes retain their semantics and encoding.
+
 - Permit the exact native SCIM replace and PATCH actions through the existing
   typed attribute processor with unchanged schema, field-policy, normalization
   and bounds checks. These update actions do not apply creation defaults or
