@@ -18,12 +18,29 @@ The owned native adapter supplies `ObserveSourceAuthority` and an existing-Work
 timestamps separately, retain exact root/security versions and credential expiry,
 intersect grants and use the earliest contributing current deadline. A genuine
 later primary read is distinct from copying or replaying an expired observation.
-User ownership never converts the API-key actor into a human. Organization
-sources remain excluded. Legacy observation/fencing additionally requires a
+User ownership never converts the API-key actor into a human. These existing
+USER types and methods remain USER-only. Legacy observation/fencing requires a
 native adapter that explicitly adopts `LegacyConfiguration`; this root extension
 alone does not provide that adoption. This seam is not an OAuth exchange.
 Bindings/observations deny implicit JSON export. A composing durable owner must
 use its explicit nonsecret projection, not a public proof factory or raw key.
+
+Organization-owned modern sources use the distinct
+`NewOrganizationSourceAuthorityBinding` and
+`OrganizationSourceAuthorityObservation` contracts. Native
+`ObserveOrganizationSourceAuthority` / `RequireOrganizationSourceAuthority`
+consume actual organization credential authority, not the creator's membership
+or USER epochs. Member removal does not revoke independent integration ownership;
+human management/delegation still needs its own current member permission.
+Organization aggregate version is separately fenced, while the exact credential
+epoch prevents archive/restore from reviving a key. Original read-start freshness,
+key root/security versions, finite source expiry and non-expanding grants remain
+mandatory. Organization read/verified/expiry timestamps retain the owner's
+original clock domain separately from the outer primary-database timestamps;
+neither is retimed or required to nest exactly across clocks. Overall validity
+uses the earliest original deadline. Legacy organization sources are not selected.
+Adopting these root
+types alone does not implement the native reader/fence or OAuth exchange.
 
 `Updater` is an optional name/permission-management extension; it does not
 change the existing `Service` interface. Supply the genuine human bearer,

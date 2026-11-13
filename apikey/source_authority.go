@@ -35,8 +35,16 @@ func NewSourceAuthorityBinding(r VerificationResult, c Configuration, now time.T
 	if r.ValidateAt(c, now) != nil {
 		return SourceAuthorityBinding{}, ErrDenied
 	}
+	b := sourceAuthorityBinding(r)
+	if err := b.Validate(c); err != nil {
+		return SourceAuthorityBinding{}, err
+	}
+	return b, nil
+}
+
+func sourceAuthorityBinding(r VerificationResult) SourceAuthorityBinding {
 	record := r.Record
-	b := SourceAuthorityBinding{
+	return SourceAuthorityBinding{
 		ConfigurationAuthority: r.ConfigurationAuthority,
 		ConfigurationRevision:  record.ConfigurationRevision,
 		KeyID:                  record.ID,
@@ -50,16 +58,16 @@ func NewSourceAuthorityBinding(r VerificationResult, c Configuration, now time.T
 		Grant:                  slices.Clone(r.Grant),
 		ExpiresAt:              record.ExpiresAt,
 	}
-	if err := b.Validate(c); err != nil {
-		return SourceAuthorityBinding{}, err
-	}
-	return b, nil
 }
 
 // Validate checks user-only shape and exact modern or verify-only legacy
 // configuration, not current storage, bearer authentication or permission.
 // Mutable fields remain borrowed until their invoking bounded call returns.
 func (b SourceAuthorityBinding) Validate(c Configuration) error {
+	return b.validate(c, OwnerUser)
+}
+
+func (b SourceAuthorityBinding) validate(c Configuration, kind OwnerKind) error {
 	profile := c.Spec()
 	owner := b.Owner.Spec()
 	modern := profile.Algorithm == AlgorithmModernHMACSHA256
@@ -68,7 +76,7 @@ func (b SourceAuthorityBinding) Validate(c Configuration) error {
 	if !configurationSelected || b.ConfigurationRevision != profile.Revision {
 		return ErrInvalid
 	}
-	if b.Owner.Validate() != nil || owner.Kind != OwnerUser || b.ConfigurationAuthority.Validate(owner.TenantID, profile.ID) != nil {
+	if b.Owner.Validate() != nil || owner.Kind != kind || b.ConfigurationAuthority.Validate(owner.TenantID, profile.ID) != nil {
 		return ErrInvalid
 	}
 	if _, err := ParseKeyID(string(b.KeyID)); err != nil {

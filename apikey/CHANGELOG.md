@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add distinct modern organization-source binding and observation contracts.
+  Keep integration ownership independent of creator membership, retain separate
+  organization aggregate/credential epochs and original bounded freshness, and
+  preserve original organization/primary-clock windows without retiming. Leave
+  existing USER structs/methods unchanged. Actual native authority/fencing
+  is required; no human principal or legacy organization exchange is implied.
+
 - Admit already-authenticated USER sources from an explicit verify-only
   legacy SHA-256 configuration, preserving imported expiry or selected absence.
   Source observations remain bounded by their original read-start deadline;
