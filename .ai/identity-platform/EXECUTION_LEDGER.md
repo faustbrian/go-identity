@@ -1,5 +1,24 @@
 # Identity Implementation — Current Milestone
 
+Selected M17 existing-account HTTP consumer profile DELIVERED: Reference
+main4edff224b3f06fd27269bacdd0852e8a76c27416, exact successful CI
+https://github.com/faustbrian/go-identity/actions/runs/43366321487.
+Fresh external consumer downloads that public Reference artifact and passes
+actual PostgreSQL browser signin/read/logout/race4.438s plus module verification.
+All16 changed Reference source/manifest files match authenticated downloaded
+bytes. Other source-identical browser/persistent/denial/linking/closed-profile
+cases retain the public-dependency17.872s proof below. No whole M17/M18 or unit
+qualification closure is claimed. Native/HTTP source is c370ef9/405ecb7.
+
+`public_client_update_review` owns read-only complete-final-diff review of
+go-oauth-server base38ddd45dce6d624d5281cbfab733d62f92328a0f and frozen
+10-file source manifest /tmp/oauth-public-update.GuOIul/source.sha256,
+digest67f45fa6c1a6589be7d2ffb2f21b6a5c38487d11f06ed2ba64eb3907b27413de.
+No Go/services/Git/writes/children. Acceptance/ownership is the finite native
+public-client update lane below. Worker retains bounded vet/fuzz; primary owns
+integration, root pin adoption and final main delivery. Native RED/GREEN and
+ordinary race logs are retained by the writer under its private scratch.
+
 Public Reference integration now passes actual PostgreSQL/race17.872s with
 downloaded dependencies (no workspace): browser/persistent/denial, preserved
 linking, closed selection and foreign-preauth-origin refusal. Ordinary Reference

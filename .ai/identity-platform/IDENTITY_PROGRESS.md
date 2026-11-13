@@ -14,14 +14,21 @@ The native prerequisites are on main at `c370ef9` with
 [passing CI](https://github.com/faustbrian/go-identity/actions/runs/43364749735),
 and HTTP transport at `405ecb7` with
 [passing CI](https://github.com/faustbrian/go-identity/actions/runs/43365176214).
-Reference source/public pins are integrated locally; its consumer commit/push,
-published-consumer readback and exact CI are the remaining delivery boundary.
-No new milestone or whole-unit qualification is claimed.
+Reference is delivered on main at `4edff22` with
+[passing CI](https://github.com/faustbrian/go-identity/actions/runs/43366321487).
+A fresh consumer downloaded that exact public Reference module and passed the
+actual PostgreSQL browser-signin/session/logout journey under race (4.438s),
+plus module verification. Its changed source and manifests match the reviewed
+Git bytes. This closes the selected existing-account HTTP consumer profile,
+not all M17/M18 variants or another fully qualified unit.
 
 **Parallel implementation:** a dependency-ready native public-client metadata
-update lane is active in go-oauth-server. It reuses existing manager/session/
-transaction authority and does not add RFC7592. Primary retains Reference
-delivery, integration and final acceptance; workers do not publish independently.
+update lane is active in go-oauth-server. Its public lifecycle, grant invalidation,
+concurrent changes, authority withdrawal and lost-commit recovery pass real
+PostgreSQL (15.330s), with unchanged confidential regressions. These changes are
+local and awaiting independent review/public pins, not delivered yet. It reuses
+existing authority and does not add RFC7592. Primary retains final acceptance
+and publication; workers do not publish independently.
 
 ### Last published native consumer checkpoint
 
