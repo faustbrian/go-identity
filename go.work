@@ -31,6 +31,7 @@ use (
 	./mfa/postgres
 	./oauth
 	./oauth/postgres
+	./oauth/providers
 	./otp
 	./otp/postgres
 	./password
