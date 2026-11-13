@@ -27,21 +27,26 @@ const sourceFenceTestOperation = "identity.apikey.source-authority-test"
 // key mutation or principal issuance. Its source was genuinely authenticated by
 // authenticatedSourceBinding; production SourceAuthority owns all current facts.
 type sourceFenceConsumer struct {
-	service  *apikeypg.Service
-	observed apikey.SourceAuthorityObservation
-	command  identity.Command
-	fail     bool
-	invoked  bool
-	scope    identity.CommandBinding
-	scopeErr error
-	fenceErr error
+	service      *apikeypg.Service
+	observed     apikey.SourceAuthorityObservation
+	organization *apikey.OrganizationSourceAuthorityObservation
+	command      identity.Command
+	fail         bool
+	invoked      bool
+	scope        identity.CommandBinding
+	scopeErr     error
+	fenceErr     error
 }
 
 func (*sourceFenceConsumer) Descriptor() kernel.ContributorDescriptor {
 	return kernel.ContributorDescriptor{Owner: "identity/apikey/postgres", ContractID: "identity.apikey", Version: 1}
 }
-func (*sourceFenceConsumer) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{{Owner: "identity/apikey", OperationID: sourceFenceTestOperation, SchemaID: "source-authority-test-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}}
+func (p *sourceFenceConsumer) FeatureOperations() []identity.FeatureOperation {
+	op := identity.FeatureOperation{Owner: "identity/apikey", OperationID: sourceFenceTestOperation, SchemaID: "source-authority-test-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if p.organization != nil {
+		op.SchemaID, op.SubjectRequirement = "source-authority-organization-test-v1", identity.FeatureSubjectAnonymousFlow
+	}
+	return []identity.FeatureOperation{op}
 }
 func (p *sourceFenceConsumer) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
 	if command != p.command || plan.Feature == nil || plan.Feature.Operation != p.FeatureOperations()[0] || plan.SubjectType != "api_key_source" {
@@ -52,7 +57,7 @@ func (p *sourceFenceConsumer) ValidateFeatureCommand(command identity.Command, p
 func (p *sourceFenceConsumer) ApplyFeature(ctx context.Context, work kernel.Work, _ identity.Command) (identity.FeatureReceipt, error) {
 	p.invoked = true
 	p.scope, _, _, p.scopeErr = work.FeatureScope(p)
-	p.fenceErr = p.service.RequireSourceAuthority(ctx, work, p, p.observed)
+	p.fenceErr = p.requireSource(ctx, work)
 	if p.fenceErr != nil {
 		return identity.FeatureReceipt{}, p.fenceErr
 	}
@@ -62,6 +67,12 @@ func (p *sourceFenceConsumer) ApplyFeature(ctx context.Context, work kernel.Work
 	return identity.FeatureReceipt{Operation: p.FeatureOperations()[0]}, nil
 }
 func (p *sourceFenceConsumer) CheckFeatureCommit(ctx context.Context, work kernel.Work, _ identity.Command) error {
+	return p.requireSource(ctx, work)
+}
+func (p *sourceFenceConsumer) requireSource(ctx context.Context, work kernel.Work) error {
+	if p.organization != nil {
+		return p.service.RequireOrganizationSourceAuthority(ctx, work, p, *p.organization)
+	}
 	return p.service.RequireSourceAuthority(ctx, work, p, p.observed)
 }
 func (*sourceFenceConsumer) RecoverParticipant(context.Context, kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
@@ -108,6 +119,11 @@ func prepareSourceFence(t *testing.T, f nativeConsumerFixture, service *apikeypg
 func prepareSourceFenceScope(t *testing.T, f nativeConsumerFixture, service *apikeypg.Service, observed apikey.SourceAuthorityObservation, fail bool, scope identity.CommandBinding, evaluator authorization.Evaluator) (*kernel.Coordinator, kernel.Work, identity.Command, *sourceFenceConsumer) {
 	t.Helper()
 	participant := &sourceFenceConsumer{service: service, observed: observed, fail: fail}
+	return prepareSourceFenceParticipant(t, f, participant, scope, evaluator, observed.Binding.KeyID, observed.Binding.AuthorityVersion, observed.ValidUntil)
+}
+
+func prepareSourceFenceParticipant(t *testing.T, f nativeConsumerFixture, participant *sourceFenceConsumer, scope identity.CommandBinding, evaluator authorization.Evaluator, keyID apikey.KeyID, keyVersion uint64, validUntil time.Time) (*kernel.Coordinator, kernel.Work, identity.Command, *sourceFenceConsumer) {
+	t.Helper()
 	domain, err := kernel.NewRepository(f.pool, kernel.Config{MaximumDuration: f.config.MaximumDuration})
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +163,12 @@ func prepareSourceFenceScope(t *testing.T, f nativeConsumerFixture, service *api
 	op := participant.FeatureOperations()[0]
 	id := commandID(t)
 	binding := identity.CommandBinding{CommandID: id, TenantID: scope.TenantID, UserID: scope.UserID, ActorKind: scope.ActorKind, ActorID: scope.ActorID, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: f.config.PolicyID, PolicyVersion: f.config.PolicyVersion, CorrelationID: string(id)}
-	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: op, Fields: []identity.FeatureField{{Name: "source.key", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(observed.Binding.KeyID)}}, {Name: "source.version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: observed.Binding.AuthorityVersion}}, {Name: "source.deadline", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: observed.ValidUntil}}}})
+	subjectID := string(binding.UserID)
+	if op.SubjectRequirement == identity.FeatureSubjectAnonymousFlow {
+		binding.AnonymousFlowID = string(id)
+		subjectID = binding.AnonymousFlowID
+	}
+	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: op, Fields: []identity.FeatureField{{Name: "source.key", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(keyID)}}, {Name: "source.version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: keyVersion}}, {Name: "source.deadline", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: validUntil}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,11 +185,11 @@ func prepareSourceFenceScope(t *testing.T, f nativeConsumerFixture, service *api
 	seed, err := builder.Build(audit.RecordInput{
 		OccurredAt: time.Now().UTC(), Action: event, Outcome: audit.OutcomeDenied, ReasonCode: "not_authorized",
 		Actor:      audit.ActorInput{Kind: actorKind, ID: string(binding.ActorID)},
-		Subject:    audit.SubjectInput{Type: "api_key_source", ID: string(binding.UserID)},
+		Subject:    audit.SubjectInput{Type: "api_key_source", ID: subjectID},
 		Context:    audit.ContextInput{TenantID: string(binding.TenantID), CorrelationID: binding.CorrelationID, CausationID: string(id)},
 		Policy:     audit.PolicyMetadata{PolicyID: binding.PolicyID, Version: strconv.FormatUint(binding.PolicyVersion, 10)},
 		Changes:    audit.ChangeSetInput{NoChange: true},
-		Attributes: map[string]string{"command.id": string(id), "aggregate.type": "api_key_source", "aggregate.id": string(binding.UserID), "aggregate.before_version": "0", "aggregate.after_version": "0", "retention.class": "protected"},
+		Attributes: map[string]string{"command.id": string(id), "aggregate.type": "api_key_source", "aggregate.id": subjectID, "aggregate.before_version": "0", "aggregate.after_version": "0", "retention.class": "protected"},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add distinct modern organization-source observation and real-Work fencing.
+  Consume actual organization credential authority independently of creator
+  membership, retain exact key roots/current policy and original bounded
+  freshness in each owner's original clock domain without retiming, and deny
+  blocked owners or revoked roots. Existing USER APIs,
+  native journals/schema and verification/debit semantics remain unchanged.
+
 - Extend current source observations and existing-Work fences to explicitly
   configured verify-only legacy USER keys. Preserve digest-only import, canonical
   IDs and absent historical expiry without extending current evidence or enabling

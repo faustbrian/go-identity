@@ -191,7 +191,7 @@ func (s *Service) RequireSourceAuthority(ctx context.Context, w kernel.Work, par
 	if err := w.RequireActiveUserAuthorization(ctx, participant, policy); err != nil {
 		return err
 	}
-	if err := s.requireSourceConfiguration(ctx, w, observed); err != nil {
+	if err := s.requireSourceConfiguration(ctx, w, observed.Binding, observed.ConfigurationAuthority); err != nil {
 		return err
 	}
 	var wire []byte
@@ -210,16 +210,16 @@ func (s *Service) RequireSourceAuthority(ctx context.Context, w kernel.Work, par
 	return observed.Validate(observed.Binding, configuration, now)
 }
 
-func (s *Service) requireSourceConfiguration(ctx context.Context, w kernel.Work, observed apikey.SourceAuthorityObservation) error {
+func (s *Service) requireSourceConfiguration(ctx context.Context, w kernel.Work, binding apikey.SourceAuthorityBinding, expected apikey.ConfigurationAuthorityBinding) error {
 	var version string
 	var digest []byte
 	var enabled bool
-	rows, err := w.Query(ctx, `SELECT authority_version::text,configuration_digest,enabled FROM identity_api_keys.configurations WHERE tenant_id=$1 AND configuration_id=$2 FOR UPDATE`, string(observed.Binding.Owner.Spec().TenantID), s.config().Configuration.Spec().ID)
+	rows, err := w.Query(ctx, `SELECT authority_version::text,configuration_digest,enabled FROM identity_api_keys.configurations WHERE tenant_id=$1 AND configuration_id=$2 FOR UPDATE`, string(binding.Owner.Spec().TenantID), s.config().Configuration.Spec().ID)
 	if err := scanSourceAuthorityRow(rows, err, &version, &digest, &enabled); err != nil {
 		return err
 	}
 	want, err := configurationDigest(s.config().Configuration)
-	if err != nil || !enabled || version != strconv.FormatUint(observed.ConfigurationAuthority.Version, 10) || !bytes.Equal(digest, want[:]) {
+	if err != nil || !enabled || version != strconv.FormatUint(expected.Version, 10) || !bytes.Equal(digest, want[:]) {
 		return apikey.ErrDenied
 	}
 	return nil

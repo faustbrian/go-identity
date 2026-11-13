@@ -23,7 +23,7 @@ and the intersection with the inherited effective grant. It performs no secret
 comparison, quota debit, key mutation or principal issuance. Missing/disabled/
 foreign/revoked/expired/changed-root state fails closed without stale fallback.
 Current user-policy callbacks run only outside protected transactions. USER
-ownership is required; organization sources are not selected. The binding's exact
+ownership is required by these existing USER methods. The binding's exact
 configuration ID/revision must select the already configured modern profile or
 explicit verify-only `LegacyConfiguration`; secret text never selects it. Legacy
 initialization/import still use their existing owners. New issuance remains
@@ -49,6 +49,30 @@ configuration epoch fences an old invocation; a later genuine read can still
 admit another unchanged key. No schema/migration or existing fingerprint changes
 are required. These are source-authority primitives, not a completed OAuth or
 HTTP delegation consumer.
+
+For a modern organization source, explicitly compose `NewOrganizationService`
+with the actual `organization/postgres.Repository` and install both owners'
+organization-credential histories before use. Authenticate through the existing
+atomic verifier, retain `NewOrganizationSourceAuthorityBinding` and use the
+distinct `ObserveOrganizationSourceAuthority` /
+`RequireOrganizationSourceAuthority` methods. They read/fence active organization
+ownership without a creator/member query. Aggregate changes (including creator
+removal) fence an in-flight observation, while a fresh read preserves the key
+when its independent credential epoch is unchanged. Human management/delegation
+still requires actual current membership and permission; these facts grant none.
+
+The Work must carry the exact key actor and tenant, no USER, and its composing
+owner's genuine anonymous-flow binding. The composing owner additionally binds
+that flow, authenticated caller and full lineage. Locks follow directory,
+organization, configuration, key; current organization permission callbacks run
+before Work. Organization application-clock read/verified/expiry values remain
+exactly as observed, separately from outer primary-database times. The fence
+never retimes the owner or assumes exact interval nesting across clocks; the
+earliest original deadline wins. The final post-wait primary-clock check retains original freshness
+and the earliest organization/key expiry. Missing org composition, owner block,
+credential-epoch change or key revoke denies without stale fallback. No new
+schema, journal, authority namespace or human principal is introduced here.
+Legacy organization source exchange is not selected by these methods.
 
 ## Optional authoritative modern quota
 
