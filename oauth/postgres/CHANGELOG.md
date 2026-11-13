@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Add native query/S256 OIDC completion for an existing linked account and
+  known-empty MFA. Bind issuance to the original callback-purpose browser and
+  exact Remember policy; consume state/browser and write the session, audit,
+  lifecycle and exchange-secret erasure atomically. Only the original newly
+  committed invocation delivers bearer/CSRF custody; committed retry is
+  tokenless and an unknown exchange is never retried. Issuer-bound provider
+  denial erases custody without exchange or session issuance.
+
+- Add tokenless signin-command recovery through the existing coordinator and
+  current query policy, bound to the original anonymous flow/service actor.
+  Recovery returns receipt metadata only, never a session, bearer or CSRF token;
+  uncertain exchange remains pending without re-exchange. Provider-denial
+  commands retain their separate profile.
+
+- Document explicit risk `OAuthProviderDiscovery` selection, mandatory trusted
+  network/device attribution, the forward-only installed session-purpose
+  expansion, and existing native primary-read/same-user cookie-logout owners.
+  Signup, MFA completion, email matching, automatic reference/HTTP selection,
+  refresh, unlinking and complete OAuth qualification remain outside this unit.
+
+- Add native original-preauth OAuth initiation and state/browser-authenticated
+  callback-rate attribution. Original state, nonce, PKCE and expiry survive
+  restart retries; tenant suspension or changed directory epochs withhold
+  redirect delivery. Attribution neither consumes state nor exchanges a code.
+  Provider callback/session completion and HTTP/reference signin remain open.
+
 - Retain definitive token-endpoint refusal for atomic terminal cleanup and
   replay without another exchange or final link grant. Failed denial erasure
   preserves pending custody; trusted expired-RP maintenance can settle known

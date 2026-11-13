@@ -71,9 +71,9 @@ func rpTransactionAudit(ctx context.Context, b identity.CommandBinding, op ident
 	// These self-service RP operations use its standard retention classification.
 	var action string
 	switch op {
-	case rpLinkStartOperation():
+	case rpLinkStartOperation(), rpSigninStartOperation():
 		action = "identity.oauth.start_authorization"
-	case rpDenialOperation():
+	case rpDenialOperation(), signinDeniedOperation():
 		action = "identity.oauth.handle_callback"
 	default:
 		return kernel.AuditPlan{}, identity.InvalidInputError{Field: "oauth_transaction_audit"}
@@ -84,7 +84,11 @@ func rpTransactionAudit(ctx context.Context, b identity.CommandBinding, op ident
 	if err != nil || retention == 0 {
 		return kernel.AuditPlan{}, identity.InvalidInputError{Field: "oauth_start_audit"}
 	}
-	record, err := builder.Build(audit.RecordInput{Action: action, OccurredAt: now, Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "oauth_transaction", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": "standard", "aggregate.type": "oauth_transaction", "aggregate.id": b.RecordID, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": strconv.FormatUint(after, 10)}})
+	actor := audit.ActorHuman
+	if op == rpSigninStartOperation() || op == signinDeniedOperation() {
+		actor = audit.ActorService
+	}
+	record, err := builder.Build(audit.RecordInput{Action: action, OccurredAt: now, Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: actor, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "oauth_transaction", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": "standard", "aggregate.type": "oauth_transaction", "aggregate.id": b.RecordID, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": strconv.FormatUint(after, 10)}})
 	if err != nil {
 		return kernel.AuditPlan{}, err
 	}

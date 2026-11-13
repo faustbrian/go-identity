@@ -1,10 +1,120 @@
 # OAuth PostgreSQL
 
 Native RP transaction storage and recoverable PKCE custody, under development.
-`NewLinkService` composes the explicit-self password-session OIDC linking
-profile through real current authority and the existing kernel transaction.
-The selected reference journey is exercised locally; publication and complete
-OAuth qualification remain unfinished.
+`NewSigninService` and `NewSigninCompletionService` compose existing-account
+OIDC signin; `NewLinkService` composes explicit-self password-session linking.
+Both use native authority owners and the existing kernel coordinator, not
+application-written domain stores. Publication and complete OAuth qualification
+remain unfinished.
+
+## Existing-account signin
+
+This selected profile uses query callbacks, S256 PKCE and nonce-bound OIDC.
+The provider's verified issuer and subject must resolve to an already linked
+account with its current provider credential. `SignupDisabled` must be true.
+There is no implicit signup, email matching, MFA challenge, organization-session
+selection, refresh or unlink workflow; enrolled or unknown MFA denies rather
+than falling back to single-factor authentication.
+
+Issue the original browser transaction through `session.NewPreAuthIssuer` and
+the native `session/postgres.NewPreAuthIssueExecutor`. Its purpose is
+`session.PreAuthSessionIssuance`, its action is `identity.oauth.callback`, and
+its callback URL is the exact allowlisted application success callback. Bind
+the tenant, origin, policy and already resolved `RememberPolicy` there; leave
+identifier binding empty. `SigninStartRequest` must carry that exact flow ID,
+cookie and Remember policy, not a newly resolved default or a password session.
+Its caller is the configured service account acting on that anonymous flow,
+not a user chosen before provider verification.
+
+Start and callback require trusted transport `Origin`, `Network` and `Device`.
+Device is a bounded browser identity, distinct from the random flow ID and
+never a provider claim or request-body override. Callback must retain the
+original Device; its Network is trusted attribution for that invocation, not
+a provider-selected value. Exact start retries preserve the original network,
+device, state, nonce, PKCE and expiry; changed intent conflicts. Current directory
+epochs are still checked before delivering a replayed authorization redirect.
+
+Select `risk.PolicyConfig.OAuthProviderDiscovery` explicitly in trusted startup
+configuration. Supply the counted, fail-closed audited Authentication evaluator
+through `SigninServiceConfig.Risk`; the opt-in omits only the unavailable
+identifier dimension for signin-start/callback. Tenant, network and trusted
+device counters remain mandatory. `SigninCallbackRateSource` authenticates
+original browser/state attribution for an outer provider budget; it does not
+reserve state, authorize exchange or replace callback admission.
+
+Install the kernel request-key, preparation/admission, capability, audit,
+lifecycle, original-preauth and RP histories before selecting the services.
+For an installed session schema, apply both steps from
+`session/postgres.OAuthSigninMigrationSource` with permanently allocated
+`Version` and later `ValidationVersion`, and the exact installed validated
+`PreviousConstraint`. It expands the existing issuance-purpose predicate with
+`identity.oauth.callback`, preserving populated rows and original migration
+bytes. Expansion uses a bounded exclusive metadata lock without a validation
+scan; validation runs separately. Install both steps and retire readers that
+cannot admit provider sessions before enabling issuance. Rollback disables
+the profile; it does not remove forward history or retained evidence.
+
+`NewSigninCompletionService` takes the native starter and a
+`SigninCompletionConfig` with the actual session audience, policy namespace,
+issuer and CSRF configuration. `Issuer.Authority` must be nil: provider,
+state and browser authentication belong to the native callback owner. It
+reserves canonical one-use state before releasing PKCE or exchanging the code,
+then retains encrypted, tokenless account/session preparation. Session and
+family issuance, original browser consumption, state consumption, exchange-secret
+erasure, audit and lifecycle effects share the existing coordinator transaction.
+Provider tokens are destroyed rather than persisted as signin credentials.
+
+Only the original newly committed invocation can deliver its session bearer
+and CSRF token. A committed callback retry returns the original tokenless
+identity/session metadata while the original browser/RP window and current
+authority checks permit it; it never discloses another bearer or re-exchanges
+the code. A lost or otherwise unknown exchange remains pending: neither retry
+nor expiry proves that it failed, and the code is not exchanged again.
+Issuer-bound provider denial consumes the original state and erases exchange
+ciphertext without exchanging, issuing a session or changing an account; exact
+retry returns the original allowlisted error callback.
+
+`SigninCompletionService.RecoverCallback(ctx, query, caller)` observes or
+reconciles the original signin command through the existing coordinator.
+Use its original command ID, tenant, anonymous flow and service-account actor,
+with operation `identity.oauth.callback`; `UserID` and `RecordID` must be empty
+and `LinkMode` zero. The caller must match that scope and be authorized by the
+configured current `QueryPolicy`. This entry point accepts the signin-completion
+profile, not the distinct provider-denial profile. Its `session.IssueResult`
+contains only command ID, commit outcome, replay status and retry delay; even
+a committed result contains no session, bearer or CSRF token and grants no
+current authentication authority. Recovery does not require browser proof or
+exchange a code. Live or uncertain exchange remains pending; expired custody
+can be reconciled only from the original participants' retained evidence.
+
+Read issued sessions through `session/postgres.NewSessionService` with an
+`IdentifierAdmissionConfig` selecting `AuthenticationMethod: "oauth"`,
+`CredentialKind: identity.CredentialProvider` and
+`CredentialOwner: "identity/oauth"`, plus the same global authority, policy
+namespace and audience. The existing primary reader checks the linked provider
+credential and exact known-empty factor generation as well as ordinary current
+authority; it does not discard the factor dimension. Cookie logout uses the
+existing `NewCookieRevokeOneExecutor` with that same profile in its execution
+and `SingleFactorSessionAdmissionConfig.Verified` selection, the native reader,
+and core cookie sign-out/CSRF services. Revocation remains strictly same-user;
+wrong CSRF must not revoke the session.
+
+The direct consumer in
+[`reference/social_signin_start_integration_test.go`](../../reference/social_signin_start_integration_test.go)
+shows original-preauth issuance, risk configuration, forward migration,
+completion, primary read and cookie logout using native owners. It supplies
+configuration, not replacement domain stores. This is not automatic selection
+by `reference.SocialOAuth`, an HTTP route, or a whole-unit qualification claim.
+
+Construction snapshots configuration but borrows the primary pool, providers,
+policy services and clocks; keep them alive and concurrency-safe until calls
+finish. The caller owns pool shutdown, provider transport lifetime and bounded
+outer contexts. Calls derive their configured timeouts, honor cancellation and
+start no worker or background resource. Cancellation after an external attempt
+does not establish noncommit. Retain original configuration and state, replay,
+PKCE, admission and envelope keys while dependent custody remains recoverable.
+Do not log authorization URLs, cookies, parsed callbacks, tokens or secrets;
+destroy parsed callback custody after the bounded call on every outcome.
 
 ## Explicit account linking
 
@@ -93,7 +203,8 @@ Install the native kernel account/preparation/erasure and RP/token-vault histori
 before selecting the service. The reference backend owns that composition when
 `SocialOAuth` is selected; `HTTPSocialOAuth` independently selects routes. Stable
 intent custody is separate from retained state, PKCE and envelope rotation keys.
-Do not expose this developing profile as social signin, refresh or unlinking.
+The linking profile does not select signin, refresh or unlinking; native
+existing-account signin requires the separate composition described above.
 
 This service also selects the risk owner's `RetainCounterKeyVersions` profile.
 Install `risk/postgres.CounterKeyVersionMigrationSource` after protected-counter
