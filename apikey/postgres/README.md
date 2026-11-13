@@ -8,6 +8,43 @@ identity coordinator, PostgreSQL authority, password bearer sessions,
 authorization, risk counters, audit and transactional outbox owners. It does
 not issue browser sessions or treat the creator as the API key's human actor.
 
+## Secret-free current source authority
+
+First authenticate a modern user-owned key with the existing `VerifyAndConsume`
+owner and retain its exact successful result. Construct
+`apikey.NewSourceAuthorityBinding(result, configuration, now)` while that original
+result is fresh. Keep Secret/wire custody within that verification invocation;
+return/store only explicit nonsecret lineage. This API makes no Go-string
+zeroization guarantee and introduces no replacement verifier or journal.
+
+`Service.ObserveSourceAuthority(ctx, binding)` reads the real primary directory,
+user, scoped policy, exact configuration and key. It returns copied current facts
+and the intersection with the inherited effective grant. It performs no secret
+comparison, quota debit, key mutation or principal issuance. Missing/disabled/
+foreign/revoked/expired/changed-root state fails closed without stale fallback.
+Current user-policy callbacks run only outside protected transactions. Modern
+USER ownership is required; organization and legacy sources are not selected.
+
+`Service.RequireSourceAuthority(ctx, work, participant, observation)` belongs in
+both Apply and the final commit check of the consumer's actual existing native
+participant. Propagate every error. It binds the Work tenant/user owner and
+`SubjectAPIKey`/key actor separately, then retains directory/user/authorization,
+configuration and exact key locks in the existing key-mutation order. No callback
+or new transaction runs under those locks. Database time is checked after waits;
+the original observation deadline cannot be renewed by retries or final checks.
+
+Each current observation expires from its own primary read beginning within
+twenty seconds minus the configured uncertainty/race budgets, rounded down to
+PostgreSQL microseconds and capped by credential expiry. Preserve historical
+issuance/verification timestamps separately. A genuinely later primary read may
+observe a still-valid original root, but cannot rewrite those historical times,
+change the root generation, expand its ceiling or revive a revoked key.
+Name-only metadata changes do not become credential rotation. A changed aggregate
+configuration epoch fences an old invocation; a later genuine read can still
+admit another unchanged key. No schema/migration or existing fingerprint changes
+are required. These are source-authority primitives, not a completed OAuth or
+HTTP delegation consumer.
+
 ## Optional authoritative modern quota
 
 Before selecting `QuotaTokenBucket`, apply `QuotaMigrationSource{Version: ...}`

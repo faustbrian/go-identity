@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add secret-free current authority observation and same-Work final fencing for
+  already-authenticated modern user-owned key sources. Read real current owners,
+  retain independent key/configuration epochs and narrow grants without another
+  verification, debit, mutation or principal. Post-wait expiry and withdrawal
+  deny; a later genuine read never changes historical proof/root/expiry. Reuse
+  existing schema and coordinator; no organization/legacy delegation is selected.
+
 - Add opt-in authoritative modern token buckets for user/organization keys using
   PostgreSQL-time continuous exact fractional refill in the existing verifier
   Work. Install the independent additive quota migration before finite selection;
