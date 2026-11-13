@@ -12,6 +12,20 @@ the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in
 provider catalog, automatic credential-channel fallback or Apple hybrid flow.
 
+An explicitly configured `oauth.NewGoogleAccountsProvider` accepts Google's two
+documented signed ID-token issuer forms only after full upstream verification.
+Native linking and existing-account signin use its canonical
+`https://accounts.google.com` issuer and exact subject, so the forms cannot create
+separate account namespaces. Raw callback query issuers remain canonical.
+`ProviderProfile.GoogleAccounts` is frozen into the existing configuration
+fingerprint, encrypted transaction snapshot and canonical state binding. A
+same-version policy switch cannot reinterpret an in-flight callback or replay;
+retain its original configuration or let the original flow expire. The false
+selection preserves released strict profile/fingerprint bytes and the existing
+RP verifier AAD schema. No new authority, journal, signup or email merge is added.
+Controlled signed-token/native PostgreSQL consumers do not claim live Google
+interoperability or complete provider-catalog qualification.
+
 ## Existing-account signin
 
 This selected profile uses query callbacks, S256 PKCE and nonce-bound OIDC.

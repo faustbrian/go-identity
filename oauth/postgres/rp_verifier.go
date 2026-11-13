@@ -32,6 +32,12 @@ type rpVerifierBinding struct {
 }
 
 func newRPVerifierBinding(tenant string, profile oauth.ProviderProfile, transactionID string, stateDigest [32]byte, operation string) (rpVerifierBinding, error) {
+	// The explicit Google policy has additional trusted profile constraints.
+	// Reuse their protocol owner rather than admitting a foreign-issuer variant;
+	// unselected profiles retain the released native validation and AAD bytes.
+	if profile.GoogleAccounts && profile.ValidateQueryCallback() != nil {
+		return rpVerifierBinding{}, errRPVerifier
+	}
 	b := rpVerifierBinding{tenant: tenant, provider: profile, transactionID: transactionID, stateDigest: stateDigest, operation: operation}
 	if _, err := b.aad(); err != nil {
 		return rpVerifierBinding{}, err

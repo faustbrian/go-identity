@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind explicit Google Accounts signed-issuer policy to the existing immutable
+  configuration and retained callback profile. Canonical and legacy signed
+  Google issuers resolve to the same canonical issuer/exact-subject account;
+  changing policy cannot reinterpret pending callbacks or replay them under a
+  different selection. Strict zero-selection profile bytes and RP AAD remain
+  compatible. No signup, account merge or generic issuer aliases are added.
+
 - Adopt the explicit `client_secret_post` provider profile for native linking
   and existing-account signin. The selected token credential channel remains
   bound to original state/configuration; no migration or automatic fallback

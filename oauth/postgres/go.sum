@@ -18,6 +18,8 @@ github.com/containerd/platforms v0.2.1 h1:zvwtM3rz2YHPQsF2CHYM8+KtB5dvhISiXh5ZpS
 github.com/containerd/platforms v0.2.1/go.mod h1:XHCb+2/hzowdiut9rkudds9bE5yJ7npe7dG/wG+uFPw=
 github.com/coreos/go-oidc/v3 v3.20.0 h1:EtE0WIBHk03N+DqGkY4+UONzzZHk7amKt6IyNd7OsZE=
 github.com/coreos/go-oidc/v3 v3.20.0/go.mod h1:DYCf24+ncYi+XkIH97GY1+dqoRlbaSI26KVTCI9SrY4=
+github.com/coreos/go-oidc/v3 v3.21.0 h1:wZo4Q9Pum8dYEj0eMUPrqR+kvuGkeUplbLpNCkBqoWM=
+github.com/coreos/go-oidc/v3 v3.21.0/go.mod h1:DYCf24+ncYi+XkIH97GY1+dqoRlbaSI26KVTCI9SrY4=
 github.com/cpuguy83/dockercfg v0.3.2 h1:DlJTyZGBDlXqUZ2Dk2Q3xHs/FtnooJJVaad2S9GKorA=
 github.com/cpuguy83/dockercfg v0.3.2/go.mod h1:sugsbF4//dDlL/i+S+rtpIWp+5h0BHJHfjj5/jFyUJc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -37,8 +39,12 @@ github.com/faustbrian/go-authentication v1.0.0 h1:TD2CGRoH7Wyd6Ylztpe5GSPM4FLh0e
 github.com/faustbrian/go-authentication v1.0.0/go.mod h1:cLbyMCC4LxGQvUuB+Rx/lbnVvYiBN23mLn7z5TwMRNQ=
 github.com/faustbrian/go-authentication/oidc v1.0.1 h1:qsYIP15f0xXXd7fYaNmhvVF78scJJ2yV6+aMSY3/1h8=
 github.com/faustbrian/go-authentication/oidc v1.0.1/go.mod h1:bsxH9E32F494Z7Go4KaquCPmz30tfisS+C4/7QucgUs=
+github.com/faustbrian/go-authentication/oidc/v2 v2.0.1-0.20261113095502-c3c7b7cba8f4 h1:qn+Nuul5CSLju0cWNEWe9YmKU2u0rsJc2oxzpO7r3rs=
+github.com/faustbrian/go-authentication/oidc/v2 v2.0.1-0.20261113095502-c3c7b7cba8f4/go.mod h1:luOnA+NIhTxf0UvONurBSl3dWEhRT1YGtZo6Bjc7XIQ=
 github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68 h1:Dzbh18x7aIDc2RKDSYStHtmssiMSDNWMKN3HmGUCsrU=
 github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68/go.mod h1:3ab0dEi2IOIlvEISAJLPhlJE0TlNO/lGdjU+cjHZmjg=
+github.com/faustbrian/go-authentication/v3 v3.0.0 h1:5dwpQ8237QwnFDG/Jn8ASG0qROs+wqASS38YeKelc9g=
+github.com/faustbrian/go-authentication/v3 v3.0.0/go.mod h1:/WR+t/pTmCfXbFQBA82+Sg9i4IoUco4y5tJ3sd0fL74=
 github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060 h1:3YN3ZyLKlU+Qo7fh0XczJwqpXW59tmP1ZfAR33Eh67c=
 github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060/go.mod h1:1CrqZmsebZ1miA3k8hitH0g2fCSHuzdsmSoCRJ58zfw=
 github.com/faustbrian/go-cache/v2 v2.0.0 h1:I/e1YaZzs4DMFmqyvOs/kG8U/env6/5ZH+5H9o8/ba0=
@@ -73,6 +79,8 @@ github.com/faustbrian/go-identity/oauth v0.0.0-20261113005611-82309c273c6c h1:2x
 github.com/faustbrian/go-identity/oauth v0.0.0-20261113005611-82309c273c6c/go.mod h1:tArfhscVyCw81qD/ssVw5PAI7AcHT+LbSV/siIRZhrw=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261113053708-2bf4fa020011 h1:+KmdoJdmihV1MGY7BPk+w/j6HMc0xELpy5B8EF7wPk0=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261113053708-2bf4fa020011/go.mod h1:tArfhscVyCw81qD/ssVw5PAI7AcHT+LbSV/siIRZhrw=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261113112124-b50c9d4c721e h1:TM3zhX1VKwqVz/07QDW3HTseqepMFbGIsroZzIhlABg=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261113112124-b50c9d4c721e/go.mod h1:a4z/upZrUScWow37uZElY+Ni6rvIrxirgbiDtWXDQJA=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261109200157-e77387b87860 h1:+YeQjCBVzJ9y6iK769bBrPW73G6HPcVC0ecjWVrgl4E=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261109200157-e77387b87860/go.mod h1:YYj5HFplHAg9Xx4sUA0Sb4dChjutZQnAFQptTVoHGVs=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261113005611-82309c273c6c h1:QPk+02H0S/7YDiL/X8dpifHyENy8dQd+0xRTFUM4fuE=

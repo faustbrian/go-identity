@@ -3,7 +3,7 @@ module github.com/faustbrian/go-identity/oauth/postgres
 go 1.27.0
 
 require (
-	github.com/coreos/go-oidc/v3 v3.20.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/faustbrian/go-audit v1.0.0
 	github.com/faustbrian/go-audit/postgres v1.0.2-0.20261015062502-d62df280d85e
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
@@ -12,7 +12,7 @@ require (
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
 	github.com/faustbrian/go-identity v0.0.0-20261109180909-8901e7f09812
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261113010854-034af7b522e8
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261113053708-2bf4fa020011
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261113112124-b50c9d4c721e
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261113005611-82309c273c6c
 	github.com/faustbrian/go-identity/risk v0.0.0-20261113005611-82309c273c6c
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261109202903-8112f3df2617
@@ -28,6 +28,8 @@ require (
 require (
 	github.com/faustbrian/go-authentication v1.0.0 // indirect
 	github.com/faustbrian/go-authentication/oidc v1.0.1 // indirect
+	github.com/faustbrian/go-authentication/oidc/v2 v2.0.1-0.20261113095502-c3c7b7cba8f4 // indirect
+	github.com/faustbrian/go-authentication/v3 v3.0.0 // indirect
 	github.com/faustbrian/go-clock v1.2.0 // indirect
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053 // indirect
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907 // indirect
