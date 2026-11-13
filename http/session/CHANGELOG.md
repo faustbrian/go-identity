@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Optionally clear the separate browser-readable synchronizer cookie with
+  confirmed native cookie logout. Wrong CSRF, failed or unknown outcomes clear
+  neither cookie; bearer logout and colliding scopes reject this selection.
+
 - Recheck original guest and permanent read custody at final response
   commitment; expired results return unavailable without identity metadata.
 

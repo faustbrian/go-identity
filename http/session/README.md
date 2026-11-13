@@ -7,6 +7,13 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+Cookie signout can select `SignOutConfig.CSRFCookie` to clear the separate
+browser-readable synchronizer cookie after the same confirmed native success.
+Wrong CSRF, failure and uncertain commitment clear neither cookie. The cookie is
+not accepted as input authority: the existing protected CSRF header/form channel
+still applies. Bearer mode and colliding session/CSRF names reject this selection;
+nil retains existing one-cookie behavior.
+
 Select `NewPreAuthHandlerWithBrowserDevice(config, deviceConfig)` or
 `NewPreAuthFeatureWithBrowserDevice(config, deviceConfig)` to include the
 session-owned browser correlation cookie. Dedicated versioned keys, namespace,

@@ -37,8 +37,9 @@ type SessionReader interface {
 
 // Config selects one explicitly configured OIDC/query provider at its exact
 // callback URL, not a provider selected by inbound issuer/host. This finite
-// profile supports cookie explicit-self linking only; it enables no signin,
-// popup, direct-token, hybrid or form-post route. Compose each chosen operation
+// profile supports cookie explicit-self linking, with existing-account signin
+// callback only when Signin is explicitly configured. Popup, direct-token,
+// hybrid and form-post are not enabled. Compose each chosen operation
 // explicitly with NewFeature. All services/clock/limiter are borrowed and must
 // be prompt, bounded and concurrency-safe. Construction performs no IO.
 type Config struct {
@@ -54,15 +55,22 @@ type Config struct {
 	PolicyRevision    authorization.Revision
 	Now               func() time.Time
 	MaximumDuration   time.Duration
+	// Signin explicitly adds existing-account native signin to the shared
+	// callback URL. Nil preserves the original linking-only callback unchanged.
+	Signin *SigninCallbackConfig
 }
 
 // FeatureConfig selects operations independently; nil advertises no operation.
-// Empty selection is invalid. Both operations share the configured rate owner.
-type FeatureConfig struct{ LinkStart, Callback *Config }
+// Empty selection is invalid. Compose selected operations with the same rate
+// owner. SigninStart does not implicitly enable a callback or account linking.
+type FeatureConfig struct {
+	LinkStart, Callback *Config
+	SigninStart         *SigninStartConfig
+}
 
 // NewFeature contributes only actual selected handlers and their wire contracts.
 func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
-	if c.LinkStart == nil && c.Callback == nil {
+	if c.LinkStart == nil && c.Callback == nil && c.SigninStart == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
@@ -88,6 +96,18 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 			return identityhttp.Feature{}, err
 		}
 		op.Wire = wireOperation(*selected.config, selected.callback)
+		operations = append(operations, op)
+	}
+	if c.SigninStart != nil {
+		handler, err := NewSigninStartHandler(*c.SigninStart)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/oauth", OperationID: "identity.oauth.signin-start", Handler: handler, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = wireSigninStart(*c.SigninStart)
 		operations = append(operations, op)
 	}
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/oauth", Operations: operations})
@@ -126,6 +146,9 @@ func missing(v any) bool {
 }
 
 func newHandler(c Config, callback bool) (http.Handler, error) {
+	if callback && c.Signin != nil {
+		return newSigninCallbackHandler(c)
+	}
 	if !c.Rate.Configured() || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || callback && missing(c.Callback) || !callback && (missing(c.Start) || missing(c.Sessions) || c.PolicyRevision == 0 || c.Now == nil || len(c.CallbackAllowlist) == 0) {
 		return nil, identityhttp.ErrInvalidInput
 	}
@@ -219,7 +242,7 @@ func newHandler(c Config, callback bool) (http.Handler, error) {
 			if callback {
 				// Top-level provider GET navigation normally has no Origin. Any
 				// present origin is still checked, never used to choose authority.
-				if len(r.Header.Values("Origin")) != 0 {
+				if callbackOriginPresent(r) {
 					if _, err := origin.CheckBound(r, c.Origin); err != nil {
 						return s, identity.ForbiddenError{}
 					}

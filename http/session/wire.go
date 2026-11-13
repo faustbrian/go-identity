@@ -86,6 +86,9 @@ func sessionWire(c SignOutConfig, logout bool) *identityhttp.WireOperation {
 				map[string]any{"name": "X-CSRF-Token", "in": "header", "required": false, "description": "Current primary session-bound synchronizer token required when active; optional only for absent/inactive logout. Exactly one header OR form field, never both. No independent maximum-age claim.", "schema": token},
 			}
 			responses["200"].(map[string]any)["headers"] = map[string]any{"Set-Cookie": map[string]any{"description": "Exact configured Secure/HttpOnly host-cookie deletion tuple on confirmed success only; no credential disclosure.", "schema": text(4096)}}
+			if c.CSRFCookie != nil {
+				responses["200"].(map[string]any)["headers"].(map[string]any)["Set-Cookie"].(map[string]any)["description"] = "Separate exact host-cookie deletion fields for the HttpOnly session and selected browser-readable synchronizer cookie, only after confirmed success. Failure and unknown outcome clear neither; no token is accepted from the CSRF cookie as authority."
+			}
 		} else {
 			definition["description"] = description + " Bearer mode rejects X-CSRF-Token and csrf_token; ambient cookies confer no authority and are never deleted."
 		}

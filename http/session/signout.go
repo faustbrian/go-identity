@@ -29,6 +29,11 @@ type SignOutConfig struct {
 	CookieSignOut  *session.CookieSignOutService
 	BearerSignOut  *session.SignOutService
 	TrustedOrigins []identityhttp.Origin
+	// CSRFCookie optionally clears the separate browser-readable synchronizer
+	// cookie after the same confirmed cookie-signout success. It is never an
+	// input authority channel. Nil preserves existing one-cookie behavior;
+	// bearer mode and a name colliding with the session cookie are rejected.
+	CSRFCookie *session.CSRFCookiePolicy
 }
 
 // SignOutRecovery is the original durable command's exact scope locator, not
@@ -85,9 +90,10 @@ func NewSignOutHandler(c SignOutConfig) (http.Handler, error) {
 }
 
 type signOutAttempt struct {
-	out       SignOutResponse
-	attempted bool
-	cookie    string
+	out        SignOutResponse
+	attempted  bool
+	cookie     string
+	csrfCookie string
 }
 type signOutAttemptKey struct{}
 
@@ -160,6 +166,14 @@ func NewSignOutHandlerWithMiddleware(c SignOutConfig, middleware []identityhttp.
 	network, _ := identityhttp.NewNetworkResolver(c.Network)
 	decoder, _ := identityhttp.NewRequestDecoder(c.Network.Limits)
 	cookie, _ := c.Cookie.DeletionAttributes()
+	var csrfDeletion string
+	if c.CSRFCookie != nil {
+		selected, err := c.CSRFCookie.DeletionAttributes()
+		if err != nil || c.Transport != session.CredentialCookie || selected.Name == cookie.Name {
+			return nil, identityhttp.ErrInvalidInput
+		}
+		csrfDeletion = selected.String()
+	}
 	var origins *identityhttp.OriginGuard
 	if c.Transport == session.CredentialCookie {
 		var err error
@@ -176,6 +190,7 @@ func NewSignOutHandlerWithMiddleware(c SignOutConfig, middleware []identityhttp.
 			}
 		}
 		attempt.cookie = ""
+		attempt.csrfCookie = ""
 		attempt.out.SignedOut, attempt.out.ClearBearer = false, false
 		failure := getFailure{status: 503, code: "unavailable"}
 		if errors.Is(err, identityhttp.ErrInvalidInput) {
@@ -328,6 +343,7 @@ func NewSignOutHandlerWithMiddleware(c SignOutConfig, middleware []identityhttp.
 					return
 				}
 				state.attempt.cookie = cookie.String()
+				state.attempt.csrfCookie = csrfDeletion
 			} else {
 				if !result.ClearBearer || result.ClearCookie {
 					send(503, "unavailable")
@@ -347,7 +363,7 @@ func NewSignOutHandlerWithMiddleware(c SignOutConfig, middleware []identityhttp.
 		if r != nil {
 			r = r.WithContext(context.WithValue(r.Context(), signOutAttemptKey{}, attempt))
 		}
-		serveSessionResponse(handler, w, r, func() string { return attempt.cookie })
+		serveSessionCookies(handler, w, r, func() []string { return []string{attempt.cookie, attempt.csrfCookie} })
 	}}, nil
 }
 
@@ -356,6 +372,7 @@ func sendSignOut(w http.ResponseWriter, attempt *signOutAttempt, status int, cod
 	body, err := json.Marshal(attempt.out)
 	if err != nil {
 		attempt.cookie = ""
+		attempt.csrfCookie = ""
 		response(w, 503, `{"error":"unavailable"}`)
 		return
 	}
