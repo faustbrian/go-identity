@@ -97,6 +97,7 @@ type SessionIssuer struct {
 	anonymousUpgrade bool
 	passkey          bool
 	passkeySignup    bool
+	oauth            bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -170,6 +171,7 @@ type preparedIssuanceState struct {
 	anonymous *anonymousPreparationState
 	upgrade   *anonymousUpgradePreparationState
 	passkey   *passkeyPreparationState
+	oauth     *oauthPreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -185,7 +187,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -266,7 +268,7 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 // without bearer bytes. Zero, OTP and password preparations deny: secret-bearing
 // consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil || p.state.upgrade != nil || p.state.passkey != nil {
+	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil || p.state.upgrade != nil || p.state.passkey != nil || p.state.oauth != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -367,6 +369,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, err
 	}
 	now := s.config.Clock.Now()
+	if s.oauth {
+		if err := validateOAuthIssuanceAt(out.Session, now); err != nil {
+			return out, err
+		}
+	}
 	if s.passkey {
 		if err := validatePasskeyIssuanceAt(out.Session, now); err != nil {
 			return out, err
@@ -449,7 +456,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil || r.state.oauth != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()

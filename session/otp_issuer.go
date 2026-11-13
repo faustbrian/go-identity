@@ -131,6 +131,9 @@ func (p PreparedIssuance) Session() (Session, bool) {
 	if p.state == nil {
 		return Session{}, false
 	}
+	if p.state.oauth != nil {
+		return p.state.oauth.record, true
+	}
 	if p.state.passkey != nil {
 		return p.state.passkey.record, true
 	}
@@ -195,6 +198,10 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	if r.state == nil {
 		return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
 	}
+	if r.state.oauth != nil {
+		p := r.state.oauth
+		return p.binding, oauthSigninOperation(), p.record, true
+	}
 	if r.state.passkey != nil {
 		p := r.state.passkey
 		if p.signup {
@@ -242,6 +249,15 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 }
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
+	if s.oauth {
+		if r.state == nil || r.state.oauth == nil {
+			return ErrInvalidIssuance
+		}
+		return validateOAuthIssuanceAt(r.state.oauth.record, now)
+	}
+	if r.state != nil && r.state.oauth != nil {
+		return ErrInvalidIssuance
+	}
 	if s.passkey {
 		if r.state == nil || r.state.passkey == nil || r.state.passkey.signup != s.passkeySignup {
 			return ErrInvalidIssuance

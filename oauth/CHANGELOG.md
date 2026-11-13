@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add distinct existing-account callback input with original preauth-cookie
+  custody and trusted browser attribution. Callback shape does not select a
+  local user, infer Remember policy, or grant exchange/session authority.
+
+- Add distinct existing-account signin initiation input and result contracts.
+  Bind original preauth browser custody, resolved Remember policy and configured
+  service/flow scope without treating them as authentication. Native initiation,
+  callback/session composition and full social-login acceptance remain required;
+  explicit-self linking and its callback input are unchanged.
+
 - Add a typed terminal provider-error redirect outcome with no identity or
   session projection. Only the exact committed state-consumption receipt and
   original validated application error callback can produce it.

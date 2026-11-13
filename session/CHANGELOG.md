@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add an explicit prospective existing-account OAuth cookie-session issuer.
+  Preserve actual provider-credential metadata, known-empty factor epoch,
+  original Remember policy and one-bind/one-attempt custody. Bearer and CSRF
+  delivery require the exact new timely commit; replay, unknown and expired
+  outcomes disclose neither. This is not a social-login service: native provider
+  proof, current account/credential/factor authority and atomic state/session
+  consumption remain required before the profile may report a usable session.
+
 - Add an explicit prospective password-bearer issuer requiring no cookie policy
   and delivering no cookie attributes or CSRF state. Existing cookie issuance,
   atomic native authentication and reveal-once commit/recovery rules are unchanged.

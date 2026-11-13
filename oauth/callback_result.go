@@ -14,8 +14,8 @@ import (
 // IdentityResult is a transport-neutral, caller-owned identity projection, not
 // authentication, provider proof or current access authority. The native owner
 // establishes the verified provider/account tuple and original RememberPolicy.
-// The selected constructor below supports explicit linking; other workflows
-// must supply their own validated transitions rather than relabel this result.
+// Linking and signin use distinct validated transitions; neither may relabel
+// a receipt from the other workflow.
 type IdentityResult struct {
 	ProviderID, ProviderSubject string
 	UserID                      identity.UserID
@@ -24,7 +24,7 @@ type IdentityResult struct {
 	Outcome                     string
 }
 
-type linkedCallbackDelivery struct {
+type identityCallbackDelivery struct {
 	identity IdentityResult
 	redirect ValidatedCallbackURL
 }
@@ -34,8 +34,8 @@ type linkedCallbackDelivery struct {
 // to issue a session, access provider tokens or repeat a protected mutation.
 // Copies share immutable state and support concurrent reads without resources.
 type IdentityDeliveryResult struct {
-	linked *linkedCallbackDelivery
-	denied *ValidatedCallbackURL
+	delivery *identityCallbackDelivery
+	denied   *ValidatedCallbackURL
 }
 
 // Denied reports completion of an issuer-bound provider-error callback. It
@@ -45,10 +45,10 @@ func (r IdentityDeliveryResult) Denied() bool { return r.denied != nil }
 // Identity returns an independent identity projection when the outcome exists.
 // It contains no bearer, token-vault data, callback code or signed capability.
 func (r IdentityDeliveryResult) Identity() (IdentityResult, bool) {
-	if r.linked == nil {
+	if r.delivery == nil {
 		return IdentityResult{}, false
 	}
-	return r.linked.identity, true
+	return r.delivery.identity, true
 }
 
 // RedirectURI deliberately returns the state-bound application URL. Callers
@@ -58,10 +58,10 @@ func (r IdentityDeliveryResult) RedirectURI() (url.URL, bool) {
 	if r.denied != nil {
 		return r.denied.URL(), true
 	}
-	if r.linked == nil {
+	if r.delivery == nil {
 		return url.URL{}, false
 	}
-	return r.linked.redirect.URL(), true
+	return r.delivery.redirect.URL(), true
 }
 
 // CallbackResult wraps a validated identity outcome for transport composition.
@@ -101,7 +101,7 @@ func NewLinkedCallbackResult(receipt identity.CommandResult, result IdentityResu
 		return CallbackResult{}, failure(InvalidInput, nil)
 	}
 	result.ProviderID, result.ProviderSubject = strings.Clone(result.ProviderID), strings.Clone(result.ProviderSubject)
-	return CallbackResult{Outcome: IdentityDeliveryResult{linked: &linkedCallbackDelivery{identity: result, redirect: callback}}}, nil
+	return CallbackResult{Outcome: IdentityDeliveryResult{delivery: &identityCallbackDelivery{identity: result, redirect: callback}}}, nil
 }
 
 // Format excludes provider subjects and identity correlations from diagnostics.

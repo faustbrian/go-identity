@@ -14,6 +14,21 @@ func oauthCallbackDenialOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/oauth", OperationID: "identity.oauth.callback", SchemaID: "identity.oauth.callback.denied-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
+func anonymousOAuthCallbackDenialOperation() identity.FeatureOperation {
+	op := oauthCallbackDenialOperation()
+	op.SchemaID = "identity.oauth.callback.anonymous-denied-v1"
+	op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+	return op
+}
+
+func oauthCallbackDenialSelected(op identity.FeatureOperation) bool {
+	return op == oauthCallbackDenialOperation() || op == anonymousOAuthCallbackDenialOperation()
+}
+
+func validOAuthCallbackDenialBinding(b identity.CommandBinding) bool {
+	return b.ValidateFor(oauthCallbackDenialOperation()) == nil || b.ValidateFor(anonymousOAuthCallbackDenialOperation()) == nil
+}
+
 func oauthCallbackDenialDescriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.callback-denial", Version: 1}
 }
@@ -24,7 +39,12 @@ func oauthCallbackDenialDescriptor() ContributorDescriptor {
 // successful linking, cancellation performs no protected credential mutation.
 func encodeOAuthCallbackDenialPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan) ([]byte, error) {
 	owner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
-	if p.Feature == nil || p.Feature.Operation != oauthCallbackDenialOperation() || p.Feature.Contributor != oauthCallbackDenialDescriptor() || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || p.SubjectType != "oauth_transaction" || p.Capability == nil || validateCapabilityPlan(b, p.Capability) != nil || p.RiskEvidence != nil || p.CommandCounters != nil || p.OTP != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation || p.SignupAcceptance || p.MagicLinkRequestAcceptance || p.CapabilityIssuance != nil || p.Delivery != nil || p.OrganizationInvitationOrigin != nil || p.Lifecycle == nil || *p.Lifecycle != (LifecyclePlan{EventType: "oauth.rp_transaction.denied.v1", BeforeVersion: 1, AfterVersion: 2}) || len(p.Contributors) != 5 || p.Contributors[4] != owner || len(p.Audits) != 1 || p.Audits[0].EventType != "identity.oauth.handle_callback" || p.Audits[0].RetentionClass != "standard" {
+	if p.Feature == nil || !oauthCallbackDenialSelected(p.Feature.Operation) || p.Feature.Contributor != oauthCallbackDenialDescriptor() || !validOAuthCallbackDenialBinding(b) || p.SubjectType != "oauth_transaction" || p.Capability == nil || validateCapabilityPlan(b, p.Capability) != nil || p.RiskEvidence != nil || p.CommandCounters != nil || p.OTP != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation || p.SignupAcceptance || p.MagicLinkRequestAcceptance || p.CapabilityIssuance != nil || p.Delivery != nil || p.OrganizationInvitationOrigin != nil || p.Lifecycle == nil || *p.Lifecycle != (LifecyclePlan{EventType: "oauth.rp_transaction.denied.v1", BeforeVersion: 1, AfterVersion: 2}) || len(p.Contributors) != 5 || p.Contributors[4] != owner || len(p.Audits) != 1 || p.Audits[0].EventType != "identity.oauth.handle_callback" || p.Audits[0].RetentionClass != "standard" {
+		return nil, invalidPlan()
+	}
+	user := p.Feature.Operation == oauthCallbackDenialOperation() && b.ActorKind == authorization.SubjectUser && string(b.ActorID) == string(b.UserID)
+	anonymous := p.Feature.Operation == anonymousOAuthCallbackDenialOperation() && b.ActorKind == authorization.SubjectServiceAccount && b.UserID == "" && b.AnonymousFlowID != ""
+	if !user && !anonymous {
 		return nil, invalidPlan()
 	}
 	base := p

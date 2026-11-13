@@ -175,7 +175,7 @@ func (w Work) StagedLifecycle() ([]StagedLifecycle, error) {
 		return []StagedLifecycle{*r}, nil
 	}
 	outcome := audit.OutcomeSucceeded
-	denial := w.state.feature != nil && w.state.feature.Operation == oauthCallbackDenialOperation()
+	denial := w.state.feature != nil && oauthCallbackDenialSelected(w.state.feature.Operation)
 	if denial {
 		if w.state.feature.Contributor != oauthCallbackDenialDescriptor() || r.EventType != "oauth.rp_transaction.denied.v1" || r.SubjectType != "oauth_transaction" || r.BeforeVersion != 1 || r.AfterVersion != 2 {
 			return nil, w.fail(w.state.ctx, invalidLifecycle())

@@ -24,7 +24,7 @@ type FeatureTerminalCleanupContributor interface {
 // execution or consumption authority; foreign and returned handles fail.
 func (w Work) OAuthCallbackDenialState(owner FeatureTerminalCleanupContributor) (CapabilityPlan, error) {
 	_, feature, _, err := w.FeatureScope(owner)
-	if err != nil || feature.Operation != oauthCallbackDenialOperation() || feature.Contributor != oauthCallbackDenialDescriptor() || w.state.featureApplying || w.state.featureAttempted || w.state.execution == nil || w.state.execution.reservation == nil || w.state.execution.reservation.plan == nil || w.state.execution.reservation.plan.capability == nil {
+	if err != nil || !oauthCallbackDenialSelected(feature.Operation) || feature.Contributor != oauthCallbackDenialDescriptor() || w.state.featureApplying || w.state.featureAttempted || w.state.execution == nil || w.state.execution.reservation == nil || w.state.execution.reservation.plan == nil || w.state.execution.reservation.plan.capability == nil {
 		return CapabilityPlan{}, invalidWork()
 	}
 	return *w.state.execution.reservation.plan.capability, nil
@@ -35,7 +35,7 @@ func (w Work) OAuthCallbackDenialState(owner FeatureTerminalCleanupContributor) 
 // collection. There is no restoration or renewal of a usable proof.
 func (w RecoveryWork) OAuthCallbackDenialState(owner FeatureTerminalCleanupContributor) (CapabilityPlan, error) {
 	_, feature, _, err := w.FeatureScope(owner)
-	if err != nil || feature.Operation != oauthCallbackDenialOperation() || feature.Contributor != oauthCallbackDenialDescriptor() || w.state.plan.capability == nil {
+	if err != nil || !oauthCallbackDenialSelected(feature.Operation) || feature.Contributor != oauthCallbackDenialDescriptor() || w.state.plan.capability == nil {
 		return CapabilityPlan{}, invalidWork()
 	}
 	return *w.state.plan.capability, nil
@@ -65,7 +65,7 @@ func (c *Coordinator) cleanupFeatureTerminal(ctx context.Context, w Work) (err e
 		return invalidWork()
 	}
 	p := w.state.execution.reservation.plan
-	if p.feature == nil || p.feature.Operation != oauthCallbackDenialOperation() {
+	if p.feature == nil || !oauthCallbackDenialSelected(p.feature.Operation) {
 		return nil
 	}
 	if p.feature.Contributor != oauthCallbackDenialDescriptor() || p.capability == nil || p.accountLink != nil {

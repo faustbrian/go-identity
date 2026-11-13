@@ -309,7 +309,7 @@ func securityMutationAuditCausation(ctx context.Context, b identity.CommandBindi
 		return audit.Record{}, identity.InvalidInputError{Field: "creation_actor"}
 	}
 	outcome, reason, changes, after := audit.OutcomeSucceeded, "completed", audit.ChangeSetInput{Redacted: true}, strconv.FormatUint(afterVersion, 10)
-	if class == "provider-denied" && feature && b.ValidateFor(oauthCallbackDenialOperation()) == nil {
+	if class == "provider-denied" && feature && validOAuthCallbackDenialBinding(b) {
 		// Durable RP cancellation succeeded; authentication did not. Preserve
 		// the real erasure transition without recording a successful signin.
 		outcome, reason = audit.OutcomeDenied, "provider_denied"

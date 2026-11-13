@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence OAuth session reads and logout against the current linked provider
+  credential and account association. Support anonymous provider denial as a
+  distinct atomic callback profile without changing existing user-owned history.
+
 - Preserve the distinct native confidential OAuth client-registration schema
   during original preparation observation/recovery. Public history cannot be
   reinterpreted as confidential, and protected counters/effects remain required.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit identifier-free OAuth provider discovery for signin-start and
+  callback. Tenant, network and trusted browser-device admission remain counted
+  and audited; other operations still require their original dimensions. The
+  opt-in policy is bound to retained admission without changing default custody.
+
 - Admit exact digest-only API-key import through the existing protected
   credential-mutation profile and transaction-owned user/session/network
   counters. Mandatory provider signals, original scope and expiry remain

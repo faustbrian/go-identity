@@ -15,7 +15,8 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 }
 
 func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
-	if !proofBase && binding.OperationID == oauthCallbackDenialOperation().OperationID && binding.SchemaID == oauthCallbackDenialOperation().SchemaID {
+	denialSchema := binding.SchemaID == oauthCallbackDenialOperation().SchemaID || binding.SchemaID == anonymousOAuthCallbackDenialOperation().SchemaID
+	if !proofBase && binding.OperationID == oauthCallbackDenialOperation().OperationID && denialSchema {
 		return decodeOAuthCallbackDenialPlan(binding, fingerprint, encoded)
 	}
 	if !proofBase && binding.OperationID == oauthSigninAccountOperation().OperationID && binding.SchemaID == oauthSigninAccountOperation().SchemaID && len(encoded) > 0 && encoded[0] == 0xa5 {

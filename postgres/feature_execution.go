@@ -157,7 +157,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		if plan.Feature != nil && plan.Feature.Operation == oauthSigninAccountOperation() {
 			return validateOAuthSigninConsumption(phase, command, plan)
 		}
-		if plan.Feature != nil && plan.Feature.Operation == oauthCallbackDenialOperation() {
+		if plan.Feature != nil && oauthCallbackDenialSelected(plan.Feature.Operation) {
 			if _, ok := phase.(FeatureCommitContributor); !ok {
 				return invalidPlan()
 			}
@@ -233,7 +233,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != oauthCallbackDenialOperation() && p.Feature.Operation != oauthSigninAccountOperation() && p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || !oauthCallbackDenialSelected(p.Feature.Operation) && p.Feature.Operation != oauthSigninAccountOperation() && p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -386,7 +386,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 					return nil, invalidPlan()
 				}
 			}
-		} else if p.Feature.Operation == oauthCallbackDenialOperation() {
+		} else if oauthCallbackDenialSelected(p.Feature.Operation) {
 			if _, ok := feature.contributor.(FeatureCommitContributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -769,7 +769,7 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			if e := prepareOAuthSigninConsumption(ctx, w); e != nil {
 				return result, e
 			}
-		} else if p.feature.Operation == oauthCallbackDenialOperation() {
+		} else if oauthCallbackDenialSelected(p.feature.Operation) {
 			if e := c.runCapabilityExecution(ctx, w, false); e != nil {
 				return result, e
 			}
@@ -997,7 +997,7 @@ func invokeFeature(p FeatureExecutionContributor, ctx context.Context, w Work, c
 }
 
 func featureMutationAudits(ctx context.Context, p *admittedKernelPlan, now time.Time, class string) ([]audit.Record, error) {
-	if class == "committed" && p.feature != nil && p.feature.Operation == oauthCallbackDenialOperation() {
+	if class == "committed" && p.feature != nil && oauthCallbackDenialSelected(p.feature.Operation) {
 		class = "provider-denied"
 	}
 	if p.apiKeyVerification != nil {

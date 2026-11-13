@@ -38,7 +38,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.AccountLinkState != nil {
 		return nil, invalidPlan()
 	}
-	if !proofBase && p.Feature != nil && p.Feature.Operation == oauthCallbackDenialOperation() {
+	if !proofBase && p.Feature != nil && oauthCallbackDenialSelected(p.Feature.Operation) {
 		return encodeOAuthCallbackDenialPlan(binding, fingerprint, p)
 	}
 	if !proofBase && p.Feature != nil && p.Feature.Operation == oauthSigninAccountOperation() && p.Capability != nil {

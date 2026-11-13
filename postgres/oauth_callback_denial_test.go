@@ -61,6 +61,35 @@ func TestOAuthCallbackDenialPreservesOriginalConsumptionAndClosedHistory(t *test
 	}
 }
 
+func TestAnonymousOAuthDenialPreservesOriginalFlowWithoutUserAuthority(t *testing.T) {
+	b, p := oauthDenialPlanFixture(t)
+	op := p.Feature.Operation
+	op.SchemaID = "identity.oauth.callback.anonymous-denied-v1"
+	op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+	p.Feature.Operation = op
+	b.SchemaID, b.UserID, b.AnonymousFlowID = op.SchemaID, "", "original-browser-flow"
+	b.ActorKind, b.ActorID = authorization.SubjectServiceAccount, "oauth-login"
+	wire, err := encodeFeaturePlan(b, [32]byte{1}, p)
+	if err != nil {
+		t.Fatal("anonymous provider denial cannot consume its original callback state", err)
+	}
+	restored, err := decodeFeaturePlan(b, [32]byte{1}, wire)
+	if err != nil || restored.Feature.Operation != op || *restored.Capability != *p.Capability {
+		t.Fatal("anonymous denial changed original operation/state", err)
+	}
+	for _, change := range []func(*identity.CommandBinding){
+		func(b *identity.CommandBinding) { b.UserID = "invented-user" },
+		func(b *identity.CommandBinding) { b.ActorKind = authorization.SubjectUser },
+		func(b *identity.CommandBinding) { b.AnonymousFlowID = "" },
+	} {
+		other := b
+		change(&other)
+		if _, err := encodeFeaturePlan(other, [32]byte{1}, p); err == nil {
+			t.Fatal("anonymous denial borrowed user authority")
+		}
+	}
+}
+
 func TestOAuthCallbackDenialCannotBecomeIdentityOrIssuance(t *testing.T) {
 	for name, change := range map[string]func(*identity.CommandBinding, *CommandPlan){
 		"missing proof":    func(_ *identity.CommandBinding, p *CommandPlan) { p.Capability = nil },

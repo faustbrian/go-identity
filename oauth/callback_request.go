@@ -39,7 +39,7 @@ func (r CallbackRequest) Validate() error {
 	if success == r.Callback.Denied() {
 		return failure(InvalidInput, nil)
 	}
-	return validateLinkBrowser(r.TenantID, r.Session, r.Origin, r.Network)
+	return validateRPBrowser(r.TenantID, r.Session, r.Origin, r.Network)
 }
 
 // Format refuses implicit disclosure of original provider/browser input.

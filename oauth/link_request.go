@@ -125,7 +125,7 @@ func (r LinkStartRequest) Validate() error {
 }
 
 func validateLinkCaller(tenant identity.TenantID, bearer auth.BearerCredential, c authorization.DecisionContext, originText, network string, operation authorization.Action) error {
-	if err := validateLinkBrowser(tenant, bearer, originText, network); err != nil {
+	if err := validateRPBrowser(tenant, bearer, originText, network); err != nil {
 		return err
 	}
 	if c.Validate() != nil || c.Request.Tenant != authorization.TenantID(tenant) || c.Request.Subject.Kind != authorization.SubjectUser || c.Request.Action != operation || c.Request.Resource.Type != "identity.user" || string(c.Request.Resource.ID) != string(c.Request.Subject.ID) {
@@ -134,7 +134,7 @@ func validateLinkCaller(tenant identity.TenantID, bearer auth.BearerCredential, 
 	return nil
 }
 
-func validateLinkBrowser(tenant identity.TenantID, bearer auth.BearerCredential, originText, network string) error {
+func validateRPBrowser(tenant identity.TenantID, bearer auth.BearerCredential, originText, network string) error {
 	_, tenantErr := identity.ParseIdentifierID(string(tenant))
 	_, tokenErr := session.ParseToken(bearer.Token())
 	ip, ipErr := netip.ParseAddr(network)
