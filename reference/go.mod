@@ -33,7 +33,7 @@ require (
 	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261025150519-83149c8dcdf6
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b
 	github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806
-	github.com/faustbrian/go-identity/http/session v0.0.0-20261113042301-405ecb7dd9b1
+	github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
@@ -52,6 +52,7 @@ require (
 	github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
 	github.com/faustbrian/go-identity/session v0.0.0-20261113041908-c370ef9887da
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261113041908-c370ef9887da
+	github.com/faustbrian/go-identity/session/valkey v0.0.0-20261113101712-a0f7aabc4f38
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
 	github.com/faustbrian/go-oauth-server v0.0.0-20261101021712-d442ceeccf14
@@ -91,6 +92,7 @@ require (
 	github.com/nyaruka/phonenumbers/v2 v2.0.14 // indirect
 	github.com/pressly/goose/v3 v3.28.0 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
+	github.com/valkey-io/valkey-go v1.0.78 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect

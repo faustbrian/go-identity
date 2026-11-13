@@ -44,7 +44,16 @@ func (f composedSession) Get(ctx context.Context, r session.GetRequest) (session
 		return session.GetResult{}, err
 	}
 	defer done()
-	return f.state.features.session.reader.Get(w, r)
+	f.state.mu.Lock()
+	owner := f.state.features.session
+	var reader interface {
+		Get(context.Context, session.GetRequest) (session.GetResult, error)
+	} = owner.reader
+	if owner.cache != nil && owner.cache.native != nil {
+		reader = owner.cache.native
+	}
+	f.state.mu.Unlock()
+	return reader.Get(w, r)
 }
 
 func (f composedSession) SignOut(ctx context.Context, r session.SignOutRequest, csrf session.CSRFToken) (session.SignOutResult, error) {

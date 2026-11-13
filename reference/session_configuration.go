@@ -31,6 +31,9 @@ import (
 type SessionConfiguration struct {
 	Native   sessionpg.SignOutServiceConfig
 	CSRFKeys []session.CSRFKey
+	// Cache selects only ordinary reads; native protected operations retain
+	// primary authority. Construction validates without connecting to Valkey.
+	Cache *SessionCacheConfiguration
 	// Passkey admits the explicitly configured native passkey issuer into common
 	// reads and signout. False retains the separate Passkeys handle only.
 	Passkey bool
@@ -38,6 +41,7 @@ type SessionConfiguration struct {
 
 type sessionState struct {
 	reader         *session.SessionService
+	cache          *sessionCacheState
 	bearer         *session.SignOutService
 	cookie         *session.CookieSignOutService
 	revoke         *sessionpg.RevokeOneExecutor
@@ -177,6 +181,10 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 	// Runtime services own frozen configuration. Retain only the cookie and
 	// duration needed by transport, never another caller-owned key/policy graph.
 	state.config = sessionpg.SignOutServiceConfig{Cookie: n.Cookie, MaximumDuration: n.MaximumDuration}
+	state.cache, err = composeSessionCache(c.Session.Cache, n, reader, d.EnvelopeKeys)
+	if err != nil {
+		return nil, err
+	}
 	return state, nil
 }
 

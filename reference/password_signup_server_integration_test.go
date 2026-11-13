@@ -281,6 +281,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	sessionCache                *referenceSessionCacheProof
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -444,6 +445,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.mfaListRecheck = extensions.mfaListRecheck
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
+	if extensions.sessionCache != nil {
+		deps.PostgreSQL = extensions.sessionCache.tracePrimary(t, ctx, f.pool)
+	}
 	var socialRollbackClock *referenceSocialRollbackClock
 	if extensions.socialOIDCFailure == socialExpiredCleanup {
 		deps.PostgreSQL, socialRollbackClock = newReferenceSocialRollbackClockPool(t, ctx, f.pool)
@@ -1253,6 +1257,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.socialOIDCHTTPSignin {
 		configureReferenceSocialSigninHTTP(t, &c)
+	}
+	if extensions.sessionCache != nil {
+		extensions.sessionCache.configure(t, &c)
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if extensions.socialOIDCHTTPForeignOrigin {
@@ -2386,6 +2393,11 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 	}
 	if extensions.phoneTOTP || extensions.mfaOTPEnrollment {
 		f.config = c
+	}
+	if proof := extensions.sessionCache; proof != nil {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			proof.prove(t, ctx, c, deps, stores, features, client, network.URL, origin, user, cookies, csrf, fresh)
+		}
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
 	if extensions.phoneTOTP && !*f.phoneTOTPCompleted {

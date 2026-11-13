@@ -499,6 +499,10 @@ func (s StoreSet) Close(ctx context.Context) error {
 	state.mu.Lock()
 	state.closed = true
 	state.cancel()
+	var sessionCache *sessionCacheState
+	if state.features != nil && state.features.session != nil {
+		sessionCache = state.features.session.cache
+	}
 	if state.features != nil {
 		state.features.httpAPIKey.close()
 		state.features.httpOrganization.close()
@@ -590,6 +594,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	select {
 	case <-drained:
+		// The graph has canceled and joined every cache operation, including
+		// initialization. Closing its idle transport owner cannot outwait ctx.
+		sessionCache.close()
 		return ctx.Err()
 	case <-ctx.Done():
 		return ctx.Err()

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Explicitly select an encrypted standalone-TLS Valkey session cache for ordinary
+  reads while protected metadata and signout retain the native primary. Validate
+  cache configuration without IO, probe only at initialization, preserve the
+  original at-most-20-second admission deadline and use bounded primary fallback
+  during cache outages. Shutdown drains owned cache work without closing the
+  borrowed PostgreSQL pool or key provider. Omission preserves native-only reads.
+
 - Support configured OIDC providers that explicitly require POST client
   credentials through the existing linking/signin/session/logout composition.
   Public and Basic selections retain their original behavior; no built-in

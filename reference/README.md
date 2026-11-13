@@ -1,5 +1,29 @@
 # Identity reference composition
 
+## Optional session cache
+
+Set `Session.Cache` to `SessionCacheConfiguration{Codec: ..., Valkey: ...}` to
+select the standalone-TLS encrypted positive cache for `FeatureSet.Sessions().Get`
+and the independently selected session GET route. Supply the same positive
+deployment epoch to both configurations, sufficient payload bounds, a dedicated
+Valkey namespace credential and a verified CA bundle. Leave `Valkey.LookupKeys`
+empty: composition copies the native reader's complete lookup custody. Envelope
+keys come from the existing borrowed `ReferenceDependencies.EnvelopeKeys`; the
+native clock also remains borrowed. Keep the whole cache budget within the
+session budget, reserving the primary read budget plus two cache timeouts for
+read and best-effort fill.
+
+Construction validates and freezes configuration without network IO. Explicit
+`FeatureSet.Initialize` probes the real cache before readiness. Ordinary reads
+may reuse only genuine primary evidence until its original exclusive deadline
+(at most 20 seconds from authoritative reading), even after lost invalidation.
+Copies, hits and fills never renew that deadline; expired evidence requires
+primary admission, never stale fallback. Cache outages use bounded healthy
+primary admission. Protected metadata, signout and domain mutations do not use
+this read projection. `StoreSet.Close` cancels/joins graph work and closes only
+its owned idle cache; it never closes the supplied pool or key provider. Nil
+`Session.Cache` changes no behavior, route, migration or advertised capability.
+
 ## Optional OIDC account linking
 
 `SocialOAuth` composes configured explicit-self linking with the real password,

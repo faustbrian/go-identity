@@ -1203,15 +1203,30 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 			}
 		}
 	}
+	var cacheOwner *sessionCacheState
+	if owner := s.features.session; owner != nil {
+		cacheOwner = owner.cache
+	}
+	cache, err := cacheOwner.initialize(w)
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := w.Err(); err != nil {
+		s.mu.Unlock()
+		cache.Close()
 		return err
 	}
 	if s.closed {
+		s.mu.Unlock()
+		cache.Close()
 		return identity.UnavailableError{}
 	}
+	if cacheOwner != nil {
+		cacheOwner.native = cache
+	}
 	s.features.ready = true
+	s.mu.Unlock()
 	return nil
 }
 
