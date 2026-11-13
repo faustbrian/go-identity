@@ -647,7 +647,7 @@ func (p *referenceSocialOIDCIssuer) VerifySignature(ctx context.Context, token s
 	return base64.RawURLEncoding.Strict().DecodeString(parts[1])
 }
 
-func proveReferenceSocialOIDC(t *testing.T, ctx context.Context, client *http.Client, base, origin string, p *referenceSocialOIDCIssuer, user identity.UserID, original []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool, persistent, linkOnly bool, accounts identity.AccountRepository, rotate func(), collision bool, failureMode socialOIDCFailure, awaitExpiry func(string), concurrent bool) {
+func proveReferenceSocialOIDC(t *testing.T, ctx context.Context, client *http.Client, base, origin string, p *referenceSocialOIDCIssuer, user identity.UserID, original []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool, persistent, linkOnly bool, accounts identity.AccountRepository, rotate func(), collision bool, failureMode socialOIDCFailure, awaitExpiry func(string), concurrent, signinEnabled bool) {
 	t.Helper()
 	app := *client
 	app.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -929,9 +929,11 @@ func proveReferenceSocialOIDC(t *testing.T, ctx context.Context, client *http.Cl
 				t.Fatal("refused provider collision invalidated the existing password session")
 			}
 		}
-		disabled, _ := call(http.MethodPost, base+"/v1/oauth/signin-start", map[string]any{}, "", "disabled-social-signin")
-		if disabled.StatusCode != http.StatusNotFound {
-			t.Fatal("link-only composition exposed unselected social signin")
+		if !signinEnabled {
+			disabled, _ := call(http.MethodPost, base+"/v1/oauth/signin-start", map[string]any{}, "", "disabled-social-signin")
+			if disabled.StatusCode != http.StatusNotFound {
+				t.Fatal("link-only composition exposed unselected social signin")
+			}
 		}
 		return
 	}

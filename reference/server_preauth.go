@@ -110,12 +110,15 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 		return nil, err
 	}
 	c := sessionhttp.PreAuthConfig{Network: network, Service: owner, Rate: s.state.httpRate.limiter, Cookie: h.deployment.Cookie, Lifetime: h.lifetime, Origin: identityhttp.Origin(h.deployment.Origin), Action: h.action, CallbackURL: h.deployment.CallbackURL, PolicyID: h.policy, PolicyVersion: h.version, Now: time.Now, MaximumDuration: s.state.features.timeout}
+	if selected := s.state.features.socialOAuth; selected != nil && selected.signin != nil && selected.http != nil && selected.http.SigninStart {
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "oauth", Service: composedPreAuth{state: s.state, issuer: selected.signin.preauth}, Action: "identity.oauth.callback", CallbackURL: selected.signin.callback, PolicyID: selected.policy, PolicyVersion: uint64(selected.version)})
+	}
 	if selected := s.state.features.httpPasswordSignin; selected != nil {
 		password, err := f.PasswordPreAuth()
 		if err != nil {
 			return nil, err
 		}
-		c.Methods = []sessionhttp.PreAuthMethod{{Name: "password", Service: password, Action: "identity.password.signin", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version}}
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "password", Service: password, Action: "identity.password.signin", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
 	}
 	if selected := s.state.features.httpPasswordSignup; selected != nil {
 		owner, err := f.SignupPreAuth()

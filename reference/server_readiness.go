@@ -3,6 +3,7 @@ package reference
 import (
 	"context"
 	"slices"
+	"strings"
 
 	migrations "github.com/faustbrian/go-migrations/v3"
 )
@@ -420,6 +421,23 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 					case guards[i].schema == "identity_mfa" && (name == "factor_authorities.factor_authorities_initialized_purpose_v2" || name == "factor_authorities.factor_authorities_initialized_purpose_v3"):
 						guards[i].constraints[j] = "factor_authorities.factor_authorities_initialized_purpose_v4"
 					}
+				}
+			}
+		}
+	}
+	if state.features != nil && state.features.socialOAuth != nil && state.features.socialOAuth.signin != nil {
+		schema := state.features.socialOAuth.signin.sessionSchema
+		for i := range guards {
+			if guards[i].schema != schema {
+				continue
+			}
+			guards[i].constraints = slices.Clone(guards[i].constraints)
+			for j, constraint := range guards[i].constraints {
+				// OAuthSigninMigrationSource is the final selected purpose
+				// expansion. It preserves the installed predicate but replaces
+				// its name; collision/history guards must remain immutable.
+				if strings.HasPrefix(constraint, "session_issuances.session_issuances_purpose_") {
+					guards[i].constraints[j] = "session_issuances.session_issuances_purpose_oauth_v1"
 				}
 			}
 		}

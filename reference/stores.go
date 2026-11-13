@@ -38,7 +38,8 @@ type ReferenceDependencies struct {
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
-	// SocialOAuth selects native OIDC linking; HTTPSocialOAuth exposes only
+	// SocialOAuth selects native OIDC linking and optional existing-account
+	// signin; HTTPSocialOAuth exposes only
 	// explicitly selected routes and metadata over those actual native owners.
 	SocialOAuth     *SocialOAuthConfiguration
 	HTTPSocialOAuth *HTTPSocialOAuthConfiguration

@@ -2,6 +2,29 @@
 
 ## Current TL;DR — 2026-11-13
 
+**Current consumer integration:** the actual configured PostgreSQL backend
+passes HTTP OIDC signin, common session reads and strict logout using downloaded
+public dependencies (`GOWORK=off`), not local workspace substitutes. Browser,
+persistent, provider-denial, linking-only and closed-selection cases pass race
+(17.872s); Reference/baseline ordinary race passes6.120s/10.571s, tagged vet and
+module verification pass. Independent complete-source and public-pin reviews
+approve. Both reproduced review findings are fixed without a weaker profile.
+
+The native prerequisites are on main at `c370ef9` with
+[passing CI](https://github.com/faustbrian/go-identity/actions/runs/43364749735),
+and HTTP transport at `405ecb7` with
+[passing CI](https://github.com/faustbrian/go-identity/actions/runs/43365176214).
+Reference source/public pins are integrated locally; its consumer commit/push,
+published-consumer readback and exact CI are the remaining delivery boundary.
+No new milestone or whole-unit qualification is claimed.
+
+**Parallel implementation:** a dependency-ready native public-client metadata
+update lane is active in go-oauth-server. It reuses existing manager/session/
+transaction authority and does not add RFC7592. Primary retains Reference
+delivery, integration and final acceptance; workers do not publish independently.
+
+### Last published native consumer checkpoint
+
 Overall estimate remains **25–30%, low confidence; 10/39 selected milestones
 closed**. The native existing-account OIDC slice below is not whole M17/M18,
 nor another fully qualified unit out of 67.
@@ -28,10 +51,10 @@ changed SQL has measured indexed/bounded plans, not a production latency claim.
 This consumer checkpoint adopts those exact public pins. No Tools, release-tag
 or deployment work was performed for this slice.
 
-**Stop boundary:** publish the consumer checkpoint, write the takeover handoff
-and pause as requested; no next slice is being started. Broader opt-in HTTP and
-Reference feature selection, other provider/signup/MFA profiles and full
-platform qualification remain open. Nothing waits on Brian.
+**Authority:** the full goal is active. The prior native checkpoint's one-unit
+handoff/pause request was fulfilled at69b36a8 and is not a recurring stop.
+Other provider/signup/MFA profiles and full platform qualification remain open.
+Nothing waits on Brian.
 
 Older entries below are historical and do not override this current summary.
 

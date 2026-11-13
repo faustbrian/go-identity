@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Independently select native existing-account OIDC signin and its HTTP
+  original-browser start/shared callback. Reuse real preauth, risk, session and
+  migration owners; committed callbacks deliver an HttpOnly session plus a
+  separate readable CSRF cookie for common session reads and strict logout.
+  Original retries and provider denial never redisclose credentials. The
+  linking-only profile remains unchanged; signup and MFA fallback stay disabled.
+
 - Preserve original session authority across concurrent OIDC link flows and
   erase exchange secrets on known terminal refusal. Unsupported social-signin
   selection still fails at composition rather than advertising a login route.

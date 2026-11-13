@@ -7,7 +7,8 @@ session, capability, risk, audit and PostgreSQL owners. Select
 `HTTPSocialOAuth.LinkStart` and `HTTPSocialOAuth.Callback` independently. This
 profile links an external account to an existing verified password user; it
 does not sign in, create another session, refresh provider tokens or unlink.
-`SigninStart` fails at configuration rather than exposing an incomplete route.
+`SigninStart` requires the separately selected native signin profile below;
+linking-only configurations continue to expose no signin route.
 
 Start with the existing password-signup/signin, session and OTP configuration.
 Supply one `oauth.NewOIDCProvider` with fixed HTTPS issuer/endpoints/client,
@@ -49,6 +50,53 @@ rollback and expired-proof recovery. See the
 [native service contract](../oauth/postgres/README.md) and
 [HTTP contract](../http/oauth/README.md) for trusted maintenance and failure
 semantics. Full social OAuth and platform qualification remain unfinished.
+
+## Optional existing-account OIDC signin
+
+Add `SocialOAuth.Signin` to the configured linking graph to select the native
+existing-account signin owners. Supply the fixed service actor, allowlisted
+callback, original flow-key index/TTL/token size/cookie, authentication-risk
+configuration ID and native `SigninCompletionConfig`. Completion must match
+the common session repository, namespace, audience, issuer and CSRF custody.
+The graph reuses its counted/audited risk evaluator and retained flow keys;
+consumers do not supply another store, transaction or authentication engine.
+Apply the graph's selected forward migrations, including OAuth session-purpose
+expansion and validation, before startup. Readiness requires the final selected
+constraint without changing historical migration collision guards.
+
+HTTP remains independently opt-in: select `HTTPSocialOAuth.SigninStart` and
+`Callback`, plus the existing `HTTPPreAuth` device-cookie issuance and `HTTPRate`.
+The HTTP social origin must equal the shared preauth origin; composition rejects
+a mismatch instead of advertising an unusable preauth method. Native-only
+selection does not impose this transport relationship.
+Use Lax flow/device cookies for top-level provider GET navigation and matching
+Lax authentication-cookie policy when sharing the callback with linking.
+Supply a distinct secure host-only `session.CSRFCookiePolicy` for same-origin
+application callbacks. The authentication cookie remains HttpOnly; only its
+separate synchronizer cookie is browser-readable.
+
+1. Send `POST /v1/session/preauth-issue` with `{"method":"oauth","remember":false}`
+   and exact `Origin`. Retain the returned flow ID and browser cookies.
+2. Send `POST /v1/oauth/signin-start` with exact `Origin`, a stable
+   `Idempotency-Key`, and `flowID`, `provider`, allowlisted `callback` and
+   `errorCallback`, configured `scopes`, `signupDisabled: true` and the same
+   resolved `remember` choice. Retry this original flow/key rather than issuing
+   another preauth flow.
+3. Navigate the same browser to `redirectURI`. A new committed callback returns
+   303 to the original application URL and sets the authentication and CSRF
+   cookies. Provider denial redirects to the original error URL without either
+   credential. Callback replay neither exchanges again nor reveals credentials.
+4. Use `GET /v1/session/get` through the existing common session owner. For
+   `POST /v1/session/signout`, send exact `Origin` and copy the synchronizer
+   cookie into `X-CSRF-Token`. Confirmed logout revokes the session and deletes
+   both cookies; wrong CSRF deletes neither and does not revoke the session.
+
+`TestReferencePostgresConfiguredOIDCSigninHTTP` in
+[social_signin_http_integration_test.go](social_signin_http_integration_test.go)
+executes this complete configured HTTP journey against real PostgreSQL, for
+browser/persistent sessions and provider denial. Only the external TLS provider
+is controlled. This selected profile does not enable signup, MFA fallback,
+refresh, unlinking or other OAuth variants. It is not full M17/M18 qualification.
 
 ## Optional workload OAuth backend
 

@@ -147,7 +147,7 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 		return nil, invalid
 	}
 	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey}
-	if selection.Verified == nil && selection.OTP == nil && selection.MagicLink == nil {
+	if selection.Verified == nil && selection.OAuth == nil && selection.OTP == nil && selection.MagicLink == nil {
 		execution.Admission = nil
 	}
 	revoke, err := sessionpg.NewRevokeOneExecutor(d.PostgreSQL, execution)
@@ -232,6 +232,14 @@ func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSess
 		}
 		profile := v.Profile
 		selected.MagicLink = &profile
+	}
+	if social := c.SocialOAuth; social != nil && social.Signin != nil {
+		completion := social.Signin.Completion
+		if completion.PolicyNamespace != common.PolicyNamespace || completion.Audience != common.Audience || !sessionIssuanceMatches(n, completion.Issuer, completion.CSRF) {
+			return deny()
+		}
+		profile := sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: common.GlobalAuthorityID, PolicyNamespace: common.PolicyNamespace, Audience: common.Audience, AuthenticationMethod: "oauth", CredentialKind: identity.CredentialProvider, CredentialOwner: "identity/oauth"}
+		selected.OAuth = &profile
 	}
 	return selected, nil
 }

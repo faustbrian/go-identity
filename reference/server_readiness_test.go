@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/faustbrian/go-identity/risk"
+	migrations "github.com/faustbrian/go-migrations/v3"
 )
 
 // These cases prove early denial without crossing any external boundary.
@@ -53,5 +54,23 @@ func TestReferenceServerReadinessRequiresCurrentPublishedCustody(t *testing.T) {
 				t.Fatal("early denial admitted or retained work")
 			}
 		})
+	}
+}
+
+func TestOAuthReadinessRequiresSelectedSuccessorWithoutChangingHistoricalGuards(t *testing.T) {
+	_, _, features := serverFixture(t)
+	state := features.state
+	history := migrationHistory{namespace: "native-session-fixture", owners: map[migrations.Version]ModuleID{1: "identity/session/postgres"}, guards: []migrationGuard{{version: 1, schema: "session_store", constraints: []string{"session_issuances.session_issuances_purpose_v3", "sessions.session_record_binding_v7"}}}}
+	state.features.socialOAuth = &socialOAuthState{signin: &socialSigninState{sessionSchema: "session_store"}}
+	actual := readinessCatalogGuards(state, history)
+	if len(actual) != 1 || actual[0].constraints[0] != "session_issuances.session_issuances_purpose_oauth_v1" || actual[0].constraints[1] != "sessions.session_record_binding_v7" {
+		t.Fatal("readiness required a removed predecessor or changed another owner's guard")
+	}
+	if history.guards[0].constraints[0] != "session_issuances.session_issuances_purpose_v3" {
+		t.Fatal("readiness rewrote immutable collision/history inputs")
+	}
+	state.features.socialOAuth = nil
+	if got := readinessCatalogGuards(state, history); got[0].constraints[0] != history.guards[0].constraints[0] {
+		t.Fatal("unselected OAuth changed readiness")
 	}
 }

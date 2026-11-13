@@ -12,6 +12,7 @@ import (
 	"github.com/faustbrian/go-identity/oauth"
 	oauthpg "github.com/faustbrian/go-identity/oauth/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-identity/risk"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -24,8 +25,8 @@ import (
 // are stable across state/PKCE/envelope key rotation; changing them requires
 // retaining the original deployment for in-flight requests. Providers and all
 // borrowed callbacks remain bounded, concurrency-safe and caller-owned.
-// HTTP is independently opt-in. This profile enables no social signin or token
-// refresh; those operations must be selected only with their actual owners.
+// HTTP is independently opt-in. Signin adds only its actual native existing-
+// account owners; implicit signup and token refresh are not selected here.
 type SocialOAuthConfiguration struct {
 	Schema, ConfigurationID, Origin, PolicyID string
 	Providers                                 []oauth.Provider
@@ -41,12 +42,14 @@ type SocialOAuthConfiguration struct {
 	PKCECommitmentKeys                        map[uint32][32]byte
 	CurrentEnvelopeKey                        string
 	EnvelopeKeys                              map[string][]byte
+	Signin                                    *SocialOAuthSigninConfiguration
 }
 
 // HTTPSocialOAuthConfiguration independently selects initiation and callback.
 // The current query-only HTTP profile binds one configured provider to its
-// exact callback URL. SigninStart is rejected until the native signin owner is
-// selected; it is never advertised as a placeholder or weaker login method.
+// exact callback URL. SigninStart requires the selected native Signin profile,
+// original-flow/device HTTP issuance and Callback. Callback completes explicitly
+// selected native workflows; nil Signin retains linking-only behavior.
 type HTTPSocialOAuthConfiguration struct{ LinkStart, SigninStart, Callback bool }
 
 type socialOAuthState struct {
@@ -57,9 +60,11 @@ type socialOAuthState struct {
 	version        authorization.Revision
 	duration       time.Duration
 	http           *HTTPSocialOAuthConfiguration
+	policy         string
+	signin         *socialSigninState
 }
 
-func composeSocialOAuth(c StoreConfiguration, d ReferenceDependencies, selectedSession *sessionState) (*socialOAuthState, error) {
+func composeSocialOAuth(c StoreConfiguration, d ReferenceDependencies, selectedSession *sessionState, evaluation risk.Evaluator) (*socialOAuthState, error) {
 	invalid := identity.InvalidInputError{Field: "reference_social_oauth"}
 	if c.SocialOAuth == nil {
 		if c.HTTPSocialOAuth != nil {
@@ -78,7 +83,10 @@ func composeSocialOAuth(c StoreConfiguration, d ReferenceDependencies, selectedS
 	}
 	if c.HTTPSocialOAuth != nil {
 		h := *c.HTTPSocialOAuth
-		if h.SigninStart || !h.LinkStart && !h.Callback || len(n.Providers) != 1 || c.HTTPRate == nil {
+		if !h.LinkStart && !h.SigninStart && !h.Callback || len(n.Providers) != 1 || c.HTTPRate == nil {
+			return nil, invalid
+		}
+		if h.SigninStart && (n.Signin == nil || !h.Callback || c.HTTPPreAuth == nil || c.HTTPPreAuth.Device == nil) {
 			return nil, invalid
 		}
 	}
@@ -99,7 +107,11 @@ func composeSocialOAuth(c StoreConfiguration, d ReferenceDependencies, selectedS
 	if err != nil {
 		return nil, err
 	}
-	s := &socialOAuthState{owner: owner, schema: n.Schema, origin: n.Origin, callbacks: slices.Clone(n.CallbackAllowlist), version: authorization.Revision(n.Coordinator.AdmissionPolicy.PolicyVersion), duration: n.MaximumDuration}
+	signin, err := composeSocialSignin(c, d, evaluation)
+	if err != nil {
+		return nil, err
+	}
+	s := &socialOAuthState{owner: owner, schema: n.Schema, origin: n.Origin, callbacks: slices.Clone(n.CallbackAllowlist), version: authorization.Revision(n.Coordinator.AdmissionPolicy.PolicyVersion), duration: n.MaximumDuration, policy: n.PolicyID, signin: signin}
 	if c.HTTPSocialOAuth != nil {
 		h := *c.HTTPSocialOAuth
 		s.http = &h

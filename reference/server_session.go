@@ -84,6 +84,10 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 	}
 	if h.config.Transport == session.CredentialCookie {
 		c.CookieSignOut = owner.cookie
+		if social := s.state.features.socialOAuth; social != nil && social.signin != nil && social.http != nil && social.http.Callback {
+			policy := social.signin.csrfCookie
+			c.CSRFCookie = &policy
+		}
 	} else {
 		c.BearerSignOut = owner.bearer
 	}

@@ -281,73 +281,77 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
-	socialOIDC                bool
-	socialOIDCPersistent      bool
-	socialOIDCLinkOnly        bool
-	socialOIDCRotateCounters  bool
-	socialOIDCCollision       bool
-	socialOIDCStartupSnapshot bool
-	socialOIDCFailure         socialOIDCFailure
-	socialOIDCConcurrent      bool
-	socialOIDCRejectSignin    bool
-	socialOIDCNativeStart     string
-	socialOIDCNativeSignin    bool
-	socialOIDCNativeMode      string
-	organizationKey           bool
-	organizationKeyUpgrade    bool
-	organizationKeyMetadata   bool
-	organizationKeyUpdate     bool
-	apiKey                    bool
-	apiKeyUpgrade             bool
-	apiKeyLegacy              bool
-	apiKeyLegacyNoExpiry      bool
-	apiKeyMetadata            bool
-	apiKeyUpdate              bool
-	organization              bool
-	organizationUpgrade       bool
-	organizationTransfer      bool
-	organizationExpiry        bool
-	organizationLifecycle     bool
-	organizationTeams         bool
-	organizationTeamCRUD      bool
-	organizationRoles         bool
-	organizationBindings      bool
-	organizationTeamBindings  bool
-	passkey                   bool
-	passkeyUpgrade            bool
-	passkeyDiscovery          bool
-	passkeySessionHTTP        bool
-	passkeyKeyed              bool
-	passkeyHTTP               bool
-	passkeyManagement         bool
-	passkeyDeletion           bool
-	passkeySignup             bool
-	passkeySignupHTTP         bool
-	passkeyTOTP               bool
-	passkeyTOTPManagement     bool
-	passkeyTOTPEnrollment     bool
-	passkeyTOTPDeletion       bool
-	mfaOTPDisable             bool
-	mfaOTPDisableAll          bool
-	mfaOTPActiveCase          string
-	mfaOTPManage              bool
-	mfaOTPRemoval             bool
-	mfaOTPRemovalRace         bool
-	mfaOTPActive              bool
-	mfaOTPEnrollment          bool
-	mfaOTPEnrollmentOnly      bool
-	mfaOTPListing             bool
-	mfaOTPListingHTTP         bool
-	phoneEnrollment           bool
-	phonePassword             bool
-	phoneTOTP                 bool
-	phoneTOTPOnly             bool
-	phonePasswordReset        bool
-	phoneResetRollback        bool
-	phoneTOTPRollback         bool
-	phoneOTP                  string
-	phoneRemoval              string
-	phoneChange               bool
+	socialOIDC                  bool
+	socialOIDCPersistent        bool
+	socialOIDCLinkOnly          bool
+	socialOIDCRotateCounters    bool
+	socialOIDCCollision         bool
+	socialOIDCStartupSnapshot   bool
+	socialOIDCFailure           socialOIDCFailure
+	socialOIDCConcurrent        bool
+	socialOIDCRejectSignin      bool
+	socialOIDCNativeStart       string
+	socialOIDCNativeSignin      bool
+	socialOIDCNativeMode        string
+	socialOIDCHTTPSignin        bool
+	socialOIDCHTTPRemember      bool
+	socialOIDCHTTPDenial        bool
+	socialOIDCHTTPForeignOrigin bool
+	organizationKey             bool
+	organizationKeyUpgrade      bool
+	organizationKeyMetadata     bool
+	organizationKeyUpdate       bool
+	apiKey                      bool
+	apiKeyUpgrade               bool
+	apiKeyLegacy                bool
+	apiKeyLegacyNoExpiry        bool
+	apiKeyMetadata              bool
+	apiKeyUpdate                bool
+	organization                bool
+	organizationUpgrade         bool
+	organizationTransfer        bool
+	organizationExpiry          bool
+	organizationLifecycle       bool
+	organizationTeams           bool
+	organizationTeamCRUD        bool
+	organizationRoles           bool
+	organizationBindings        bool
+	organizationTeamBindings    bool
+	passkey                     bool
+	passkeyUpgrade              bool
+	passkeyDiscovery            bool
+	passkeySessionHTTP          bool
+	passkeyKeyed                bool
+	passkeyHTTP                 bool
+	passkeyManagement           bool
+	passkeyDeletion             bool
+	passkeySignup               bool
+	passkeySignupHTTP           bool
+	passkeyTOTP                 bool
+	passkeyTOTPManagement       bool
+	passkeyTOTPEnrollment       bool
+	passkeyTOTPDeletion         bool
+	mfaOTPDisable               bool
+	mfaOTPDisableAll            bool
+	mfaOTPActiveCase            string
+	mfaOTPManage                bool
+	mfaOTPRemoval               bool
+	mfaOTPRemovalRace           bool
+	mfaOTPActive                bool
+	mfaOTPEnrollment            bool
+	mfaOTPEnrollmentOnly        bool
+	mfaOTPListing               bool
+	mfaOTPListingHTTP           bool
+	phoneEnrollment             bool
+	phonePassword               bool
+	phoneTOTP                   bool
+	phoneTOTPOnly               bool
+	phonePasswordReset          bool
+	phoneResetRollback          bool
+	phoneTOTPRollback           bool
+	phoneOTP                    string
+	phoneRemoval                string
+	phoneChange                 bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -581,7 +585,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var socialIssuer *referenceSocialOIDCIssuer
 	if extensions.socialOIDC {
 		socialPolicy.actor = authorization.SubjectID(c.PasswordSignup.PreAuth.ActorID)
-		socialIssuer = configureReferenceSocialOIDC(t, &c, origin, extensions.socialOIDCLinkOnly)
+		socialOrigin := origin
+		if extensions.socialOIDCHTTPForeignOrigin {
+			socialOrigin = "https://other-origin.example"
+			c.PasswordSignin.Native.Origins = append(c.PasswordSignin.Native.Origins, socialOrigin)
+		}
+		socialIssuer = configureReferenceSocialOIDC(t, &c, socialOrigin, extensions.socialOIDCLinkOnly)
 		if socialRollbackClock != nil {
 			c.SocialOAuth.Issuer.Crypto.Clock = socialRollbackClock.now
 			c.PasswordSignup.Preparation.Clock = socialRollbackClock.now
@@ -1241,7 +1250,21 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			c.Organization, c.HTTPOrganization = nil, nil
 		}
 	}
+	if extensions.socialOIDCHTTPSignin {
+		configureReferenceSocialSigninHTTP(t, &c)
+	}
 	stores, err := reference.ComposeStores(c, deps)
+	if extensions.socialOIDCHTTPForeignOrigin {
+		var invalid identity.InvalidInputError
+		if err == nil {
+			_ = stores.Close(ctx)
+			t.Fatal("HTTP social signin accepted an origin different from shared preauth")
+		}
+		if !errors.As(err, &invalid) || invalid.Field != "reference_social_signin" {
+			t.Fatal("foreign-origin fixture failed before selected signin validation")
+		}
+		return
+	}
 	if extensions.socialOIDCRejectSignin {
 		var invalid identity.InvalidInputError
 		if !errors.As(err, &invalid) || invalid.Field != "reference_social_oauth" {
@@ -1345,7 +1368,7 @@ END $$`); err != nil {
 	}
 	migrationRequest := applyRequest(t, ctx, stores, modules)
 	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -1678,6 +1701,7 @@ END $$`); err != nil {
 		enabled bool
 	}{
 		{"identity.account.link-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.LinkStart},
+		{"identity.oauth.signin-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.SigninStart},
 		{"identity.oauth.callback", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.Callback},
 	} {
 		if selected.enabled {
@@ -2059,9 +2083,12 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 					}
 				}
 			}
-			proveReferenceSocialOIDC(t, ctx, client, network.URL, origin, socialIssuer, user, cookies, csrf, fresh, readSession, extensions.socialOIDCPersistent, extensions.socialOIDCLinkOnly, accounts, rotate, extensions.socialOIDCCollision, extensions.socialOIDCFailure, awaitExpiry, extensions.socialOIDCConcurrent)
+			proveReferenceSocialOIDC(t, ctx, client, network.URL, origin, socialIssuer, user, cookies, csrf, fresh, readSession, extensions.socialOIDCPersistent, extensions.socialOIDCLinkOnly, accounts, rotate, extensions.socialOIDCCollision, extensions.socialOIDCFailure, awaitExpiry, extensions.socialOIDCConcurrent, extensions.socialOIDCHTTPSignin)
 			if extensions.socialOIDCNativeSignin {
 				proveNativeSocialSignin(t, ctx, c, deps, origin, "complete", &nativeSigninCompletionFixture{provider: socialIssuer, user: user, mode: extensions.socialOIDCNativeMode})
+			}
+			if extensions.socialOIDCHTTPSignin {
+				proveReferenceSocialSigninHTTP(t, ctx, client, network.URL, origin, socialIssuer, user, extensions.socialOIDCHTTPRemember, extensions.socialOIDCHTTPDenial)
 			}
 			if (extensions.socialOIDCFailure == socialAttachedProofExpiry || extensions.socialOIDCFailure == socialAttachedRPExpiry) && !f.completionFault.hit.Load() {
 				t.Fatal("callback never lost its actual attachment COMMIT acknowledgement")

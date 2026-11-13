@@ -536,7 +536,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.singleSessionRevocation = sessionOwner != nil
-	socialOAuthOwner, err := composeSocialOAuth(c, d, sessionOwner)
+	socialOAuthOwner, err := composeSocialOAuth(c, d, sessionOwner, evaluator)
 	if err != nil {
 		return err
 	}

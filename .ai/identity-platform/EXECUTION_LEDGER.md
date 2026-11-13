@@ -1,5 +1,202 @@
 # Identity Implementation — Current Milestone
 
+Public Reference integration now passes actual PostgreSQL/race17.872s with
+downloaded dependencies (no workspace): browser/persistent/denial, preserved
+linking, closed selection and foreign-preauth-origin refusal. Ordinary Reference
+and baseline race6.120s/10.571s, tagged vet and module verification pass. Final
+source review and both public-pin adoption reviews approve;22 changed Go files
+match authenticated public module bytes. Prerequisite mainc370ef9 and HTTP
+main405ecb7 have successful exact CI. Reference commit/push, published consumer
+readback and final exact CI remain primary-owned. No M17/M18 or unit qualification
+closure is inferred from this finite profile.
+
+Independent implementation lane `oauth_registration_successor` now owns one
+native M30 successor in go-oauth-server main38ddd45: owner-authorized metadata
+replacement for registered public OAuth-only browser clients, preserving null
+secret custody and version-bound grant/consent invalidation. RFC7592 remains
+explicitly excluded. Writable paths: root client_update*.go and narrowly needed
+client_management.go; postgres/client_update*.go, postgres/client_management.go,
+postgres/phase.go, dedicated postgres/client_public_update_integration_test.go;
+root/postgres README.md and CHANGELOG.md. No identity writes, shared tooling,
+HTTP/Reference, Git, services or children. Committed consumed contracts remain
+kernel8901e7f, kernel-PGafeaa86, sessione952895, session-PG49fde04 and root017f10d
+as pinned by its native adapter; real native DCR/management proof is retained
+at the delivered38ddd45 checkpoint. No new authority engine is needed.
+Acceptance: actual public creation/registration, exact-version metadata replace,
+old grant/consent denial, fresh S256 success and delete; changed-class/owner,
+stale/CSRF/withdrawal/contention/unknown/replay deny or recover safely without
+secrets. Focused TDD, actual PG integration and confidential regression only;
+no migration unless a concrete installed constraint requires it. Primary owns
+root pin adoption, independent final review and main delivery. Worker prepares
+source/tests concurrently; heavy Go slot waits until current Reference run ends.
+
+Parallel bounded readiness question `oauth_registration_successor` is read-only
+in go-oauth-server main38ddd45dce6d624d5281cbfab733d62f92328a0f (clean).
+It identifies the smallest still-missing RFC7592/native registration-management
+consumer and whether its actual committed owner contracts permit an independent
+implementation lane. No writable paths, Go/services, Git or children; no parser-
+only substitute, private authority or new architecture. Primary owns integration
+and will not assign implementation until the consumed contract gap is concrete.
+
+Current final source review APPROVES after one fix round (native report in the
+existing private handoff directory, http-signin-review.md). Actual distinct-
+origin graph rejection and both rate-denial Retry-After cases ran RED/GREEN.
+Corrected HTTP/Reference race passes, including callback outages without invented
+retry metadata; unchanged prior native checks are reused. Separate GOWORKoff
+prerequisite session/session-PG/OAuth-PG race, tagged vet and module verification
+pass. Public dependency adoption and main delivery/CI are next, not new features.
+
+2026-11-13 Reference integration: actual configured PostgreSQL HTTP signin now
+passes race for browser, persistent and provider-denial profiles (17.761s),
+including original-flow keyed retry, preserved account linking, common session
+get, wrong-CSRF refusal, confirmed two-cookie logout and credential-free replay.
+An actual readiness failure exposed the final purpose-constraint predecessor;
+the focused readiness test ran RED/GREEN and the graph now requires its selected
+successor without mutating historical guards. These are local workspace results,
+not public-pin delivery or whole M17 closure.
+
+`http_signin_final_review` owns read-only review of the complete current slice
+against main 69b36a874f979d408898ff60a50cb3830ce8e38c and the source manifest
+http-signin-review.sha256 (manifest digest
+3a8f07b4feed1208319582d54092b579ebe6935eeec6d6b19b53e9db3815b135),
+under the existing private handoff directory. Scope is all changed/new files in
+session/, http/oauth/, http/session/, oauth/postgres/ and reference/; no Git,
+source, services, Go execution or child agents. It consumes the committed native
+contracts documented below plus this explicit current candidate. Acceptance is
+the frozen complete HTTP journey, opt-in/backward compatibility, original
+credential/authority custody and bounded migration/readiness behavior, not new
+provider variants or tooling. Primary runs final affected checks concurrently,
+then integrates concrete findings and public dependency adoption.
+
+Parallel finite test lane `callback_delivery_cases` owns only new
+http/oauth/signin_callback_delivery_test.go. It consumes committed native
+session/OAuth contracts at 82309c2/4c60c62/d495b36 and the locally implemented,
+race-tested HTTP callback candidate SHA256
+6a5e820cf165b21ae8190ebdb543b989d4c2ee2fcdf1a4644038199154df90b1.
+It proves public transport delivery of the new committed session plus readable
+CSRF cookie, and withholding on denied/replayed/malformed/canceled results;
+test boundary doubles must not claim native provider/database authority.
+No production, Reference, pins, Git, service or child-agent writes. Primary
+retains HTTP/Reference composition and actual PostgreSQL journey. Source/test
+preparation overlaps primary Reference work; Go waits for shared slot.
+
+Local HTTP batch now implements opt-in signin-start feature/OpenAPI selection,
+native-state shared callback dispatch with original browser/device attribution,
+commit-gated dual-cookie delivery, and optional confirmed synchronizer-cookie
+cleanup in existing session signout. Both writer-interface injection regressions
+and case-insensitive present-Origin regressions ran RED then GREEN; absent Origin
+still works for provider GET. Root CSRFCookiePolicy remains separate from HttpOnly
+authentication cookies. Ordinary workspace race: http/oauth 1.711s (final Origin
+correction), http/session 8.847s, session 1.630s, session/postgres 2.058s. No full
+repo rerun; unchanged native consumer proof remains adopted. New native resolver
+storage test passed actual PG0.760s GOWORK off; frozen-query cost note is
+/Users/brian/.dotfiles/.ai/handoffs/go-identity/callback-route-query.md. The 100k-row
+cost experiment is explicitly tagged integration,queryperformance so ordinary
+integration regressions do not repeat it. PostgreSQL PID86933 was stopped and
+fixture databases cleaned; task caches remain owned for adjacent slice checks.
+Both implementation/query workers completed. Reference composition/public pins,
+actual HTTP PostgreSQL journey and independent final review remain open; none
+of this uncommitted batch is another milestone or whole-unit delivery.
+
+Native callback routing now passes its real PostgreSQL storage-boundary test
+(0.760s, GOWORK off): stored link/signin intent, provider denial, retained erased
+retry metadata, foreign/empty tenant, cancellation and expiry; lookup does not
+change ciphertext or state. This fixture is not complete browser admission.
+Frozen new query source SHA256 ea35ebcae1df209cc633fff83abaee01578ede3a3422096c3bc57e8e3603322f.
+`callback_route_query` owns only new
+oauth/postgres/callback_operation_query_performance_test.go and a private result
+note. It measures this exact SELECT/native typed bindings and representative
+no-match/match/retained-key/skew cases on the task-owned PostgreSQL; no production,
+index/schema, Reference, Git or other writes. Consumes main 69b36a8 plus this
+explicit frozen query candidate, not an invented downstream contract. Primary
+integrates measurement into the sole final consumer review. Serial heavy slot
+is granted to this lane while primary writes browser-delivery source/tests.
+
+M17 actual coding resumed in two disjoint lanes. Primary's explicit OAuth plus
+password native selection/revocation regression ran RED, then GREEN with the
+existing Selected/SingleFactor cases (0.277s); original stored proof chooses
+the owner and the common lookup/freshness boundary is retained. This local
+unit result does not close common Reference/HTTP PostgreSQL acceptance or review.
+`signin_start_transport` is now an active GPT-6.1 Sol/high implementation worker
+with its two-file handler boundary aligned; it holds the serial heavy slot for
+focused RED/GREEN while primary continues shared integration source work.
+
+Concrete required native extension: canonical GET /v1/oauth/callback is shared
+by link and signin, whose existing native loaders deliberately filter different
+stored operations. Their generic forbidden result cannot safely distinguish
+wrong-browser denial from absent intent for HTTP fallback. Add one bounded,
+keyed-state native operation lookup, then require the selected native owner to
+repeat original browser/configuration/current-authority admission. No exchange,
+secret release, reservation or mutation occurs in routing. Its one new indexed
+SELECT needs focused PostgreSQL attribution/denial proof and bounded query-cost
+measurement before delivery; no schema/index expansion is needed.
+
+M17 seam pass completed: preauth already has a public method-selection route;
+reuse it with fixed OAuth callback intent and preserve the same flow for keyed
+start retry. Native selected sessions need one additional explicit OAuth
+verified-profile selection, dispatched from stored provenance after the sole
+lookup, never application-side fallback. Shared callback routing must resolve
+native stored state rather than ambient cookie presence or an inbound mode.
+Browser flow/device cookies require Lax for provider GET navigation. The chosen
+CSRF delivery is a secure host-only browser-readable synchronizer cookie bound
+to the newly committed session, using the existing token/digest validation; no
+token in redirect URLs, hidden response-header-only delivery or new token store.
+
+Design alternatives considered once: an HTTP-side session-reader fallback
+would duplicate owner selection and is rejected in favor of extending the
+existing native selector. A post-redirect CSRF mint/retrieval workflow would
+need new state/rotation and is rejected in favor of delivering the original
+committed CSRF token in a distinct, strictly scoped cookie. Parent owns shared
+cookie policy, selector, callback composition and Reference integration.
+
+Implementation lane `signin_start_transport` owns only new
+http/oauth/signin_start.go and http/oauth/signin_start_test.go. It implements a
+bounded standalone start handler against committed OAuth 82309c2/native d495b36
+and existing HTTP/session device/preauth contracts; it does not edit NewFeature,
+wire.go, callbacks, reference, public pins, shared contracts, Git or other
+files. Primary owns its final routing/OpenAPI integration and checks the first
+public boundary. Acceptance: original flow/cookie/remember/device/trusted network,
+service caller, exact keyed header, bounded closed JSON, provider/IP admission,
+no user/session lookup and safe native redirect result. Unsupported variants
+deny. Source/handler tests can proceed concurrently with primary's native
+multi-method session work; heavy Go/service runs wait for the shared slot.
+
+## Active M17 continuation — opt-in native OIDC HTTP consumer
+
+User reactivated the full goal after the delivered 69b36a8 checkpoint. The old
+one-unit pause request was fulfilled; it is not a recurring stop condition.
+This Tier C slice exposes the committed existing-account query/S256 native
+signin through opt-in HTTP and Reference composition, then proves issued-session
+read and CSRF logout through the configured server. Preserve authenticated
+linking. No implicit signup, enrolled-MFA fallback, new provider variant or UI.
+
+Primary owns HTTP/Reference composition and necessary shared session selection.
+Consumed contracts: native OAuth d495b36, native session 4c60c62, MFA 034af7b,
+root contracts 82309c2, integrated Reference 69b36a8. Existing native proof stays
+valid unless an actual input changes; do not restart its qualification.
+
+Bounded parallel source questions before freezing the implementation seam:
+`signin_http_map` reads http/oauth and Reference social composition only, with
+no writable paths; locate exact start/callback/rate/cookie/OpenAPI integration
+points and retained linking behavior. `signin_session_map` reads session/postgres
+and Reference session selection only, with no writable paths; establish how the
+same selected reader/revoke owner can admit password and OAuth without dropping
+factor or credential checks. Both consume the committed revisions above, return
+source-backed boundaries, run no Go/services and perform no Git mutations.
+Primary integration point is the actual configured Reference server journey.
+
+Acceptance: selected start and callback expose canonical routes/metadata only
+when enabled; genuine browser/preauth/state and trusted transport attribution;
+one provider exchange; new commit alone emits secure session/CSRF cookies;
+usable session read/logout; denial, foreign browser/tenant/origin, replay and
+unknown outcomes do not disclose credentials or weaken existing linking.
+Use focused HTTP contract tests while coding, then the existing real PostgreSQL
+consumer extended through HTTP, affected module race/vet, public-pin proof,
+one independent complete-final-diff review and ordinary main delivery. No new
+SQL, migration, tooling or neighboring feature is planned without a concrete
+demonstrated dependency. No implementation worker is assigned a speculative
+upstream contract; source mapping is one bounded pass, not a planning programme.
+
 2026-11-13 final native slice: source commits 82309c2, 034af7b, 4c60c62 and d495b36 are on
 origin/main with exact-source CI success, authenticated public changed bytes
 matching Git, and no permanent replacement directives. Native existing-account
