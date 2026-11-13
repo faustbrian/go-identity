@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence known-empty MFA for the exact native existing-account OAuth signin
+  callback and its original provider-account selection, including final commit
+  checks. Missing or enrolled state cannot become single-factor signin authority.
+  Reads and same-user logout retain the issued session's original generation.
+
 - Fence the original known-empty MFA generation during native explicit-self
   OAuth link initiation, callback preparation and protected account linking.
   Missing, enrolled, corrupt or changed authority denies without initializing
