@@ -102,7 +102,7 @@ func (d *SCIMUserCreationDomain) Apply(ctx context.Context, w Work, p FeatureExe
 	if !finalCheck || !originalProfile || lifecycle != (LifecyclePlan{EventType: "identity.scim.user_created.v1", AfterVersion: 1}) {
 		return fail(invalidSCIMCreation())
 	}
-	kernelAlreadyMutated := w.state.scimUserCreation != nil || w.state.registrationUser != nil || w.state.registrationAccepted || w.state.creation != nil || w.state.profile != nil || w.state.update != nil || w.state.status != nil || w.state.identifier != nil || w.state.anonymousCreation != nil
+	kernelAlreadyMutated := w.state.scimUserUpdate != nil || w.state.scimUserCreation != nil || w.state.registrationUser != nil || w.state.registrationAccepted || w.state.creation != nil || w.state.profile != nil || w.state.update != nil || w.state.status != nil || w.state.identifier != nil || w.state.anonymousCreation != nil
 	if kernelAlreadyMutated || w.state.lifecycle.record != nil {
 		return fail(invalidSCIMCreation())
 	}

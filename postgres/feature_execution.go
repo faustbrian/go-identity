@@ -65,6 +65,13 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if plan.Feature != nil && scimUserUpdateSelected(plan.Feature.Operation) {
+		update, err := scimUserUpdateCommandPlan(command)
+		_, finalCheck := phase.(FeatureCommitContributor)
+		if err != nil || !finalCheck || plan.SubjectType != "scim_user" || plan.SCIMUserUpdate == nil || *plan.SCIMUserUpdate != update {
+			return invalidSCIMUpdate()
+		}
+	}
 	if anonymousUpgradePreparationSelected(plan) {
 		owner, ok := phase.(AnonymousUpgradePreparationContributor)
 		if !ok {
@@ -610,7 +617,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{apiKeyVerification: cloneAPIKeyVerificationPlan(p.APIKeyVerification), invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), passkeyRegistration: clonePasskeyRegistrationPlan(p.PasskeyRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{scimUserUpdate: cloneSCIMUserUpdatePlan(p.SCIMUserUpdate), apiKeyVerification: cloneAPIKeyVerificationPlan(p.APIKeyVerification), invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), passkeyRegistration: clonePasskeyRegistrationPlan(p.PasskeyRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
@@ -820,6 +827,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if p.feature.Operation == scimUserCreationOperation() && w.state.scimUserCreation == nil {
 		return result, w.fail(ctx, invalidSCIMCreation())
+	}
+	if scimUserUpdateSelected(p.feature.Operation) && (p.scimUserUpdate == nil || p.scimUserUpdate.Required != (w.state.scimUserUpdate != nil)) {
+		return result, w.fail(ctx, invalidSCIMUpdate())
 	}
 	if oauthConsentSelected(p.snapshot()) && w.state.oauthConsent == nil || p.feature.Operation == organizationInvitationAcceptOperation() && w.state.invitationMembership == nil {
 		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})

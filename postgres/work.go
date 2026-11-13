@@ -37,6 +37,7 @@ type workState struct {
 	execution                 *domainExecution
 	creation                  *identity.User
 	scimUserCreation          *identity.User
+	scimUserUpdate            *identity.User
 	registrationUser          *identity.User
 	passkeySignupSessionID    string
 	anonymousCreation         *anonymousCreationProgress

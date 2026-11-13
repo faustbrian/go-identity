@@ -52,7 +52,7 @@ func (r *Repository) applyAttributeUpdate(ctx context.Context, w Work, command i
 		return identity.UserProfile{}, err
 	}
 	fail := func(err error) (identity.UserProfile, error) { return identity.UserProfile{}, w.fail(ctx, err) }
-	if w.state.execution == nil || w.state.creation != nil || w.state.profile != nil || w.state.update != nil {
+	if w.state.execution == nil || w.state.creation != nil || w.state.profile != nil || w.state.update != nil || w.state.scimUserUpdate != nil {
 		return fail(invalidWork())
 	}
 	enlisted := false
@@ -86,9 +86,32 @@ func (r *Repository) applyAttributeUpdate(ctx context.Context, w Work, command i
 	if err != nil {
 		return fail(err)
 	}
-	rows, err := w.Query(ctx, profileSelect+" FOR UPDATE OF u", string(spec.Binding.TenantID), string(spec.Binding.UserID))
+	record, err := r.persistAttributeUpdate(ctx, w, spec, registered, attributeUpdateStorage{requireActive: !administrative, writeProfile: !administrative})
 	if err != nil {
 		return identity.UserProfile{}, err
+	}
+	if administrative {
+		user := record.User
+		w.state.update = &user
+	} else {
+		owned := cloneStoredProfile(record.Profile)
+		w.state.profile = &owned
+	}
+	return record.Profile, nil
+}
+
+// Admission remains with each closed caller. This storage path alone owns the
+// locked complete-document decode, omission-preserving merge and user/version CAS.
+type attributeUpdateStorage struct {
+	requireActive bool
+	writeProfile  bool
+}
+
+func (r *Repository) persistAttributeUpdate(ctx context.Context, w Work, spec identity.ProfileUpdateCommand, registered registeredSchema, storage attributeUpdateStorage) (identity.ProfileRecord, error) {
+	fail := func(err error) (identity.ProfileRecord, error) { return identity.ProfileRecord{}, w.fail(ctx, err) }
+	rows, err := w.Query(ctx, profileSelect+" FOR UPDATE OF u", string(spec.Binding.TenantID), string(spec.Binding.UserID))
+	if err != nil {
+		return identity.ProfileRecord{}, err
 	}
 	if !rows.Next() {
 		rows.Close()
@@ -118,7 +141,7 @@ func (r *Repository) applyAttributeUpdate(ctx context.Context, w Work, command i
 	if err != nil {
 		return fail(err)
 	}
-	if !administrative && record.User.Status != identity.StatusActive || record.User.Status == identity.StatusDeleted || record.User.Status == identity.StatusAnonymized {
+	if storage.requireActive && record.User.Status != identity.StatusActive || record.User.Status == identity.StatusDeleted || record.User.Status == identity.StatusAnonymized {
 		return fail(identity.ForbiddenError{})
 	}
 	if record.User.Version != spec.ExpectedVersion {
@@ -144,33 +167,27 @@ func (r *Repository) applyAttributeUpdate(ctx context.Context, w Work, command i
 		return fail(err)
 	}
 	if err := persistCreationSchema(ctx, w, registered); err != nil {
-		return identity.UserProfile{}, err
+		return identity.ProfileRecord{}, err
 	}
 	count, err := w.Exec(ctx, `UPDATE identity.users SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND status=$4`, string(spec.Binding.TenantID), string(spec.Binding.UserID), strconv.FormatUint(spec.ExpectedVersion, 10), string(record.User.Status))
 	if err != nil {
-		return identity.UserProfile{}, err
+		return identity.ProfileRecord{}, err
 	}
 	if count != 1 {
 		return fail(identity.ConflictError{})
 	}
-	if !administrative {
+	if storage.writeProfile {
 		if _, err := w.Exec(ctx, `INSERT INTO identity.user_profiles(tenant_id,user_id,name,image) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,user_id) DO UPDATE SET name=excluded.name,image=excluded.image`, string(spec.Binding.TenantID), string(spec.Binding.UserID), profile.Name, profile.Image); err != nil {
-			return identity.UserProfile{}, err
+			return identity.ProfileRecord{}, err
 		}
 	}
 	if _, err := w.Exec(ctx, `INSERT INTO identity.user_attributes(tenant_id,user_id,schema_id,schema_version,encoding_version,document) VALUES($1,$2,$3,$4,1,$5) ON CONFLICT(tenant_id,user_id) DO UPDATE SET document=excluded.document`, string(spec.Binding.TenantID), string(spec.Binding.UserID), registered.schema.ID, registered.schema.Version, document); err != nil {
-		return identity.UserProfile{}, err
+		return identity.ProfileRecord{}, err
 	}
 	profile.Version++
-	if administrative {
-		user := record.User
-		user.Version++
-		w.state.update = &user
-	} else {
-		owned := cloneStoredProfile(profile)
-		w.state.profile = &owned
-	}
-	return profile, nil
+	user := record.User
+	user.Version++
+	return identity.ProfileRecord{User: user, Profile: profile}, nil
 }
 
 func cloneStoredProfile(p identity.UserProfile) identity.UserProfile {
@@ -195,6 +212,9 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.feature == nil && result.User == owned.User && result.ExpectedVersion == owned.ExpectedVersion && result.Revocation != nil && owned.Revocation != nil && result.Revocation.CascadeID == owned.Revocation.CascadeID && result.Revocation.Generation == owned.Revocation.Generation && result.Revocation.AuthorityVersion == owned.Revocation.AuthorityVersion && result.Revocation.Status == owned.Revocation.Status && slices.Equal(result.Revocation.Owners, owned.Revocation.Owners) && slices.Equal(result.Revocation.ExternalLimitations, owned.Revocation.ExternalLimitations)
 	}
 	if w.state.feature != nil {
+		if scimUserUpdateSelected(w.state.feature.Operation) && (w.state.execution.reservation.plan.scimUserUpdate == nil || w.state.execution.reservation.plan.scimUserUpdate.Required != (w.state.scimUserUpdate != nil)) {
+			return false
+		}
 		if w.state.feature.Operation == scimUserCreationOperation() && w.state.scimUserCreation == nil {
 			return false
 		}

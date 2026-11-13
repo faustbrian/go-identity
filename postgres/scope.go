@@ -59,10 +59,10 @@ func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.Fea
 			}
 			switch key {
 			case "version_policy":
-				if value != uint64(identity.FeatureVersionSnapshotImport) {
+				if value != uint64(identity.FeatureVersionSnapshotImport) && value != uint64(identity.FeatureVersionSequentialOrUnchanged) {
 					return invalid()
 				}
-				feature.VersionPolicy = identity.FeatureVersionSnapshotImport
+				feature.VersionPolicy = identity.FeatureVersionPolicy(value)
 			case "subject_requirement":
 				if value != uint64(identity.FeatureSubjectAnonymousFlow) {
 					return invalid()

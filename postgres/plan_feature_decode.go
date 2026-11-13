@@ -15,6 +15,9 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 }
 
 func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
+	if !proofBase && (binding.OperationID == "identity.scim.user-replace" || binding.OperationID == "identity.scim.user-patch") && binding.SchemaID == binding.OperationID+".native-v1" {
+		return decodeSCIMUserUpdatePlan(binding, fingerprint, encoded)
+	}
 	denialSchema := binding.SchemaID == oauthCallbackDenialOperation().SchemaID || binding.SchemaID == anonymousOAuthCallbackDenialOperation().SchemaID
 	if !proofBase && binding.OperationID == oauthCallbackDenialOperation().OperationID && denialSchema {
 		return decodeOAuthCallbackDenialPlan(binding, fingerprint, encoded)

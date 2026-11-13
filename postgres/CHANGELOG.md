@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Preserve the same positive SCIM projection version for an accepted no-op
+  PATCH, using its unchanged registered operation. Effective kernel updates
+  still require sequential versions; historical scope decoding retains the
+  exact explicit policy. No-op replay does not fabricate a core mutation.
+
+- Add closed same-command SCIM typed user-field updates through the existing
+  registered-schema merge and aggregate-version CAS. Native projection versions
+  remain independent; no-op and projection-only commands do not change the core
+  aggregate. Exact command/participant custody, final admission, atomic rollback
+  and original-version recovery are required. No global status or membership
+  effects are introduced.
+
 - Add protocol-canonical DELETE original-input custody with optional immutable
   retry-key aliases to the same command. The explicit mode requires its own
   namespace and additive alias migration before activation. Existing command

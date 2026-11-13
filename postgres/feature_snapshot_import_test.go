@@ -127,7 +127,7 @@ func TestFeatureSnapshotImportObservedScopeConservesPolicy(t *testing.T) {
 		if err != nil || binding != s.Binding || operation == nil || *operation != s.Operation {
 			t.Fatal("historical command scope lost exact import policy", err)
 		}
-		for _, bad := range []uint64{0, 2, 256, math.MaxUint64} {
+		for _, bad := range []uint64{0, 3, 256, math.MaxUint64} {
 			changed := bytes.Replace(wire, append(cborText("version_policy"), 1), append(cborText("version_policy"), cborUint(bad)...), 1)
 			if _, operation, err := decodeObservedScope(changed); err == nil || operation != nil {
 				t.Fatal("unknown or explicitly default policy accepted as imported history")

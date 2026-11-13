@@ -106,6 +106,9 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	if op.OperationID == "identity.scim.user-create" {
 		return op == scimUserCreationOperation() && d == scimUserCreationDescriptor()
 	}
+	if op.OperationID == "identity.scim.user-replace" || op.OperationID == "identity.scim.user-patch" {
+		return scimUserUpdateSelected(op) && d == scimUserCreationDescriptor()
+	}
 	// The device child owns RFC8628 semantics, while the existing OAuth native
 	// participant owns client, consent and token mutations in the same Work.
 	// Freeze each exact schema/subject mode; no cross-owner family wildcard.

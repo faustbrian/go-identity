@@ -22,6 +22,10 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
+	// SCIMUserUpdate retains only the closed native update's required core CAS
+	// and original core version for participant recovery, not SCIM generation.
+	// Nil preserves all other historical plan encodings.
+	SCIMUserUpdate *SCIMUserUpdatePlan
 	// APIKeyVerification freezes the closed read-only authentication attempt and
 	// its optional same-command permission reduction. Nil preserves existing
 	// non-verification profiles; the native verification schema requires it.
@@ -154,7 +158,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.CapabilityIssuance != nil {
 		return encodeIssuanceWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
 	}
-	if plan.SignupAcceptance || plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CaptchaEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation || plan.OTP != nil {
+	if plan.SCIMUserUpdate != nil || plan.SignupAcceptance || plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CaptchaEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation || plan.OTP != nil {
 		return nil, invalidPlan()
 	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
@@ -230,6 +234,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
+	scimUserUpdate             *SCIMUserUpdatePlan
 	accountLink                *registeredContributor
 	apiKeyVerification         *APIKeyVerificationPlan
 	invitationOrigin           *OrganizationInvitationOriginPlan

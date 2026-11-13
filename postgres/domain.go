@@ -138,6 +138,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	}
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest, CaptchaReplayReservation: p.captchaReplay, SignupAcceptance: p.signupAcceptance}
 	result.APIKeyVerification = cloneAPIKeyVerificationPlan(p.apiKeyVerification)
+	result.SCIMUserUpdate = cloneSCIMUserUpdatePlan(p.scimUserUpdate)
 	result.MagicLinkRequestAcceptance = p.magicLinkRequestAcceptance
 	result.OrganizationInvitationOrigin = cloneOrganizationInvitationOrigin(p.invitationOrigin)
 	result.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.magicLinkRegistration)

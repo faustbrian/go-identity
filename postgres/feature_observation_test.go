@@ -248,9 +248,13 @@ func FuzzObservedCommandScope(f *testing.F) {
 	f.Add(commandSafeFields(s.Binding, &s.Operation))
 	s.Operation.VersionPolicy = identity.FeatureVersionSnapshotImport
 	f.Add(commandSafeFields(s.Binding, &s.Operation))
+	s.Operation.VersionPolicy = identity.FeatureVersionSequentialOrUnchanged
+	f.Add(commandSafeFields(s.Binding, &s.Operation))
 	anon := anonymousFeatureCodecSpec()
 	f.Add(commandSafeFields(anon.Binding, &anon.Operation))
 	anon.Operation.VersionPolicy = identity.FeatureVersionSnapshotImport
+	f.Add(commandSafeFields(anon.Binding, &anon.Operation))
+	anon.Operation.VersionPolicy = identity.FeatureVersionSequentialOrUnchanged
 	f.Add(commandSafeFields(anon.Binding, &anon.Operation))
 	f.Add(commandSafeFields(codecBinding(), nil))
 	f.Add([]byte{0xbf})

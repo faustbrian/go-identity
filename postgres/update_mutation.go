@@ -8,17 +8,23 @@ import (
 )
 
 func (r *Repository) prepareAdministrativeAttributes(spec identity.UpdateUserCommand) (registeredSchema, []byte, error) {
-	registered, ok := r.attributeSchemas[schemaKey{spec.Binding.SchemaID, spec.Binding.SchemaVersion}]
+	return r.prepareAttributeUpdates(schemaKey{spec.Binding.SchemaID, spec.Binding.SchemaVersion}, spec.Binding, spec.Attributes)
+}
+
+// Storage class checks are shared without substituting another operation or
+// actor. The owning service still prepares and authorizes every typed value.
+func (r *Repository) prepareAttributeUpdates(schema schemaKey, binding identity.CommandBinding, attributes []identity.AttributeUpdate) (registeredSchema, []byte, error) {
+	registered, ok := r.attributeSchemas[schema]
 	if !ok {
 		return registeredSchema{}, nil, attributeStorageError()
 	}
-	for _, update := range spec.Attributes {
+	for _, update := range attributes {
 		found := false
 		for _, field := range registered.schema.Fields {
 			if field.Name != update.Name {
 				continue
 			}
-			if field.InputPermission != identity.FieldWrite && field.InputPermission != identity.FieldReadWrite || field.WriteAuthorization == identity.FieldWriteSelf && (spec.Binding.ActorKind != authorization.SubjectUser || string(spec.Binding.ActorID) != string(spec.Binding.UserID)) {
+			if field.InputPermission != identity.FieldWrite && field.InputPermission != identity.FieldReadWrite || field.WriteAuthorization == identity.FieldWriteSelf && (binding.ActorKind != authorization.SubjectUser || string(binding.ActorID) != string(binding.UserID)) {
 				return registeredSchema{}, nil, identity.ForbiddenError{}
 			}
 			found = true
@@ -28,7 +34,7 @@ func (r *Repository) prepareAdministrativeAttributes(spec identity.UpdateUserCom
 			return registeredSchema{}, nil, attributeStorageError()
 		}
 	}
-	encoded, err := encodeAttributeDocument(registered.schema, spec.Attributes)
+	encoded, err := encodeAttributeDocument(registered.schema, attributes)
 	return registered, encoded, err
 }
 

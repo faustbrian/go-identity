@@ -226,6 +226,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		return recoverAccountLink(ctx, recovery)
 	}
 	if err == nil && recovery.state.plan.feature != nil {
+		if scimUserUpdateSelected(recovery.state.plan.feature.Operation) {
+			return recoverSCIMUserUpdate(ctx, recovery)
+		}
 		if recovery.state.plan.feature.Operation == scimUserCreationOperation() {
 			return recoverCreatedUser(ctx, recovery)
 		}

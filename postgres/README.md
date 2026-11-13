@@ -38,6 +38,40 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
+## Typed SCIM kernel updates
+
+`NewSCIMUserUpdateDomain(repository)` borrows that exact enlisted kernel owner
+for `identity.scim.user-replace` and `identity.scim.user-patch`, each with its
+matching `.native-v1` schema, the existing SCIM descriptor and `scim_user` target.
+The native service prepares typed updates with `AttributeProcessor` under its
+actual SCIM action and service actor. Existing input/write-class rules and
+per-field policy remain required; no administrator/user command is substituted.
+
+Freeze `SCIMUserUpdateIntent` using the original feature binding, registered field
+schema, exact core `ExpectedVersion` and prepared updates. Include all five
+`SCIMUserUpdateFields(intent, fieldSchema)` fields in the command and the matching
+`CommandPlan.SCIMUserUpdate` scalars. That existing immutable plan retains only
+whether a core update is required and its original core version for recovery.
+SCIM projection/lifecycle generations are not core user aggregate versions.
+The single immutable PATCH operation selects `FeatureVersionSequentialOrUnchanged`:
+a true no-op preserves its positive projection version and ETag, while an
+effective projection change advances sequentially. Replace remains sequential.
+The existing plan rejects unchanged lifecycle versions when `Required=true`;
+`Required=false` permits either projection-only change or a native-fenced no-op.
+
+During the original Apply invocation, call `domain.Apply` only for nonempty
+updates. Its user and `work.SCIMUserUpdate(participant)` are provisional effects,
+not credentials or durable receipts. Empty/projection-only input binds
+`Required=false`, does not invoke the core CAS and cannot manufacture an effect.
+Native `RequireActiveUserStatus` plus current connection/security admission and
+the exact final check remain mandatory in both branches. Omitted kernel fields
+are preserved; an explicit typed empty string clears a mapped optional value.
+This seam does not change status, credentials, membership or global authority.
+
+Core user/attribute CAS and native/audit/lifecycle effects share the existing Work.
+Recovery uses only the original core version as negative kernel evidence; a
+changed or missing core aggregate stays unknown, never a reconstructed success.
+
 ## Interrupted native public-client registration
 
 The closed `identity.oauth-server.dynamic-register.native-public-v1` preparation
