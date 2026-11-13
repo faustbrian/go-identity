@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add protocol-canonical DELETE original-input custody with optional immutable
+  retry-key aliases to the same command. The explicit mode requires its own
+  namespace and additive alias migration before activation. Existing command
+  execution/recovery remains authoritative; legacy request-key APIs and
+  installed migration history are unchanged.
+
 - Add a closed SCIM user-creation domain seam that inserts kernel-owned users
   and attributes inside the native projection's existing command transaction.
   Exact original-command/input/participant custody and a final-check owner are

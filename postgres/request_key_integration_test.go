@@ -631,6 +631,9 @@ func TestRequestKeyIntegration(t *testing.T) {
 			testExpiredMappedOrigin(t, ctx, prepared, owner, input, wire, spec.Binding, intent)
 		})
 	})
+	t.Run("canonical DELETE custody", func(t *testing.T) {
+		testCanonicalRequests(t, ctx, db, pool, conf, policy, requestKeys)
+	})
 }
 
 func requestKeyCaller(s RequestKeyScope) authorization.DecisionContext {

@@ -102,6 +102,9 @@ type RequestKeyAdmission struct {
 // and zero admission, never execution permission. Retry the same key/intent.
 // No provider callbacks, goroutines or command journal/domain writes occur.
 func (c *Coordinator) ResolveRequestKey(ctx context.Context, scope RequestKeyScope, key identity.IdempotencyKey, intent identity.RequestIntent, caller authorization.DecisionContext) (RequestKeyAdmission, error) {
+	if c != nil && c.canonicalRequests {
+		return RequestKeyAdmission{}, invalidRequestKey()
+	}
 	return c.resolveRequestKey(ctx, scope, key, intent, caller, nil)
 }
 
@@ -110,9 +113,19 @@ func (c *Coordinator) resolveRequestKey(ctx context.Context, scope RequestKeySco
 		return RequestKeyAdmission{}, invalidRequestKey()
 	}
 	lookupKey := c.requestKeys.lookupKey()
-	lookup, err := key.Digest(lookupKey)
-	if err != nil {
+	var lookup [32]byte
+	var err error
+	canonical := preparation != nil && preparation.canonicalLookup != nil
+	if c.canonicalRequests != canonical || canonical && scope.Method != "DELETE" {
 		return RequestKeyAdmission{}, invalidRequestKey()
+	}
+	if canonical {
+		lookup = *preparation.canonicalLookup
+	} else {
+		lookup, err = key.Digest(lookupKey)
+		if err != nil {
+			return RequestKeyAdmission{}, invalidRequestKey()
+		}
 	}
 	fields, valid := intent.Fields()
 	if !valid {
@@ -146,7 +159,7 @@ func (c *Coordinator) resolveRequestKey(ctx context.Context, scope RequestKeySco
 		return RequestKeyAdmission{}, listFailure(w, err)
 	}
 	defer rollbackList(tx, c.maximumDuration)
-	namespace := requestNamespaceIdentity(c.requestKeys.Namespace, lookupKey)
+	namespace := c.requestNamespaceIdentity()
 	if _, err := tx.Exec(w, `INSERT INTO identity.request_key_namespaces(namespace,key_identity) VALUES($1,$2) ON CONFLICT(namespace) DO NOTHING`, c.requestKeys.Namespace, namespace[:]); err != nil {
 		return RequestKeyAdmission{}, listFailure(w, err)
 	}
@@ -156,6 +169,13 @@ func (c *Coordinator) resolveRequestKey(ctx context.Context, scope RequestKeySco
 	}
 	if !hmac.Equal(installed, namespace[:]) {
 		return RequestKeyAdmission{}, identity.ConflictError{}
+	}
+	if canonical && preparation.canonicalAlias != nil {
+		// An established alias conflict takes precedence over preparing another
+		// target. Final attachment still arbitrates aliases created concurrently.
+		if err := c.checkCanonicalAlias(w, tx, scope, *preparation.canonicalAlias, lookup); err != nil {
+			return RequestKeyAdmission{}, err
+		}
 	}
 	args := []any{c.requestKeys.Namespace, string(scope.TenantID), string(scope.ActorID), string(scope.ActorKind), scope.Method, scope.RouteID, lookup[:]}
 	read := func() (RequestKeyAdmission, []byte, []byte, error) {
@@ -254,6 +274,11 @@ func (c *Coordinator) resolveRequestKey(ctx context.Context, scope RequestKeySco
 			return RequestKeyAdmission{}, identity.ConflictError{}
 		}
 		preparation.binding = c.requestPreparationBinding(scope, admission, preparation.feature, expected)
+	}
+	if canonical && preparation.canonicalAlias != nil {
+		if err := c.attachCanonicalAlias(w, tx, scope, *preparation.canonicalAlias, lookup); err != nil {
+			return RequestKeyAdmission{}, err
+		}
 	}
 	if err := tx.Commit(w); err != nil {
 		return RequestKeyAdmission{}, identity.UnknownCommitError{CommandID: admission.CommandID}

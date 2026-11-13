@@ -23,6 +23,10 @@ import (
 // Returned bytes are caller-owned and must be cleared after use. Pool/inputs
 // remain borrowed; concurrent calls honor cancellation and MaximumDuration.
 func (c *Coordinator) ReadPreparedRequestKey(ctx context.Context, scope RequestKeyScope, key identity.IdempotencyKey, intent identity.RequestIntent, caller authorization.DecisionContext, feature FeatureRegistration, owner RequestKeyPreparationContributor) (binding RequestKeyPreparationBinding, wire []byte, found bool, err error) {
+	return c.readPreparedRequestKey(ctx, scope, key, intent, caller, feature, owner, nil)
+}
+
+func (c *Coordinator) readPreparedRequestKey(ctx context.Context, scope RequestKeyScope, key identity.IdempotencyKey, intent identity.RequestIntent, caller authorization.DecisionContext, feature FeatureRegistration, owner RequestKeyPreparationContributor, canonicalLookup *[32]byte) (binding RequestKeyPreparationBinding, wire []byte, found bool, err error) {
 	defer func() {
 		if recover() != nil {
 			err = identity.UnavailableError{}
@@ -41,9 +45,17 @@ func (c *Coordinator) ReadPreparedRequestKey(ctx context.Context, scope RequestK
 	}
 	lookupKey := c.requestKeys.lookupKey()
 	defer clear(lookupKey[:])
-	lookup, err := key.Digest(lookupKey)
-	if err != nil {
+	if c.canonicalRequests != (canonicalLookup != nil) || canonicalLookup != nil && scope.Method != "DELETE" {
 		return binding, nil, false, invalidRequestKey()
+	}
+	var lookup [32]byte
+	if canonicalLookup != nil {
+		lookup = *canonicalLookup
+	} else {
+		lookup, err = key.Digest(lookupKey)
+		if err != nil {
+			return binding, nil, false, invalidRequestKey()
+		}
 	}
 	fields, valid := intent.Fields()
 	if !valid {
@@ -89,7 +101,7 @@ WHERE r.namespace=$1 AND r.tenant_id=$2 AND r.actor_id=$3 AND r.actor_kind=$4 AN
 		if err != nil {
 			return binding, nil, false, readFailure(w, err)
 		}
-		expected := requestNamespaceIdentity(c.requestKeys.Namespace, lookupKey)
+		expected := c.requestNamespaceIdentity()
 		if !hmac.Equal(namespace, expected[:]) {
 			return binding, nil, false, identity.ConflictError{}
 		}
@@ -109,7 +121,7 @@ WHERE r.namespace=$1 AND r.tenant_id=$2 AND r.actor_id=$3 AND r.actor_kind=$4 AN
 	if retired || claimTenant != nil && (*claimTenant != string(scope.TenantID) || claimPurpose == nil || *claimPurpose != scope.RouteID) {
 		return binding, wire, true, identity.ForbiddenError{}
 	}
-	namespaceIdentity := requestNamespaceIdentity(c.requestKeys.Namespace, lookupKey)
+	namespaceIdentity := c.requestNamespaceIdentity()
 	preparationIdentity := requestPreparationIdentity(feature)
 	if !hmac.Equal(namespace, namespaceIdentity[:]) || !hmac.Equal(preparation, preparationIdentity[:]) {
 		return binding, wire, true, identity.ConflictError{}

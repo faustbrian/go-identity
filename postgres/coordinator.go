@@ -69,6 +69,7 @@ type Coordinator struct {
 	commandRead                    func(context.Context, identity.CommandID) (commandObservation, error)
 	finalAuthentication            *FinalAuthenticationConfig
 	requestKeys                    *RequestKeyConfig
+	canonicalRequests              bool
 	requestKeyBegin                func(context.Context) (pgx.Tx, error)
 	preparationCommit              func(context.Context, pgx.Tx) error
 }

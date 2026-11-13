@@ -59,6 +59,8 @@ type requestKeyPreparation struct {
 	candidate                                    RequestKeyAdmission
 	ciphertext, storedIdentity, storedCiphertext []byte
 	binding                                      RequestKeyPreparationBinding
+	canonicalLookup                              *[32]byte
+	canonicalAlias                               *[32]byte
 }
 
 // ResolvePreparedRequestKey retains original native code-free ciphertext in

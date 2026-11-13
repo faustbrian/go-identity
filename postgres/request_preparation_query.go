@@ -18,9 +18,10 @@ import (
 // immutable request-key mapping. It does not need a password, initiating key,
 // generated output or committed command. The exact registered input owner and
 // current CommandQueryPolicy must admit the request. Namespace/key/feature and
-// original actor/tenant/POST route provenance must match; retained fingerprint
-// keys remain required. An existing claim must match full query scope and its
-// journal. Retired, foreign or corrupt claims fail closed. Pending preparation
+// original actor/tenant/route and configured POST or canonical DELETE method
+// must match; retained fingerprint keys remain required. Existing claims must
+// match full query scope and journal. Retired, foreign or corrupt claims fail
+// closed. Pending preparation
 // may precede the final command plan; reading input does not approve that plan.
 //
 // A mapping may precede its journal. In that case actor/tenant/route identify the
@@ -44,6 +45,9 @@ func (c *Coordinator) QueryRequestPreparation(ctx context.Context, q identity.Re
 func (c *Coordinator) queryRequestPreparation(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, feature FeatureRegistration, owner RequestKeyPreparationContributor, allowExpiry bool) (RequestKeyPreparationBinding, []byte, error) {
 	zero := RequestKeyPreparationBinding{}
 	scope := RequestKeyScope{TenantID: q.TenantID, ActorID: q.ActorID, ActorKind: q.ActorKind, Method: "POST", RouteID: q.OperationID}
+	if c != nil && c.canonicalRequests {
+		scope.Method = "DELETE"
+	}
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || c.commandRead == nil || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || c.queryPolicy == nil || !validCommandQueryPolicy(*c.queryPolicy) || c.maximumDuration <= 0 || c.maximumDuration > time.Minute || !validRequestKeyScope(scope) || c.validateRequestPreparation(scope, feature, owner) != nil {
 		return zero, nil, invalidPreparation()
 	}
@@ -85,6 +89,9 @@ func (c *Coordinator) readRequestPreparation(ctx context.Context, q identity.Rec
 func (c *Coordinator) readRequestPreparationMode(ctx context.Context, q identity.RecoveryQuery, feature FeatureRegistration, observed commandObservation, missing, allowExpiry bool) (RequestKeyPreparationBinding, []byte, error) {
 	zero := RequestKeyPreparationBinding{}
 	scope := RequestKeyScope{TenantID: q.TenantID, ActorID: q.ActorID, ActorKind: q.ActorKind, Method: "POST", RouteID: q.OperationID}
+	if c != nil && c.canonicalRequests {
+		scope.Method = "DELETE"
+	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.CommandID))
 	var safe, digest, identityDigest, namespace, input []byte
 	var keyVersion int64
@@ -121,7 +128,7 @@ AND (($7::boolean AND `+missingClaimSQL+`) OR (NOT $7 AND c.command_id IS NOT NU
 		}
 	}
 	expectedIdentity := requestPreparationIdentity(feature)
-	expectedNamespace := requestNamespaceIdentity(c.requestKeys.Namespace, c.requestKeys.lookupKey())
+	expectedNamespace := c.requestNamespaceIdentity()
 	if method != scope.Method || keyVersion < 1 || keyVersion > math.MaxUint32 || len(digest) != 32 || len(input) == 0 || !hmac.Equal(identityDigest, expectedIdentity[:]) || !hmac.Equal(namespace, expectedNamespace[:]) {
 		return zero, nil, identity.UnavailableError{}
 	}

@@ -1454,6 +1454,30 @@ input without treating it as current authority, and verify bearer possession
 separately. Unknown acknowledgement returns no usable input. This kernel seam
 does not itself implement the public OTP Send service.
 
+Protocol-canonical DELETE preparation uses
+`NewCoordinatorWithCanonicalRequestKeys` with its own trusted request namespace.
+Append `CanonicalRequestMigrationSource{Base, Version}` after the existing
+request-key/input migrations **before** activating this mode. This additive
+schema creates only immutable aliases to existing request mappings; old rows
+and migration bytes are unchanged. There is no backfill or destructive down
+migration. Reverting the consumer disables the mode while retaining original
+custody; the foreign-key lock wait is limited to five seconds.
+
+Construct `NewCanonicalRequestKey` from validated stable protocol bytes, not
+credentials or an optional HTTP retry header. For SCIM DELETE the selector
+includes connection, route, target and If-Match. Supply mutable configuration
+and complete original intent separately. `ResolvePreparedCanonicalRequest`
+retains the original native ciphertext and random command before effects;
+an optional `*identity.IdempotencyKey` attaches to that same command in the
+acknowledgement transaction. A key bound to another selector conflicts without
+retaining an orphan candidate. `ReadPreparedCanonicalRequest` never allocates
+or attaches a key. Neither API proves an outcome: recover through the existing
+command journal. Canonical mode supports DELETE only and retains that method
+through original-input queries/recovery; legacy POST behavior is unchanged.
+Namespace-mode identity rejects mixing ordinary key allocation and canonical
+admission in the same namespace. Keep the same lookup key and retain historical
+fingerprint keys for original retries.
+
 Compose `RequestKeyMigrationSource{Base, Version}` after kernel history and use
 `NewCoordinatorWithRequestKeys` with a separate `RequestKeyConfig`. Existing
 `CoordinatorConfig` and `NewCoordinator` remain unchanged; the ordinary
