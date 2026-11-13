@@ -33,7 +33,7 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 			return identity.InvalidInputError{Field: "command_terminal"}
 		}
 	}
-	body, e := encodeJournalResult(q, result)
+	body, e := encodeJournalResultFailure(q, result, r.failureCode, class)
 	if e != nil {
 		return e
 	}

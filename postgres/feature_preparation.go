@@ -579,7 +579,7 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 		if r.journal.result != nil {
 			result = *r.journal.result
 		}
-		return r, result, nil
+		return r, result, featureFailureError(r.journal.failureCode)
 	}
 	if r.generate {
 		if err := c.admitFeaturePreparation(ctx, tx, original, q, p, phase, r.journal, owner); err != nil {

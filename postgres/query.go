@@ -289,7 +289,7 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	if observed.resultVersion == nil || *observed.resultVersion != 1 || observed.class == nil || (*observed.state != "committed" && *observed.state != "aborted") {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
-	result, err := decodeJournalResult(claimRequest{safeFields: observed.scope, feature: feature}, observed.result)
+	result, failureCode, err := decodeJournalResultFailure(claimRequest{safeFields: observed.scope, feature: feature}, observed.result, *observed.class)
 	if err != nil || (*observed.state == "committed") != (result.Outcome == identity.CommitOutcomeCommitted) {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
@@ -313,6 +313,9 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	case "denied":
 		return result, identity.ForbiddenError{}
 	case "conflict":
+		if failureCode != 0 {
+			return result, featureFailureError(failureCode)
+		}
 		return result, identity.ConflictError{CommandID: q.CommandID}
 	case "cancelled":
 		return result, identity.CancelledError{}

@@ -391,7 +391,7 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 		if journal.result != nil {
 			result = *journal.result
 		}
-		return c.failedReservation(tx, binding, result, nil)
+		return c.failedReservation(tx, binding, result, featureFailureError(journal.failureCode))
 	}
 	if authentication != nil {
 		var now time.Time

@@ -40,6 +40,30 @@ releasing an expired pending command.
 
 ## Typed SCIM kernel updates
 
+### Original SCIM failure replay
+
+An exact SCIM create/replace/PATCH/delete participant may return
+`work.DenyFeature(ctx, participant, originalCommand, code)` during its active
+Apply invocation. Select only `FeatureFailureUniqueness`,
+`FeatureFailurePrecondition` or `FeatureFailureConflict`, and close query rows
+first. This poisons Work with ordinary `identity.ConflictError`; it is not a
+receipt. Only an existing ordinary core-CAS Conflict may be refined, never a
+dependency, authorization or cancellation failure.
+
+After known rollback plus the existing fenced failure-audit/terminal commit,
+the caller receives `TypedFeatureFailureError`. Its `Code` retains the original
+classification on terminal reserve/prepared replay, query and recovery; its
+`Unwrap` preserves `identity.ConflictError` compatibility. Native HTTP adapters
+must check this type before a blanket Conflict translation and retain their
+existing unknown-commit/outcome guard. Returned/caller-created typed errors
+cannot mint journal detail, and uncertain rollback/commit discloses no code.
+
+The optional finite code lives only in the existing protected result bytes:
+no public root receipt field, new table, migration, journal or query API.
+Zero-code records retain exact legacy bytes and replay behavior. Roll out these
+readers to every journal consumer before enabling detailed writers; older
+strict readers fail closed rather than silently dropping the new code.
+
 `NewSCIMUserUpdateDomain(repository)` borrows that exact enlisted kernel owner
 for `identity.scim.user-replace` and `identity.scim.user-patch`, each with its
 matching `.native-v1` schema, the existing SCIM descriptor and `scim_user` target.

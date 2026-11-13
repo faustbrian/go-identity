@@ -498,6 +498,12 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	execution := w.state.execution
 	r := execution.reservation
 	class, reason, outcome, safeCause := abortFeatureClassification(cause, w.state.feature)
+	// Only the active invocation guard can mint this private code. Capture it
+	// before invalidating Work; caller-provided typed errors alone grant none.
+	failureCode := w.state.featureFailure
+	if class != "conflict" {
+		failureCode = 0
+	}
 	var records []audit.Record
 	// Previously validated immutable staging survives a poisoned/cancelled
 	// domain handle; detached terminalization must revalidate it under its fence.
@@ -611,7 +617,9 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 		return fail(identity.UnavailableError{})
 	}
 	result := featureOutcome(w.state.binding, r.request.feature, identity.CommitOutcomeNotCommitted, 0)
-	if err := terminalizeJournal(terminal.state.ctx, tx, r.request, r.journal, r.owner, result, class); err != nil {
+	journal := r.journal
+	journal.failureCode = failureCode
+	if err := terminalizeJournal(terminal.state.ctx, tx, r.request, journal, r.owner, result, class); err != nil {
 		return fail(err)
 	}
 	deadline, _ := terminal.state.ctx.Deadline()
@@ -621,6 +629,9 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	closed = true
 	if err := tx.Commit(commit); err != nil {
 		return unknown, readFailure(commit, err)
+	}
+	if failureCode != 0 {
+		return result, featureFailureError(failureCode)
 	}
 	return result, safeCause
 }

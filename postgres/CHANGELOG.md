@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Retain finite SCIM uniqueness, version-precondition and generic-conflict
+  denials in the existing terminal journal result after known rollback and a
+  fenced failure-audit commit. Original reserve/prepared replay, query and
+  recovery preserve the classification without reevaluating today's resource.
+  Public root receipt structs and zero-code journal bytes are unchanged. Deploy
+  these readers to every journal consumer before enabling detailed writers;
+  older strict readers deliberately reject detailed records.
+
 - Preserve the same positive SCIM projection version for an accepted no-op
   PATCH, using its unchanged registered operation. Effective kernel updates
   still require sequential versions; historical scope decoding retains the

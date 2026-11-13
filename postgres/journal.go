@@ -26,6 +26,7 @@ type journalReservation struct {
 	generation, previousGeneration, attempt uint64
 	retryAfter                              time.Duration
 	result                                  *identity.CommandResult
+	failureCode                             FeatureFailureCode
 }
 
 // reserveJournal runs only after the global claim has been locked and matched.
@@ -49,8 +50,9 @@ SELECT $1,$2,$3,'pending',1,1,$4,now+($5::bigint*interval '1 microsecond'),now,n
 	var until *time.Time
 	var resultVersion *int32
 	var result []byte
-	e := tx.QueryRow(ctx, `SELECT state,generation::text,attempt::text,lease_until,result_version,result FROM identity.commands
-WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose).Scan(&state, &generation, &attempt, &until, &resultVersion, &result)
+	var class *string
+	e := tx.QueryRow(ctx, `SELECT state,generation::text,attempt::text,lease_until,result_version,result,terminal_class FROM identity.commands
+WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose).Scan(&state, &generation, &attempt, &until, &resultVersion, &result, &class)
 	if e != nil {
 		return journalReservation{}, readFailure(ctx, e)
 	}
@@ -66,16 +68,16 @@ WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.te
 		return journalReservation{}, identity.UnavailableError{}
 	}
 	if *state == "committed" || *state == "aborted" {
-		if resultVersion == nil || *resultVersion != 1 {
+		if resultVersion == nil || *resultVersion != 1 || class == nil {
 			return journalReservation{}, identity.UnavailableError{}
 		}
-		r, err := decodeJournalResult(q, result)
+		r, code, err := decodeJournalResultFailure(q, result, *class)
 		if err != nil || (*state == "committed") != (r.Outcome == identity.CommitOutcomeCommitted) {
 			return journalReservation{}, identity.UnavailableError{}
 		}
-		return journalReservation{disposition: journalTerminal, generation: gen, attempt: tries, result: &r}, nil
+		return journalReservation{disposition: journalTerminal, generation: gen, attempt: tries, result: &r, failureCode: code}, nil
 	}
-	if *state != "pending" || resultVersion != nil || result != nil {
+	if *state != "pending" || resultVersion != nil || result != nil || class != nil {
 		return journalReservation{}, identity.UnavailableError{}
 	}
 	// Read after acquiring the row lock: lock wait must not extend old authority.

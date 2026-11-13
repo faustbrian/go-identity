@@ -19,6 +19,9 @@ type registrationCommitFault struct {
 	// Other protected workflows select their actual owned INSERT. Empty keeps
 	// the established registration target; never arm on an earlier reservation.
 	marker []byte
+	// Empty retains COMMIT. Bounded recovery tests may select actual ROLLBACK
+	// acknowledgement loss without replacing transaction operations or SQL.
+	tag []byte
 }
 
 func (f *registrationCommitFault) dial(ctx context.Context, network, address string) (net.Conn, error) {
@@ -69,7 +72,11 @@ func (c *registrationFaultConn) Read(p []byte) (int, error) {
 		if _, err := io.ReadFull(c.Conn, message[5:]); err != nil {
 			return 0, err
 		}
-		if !c.fault.before && c.mutation.Load() && header[0] == 'C' && bytes.Equal(message[5:], []byte("COMMIT\x00")) && c.fault.hit.CompareAndSwap(false, true) {
+		tag := c.fault.tag
+		if len(tag) == 0 {
+			tag = []byte("COMMIT\x00")
+		}
+		if !c.fault.before && c.mutation.Load() && header[0] == 'C' && bytes.Equal(message[5:], tag) && c.fault.hit.CompareAndSwap(false, true) {
 			_ = c.Conn.Close()
 			return 0, io.ErrUnexpectedEOF
 		}

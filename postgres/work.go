@@ -73,6 +73,7 @@ type workState struct {
 	featureCommitCommand      *identity.Command
 	featureInvocation         FeatureExecutionContributor
 	featureApplying           bool
+	featureFailure            FeatureFailureCode
 	featureApplyCommand       *identity.Command
 	featurePreparationCommand *identity.Command
 	featurePreparationPlan    *admittedKernelPlan
@@ -303,6 +304,7 @@ func invalidateWork(w Work) {
 		return
 	}
 	w.state.closed = true
+	w.state.featureFailure = 0
 	if w.state.issuance != nil {
 		clear(w.state.issuance.grants)
 		w.state.issuance.invocation = nil

@@ -14,8 +14,22 @@ import (
 const maxJournalResultBytes = 8 << 20
 
 func encodeJournalResult(q claimRequest, r identity.CommandResult) ([]byte, error) {
+	return encodeJournalResultFailure(q, r, 0, "")
+}
+
+// Anonymous embedding conserves exact legacy bytes when the finite code is
+// omitted, without adding fields to either public root receipt struct.
+type journalResultWire struct {
+	identity.CommandResult
+	FeatureFailure FeatureFailureCode `json:",omitempty"`
+}
+
+func encodeJournalResultFailure(q claimRequest, r identity.CommandResult, code FeatureFailureCode, class string) ([]byte, error) {
 	if r.Validate() != nil || (r.Outcome != identity.CommitOutcomeCommitted && r.Outcome != identity.CommitOutcomeNotCommitted) || !matchesResultFeature(q, r) || !matchesPrivacyResultIntent(q, r) || !bytes.Equal(q.safeFields, commandSafeFields(r.Binding, q.feature)) {
 		return nil, identity.InvalidInputError{Field: "command_result"}
+	}
+	if !validFeatureFailureResult(q, r, code, class) {
+		return nil, identity.InvalidInputError{Field: "feature_failure"}
 	}
 	if r.Profile != nil {
 		profile := *r.Profile
@@ -33,7 +47,7 @@ func encodeJournalResult(q claimRequest, r identity.CommandResult) ([]byte, erro
 		}
 		r.Profile = &profile
 	}
-	b, e := json.Marshal(r)
+	b, e := json.Marshal(journalResultWire{CommandResult: r, FeatureFailure: code})
 	if e != nil || len(b) > maxJournalResultBytes {
 		return nil, identity.UnavailableError{}
 	}
@@ -73,20 +87,28 @@ func matchesPrivacyResultIntent(q claimRequest, r identity.CommandResult) bool {
 }
 
 func decodeJournalResult(q claimRequest, b []byte) (identity.CommandResult, error) {
-	if len(b) == 0 || len(b) > maxJournalResultBytes {
-		return identity.CommandResult{}, identity.UnavailableError{}
-	}
-	var r identity.CommandResult
-	decoder := json.NewDecoder(bytes.NewReader(b))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&r) != nil {
-		return identity.CommandResult{}, identity.UnavailableError{}
-	}
-	canonical, e := encodeJournalResult(q, r)
-	// Require the owned representation exactly: duplicate keys, trailing values,
-	// unknown fields, lossy JSON numbers and alternate spellings fail closed.
-	if e != nil || !bytes.Equal(b, canonical) {
+	r, code, err := decodeJournalResultFailure(q, b, "")
+	if err != nil || code != 0 {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
 	return r, nil
+}
+
+func decodeJournalResultFailure(q claimRequest, b []byte, class string) (identity.CommandResult, FeatureFailureCode, error) {
+	if len(b) == 0 || len(b) > maxJournalResultBytes {
+		return identity.CommandResult{}, 0, identity.UnavailableError{}
+	}
+	var wire journalResultWire
+	decoder := json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&wire) != nil {
+		return identity.CommandResult{}, 0, identity.UnavailableError{}
+	}
+	canonical, e := encodeJournalResultFailure(q, wire.CommandResult, wire.FeatureFailure, class)
+	// Require the owned representation exactly: duplicate keys, trailing values,
+	// unknown fields, lossy JSON numbers and alternate spellings fail closed.
+	if e != nil || !bytes.Equal(b, canonical) {
+		return identity.CommandResult{}, 0, identity.UnavailableError{}
+	}
+	return wire.CommandResult, wire.FeatureFailure, nil
 }
