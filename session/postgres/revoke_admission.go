@@ -20,6 +20,7 @@ type revokeRecordAuthority struct {
 	passkey      bool
 	mfaPasskey   bool
 	organization bool
+	oauth        bool
 }
 
 func copySingleFactorAdmission(c SingleFactorSessionAdmissionConfig) SingleFactorSessionAdmissionConfig {
@@ -105,6 +106,13 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 			return deny()
 		}
 		directory, credential, policy, err := sessionAdmissionBindings(*profile, record, b, s.SessionID, s.Version)
+		if profile.AuthenticationMethod == "oauth" {
+			directory, credential, policy, err = oauthSessionAdmissionBindings(*profile, record, b)
+			if err != nil {
+				return deny()
+			}
+			return revokeRecordAuthority{directory: directory, credential: &credential, policy: policy, oauth: true}, nil
+		}
 		if err != nil {
 			return deny()
 		}
@@ -203,6 +211,15 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	}
 	if err := w.RequireActiveUserAuthorization(ctx, owner, a.policy); err != nil {
 		return err
+	}
+	if a.oauth {
+		if a.credential == nil {
+			return identity.ForbiddenError{}
+		}
+		if err := w.RequireLinkedProviderCredential(ctx, owner, *a.credential); err != nil {
+			return err
+		}
+		return mfapg.RequireOAuthSessionFactors(ctx, w, owner, record)
 	}
 	if a.passkey {
 		return r.revokePasskey.authority.RequirePasskeySession(ctx, w, owner, r.revokePasskey.profile.RPNamespace, record)

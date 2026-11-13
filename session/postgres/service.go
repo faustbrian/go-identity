@@ -227,6 +227,9 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	}
 	binding := identity.CommandBinding{TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser}
 	directory, credential, policy, err := sessionAdmissionBindings(r.profile, stored.Session, binding, spec.SessionID, spec.Version)
+	if r.profile.AuthenticationMethod == "oauth" {
+		directory, credential, policy, err = oauthSessionAdmissionBindings(r.profile, stored.Session, binding)
+	}
 	if r.mfaPassword {
 		directory, credential, policy, err = passwordMFASessionAdmission(r.profile, stored.Session, binding, spec.SessionID, spec.Version)
 	}
@@ -241,6 +244,14 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	}
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnauthenticated
+	}
+	if r.profile.AuthenticationMethod == "oauth" {
+		if err := r.domain.CheckLinkedProviderCredential(bounded, credential); err != nil {
+			return session.SessionObservation{}, observationError(err)
+		}
+		if err := mfapg.ReadOAuthSessionFactors(bounded, r.native.pool, stored.Session, r.native.maximumDuration); err != nil {
+			return session.SessionObservation{}, observationError(err)
+		}
 	}
 	currentDirectory, err := r.domain.GetDirectoryAuthority(bounded, directory.Query)
 	if err != nil {

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Stage provider-session, family, original-browser and retained issuance effects
+  in the native OAuth callback's existing transaction after real callback-state
+  consumption. Current provider-account, policy and known-empty MFA remain fenced.
+  Extend the selected issuance purpose with separate forward expansion and
+  validation migrations before enabling native signin; preserve populated rows.
+
+- Add exact prospective OAuth-signin session mapping, retaining the original
+  provider credential, known-empty factor epoch, anonymous browser scope,
+  Remember policy and CSRF commitment. Other authentication/custody profiles
+  remain disjoint. Mapping alone does not supply native provider validation,
+  atomic callback/session execution or a usable social-login backend.
+
 - Add explicit single-factor password organization authority for selected native
   session reads and bearer revocation. Preserve every original primary owner
   and the earliest non-renewable evidence deadline; legacy readers still deny
