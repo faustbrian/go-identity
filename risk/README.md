@@ -926,6 +926,14 @@ requires actor/resource/network-bound counters in the owning transaction; clean
 provider facts alone are not consent or issuance authority. Native entries may
 fill an omitted matrix classification, never override an explicit pinned class.
 
+Disabled static-OIDC provider registration
+(`identity.sso.provider.register-oidc`) uses that same Privileged profile.
+Current required provider signals and tenant/actor/provider/network-bound
+counter reservation remain mandatory. This selects no organization authority,
+domain proof, credentials, enablement or login capability. Other provider
+registration protocols, administrative reads and aliases keep their existing
+closed classifications.
+
 Digest-only legacy API-key import (`identity.apikey.import`) uses the existing
 CredentialMutation reservation profile, with tenant, current user, original
 session and canonical network counters. Current required provider signals
