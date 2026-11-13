@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"session/valkey","directory":".","name":"sessionvalkey","import_path":"github.com/faustbrian/go-identity/session/valkey","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"oauth/providers","directory":".","name":"providers","import_path":"github.com/faustbrian/go-identity/oauth/providers","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"http/oauth","directory":".","name":"oauthhttp","import_path":"github.com/faustbrian/go-identity/http/oauth","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"oauth/postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/oauth/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},

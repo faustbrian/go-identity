@@ -50,5 +50,6 @@ use (
 	./risk/valkey
 	./session
 	./session/postgres
+	./session/valkey
 	./username
 )
