@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in authoritative modern token buckets for user/organization keys using
+  PostgreSQL-time continuous exact fractional refill in the existing verifier
+  Work. Install the independent additive quota migration before finite selection;
+  existing migration bytes and unlimited/legacy behavior remain unchanged.
+  Exact attempt replay/reconciliation cannot charge, refill or renew authority;
+  lost commit acknowledgements return typed possible-debit results with no
+  principal. Required-effect rollback also rolls back the debit.
+
 - Support keyed name and non-expanding permission updates for current self or
   explicitly selected organization owners, preserving modern/legacy credential
   identity, lineage and expiry. Name-only changes do not advance security epochs;

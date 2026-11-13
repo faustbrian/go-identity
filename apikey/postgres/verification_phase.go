@@ -421,6 +421,13 @@ func (p *verificationPhase) ApplyAPIKeyVerification(ctx context.Context, w kerne
 			for _, required := range p.request.RequiredPermissions {
 				outcome.Authenticated = outcome.Authenticated && slices.Contains(grant, required)
 			}
+			if outcome.Authenticated && p.service.config().Configuration.Spec().Quota == apikey.QuotaTokenBucket {
+				effect.Quota, effect.Debited, err = p.debitQuota(ctx, w, record)
+				if err != nil {
+					return zero(err)
+				}
+				outcome.Authenticated = effect.Debited
+			}
 			effect.Grant = slices.Clone(grant)
 		}
 		p.resultRecord = &record

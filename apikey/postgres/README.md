@@ -1,11 +1,74 @@
 # Native PostgreSQL API keys
 
 `github.com/faustbrian/go-identity/apikey/postgres` implements the selected
-human-owned and explicitly selected organization-owned, unlimited-quota modern
-and legacy API-key workflows. It uses the actual
+human-owned and explicitly selected organization-owned modern and legacy
+API-key workflows. Modern quotas are unlimited by default or explicitly finite;
+legacy quotas remain unlimited. It uses the actual
 identity coordinator, PostgreSQL authority, password bearer sessions,
 authorization, risk counters, audit and transactional outbox owners. It does
 not issue browser sessions or treat the creator as the API key's human actor.
+
+## Optional authoritative modern quota
+
+Before selecting `QuotaTokenBucket`, apply `QuotaMigrationSource{Version: ...}`
+with a deployment-owned unused version through the migrations runner, after the
+base key migration. The optional step creates only a new quota table/primary
+index: no existing-key rewrite, backfill, FK or historical checksum change.
+Install schema first, then enable the finite configuration; an absent schema
+fails closed for finite verification. Unlimited and legacy workflows never query
+the table and remain usable before installation. Rolling back finite selection
+leaves unused quota state intact; there is no destructive down step. Consumers
+own migration deadlines and must verify application before enabling the profile.
+
+Set `ConfigurationSpec.Quota = apikey.QuotaTokenBucket` and, for example,
+`TokenBucket = apikey.TokenBucketPolicy{Capacity: 1000, RefillAmount: 1000,
+RefillInterval: time.Hour}`. Supply `DebitAmount: 1` on each original authenticated
+request. Values must be positive, capacity is at most 1,000,000, and the interval
+must be exactly representable in microseconds. Policy/revision and debit are
+part of the existing canonical attempt intent; immutable configuration checks
+reject changed settings rather than reusing old debits.
+
+A new key starts full. The sole verifier participant uses its existing protected
+Work and key/configuration locks to initialize/refill/debit the exact
+tenant/configuration/key bucket with PostgreSQL UTC time. One token is an integer
+numerator of interval microseconds; each elapsed microsecond accrues RefillAmount
+numerator units. `numeric(39,0)` covers the maximum uint64 refill times any finite
+PostgreSQL timestamp difference and capacity times the largest microsecond-exact
+Go duration. No float or overflowing Go multiplication is used. Fractional credit
+is retained continuously and capped; backward time/incompatible state fails
+closed. Supported observations are UTC years 1..9999 at microsecond precision.
+Quota updates never advance credential/root/configuration authority versions or
+extend the original positive-validity deadline.
+
+Wrong credentials, expired/revoked keys, inactive owners and missing permissions
+do not debit. Exhaustion commits a known non-debit and no principal; legitimate
+grant narrowing retains its existing independent atomic semantics. A required
+effect failure rolls quota back with the rest of Work. No second attempt journal
+or transaction coordinator is introduced.
+
+Successful debits/exhaustion retain safe `QuotaMetadata` in the existing command
+effect. Exact retries and secret-free reconciliation return that historical
+observation without another comparison/refill/debit; they do not turn its time
+into current authority. A known debit stays attributable after principal expiry,
+but carries no usable principal then. A lost commit acknowledgement returns
+`ErrDebitOutcomeUnknown`, the same attempt/fingerprint/original scope, possible
+debit and no principal/metadata. Reconcile the original, not a replacement ID.
+Organization buckets belong to the organization credential, not its creator.
+Current native tenant/configuration/key-owner denial gates can prevent original
+history disclosure. Such a finite result remains explicit possible debit, not
+an assertion that the original never charged. A zero fingerprint/scope means no
+commitment was disclosed; a caller-supplied reconciliation scope is not a new
+observation. The response is uniform for absent and retained attempts, so it does
+not enumerate history. Preserve earlier original receipt fields, or retry only
+the same request once authority allows observation. The gates reuse existing
+primary owners solely to deny disclosure, never rebuild the original authority
+or extend its deadline. Only authoritative coordinator rollback/non-submission
+can establish known non-debit.
+
+The selected issued-key consumers are `TestNativeQuota*`; exact fractional/max
+arithmetic and bounded composite-key query plans are `TestQuotaSQL*`. These
+native checks do not provide HTTP/Reference composition or a production workload
+throughput claim. Quota rows are private state, never a cache authority.
 
 ## Keyed name and permission updates
 
@@ -217,8 +280,7 @@ original deadline. Status-only recovery does not perform a new mutation.
 
 ## Retained scope
 
-Finite quota, cache projection,
-API-key sessions, general CRUD/metadata, and HTTP/Reference composition are
+Cache projection, API-key sessions, broader administrator management, and HTTP/Reference composition are
 remaining platform work, not selected fallback behavior. This experimental
 module's native profile is not whole M21 or final release qualification.
 

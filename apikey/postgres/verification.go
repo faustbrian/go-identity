@@ -15,6 +15,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/apikey"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	organization "github.com/faustbrian/go-organization"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -36,7 +37,7 @@ func verificationBindingOperation(b identity.CommandBinding) identity.FeatureOpe
 	return op
 }
 
-// VerifyAndConsume authenticates one original modern, unlimited owner-bound
+// VerifyAndConsume authenticates one original owner-bound
 // attempt through the native primary owners and sole identity coordinator.
 // Required permissions intersect current policy; strict reduction is atomic
 // even when use of a removed permission denies. No browser session is created.
@@ -55,25 +56,41 @@ func (s *Service) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificat
 		return out, apikey.ErrInvalid
 	}
 	out = apikey.AtomicVerificationResult{AttemptID: r.AttemptID, State: apikey.VerificationAttemptNotDebited, Outcome: identity.CommitOutcomeNotCommitted}
+	finite := configuration.Spec().Quota == apikey.QuotaTokenBucket
+	if finite {
+		out.State, out.Outcome = apikey.VerificationAttemptPossibleDebit, identity.CommitOutcomeUnknown
+		defer func() {
+			if out.State == apikey.VerificationAttemptPossibleDebit {
+				out, err = s.unknownVerification(out)
+			}
+		}()
+	}
 	r.RequiredPermissions = slices.Clone(r.RequiredPermissions)
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
 	defer cancel()
 	defer func() {
 		if recover() != nil {
 			out.Result = nil
+			out.Quota = nil
 			err = identity.UnavailableError{}
 			if out.Fingerprint != ([32]byte{}) {
 				out.Outcome = identity.CommitOutcomeUnknown
-				err = identity.UnknownCommitError{CommandID: identity.CommandID(r.AttemptID)}
+				out, err = s.unknownVerification(out)
 			}
 		}
 	}()
-	directory, err := s.directory.GetDirectoryAuthority(ctx, kernel.DirectoryAuthorityQuery{GlobalAuthorityID: s.config().Profile.GlobalAuthorityID, TenantID: r.TenantID})
-	if err != nil {
-		return out, nativeError(ctx, err)
-	}
-	if !directory.Enabled {
-		return out, apikey.ErrDenied
+	if finite {
+		if err := s.currentQuotaVerificationAuthority(ctx, r.TenantID); err != nil {
+			return out, err
+		}
+	} else {
+		directory, err := s.directory.GetDirectoryAuthority(ctx, kernel.DirectoryAuthorityQuery{GlobalAuthorityID: s.config().Profile.GlobalAuthorityID, TenantID: r.TenantID})
+		if err != nil {
+			return out, nativeError(ctx, err)
+		}
+		if !directory.Enabled {
+			return out, apikey.ErrDenied
+		}
 	}
 	digest, err := s.presentedDigest(r)
 	if err != nil {
@@ -82,6 +99,11 @@ func (s *Service) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificat
 	record, err := s.verificationCandidate(ctx, r, digest)
 	if err != nil {
 		return out, err
+	}
+	if finite && record != nil {
+		if err := s.currentQuotaVerificationOwner(ctx, *record); err != nil {
+			return out, err
+		}
 	}
 	if original, exists, err := s.retainedVerificationCandidate(ctx, r); err != nil {
 		return out, err
@@ -113,12 +135,14 @@ func (s *Service) VerifyAndConsume(ctx context.Context, r apikey.AtomicVerificat
 		out.Original = p.query()
 	}
 	if result.Validate() != nil {
+		if fp != ([32]byte{}) && configuration.Spec().Quota == apikey.QuotaTokenBucket {
+			return s.unknownVerification(out)
+		}
 		return out, nativeError(ctx, executionErr)
 	}
-	out.Outcome = result.Outcome
-	if result.Outcome == identity.CommitOutcomeInProgress {
-		out.Outcome = identity.CommitOutcomeUnknown
-		return out, identity.UnknownCommitError{CommandID: result.Binding.CommandID}
+	out.Outcome, out.State = result.Outcome, apikey.VerificationAttemptNotDebited
+	if result.Outcome == identity.CommitOutcomeInProgress || result.Outcome == identity.CommitOutcomeUnknown {
+		return s.unknownVerification(out)
 	}
 	if result.Outcome != identity.CommitOutcomeCommitted {
 		if executionErr == nil {
@@ -148,16 +172,38 @@ func (s *Service) ReconcileVerifyAndConsume(ctx context.Context, q apikey.Verifi
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
 	defer cancel()
+	if s.config().Configuration.Spec().Quota == apikey.QuotaTokenBucket {
+		// Caller-provided original scope is not a newly disclosed observation.
+		out = apikey.AtomicVerificationResult{AttemptID: q.AttemptID, Fingerprint: q.Fingerprint, Original: q.Original, State: apikey.VerificationAttemptPossibleDebit, Outcome: identity.CommitOutcomeUnknown}
+		defer func() {
+			if out.State == apikey.VerificationAttemptPossibleDebit {
+				out, err = s.unknownVerification(out)
+			}
+		}()
+	}
 	var configuration apikey.Configuration
+	var current apikey.Record
 	if q.Original.ActorKind == authorization.SubjectServiceAccount {
 		configuration, err = s.selectedConfiguration(string(q.Original.ActorID), 0)
 	} else {
-		_, configuration, err = s.managementRecord(ctx, q.TenantID, apikey.KeyID(q.Original.ActorID))
+		current, configuration, err = s.managementRecord(ctx, q.TenantID, apikey.KeyID(q.Original.ActorID))
 	}
 	if err != nil {
 		return out, nativeError(ctx, err)
 	}
 	s = s.withConfiguration(configuration)
+	if configuration.Spec().Quota == apikey.QuotaTokenBucket {
+		if err := s.currentQuotaVerificationAuthority(ctx, q.TenantID); err != nil {
+			return out, err
+		}
+		if current.ID != "" {
+			if err := s.currentQuotaVerificationOwner(ctx, current); err != nil {
+				return out, err
+			}
+		}
+	} else {
+		out = apikey.AtomicVerificationResult{}
+	}
 	p := &verificationPhase{service: s, binding: recoveryBinding(q.Original)}
 	p.coordinator, p.registry, err = s.compose(p)
 	if err != nil {
@@ -170,15 +216,51 @@ func (s *Service) ReconcileVerifyAndConsume(ctx context.Context, q apikey.Verifi
 	result, recoveryErr := p.coordinator.RecoverAPIKeyVerificationCommand(ctx, q.Original, q.Fingerprint, p.caller(kind, target))
 	out = apikey.AtomicVerificationResult{AttemptID: q.AttemptID, Fingerprint: q.Fingerprint, Original: q.Original, State: apikey.VerificationAttemptNotDebited, Outcome: result.Outcome}
 	if result.Validate() != nil {
+		if configuration.Spec().Quota == apikey.QuotaTokenBucket {
+			return s.unknownVerification(out)
+		}
 		return apikey.AtomicVerificationResult{}, nativeError(ctx, recoveryErr)
 	}
-	if result.Outcome == identity.CommitOutcomeInProgress {
-		out.Outcome = identity.CommitOutcomeUnknown
+	if result.Outcome == identity.CommitOutcomeInProgress || result.Outcome == identity.CommitOutcomeUnknown {
+		return s.unknownVerification(out)
 	}
 	if result.Outcome != identity.CommitOutcomeCommitted {
 		return out, nativeError(ctx, recoveryErr)
 	}
 	return s.verificationEffect(ctx, out)
+}
+
+// These existing public primary readers are denial gates, not new authority
+// evidence. They neither query original history nor alter its versions/deadline.
+// Without admission, no absence or original non-debit can safely be inferred.
+func (s *Service) currentQuotaVerificationAuthority(ctx context.Context, tenant identity.TenantID) error {
+	directory, err := s.directory.GetDirectoryAuthority(ctx, kernel.DirectoryAuthorityQuery{GlobalAuthorityID: s.config().Profile.GlobalAuthorityID, TenantID: tenant})
+	if err != nil || !directory.Enabled {
+		return apikey.ErrDenied
+	}
+	return s.CheckConfiguration(ctx, tenant)
+}
+
+func (s *Service) currentQuotaVerificationOwner(ctx context.Context, record apikey.Record) error {
+	if record.Status != apikey.KeyActive {
+		return apikey.ErrDenied
+	}
+	owner := record.Owner.Spec()
+	if owner.Kind == apikey.OwnerOrganization {
+		if s.organization == nil || s.organization.repository == nil {
+			return apikey.ErrDenied
+		}
+		observed, err := s.organization.repository.ObserveCredentialAuthority(ctx, organization.CredentialAuthorityQuery{TenantID: owner.TenantID, OrganizationID: organization.ID(owner.OrganizationID)})
+		if err != nil || observed.CredentialVersion != owner.Version {
+			return apikey.ErrDenied
+		}
+		return nil
+	}
+	status, err := s.directory.GetStatus(ctx, identity.UserStatusQuery{TenantID: owner.TenantID, UserID: owner.UserID})
+	if err != nil || status.User.Status != identity.StatusActive {
+		return apikey.ErrDenied
+	}
+	return nil
 }
 
 func recoveryBinding(q identity.RecoveryQuery) identity.CommandBinding {
@@ -360,19 +442,35 @@ func (s *Service) verificationEffect(ctx context.Context, out apikey.AtomicVerif
 	var binding, fingerprint, wire []byte
 	err := s.pool.Raw().QueryRow(ctx, `SELECT binding,fingerprint,record FROM identity_api_keys.command_effects WHERE command_id=$1 AND tenant_id=$2`, string(out.AttemptID), string(out.Original.TenantID)).Scan(&binding, &fingerprint, &wire)
 	if err != nil {
+		if s.config().Configuration.Spec().Quota == apikey.QuotaTokenBucket {
+			return s.unknownVerification(out)
+		}
 		return out, nativeError(ctx, err)
 	}
 	var retained storedBinding
 	if decodeCanonical(binding, &retained) != nil || !hmac.Equal(fingerprint, out.Fingerprint[:]) {
-		return out, identity.UnavailableError{}
+		return s.unreadableVerification(out)
 	}
 	b := identity.CommandBinding(retained)
 	if (&verificationPhase{binding: b}).query() != out.Original {
-		return out, identity.UnavailableError{}
+		return s.unreadableVerification(out)
 	}
 	var effect verificationEffect
 	if len(wire) > maximumCommandEffectBytes || decodeCanonical(wire, &effect) != nil || effect.Schema != 1 || effect.Snapshot.Binding != retained {
-		return out, identity.UnavailableError{}
+		return s.unreadableVerification(out)
+	}
+	finite := s.config().Configuration.Spec().Quota == apikey.QuotaTokenBucket
+	if effect.Debited && (!effect.Authenticated || effect.Quota == nil) || !finite && (effect.Debited || effect.Quota != nil) || finite && effect.Authenticated && !effect.Debited {
+		return s.unreadableVerification(out)
+	}
+	if effect.Quota != nil {
+		if effect.Quota.Validate() != nil || effect.Quota.TokenBucketPolicy != s.config().Configuration.Spec().TokenBucket || effect.Quota.ObservedAt.Before(effect.Snapshot.Verified) || !effect.Quota.ObservedAt.Before(effect.Snapshot.Until) {
+			return s.unreadableVerification(out)
+		}
+		out.Quota = effect.Quota
+		if effect.Debited {
+			out.State = apikey.VerificationAttemptDebited
+		}
 	}
 	if !effect.Authenticated {
 		return out, apikey.ErrDenied
@@ -385,8 +483,27 @@ func (s *Service) verificationEffect(ctx context.Context, out apikey.AtomicVerif
 	if err != nil || clockErr != nil || result.ValidateAt(s.config().Configuration, now) != nil {
 		return out, apikey.ErrDenied
 	}
-	out.State, out.Result = apikey.VerificationAttemptNotApplicable, &result
+	if !finite {
+		out.State = apikey.VerificationAttemptNotApplicable
+	}
+	out.Result = &result
 	return out, nil
+}
+
+func (s *Service) unreadableVerification(out apikey.AtomicVerificationResult) (apikey.AtomicVerificationResult, error) {
+	if s.config().Configuration.Spec().Quota == apikey.QuotaTokenBucket {
+		return s.unknownVerification(out)
+	}
+	return out, identity.UnavailableError{}
+}
+
+func (s *Service) unknownVerification(out apikey.AtomicVerificationResult) (apikey.AtomicVerificationResult, error) {
+	out.Outcome, out.Result, out.Quota = identity.CommitOutcomeUnknown, nil, nil
+	if s.config().Configuration.Spec().Quota == apikey.QuotaTokenBucket {
+		out.State = apikey.VerificationAttemptPossibleDebit
+		return out, apikey.ErrDebitOutcomeUnknown{AttemptID: out.AttemptID}
+	}
+	return out, identity.UnknownCommitError{CommandID: identity.CommandID(out.AttemptID)}
 }
 
 // verificationEffect is an existing command_effects projection, not a second
@@ -397,6 +514,8 @@ type verificationEffect struct {
 	Snapshot      verificationSnapshot
 	Record        []byte
 	Grant         []string
+	Quota         *apikey.QuotaMetadata `json:",omitempty"`
+	Debited       bool                  `json:",omitempty"`
 }
 
 func (e verificationEffect) result(c apikey.Configuration) (apikey.VerificationResult, error) {
