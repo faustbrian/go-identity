@@ -39,15 +39,21 @@ func sourceRecordMatches(b apikey.SourceAuthorityBinding, record apikey.Record) 
 }
 
 // ObserveSourceAuthority reads current validity of one previously authenticated
-// modern user-owned key. It authenticates no bearer or human actor, performs no
-// debit/mutation and retains no secret. The caller separately proves its source
-// credential and binds these facts to its exact operation/lineage. Only primary
+// user-owned key in its exact selected profile. It authenticates no bearer or
+// human actor, performs no debit or mutation and retains no secret. The caller
+// separately proves its source credential and binds these facts to its exact
+// operation/lineage. Only primary
 // owners are used; errors return a zero observation without stale fallback.
 // The service and its pool are borrowed and must outlive the bounded call.
 func (s *Service) ObserveSourceAuthority(ctx context.Context, binding apikey.SourceAuthorityBinding) (out apikey.SourceAuthorityObservation, err error) {
-	if s == nil || s.config == nil || ctx == nil || binding.Validate(s.config().Configuration) != nil {
+	if s == nil || s.config == nil || ctx == nil {
 		return out, apikey.ErrInvalid
 	}
+	configuration, err := s.selectedConfiguration(binding.ConfigurationAuthority.ConfigurationID, binding.ConfigurationRevision)
+	if err != nil || binding.Validate(configuration) != nil {
+		return out, apikey.ErrInvalid
+	}
+	s = s.withConfiguration(configuration)
 	binding.Grant = slices.Clone(binding.Grant)
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
 	defer cancel()
@@ -66,8 +72,8 @@ func (s *Service) ObserveSourceAuthority(ctx context.Context, binding apikey.Sou
 	if err != nil || !directory.Enabled {
 		return out, apikey.ErrDenied
 	}
-	configuration, err := s.configurationAuthority(ctx, owner.TenantID)
-	if err != nil || configuration.Version < binding.ConfigurationAuthority.Version {
+	configurationAuthority, err := s.configurationAuthority(ctx, owner.TenantID)
+	if err != nil || configurationAuthority.Version < binding.ConfigurationAuthority.Version {
 		return out, apikey.ErrDenied
 	}
 	record, err := s.currentRecord(ctx, owner.TenantID, binding.KeyID)
@@ -113,14 +119,16 @@ func (s *Service) ObserveSourceAuthority(ctx context.Context, binding apikey.Sou
 	}
 	profile := s.config().Configuration.Spec()
 	until := started.Add(20*time.Second - profile.ClockUncertainty - profile.DecisionRaceBudget).Truncate(time.Microsecond)
-	until = minTime(until, binding.ExpiresAt)
+	if !binding.ExpiresAt.IsZero() {
+		until = minTime(until, binding.ExpiresAt)
+	}
 	observation := apikey.SourceAuthorityObservation{
 		Binding:                binding,
 		Record:                 record,
 		Owner:                  currentOwner,
 		Grant:                  grant,
 		PolicyVersion:          s.config().PolicyVersion,
-		ConfigurationAuthority: configuration,
+		ConfigurationAuthority: configurationAuthority,
 		GlobalVersion:          directory.GlobalVersion,
 		TenantVersion:          directory.TenantVersion,
 		UserVersion:            status.User.Version,
@@ -148,7 +156,11 @@ func (s *Service) RequireSourceAuthority(ctx context.Context, w kernel.Work, par
 	if s == nil || s.config == nil || ctx == nil || participant == nil {
 		return apikey.ErrInvalid
 	}
-	configuration := s.config().Configuration
+	configuration, err := s.selectedConfiguration(observed.Binding.ConfigurationAuthority.ConfigurationID, observed.Binding.ConfigurationRevision)
+	if err != nil {
+		return apikey.ErrDenied
+	}
+	s = s.withConfiguration(configuration)
 	if observed.Validate(observed.Binding, configuration, observed.VerifiedAt) != nil || observed.PolicyVersion != s.config().PolicyVersion {
 		return apikey.ErrDenied
 	}

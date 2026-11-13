@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extend current source observations and existing-Work fences to explicitly
+  configured verify-only legacy USER keys. Preserve digest-only import, canonical
+  IDs and absent historical expiry without extending current evidence or enabling
+  legacy issuance; modern issuance and existing SQL/lock order are unchanged.
+
 - Add secret-free current authority observation and same-Work final fencing for
   already-authenticated modern user-owned key sources. Read real current owners,
   retain independent key/configuration epochs and narrow grants without another

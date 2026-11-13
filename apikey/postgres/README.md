@@ -10,7 +10,7 @@ not issue browser sessions or treat the creator as the API key's human actor.
 
 ## Secret-free current source authority
 
-First authenticate a modern user-owned key with the existing `VerifyAndConsume`
+First authenticate a user-owned key with the existing `VerifyAndConsume`
 owner and retain its exact successful result. Construct
 `apikey.NewSourceAuthorityBinding(result, configuration, now)` while that original
 result is fresh. Keep Secret/wire custody within that verification invocation;
@@ -22,8 +22,13 @@ user, scoped policy, exact configuration and key. It returns copied current fact
 and the intersection with the inherited effective grant. It performs no secret
 comparison, quota debit, key mutation or principal issuance. Missing/disabled/
 foreign/revoked/expired/changed-root state fails closed without stale fallback.
-Current user-policy callbacks run only outside protected transactions. Modern
-USER ownership is required; organization and legacy sources are not selected.
+Current user-policy callbacks run only outside protected transactions. USER
+ownership is required; organization sources are not selected. The binding's exact
+configuration ID/revision must select the already configured modern profile or
+explicit verify-only `LegacyConfiguration`; secret text never selects it. Legacy
+initialization/import still use their existing owners. New issuance remains
+modern. An explicitly permitted absent historical expiry stays absent, while
+current evidence retains its finite read-start deadline of at most twenty seconds.
 
 `Service.RequireSourceAuthority(ctx, work, participant, observation)` belongs in
 both Apply and the final commit check of the consumer's actual existing native
