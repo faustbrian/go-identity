@@ -4,6 +4,9 @@
 
 ### Added
 
+- Side-effect-free `Config.Validate` for rejecting malformed selected cache
+  configuration during composition. It shares the constructor's validation;
+  `New` still performs its original strict TLS/server probe at initialization.
 - Explicit standalone TLS 1.3 session positive caching using the existing
   authenticated encrypted-cache codec. Restored hits, promotion and retries
   retain the original authoritative deadline of at most 20 seconds.

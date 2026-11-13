@@ -72,6 +72,36 @@ type Config struct {
 	MaximumConcurrent, MaximumScopes, MaximumPayloadBytes int
 }
 
+// Validate checks the selected profile, bounds, opaque credential/key custody,
+// endpoint syntax and explicit trust bundle without IO, DNS, entropy, clock or
+// codec calls. Invalid configuration returns ErrInvalidInput without diagnostics.
+// Success is structural only, not server health, TLS peer verification or
+// authentication. New repeats the same owning checks before probing the server.
+// Validate retains no state and does not mutate the configuration or its slices;
+// concurrent calls are safe while callers keep those inputs unchanged.
+func (config Config) Validate() error {
+	if _, _, err := config.validateEndpoint(); err != nil {
+		return err
+	}
+	_, err := config.trustPool()
+	return err
+}
+
+func (config Config) validateEndpoint() (string, string, error) {
+	if !validConfig(config) {
+		return "", "", ErrInvalidInput
+	}
+	return parseEndpoint(config.Endpoint)
+}
+
+func (config Config) trustPool() (*x509.CertPool, error) {
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(config.TrustPEM) {
+		return nil, ErrInvalidInput
+	}
+	return roots, nil
+}
+
 // Cache borrows the original codec/clock and owns no session store or authority.
 // Concurrent calls are safe with concurrent-safe borrowed dependencies. Each
 // bounded operation owns and closes its TLS client; there is no background fill,
@@ -96,19 +126,19 @@ type Cache struct {
 // verified TLS. Replica/cluster/sentinel and cache-only profiles fail. A failed
 // probe returns no cache, never an alternative authentication implementation.
 func New(ctx context.Context, config Config, codec *session.EncryptedCacheCodec, clock session.IssuerClock) (*Cache, error) {
-	if ctx == nil || codec == nil || clock == nil || !validConfig(config) {
+	if ctx == nil || codec == nil || clock == nil {
 		return nil, ErrInvalidInput
 	}
-	address, serverName, err := parseEndpoint(config.Endpoint)
+	address, serverName, err := config.validateEndpoint()
 	if err != nil {
 		return nil, ErrInvalidInput
 	}
 	if ctx.Err() != nil {
 		return nil, ErrUnavailable
 	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(config.TrustPEM) {
-		return nil, ErrInvalidInput
+	roots, err := config.trustPool()
+	if err != nil {
+		return nil, err
 	}
 	config.TrustPEM = nil
 	config.LookupKeys = append([]session.DigestKey(nil), config.LookupKeys...)

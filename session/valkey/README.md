@@ -34,6 +34,14 @@ Select `Profile: "positive-cache"`, `Topology: "standalone"`, an exact
 construction. TLS 1.3 and hostname verification cannot be disabled. URL
 credentials, plaintext TLS alternatives, implicit topology and zero limits fail.
 
+Call `configuration.Validate()` during side-effect-free composition to reject
+malformed selected configuration before startup. It uses the same profile,
+credential/key, endpoint and trust-bundle checks as `New`, but does not resolve
+DNS, dial, call the codec/clock, mutate inputs or retain a validated object.
+Success does not establish server health, TLS peer identity or session authority.
+`New` rechecks the configuration and performs the original strict TLS probe
+when the application initializes the selected cache.
+
 Choose `MaximumDuration` between 1 ms and 5 seconds, a smaller `CacheTimeout`
 between 1 ms and 1 second, `MaximumConcurrent` between 1 and 128,
 `MaximumScopes` between 1 and 4096, and `MaximumPayloadBytes` between 256 and
