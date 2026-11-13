@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Permit the exact native SCIM replace and PATCH actions through the existing
+  typed attribute processor with unchanged schema, field-policy, normalization
+  and bounds checks. These update actions do not apply creation defaults or
+  substitute an administrative or human actor.
+
 - Expose storage-neutral immutable final-link intent, explicit preserve-access
   policy and injected participant selection. Provisional application and durable
   observation are distinct results; these contracts grant no execution authority.

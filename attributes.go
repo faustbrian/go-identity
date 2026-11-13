@@ -152,7 +152,8 @@ type AttributeProcessorConfig struct {
 
 // AttributePrepareRequest is trusted command composition, not a client-decoded
 // authorization context. Supported actions are identity.user.create,
-// identity.profile.update and identity.user.update-admin; only create fills
+// identity.profile.update, identity.user.update-admin and the exact native SCIM
+// identity.scim.user-replace/identity.scim.user-patch actions; only create fills
 // absent defaults. SchemaVersion is exact, not a request to auto-migrate.
 type AttributePrepareRequest struct {
 	TenantID      TenantID
@@ -249,7 +250,9 @@ func (p *AttributeProcessor) prepare(ctx context.Context, req AttributePrepareRe
 		return nil, InvalidInputError{Field: "attribute_context"}
 	}
 	action := string(req.Context.Request.Action)
-	if action != "identity.user.create" && action != "identity.profile.update" && action != "identity.user.update-admin" {
+	switch action {
+	case "identity.user.create", "identity.profile.update", "identity.user.update-admin", "identity.scim.user-replace", "identity.scim.user-patch":
+	default:
 		return nil, InvalidInputError{Field: "attribute_operation"}
 	}
 	if err := validateQueryContext(req.Context, req.TenantID, string(req.UserID), action, "identity.user", p.config.PolicyVersion); err != nil {
