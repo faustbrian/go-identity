@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Optionally select a borrowed ordinary-GET session projection, including a
+  bounded encrypted cache. Original owner custody and expiry remain mandatory;
+  protected metadata and signout continue using the native primary. Omission
+  preserves existing reads, and a selected denial/error has no second-reader
+  fallback.
+
 - Optionally clear the separate browser-readable synchronizer cookie with
   confirmed native cookie logout. Wrong CSRF, failed or unknown outcomes clear
   neither cookie; bearer logout and colliding scopes reject this selection.

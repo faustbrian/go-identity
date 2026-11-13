@@ -33,9 +33,23 @@ type GetConfig struct {
 	Cookie          session.CookiePolicy
 	Now             func() time.Time
 	MaximumDuration time.Duration
+	// ReadOnly optionally selects an ordinary GET projection over the same
+	// primary's authenticated custody (for example its bounded encrypted cache).
+	// It is borrowed, concurrency-safe and must honor cancellation. Nil uses
+	// Sessions. Protected metadata and signout always use Sessions directly.
+	// A denial/error never triggers a second reader or transport fallback here.
+	ReadOnly SessionGetter
 	// Anonymous optionally selects the distinct guest cookie/read profile for
 	// GET only. It never grants verified-user admission or changes signout.
 	Anonymous *AnonymousGetConfig
+}
+
+// SessionGetter is the ordinary-read projection seam, not primary authority.
+// Implementations must return original owner-produced GetResult custody with
+// unchanged tenant, credential and exclusive validity deadline. They must bound
+// work by ctx and outlive the handler; the handler never closes them.
+type SessionGetter interface {
+	Get(context.Context, session.GetRequest) (session.GetResult, error)
 }
 
 // GetResponse is the explicit credential-free read projection. It conveys no
@@ -190,7 +204,11 @@ func NewGetHandlerWithMiddleware(c GetConfig, middleware []identityhttp.Middlewa
 		Reject:          reject,
 		Decode:          decode,
 		Authenticate: func(r *http.Request, state GetState) (GetState, error) {
-			return authenticateSession(c, r, state)
+			reader := SessionGetter(c.Sessions)
+			if c.ReadOnly != nil {
+				reader = c.ReadOnly
+			}
+			return authenticateSessionWithReader(c, r, state, reader)
 		},
 		Admit: func(r *http.Request, state GetState) error {
 			user := state.principal.UserID
@@ -356,6 +374,12 @@ func newSessionReadDecoder(c GetConfig, path string) (func(*http.Request) (GetSt
 }
 
 func authenticateSession(c GetConfig, r *http.Request, state GetState) (GetState, error) {
+	// Protected consumers deliberately retain primary admission even when a
+	// shared GetConfig selects an ordinary-read cache.
+	return authenticateSessionWithReader(c, r, state, c.Sessions)
+}
+
+func authenticateSessionWithReader(c GetConfig, r *http.Request, state GetState, reader SessionGetter) (GetState, error) {
 	state.delivery, _ = r.Context().Value(readDeliveryKey{}).(*readDelivery)
 	if state.anonymousSelected {
 		if c.Anonymous == nil || !state.present {
@@ -380,7 +404,7 @@ func authenticateSession(c GetConfig, r *http.Request, state GetState) (GetState
 	}
 	if state.present {
 		var err error
-		state.result, err = c.Sessions.Get(r.Context(), session.GetRequest{TenantID: state.facts.TenantID(), Credential: state.credential})
+		state.result, err = reader.Get(r.Context(), session.GetRequest{TenantID: state.facts.TenantID(), Credential: state.credential})
 		if err != nil {
 			return state, identityhttp.ErrUnavailable
 		}

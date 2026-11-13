@@ -7,6 +7,17 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+`GetConfig.ReadOnly` optionally accepts a borrowed `SessionGetter` for ordinary
+`GET /v1/session/get` only. For example, a composition graph can supply its
+guarded session handle backed by the same primary's encrypted cache. Keep
+`GetConfig.Sessions` set to the native primary: protected metadata and signout
+always use it directly, even when they share this configuration. The optional
+reader must preserve original credential/tenant binding and owner-produced
+`GetResult` custody; HTTP checks the original exclusive validity deadline before
+delivery. A selected error or inactive result never causes HTTP to try another
+reader. Nil preserves existing behavior. No resource ownership transfers to
+HTTP, and this selection changes neither routes nor wire responses.
+
 Cookie signout can select `SignOutConfig.CSRFCookie` to clear the separate
 browser-readable synchronizer cookie after the same confirmed native success.
 Wrong CSRF, failure and uncertain commitment clear neither cookie. The cookie is
