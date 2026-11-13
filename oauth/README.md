@@ -68,6 +68,17 @@ authorized party, nonce, time and present access-token/code hashes remain
 mandatory checks. Original signed token bytes are neither rewritten nor used
 to choose the configured key source. No discovery occurs in either constructor.
 
+Google may report the identity scopes as
+`https://www.googleapis.com/auth/userinfo.email` and
+`https://www.googleapis.com/auth/userinfo.profile`. The explicit Google selection
+projects these to `email` and `profile` only when that short scope was requested.
+Equivalent short/URI spellings collapse to one granted permission. Exact URI
+configuration otherwise stays unchanged; unknown or unrequested scopes still
+fail. Requested scopes and original access, refresh and signed ID-token bytes
+are unchanged. The generic constructor does not apply this policy. See Google's
+[response-scope contract](https://developers.google.com/identity/protocols/oauth2)
+and [identity scope equivalents](https://support.google.com/cloud/answer/15549945).
+
 `ProviderProfile.GoogleAccounts` binds the selected policy into the existing
 native immutable configuration and retained transaction snapshot. Its false
 value is omitted from JSON, preserving strict profile bytes. Never change the

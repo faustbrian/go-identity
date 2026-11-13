@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accept Google's two documented identity-scope URI spellings only under
+  explicit Google Accounts selection and only for equivalent requested scopes.
+  Collapse equivalent spellings without expanding grants; preserve generic
+  strictness, exact request configuration and original token bytes.
+
 - Add explicit `NewGoogleAccountsProvider` selection for Google's canonical and
   documented legacy signed ID-token issuers, projecting one canonical account
   issuer and unchanged subject after full validation. Bind the selection in an

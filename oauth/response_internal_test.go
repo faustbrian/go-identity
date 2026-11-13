@@ -3,6 +3,7 @@ package oauth
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -40,7 +41,7 @@ func TestTokenResponseHostileBoundaries(t *testing.T) {
 		{"extension", strings.TrimSuffix(valid, "}") + `,"extension":{"nested":[true,null,1,"value"]}}`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			parsed, kind := parseResponse(200, "application/json", []byte(tc.body), parserConfig())
+			parsed, kind := parseResponse(200, "application/json", []byte(tc.body), parserConfig(), false)
 			defer parsed.clear()
 			if (kind == "") != tc.valid {
 				t.Fatalf("unexpected parser outcome %q", kind)
@@ -58,7 +59,7 @@ func TestTokenResponseHostileBoundaries(t *testing.T) {
 		fields[fmt.Sprint(i)] = nil
 	}
 	body, _ := json.Marshal(fields)
-	if _, kind := parseResponse(200, "application/json", body, parserConfig()); kind == "" {
+	if _, kind := parseResponse(200, "application/json", body, parserConfig(), false); kind == "" {
 		t.Fatal("too many object members accepted")
 	}
 }
@@ -67,15 +68,26 @@ func FuzzTokenResponse(f *testing.F) {
 	for _, seed := range []string{`{}`, `{"error":"invalid_grant"}`, `{"access_token":"a","id_token":"i","token_type":"Bearer","expires_in":60}`, `{"a":1,"a":2}`, `{"x":[true,null,{"a":"b"}]}`, `{"x":"\ud800"}`} {
 		f.Add([]byte(seed), uint16(200))
 	}
+	for _, scope := range []string{"openid https://www.googleapis.com/auth/userinfo.profile", "openid profile https://www.googleapis.com/auth/userinfo.profile", "openid https://www.googleapis.com/auth/userinfo.email"} {
+		seed := fmt.Sprintf(`{"access_token":"a","id_token":"i","token_type":"Bearer","expires_in":60,"scope":%q}`, scope)
+		f.Add([]byte(seed), uint16(200))
+	}
 	f.Fuzz(func(t *testing.T, body []byte, status uint16) {
 		if len(body) > 64<<10 {
 			t.Skip()
 		}
-		parsed, kind := parseResponse(int(status), "application/json", body, parserConfig())
-		defer parsed.clear()
-		if kind == "" {
-			if status != 200 || len(parsed.access) == 0 || len(parsed.access) > 16<<10 || len(parsed.id) == 0 || len(parsed.id) > 16<<10 || parsed.expires <= 0 || parsed.expires > 31536000 || !validScopes(parsed.scopes) {
-				t.Fatal("unbounded successful parse")
+		for _, googleAccounts := range []bool{false, true} {
+			parsed, kind := parseResponse(int(status), "application/json", body, parserConfig(), googleAccounts)
+			defer parsed.clear()
+			if kind == "" {
+				if status != 200 || len(parsed.access) == 0 || len(parsed.access) > 16<<10 || len(parsed.id) == 0 || len(parsed.id) > 16<<10 || parsed.expires <= 0 || parsed.expires > 31536000 || !validScopes(parsed.scopes) {
+					t.Fatal("unbounded successful parse")
+				}
+				for _, scope := range parsed.scopes {
+					if !slices.Contains(parserConfig().Scopes, scope) {
+						t.Fatal("returned permission exceeds the requested set")
+					}
+				}
 			}
 		}
 	})

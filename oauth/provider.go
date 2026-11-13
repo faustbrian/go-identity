@@ -218,7 +218,9 @@ const googleAccountsIssuer = "https://accounts.google.com"
 // must be exactly https://accounts.google.com. Both signed forms project that
 // canonical issuer and the unchanged subject into one account namespace. Raw
 // callback iss, explicit endpoints, trusted keys, claims, nonce, PKCE and hash
-// bindings remain strict; no discovery, generic aliases or token rewriting occur.
+// bindings remain strict. Returned Google userinfo.email/profile URI scopes map
+// only to equivalent requested email/profile scopes, collapsing equivalents
+// without expanding permissions. No discovery, generic aliases or token rewriting occur.
 // Configuration, defaults, resource ownership and concurrency are NewOIDCProvider's.
 // Construction performs no network IO. Existing NewOIDCProvider stays strict.
 func NewGoogleAccountsProvider(c OIDCConfig) (*OIDCProvider, error) {
@@ -466,7 +468,7 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 		return ExchangeResult{}, failure(Unknown, ctx)
 	}
 	receivedAt := p.config.Clock.Now()
-	parsed, kind := parseResponse(response.StatusCode, response.Header.Get("Content-Type"), body, p.config)
+	parsed, kind := parseResponse(response.StatusCode, response.Header.Get("Content-Type"), body, p.config, p.googleAccounts)
 	if kind != "" {
 		return ExchangeResult{}, failure(kind, ctx)
 	}

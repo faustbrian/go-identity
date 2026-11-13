@@ -20,7 +20,7 @@ type tokenResponse struct {
 
 func (r *tokenResponse) clear() { clear(r.access); clear(r.refresh); clear(r.id) }
 
-func parseResponse(status int, contentType string, body []byte, c OIDCConfig) (tokenResponse, ErrorKind) {
+func parseResponse(status int, contentType string, body []byte, c OIDCConfig, googleAccounts bool) (tokenResponse, ErrorKind) {
 	var out tokenResponse
 	media, _, err := mime.ParseMediaType(contentType)
 	if err != nil || media != "application/json" || len(body) == 0 || int64(len(body)) > c.MaxResponseBytes || !utf8.Valid(body) {
@@ -93,19 +93,45 @@ func parseResponse(status int, contentType string, body []byte, c OIDCConfig) (t
 		if !ok {
 			return out, Unknown
 		}
-		scopes = strings.Split(raw, " ")
-		if !validScopes(scopes) {
+		reportedScopes := strings.Split(raw, " ")
+		if !validScopes(reportedScopes) {
 			return out, Unknown
 		}
-		for _, scope := range scopes {
+		scopes = make([]string, 0, len(reportedScopes))
+		for _, scope := range reportedScopes {
+			if googleAccounts {
+				scope = googleReportedScope(scope, c.Scopes)
+			}
 			if !slices.Contains(c.Scopes, scope) {
 				return out, Unknown
+			}
+			if !slices.Contains(scopes, scope) {
+				scopes = append(scopes, scope)
 			}
 		}
 		reported = true
 	}
 	out = tokenResponse{access: []byte(access), refresh: []byte(refresh), id: []byte(id), expires: seconds, scopes: scopes, scopeReported: reported}
 	return out, ""
+}
+
+// Google can return equivalent scope spellings (developers.google.com/identity/
+// protocols/oauth2, "Examine scopes of access granted by the user"). Its identity
+// URI scopes have OpenID equivalents (support.google.com/cloud/answer/15549945).
+// Map only the two known identity URIs to an actually requested short scope;
+// this changes the permission projection, never the original signed token.
+func googleReportedScope(scope string, requested []string) string {
+	canonical := scope
+	switch scope {
+	case "https://www.googleapis.com/auth/userinfo.email":
+		canonical = "email"
+	case "https://www.googleapis.com/auth/userinfo.profile":
+		canonical = "profile"
+	}
+	if slices.Contains(requested, canonical) {
+		return canonical
+	}
+	return scope
 }
 
 // Every response member, including ignored OAuth extensions, passes the same

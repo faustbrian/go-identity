@@ -130,7 +130,9 @@ func (t TokenSet) RequestedScopes() []string { return slices.Clone(t.requested) 
 
 // GrantedScopes returns provider-reported scopes, or the RFC6749 section5.1
 // equivalent requested scopes when scope was omitted. ScopeReported distinguishes
-// those cases; it never silently upgrades a reported subset.
+// those cases; it never silently upgrades a reported subset. Explicit Google
+// selection projects its two known identity URI spellings to equivalent requested
+// email/profile scopes and collapses equivalent spellings.
 func (t TokenSet) GrantedScopes() []string { return slices.Clone(t.granted) }
 
 // ScopeReported states whether scope was explicitly present in the response.
