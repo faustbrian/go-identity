@@ -160,6 +160,9 @@ func (p ProviderProfile) ValidateQueryCallback() error {
 }
 
 func queryProfileValid(p ProviderProfile) bool {
+	if p.GoogleAccounts && p.Issuer != googleAccountsIssuer {
+		return false
+	}
 	if !identifier(p.ID) || p.Version == 0 || !httpsURL(p.Issuer) || !httpsURL(p.AuthorizationEndpoint) || !httpsURL(p.TokenEndpoint) || !httpsURL(p.RedirectURI) || !visible(p.ClientID, 1, 1024) || !p.ClientAuthentication.valid() || !validScopes(p.Scopes) || !slices.Contains(p.Scopes, "openid") || len(p.Algorithms) < 1 || len(p.Algorithms) > 2 || p.ResponseMode != "query" || p.PKCEMethod != "S256" || !p.NonceRequired || p.StateBytes != 32 || p.NonceBytes != 32 || p.Timeout < time.Second || p.Timeout > 30*time.Second || p.ClockSkew <= 0 || p.ClockSkew > 5*time.Minute || p.MaxResponseBytes < 1024 || p.MaxResponseBytes > 1<<20 || p.MaxTokenBytes < 256 || p.MaxTokenBytes > 16<<10 || p.MaxCodeBytes < 1 || p.MaxCodeBytes > 64<<10 {
 		return false
 	}

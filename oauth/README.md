@@ -51,6 +51,37 @@ described by [RFC 6749 section 2.3.1](https://www.rfc-editor.org/rfc/rfc6749#sec
 This generic capability does not itself implement the built-in Google catalog
 or claim Google interoperability.
 
+## Explicit Google Accounts selection
+
+For a configured Google Accounts provider, call
+`NewGoogleAccountsProvider(config)` instead of `NewOIDCProvider(config)`, with
+`config.Issuer` exactly `https://accounts.google.com`. All other configuration,
+trusted key, ownership and shutdown requirements are identical. This explicit
+selection consumes `authentication/oidc/v2`'s Google-only policy; the generic
+constructor continues using its released strict validator.
+
+Only a fully verified original ID token may use either Google's canonical
+`https://accounts.google.com` issuer or its documented `accounts.google.com`
+form. Both return the canonical issuer and the exact unchanged subject, so the
+native account lookup uses one issuer/subject namespace. Signature, audience,
+authorized party, nonce, time and present access-token/code hashes remain
+mandatory checks. Original signed token bytes are neither rewritten nor used
+to choose the configured key source. No discovery occurs in either constructor.
+
+`ProviderProfile.GoogleAccounts` binds the selected policy into the existing
+native immutable configuration and retained transaction snapshot. Its false
+value is omitted from JSON, preserving strict profile bytes. Never change the
+selection for an in-flight transaction: policy mismatch must deny rather than
+reinterpreting the retained callback. This flag is trusted startup metadata,
+not a claim, callback option or authentication proof.
+
+The RFC 9207 raw callback `iss` must still equal the canonical configured issuer;
+the signed-token policy does not accept a legacy query issuer or aliases in
+discovery metadata. This finite configured-key profile is not a built-in catalog,
+Google One Tap, automatic signup/email merge or live Google interoperability
+claim. The Google issuer policy is owned by the explicitly selected upstream
+validator, not an application-level JWT rewrite.
+
 ```go
 result, err := provider.Exchange(ctx, originalCallback, decryptedVerifier, boundNonce)
 if err != nil {

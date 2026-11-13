@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit `NewGoogleAccountsProvider` selection for Google's canonical and
+  documented legacy signed ID-token issuers, projecting one canonical account
+  issuer and unchanged subject after full validation. Bind the selection in an
+  omitted-false provider profile; generic constructors, strict callback query
+  issuers and existing profile bytes remain unchanged. No implicit signup,
+  catalog, One Tap or live-provider interoperability is added.
+
 - Support explicitly configured `client_secret_post` for HTTPS OIDC code
   exchange. Keep credentials in the token form only, bind the chosen method
   into callback configuration and preserve existing public/Basic behavior.

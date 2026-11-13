@@ -19,6 +19,7 @@ import (
 	"time"
 
 	authoidc "github.com/faustbrian/go-authentication/oidc"
+	googleoidc "github.com/faustbrian/go-authentication/oidc/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -102,12 +103,13 @@ type Provider interface {
 // It must not be copied. Concurrent calls through its pointer are supported with
 // distinct admitted callback/verifier custody.
 type OIDCProvider struct {
-	config    OIDCConfig
-	client    *http.Client
-	transport *http.Transport
-	mu        sync.Mutex
-	secret    []byte
-	closed    bool
+	config         OIDCConfig
+	client         *http.Client
+	transport      *http.Transport
+	mu             sync.Mutex
+	secret         []byte
+	closed         bool
+	googleAccounts bool
 }
 
 // NewOIDCProvider validates configuration without network I/O. Zero limits select
@@ -209,8 +211,38 @@ func NewOIDCProvider(c OIDCConfig) (*OIDCProvider, error) {
 	return p, nil
 }
 
+const googleAccountsIssuer = "https://accounts.google.com"
+
+// NewGoogleAccountsProvider selects Google's two documented signed ID-token
+// issuer forms through authentication/oidc/v2's Google-only validator. Issuer
+// must be exactly https://accounts.google.com. Both signed forms project that
+// canonical issuer and the unchanged subject into one account namespace. Raw
+// callback iss, explicit endpoints, trusted keys, claims, nonce, PKCE and hash
+// bindings remain strict; no discovery, generic aliases or token rewriting occur.
+// Configuration, defaults, resource ownership and concurrency are NewOIDCProvider's.
+// Construction performs no network IO. Existing NewOIDCProvider stays strict.
+func NewGoogleAccountsProvider(c OIDCConfig) (*OIDCProvider, error) {
+	if c.Issuer != googleAccountsIssuer {
+		return nil, failure(InvalidInput, nil)
+	}
+	p, err := NewOIDCProvider(c)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := googleoidc.NewGoogleAccountsWithKeySet(googleValidatorConfig(p.config, nil), p.config.KeySet); err != nil {
+		p.Close()
+		return nil, failure(InvalidInput, nil)
+	}
+	p.googleAccounts = true
+	return p, nil
+}
+
 func validatorConfig(c OIDCConfig, nonce authoidc.NonceValidator) authoidc.Config {
 	return authoidc.Config{Issuer: c.Issuer, ClientID: c.ClientID, Algorithms: c.Algorithms, Clock: c.Clock, ClockSkew: c.ClockSkew, NonceValidator: nonce, MaxTokenBytes: c.MaxTokenBytes, MaxClaims: 128, MaxClaimDepth: 8}
+}
+
+func googleValidatorConfig(c OIDCConfig, nonce googleoidc.NonceValidator) googleoidc.Config {
+	return googleoidc.Config{Issuer: c.Issuer, ClientID: c.ClientID, Algorithms: c.Algorithms, Clock: c.Clock, ClockSkew: c.ClockSkew, NonceValidator: nonce, MaxTokenBytes: c.MaxTokenBytes, MaxClaims: 128, MaxClaimDepth: 8}
 }
 
 // ID returns the configured provider identity, or empty for nil.
@@ -311,7 +343,8 @@ type ProviderIdentity struct {
 // ProviderID returns the immutable configured provider ID.
 func (i ProviderIdentity) ProviderID() string { return i.provider }
 
-// Issuer returns the exact verified issuer.
+// Issuer returns the verified account issuer. Only the explicitly selected
+// Google Accounts provider canonicalizes its two documented signed forms.
 func (i ProviderIdentity) Issuer() string { return i.issuer }
 
 // Subject returns the verified stable provider subject, or empty for zero.
@@ -438,24 +471,50 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 		return ExchangeResult{}, failure(kind, ctx)
 	}
 	defer parsed.clear()
-	validator, err := authoidc.NewWithKeySet(validatorConfig(p.config, authoidc.NonceValidatorFunc(func(_ context.Context, actual string) error {
+	nonceCheck := func(_ context.Context, actual string) error {
 		if subtle.ConstantTimeCompare([]byte(actual), []byte(nonce)) != 1 {
 			return failure(InvalidProof, nil)
 		}
 		return nil
-	})), p.config.KeySet)
-	if err != nil {
-		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
-	principal, err := validator.ValidateBearer(ctx, string(parsed.id))
+	// This private getter projection consumes only successful upstream validation.
+	// V1 and V2 retain distinct principal/proof types; neither is manufactured or
+	// converted into the other's authentication authority.
+	var principal interface {
+		Issuer() string
+		Subject() string
+		AuthenticatedAt() time.Time
+	}
+	var validateBinding func(string, string) error
+	if p.googleAccounts {
+		validator, createErr := googleoidc.NewGoogleAccountsWithKeySet(googleValidatorConfig(p.config, googleoidc.NonceValidatorFunc(nonceCheck)), p.config.KeySet)
+		if createErr != nil {
+			return ExchangeResult{}, failure(InvalidProof, ctx)
+		}
+		principal, err = validator.ValidateBearer(ctx, string(parsed.id))
+		validateBinding = func(access, code string) error {
+			_, err := validator.ValidateIDToken(ctx, string(parsed.id), googleoidc.TokenBinding{AccessToken: access, AuthorizationCode: code})
+			return err
+		}
+	} else {
+		validator, createErr := authoidc.NewWithKeySet(validatorConfig(p.config, authoidc.NonceValidatorFunc(nonceCheck)), p.config.KeySet)
+		if createErr != nil {
+			return ExchangeResult{}, failure(InvalidProof, ctx)
+		}
+		principal, err = validator.ValidateBearer(ctx, string(parsed.id))
+		validateBinding = func(access, code string) error {
+			_, err := validator.ValidateIDToken(ctx, string(parsed.id), authoidc.TokenBinding{AccessToken: access, AuthorizationCode: code})
+			return err
+		}
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return ExchangeResult{}, failure(Unknown, ctx)
 		}
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
-	// oidc/v1.0.1 removes registered protocol claims from Principal.Claims and
-	// substitutes iat when auth_time is absent. Only after its full validation do
+	// Both selected validators remove registered protocol claims from Principal.Claims
+	// and substitute iat when auth_time is absent. Only after full validation do
 	// we inspect presence in the same bounded, authenticated payload. Optional
 	// at_hash/c_hash remain optional (OIDC Core 3.1.3.6); present hashes are then
 	// checked by that existing validator against the original token/code bytes.
@@ -468,15 +527,15 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	if !issuedOK || !expiresOK {
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
-	binding := authoidc.TokenBinding{}
+	var accessBinding, codeBinding string
 	if len(metadata.AccessHash) > 0 {
-		binding.AccessToken = string(parsed.access)
+		accessBinding = string(parsed.access)
 	}
 	if len(metadata.CodeHash) > 0 {
-		binding.AuthorizationCode = string(code)
+		codeBinding = string(code)
 	}
-	if binding.AccessToken != "" || binding.AuthorizationCode != "" {
-		if _, err := validator.ValidateIDToken(ctx, string(parsed.id), binding); err != nil {
+	if accessBinding != "" || codeBinding != "" {
+		if err := validateBinding(accessBinding, codeBinding); err != nil {
 			if ctx.Err() != nil {
 				return ExchangeResult{}, failure(Unknown, ctx)
 			}
@@ -551,6 +610,9 @@ type ProviderProfile struct {
 	Timeout, ClockSkew                                                  time.Duration
 	MaxResponseBytes                                                    int64
 	MaxTokenBytes, MaxCodeBytes                                         int
+	// GoogleAccounts selects only the documented signed-token issuer policy.
+	// Omitted false preserves existing canonical native profile bytes.
+	GoogleAccounts bool `json:",omitempty"`
 }
 
 // Profile returns a fresh projection with cloned slices. Nil/zero providers
@@ -560,7 +622,7 @@ func (p *OIDCProvider) Profile() ProviderProfile {
 		return ProviderProfile{}
 	}
 	c := p.config
-	return ProviderProfile{ID: c.ID, Version: c.Version, Issuer: c.Issuer, ClientID: c.ClientID, AuthorizationEndpoint: c.AuthorizationEndpoint, TokenEndpoint: c.TokenEndpoint, RedirectURI: c.RedirectURI, ClientAuthentication: c.ClientAuthentication, Scopes: slices.Clone(c.Scopes), Algorithms: slices.Clone(c.Algorithms), ResponseMode: "query", PKCEMethod: "S256", NonceRequired: true, StateBytes: 32, NonceBytes: 32, Timeout: c.Timeout, ClockSkew: c.ClockSkew, MaxResponseBytes: c.MaxResponseBytes, MaxTokenBytes: c.MaxTokenBytes, MaxCodeBytes: c.MaxCodeBytes}
+	return ProviderProfile{ID: c.ID, Version: c.Version, Issuer: c.Issuer, ClientID: c.ClientID, AuthorizationEndpoint: c.AuthorizationEndpoint, TokenEndpoint: c.TokenEndpoint, RedirectURI: c.RedirectURI, ClientAuthentication: c.ClientAuthentication, Scopes: slices.Clone(c.Scopes), Algorithms: slices.Clone(c.Algorithms), ResponseMode: "query", PKCEMethod: "S256", NonceRequired: true, StateBytes: 32, NonceBytes: 32, Timeout: c.Timeout, ClockSkew: c.ClockSkew, MaxResponseBytes: c.MaxResponseBytes, MaxTokenBytes: c.MaxTokenBytes, MaxCodeBytes: c.MaxCodeBytes, GoogleAccounts: p.googleAccounts}
 }
 
 func (p *OIDCProvider) ready() bool {
