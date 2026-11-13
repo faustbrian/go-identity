@@ -290,6 +290,9 @@ type signupGraphExtensions struct {
 	socialOIDCFailure         socialOIDCFailure
 	socialOIDCConcurrent      bool
 	socialOIDCRejectSignin    bool
+	socialOIDCNativeStart     string
+	socialOIDCNativeSignin    bool
+	socialOIDCNativeMode      string
 	organizationKey           bool
 	organizationKeyUpgrade    bool
 	organizationKeyMetadata   bool
@@ -1342,7 +1345,8 @@ END $$`); err != nil {
 	}
 	migrationRequest := applyRequest(t, ctx, stores, modules)
 	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
-	if (extensions.factorReplacement || extensions.passkeyTOTP) && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin
+	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
 		// widen the native authentication/read budgets to get the fixture ready.
@@ -1732,6 +1736,10 @@ END $$`); err != nil {
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if extensions.socialOIDCNativeStart != "" {
+		proveNativeSocialSigninStart(t, ctx, c, deps, origin, extensions.socialOIDCNativeStart)
+		return
+	}
 	if extensions.socialOIDCFailure == socialVaultRollback || extensions.socialOIDCFailure == socialExpiredCleanup {
 		// Only a failing token-vault write is injected. Public workflows still
 		// establish every user, session, state, proof and domain transition.
@@ -2052,6 +2060,9 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				}
 			}
 			proveReferenceSocialOIDC(t, ctx, client, network.URL, origin, socialIssuer, user, cookies, csrf, fresh, readSession, extensions.socialOIDCPersistent, extensions.socialOIDCLinkOnly, accounts, rotate, extensions.socialOIDCCollision, extensions.socialOIDCFailure, awaitExpiry, extensions.socialOIDCConcurrent)
+			if extensions.socialOIDCNativeSignin {
+				proveNativeSocialSignin(t, ctx, c, deps, origin, "complete", &nativeSigninCompletionFixture{provider: socialIssuer, user: user, mode: extensions.socialOIDCNativeMode})
+			}
 			if (extensions.socialOIDCFailure == socialAttachedProofExpiry || extensions.socialOIDCFailure == socialAttachedRPExpiry) && !f.completionFault.hit.Load() {
 				t.Fatal("callback never lost its actual attachment COMMIT acknowledgement")
 			}

@@ -1,5 +1,331 @@
 # Identity Implementation — Current Milestone
 
+2026-11-13 final native slice: source commits 82309c2, 034af7b, 4c60c62 and d495b36 are on
+origin/main with exact-source CI success, authenticated public changed bytes
+matching Git, and no permanent replacement directives. Native existing-account
+OIDC consumer completes genuine bootstrap/link/signin/read/CSRF-logout; all nine
+scenarios pass PostgreSQL/race in 26.407s with GOWORK off, including directory epochs,
+original browser, provider denial, concurrent callbacks, tokenless recovery,
+foreign recovery scope and expired uncertain exchange. Reference ordinary race
+9.999s, baseline command 11.437s, tagged vet and module verification pass. Source inputs are
+unchanged after execution. Independent final-source, focused corrections and
+seven-owned-pin adoption reviews approve. Required consumer publication checks,
+push/readback and final handoff/pause are the remaining delivery boundary; no
+new slice or Tools work is started. Overall estimate is 25–30%, low confidence,
+with 10/39 selected milestones; whole M17/M18 and 67-unit qualification remain open.
+
+2026-11-13 00:40 UTC: native existing-account callback/read/logout plus concurrent
+callback and unknown-exchange/tokenless recovery consumer passes actual PG3.294s.
+Original-browser initiation and denial retained. Added negative recovery-scope
+and expired-uncertain-lease assertions await final execution; no new source bug
+was inferred from the original InProgress-return test mismatch. Kernel/MFA and
+remaining native source independently reviewed without confirmed blockers;
+final runtime/query evidence pending. Query worker completed finite31-class/
+10-statement measurement, reducing results. Factor worker owns only
+mfa/postgres/oauth_session_authority_integration_test.go and holds heavy slot
+next; primary owns source, shared runtime and all Git. Docs worker completed
+only oauth/postgres README/CHANGELOG. Scope remains finite native signin unit;
+commit/push/public pins, takeover handoff, then requested pause. No Tools work.
+
+2026-11-13 resumption: preserve native signin unit and requested delivery/handoff
+pause boundary. Main remains afeaa86; no old heavy runner or cache owner is live.
+Parallel ownership: kernel/MFA prerequisite reviewer reads the complete dirty
+postgres and mfa/postgres delta on afeaa86, no writes/Go/services/Git. Query
+verification worker owns only postgres/provider_session_query_performance_test.go
+and oauth/postgres/signin_query_performance_test.go plus its private result note;
+it measures actual changed SQL/bindings on isolated representative PostgreSQL,
+without production edits or a new framework. Consumes current native code and
+actual migration/driver contracts on main; primary retains integration and all
+production code, Reference, pins and Git. Primary finishes the same native
+callback denial/recovery/concurrency acceptance. No unrelated unit is started.
+
+M17 completion composition: caller uses NewSigninCompletionService(start,
+explicit session issuer/CSRF/audience/policy config). Callback owns a single
+invocation-local native preparation participant and lends original command to
+the existing kernel; it owns no transaction/outcome journal. Its generated
+data is the original provider-account snapshot, session-owned tokenless fields
+and risk custody under the acknowledged generation. Existing early capability
+reservation must precede PKCE/provider work. Rejected design: making LinkService
+accept anonymous password/session authority; rejected alternative: a separate
+OAuth callback journal/transaction. Native current Work and original session
+issuer retain their authority/delivery ownership. This is the same frozen M17
+consumer outcome, not a new helper milestone or planning gate.
+
+2026-11-10 resumed — Prior status-only turn NO PROGRESS; actual implementation
+resumed on identity/main afeaa86. Native original-browser initiation now passes
+real PostgreSQL positive/restart replay. Genuine disabled-tenant RED and then
+committed-replay-after-suspension RED located missing directory admission and
+terminal redirect rechecks. Frozen directory epochs now gate preparation,
+Apply/final admission and redirect delivery; no fresh epochs/expiry are adopted.
+Focused native PostgreSQL/race passes16.205s, including still-enabled changed
+global/tenant versions. Logs retained in task identity-signin.aNjPJ1. This is
+local, uncommitted and not whole social signin or another closed milestone.
+Next: distinct anonymous callback input + authenticated original browser/state
+resolution, then pre-exchange reservation/native provider/session/Reference.
+No new independent lane: SCIM provisioning needs its real identity bridge;
+SSO needs organization-owned challenge/capability-to-proof atomic admission.
+RFC7592 is explicitly an unselected future profile, not authorized filler.
+Primary owns shared OAuth/session/risk/reference; no writer overlap.
+
+01:10 UTC — Finite confidential Basic registration profile CLOSED, not allM30:
+protocol017f10d096a1c65a4109a8c46292c3bf9d2233af/native38ddd45dce6d624d5281cbfab733d62f92328a0f
+are ordinary main-pushed/readback; [native CI](https://github.com/faustbrian/go-oauth-server/actions/runs/42733100367)
+SUCCESS. Matching kernelafeaa86 main/CI-green. Complete independent source and
+publication-pin reviews APPROVE. Public-dependency ordinary0.230s, complete
+affected native race155.166s, taggedvet/modverify, final rootchecks/native docs
+pass. Authenticated downloaded native v0.0.0-20261110010425-38ddd45dce6d matches
+source; actual downloaded four-case PG/race21.972s+modverify PASS, runner3306
+terminal0. Owned PG56326 cleaned. OAuth-server worktree clean. NoHTTP/Reference,
+RFC7592/fullM30/unit qualification claim. Next primary M17 native integration;
+do not launch another registration variant before returning to that outcome.
+
+M17 latest native source compiles and selected original-browser/output/link
+regressions pass race1.469s/vet. New root canonical-flow regression genuinely
+RED (ParseIdentifierID allowed noncanonical preauth ID), exact parser correction
+then OAuth root ordinary0.308s PASS. Actual new native PG initialization/start,
+global/tenant current-authority fencing, provider callback/session and selected
+HTTP/Reference remain pending; no source-only acceptance or new milestone claim.
+SSO domain engine not dispatched: go-sso main1edc51b has no runtime Go package
+or required DomainProofEngine/claim orchestration; organization alone cannot
+unlock an adapter. SCIM atomic identity bridge remains a separate real gap.
+
+00:52 UTC — Admission correction f0d98df main/readback/CI-green; downloaded
+postgres v0.0.0-20261110003151-f0d98dfce956 matches committed source and selected
+actual PG/race2.814s + module verification pass. Native initiation is LOCAL:
+SigninService/start composes original preauth/request-key/external-admission/
+state-grant owners; selected ordinary browser/output/link0.297s pass, not actual
+native signin/HTTP/Reference acceptance. No extra journal or fake password owner.
+Caller usage: configured native SigninService.SigninStart(ctx, original browser
+request), then future exact native callback/session delivery. Rejected designs:
+using NewLinkService as anonymous authority, or new independent RP replay state.
+Use distinct signin projection with existing RP rows/coordinator instead.
+
+Parallel confidential-registration worker completed local thirteen-path outcome
+on OAuth d589127; root fullrace1.528s and full affected public/confidential
+native PG/race116.435s pass, with exact cancellation-after-COMMIT RED corrected.
+Source frozen in complete independent review. Worker own PG/cache removed.
+Primary four-path kernel dependency retains distinct confidential-v1 original
+declaration; real root RED then GREEN0.248s/wholeordinary1.189s/taggedvet pass;
+signin_kernel_review APPROVE. Final root checks/commit/public main delivery
+next. No full M30/M17/67-unit completion claim. Primary owns heavy slot.
+
+2026-11-10 resumed — Prior user status turn: NO PROGRESS; live main heads and
+all pending implementation preserved. Primary resumes M17 on identity/main
+d9c61f9. The eleven-path canonical Authentication admission correction is
+independently APPROVED (signin_kernel_review); ordinary1.037s, selected native
+race3.563s, neighboring native race2.666s, tagged vet and bounded fuzz10.413s
+passed, sequence8502 terminal EXIT0. Root checks48723 pending. Deliver this
+reviewed prerequisite, then actual native SigninService/start/callback/session
+delivery and opt-in HTTP/Reference; do not restart mapping or existing evidence.
+
+Parallel M30 lane: gpt-6.1-sol/high/fresh/default worker, no children or Git.
+Own go-oauth-server dynamic_registration*.go (existing exact root filenames
+resolved before edits), postgres/client_registration*.go plus narrowly necessary
+registration-specific code/docs/changelog. Consume main d589127 and its proved
+native public RFC7591/coordinator/managed confidential-client secret custody;
+identity d9c61f9 is committed, not the pending M17 correction. Finite outcome:
+explicit configured confidential Basic RFC7591 registration with digest-only
+initial token and secret persistence, reveal-once delivery, actual subsequent
+code/S256 token use, original recovery, concurrency and rollback. Preserve
+public registration/wire compatibility; no RFC7592, HTTP/Reference, manifests,
+CI/tools/shared identity contracts or second engine. First inspect readiness
+and report the public boundary; missing authority goes to primary, not a stub.
+Source/TDD preparation may run now; heavy Go/PG waits for primary's slot grant.
+Primary owns review, pins/integration and ordinary main delivery. Narrow tests,
+actual PostgreSQL/race, root required checks and public consumer qualify this
+finite profile, not all M30 or a verified unit.
+
+2026-11-09 23:59 UTC — Finite native device-coexistence profile CLOSED:
+go-oauth-server main/remote d58912788557fec1139e6dce7614d483614ab314,
+[CI success](https://github.com/faustbrian/go-oauth-server/actions/runs/42723972222).
+Public postgres v0.0.0-20261109235233-d58912788557 matches128 Go/module files;
+downloaded GOWORKoff/-modreadonly realPG/race32.625s and module verification pass.
+Source independent review device_composition_review APPROVE on exact nine paths;
+native focused6.680s/race28.437s/taggedvet, root makecheck/native docs pass.
+Old device SQL/checksum unchanged. Consumer preserves actual old OIDC/workload/
+delegated grants and supports actual OAuth-only device tokens/refresh/withdrawal/
+unknown recovery. No HTTP/Reference/OIDC-device/fullM34/unit qualification claim.
+Worker finished; no live worker Go/PG. Parent continues M17, not device variants.
+
+M17 early-state reservation regression RED: acknowledged journal start had no
+original reserved state row. Closed-profile reserve/rebind/attachment correction
+now passes actual PG/race1.583s with metadata recovery retaining uncertain
+external exchange. Earlier failures localized fixture omissions (real recovery
+interfaces/current counter admission) plus the missing typed signin registry
+branch; they are retained as failed, not green. Independent complete kernel
+source pass has no material source finding; accepted finite coverage request
+extends this same test through actual Apply/Commit and late-native/finalize
+rollback. That expanded check is running, not yet passed. No complete signin.
+
+Resumed 2026-11-10: continue M17 in go-identity/main d71a76f; device worker
+continues go-oauth-server/main 0bc3146. Previous user-requested status turn was
+NO PROGRESS, not a completed implementation turn. Groups protocol bfb8896 is
+main/public/CI-green; original review and downloaded consumer proof retained.
+This does not close native provisioning or all M29. No Tools work is selected.
+
+M17 current implementation plan (Tier C/D): contract/workspace/one bounded
+mapping and test plan retained; defect discovery skip: this is the already
+selected new signin path, not a new investigation. TDD original-declaration,
+unattached observation and actual reservation/rebind/attachment tests first;
+extend only the closed signin profile in the existing journal, then integrate
+native provider/session/Reference. Actual one-use state must precede any
+provider call and move only with the same command/generation. Keep original
+capability unchanged, do not create another journal. Run affected ordinary and
+real PostgreSQL tests; review complete coherent consumer before public/main
+delivery. Final qualification remains pending, not waived. Handoff maintained.
+
+Device worker ownership extended to postgres/device_config.go: its global
+OIDC/workload exclusion blocks the frozen coexistence consumer. Narrow only
+that constructor exclusion; keep device requests OAuth-only and ordinary-human.
+Use a distinct actual OAuth-only registered device client beside OIDC/workload
+clients. Existing request-level scope/subject checks are not to be weakened.
+
+23:25 UTC — Next separate-repository worker: native device coexistence in
+go-oauth-server main0bc3146006c8b66994cfa17622833a5fe41fe0a8. Existing device
+profile is delivered (historical selected public PG/race88.436s + downloaded
+consumer30.396s); don't rebuild it. Concrete M39 composition gap: published
+DeviceMigrationSource drops artifacts_check and excludes populated workload/
+silent-OIDC histories, whose parent predicates have already changed. Finite
+outcome: preserve existing workload/OIDC (and installed exchange) artifacts and
+authority while adding optional device history, then run genuine native device
+approval/poll/token/revocation and original-client/old-grant controls. First
+refresh exact consumed baseline with existing consumer + reproduce upgrade RED.
+Own only new postgres/device_composition* and necessary device-local source/tests/
+docs/changelogs; no shared identity contracts, historical migration SQL rewrites,
+private engine, CI/tools/manifests/Git. Existing installed migration bytes must
+remain unchanged; use an explicit immutable forward profile. Parent owns pins/
+integration/review/public main delivery. No HTTP/Reference or fullM34 claim.
+Source investigation/tests may start; heavy Go/services wait for explicit grant.
+
+M17 original-state dependency (bounded source map): generic feature preparation
+currently reserves capability only after Generate/retained-output attachment.
+Signin requires its real RP state reservation before any provider exchange.
+Implement a closed signin hook in existing start/rebind/cleanup preparation
+ownership, not the user/link-only AccountLinkPreparation engine or a copied
+journal. New OAuthSigninConsumption covers final Apply, not this earlier phase.
+The mapper is checking final provider-selected account/session enrichment rules;
+do not assume generic restoration already admits those deltas. This is required
+by the frozen reserve-before-exchange acceptance, not new feature scope.
+
+22:50 UTC — Finite native RFC7591 public-registration profile CLOSED:
+root44cb057fd13e63c12f5a398f9252ace2fbf27679 and native
+0bc3146006c8b66994cfa17622833a5fe41fe0a8 ordinary main-pushed/readback.
+[Native CI](https://github.com/faustbrian/go-oauth-server/actions/runs/42714835466)
+and root prerequisite CI42713783312 are success on exact heads. Public native
+v0.0.0-20261109224614-0bc3146006c8 matches125 Go/module files; actual downloaded
+GOWORKoff/-modreadonly consumer PG/race33.169s passes public code/S256/delete,
+pre-retention recovery and unknown COMMIT/rollback. Public graph full selected
+native race93.199s/ordinary0.245s/taggedvet/modverify and final makecheck/docs
+pass. Full source review + public pin delta review approve. Earlier failed
+aggregates retain failed status. Kerneld71 prerequisite is main/CI-green.
+No M30 whole-row/HTTP/Reference/confidential/RFC7592 or full-unit closure claim.
+OAuth-server worktree clean. Continue primary M17, not new registration variants.
+
+M17 factor bridge: retain the existing factor-authority tuple (tenant/user/
+version/active count), not a new state machine. Preliminary ReadOAuthSigninFactors
+observes known-empty metadata only; RequireOAuthSigninFactors derives the user
+from the frozen original provider account and invokes the kernel's exact original
+account fence before locking that same MFA generation in Apply/final checks.
+Alternative caller-selected user/version without original account custody is
+rejected. No MFA bypass, state initialization, proof/lease renewal or provider
+authentication is created. Real primary/coordinator tests must prove known-empty
+success, missing/enrolled/stale denial, exact participant/original command,
+held lock, late enrollment rollback and post-Work rejection. This stays inside
+the unfinished native social-signin consumer, not another delivery milestone.
+
+2026-11-09 22:46 UTC — Parallel SCIM Groups protocol lane assigned (Sol6.1/high,
+fresh context/default non-fast, no children). Own go-scim root Go/tests/docs and
+CHANGELOG only; exclude postgres/, organization/, .ai/, CI/tool configuration,
+inventories/root manifests and Git operations. Base main3df153b966653c2cfef95752b6ac4ecbac1835d6;
+consume its proved Users protocol/authenticated scoped Store/Mapper/authority
+contracts and pinned identity789096fff1c1/organization02c55d2b5bc0 types. No
+uncommitted identity/M17 contract is consumed. Finite public library outcome:
+explicitly selected Groups discovery/create/read/list/search/replace/atomicPATCH/
+delete with exact schema, bounded membership, resource-type isolation, ETag,
+original authority deadline, redacted errors and no cross-connection effects.
+Preserve existing NewUsersService behavior and API compatibility; separate
+typed Group mapping/storage boundaries where existing User-specific interfaces
+cannot represent Groups. No fake provisioning authority, private replay engine,
+Bulk, connection lifecycle, HTTP/native organization reconciliation or wholeM29
+claim. Tests use honest trusted protocol boundary fixtures, not native evidence.
+Worker first returns public boundary/design alignment; primary owns integration,
+review/main/public consumer/CI and native successor readiness. Heavy Go/services
+remain primary-owned until granted; source/TDD preparation may overlap delivery.
+Use focused ordinary/race/vet, bounded group-hostile-input fuzz and existing
+required checks; no new verification machinery. Freeze after one investigation.
+
+Resume checkpoint: preserved M17 source/tests remain local; linking stays closed.
+The root-session, typed signin request and prospective native mapping ordinary
+checks passed (0.407s/0.342s/0.268s); none proves complete social signin yet.
+Next native bridge freezes an actual ProviderAccountAdmission as closed scalar
+oauth.signin.account fields in the original anonymous callback command, then
+fences that exact selected account/credential under the same Work. The alternative
+of retargeting Work or manufacturing an email recipient is rejected. Existing
+user-scoped provider admission stays unchanged. Tests cover frozen snapshots,
+foreign command/participant/schema/custody, current link/credential denial and
+retained locks; full Reference success/read/logout remains the slice exit.
+Independent M30 worker resumed in its existing thread for corrected native
+registration/code-S256/deletion/recovery checks, using only owned PostgreSQL56327.
+It owns the serialized heavy slot; primary prepares M17 tests/source meanwhile.
+
+21:58 checkpoint: prospective session/request/mapping affected race/vet pass;
+current account fence also supports the coordinator's exact original final-check
+custody, without widening Apply-only identity. Its final current/expired RED and
+corrected native race3.753s pass. Added one bounded native exact provider-subject
+lookup returning real associated credential/user epochs, not proof: clean API
+RED, focused ordinary0.326s and full selected lookup/admission PostgreSQL/race
+4.325s pass. No session/start/callback consumer closure yet. Next is the actual
+known-empty MFA owner and atomic OAuth session effect, then native initiation/
+callback composition. Kernel and MFA retain their existing storage/transaction
+owners. DCR's original recovery currently needs a demonstrated pinned-kernel
+correction; the worker must return that exact boundary, not a private workaround.
+
+2026-11-09 21:07 UTC — M17 existing-linked-account social signin is active;
+the preceding explicit-self linking profile stays closed. Primary owns root/
+session/kernel/risk contracts, oauth/native/HTTP/Reference, public pins and Git.
+Consume delivered identity5006/e836/0b5, root8901, corePG e773, capabilityb329,
+MFA/risk/HTTP8112. Outcome: real password-user registration/verification/link,
+logout, fresh original preauth + OIDC code/S256 -> same user/new cookie session,
+authenticated read and logout, both browser/persistent Remember. No implicit
+signup/link, unknown/missing MFA downgrade, catalog fanout or enterprise behavior.
+Original state ownership before exchange, one exchange under concurrency,
+durable encrypted retention/recovery, current user/provider/credential/factor/
+policy/risk authority, atomic state/session/audit and no replay credential delivery
+are required. Freeze the existing positive Reference journey and its denial/
+rollback/unknown variants; add it as real RED, not a new planning programme.
+
+Data shape/design: retain AuthenticationVerified for a genuine provider-credential
+session (method oauth, actual CredentialProvider ID/version), with a distinct
+prospective OAuth issuance command whose native owner proves provider assertion,
+original preauth, current account/link and atomic effects. Do not counterfeit a
+password or opaque authenticated proof. Alternative new authentication-kind/
+parallel record schema was rejected: existing verified provenance already
+represents a persistent provider credential; independent provider-link current
+authority must be checked by its native owner. Public callers should configure
+native SocialOAuth signin and independently select HTTP SigninStart/Callback;
+application domain stores/transaction callbacks remain forbidden. Changes to
+closed engine profiles require exact typed participants and actual consumer
+proof, not a permissive operation whitelist. Focused issuer/mapping/native tests,
+real Reference PostgreSQL/race journey, affected vet/fuzz, one final review and
+public consumer/main CI close the outcome. No whole unit/M17 closure yet.
+
+Parallel M30 native RFC7591 worker: Sol6.1/high/default NON-FAST, fresh context,
+no children. Own go-oauth-server root client/registration source/tests/docs and
+postgres native registration/client-management source/tests/migrations/module
+files; exclude oidc/device, .ai, root inventories, CI/tool config and all other
+repos. Consume actual go-oauth-server0a520d6/d442 core and native client manager,
+existing public identity/capability/authorization/risk dependencies and genuine
+managed-client/code-S256 consumers. Finite outcome: explicitly enabled immutable
+platform-owner initial-token registration -> actual public client -> real
+code/S256 token -> terminal deletion/recovery. Registration bearer is finite,
+single-use/digest-only and atomically consumed with client creation; exact scopes,
+owner/audience and metadata policy, stable protocol-command retries, wrong token/
+scope/owner/expiry/concurrency/rollback/unknown denial; RFC7592 absent. Parent owns
+integration/HTTP/Reference/shared manifests/review/Git and serial heavy slot.
+Prepare bounded tests first; no Go/services until slot is granted. Missing
+upstream behavior is reported, never replaced by a private engine. Main/retained
+source stays preserved; worker never stages/commits/pushes or changes branch.
+
 2026-11-09 20:49 UTC — Primary is finishing the same configured HTTPS
 OIDC/query/S256 explicit-self account-link consumer, not restarting it. Full
 67/39/19/10 scope remains. Root/OAuth/kernel prerequisites8901/e773 and

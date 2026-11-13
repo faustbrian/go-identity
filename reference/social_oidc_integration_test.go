@@ -59,6 +59,14 @@ func TestReferencePostgresConfiguredOIDCLinkPersistentSession(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, socialOIDC: true, socialOIDCLinkOnly: true, socialOIDCPersistent: true}, true)
 }
 
+func TestReferencePostgresConfiguredOIDCLinkedAccountSignin(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, socialOIDC: true}, true)
+}
+
+func TestReferencePostgresConfiguredOIDCLinkedAccountPersistentSignin(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, socialOIDC: true, socialOIDCPersistent: true}, true)
+}
+
 func TestReferencePostgresConfiguredOIDCLinkCounterRotation(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, socialOIDC: true, socialOIDCLinkOnly: true, socialOIDCRotateCounters: true}, true)
 }
@@ -441,7 +449,8 @@ func (p *referenceSocialOIDCPolicy) Decide(ctx context.Context, c authorization.
 			self := r.Subject.Kind == authorization.SubjectUser && r.Resource.Type == "identity.user" && string(r.Resource.ID) == string(r.Subject.ID)
 			admission := p.actor != "" && r.Subject.Kind == authorization.SubjectServiceAccount && r.Subject.ID == p.actor && r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action)
 			selfAdmission := r.Action == "identity.account.link-start" && r.Subject.Kind == authorization.SubjectUser && r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action)
-			if self || admission || selfAdmission {
+			anonymous := (r.Action == "identity.oauth.signin-start" || r.Action == "identity.oauth.callback") && p.actor != "" && r.Subject.Kind == authorization.SubjectServiceAccount && r.Subject.ID == p.actor && r.Resource.Type == "identity.anonymous-flow" && r.Resource.ID != ""
+			if self || admission || selfAdmission || anonymous {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
 		}
