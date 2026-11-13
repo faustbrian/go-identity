@@ -14,7 +14,8 @@ any of those authorities. It does not complete M17, M18 or unit qualification.
 
 1. Configure one `OIDCConfig` with explicit HTTPS authorization/token/issuer and
    exact callback URI, positive trusted configuration version, client ID,
-   `PublicClient` or `ClientSecretBasic`, exact scopes including `openid`,
+   `PublicClient`, `ClientSecretBasic` or explicitly selected `ClientSecretPost`,
+   exact scopes including `openid`,
    signing algorithms and a trusted locally available `SigningKeySet`.
 2. `NewOIDCProvider` performs validation only, with no network access. Its
    immutable `Profile` is the secret-free configuration the native transaction
@@ -39,6 +40,16 @@ any of those authorities. It does not complete M17, M18 or unit qualification.
    byte projection is borrowed synchronously and cleared on return. Explicitly
    `Destroy` token, verifier and original callback custody after bounded use,
    including later native failure. No durable secret storage is implemented here.
+
+`ClientSecretPost` sends the original client ID and copied secret only as form
+members of the HTTPS token request. It never adds Basic authentication or puts
+the secret in an authorization URL. Empty, control-containing or oversized
+secrets fail construction. Select the method from the immutable provider
+profile; there is no automatic fallback between credential channels. Prefer
+Basic unless the selected provider profile requires POST authentication, as
+described by [RFC 6749 section 2.3.1](https://www.rfc-editor.org/rfc/rfc6749#section-2.3.1).
+This generic capability does not itself implement the built-in Google catalog
+or claim Google interoperability.
 
 ```go
 result, err := provider.Exchange(ctx, originalCallback, decryptedVerifier, boundNonce)

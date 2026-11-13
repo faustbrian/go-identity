@@ -30,7 +30,15 @@ const (
 	PublicClient ClientAuthentication = "none"
 	// ClientSecretBasic uses RFC6749 section2.3.1 form-escaped Basic credentials.
 	ClientSecretBasic ClientAuthentication = "client_secret_basic"
+	// ClientSecretPost sends credentials only in the HTTPS token request form.
+	// Select it explicitly for providers whose pinned profile requires it;
+	// RFC6749 section2.3.1 prefers Basic where that channel is supported.
+	ClientSecretPost ClientAuthentication = "client_secret_post"
 )
+
+func (method ClientAuthentication) valid() bool {
+	return method == PublicClient || method == ClientSecretBasic || method == ClientSecretPost
+}
 
 // Clock supplies trusted validation/response-receipt time. It must be safe for
 // concurrent use, nonblocking and panic-free. Nil selects the system clock.
@@ -128,7 +136,13 @@ func NewOIDCProvider(c OIDCConfig) (*OIDCProvider, error) {
 	if c.Version == 0 || !identifier(c.ID) || !visible(c.ClientID, 1, 1024) || !httpsURL(c.Issuer) || !httpsURL(c.AuthorizationEndpoint) || !httpsURL(c.TokenEndpoint) || !httpsURL(c.RedirectURI) || c.KeySet == nil || c.Timeout < time.Second || c.Timeout > 30*time.Second || c.ClockSkew <= 0 || c.ClockSkew > 5*time.Minute || c.MaxResponseBytes < 1024 || c.MaxResponseBytes > 1<<20 || c.MaxTokenBytes < 256 || c.MaxTokenBytes > 16<<10 || c.MaxCodeBytes < 1 || c.MaxCodeBytes > 64<<10 {
 		return nil, failure(InvalidInput, nil)
 	}
-	if (c.ClientAuthentication == PublicClient && len(c.ClientSecret) != 0) || (c.ClientAuthentication == ClientSecretBasic && !visible(string(c.ClientSecret), 1, 4096)) || (c.ClientAuthentication != PublicClient && c.ClientAuthentication != ClientSecretBasic) {
+	if !c.ClientAuthentication.valid() {
+		return nil, failure(InvalidInput, nil)
+	}
+	if c.ClientAuthentication == PublicClient && len(c.ClientSecret) != 0 {
+		return nil, failure(InvalidInput, nil)
+	}
+	if c.ClientAuthentication != PublicClient && !visible(string(c.ClientSecret), 1, 4096) {
 		return nil, failure(InvalidInput, nil)
 	}
 	if !validScopes(c.Scopes) || !slices.Contains(c.Scopes, "openid") || len(c.Algorithms) == 0 || len(c.Algorithms) > 2 {
@@ -386,6 +400,10 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	q := url.Values{"grant_type": {"authorization_code"}, "code": {string(code)}, "code_verifier": {string(verifier)}, "redirect_uri": {p.config.RedirectURI}}
 	if p.config.ClientAuthentication == PublicClient {
 		q.Set("client_id", p.config.ClientID)
+	}
+	if p.config.ClientAuthentication == ClientSecretPost {
+		q.Set("client_id", p.config.ClientID)
+		q.Set("client_secret", string(secret))
 	}
 	encoded := []byte(q.Encode())
 	bodyOwner := newTokenRequestBody(encoded)

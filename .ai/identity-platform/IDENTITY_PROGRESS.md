@@ -1,5 +1,17 @@
 # Identity Platform Progress
 
+## Overall and reporting
+
+**Overall completion estimate: 25–30%, low confidence.** The conservative
+retained count is 10/39 selected consumer outcomes closed; many additional
+profiles are delivered inside still-open milestones. Neither number is a
+measured percentage of source code or full-package qualification.
+
+Brian requires a complete progress report every 15 minutes of active work:
+fresh agent states/owners, all 67 units below, delivered behavior, remaining work,
+dependencies, checks/publication and blockers. Keep this current overview above
+historical detail. Do not rerun qualification just to refresh a status report.
+
 ## Current TL;DR — 2026-11-13
 
 **Current consumer integration:** the actual configured PostgreSQL backend
@@ -22,15 +34,148 @@ plus module verification. Its changed source and manifests match the reviewed
 Git bytes. This closes the selected existing-account HTTP consumer profile,
 not all M17/M18 variants or another fully qualified unit.
 
-**Parallel implementation:** a dependency-ready native public-client metadata
-update lane is active in go-oauth-server. Its public lifecycle, grant invalidation,
-concurrent changes, authority withdrawal and lost-commit recovery pass real
-PostgreSQL (15.330s), with unchanged confidential regressions. These changes are
-local and awaiting independent review/public pins, not delivered yet. It reuses
-existing authority and does not add RFC7592. Primary retains final acceptance
-and publication; workers do not publish independently.
+**Parallel native delivery:** public-client metadata replacement is pushed to
+go-oauth-server main at `39ac0ad`, with
+[passing exact-source CI](https://github.com/faustbrian/go-oauth-server/actions/runs/43370663763).
+The real public-dependency PostgreSQL cohort passed under race (64.614s),
+including public-client lifecycle, grant invalidation, authority withdrawal,
+contention, lost-commit recovery and retained confidential-client regressions.
+Independent source and public-pin reviews approve. The authenticated published
+native artifact passed a fresh complete public-client consumer (5.192s, no
+skips); all 132 published files match reviewed bytes. Its disposable PostgreSQL
+fixture and 3.3GB scratch were removed after retaining the proof.
+This is a selected M30 profile, not full M30 or whole-unit qualification.
+RFC7592 remains excluded. Primary retains final acceptance and publication.
 
-### Last published native consumer checkpoint
+**Current assignments:** primary is adding the generic POST credential channel
+required by the Google catalog, then owns catalog/native/Reference adoption.
+`package_status_platform` owns the independent direct Apple client-secret
+signing operation in `oauth/providers`, not Apple login or hybrid callbacks.
+The public-client worker and its reviewer have finished. All other units remain
+queued with their dependencies visible below; completed workers are not active.
+
+## All 67 units — functional scope and remaining work
+
+Reconciled 2026-11-13 from owning source/README, consumed public pins and retained
+consumer evidence. Percentages are broad **functional-scope estimates**, not
+delivery percentages, confidence in correctness, effort remaining or release
+qualification. **L/M** means low/medium confidence. **D** means selected consumer
+behavior delivered, **I** implemented but integration/acceptance incomplete,
+**P** planned/no mapped runtime found, **H** historical extension evidence.
+No whole-unit qualification is established by this reporting reconciliation.
+
+Primary owns integration and delivery across the goal. A unit without an active
+assignment is queued, not abandoned. Current named-agent assignments are above
+and in EXECUTION_LEDGER.md; earlier completed workers are not active workers.
+
+### Primitive extensions — 6
+
+| Unit | Functional estimate | Stage / supported behavior | Remaining work and dependencies |
+|---|---:|---|---|
+| `primitive/authentication-identity-contracts` |70–90%,L|H: pinned proof/assurance/opaque credential contracts used by real consumers|Shared-issuer current-validity/resource verification and contract compatibility|
+| `primitive/authorization-identity-contracts` |55–80%,L|H: public decision integration; fuller administrative extension retained separately|Reconcile/publish retained administration/assignment contracts against consumed pins|
+| `primitive/capability-identity-contracts` |80–95%,M|H: opaque purpose-bound issue/verify and references used by delivered flows|Remaining lifecycle/shared-issuer compatibility and qualification|
+| `primitive/capability-postgres-identity-contracts` |65–85%,L|D/H: same-coordinator reserve/consume/issue/recover participant|Remaining lifecycle/supersession/retirement and public contract qualification|
+| `primitive/identifier-identity-contracts` |75–90%,L|H: versioned normalization/canonical identity adopted by email/username|Remaining profile migration/collision/compatibility coverage|
+| `primitive/password-secret-contracts` |85–95%,M|H: owned opaque secrets and explicit intrinsic algorithm parameters|Final extension/compatibility qualification reconciliation|
+
+### Identity, sessions and delivery — 9
+
+| Unit | Functional estimate | Stage / supported behavior | Remaining work and dependencies |
+|---|---:|---|---|
+| `identity` |45–65%,L|D: identity/credential authority, commands and baseline lifecycle|Complete administration, privacy/lifecycle and typed fields/hooks|
+| `identity/postgres` |50–70%,L|D: real primary storage, sole coordinator, audit/outbox/recovery|Remaining destructive/privacy lifecycle and participant/compatibility profiles|
+| `identity/session` |45–65%,L|D: selected issuance/provenance, cookies, CSRF, read/revoke and cache contracts|Refresh/rotation, switching/transfer/enrichment, devices and all storage profiles|
+| `identity/session/postgres` |50–70%,L|D: selected password/OTP/MFA/passkey/OAuth durable session flows|Refresh families, switching/limits/devices and complete lifecycle/cache qualification|
+| `identity/session/valkey` |Unassessed|No mapped current module located; core cache code is not this adapter|Locate actual source checkpoint or implement positive-cache/invalidation adapter after native authority|
+| `identity/delivery` |65–85%,M|D/I: templates/intents, selected real email delivery and worker/status contracts|Remaining provider/channel/locale/error-policy interoperability|
+| `identity/delivery/postgres` |65–85%,M|D/I: encrypted durable queue, leases/dedupe/receipts/recovery|Complete provider/recovery/retention profiles and qualification|
+| `identity/i18n` |45–65%,M|I: locale negotiation, catalogs/templates and typed error rendering|Durable preferences/lifecycle/export and complete delivery integration|
+| `identity/http` |35–55%,L|D/I: base transport/security/OpenAPI and selected real feature handlers|Remaining canonical handlers/profiles and cross-feature acceptance|
+
+### Risk and authentication workflows — 17
+
+| Unit | Functional estimate | Stage / supported behavior | Remaining work and dependencies |
+|---|---:|---|---|
+| `identity/risk` |50–70%,L|D/I: selected counted/audited admission, risk/CAPTCHA custody|Full operation matrix, lockout/override/recovery and evidence orchestration|
+| `identity/risk/postgres` |50–70%,L|D/I: real protected counters and evidence/lockout executors|Remaining durable profiles, retention and joint PG/Valkey recovery composition|
+| `identity/risk/valkey` |30–55%,L|I: bounded journal-fenced velocity owner and explicit lifetime|Joint primary/native/reference recovery and topology/failover qualification|
+| `identity/risk/captcha` |65–85%,M|I: neutral bounded provider facts and exact risk callback|Durable one-use consumption/events and complete reference/provider selection|
+| `identity/risk/captcha/recaptcha` |65–85%,M|I: selected classic-v3 Siteverify/action/host/score handling|Durable risk/reference/events and provider interoperability|
+| `identity/risk/captcha/turnstile` |65–85%,M|I: Siteverify, original-command idempotency and host/action/cdata binding|Durable risk/reference/events and provider interoperability|
+| `identity/risk/captcha/hcaptcha` |65–85%,M|I: selected Siteverify/sitekey/host facts and risk callback|Durable risk/reference/events and provider interoperability|
+| `identity/risk/captcha/captchafox` |65–85%,M|I: selected Siteverify/sitekey/host facts and strict parsing|Durable risk/reference/events and provider interoperability|
+| `identity/risk/hibp` |70–90%,M|D/I: privacy-preserving padded range screening in selected password flows|Broader workflow selection, interoperability and qualification|
+| `identity/password` |65–85%,M|D: registration/verification/signin/reset/change/fresh proof/recovery|Provider-only set-password, administration/compromise and remaining profiles|
+| `identity/password/postgres` |65–85%,M|D: real atomic password flows and selected username/email/phone owners|Remaining administration/reset/lifecycle and compatibility profiles|
+| `identity/username` |70–90%,M|D: selected signup/signin/availability/rename/TOTP journey|Broader policy/hook/catalog variants and qualification|
+| `identity/email` |65–85%,M|D:13 selected lifecycle/OTP/TOTP/admin/hook profiles|Privacy/lifecycle contribution and remaining factor/composition policies|
+| `identity/magiclink` |70–90%,M|D: selected signin/optional signup, delivery, consume/session/recovery|Remaining MFA/method combinations and complete lifecycle/provider qualification|
+| `identity/otp` |65–85%,M|D: purpose-bound custody and selected email/phone/MFA workflows|Remaining purpose/channel/factor/reset profiles and qualification|
+| `identity/otp/postgres` |65–85%,M|D: durable issuance/attempts/delivery and atomic consumption|Remaining reset/channel/management/retention profiles|
+| `identity/phone` |55–75%,M|D: enrollment, verification, password/SMS signin, removal/replacement|Signup, unclosed password-reset journey and remaining recycling/factor profiles|
+
+### Anonymous identity, MFA and passkeys — 8
+
+| Unit | Functional estimate | Stage / supported behavior | Remaining work and dependencies |
+|---|---:|---|---|
+| `identity/anonymous` |70–90%,M|D: selected creation/read/delete/upgrade/abandoned cleanup|Other target-authentication/transfer/conflict profiles and qualification|
+| `identity/anonymous/postgres` |70–90%,M|D: real atomic anonymous lifecycle/upgrade/recovery/cleanup|Remaining merge/authentication/lifecycle profiles|
+| `identity/mfa` |50–70%,L|D/I: selected confirmed TOTP/email-OTP and factor management|OTP replacement, trusted devices/security keys and administrative recovery|
+| `identity/mfa/postgres` |50–70%,L|D/I: durable factors/continuations/completion and selected management|Remaining device/method/admin recovery and complete lifecycle qualification|
+| `webauthn` |45–65%,M|D: selected identified/discoverable ES256/Ed25519 ceremonies|Remaining attestation/algorithm/RP profiles and physical interoperability|
+| `webauthn/postgres` |50–70%,M|D: durable ceremonies/credentials and passkey participants|Remaining protocol profiles, lifecycle/migration and full adapter qualification|
+| `passkey` |50–70%,L|D: selected signup/signin/management and TOTP custody contracts|Remaining recovery/method/policy profiles|
+| `passkey/postgres` |55–75%,M|D: selected signup/signin/inventory/management/TOTP backend|Remaining MFA/organization/recovery and hardware/autofill interoperability|
+
+### Social OAuth, API keys and impersonation — 10
+
+| Unit | Functional estimate | Stage / supported behavior | Remaining work and dependencies |
+|---|---:|---|---|
+| `identity/oauth` |30–50%,M|D: configured OIDC/query/S256 linking and existing-account signin|Signup/unlink/stored-token refresh, more modes/providers/native-token workflows|
+| `identity/oauth/postgres` |30–50%,M|D: original browser/state/PKCE, link/signin/session and tokenless recovery|Signup/MFA/organization variants, unlink and durable provider refresh|
+| `identity/oauth/providers` |0–5%,M|P: generic configured provider is not this catalog unit|Built-in catalog/mappings/native-token proofs after generic OAuth|
+| `identity/oauth/onetap` |0–5%,M|P: no mapped runtime found|One Tap browser/nonce/origin proofs and real identity/session composition|
+| `identity/oauth/proxy` |0–5%,M|P: no mapped runtime found|Registered previews, one-use proxy state and intended-application completion|
+| `identity/apikey` |60–80%,M|D: selected modern/legacy user/organization keys, reads and narrowing update|Finite quotas/caches and remaining session/delegation/management profiles|
+| `identity/apikey/postgres` |60–80%,M|D: real ownership/legacy/verification/management/paging/recovery|Quotas, remaining cascades/profiles and complete native qualification|
+| `identity/apikey/valkey` |0–5%,M|P: mapped adapter absent; selected implementation disables caches|Bounded positive/quota projections and invalidation after source-owner contracts|
+| `identity/impersonation` |0–5%,M|P: no mapped runtime found|Actor/target approvals/grants/session lifecycle; needs identity/session/risk/authorization|
+| `identity/impersonation/postgres` |0–5%,M|P: no mapped adapter found|Durable grants/approvals and atomic session/audit/recovery after core contracts|
+
+### Organizations, federation and provisioning — 11
+
+| Unit | Functional estimate | Stage / supported behavior | Remaining work and dependencies |
+|---|---:|---|---|
+| `organization` |55–75%,M|D: selected membership/invitations/teams/roles/ownership/lifecycle|Remaining selection/hook/field variants and external lifecycle cascades|
+| `organization/postgres` |55–75%,M|D: durable selected organization/team/role/permission/recovery flows|Remaining mutations/selection/cascades and complete adapter qualification|
+| `sso` |0–5%,M|P: source explicitly planned; no runtime API|Federation/provider/domain/routing/JIT/linking/sync authority after organization contracts|
+| `sso/domain-verification` |0–5%,M|P: no mapped runtime found|Bounded domain challenges/DNS/HTTP verification after SSO contracts|
+| `sso/oidc` |0–5%,M|P: social OIDC does not implement enterprise federation|Enterprise adapter and real SSO provisioning/signin/session composition|
+| `sso/oauth2` |0–5%,M|P: no mapped enterprise adapter found|Enterprise OAuth mapping/proof and SSO-owned provisioning/session outcome|
+| `sso/saml` |0–5%,M|P: no mapped SAML runtime found|SAML validation/replay/lifecycle plus genuine federation signin|
+| `sso/postgres` |0–5%,M|P: no mapped native adapter found|Provider/domain/login/token/sync persistence after SSO contracts|
+| `scim` |45–65%,M|D/I: Users/Groups protocol discovery/CRUD/PATCH/filter/page/ETag|Remaining schemas/Bulk/connection lifecycle and real authority/store/mapper/transport|
+| `scim/postgres` |0–5%,M|P: no mapped native adapter found|Durable resources/tokens/ETags and atomic identity/organization effects; needs mapper|
+| `scim/organization` |0–5%,M|P: no mapped mapper/reconciler found|User/Group mapping/deprovisioning/drift after identity/organization and SSO sync authority|
+
+### Authorization server and end-state composition — 6
+
+| Unit | Functional estimate | Stage / supported behavior | Remaining work and dependencies |
+|---|---:|---|---|
+| `oauth-server` |55–75%,M|D: selected code/consent/refresh/client/RFC7591/workload/exchange and public metadata Update|Remaining management/delegation/shared-issuer and human HTTP/reference; RFC7592 excluded|
+| `oauth-server/oidc` |55–75%,M|D: selected ID token/discovery/JWKS/UserInfo/subjects/prompt/logout|Remaining claims/methods/protocol and complete human HTTP/reference/conformance|
+| `oauth-server/device` |45–65%,M|D: selected RFC8628 native issuance/approval/polling/recovery|Other identity profiles, full HTTP/reference and device qualification|
+| `oauth-server/postgres` |55–75%,M|D: durable selected grants/clients/keys/device/registration/exchange and published public Update consumer|Remaining shared-issuer/composition/qualification|
+| `identity/reference` |35–55%,L|D: selected actual PostgreSQL backend graphs, including delivered OIDC signin|Enterprise/SCIM/impersonation and remaining social/server/session/privacy/all-feature journeys|
+| `identity/identitytest` |0–5%,M|P: no mapped reusable toolkit module found|Public reference-backed factories/fixtures/failure drivers and contract suites after Reference contracts|
+
+These estimates retain source/delivery boundaries: local/provider-derived tests
+do not become live-provider interoperability; native APIs do not become HTTP
+composition; historical proof is not a newly executed check. Old records below
+may contain superseded status. The current overview takes precedence.
+
+### Last published native consumer checkpoint (historical detail)
 
 Overall estimate remains **25–30%, low confidence; 10/39 selected milestones
 closed**. The native existing-account OIDC slice below is not whole M17/M18,

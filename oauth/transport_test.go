@@ -240,7 +240,16 @@ func TestOIDCConfigurationFailsClosed(t *testing.T) {
 		{"algorithm-none", func(c *oauth.OIDCConfig) { c.Algorithms = []string{"none"} }},
 		{"algorithm-duplicate", func(c *oauth.OIDCConfig) { c.Algorithms = []string{"ES256", "ES256"} }},
 		{"client-auth-missing", func(c *oauth.OIDCConfig) { c.ClientAuthentication = "" }},
-		{"client-auth-post", func(c *oauth.OIDCConfig) { c.ClientAuthentication = "client_secret_post" }},
+		{"client-auth-unknown", func(c *oauth.OIDCConfig) { c.ClientAuthentication = "client_secret_unknown" }},
+		{"client-auth-post-empty", func(c *oauth.OIDCConfig) { c.ClientAuthentication = oauth.ClientSecretPost; c.ClientSecret = nil }},
+		{"client-auth-post-control", func(c *oauth.OIDCConfig) {
+			c.ClientAuthentication = oauth.ClientSecretPost
+			c.ClientSecret = []byte("invalid\x00credential")
+		}},
+		{"client-auth-post-limit", func(c *oauth.OIDCConfig) {
+			c.ClientAuthentication = oauth.ClientSecretPost
+			c.ClientSecret = []byte(strings.Repeat("x", 4097))
+		}},
 		{"public-secret", func(c *oauth.OIDCConfig) { c.ClientAuthentication = oauth.PublicClient }},
 		{"missing-keyset", func(c *oauth.OIDCConfig) { c.KeySet = nil }},
 		{"timeout", func(c *oauth.OIDCConfig) { c.Timeout = 31 * time.Second }},

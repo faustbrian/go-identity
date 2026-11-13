@@ -1,5 +1,57 @@
 # Identity Implementation — Current Milestone
 
+Parallel leaf assignment: package_status_platform owns only new
+oauth/providers/** for the existing direct Apple client-secret-sign operation.
+This is independent of unfinished Google claims/native-token/hybrid flows:
+consumer supplies an authorized preprovisioned opaque signing-key handle and
+uses the resulting bounded JWT only through a synchronous token-request encoder.
+Follow the complete identity-oauth-providers goal's exact header/claims/order,
+P-256/ES256, clock/lifetime bounds, secret-envelope custody and stable redacted
+errors. Consume committed secret-envelope/v2 v2.0.1 and existing Go1.27 crypto;
+no OAuth/session/state authority is created. Include actual JOSE verification,
+exact bytes, cancellation/errors/zeroization and clean public API usage proof.
+TDD and focused race/vet; no claims of Apple login or catalog/unit completion.
+Primary owns root manifests/workspace/HTTP/Reference/Git/review/integration.
+Worker must request the serial heavy slot before Go/services, preserve others'
+work and spawn no children. Final full-diff review follows coherent implementation.
+
+M17 next selected profile: explicit OIDC client_secret_post token exchange,
+required by the existing Google catalog row, not a Basic substitute. Primary
+owns oauth/provider.go, callback_query.go, affected provider/transport tests,
+oauth README/CHANGELOG and subsequent native/Reference pins/composition.
+Consume current public OAuth82309c273c6c, nativec370ef9 and delivered Reference
+4edff22. Preserve original code/state/nonce/S256/redirect custody and exactly one
+credential channel: form client_id/client_secret, never Basic/query/authorize
+disclosure. Existing public/Basic behavior stays unchanged. Invalid/missing
+secrets, wrong nonce/issuer, cancellation/unknown exchange and redaction retain
+fail-closed semantics. Focused TLS provider TDD plus ordinary OAuth race/vet and
+existing callback fuzz; independent final-diff review before root delivery.
+Then use the actual committed contract for catalog/native consumer adoption.
+This prerequisite does not close M17 or the provider catalog. Signup, claims
+enrichment, Apple/form_post, refresh/unlink and other providers remain separate
+required profiles. No schema/query/tooling changes are part of this batch.
+
+Native public-client metadata Update is now pushed to go-oauth-server main
+39ac0ad1636a544a13862abaee81d5b6a1f12d87; exact-source CI passes:
+https://github.com/faustbrian/go-oauth-server/actions/runs/43370663763.
+Root prerequisite edc360c is public. Source/public-pin reviews approve; actual
+GOWORK=off public-dependency PG/race cohort passes64.614s. The original worker
+owns only published-native artifact/one representative consumer proof and
+task-resource cleanup now, not repository writes or Git. Primary owns final
+acceptance. Earlier active-source statements below are historical.
+
+User reporting update: every15 active minutes, include all67 units, not only
+active packages. `package_status_core` owns read-only reconciliation of the
+first34 unit rows (six primitive extensions through identity/mfa/postgres);
+`package_status_platform` owns the remaining33 (webauthn through identitytest).
+They read current main source/README and retained delivery evidence only, with
+no writes, tests, services, Git mutations, new qualification or child agents.
+Return functional-scope estimate/range+confidence where supported, delivered
+behavior, remaining work/dependencies and current ownership; otherwise mark
+unassessed, never zero. This bounded reporting pass is not a prerequisite to
+the public-client implementation delivery proceeding in parallel. Primary owns
+one compact complete matrix at the top of IDENTITY_PROGRESS.md.
+
 Selected M17 existing-account HTTP consumer profile DELIVERED: Reference
 main4edff224b3f06fd27269bacdd0852e8a76c27416, exact successful CI
 https://github.com/faustbrian/go-identity/actions/runs/43366321487.

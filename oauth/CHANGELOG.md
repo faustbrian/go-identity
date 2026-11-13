@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support explicitly configured `client_secret_post` for HTTPS OIDC code
+  exchange. Keep credentials in the token form only, bind the chosen method
+  into callback configuration and preserve existing public/Basic behavior.
+  There is no automatic credential-channel fallback.
+
 - Add distinct existing-account callback input with original preauth-cookie
   custody and trusted browser attribution. Callback shape does not select a
   local user, infer Remember policy, or grant exchange/session authority.
