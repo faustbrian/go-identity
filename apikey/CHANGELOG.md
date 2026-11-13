@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add modern user-key `SourceAuthorityBinding` and separate current
+  `SourceAuthorityObservation` contracts for already-authenticated delegation
+  sources. Retain exact roots, non-expanding grants and original expiry without
+  claiming bearer/human authentication. Existing service/verifier interfaces,
+  defaults and fingerprints are unchanged; real native observation/fencing is
+  required and organization/legacy sources remain unselected.
+
 - Add opt-in modern token-bucket quota configuration and bounded historical
   metadata to the existing atomic verifier contract. Exact positive debits bind
   the original attempt; possible-debit outcomes expose no principal and require

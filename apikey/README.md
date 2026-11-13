@@ -1,5 +1,24 @@
 # API keys
 
+## Current validity of an authenticated delegation source
+
+`NewSourceAuthorityBinding` snapshots the nonsecret root and effective ceiling of
+a still-fresh `VerificationResult` supplied by the real `AtomicVerifier`.
+The binding selects modern user-owned keys only. `SourceAuthorityObservation`
+represents a separate, bounded primary read of current key/owner/policy facts;
+neither value nor structural validation authenticates a bearer or proves a human
+actor/session. Existing `Service` and `AtomicVerifier` interfaces are unchanged.
+
+The owned native adapter supplies `ObserveSourceAuthority` and an existing-Work
+`RequireSourceAuthority` fence. Consumers must preserve original verification
+timestamps separately, retain exact root/security versions and credential expiry,
+intersect grants and use the earliest contributing current deadline. A genuine
+later primary read is distinct from copying or replaying an expired observation.
+User ownership never converts the API-key actor into a human. Organization and
+legacy source profiles remain excluded; this seam is not an OAuth exchange.
+Bindings/observations deny implicit JSON export. A composing durable owner must
+use its explicit nonsecret projection, not a public proof factory or raw key.
+
 `Updater` is an optional name/permission-management extension; it does not
 change the existing `Service` interface. Supply the genuine human bearer,
 stable idempotency key, exact record version, required name and explicit sorted
