@@ -1,12 +1,58 @@
-# Provider-specific direct operations
+# Built-in OAuth profiles and direct operations
 
-This experimental module currently implements only
-`identity.oauth.provider-apple-client-secret-sign`. It signs an Apple
+This experimental module supplies an explicitly configured Google
+code/query/S256 provider through the existing OAuth owner and
+`identity.oauth.provider-apple-client-secret-sign`, which signs an Apple
 client-secret JWT using an explicitly configured, preprovisioned encrypted
 P-256 key. It does **not** implement Apple authentication, hybrid/form-post
-callbacks, signup, sessions, a provider catalog or whole-unit qualification.
+callbacks, implicit signup, a complete provider catalog or whole-unit qualification.
 
-## Provision and use
+## Google existing-account browser flow
+
+```go
+provider, err := providers.NewGoogle(providers.GoogleConfig{
+    Version: 1,
+    ClientID: clientID,
+    ClientSecret: loadedSecret,
+    RedirectURI: "https://application.example/google/callback",
+    KeySet: trustedGoogleKeys,
+    Clock: clock,
+    HTTPClient: httpClient,
+})
+if err != nil {
+    return err
+}
+// The caller clears loadedSecret after construction.
+defer provider.Close()
+// Supply provider to the existing native OAuth link/signin configuration.
+```
+
+`NewGoogle` fixes the stable ID, reviewed issuer/endpoints, RS256,
+`client_secret_post`, code/query/S256 and required nonce. Nil `Scopes` selects
+`openid`, `email`, `profile`; an explicit unique subset must retain `openid`.
+Unlisted scopes, aliases and endpoint/algorithm/authentication overrides are
+not selected. `Profile()` is the existing defensive, secret-free facts
+projection, not a second catalog or proof owner. See [the Google profile and
+source pins](docs/google.md) for bounds, supported behavior and remaining scope.
+
+Construction performs no discovery, key fetch, clock read or network exchange.
+Trusted keys, clock and standard HTTP transport remain caller-owned. The
+returned `*oauth.OIDCProvider` owns its copied secret and cloned transport;
+close it when admitted operations finish. Native state admission, exact callback
+binding, account selection, current authority and session issuance remain owned
+by the existing OAuth/native services. Configuring this builder does not grant
+any of those authorities or expose a route by itself.
+
+The two documented signed Google issuer forms project to one canonical
+issuer/exact-subject account after full verification. Raw callback `iss` remains
+required and exactly canonical, as declared by the pinned Google metadata.
+There is no email matching, automatic signup, direct/native-token signin,
+UserInfo enrichment, refresh, revocation, unlink, provider logout or One Tap
+operation in this finite builder. Controlled TLS/signature/native tests do not
+claim live Google interoperability. The full 43-row provider matrix and all
+unimplemented Google cells remain binding and unverified.
+
+## Provision and use the Apple signer
 
 The application owns key provisioning, authorizes the operation, and retains
 the actual `secret-envelope/v2` service and its concurrent-safe wrapping-key

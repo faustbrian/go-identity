@@ -1,6 +1,6 @@
-// Package providers supplies explicitly selected provider-specific operations.
-// This initial surface signs Apple client-secret JWTs through preprovisioned
-// encrypted P-256 keys; it does not implement Apple login or a provider catalog.
+// Package providers supplies explicit built-in OAuth profiles and provider-specific
+// operations. Google composes the existing OAuth owner; Apple signs client-secret
+// JWTs with preprovisioned encrypted P-256 keys, not Apple authentication.
 package providers
 
 import (
