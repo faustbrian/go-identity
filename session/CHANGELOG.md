@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a separate browser-readable, secure host-only synchronizer-cookie policy
+  for original committed CSRF delivery after provider redirects. Authentication
+  cookies remain HttpOnly; existing token/digest and protected logout validation
+  are unchanged. Remember and deletion retain the original cookie scope/lifetime.
+
 - Add an explicit prospective existing-account OAuth cookie-session issuer.
   Preserve actual provider-credential metadata, known-empty factor epoch,
   original Remember policy and one-bind/one-attempt custody. Bearer and CSRF

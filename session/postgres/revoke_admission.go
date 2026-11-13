@@ -28,6 +28,10 @@ func copySingleFactorAdmission(c SingleFactorSessionAdmissionConfig) SingleFacto
 		copied := *p
 		c.Verified = &copied
 	}
+	if p := c.OAuth; p != nil {
+		copied := *p
+		c.OAuth = &copied
+	}
 	if p := c.OTP; p != nil {
 		copied := *p
 		c.OTP = &copied
@@ -98,6 +102,9 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 		var profile *IdentifierAdmissionConfig
 		if r.revokeAdmission != nil {
 			profile = r.revokeAdmission.Verified
+			if s.Authentication.Proof.Method == "oauth" && r.revokeAdmission.OAuth != nil {
+				profile = r.revokeAdmission.OAuth
+			}
 		} else if r.issueAdmission != nil {
 			p := IdentifierAdmissionConfig(*r.issueAdmission)
 			profile = &p

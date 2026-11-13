@@ -1,5 +1,16 @@
 # PostgreSQL session storage
 
+## Combined password and OAuth admission
+
+`SingleFactorSessionAdmissionConfig.OAuth` independently selects the exact
+`oauth`/provider/`identity/oauth` profile beside the existing `Verified` profile.
+The native reader performs its original lookup once and selects from immutable
+stored provenance, without falling back after denial. OAuth retains the linked
+provider credential and original known-empty factor generation. All selections
+share deployment, policy namespace and audience and participate in cache custody.
+Configure the same frozen selection for reading and revoke-one execution; caller
+and target retain their own original method. Nil preserves existing behavior.
+
 ## Organization-selected password sessions
 
 Selection is a logical organization operation, not a second session command.

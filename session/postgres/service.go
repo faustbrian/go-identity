@@ -105,6 +105,7 @@ type primarySessionReader struct {
 	domain                     *kernel.Repository
 	policy                     *authority.AuthorityStore
 	profile                    IdentifierAdmissionConfig
+	oauthReader                *primarySessionReader
 	clock                      session.IssuerClock
 	otp                        *OTPAdmissionConfig
 	magicLink                  *MagicLinkAdmissionConfig
@@ -211,7 +212,13 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 		}
 		return r.observeCredential(bounded, stored, start)
 	}
-	if spec.Authentication.Kind != session.AuthenticationVerified || !r.profile.valid() {
+	if spec.Authentication.Kind != session.AuthenticationVerified {
+		return session.SessionObservation{}, session.ErrUnauthenticated
+	}
+	if spec.Authentication.Proof.Method == "oauth" && r.oauthReader != nil {
+		return r.oauthReader.observeCredential(bounded, stored, start)
+	}
+	if !r.profile.valid() {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
 	if r.mfaPassword {

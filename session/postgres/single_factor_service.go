@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	authority "github.com/faustbrian/go-authorization/v3/postgres"
@@ -17,7 +18,11 @@ import (
 // must agree. No selection implies authority for another method. Organization,
 // MFA and passkey dimensions remain denied until their owners are composed.
 type SingleFactorSessionAdmissionConfig struct {
-	Verified  *IdentifierAdmissionConfig
+	Verified *IdentifierAdmissionConfig
+	// OAuth independently selects oauth/provider/identity/oauth alongside the
+	// existing verified profile. Both use AuthenticationVerified; immutable
+	// stored proof provenance selects the owner without admission fallback.
+	OAuth     *IdentifierAdmissionConfig
 	OTP       *OTPAdmissionConfig
 	MagicLink *MagicLinkAdmissionConfig
 }
@@ -42,7 +47,9 @@ func singleFactorAdmission(c SingleFactorSessionAdmissionConfig) ([]session.Auth
 			return false
 		}
 		common = profile
-		methods = append(methods, kind)
+		if !slices.Contains(methods, kind) {
+			methods = append(methods, kind)
+		}
 		fields = append(fields, fmt.Sprint(kind), profile.GlobalAuthorityID, profile.PolicyNamespace, profile.Audience)
 		return true
 	}
@@ -52,6 +59,19 @@ func singleFactorAdmission(c SingleFactorSessionAdmissionConfig) ([]session.Auth
 			return nil, "", session.ErrInvalidInput
 		}
 		fields = append(fields, p.AuthenticationMethod, fmt.Sprint(p.CredentialKind), p.CredentialOwner)
+	}
+	if c.OAuth != nil {
+		p := *c.OAuth
+		if !p.valid() || p.AuthenticationMethod != "oauth" || p.CredentialKind != identity.CredentialProvider || p.CredentialOwner != "identity/oauth" {
+			return nil, "", session.ErrInvalidInput
+		}
+		if c.Verified != nil && c.Verified.AuthenticationMethod == "oauth" {
+			return nil, "", session.ErrInvalidInput
+		}
+		if !selectProfile(session.AuthenticationVerified, OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience}) {
+			return nil, "", session.ErrInvalidInput
+		}
+		fields = append(fields, "explicit-oauth", p.AuthenticationMethod, fmt.Sprint(p.CredentialKind), p.CredentialOwner)
 	}
 	if c.OTP != nil && !selectProfile(session.AuthenticationOTP, *c.OTP) {
 		return nil, "", session.ErrInvalidInput
@@ -85,6 +105,9 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	}
 	var audience string
 	if p := c.Admission.Verified; p != nil {
+		audience = p.Audience
+	}
+	if p := c.Admission.OAuth; p != nil {
 		audience = p.Audience
 	}
 	if p := c.Admission.OTP; p != nil {
@@ -129,6 +152,12 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 		r.profile = *p
 		r.profile.GlobalAuthorityID, r.profile.PolicyNamespace, r.profile.Audience = clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience)
 		r.profile.AuthenticationMethod, r.profile.CredentialOwner = clone(p.AuthenticationMethod), clone(p.CredentialOwner)
+	}
+	if p := c.Admission.OAuth; p != nil {
+		copied := *p
+		copied.GlobalAuthorityID, copied.PolicyNamespace, copied.Audience = clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience)
+		copied.AuthenticationMethod, copied.CredentialOwner = clone(p.AuthenticationMethod), clone(p.CredentialOwner)
+		r.oauthReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: copied}
 	}
 	if p := c.Admission.OTP; p != nil {
 		r.otp = &OTPAdmissionConfig{clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience)}

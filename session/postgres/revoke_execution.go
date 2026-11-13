@@ -79,6 +79,9 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 		if p := selected.Verified; p != nil {
 			profiles = append(profiles, OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience})
 		}
+		if p := selected.OAuth; p != nil {
+			profiles = append(profiles, OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience})
+		}
 		if p := selected.OTP; p != nil {
 			profiles = append(profiles, *p)
 		}

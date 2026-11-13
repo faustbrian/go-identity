@@ -60,7 +60,7 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 		}
 		common := OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience}
 		profiles := []*OTPAdmissionConfig{c.SingleFactor.OTP}
-		for _, v := range []*IdentifierAdmissionConfig{c.SingleFactor.Verified, c.MFAPassword} {
+		for _, v := range []*IdentifierAdmissionConfig{c.SingleFactor.Verified, c.SingleFactor.OAuth, c.MFAPassword} {
 			if v != nil {
 				profiles = append(profiles, &OTPAdmissionConfig{v.GlobalAuthorityID, v.PolicyNamespace, v.Audience})
 			}
@@ -78,7 +78,7 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 		}
 		var methods []session.AuthenticationKind
 		var previous string
-		if c.Passkey != nil || c.SingleFactor.Verified != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil || c.MFAPassword != nil {
+		if c.Passkey != nil || c.SingleFactor.Verified != nil || c.SingleFactor.OAuth != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil || c.MFAPassword != nil {
 			prior := c
 			prior.MFAPasskey = nil
 			var err error
@@ -103,8 +103,10 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 		}
 		common := OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience}
 		profiles := []*OTPAdmissionConfig{c.SingleFactor.OTP}
-		if v := c.SingleFactor.Verified; v != nil {
-			profiles = append(profiles, &OTPAdmissionConfig{v.GlobalAuthorityID, v.PolicyNamespace, v.Audience})
+		for _, v := range []*IdentifierAdmissionConfig{c.SingleFactor.Verified, c.SingleFactor.OAuth} {
+			if v != nil {
+				profiles = append(profiles, &OTPAdmissionConfig{v.GlobalAuthorityID, v.PolicyNamespace, v.Audience})
+			}
 		}
 		for _, v := range []*MagicLinkAdmissionConfig{c.SingleFactor.MagicLink, c.MFAMagicLink} {
 			if v != nil {
@@ -122,7 +124,7 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 		}
 		var methods []session.AuthenticationKind
 		var previous string
-		if c.SingleFactor.Verified != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil || c.MFAPassword != nil {
+		if c.SingleFactor.Verified != nil || c.SingleFactor.OAuth != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil || c.MFAPassword != nil {
 			prior := c
 			prior.Passkey = nil
 			var err error
@@ -160,7 +162,7 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 		prior.MFAPassword = nil
 		var methods []session.AuthenticationKind
 		var previous string
-		if c.SingleFactor.Verified != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil {
+		if c.SingleFactor.Verified != nil || c.SingleFactor.OAuth != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil {
 			var err error
 			methods, previous, err = selectedSessionAdmission(prior)
 			if err != nil {
@@ -186,7 +188,7 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 	one := c.SingleFactor
 	var methods []session.AuthenticationKind
 	var singleProfile string
-	if one.Verified != nil || one.OTP != nil || one.MagicLink != nil {
+	if one.Verified != nil || one.OAuth != nil || one.OTP != nil || one.MagicLink != nil {
 		var err error
 		methods, singleProfile, err = singleFactorAdmission(one)
 		if err != nil {

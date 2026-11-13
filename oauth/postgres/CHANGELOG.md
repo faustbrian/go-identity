@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Resolve shared link/signin callback routing from the native keyed state
+  commitment, including retained terminal metadata within its original lifetime.
+  Routing grants no browser or exchange authority; the selected native callback
+  still authenticates its original profile and browser without method fallback.
+
 - Add native query/S256 OIDC completion for an existing linked account and
   known-empty MFA. Bind issuance to the original callback-purpose browser and
   exact Remember policy; consume state/browser and write the session, audit,

@@ -1,5 +1,16 @@
 # Session
 
+## Browser-readable synchronizer delivery
+
+`NewCSRFCookiePolicy` is separate from the HttpOnly authentication-cookie policy.
+It retains Secure, host-only `__Host-`, Path=/, explicit Lax/Strict and original
+Remember/absolute-expiry semantics, but deliberately allows same-origin browser
+code to read the original synchronizer token after a provider redirect. Attribute
+construction issues nothing: only the exact new committed delivery owner may
+populate the cookie. Keep its name distinct from session, flow and device cookies.
+It is not a bearer or CSRF authority channel. Existing digest-bound protected
+header validation remains mandatory; replay cannot recreate a token.
+
 ## Explicit password-bearer issuance
 
 `NewPasswordBearerSessionIssuer` uses the same prospective password preparation,

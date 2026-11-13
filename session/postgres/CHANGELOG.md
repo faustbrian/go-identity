@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Independently select OAuth and password profiles in one native session reader
+  and revoker. Dispatch from original stored provenance without fallback, retain
+  linked-provider and factor checks, and bind both selections into cache custody.
+  Existing configurations without the additional OAuth selection are unchanged.
+
 - Stage provider-session, family, original-browser and retained issuance effects
   in the native OAuth callback's existing transaction after real callback-state
   consumption. Current provider-account, policy and known-empty MFA remain fenced.
