@@ -51,14 +51,15 @@ type AtomicVerificationRequest struct {
 	DebitAmount         uint64
 }
 
-// Validate checks the finite unlimited shape, not the presented secret against
+// Validate checks the selected quota shape, not the presented secret against
 // storage. Current owner/tenant/permission checks remain mandatory native work.
 func (r AtomicVerificationRequest) Validate(c Configuration) error {
 	if _, err := ParseVerificationAttemptID(string(r.AttemptID)); err != nil {
 		return ErrInvalid
 	}
 	credentialValid := c.spec.Algorithm == AlgorithmModernHMACSHA256 && r.Secret.state != nil && r.LegacySecret.state == nil || c.spec.Algorithm == AlgorithmLegacySHA256V1 && r.Secret.state == nil && r.LegacySecret.state != nil
-	if c.Validate() != nil || !scope(string(r.TenantID), 128) || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || !credentialValid || !validPermissions(r.RequiredPermissions) || r.DebitAmount != 0 {
+	debitValid := c.spec.Quota == QuotaUnlimited && r.DebitAmount == 0 || c.spec.Quota == QuotaTokenBucket && r.DebitAmount > 0 && r.DebitAmount <= c.spec.TokenBucket.Capacity
+	if c.Validate() != nil || !scope(string(r.TenantID), 128) || r.ConfigurationID != c.spec.ID || r.ConfigurationRevision != c.spec.Revision || !credentialValid || !validPermissions(r.RequiredPermissions) || !debitValid {
 		return ErrInvalid
 	}
 	if r.Candidate != "" {
@@ -101,7 +102,8 @@ type AtomicVerificationResult struct {
 	AttemptID VerificationAttemptID
 	// Fingerprint is the exact native coordinator request commitment. Submitted
 	// attempts return it even when commitment is unknown, so status inquiry need
-	// not retain or resubmit a raw key. Zero is allowed only before submission.
+	// not retain or resubmit a raw key. Zero means no commitment was disclosed;
+	// with PossibleDebit it does not prove that an older same-ID attempt is absent.
 	Fingerprint [32]byte
 	// Original retains the exact submitted coordinator scope, including its
 	// user/API-key actor, known nonhuman API-key actor or anonymous service-actor
@@ -111,6 +113,9 @@ type AtomicVerificationResult struct {
 	State    VerificationAttemptState
 	Outcome  identity.CommitOutcome
 	Result   *VerificationResult
+	// Quota is the original transaction's historical observation, never a new
+	// refill or authority read. Ambiguous and unlimited attempts carry none.
+	Quota *QuotaMetadata
 }
 
 func (r AtomicVerificationResult) Validate() error {
@@ -118,8 +123,20 @@ func (r AtomicVerificationResult) Validate() error {
 		return ErrInvalid
 	}
 	preSubmission := r.Fingerprint == ([32]byte{}) && r.Original == (identity.RecoveryQuery{}) && r.State == VerificationAttemptNotDebited && (r.Outcome == identity.CommitOutcomeNotCommitted || r.Outcome == identity.CommitOutcomeConflict)
-	if !preSubmission && (VerificationReconcileQuery{AttemptID: r.AttemptID, TenantID: r.Original.TenantID, Fingerprint: r.Fingerprint, Original: r.Original}).Validate() != nil {
+	undisclosed := r.Fingerprint == ([32]byte{}) && r.Original == (identity.RecoveryQuery{}) && r.State == VerificationAttemptPossibleDebit && r.Outcome == identity.CommitOutcomeUnknown
+	if !preSubmission && !undisclosed && (VerificationReconcileQuery{AttemptID: r.AttemptID, TenantID: r.Original.TenantID, Fingerprint: r.Fingerprint, Original: r.Original}).Validate() != nil {
 		return ErrInvalid
+	}
+	if r.Quota != nil && (r.Quota.Validate() != nil || r.Outcome != identity.CommitOutcomeCommitted || r.Original.ActorKind != authorization.SubjectAPIKey || r.State != VerificationAttemptDebited && r.State != VerificationAttemptNotDebited) || r.State == VerificationAttemptDebited && r.Quota == nil {
+		return ErrInvalid
+	}
+	// A known debit remains attributable after original principal freshness has
+	// expired. Reconciliation may return that history, but no usable principal.
+	if r.State == VerificationAttemptDebited && r.Result == nil {
+		if r.Outcome != identity.CommitOutcomeCommitted || r.Original.ActorKind != authorization.SubjectAPIKey {
+			return ErrInvalid
+		}
+		return nil
 	}
 	switch r.State {
 	case VerificationAttemptNotApplicable, VerificationAttemptDebited:
@@ -215,8 +232,11 @@ type AtomicVerifier interface {
 	ReconcileVerifyAndConsume(context.Context, VerificationReconcileQuery) (AtomicVerificationResult, error)
 }
 
-// ErrDebitOutcomeUnknown is specific to an ambiguous submitted positive debit.
-// Callers must reconcile its exact attempt, never guess with another attempt.
+// ErrDebitOutcomeUnknown means a positive attempt's debit cannot be proved.
+// Current denial may prevent observing an older same-ID submission at all.
+// Preserve that ID and any previously disclosed fingerprint/scope; reconcile
+// when available, otherwise retry only the original after authority permits it.
+// Never guess by creating another attempt.
 type ErrDebitOutcomeUnknown struct{ AttemptID VerificationAttemptID }
 
 func (ErrDebitOutcomeUnknown) Error() string { return "apikey: debit outcome unknown" }

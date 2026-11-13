@@ -104,8 +104,32 @@ results report its successor; unknown results report no invented post-state.
 Changing key A does not rewrite or revoke key B's independent credential root:
 a fresh B verification reads the new configuration epoch and preserves B's root.
 
-The selected profile explicitly disables caches and selects unlimited quota.
-It still records one exact verification attempt/fingerprint. Known unlimited
+Configurations explicitly disable caches and select unlimited quota or the
+modern-only `QuotaTokenBucket` profile. For a finite profile, set the value
+`TokenBucket: TokenBucketPolicy{Capacity: 1000, RefillAmount: 1000,
+RefillInterval: time.Hour}` and submit a positive `DebitAmount` no greater than
+capacity. Capacity is 1..1,000,000; refill amounts are positive uint64 values,
+and intervals must be positive, microsecond-exact Go durations. Unsupported
+precision is rejected, not rounded. Zero policy with `QuotaUnlimited` retains
+the original JSON/configuration fingerprint bytes. Policy/configuration revision
+and debit amount bind the exact original attempt; changing them is not a retry.
+
+The PostgreSQL adapter must install its optional quota migration before finite
+selection. Only authenticated current-owner requests with the required grant
+can debit. `QuotaMetadata` reports the original transaction's whole remaining
+tokens and database observation time, not current allowance or renewed authority.
+Continuous fractional accrual remains with the native owner. Known debit is
+`VerificationAttemptDebited`; exhaustion is a known non-debit with no principal.
+A submitted uncertain debit returns `ErrDebitOutcomeUnknown` with the same
+attempt ID, `VerificationAttemptPossibleDebit`, and no principal or quota
+metadata. Reconcile that original ID, never guess by issuing another attempt.
+Current authority denial can prevent even observing an older same-ID attempt.
+That result is also possible debit, uniformly without revealing whether history
+exists. A zero fingerprint/scope means nothing was disclosed, not proven absence.
+Retain any earlier fingerprint/scope for reconciliation; if none was disclosed,
+retry only that original request after current authority permits observation.
+
+Both profiles record one exact verification attempt/fingerprint. Known unlimited
 success is `VerificationAttemptNotApplicable`. A replay returns its original
 result, not a new verification; its original validity must still pass
 `VerificationResult.ValidateAt` before reuse. Reconciliation carries only the
@@ -171,7 +195,7 @@ Legacy record eligibility does not apply modern issuance-age limits to original
 times. The owning native adapter must implement this selected profile before
 it is usable; these core contracts alone do not provide durable verification.
 
-Organization-owned and administrator management, finite quota, cache, API-key
+Administrator management, cache, API-key
 session adapters and OAuth delegation remain separate profiles, not fallbacks.
 Deprecated configurations still deny construction.
 Reference/native expiry remains the selected 1-day..365-day profile; a shorter

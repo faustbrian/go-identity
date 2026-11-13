@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in modern token-bucket quota configuration and bounded historical
+  metadata to the existing atomic verifier contract. Exact positive debits bind
+  the original attempt; possible-debit outcomes expose no principal and require
+  same-ID reconciliation. Unlimited/legacy defaults and fingerprint bytes remain
+  unchanged. Native quota migration and authority are required for actual use.
+
 - Clarify Update's existing protected-preparation charging contract: an admitted
   attempt is charged once before generation, including when final application
   fails. Domain, required audit and lifecycle effects remain atomic together;

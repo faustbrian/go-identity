@@ -1,7 +1,7 @@
 // Package apikey owns API-key secret custody, immutable grants and
 // current-authority reduction. Durable workflows are supplied by owned adapters,
-// not application-written stores. The selected profile is user-owned, uncached
-// and unlimited; other profiles must not silently fall back to it.
+// not application-written stores. Profiles explicitly select user/organization
+// ownership and unlimited/modern token-bucket quotas without cache fallback.
 package apikey
 
 import (
@@ -146,6 +146,7 @@ type QuotaPolicy uint8
 const (
 	QuotaUnspecified QuotaPolicy = iota
 	QuotaUnlimited
+	QuotaTokenBucket
 )
 
 type CachePolicy uint8
@@ -183,7 +184,10 @@ type ConfigurationSpec struct {
 	PermissionReduction                                                PermissionReductionDisposition
 	MaximumLifetime, MaximumRead, ClockUncertainty, DecisionRaceBudget time.Duration
 	Quota                                                              QuotaPolicy
-	Cache                                                              CachePolicy
+	// TokenBucket is required only for QuotaTokenBucket. Zero is omitted so
+	// existing unlimited configuration fingerprints remain byte-identical.
+	TokenBucket TokenBucketPolicy `json:",omitzero"`
+	Cache       CachePolicy
 }
 
 // Configuration freezes one explicit profile. Zero and unsupported selections
@@ -221,7 +225,8 @@ func NewConfiguration(s ConfigurationSpec) (Configuration, error) {
 		return Configuration{}, ErrInvalid
 	}
 	stateValid := s.Algorithm == AlgorithmModernHMACSHA256 && (s.State == ConfigurationActive || s.State == ConfigurationDisabled) || s.Algorithm == AlgorithmLegacySHA256V1 && (s.State == ConfigurationVerifyOnly || s.State == ConfigurationDisabled)
-	if !scope(s.ID, 128) || s.Revision == 0 || !stateValid || !scope(s.Issuer, 256) || !scope(s.Environment, 128) || !scope(s.Audience, 256) || s.PermissionReduction < PermissionReductionNarrow || s.PermissionReduction > PermissionReductionRevoke || s.MaximumLifetime <= 0 || s.Algorithm == AlgorithmModernHMACSHA256 && s.MaximumLifetime > 365*24*time.Hour || s.MaximumRead <= 0 || s.MaximumRead > 10*time.Second || s.ClockUncertainty < 0 || s.DecisionRaceBudget < 0 || s.ClockUncertainty > 10*time.Second || s.DecisionRaceBudget > 10*time.Second-s.ClockUncertainty || s.Quota != QuotaUnlimited || s.Cache != CacheDisabled {
+	quotaValid := s.Quota == QuotaUnlimited && s.TokenBucket == (TokenBucketPolicy{}) || s.Quota == QuotaTokenBucket && s.Algorithm == AlgorithmModernHMACSHA256 && s.TokenBucket.Validate() == nil
+	if !scope(s.ID, 128) || s.Revision == 0 || !stateValid || !scope(s.Issuer, 256) || !scope(s.Environment, 128) || !scope(s.Audience, 256) || s.PermissionReduction < PermissionReductionNarrow || s.PermissionReduction > PermissionReductionRevoke || s.MaximumLifetime <= 0 || s.Algorithm == AlgorithmModernHMACSHA256 && s.MaximumLifetime > 365*24*time.Hour || s.MaximumRead <= 0 || s.MaximumRead > 10*time.Second || s.ClockUncertainty < 0 || s.DecisionRaceBudget < 0 || s.ClockUncertainty > 10*time.Second || s.DecisionRaceBudget > 10*time.Second-s.ClockUncertainty || !quotaValid || s.Cache != CacheDisabled {
 		return Configuration{}, ErrInvalid
 	}
 	return Configuration{spec: s}, nil
