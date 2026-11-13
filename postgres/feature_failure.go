@@ -19,10 +19,14 @@ const (
 	FeatureFailurePrecondition
 	// FeatureFailureConflict retains an original generic resource conflict (HTTP409).
 	FeatureFailureConflict
+	// FeatureFailureInvalidGroupMember retains an original missing, foreign or
+	// wrong-type member denial for Group create/replace/PATCH. It is never a
+	// User denial or a Group DELETE result; it establishes no member authority.
+	FeatureFailureInvalidGroupMember
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureConflict
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureInvalidGroupMember
 }
 
 // TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
@@ -42,18 +46,45 @@ func featureFailureError(code FeatureFailureCode) error {
 	return TypedFeatureFailureError{Code: code}
 }
 
-func featureFailureOperation(op identity.FeatureOperation) bool {
-	return op == scimUserCreationOperation() || scimUserUpdateSelected(op) || op == scimUserUpdateOperation("identity.scim.user-delete")
+func featureFailureSubject(op identity.FeatureOperation) string {
+	if op == scimUserCreationOperation() || scimUserUpdateSelected(op) || op == scimUserUpdateOperation("identity.scim.user-delete") {
+		return "scim_user"
+	}
+	switch op.OperationID {
+	case "identity.scim.group-create", "identity.scim.group-replace", "identity.scim.group-patch", "identity.scim.group-delete":
+		expected := identity.FeatureOperation{Owner: "scim", OperationID: op.OperationID, SchemaID: op.OperationID + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+		if op.OperationID == "identity.scim.group-patch" {
+			expected.VersionPolicy = identity.FeatureVersionSequentialOrUnchanged
+		}
+		if op == expected {
+			return "scim_group"
+		}
+	}
+	return ""
+}
+
+func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailureCode) bool {
+	subject := featureFailureSubject(op)
+	if subject == "" || !code.valid() {
+		return false
+	}
+	if code == FeatureFailureInvalidGroupMember {
+		// DELETE affects only the Group projection, never its member resources.
+		return subject == "scim_group" && op.OperationID != "identity.scim.group-delete"
+	}
+	return true
 }
 
 func validFeatureFailureResult(q claimRequest, r identity.CommandResult, code FeatureFailureCode, class string) bool {
-	return code == 0 || code.valid() && class == "conflict" && r.Outcome == identity.CommitOutcomeNotCommitted && q.feature != nil && featureFailureOperation(*q.feature) && r.Binding.ActorKind == authorization.SubjectServiceAccount && r.Feature != nil && r.Feature.Operation == *q.feature
+	return code == 0 || class == "conflict" && r.Outcome == identity.CommitOutcomeNotCommitted && q.feature != nil && featureFailureCodeAllowed(*q.feature, code) && r.Binding.ActorKind == authorization.SubjectServiceAccount && r.Feature != nil && r.Feature.Operation == *q.feature
 }
 
 // DenyFeature captures a finite denial only during this exact registered SCIM
 // participant's synchronous Apply with its original command. It accepts the
-// closed SCIM create/replace/PATCH/delete v1 schemas, service actor and scim_user
-// target. Copies retain original command custody; reconstructed commands deny.
+// closed SCIM User/Group create/replace/PATCH/delete v1 schemas, service actor
+// and matching scim_user/scim_group target. InvalidGroupMember is additionally
+// limited to Group member-writing operations. Copies retain original command
+// custody; reconstructed commands deny.
 // The same active invocation may refine an already-poisoned ordinary core CAS
 // Conflict, but cannot upgrade cancellation, dependency, authorization or other
 // failures. Close owned query rows before calling. Invalid calls retain no
@@ -83,7 +114,15 @@ func (w Work) DenyFeature(ctx context.Context, p FeatureExecutionContributor, co
 		}
 	}
 	s := w.state
-	if !code.valid() || s.rows != nil || !s.featureApplying || !sameParticipant(s.featureInvocation, p) || s.featureApplyCommand == nil || *s.featureApplyCommand != command || s.feature == nil || s.feature.Contributor != scimUserCreationDescriptor() || !featureFailureOperation(s.feature.Operation) || s.subjectType != "scim_user" || s.binding.ActorKind != authorization.SubjectServiceAccount || s.generation == 0 || s.execution == nil || s.execution.coordinator == nil || !s.execution.coordinator.owns(w) {
+	invocationMatches := s.featureApplying && sameParticipant(s.featureInvocation, p) && s.featureApplyCommand != nil && *s.featureApplyCommand == command
+	if s.rows != nil || !invocationMatches {
+		return reject(invalidWork())
+	}
+	resourceMatches := s.feature != nil && s.feature.Contributor == scimUserCreationDescriptor() && featureFailureCodeAllowed(s.feature.Operation, code) && s.subjectType == featureFailureSubject(s.feature.Operation)
+	if !resourceMatches || s.binding.ActorKind != authorization.SubjectServiceAccount {
+		return reject(invalidWork())
+	}
+	if s.generation == 0 || s.execution == nil || s.execution.coordinator == nil || !s.execution.coordinator.owns(w) {
 		return reject(invalidWork())
 	}
 	spec, ok := command.Feature()

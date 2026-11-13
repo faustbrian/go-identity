@@ -23,6 +23,11 @@ type featureFailurePhase struct {
 	declaration                  CommandPlan
 }
 
+func (p *featureFailurePhase) FeatureOperations() []identity.FeatureOperation {
+	spec, _ := p.expected.Feature()
+	return []identity.FeatureOperation{spec.Operation}
+}
+
 func (p *featureFailurePhase) ApplyFeature(ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
 	p.applied++
 	if p.mode == "forged-error" {
@@ -91,6 +96,17 @@ func assertFeatureFailure(t *testing.T, result identity.CommandResult, err error
 }
 
 func TestFeatureFailurePostgres(t *testing.T) {
+	testFeatureFailurePostgres(t, "")
+}
+
+func TestGroupFeatureFailurePostgres(t *testing.T) {
+	for _, operation := range []string{"identity.scim.group-create", "identity.scim.group-replace", "identity.scim.group-patch", "identity.scim.group-delete"} {
+		t.Run(operation, func(t *testing.T) { testFeatureFailurePostgres(t, operation) })
+	}
+}
+
+func testFeatureFailurePostgres(t *testing.T, groupOperation string) {
+	t.Helper()
 	ctx, pool, _ := anonymousKernelDatabase(t)
 	history, err := (PreparationMigrationSource{Base: MigrationSource{}, Version: 16}).Load(ctx)
 	if err != nil {
@@ -106,7 +122,13 @@ func TestFeatureFailurePostgres(t *testing.T) {
 	if err := pool.Raw().QueryRow(ctx, `SELECT current_database()`).Scan(&databaseName); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"uniqueness", "precondition", "generic-conflict", "core-conflict", "prepared", "forged-error", "ordinary-conflict", "rollback-ack-lost", "terminal-ack-lost"} {
+	modes := []string{"uniqueness", "precondition", "generic-conflict", "prepared", "forged-error", "ordinary-conflict", "rollback-ack-lost", "terminal-ack-lost"}
+	if groupOperation == "" {
+		modes = append(modes, "core-conflict")
+	} else if groupOperation != "identity.scim.group-delete" {
+		modes = append(modes, "invalid-member")
+	}
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			executionPool := pool
 			var fault *registrationCommitFault
@@ -154,6 +176,9 @@ func TestFeatureFailurePostgres(t *testing.T) {
 			if mode == "generic-conflict" {
 				code = FeatureFailureConflict
 			}
+			if mode == "invalid-member" {
+				code = FeatureFailureInvalidGroupMember
+			}
 			if mode == "core-conflict" {
 				seedAudits, seedOutbox := &anonymousCreationAuditPhase{}, &recoveryLifecyclePhase{}
 				seedRegistry, err := NewContributorRegistry([]Contributor{repository, seedAudits, seedOutbox})
@@ -191,6 +216,14 @@ func TestFeatureFailurePostgres(t *testing.T) {
 				t.Fatal(err)
 			}
 			op := scimUserUpdateOperation(intent.Binding.OperationID)
+			subjectType := "scim_user"
+			if groupOperation != "" {
+				op = groupFailureOperation(groupOperation)
+				intent.Binding.OperationID = op.OperationID
+				intent.Binding.SchemaID = op.SchemaID
+				fields = nil
+				subjectType = "scim_group"
+			}
 			command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: intent.Binding, Operation: op, Fields: fields})
 			domain, err := NewSCIMUserUpdateDomain(repository)
 			if err != nil {
@@ -212,16 +245,21 @@ func TestFeatureFailurePostgres(t *testing.T) {
 			_, _, plan := featurePlanFixture(t)
 			plan.Contributors = registry.Descriptors()
 			plan.Feature = &FeatureRegistration{Contributor: phase.Descriptor(), Operation: op}
-			plan.SubjectType = "scim_user"
-			plan.SCIMUserUpdate = &SCIMUserUpdatePlan{Required: len(intent.Attributes) > 0, ExpectedVersion: intent.ExpectedVersion}
+			plan.SubjectType = subjectType
+			if groupOperation == "" {
+				plan.SCIMUserUpdate = &SCIMUserUpdatePlan{Required: len(intent.Attributes) > 0, ExpectedVersion: intent.ExpectedVersion}
+			}
 			plan.Lifecycle = &LifecyclePlan{EventType: "identity.scim.user_patched.v1", BeforeVersion: 7, AfterVersion: 8}
+			if groupOperation != "" {
+				plan.Lifecycle.EventType = "identity.scim.group_changed.v1"
+			}
 			plan.Audits[0].EventType = op.OperationID
 			plan.Audits[0].RetentionClass = "protected"
-			seed, err := securityMutationAudit(ctx, intent.Binding, 7, 8, time.Now().UTC().Truncate(time.Microsecond), "committed", op.OperationID, "scim_user", intent.Binding.RecordID, "protected", true)
+			seed, err := securityMutationAudit(ctx, intent.Binding, 7, 8, time.Now().UTC().Truncate(time.Microsecond), "committed", op.OperationID, subjectType, intent.Binding.RecordID, "protected", true)
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan.Audits[0].BindingDigest, err = FeatureAuditBindingDigest(intent.Binding, op, "scim_user", seed)
+			plan.Audits[0].BindingDigest, err = FeatureAuditBindingDigest(intent.Binding, op, subjectType, seed)
 			if err != nil {
 				t.Fatal(err)
 			}

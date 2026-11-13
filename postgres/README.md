@@ -42,11 +42,15 @@ releasing an expired pending command.
 
 ### Original SCIM failure replay
 
-An exact SCIM create/replace/PATCH/delete participant may return
+An exact SCIM User or Group create/replace/PATCH/delete participant may return
 `work.DenyFeature(ctx, participant, originalCommand, code)` during its active
 Apply invocation. Select only `FeatureFailureUniqueness`,
-`FeatureFailurePrecondition` or `FeatureFailureConflict`, and close query rows
-first. This poisons Work with ordinary `identity.ConflictError`; it is not a
+`FeatureFailurePrecondition` or `FeatureFailureConflict`. Group create, replace
+and PATCH additionally accept `FeatureFailureInvalidGroupMember` for missing,
+foreign or wrong-type member references; User operations and Group DELETE
+reject that code. The exact registered v1 schema and matching `scim_user` or
+`scim_group` target remain mandatory. Close query rows first.
+This poisons Work with ordinary `identity.ConflictError`; it is not a
 receipt. Only an existing ordinary core-CAS Conflict may be refined, never a
 dependency, authorization or cancellation failure.
 

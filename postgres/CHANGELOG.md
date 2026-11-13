@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve original SCIM Group uniqueness, version and resource-conflict
+  denials through the existing protected journal. Group create/replace/PATCH
+  also retain finite invalid-member denials; User operations and Group DELETE
+  reject that classification. Existing result codes and zero-detail bytes are
+  unchanged. Upgrade all journal readers before enabling these Group writers.
+
 - Retain finite SCIM uniqueness, version-precondition and generic-conflict
   denials in the existing terminal journal result after known rollback and a
   fenced failure-audit commit. Original reserve/prepared replay, query and
