@@ -130,9 +130,12 @@ func (r AtomicVerificationResult) Validate() error {
 	if r.Quota != nil && (r.Quota.Validate() != nil || r.Outcome != identity.CommitOutcomeCommitted || r.Original.ActorKind != authorization.SubjectAPIKey || r.State != VerificationAttemptDebited && r.State != VerificationAttemptNotDebited) || r.State == VerificationAttemptDebited && r.Quota == nil {
 		return ErrInvalid
 	}
-	// A known debit remains attributable after original principal freshness has
-	// expired. Reconciliation may return that history, but no usable principal.
-	if r.State == VerificationAttemptDebited && r.Result == nil {
+	// A known committed verification remains attributable after its principal
+	// expires or a later current-authority observation denies it. Preserve both
+	// finite debit and unlimited NotApplicable history, without fabricating a
+	// NotDebited outcome or treating nil Result as authentication.
+	knownHistoricalVerification := r.State == VerificationAttemptDebited || r.State == VerificationAttemptNotApplicable
+	if knownHistoricalVerification && r.Result == nil {
 		if r.Outcome != identity.CommitOutcomeCommitted || r.Original.ActorKind != authorization.SubjectAPIKey {
 			return ErrInvalid
 		}

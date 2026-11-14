@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicitly composed encrypted modern USER positive metadata projections.
+  Every admitted attempt still invokes the actual atomic verifier exactly once;
+  restoration only narrows its current grant/original deadline and never replaces
+  quota or ambiguity. Preserve known committed unlimited/debited history without
+  a principal after later authority denial. Add typed original permission-
+  reduction recovery custody without widening released structs or enabling cache
+  authority, legacy/organization projection or new default profiles.
+
 - Add distinct modern organization-source binding and observation contracts.
   Keep integration ownership independent of creator membership, retain separate
   organization aggregate/credential epochs and original bounded freshness, and

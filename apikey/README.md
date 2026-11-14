@@ -244,3 +244,32 @@ Reference/native expiry remains the selected 1-day..365-day profile; a shorter
 positive core `MaximumLifetime` cap describes an explicitly stricter alternate
 configuration, not a change to that Reference policy.
 Core contracts/constructors alone do not establish the full durable journey.
+
+## Explicit modern USER metadata projection
+
+`PositiveProjectionConfig` is a distinct opt-in composition; it does not change
+`Configuration.Cache`, existing serialized profiles or native verification.
+Its `Store`, `Verifier` and `Authority` are real borrowed public source owners,
+not cache-provided domain stores. `Begin` calls `AtomicVerifier` exactly once for
+the original supplied attempt, then obtains current source epochs. An admitted
+result must pass through `Complete` before use: `Begin`'s intermediate result
+does not yet apply a later observed permission withdrawal or cache narrowing.
+There is no public operation to seal a caller-invented successful result.
+
+Only encrypted positive/known-quota metadata may be persisted. The opaque
+admission and lookup contain no bearer or lookup digest. A restored projection
+can only narrow the current native grant/deadline; the current attempt,
+fingerprint, commit/debit outcome and quota remain native. Original projection
+read-start/deadline survive copying and republishing without renewal. Missing or
+corrupt ciphertext can use the already-obtained native result, never a second
+verification; an obtained narrower/expired authority observation cannot be
+ignored. Later denial retains known committed debit or unlimited history with
+no principal and an error, never an invented `not-debited` outcome. Legacy and
+organization projection profiles are not selected by this constructor.
+
+`PermissionReductionUnknownError` adds original recovery custody without changing
+existing result/decision/query layouts. Use its validated `Recovery` only with
+the same fixed native Store. It unwraps `identity.UnknownCommitError`, not a
+successful mutation. Keep the exact original decision for retry too: a query
+cannot reconstruct missing pre-Apply history, prove noncommit or select a new
+command. Recovery metadata is historical, never a fresh permission principal.
