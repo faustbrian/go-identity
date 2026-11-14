@@ -18,10 +18,12 @@ import (
 // destruction. Its zero value has neither variant. Destroy after bounded native
 // processing, including denial and failure; parsing assigns no expiry or TTL.
 type QueryCallback struct {
-	input   identity.OAuthCallbackInput
-	denial  func() *queryDeniedState
-	profile ProviderProfile
-	success bool
+	input            identity.OAuthCallbackInput
+	denial           func() *queryDeniedState
+	profile          ProviderProfile
+	success          bool
+	oauth2           *OAuth2UserInfoDetails
+	receivedRedirect string
 }
 
 // Callback is the selected query-only callback contract. It is an alias, not a
@@ -56,7 +58,33 @@ type queryDeniedState struct {
 // 1024-byte description and 4096-byte ignored extension. Limits reject, never
 // truncate. Nil/malformed profiles/contexts deny; cancellation is Unavailable.
 func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderProfile) (QueryCallback, error) {
-	if ctx == nil || !queryProfileValid(profile) {
+	return parseQueryCallback(ctx, rawQuery, profile, nil, "")
+}
+
+// ParseOAuth2QueryCallback selects RFC9700 distinct-redirect mix-up defense.
+// receivedRedirect is the exact trusted transport route (without query), not
+// callback-selected Host, issuer, state or redirect data. Registry construction
+// must establish its uniqueness across configured providers. Shared redirects
+// and unexpected iss responses are not this profile. Existing OIDC parsing is
+// unchanged and continues requiring RFC9207 issuer identification.
+func ParseOAuth2QueryCallback(ctx context.Context, rawQuery, receivedRedirect string, profile OAuth2UserInfoProfile) (QueryCallback, error) {
+	if profile.Validate() != nil || receivedRedirect != profile.Profile.RedirectURI {
+		return QueryCallback{}, failure(InvalidInput, ctx)
+	}
+	details := profile.Details
+	return parseQueryCallback(ctx, rawQuery, profile.Profile, &details, receivedRedirect)
+}
+
+// OAuth2Details returns immutable protocol facts, never proof or credentials.
+func (q QueryCallback) OAuth2Details() (OAuth2UserInfoDetails, bool) {
+	if q.oauth2 == nil {
+		return OAuth2UserInfoDetails{}, false
+	}
+	return *q.oauth2, true
+}
+
+func parseQueryCallback(ctx context.Context, rawQuery string, profile ProviderProfile, details *OAuth2UserInfoDetails, receivedRedirect string) (QueryCallback, error) {
+	if ctx == nil || details == nil && !queryProfileValid(profile) || details != nil && (!oauth2QueryProfileValid(profile) || receivedRedirect != profile.RedirectURI) {
 		return QueryCallback{}, failure(InvalidInput, ctx)
 	}
 	if ctx.Err() != nil {
@@ -116,7 +144,8 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 	}
 	// RFC9207 section2.4 requires exact decoded string comparison, including
 	// error responses. The issuer is not normalized or used to select a provider.
-	if string(values["iss"]) != profile.Issuer || !canonical32(string(values["state"])) || seen["code"] == seen["error"] {
+	issuerInvalid := details == nil && string(values["iss"]) != profile.Issuer || details != nil && seen["iss"]
+	if issuerInvalid || !canonical32(string(values["state"])) || seen["code"] == seen["error"] {
 		return QueryCallback{}, failure(InvalidInput, ctx)
 	}
 	if ctx.Err() != nil {
@@ -130,7 +159,7 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 		if err != nil {
 			return QueryCallback{}, failure(InvalidInput, ctx)
 		}
-		return QueryCallback{input: input, profile: profile, success: true}, nil
+		return QueryCallback{input: input, profile: profile, success: true, oauth2: details, receivedRedirect: receivedRedirect}, nil
 	}
 	if !queryErrorText(values["error"]) || seen["error_description"] && !queryErrorText(values["error_description"]) || seen["error_uri"] && !queryErrorURI(values["error_uri"]) {
 		return QueryCallback{}, failure(InvalidInput, ctx)
@@ -138,7 +167,14 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 	state := make([]byte, len(values["state"]))
 	copy(state, values["state"])
 	owner := &queryDeniedState{value: state}
-	return QueryCallback{denial: func() *queryDeniedState { return owner }, profile: profile}, nil
+	return QueryCallback{denial: func() *queryDeniedState { return owner }, profile: profile, oauth2: details, receivedRedirect: receivedRedirect}, nil
+}
+
+func (q QueryCallback) validProfile() bool {
+	if q.oauth2 == nil {
+		return queryProfileValid(q.profile)
+	}
+	return q.receivedRedirect == q.profile.RedirectURI && (OAuth2UserInfoProfile{q.profile, *q.oauth2}).Validate() == nil
 }
 
 func queryProfileSnapshot(profile ProviderProfile) ProviderProfile {

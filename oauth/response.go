@@ -21,6 +21,10 @@ type tokenResponse struct {
 func (r *tokenResponse) clear() { clear(r.access); clear(r.refresh); clear(r.id) }
 
 func parseResponse(status int, contentType string, body []byte, c OIDCConfig, googleAccounts bool) (tokenResponse, ErrorKind) {
+	return parseTokenResponse(status, contentType, body, c, googleAccounts, true)
+}
+
+func parseTokenResponse(status int, contentType string, body []byte, c OIDCConfig, googleAccounts, requireIDToken bool) (tokenResponse, ErrorKind) {
 	var out tokenResponse
 	media, _, err := mime.ParseMediaType(contentType)
 	if err != nil || media != "application/json" || len(body) == 0 || int64(len(body)) > c.MaxResponseBytes || !utf8.Valid(body) {
@@ -69,9 +73,15 @@ func parseResponse(status int, contentType string, body []byte, c OIDCConfig, go
 	}
 	access, accessOK := fields["access_token"].(string)
 	id, idOK := fields["id_token"].(string)
+	if !requireIDToken {
+		if _, present := fields["id_token"]; present {
+			return out, Unknown
+		}
+		idOK = true
+	}
 	kind, kindOK := fields["token_type"].(string)
 	expiry, expiryOK := fields["expires_in"].(json.Number)
-	if !accessOK || !idOK || !kindOK || !expiryOK || !visible(access, 1, c.MaxTokenBytes) || !visible(id, 1, c.MaxTokenBytes) || !strings.EqualFold(kind, "Bearer") {
+	if !accessOK || !idOK || !kindOK || !expiryOK || !visible(access, 1, c.MaxTokenBytes) || requireIDToken && !visible(id, 1, c.MaxTokenBytes) || !strings.EqualFold(kind, "Bearer") {
 		return out, Unknown
 	}
 	seconds, err := expiry.Int64()

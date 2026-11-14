@@ -109,6 +109,20 @@ The names above represent native-owned inputs and encryption, not missing
 pluggable domain stores consumers must invent. The composed native workflow is
 not yet provided by this module.
 
+## Explicit OAuth2/UserInfo variant
+
+`NewOAuth2UserInfoProvider` selects code/query/S256, POST client credentials and
+bearer HTTPS UserInfo without inventing OIDC claims. Its optional
+`OAuth2UserInfoFacts` retains immutable additional facts without changing the
+public `ProviderProfile` struct shape. Use a distinct registered redirect URI
+per authorization server and `ParseOAuth2QueryCallback` with the trusted actual
+received route. A shared callback URI or unexpected `iss` is rejected. Existing
+OIDC constructors/parser semantics remain unchanged. `EvidenceExpiresAt` is
+original signed OIDC expiry or bounded original OAuth2 observation expiry;
+OAuth2 supplies no ID-token/authentication times. Native state and current
+authority remain separate mandatory owners. See the GitLab provider profile
+for finite existing-account adoption and unsupported operations.
+
 ## Query callback boundary
 
 `ParseQueryCallback` accepts only the query authorization-code profile. It

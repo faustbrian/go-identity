@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an explicit OAuth2 code/query/S256 and bearer-UserInfo variant with
+  separate immutable protocol facts and distinct registered redirect-URI mix-up
+  defense. Preserve strict OIDC callbacks and public ProviderProfile shape;
+  OAuth2 observations do not invent ID-token or provider authentication claims.
+
 - Accept Google's two documented identity-scope URI spellings only under
   explicit Google Accounts selection and only for equivalent requested scopes.
   Collapse equivalent spellings without expanding grants; preserve generic

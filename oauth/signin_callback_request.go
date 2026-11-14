@@ -24,7 +24,7 @@ type SigninCallbackRequest struct {
 // Validate bounds the selected query/S256 response and borrowed cookie without
 // IO, state authentication, provider exchange or choosing a local identity.
 func (r SigninCallbackRequest) Validate() error {
-	if !queryProfileValid(r.Callback.Profile()) || !visible(r.Device, 1, 128) {
+	if !r.Callback.validProfile() || !visible(r.Device, 1, 128) {
 		return failure(InvalidInput, nil)
 	}
 	_, success := r.Callback.Input()

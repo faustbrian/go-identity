@@ -32,7 +32,7 @@ type CallbackRequest struct {
 // exchange, decryption or callbacks. Success and coherent provider denial remain
 // distinct variants; destroyed custody still denies at its next attempted use.
 func (r CallbackRequest) Validate() error {
-	if !queryProfileValid(r.Callback.Profile()) {
+	if !r.Callback.validProfile() {
 		return failure(InvalidInput, nil)
 	}
 	_, success := r.Callback.Input()

@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -160,6 +161,22 @@ func NewOIDCProvider(c OIDCConfig) (*OIDCProvider, error) {
 	if _, err := authoidc.NewWithKeySet(validatorConfig(c, nil), c.KeySet); err != nil {
 		return nil, failure(InvalidInput, nil)
 	}
+	transport, err := newProviderTransport(c)
+	if err != nil {
+		return nil, err
+	}
+	c.Scopes = slices.Clone(c.Scopes)
+	c.Algorithms = slices.Clone(c.Algorithms)
+	secret := bytes.Clone(c.ClientSecret)
+	c.ClientSecret = nil
+	c.HTTPClient = nil
+	p := &OIDCProvider{config: c, secret: secret, transport: transport}
+	p.client = &http.Client{Transport: transport, Timeout: c.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return p, nil
+}
+
+// Both protocol variants use the same authenticated, one-send transport policy.
+func newProviderTransport(c OIDCConfig) (*http.Transport, error) {
 	var transport *http.Transport
 	if c.HTTPClient != nil && c.HTTPClient.Transport != nil {
 		original, ok := c.HTTPClient.Transport.(*http.Transport)
@@ -201,14 +218,7 @@ func NewOIDCProvider(c OIDCConfig) (*OIDCProvider, error) {
 	transport.Protocols = new(http.Protocols)
 	transport.Protocols.SetHTTP1(true)
 	tlsConfig.NextProtos = []string{"http/1.1"}
-	c.Scopes = slices.Clone(c.Scopes)
-	c.Algorithms = slices.Clone(c.Algorithms)
-	secret := bytes.Clone(c.ClientSecret)
-	c.ClientSecret = nil
-	c.HTTPClient = nil
-	p := &OIDCProvider{config: c, secret: secret, transport: transport}
-	p.client = &http.Client{Transport: transport, Timeout: c.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	return p, nil
+	return transport, nil
 }
 
 const googleAccountsIssuer = "https://accounts.google.com"
@@ -332,14 +342,26 @@ func (p *OIDCProvider) Authorization(ctx context.Context, a AuthorizationParamet
 	return AuthorizationRequest{p.config.AuthorizationEndpoint + "?" + q.Encode()}, nil
 }
 
-// ProviderIdentity contains only identity admitted by the existing full strict
-// OIDC validator. It is not a local identity, account-link or session proof.
+// ProviderIdentity contains only identity admitted by the selected strict OIDC
+// validator or bearer-bound OAuth2 UserInfo owner. It is not a local identity,
+// account-link or session proof. OAuth2 supplies no ID-token/authentication times.
 // Mutable/unvalidated claim maps and authv1 principal types are not exposed.
 type ProviderIdentity struct {
 	provider, issuer, subject         string
 	authenticatedAt                   time.Time
 	hasAuthenticationTime             bool
 	idTokenIssuedAt, idTokenExpiresAt time.Time
+	evidenceExpiresAt                 time.Time
+}
+
+// EvidenceExpiresAt bounds use of this provider observation. For OIDC it is
+// the original signed exp; for OAuth2 it is the original bounded UserInfo read,
+// capped by access-token expiry. It is not a provider authentication timestamp.
+func (i ProviderIdentity) EvidenceExpiresAt() time.Time {
+	if !i.evidenceExpiresAt.IsZero() {
+		return i.evidenceExpiresAt
+	}
+	return i.idTokenExpiresAt
 }
 
 // ProviderID returns the immutable configured provider ID.
@@ -551,7 +573,7 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	}
 	owner := &tokenOwner{access: bytes.Clone(parsed.access), refresh: bytes.Clone(parsed.refresh), id: bytes.Clone(parsed.id)}
 	tokens := TokenSet{owner: func() *tokenOwner { return owner }, receivedAt: receivedAt, expiresAt: receivedAt.Add(time.Duration(parsed.expires) * time.Second), requested: slices.Clone(p.config.Scopes), granted: slices.Clone(parsed.scopes), scopeReported: parsed.scopeReported}
-	return ExchangeResult{Identity: ProviderIdentity{p.ID(), principal.Issuer(), principal.Subject(), identityTime, hasTime, issuedAt, expiresAt}, Tokens: tokens}, nil
+	return ExchangeResult{Identity: ProviderIdentity{provider: p.ID(), issuer: principal.Issuer(), subject: principal.Subject(), authenticatedAt: identityTime, hasAuthenticationTime: hasTime, idTokenIssuedAt: issuedAt, idTokenExpiresAt: expiresAt}, Tokens: tokens}, nil
 }
 
 type validatedTokenMetadata struct {
@@ -698,6 +720,21 @@ func NewProviderRegistry(providers ...Provider) (ProviderRegistry, error) {
 			return ProviderRegistry{}, failure(InvalidInput, nil)
 		}
 		registry.providers[p.ID()] = p
+	}
+	for _, p := range providers {
+		facts, selected := p.(OAuth2UserInfoFacts)
+		if !selected {
+			continue
+		}
+		profile := facts.OAuth2Profile()
+		if profile.Validate() != nil || !reflect.DeepEqual(profile.Profile, p.Profile()) {
+			return ProviderRegistry{}, failure(InvalidInput, nil)
+		}
+		for _, other := range providers {
+			if other.ID() != p.ID() && other.Profile().RedirectURI == profile.Profile.RedirectURI {
+				return ProviderRegistry{}, failure(InvalidInput, nil)
+			}
+		}
 	}
 	return registry, nil
 }
