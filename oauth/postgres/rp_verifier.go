@@ -69,10 +69,11 @@ func (b rpVerifierBinding) profile() oauth.ProviderProfile {
 func (b rpVerifierBinding) aad() (secretenvelope.Context, error) {
 	_, txErr := identity.ParsePreAuthTransactionID(b.transactionID)
 	p := b.provider
+	validNonceProfile := p.NonceRequired && p.NonceBytes == 32 || p.ValidateOAuth2Callback() == nil
 	// secret-envelope/v2 NewContext limits each exact value to 1024
 	// bytes. This selected native profile rejects longer values; the core OAuth
 	// profile retains its own URL validation/limits. No hashing or truncation.
-	if !rpDirectoryID(b.tenant) || !rpProviderID(p.ID) || !rpASCII(p.Issuer, 1, 1024) || !rpASCII(p.ClientID, 1, 1024) || !rpASCII(p.RedirectURI, 1, 1024) || !strings.HasPrefix(p.Issuer, "https://") || !strings.HasPrefix(p.RedirectURI, "https://") || txErr != nil || b.stateDigest == [32]byte{} || p.Version == 0 || p.ResponseMode != "query" || p.PKCEMethod != "S256" || !p.NonceRequired || p.StateBytes != 32 || p.NonceBytes != 32 || (b.operation != "identity.account.link-start" && b.operation != "identity.oauth.signin-start") {
+	if !rpDirectoryID(b.tenant) || !rpProviderID(p.ID) || !rpASCII(p.Issuer, 1, 1024) || !rpASCII(p.ClientID, 1, 1024) || !rpASCII(p.RedirectURI, 1, 1024) || !strings.HasPrefix(p.Issuer, "https://") || !strings.HasPrefix(p.RedirectURI, "https://") || txErr != nil || b.stateDigest == [32]byte{} || p.Version == 0 || p.ResponseMode != "query" || p.PKCEMethod != "S256" || !validNonceProfile || p.StateBytes != 32 || (b.operation != "identity.account.link-start" && b.operation != "identity.oauth.signin-start") {
 		return secretenvelope.Context{}, errRPVerifier
 	}
 	c, err := secretenvelope.NewContext(map[string]string{

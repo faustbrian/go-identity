@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose explicitly configured OAuth2/UserInfo providers through existing
+  native link and existing-account signin owners. Bind full UserInfo facts and
+  the distinct actual callback route to original encrypted state/configuration;
+  retain original evidence deadlines without introducing a second replay owner.
+
 - Bind explicit Google Accounts signed-issuer policy to the existing immutable
   configuration and retained callback profile. Canonical and legacy signed
   Google issuers resolve to the same canonical issuer/exact-subject account;

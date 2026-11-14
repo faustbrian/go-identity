@@ -61,18 +61,19 @@ type SigninServiceConfig struct {
 // store. Configuration is copied; providers and the primary pool are borrowed.
 // Calls are concurrent-safe with independent invocation-local preparation.
 type SigninService struct {
-	pool       *database.Pool
-	directory  *kernel.Repository
-	issuer     *capabilitypg.Issuer
-	checkpoint *capabilitypg.IssuancePreparationCodec
-	providers  oauth.ProviderRegistry
-	profiles   map[string]oauth.ProviderProfile
-	envelopes  *envelope.Service
-	verifiers  *rpVerifierCustody
-	custody    risk.AuthenticationAdmissionCustody
-	requestKey kernel.RequestKeyConfig
-	profile    [32]byte
-	config     SigninServiceConfig
+	pool           *database.Pool
+	directory      *kernel.Repository
+	issuer         *capabilitypg.Issuer
+	checkpoint     *capabilitypg.IssuancePreparationCodec
+	providers      oauth.ProviderRegistry
+	profiles       map[string]oauth.ProviderProfile
+	oauth2Profiles map[string]oauth.OAuth2UserInfoDetails
+	envelopes      *envelope.Service
+	verifiers      *rpVerifierCustody
+	custody        risk.AuthenticationAdmissionCustody
+	requestKey     kernel.RequestKeyConfig
+	profile        [32]byte
+	config         SigninServiceConfig
 }
 
 var _ oauth.SigninStarter = (*SigninService)(nil)
@@ -108,6 +109,10 @@ func NewSigninService(pool *database.Pool, c SigninServiceConfig) (*SigninServic
 		return nil, invalid
 	}
 	profiles := make(map[string]oauth.ProviderProfile, len(c.Providers))
+	oauth2Profiles, err := oauth2ProviderProfiles(c.Providers)
+	if err != nil {
+		return nil, invalid
+	}
 	for _, provider := range c.Providers {
 		p := provider.Profile()
 		if p.ID != provider.ID() {
@@ -195,11 +200,12 @@ func NewSigninService(pool *database.Pool, c SigninServiceConfig) (*SigninServic
 		Providers                                                 map[string]oauth.ProviderProfile
 		TTL                                                       time.Duration
 		PolicyVersion                                             uint64
-	}{c.Schema, c.ConfigurationID, c.PolicyID, c.Origin, c.Session.Schema, c.Risk.ConfigurationID, c.GlobalAuthorityID, c.CallbackAllowlist, profiles, c.StateLifetime, admission.PolicyVersion})
+		OAuth2                                                    map[string]oauth.OAuth2UserInfoDetails `json:",omitempty"`
+	}{c.Schema, c.ConfigurationID, c.PolicyID, c.Origin, c.Session.Schema, c.Risk.ConfigurationID, c.GlobalAuthorityID, c.CallbackAllowlist, profiles, c.StateLifetime, admission.PolicyVersion, oauth2Profiles})
 	if err != nil {
 		return nil, invalid
 	}
-	s := &SigninService{pool: pool, directory: directory, issuer: issuer, checkpoint: checkpoint, providers: providers, profiles: profiles, envelopes: crypto, verifiers: verifiers, custody: custody, requestKey: requestKey, profile: sha256.Sum256(frame), config: c}
+	s := &SigninService{pool: pool, directory: directory, issuer: issuer, checkpoint: checkpoint, providers: providers, profiles: profiles, oauth2Profiles: oauth2Profiles, envelopes: crypto, verifiers: verifiers, custody: custody, requestKey: requestKey, profile: sha256.Sum256(frame), config: c}
 	clear(frame)
 	if _, _, err := s.startCoordinator(&signinStartPhase{service: s}); err != nil {
 		return nil, invalid

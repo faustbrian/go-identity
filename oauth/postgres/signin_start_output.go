@@ -30,6 +30,7 @@ type signinRPBinding struct {
 	Schema                  uint8
 	Input                   signinStartInput
 	Provider                oauth.ProviderProfile
+	OAuth2                  *oauth.OAuth2UserInfoDetails `json:",omitempty"`
 	CallbackCommandID       identity.CommandID
 	State, Nonce, Challenge string
 	StateKeyVersion         uint32
@@ -150,6 +151,7 @@ func (p *signinStartPhase) generateOutput(ctx context.Context, generation uint64
 		return nil, err
 	}
 	binding := signinRPBinding{Schema: 1, Input: *p.input, Provider: profile, CallbackCommandID: callbackID, State: base64.RawURLEncoding.EncodeToString(state[:]), Nonce: base64.RawURLEncoding.EncodeToString(nonce[:]), Challenge: base64.RawURLEncoding.EncodeToString(challenge[:]), StateKeyVersion: c.CurrentStateKeyVersion, StateReplayKeyVersion: c.Capability.CurrentReplayKeyVersion, StateDigest: digest, PKCEKeyVersion: pkce.keyVersion, PKCECommitment: pkce.commitment, IssuedAt: issued, ExpiresAt: expires}
+	binding.OAuth2 = oauth2ProfileDetails(s.oauth2Profiles, profile.ID)
 	plainBinding, err := json.Marshal(binding)
 	if err != nil {
 		return nil, identity.UnavailableError{}
@@ -203,6 +205,9 @@ func (p *signinStartPhase) generateOutput(ctx context.Context, generation uint64
 }
 
 func (p *signinStartPhase) validateBinding(b signinRPBinding) error {
+	if !reflect.DeepEqual(b.OAuth2, oauth2ProfileDetails(p.service.oauth2Profiles, b.Provider.ID)) {
+		return identity.ForbiddenError{}
+	}
 	issued, expires, err := p.stateLifetime()
 	profile, ok := p.service.profiles[p.input.Provider]
 	if err != nil || !ok || b.Schema != 1 || !reflect.DeepEqual(b.Input, *p.input) || !reflect.DeepEqual(b.Provider, profile) || !issued.Equal(b.IssuedAt) || !expires.Equal(b.ExpiresAt) || b.StateDigest == ([32]byte{}) || b.PKCECommitment == ([32]byte{}) || p.service.verifiers.commitmentKeys[b.PKCEKeyVersion] == nil || p.service.config.Capability.RetainedReplayKeys[b.StateReplayKeyVersion] == ([32]byte{}) {
@@ -336,7 +341,7 @@ func (p *signinStartPhase) committedRedirect(ctx context.Context) (oauth.SigninS
 	if !ok {
 		return oauth.SigninStartResult{}, identity.ForbiddenError{}
 	}
-	request, err := provider.Authorization(ctx, oauth.AuthorizationParameters{State: v.State, Nonce: v.Nonce, PKCEChallenge: v.Challenge})
+	request, err := provider.Authorization(ctx, oauth.AuthorizationParameters{State: v.State, Nonce: protocolNonce(v.Provider, v.Nonce), PKCEChallenge: v.Challenge})
 	if err != nil {
 		return oauth.SigninStartResult{}, err
 	}

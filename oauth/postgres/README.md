@@ -28,7 +28,15 @@ interoperability or complete provider-catalog qualification.
 
 ## Existing-account signin
 
-This selected profile uses query callbacks, S256 PKCE and nonce-bound OIDC.
+The original OIDC profile uses query callbacks, S256 PKCE and nonce binding.
+An explicitly supplied `oauth.OAuth2UserInfoFacts` provider selects the separate
+OAuth2/UserInfo variant: full additional facts are authenticated in existing
+encrypted configuration/state, with a distinct registered actual callback URI.
+Use `oauth.ParseOAuth2QueryCallback` at that trusted route; do not route it through
+the strict OIDC parser or assume HTTP/Reference automatically selects it.
+UserInfo observation expiry and original access-token expiry are retained,
+never renewed during restore/replay. No provider nonce or ID-token claims are
+invented. Existing OIDC JSON and verifier AAD bytes remain unchanged.
 The provider's verified issuer and subject must resolve to an already linked
 account with its current provider credential. `SignupDisabled` must be true.
 There is no implicit signup, email matching, MFA challenge, organization-session

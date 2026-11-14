@@ -46,7 +46,7 @@ func (p *rpLinkPhase) GenerateAccountLinkPreparation(ctx context.Context, comman
 		return nil, identity.ForbiddenError{}
 	}
 	provider, ok := p.service.providers.Lookup(flow.Provider.ID)
-	if !ok || !reflect.DeepEqual(provider.Profile(), flow.Provider) {
+	if !ok || !reflect.DeepEqual(provider.Profile(), flow.Provider) || !oauth2ProviderMatches(provider, flow.OAuth2) {
 		return nil, identity.ForbiddenError{}
 	}
 	spec, input, _, ok := command.AccountLinkPreparationInput()
@@ -57,7 +57,7 @@ func (p *rpLinkPhase) GenerateAccountLinkPreparation(ctx context.Context, comman
 	if err != nil {
 		return nil, err
 	}
-	result, err := provider.Exchange(ctx, input, verifier, flow.Nonce)
+	result, err := provider.Exchange(ctx, input, verifier, protocolNonce(flow.Provider, flow.Nonce))
 	defer result.Tokens.Destroy()
 	if err != nil {
 		var failure *oauth.Error
@@ -70,7 +70,7 @@ func (p *rpLinkPhase) GenerateAccountLinkPreparation(ctx context.Context, comman
 		return nil, err
 	}
 	verified := result.Identity
-	if verified.ProviderID() != spec.ProviderID || verified.Issuer() != flow.Provider.Issuer || verified.Subject() == "" || !verified.IDTokenExpiresAt().After(now) {
+	if verified.ProviderID() != spec.ProviderID || verified.Issuer() != flow.Provider.Issuer || verified.Subject() == "" || !verified.EvidenceExpiresAt().After(now) {
 		return nil, identity.ForbiddenError{}
 	}
 	account := identity.Account{ID: identity.AccountID(spec.Binding.RecordID), TenantID: spec.Binding.TenantID, UserID: spec.Binding.UserID, Provider: verified.ProviderID(), Issuer: verified.Issuer(), Subject: verified.Subject(), Version: 1}
@@ -97,7 +97,7 @@ func (p *rpLinkPhase) GenerateAccountLinkPreparation(ctx context.Context, comman
 		return nil, err
 	}
 	unsigned := identity.AccountLinkCommand{Binding: spec.Binding, Change: change, SessionID: spec.SessionID, SessionVersion: spec.SessionVersion}
-	return p.sealLinkedOutput(ctx, command, generation, unsigned, tokens, p.flow.loadedAt, verified.IDTokenExpiresAt())
+	return p.sealLinkedOutput(ctx, command, generation, unsigned, tokens, p.flow.loadedAt, verified.EvidenceExpiresAt())
 }
 
 func (p *rpLinkPhase) RestoreAccountLinkPreparation(ctx context.Context, original identity.Command, generation uint64, wire []byte) (identity.Command, kernel.CommandPlan, kernel.CapabilityIssuancePlan, error) {

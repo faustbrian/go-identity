@@ -62,28 +62,30 @@ type LinkServiceConfig struct {
 // are borrowed and must remain usable until all calls return. No goroutines or
 // runtime resources are started or closed by this owner.
 type LinkService struct {
-	pool       *database.Pool
-	directory  *kernel.Repository
-	sessions   *session.SessionService
-	counters   *riskpg.Repository
-	issuer     *capabilitypg.Issuer
-	checkpoint *capabilitypg.IssuancePreparationCodec
-	providers  oauth.ProviderRegistry
-	profiles   map[string]oauth.ProviderProfile
-	envelopes  *envelope.Service
-	verifiers  *rpVerifierCustody
-	intentKey  session.DigestKey
-	intentCSRF session.CSRFKey
-	requestKey kernel.RequestKeyConfig
-	profile    [32]byte
-	config     func() LinkServiceConfig
+	pool           *database.Pool
+	directory      *kernel.Repository
+	sessions       *session.SessionService
+	counters       *riskpg.Repository
+	issuer         *capabilitypg.Issuer
+	checkpoint     *capabilitypg.IssuancePreparationCodec
+	providers      oauth.ProviderRegistry
+	profiles       map[string]oauth.ProviderProfile
+	oauth2Profiles map[string]oauth.OAuth2UserInfoDetails
+	envelopes      *envelope.Service
+	verifiers      *rpVerifierCustody
+	intentKey      session.DigestKey
+	intentCSRF     session.CSRFKey
+	requestKey     kernel.RequestKeyConfig
+	profile        [32]byte
+	config         func() LinkServiceConfig
 }
 
 var _ oauth.LinkStarter = (*LinkService)(nil)
 
 // NewLinkService validates and snapshots startup policy without IO, entropy,
 // provider exchange or migration. It enables no HTTP route. Only configured
-// query/S256 OIDC providers and exact application callbacks are selected.
+// query/S256 OIDC or explicit distinct-route OAuth2/UserInfo providers and exact
+// application callbacks are selected. Existing OIDC state bytes are unchanged.
 func NewLinkService(pool *database.Pool, c LinkServiceConfig) (*LinkService, error) {
 	invalid := identity.InvalidInputError{Field: "oauth_link_configuration"}
 	if len(c.Coordinator.RetainedFingerprintKeys) == 0 || len(c.Coordinator.RetainedFingerprintKeys) > 32 || len(c.Capability.RetainedReplayKeys) == 0 || len(c.Capability.RetainedReplayKeys) > 32 {
@@ -119,6 +121,10 @@ func NewLinkService(pool *database.Pool, c LinkServiceConfig) (*LinkService, err
 		return nil, invalid
 	}
 	profiles := make(map[string]oauth.ProviderProfile, len(c.Providers))
+	oauth2Profiles, err := oauth2ProviderProfiles(c.Providers)
+	if err != nil {
+		return nil, invalid
+	}
 	for _, provider := range c.Providers {
 		profile := provider.Profile()
 		if profile.ID != provider.ID() || profile.Version == 0 {
@@ -226,13 +232,14 @@ func NewLinkService(pool *database.Pool, c LinkServiceConfig) (*LinkService, err
 		Session                    rpStoredSessionProfile
 		StateTTL                   time.Duration
 		PolicyVersion              uint64
-	}{c.Schema, c.ConfigurationID, c.PolicyID, c.Origin, c.CallbackAllowlist, profiles, rpStoredSessionProfile(c.Session.Profile), c.StateLifetime, c.Coordinator.AdmissionPolicy.PolicyVersion})
+		OAuth2                     map[string]oauth.OAuth2UserInfoDetails `json:",omitempty"`
+	}{c.Schema, c.ConfigurationID, c.PolicyID, c.Origin, c.CallbackAllowlist, profiles, rpStoredSessionProfile(c.Session.Profile), c.StateLifetime, c.Coordinator.AdmissionPolicy.PolicyVersion, oauth2Profiles})
 	if err != nil {
 		return nil, invalid
 	}
 	profile := sha256.Sum256(frame)
 	clear(frame)
-	s := &LinkService{pool: pool, directory: directory, sessions: reader, counters: counters, issuer: issuer, checkpoint: checkpoint, providers: registry, profiles: profiles, envelopes: envelopes, verifiers: verifiers, intentKey: intentKey, intentCSRF: intentCSRF, requestKey: requestKeys, profile: profile, config: func() LinkServiceConfig { return c }}
+	s := &LinkService{pool: pool, directory: directory, sessions: reader, counters: counters, issuer: issuer, checkpoint: checkpoint, providers: registry, profiles: profiles, oauth2Profiles: oauth2Profiles, envelopes: envelopes, verifiers: verifiers, intentKey: intentKey, intentCSRF: intentCSRF, requestKey: requestKeys, profile: profile, config: func() LinkServiceConfig { return c }}
 	if _, _, err := s.startCoordinator(&rpStartPhase{service: s}); err != nil {
 		return nil, invalid
 	}

@@ -84,7 +84,7 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 		return nil, identity.ForbiddenError{}
 	}
 	provider, ok := s.providers.Lookup(v.Provider.ID)
-	if !ok || !reflect.DeepEqual(provider.Profile(), v.Provider) {
+	if !ok || !reflect.DeepEqual(provider.Profile(), v.Provider) || !oauth2ProviderMatches(provider, v.OAuth2) {
 		return nil, identity.ForbiddenError{}
 	}
 	input, ok := p.request.Callback.Input()
@@ -93,7 +93,7 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 	}
 	// Only FeaturePreparationAdmission.Generate reaches this exchange after
 	// acknowledged one-use state reservation. No primary Work/lock is retained.
-	result, err := provider.Exchange(ctx, input, verifier, v.Nonce)
+	result, err := provider.Exchange(ctx, input, verifier, protocolNonce(v.Provider, v.Nonce))
 	defer result.Tokens.Destroy()
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 	if err := admission.CheckAt(ctx, now); err != nil {
 		return nil, err
 	}
-	until := verified.IDTokenExpiresAt()
+	until := verified.EvidenceExpiresAt()
 	if deadline := p.flow.loadedAt.Add(20 * time.Second); deadline.Before(until) {
 		until = deadline
 	}
@@ -190,7 +190,7 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 		return nil, err
 	}
 	defer clear(terminal)
-	plain, err := json.Marshal(signinCallbackOutput{Schema: 1, Fields: fields, ProviderExpiresAt: verified.IDTokenExpiresAt(), Admission: signinStoredAdmission(admission.Prepared()), ReadStarted: p.flow.loadedAt, TerminalBinding: terminal})
+	plain, err := json.Marshal(signinCallbackOutput{Schema: 1, Fields: fields, ProviderExpiresAt: verified.EvidenceExpiresAt(), Admission: signinStoredAdmission(admission.Prepared()), ReadStarted: p.flow.loadedAt, TerminalBinding: terminal})
 	if err != nil || len(plain) > 128<<10 {
 		return nil, identity.UnavailableError{}
 	}

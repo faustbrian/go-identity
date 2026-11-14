@@ -33,6 +33,7 @@ type rpStartBinding struct {
 	Schema                  uint8
 	Input                   rpStartInput
 	Provider                oauth.ProviderProfile
+	OAuth2                  *oauth.OAuth2UserInfoDetails `json:",omitempty"`
 	CallbackCommandID       identity.CommandID
 	AccountRecordID         string
 	State, Nonce, Challenge string
@@ -247,6 +248,7 @@ func (p *rpStartPhase) generateOutput(ctx context.Context, generation uint64) ([
 		return nil, err
 	}
 	binding := rpStartBinding{Schema: 1, Input: *p.input, Provider: profile, CallbackCommandID: callbackID, AccountRecordID: string(accountID), State: base64.RawURLEncoding.EncodeToString(state[:]), Nonce: base64.RawURLEncoding.EncodeToString(nonce[:]), Challenge: base64.RawURLEncoding.EncodeToString(challenge[:]), StateKeyVersion: c.CurrentStateKeyVersion, StateReplayKeyVersion: c.Capability.CurrentReplayKeyVersion, StateDigest: digest, PKCEKeyVersion: pkce.keyVersion, PKCECommitment: pkce.commitment, IssuedAt: issued, ExpiresAt: expires}
+	binding.OAuth2 = oauth2ProfileDetails(s.oauth2Profiles, profile.ID)
 	plain, err := json.Marshal(binding)
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "oauth_rp_binding"}
@@ -333,6 +335,9 @@ func (s *LinkService) openRPStoredTransaction(ctx context.Context, tenant identi
 }
 
 func (p *rpStartPhase) validateOutputBinding(out rpStartBinding) error {
+	if !reflect.DeepEqual(out.OAuth2, oauth2ProfileDetails(p.service.oauth2Profiles, out.Provider.ID)) {
+		return identity.ForbiddenError{}
+	}
 	b := p.input.binding()
 	profile, ok := p.service.profiles[p.input.Provider]
 	issued, expires, err := p.stateLifetime()
@@ -509,7 +514,7 @@ func (p *rpStartPhase) committedRedirect(ctx context.Context) (oauth.LinkStartRe
 	if !ok || !reflect.DeepEqual(provider.Profile(), profile) {
 		return result, identity.ForbiddenError{}
 	}
-	authorization, err := provider.Authorization(ctx, oauth.AuthorizationParameters{State: retained.State, Nonce: retained.Nonce, PKCEChallenge: retained.Challenge})
+	authorization, err := provider.Authorization(ctx, oauth.AuthorizationParameters{State: retained.State, Nonce: protocolNonce(retained.Provider, retained.Nonce), PKCEChallenge: retained.Challenge})
 	if err != nil {
 		return result, err
 	}

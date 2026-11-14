@@ -73,6 +73,17 @@ func rpTokenVaultScopes(scopes []string) bool {
 	return true
 }
 
+// The existing three-slot frame remains byte-for-byte unchanged. OAuth2's
+// authenticated variant requires an empty ID-token slot, not an invented JWT;
+// the original OIDC profile still requires its original nonempty token bytes.
+func (s *LinkService) tokenVaultIDTokenSize(profile oauth.ProviderProfile, size uint64) bool {
+	if details, selected := s.oauth2Profiles[profile.ID]; selected {
+		facts := oauth.OAuth2UserInfoProfile{Profile: profile, Details: details}
+		return facts.Validate() == nil && size == 0
+	}
+	return size > 0 && size <= uint64(profile.MaxTokenBytes)
+}
+
 func (s *LinkService) tokenVaultProfile(b rpTokenVaultBinding) (oauth.ProviderProfile, error) {
 	if s == nil || s.config == nil || s.envelopes == nil || !rpSchemaName(s.config().Schema) {
 		return oauth.ProviderProfile{}, identity.InvalidInputError{Field: "oauth_token_vault"}
@@ -150,7 +161,7 @@ func (s *LinkService) sealProviderTokens(ctx context.Context, b rpTokenVaultBind
 		return out, err
 	}
 	err = tokens.Use(ctx, func(ctx context.Context, tokens oauth.TokenBytes) error {
-		if len(tokens.AccessToken) < 1 || len(tokens.AccessToken) > profile.MaxTokenBytes || len(tokens.RefreshToken) > profile.MaxTokenBytes || len(tokens.IDToken) < 1 || len(tokens.IDToken) > profile.MaxTokenBytes {
+		if len(tokens.AccessToken) < 1 || len(tokens.AccessToken) > profile.MaxTokenBytes || len(tokens.RefreshToken) > profile.MaxTokenBytes || !s.tokenVaultIDTokenSize(profile, uint64(len(tokens.IDToken))) {
 			return identity.ForbiddenError{}
 		}
 		// OIDCConfig bounds each token to16KiB. Allocate once so append cannot
@@ -222,7 +233,7 @@ func (s *LinkService) validatePreparedProviderTokens(ctx context.Context, p rpPr
 		}
 		n := binary.BigEndian.Uint32(remaining)
 		remaining = remaining[4:]
-		if n > uint32(profile.MaxTokenBytes) || uint64(n) > uint64(len(remaining)) || i != 1 && n == 0 {
+		if n > uint32(profile.MaxTokenBytes) || uint64(n) > uint64(len(remaining)) || i == 0 && n == 0 || i == 2 && !s.tokenVaultIDTokenSize(profile, uint64(n)) {
 			return identity.ForbiddenError{}
 		}
 		remaining = remaining[int(n):]
