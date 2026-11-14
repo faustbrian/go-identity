@@ -1,7 +1,7 @@
 # Built-in OAuth profiles and direct operations
 
-This experimental module supplies an explicitly configured Google
-code/query/S256 provider through the existing OAuth owner and
+This experimental module supplies explicitly configured Google and Keycloak
+code/query/S256 providers through the existing OAuth owner and
 `identity.oauth.provider-apple-client-secret-sign`, which signs an Apple
 client-secret JWT using an explicitly configured, preprovisioned encrypted
 P-256 key. It does **not** implement Apple authentication, hybrid/form-post
@@ -51,6 +51,18 @@ UserInfo enrichment, refresh, revocation, unlink, provider logout or One Tap
 operation in this finite builder. Controlled TLS/signature/native tests do not
 claim live Google interoperability. The full 43-row provider matrix and all
 unimplemented Google cells remain binding and unverified.
+
+## Keycloak existing-account browser flow
+
+`NewKeycloak(KeycloakConfig{...})` selects the existing OAuth owner using an
+explicit exact realm issuer, reviewed pinned discovery bytes, credentials and
+trusted signing keys. It derives endpoints without defaults and fixes stable
+ID `keycloak`, Basic client authentication, code/query/S256/nonce/RS256 and closed
+`openid`/`profile`/`email` scopes. Exact callback issuer remains mandatory;
+disable Keycloak's issuer-exclusion compatibility switch. See the
+[profile, trust boundary and limits](docs/keycloak.md) and
+[official source/image pins](docs/keycloak-sources.md). This is not enterprise
+SSO, signup, direct-token, refresh or remote-logout support.
 
 ## Provision and use the Apple signer
 

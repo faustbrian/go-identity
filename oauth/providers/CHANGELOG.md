@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add `NewKeycloak` for explicitly pinned realm discovery and existing-account
+  code/query/S256/nonce/RS256 linking/signin composition. Require exact issuer,
+  realm-bound endpoints, RFC 9207 responses, Basic client authentication and
+  closed identity scopes. This adds no enterprise routing, signup, implicit
+  linking, native-token, refresh or remote-logout operation.
+
 - Add explicit `NewGoogle` configuration for the reviewed Google
   code/query/S256 profile, RS256, POST client authentication and closed
   `openid`/`email`/`profile` scopes. Reuse the existing Google-only OAuth owner,
