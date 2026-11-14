@@ -17,3 +17,14 @@ func TestAPIKeyPermissionReductionCaptureRejectsZeroOwner(t *testing.T) {
 		}
 	}
 }
+
+func TestOrganizationAPIKeyPermissionReductionCaptureRejectsZeroOwner(t *testing.T) {
+	for _, owner := range []*Coordinator{nil, {}} {
+		for _, ctx := range []context.Context{nil, context.Background()} {
+			result, fingerprint, err := owner.ExecutePreparedOrganizationAPIKeyPermissionReduction(ctx, identity.Command{}, CommandPlan{})
+			if err == nil || result != (identity.CommandResult{}) || fingerprint != ([32]byte{}) {
+				t.Fatal("unowned organization reduction minted recovery commitment")
+			}
+		}
+	}
+}

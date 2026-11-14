@@ -40,6 +40,16 @@ releasing an expired pending command.
 
 ## API-key permission maintenance recovery
 
+Organization-owned maintenance explicitly selects
+`ExecutePreparedOrganizationAPIKeyPermissionReduction` with the distinct
+`apikey-permission-reduction-organization-v1` schema, a service actor and no
+user subject. Its anonymous-flow correlation must equal the original command
+ID; the required record still identifies the exact key. This method is not an
+API-key authentication, human-management or organization-authorization API.
+The actual native owner must enforce current owner/key authority and all
+protected effects. USER and organization declarations cannot select each
+other's capture method or a verification-decorated declaration.
+
 The native API-key maintenance owner may use
 `ExecutePreparedAPIKeyPermissionReduction(ctx, original, declaration)` for its
 exact service-account `identity.apikey.update` / `apikey-permission-reduction-v1`

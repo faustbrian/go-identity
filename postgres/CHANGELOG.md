@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit original-command fingerprint capture for organization-owned
+  API-key permission maintenance. The separate anonymous-flow/service-actor
+  profile preserves owner/actor separation and original recovery custody;
+  USER maintenance and verification declarations retain their existing gates.
+
 - Return the actual matched original command fingerprint for the closed native
   service-account API-key permission-maintenance profile. Live original leases,
   retained-key rotation and uncertain acknowledgements keep their original

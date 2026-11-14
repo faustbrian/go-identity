@@ -66,6 +66,14 @@ func (p *reductionCapturePhase) ApplyFeature(ctx context.Context, w Work, comman
 }
 
 func TestAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
+	testAPIKeyPermissionReductionOriginalCapturePostgres(t, identity.FeatureSubjectUser)
+}
+
+func TestOrganizationAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
+	testAPIKeyPermissionReductionOriginalCapturePostgres(t, identity.FeatureSubjectAnonymousFlow)
+}
+
+func testAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T, subject identity.FeatureSubjectRequirement) {
 	ctx, pool, _ := anonymousKernelDatabase(t)
 	history, err := (PreparationMigrationSource{Base: MigrationSource{}, Version: 16}).Load(ctx)
 	if err != nil {
@@ -81,7 +89,11 @@ func TestAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
 	if err := pool.Raw().QueryRow(ctx, `SELECT current_database()`).Scan(&databaseName); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"committed", "lost-commit-ack", "busy-retained-key", "human-actor", "another-schema", "foreign-contributor", "verification-decorated"} {
+	modes := []string{"committed", "lost-commit-ack", "busy-retained-key", "human-actor", "another-schema", "foreign-contributor", "verification-decorated", "other-owner-profile"}
+	if subject == identity.FeatureSubjectAnonymousFlow {
+		modes = append(modes, "different-anonymous-flow")
+	}
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			executionPool := pool
 			var fault *registrationCommitFault
@@ -108,11 +120,20 @@ func TestAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
 				t.Fatal(err)
 			}
 			op := identity.FeatureOperation{Owner: "identity/apikey", OperationID: "identity.apikey.update", SchemaID: "apikey-permission-reduction-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+			if subject == identity.FeatureSubjectAnonymousFlow {
+				op.SchemaID, op.SubjectRequirement = "apikey-permission-reduction-organization-v1", subject
+			}
 			if mode == "another-schema" {
 				op.SchemaID = "apikey-unselected-maintenance-v1"
 			}
 			binding := codecBinding()
 			binding.CommandID, _ = identity.NewCommandID()
+			if subject == identity.FeatureSubjectAnonymousFlow {
+				binding.UserID, binding.AnonymousFlowID = "", string(binding.CommandID)
+				if mode == "different-anonymous-flow" {
+					binding.AnonymousFlowID = "different-original-command"
+				}
+			}
 			recordID, _ := identity.NewSubjectID()
 			binding.RecordID = string(recordID)
 			binding.OperationID, binding.SchemaID, binding.SchemaVersion = op.OperationID, op.SchemaID, op.SchemaVersion
@@ -136,6 +157,16 @@ func TestAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
 			coordinator, err := NewCoordinator(executionPool, registry, configuration)
 			if err != nil {
 				t.Fatal(err)
+			}
+			execute := func(c *Coordinator, command identity.Command, plan CommandPlan) (identity.CommandResult, [32]byte, error) {
+				selectOrganization := subject == identity.FeatureSubjectAnonymousFlow
+				if mode == "other-owner-profile" {
+					selectOrganization = !selectOrganization
+				}
+				if selectOrganization {
+					return c.ExecutePreparedOrganizationAPIKeyPermissionReduction(ctx, command, plan)
+				}
+				return c.ExecutePreparedAPIKeyPermissionReduction(ctx, command, plan)
 			}
 			_, _, declaration := featurePlanFixture(t)
 			declaration.Contributors = registry.Descriptors()
@@ -177,7 +208,7 @@ func TestAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
 				var firstErr error
 				go func() {
 					defer close(finished)
-					first, firstFingerprint, firstErr = coordinator.ExecutePreparedAPIKeyPermissionReduction(ctx, command, prepared)
+					first, firstFingerprint, firstErr = execute(coordinator, command, prepared)
 				}()
 				defer func() { unblock(); <-finished }()
 				select {
@@ -198,7 +229,7 @@ func TestAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				busy, fingerprint, err := rotated.ExecutePreparedAPIKeyPermissionReduction(ctx, command, rotatedPlan)
+				busy, fingerprint, err := execute(rotated, command, rotatedPlan)
 				if err != nil || busy.Outcome != identity.CommitOutcomeInProgress || fingerprint != expected {
 					t.Fatal("live lease lost original retained-key fingerprint", busy.Outcome, err)
 				}
@@ -209,8 +240,8 @@ func TestAPIKeyPermissionReductionOriginalCapturePostgres(t *testing.T) {
 				}
 				return
 			}
-			result, fingerprint, executeErr := coordinator.ExecutePreparedAPIKeyPermissionReduction(ctx, command, prepared)
-			if mode == "human-actor" || mode == "another-schema" || mode == "foreign-contributor" || mode == "verification-decorated" {
+			result, fingerprint, executeErr := execute(coordinator, command, prepared)
+			if mode == "human-actor" || mode == "another-schema" || mode == "foreign-contributor" || mode == "verification-decorated" || mode == "other-owner-profile" || mode == "different-anonymous-flow" {
 				if executeErr == nil || result != (identity.CommandResult{}) || fingerprint != ([32]byte{}) || phase.generated != 0 {
 					t.Fatal("unselected profile disclosed a commitment or started work", executeErr)
 				}
