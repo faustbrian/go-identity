@@ -1,4 +1,5 @@
-// Package apikeyvalkey stores encrypted positive modern USER metadata only.
+// Package apikeyvalkey stores explicitly selected modern USER or organization
+// encrypted positive metadata, never authorization or credential authority.
 // Every admitted verification still invokes its real AtomicVerifier once.
 package apikeyvalkey
 
@@ -129,17 +130,18 @@ func printable(value string, limit int) bool {
 // do not copy a Cache after construction or first use.
 type Cache struct{ state *cacheState }
 type cacheState struct {
-	config     Config
-	projection apikey.PositiveProjectionConfig
-	codec      *apikey.PositiveProjectionCodec
-	address    string
-	tls        *tls.Config
-	sem        chan struct{}
-	mu         sync.Mutex
-	closed     bool
-	lifetime   context.Context
-	stop       context.CancelFunc
-	wg         sync.WaitGroup
+	config       Config
+	projection   apikey.PositiveProjectionConfig
+	codec        *apikey.PositiveProjectionCodec
+	organization bool
+	address      string
+	tls          *tls.Config
+	sem          chan struct{}
+	mu           sync.Mutex
+	closed       bool
+	lifetime     context.Context
+	stop         context.CancelFunc
+	wg           sync.WaitGroup
 }
 
 // New validates actual source composition and probes a real standalone primary
@@ -154,6 +156,26 @@ func New(ctx context.Context, c Config, projection apikey.PositiveProjectionConf
 	if err != nil {
 		return nil, ErrInvalidInput
 	}
+	return newCache(ctx, c, projection, codec, false)
+}
+
+// NewOrganization explicitly selects modern organization metadata, never its
+// creator as a USER. projection.Authority must be nil and organization must be
+// the real primary organization reader. Every verification/quota/recovery still
+// belongs to the injected native owners. Transport/security/Close ownership is
+// identical to New; mixed selection and absent owners fail before network IO.
+func NewOrganization(ctx context.Context, c Config, projection apikey.PositiveProjectionConfig, organization apikey.OrganizationProjectionAuthorityReader) (*Cache, error) {
+	if ctx == nil {
+		return nil, ErrInvalidInput
+	}
+	codec, err := apikey.NewOrganizationPositiveProjectionCodec(projection, organization)
+	if err != nil {
+		return nil, ErrInvalidInput
+	}
+	return newCache(ctx, c, projection, codec, true)
+}
+
+func newCache(ctx context.Context, c Config, projection apikey.PositiveProjectionConfig, codec *apikey.PositiveProjectionCodec, organization bool) (*Cache, error) {
 	address, name, roots, err := c.validate()
 	if err != nil {
 		return nil, err
@@ -166,7 +188,7 @@ func New(ctx context.Context, c Config, projection apikey.PositiveProjectionConf
 	}
 	c.TrustPEM = nil
 	lifetime, stop := context.WithCancel(context.Background())
-	cache := &Cache{state: &cacheState{config: c, projection: projection, codec: codec, address: address, tls: &tls.Config{MinVersion: tls.VersionTLS13, ServerName: name, RootCAs: roots}, sem: make(chan struct{}, c.MaximumConcurrent), lifetime: lifetime, stop: stop}}
+	cache := &Cache{state: &cacheState{config: c, projection: projection, codec: codec, organization: organization, address: address, tls: &tls.Config{MinVersion: tls.VersionTLS13, ServerName: name, RootCAs: roots}, sem: make(chan struct{}, c.MaximumConcurrent), lifetime: lifetime, stop: stop}}
 	if cache.now().IsZero() {
 		cache.Close()
 		return nil, ErrInvalidInput

@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
 	github.com/faustbrian/go-identity v0.0.0-20261025171642-473945c93248
-	github.com/faustbrian/go-identity/apikey v0.0.0-20261114023702-7912c478b9b1
+	github.com/faustbrian/go-identity/apikey v0.0.0-20261114072820-53dd7ca18a42
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 	github.com/valkey-io/valkey-go v1.0.78
 )

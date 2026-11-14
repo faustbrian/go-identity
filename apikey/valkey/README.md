@@ -1,6 +1,6 @@
 # API-key Valkey positive metadata
 
-This explicit modern USER profile stores encrypted positive/known-quota
+These explicit modern USER and organization profiles store encrypted positive/known-quota
 metadata, not credential or quota authority. Every admitted `VerifyAndConsume`
 calls the injected real `AtomicVerifier` **exactly once**, including warm NEW
 attempts and matching replays. This is not a SQL-speedup or offline-authentication
@@ -14,6 +14,15 @@ Construct the real native primary and its fixed-scope
 tenant, envelope service, fast clock, namespace/deployment epoch and wrapping-key
 reference. Then call `New(ctx, transport, projection)` and defer `cache.Close()`.
 No nil/typed-nil source or source-free degraded constructor is supported.
+
+For organization-owned modern keys, compose the real native
+`NewOrganizationService` and fixed-scope `NewOrganizationPermissionReductionStore`.
+Use `NewOrganization(ctx, transport, projection, primary)`, leaving
+`projection.Authority` nil. The separate reader must supply genuine current
+organization authority; mixed selection fails. No creator identity or membership
+epoch stands in for organization ownership. Distinct organization addresses and
+ciphertext purpose bind the exact owner/root and aggregate/credential epochs;
+the earliest original native and organization deadline wins. `New` stays USER-only.
 
 Transport selects `Profile: "positive-projection"`, `Topology: "standalone"`, an
 explicit `rediss://host:port`, CA trust, username/password and an independent
@@ -71,6 +80,7 @@ or acknowledgement is implied by cache cleanup.
 The production ACL needs connection setup (`HELLO`, `CLIENT SETINFO`), `INFO`
 cluster/replication, `PING`, `GETRANGE` and `SET` only in the deployment's key
 prefix `identity:apikey:p:v1:*`. Credentials/errors/configuration are redacted.
+The organization constructor instead uses `identity:apikey:organization:p:v1:*`.
 Do not log stable cache addresses or serialize opaque admissions.
 
 Close is idempotent, rejects new operations, cancels/waits for owned clients and
@@ -88,5 +98,5 @@ Run selected tests with task-owned Go caches and `-tags integration -race`.
 Real-native composition must additionally prove current primary quota, revocation,
 account withdrawal and original recovery; the independent contract fixture does
 not claim native authority. Public-only module-consumer proof remains a separate
-delivery boundary. Legacy/organization cache profiles, failover/cluster, managed
+delivery boundary. Legacy cache profiles, failover/cluster, managed
 clients and additional cache topologies remain unselected, not fallback modes.

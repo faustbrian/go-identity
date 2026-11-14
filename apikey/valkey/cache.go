@@ -17,11 +17,17 @@ var _ apikey.Store = (*Cache)(nil)
 type lookupWire apikey.PositiveProjectionLookup
 
 func (c *Cache) entry(lookup apikey.PositiveProjectionLookup) (string, error) {
+	return c.address(lookupWire(lookup), "identity:apikey:p:v1:")
+}
+
+type organizationLookupWire apikey.OrganizationPositiveProjectionLookup
+
+func (c *Cache) address(lookup any, prefix string) (string, error) {
 	wire, err := json.Marshal(struct {
 		Namespace string
 		Epoch     uint64
-		Lookup    lookupWire
-	}{c.state.projection.Namespace, c.state.projection.DeploymentEpoch, lookupWire(lookup)})
+		Lookup    any
+	}{c.state.projection.Namespace, c.state.projection.DeploymentEpoch, lookup})
 	if err != nil {
 		return "", ErrInvalidInput
 	}
@@ -30,7 +36,7 @@ func (c *Cache) entry(lookup apikey.PositiveProjectionLookup) (string, error) {
 	// Full ciphertext AAD checks the complete lookup even in a hash collision.
 	// No raw key, presented/stored credential digest, or source fingerprint is
 	// part of this address or any transport command.
-	return "identity:apikey:p:v1:" + hex.EncodeToString(mac.Sum(nil)), nil
+	return prefix + hex.EncodeToString(mac.Sum(nil)), nil
 }
 
 // VerifyAndConsume calls the real injected AtomicVerifier exactly once for each
@@ -61,12 +67,7 @@ func (c *Cache) VerifyAndConsume(ctx context.Context, request apikey.AtomicVerif
 	if err != nil || !admission.Cacheable() {
 		return out, err
 	}
-	lookup, err := admission.Lookup()
-	if err != nil {
-		out.Result = nil
-		return out, ErrUnavailable
-	}
-	key, err := c.entry(lookup)
+	key, err := c.admissionEntry(admission)
 	if err != nil {
 		out.Result = nil
 		return out, err
@@ -96,6 +97,21 @@ func (c *Cache) VerifyAndConsume(ctx context.Context, request apikey.AtomicVerif
 		}
 	}
 	return out, nil
+}
+
+func (c *Cache) admissionEntry(admission apikey.PositiveProjectionAdmission) (string, error) {
+	if c.state.organization {
+		lookup, err := admission.OrganizationLookup()
+		if err != nil {
+			return "", ErrUnavailable
+		}
+		return c.address(organizationLookupWire(lookup), "identity:apikey:organization:p:v1:")
+	}
+	lookup, err := admission.Lookup()
+	if err != nil {
+		return "", ErrUnavailable
+	}
+	return c.entry(lookup)
 }
 
 // ReconcileVerifyAndConsume delegates only the exact original source query.
