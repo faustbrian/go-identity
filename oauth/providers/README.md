@@ -1,7 +1,7 @@
 # Built-in OAuth profiles and direct operations
 
-This experimental module supplies explicitly configured Google and Keycloak
-code/query/S256 providers through the existing OAuth owner and
+This experimental module supplies explicitly configured Google, Keycloak and
+GitLab code/query/S256 providers through the existing OAuth owners and
 `identity.oauth.provider-apple-client-secret-sign`, which signs an Apple
 client-secret JWT using an explicitly configured, preprovisioned encrypted
 P-256 key. It does **not** implement Apple authentication, hybrid/form-post
@@ -63,6 +63,21 @@ disable Keycloak's issuer-exclusion compatibility switch. See the
 [profile, trust boundary and limits](docs/keycloak.md) and
 [official source/image pins](docs/keycloak-sources.md). This is not enterprise
 SSO, signup, direct-token, refresh or remote-logout support.
+
+## GitLab existing-account browser flow
+
+`NewGitLab(GitLabConfig{Version: 1, ClientID: clientID, ClientSecret: secret,
+RedirectURI: "https://application.example/gitlab/callback"})` selects exactly
+`read_user`, `client_secret_post` and bearer HTTPS `/api/v4/user`. Empty issuer
+selects `https://gitlab.com`; self-managed deployments use an exact HTTPS base.
+The stable subject is the positive integer REST `id`, not email or username.
+
+The returned `*oauth.OAuth2UserInfoProvider` composes with the native link and
+existing-account signin owners. Register one distinct callback URI per issuer
+and parse it with `oauth.ParseOAuth2QueryCallback`, passing the actual trusted
+transport route. Existing strict OIDC HTTP/Reference routes do not select this
+variant automatically. See [the profile](docs/gitlab.md) and
+[official contracts and independent test oracle](docs/gitlab-sources.md).
 
 ## Provision and use the Apple signer
 

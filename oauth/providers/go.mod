@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/faustbrian/go-identity v0.0.0-20261109180909-8901e7f09812
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261113150852-ae528e034e9b
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261114091152-4d28ca0d6bdc
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 )
 
