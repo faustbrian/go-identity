@@ -38,6 +38,24 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
+## API-key permission maintenance recovery
+
+The native API-key maintenance owner may use
+`ExecutePreparedAPIKeyPermissionReduction(ctx, original, declaration)` for its
+exact service-account `identity.apikey.update` / `apikey-permission-reduction-v1`
+profile. The required record is the actual key; the user remains its owner and
+the service actor remains distinct. The registered native owner must authorize
+and fence current policy before changing the key.
+
+The additional output is the original fingerprint actually matched under the
+existing reservation lock, including a live lease, retained-key rotation and
+uncertain acknowledgement. Preserve it for original recovery; a prospective
+current-key hash is not equivalent. Zero means no matching claim was established.
+The output is neither authorization nor a successful commit. Human updates,
+other schemas and verification plans cannot select this method. Existing APIs,
+command history, preparation, lifecycle and final-admission ownership are
+unchanged; this adds no observer, transaction or journal.
+
 ## Typed SCIM kernel updates
 
 ### Original SCIM failure replay

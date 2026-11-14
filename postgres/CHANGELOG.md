@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Return the actual matched original command fingerprint for the closed native
+  service-account API-key permission-maintenance profile. Live original leases,
+  retained-key rotation and uncertain acknowledgements keep their original
+  recovery correlation; no prospective hash, new journal or authority is minted.
+  Existing generic preparation and verification APIs are unchanged.
+
 - Preserve original SCIM Group uniqueness, version and resource-conflict
   denials through the existing protected journal. Group create/replace/PATCH
   also retain finite invalid-member denials; User operations and Group DELETE
