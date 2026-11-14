@@ -33,7 +33,9 @@ type ProjectionClock interface{ Now() time.Time }
 // Store, Verifier and Authority must be the actual public source owners (one
 // object may implement all three); they and Crypto/Clock remain borrowed.
 // Every Begin invokes Verifier exactly once. There is no source-free, cached
-// authentication, quota allowance, legacy or organization variant.
+// authentication, quota allowance or legacy variant. The distinct organization
+// constructor reuses this shape with Authority nil and its own required reader;
+// the existing USER constructor and serialized USER bindings stay unchanged.
 //
 // Namespace and positive DeploymentEpoch isolate deployments; KeyReference is
 // the envelope provider's wrapping key, not an API-key pepper. MaximumDuration
@@ -64,15 +66,21 @@ func (PositiveProjectionConfig) MarshalJSON() ([]byte, error) { return nil, ErrD
 // Concurrent use requires concurrent-safe borrowed sources/crypto/clock. It owns
 // no journal, transaction, authority vector, cache connection or worker.
 type PositiveProjectionCodec struct {
-	config PositiveProjectionConfig
-	frame  string
+	config                PositiveProjectionConfig
+	frame                 string
+	organizationAuthority OrganizationProjectionAuthorityReader
 }
 
 // NewPositiveProjectionCodec validates explicit composition without IO. Existing
 // source CacheDisabled configuration and old serialized identities stay intact.
 func NewPositiveProjectionCodec(c PositiveProjectionConfig) (*PositiveProjectionCodec, error) {
+	return newPositiveProjectionCodec(c, nil)
+}
+
+func newPositiveProjectionCodec(c PositiveProjectionConfig, organization OrganizationProjectionAuthorityReader) (*PositiveProjectionCodec, error) {
 	profile := c.Configuration.Spec()
-	if c.Configuration.Validate() != nil || profile.Algorithm != AlgorithmModernHMACSHA256 || profile.State != ConfigurationActive || profile.Cache != CacheDisabled || !scope(string(c.TenantID), 128) || projectionNil(c.Store) || projectionNil(c.Verifier) || projectionNil(c.Authority) || c.Crypto == nil || projectionNil(c.Clock) || !scope(c.Namespace, 128) || c.DeploymentEpoch == 0 || !scope(c.KeyReference, 256) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.MaximumBytes < 1024 || c.MaximumBytes > 262144 {
+	selectedAuthority := !projectionNil(c.Authority) && projectionNil(organization) || projectionNil(c.Authority) && !projectionNil(organization)
+	if c.Configuration.Validate() != nil || profile.Algorithm != AlgorithmModernHMACSHA256 || profile.State != ConfigurationActive || profile.Cache != CacheDisabled || !scope(string(c.TenantID), 128) || projectionNil(c.Store) || projectionNil(c.Verifier) || !selectedAuthority || c.Crypto == nil || projectionNil(c.Clock) || !scope(c.Namespace, 128) || c.DeploymentEpoch == 0 || !scope(c.KeyReference, 256) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.MaximumBytes < 1024 || c.MaximumBytes > 262144 {
 		return nil, ErrInvalid
 	}
 	wire, err := json.Marshal(profile)
@@ -80,7 +88,7 @@ func NewPositiveProjectionCodec(c PositiveProjectionConfig) (*PositiveProjection
 		return nil, ErrInvalid
 	}
 	frame := sha256.Sum256(wire)
-	return &PositiveProjectionCodec{config: c, frame: hex.EncodeToString(frame[:])}, nil
+	return &PositiveProjectionCodec{config: c, frame: hex.EncodeToString(frame[:]), organizationAuthority: organization}, nil
 }
 
 func projectionNil(value any) bool {
@@ -123,13 +131,14 @@ func (PositiveProjectionLookup) MarshalJSON() ([]byte, error) { return nil, ErrD
 // the original result/window and cannot select a new verification attempt.
 type PositiveProjectionAdmission struct{ state *positiveProjectionAdmission }
 type positiveProjectionAdmission struct {
-	owner    *PositiveProjectionCodec
-	result   AtomicVerificationResult
-	lookup   PositiveProjectionLookup
-	grant    []string
-	required []string
-	start    time.Time
-	until    time.Time
+	owner        *PositiveProjectionCodec
+	result       AtomicVerificationResult
+	lookup       PositiveProjectionLookup
+	organization *OrganizationPositiveProjectionLookup
+	grant        []string
+	required     []string
+	start        time.Time
+	until        time.Time
 }
 
 func (PositiveProjectionAdmission) Format(s fmt.State, _ rune) {
@@ -142,7 +151,7 @@ func (a PositiveProjectionAdmission) Cacheable() bool { return a.state != nil }
 
 // Lookup returns metadata only from this genuine source invocation. Zero denies.
 func (a PositiveProjectionAdmission) Lookup() (PositiveProjectionLookup, error) {
-	if a.state == nil {
+	if a.state == nil || a.state.organization != nil {
 		return PositiveProjectionLookup{}, ErrInvalid
 	}
 	return a.state.lookup, nil
@@ -152,7 +161,8 @@ func (a PositiveProjectionAdmission) Lookup() (PositiveProjectionLookup, error) 
 // attempt. Ambiguity/denial/error and known quota metadata pass through unchanged
 // and cannot publish a positive. Additional authority/crypto/cache failure never
 // retries verification or hides its known outcome. Unsupported request profiles
-// fail before source work. Only modern USER positives can receive admission.
+// fail before source work. Only the explicitly selected modern owner kind can
+// receive admission; the existing constructor selects USER only.
 func (c *PositiveProjectionCodec) Begin(ctx context.Context, request AtomicVerificationRequest) (admission PositiveProjectionAdmission, out AtomicVerificationResult, err error) {
 	if c == nil || ctx == nil || request.TenantID != c.config.TenantID || request.Validate(c.config.Configuration) != nil {
 		return admission, out, ErrInvalid
@@ -180,7 +190,11 @@ func (c *PositiveProjectionCodec) Begin(ctx context.Context, request AtomicVerif
 	if out.Result == nil {
 		return admission, out, nil
 	}
-	if out.State != VerificationAttemptNotApplicable && out.State != VerificationAttemptDebited || out.Result.Owner.Spec().Kind != OwnerUser {
+	expectedOwner := OwnerUser
+	if c.organizationAuthority != nil {
+		expectedOwner = OwnerOrganization
+	}
+	if out.State != VerificationAttemptNotApplicable && out.State != VerificationAttemptDebited || out.Result.Owner.Spec().Kind != expectedOwner {
 		out.Result = nil
 		return admission, out, ErrDenied
 	}
@@ -191,6 +205,9 @@ func (c *PositiveProjectionCodec) Begin(ctx context.Context, request AtomicVerif
 	if result.ValidateAt(c.config.Configuration, result.VerifiedAt) != nil || result.Owner.Spec().TenantID != request.TenantID {
 		out.Result = nil
 		return admission, out, ErrInvalid
+	}
+	if c.organizationAuthority != nil {
+		return c.admitOrganization(ctx, request, out)
 	}
 	binding, e := NewSourceAuthorityBinding(result, c.config.Configuration, result.VerifiedAt)
 	if e != nil {
@@ -262,7 +279,7 @@ func (c *PositiveProjectionCodec) Complete(ctx context.Context, admission Positi
 			}
 		}
 	}()
-	if cached, ok := c.restore(ctx, a.lookup, blob); ok {
+	if cached, ok := c.restore(ctx, a, blob); ok {
 		narrowed := projectionIntersection(grant, cached.Grant)
 		// A projection cannot turn a current positive into an ambiguous/negative
 		// debit result. A different permission requirement is a projection miss;
@@ -287,12 +304,16 @@ func (c *PositiveProjectionCodec) Complete(ctx context.Context, admission Positi
 		return out, PositiveProjectionPublication{}, nil
 	}
 	stored := positiveProjectionRecord{Schema: 1, Lookup: projectionLookupRecord(a.lookup), Grant: grant, ReadStartedAt: start, ValidUntil: until, AttemptID: out.AttemptID, State: out.State, Quota: out.Quota}
+	if a.organization != nil {
+		lookup := organizationProjectionLookupRecord(*a.organization)
+		stored.Organization = &lookup
+	}
 	plain, e := json.Marshal(stored)
 	defer clear(plain)
 	if e != nil || len(plain) > c.config.MaximumBytes {
 		return out, PositiveProjectionPublication{}, nil
 	}
-	aad, e := c.additionalData(a.lookup)
+	aad, e := c.additionalData(a)
 	if e != nil {
 		return out, PositiveProjectionPublication{}, nil
 	}
@@ -326,19 +347,26 @@ type positiveProjectionRecord struct {
 	ReadStartedAt, ValidUntil time.Time
 	AttemptID                 VerificationAttemptID
 	State                     VerificationAttemptState
-	Quota                     *QuotaMetadata `json:",omitempty"`
+	Quota                     *QuotaMetadata                      `json:",omitempty"`
+	Organization              *organizationProjectionLookupRecord `json:",omitempty"`
 }
 
-func (c *PositiveProjectionCodec) additionalData(lookup PositiveProjectionLookup) (envelope.Context, error) {
-	wire, err := json.Marshal(projectionLookupRecord(lookup))
+func (c *PositiveProjectionCodec) additionalData(a *positiveProjectionAdmission) (envelope.Context, error) {
+	var lookup any = projectionLookupRecord(a.lookup)
+	purpose := "apikey.modern-user-positive-metadata.v1"
+	if a.organization != nil {
+		lookup = organizationProjectionLookupRecord(*a.organization)
+		purpose = "apikey.modern-organization-positive-metadata.v1"
+	}
+	wire, err := json.Marshal(lookup)
 	if err != nil {
 		return envelope.Context{}, ErrInvalid
 	}
 	digest := sha256.Sum256(wire)
-	return envelope.NewContext(map[string]string{"purpose": "apikey.modern-user-positive-metadata.v1", "namespace": c.config.Namespace, "deployment": strconv.FormatUint(c.config.DeploymentEpoch, 10), "configuration": c.frame, "binding": hex.EncodeToString(digest[:])})
+	return envelope.NewContext(map[string]string{"purpose": purpose, "namespace": c.config.Namespace, "deployment": strconv.FormatUint(c.config.DeploymentEpoch, 10), "configuration": c.frame, "binding": hex.EncodeToString(digest[:])})
 }
 
-func (c *PositiveProjectionCodec) restore(ctx context.Context, lookup PositiveProjectionLookup, blob []byte) (positiveProjectionRecord, bool) {
+func (c *PositiveProjectionCodec) restore(ctx context.Context, a *positiveProjectionAdmission, blob []byte) (positiveProjectionRecord, bool) {
 	if len(blob) == 0 || len(blob) > c.config.MaximumBytes {
 		return positiveProjectionRecord{}, false
 	}
@@ -346,7 +374,7 @@ func (c *PositiveProjectionCodec) restore(ctx context.Context, lookup PositivePr
 	if err != nil {
 		return positiveProjectionRecord{}, false
 	}
-	aad, err := c.additionalData(lookup)
+	aad, err := c.additionalData(a)
 	if err != nil {
 		return positiveProjectionRecord{}, false
 	}
@@ -362,7 +390,7 @@ func (c *PositiveProjectionCodec) restore(ctx context.Context, lookup PositivePr
 		return positiveProjectionRecord{}, false
 	}
 	var extra any
-	if decoder.Decode(&extra) != io.EOF || stored.Schema != 1 || PositiveProjectionLookup(stored.Lookup) != lookup || !validPermissions(stored.Grant) || stored.ReadStartedAt.IsZero() || !stored.ValidUntil.After(stored.ReadStartedAt) || stored.ValidUntil.Sub(stored.ReadStartedAt) > 20*time.Second || c.config.Clock.Now().Before(stored.ReadStartedAt) || !c.config.Clock.Now().Before(stored.ValidUntil) {
+	if decoder.Decode(&extra) != io.EOF || stored.Schema != 1 || PositiveProjectionLookup(stored.Lookup) != a.lookup || !sameOrganizationProjectionLookup(stored.Organization, a.organization) || !validPermissions(stored.Grant) || stored.ReadStartedAt.IsZero() || !stored.ValidUntil.After(stored.ReadStartedAt) || stored.ValidUntil.Sub(stored.ReadStartedAt) > 20*time.Second || c.config.Clock.Now().Before(stored.ReadStartedAt) || !c.config.Clock.Now().Before(stored.ValidUntil) {
 		return positiveProjectionRecord{}, false
 	}
 	if _, err := ParseVerificationAttemptID(string(stored.AttemptID)); err != nil || stored.State != VerificationAttemptNotApplicable && stored.State != VerificationAttemptDebited || stored.State == VerificationAttemptDebited && stored.Quota == nil || stored.Quota != nil && stored.Quota.Validate() != nil {

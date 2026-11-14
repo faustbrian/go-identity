@@ -1,5 +1,31 @@
 # API keys
 
+## Explicit organization positive metadata
+
+`NewOrganizationPositiveProjectionCodec(config, organizationReader)` selects only
+modern organization-owned metadata. Supply the genuine native Store and atomic
+verifier through the existing `PositiveProjectionConfig`; leave `Authority` nil
+and pass the real `OrganizationProjectionAuthorityReader` separately. Mixed
+USER/organization reader selection and source-free construction fail. Existing
+`NewPositiveProjectionCodec` remains USER-only, with unchanged exported structs
+and stored USER ciphertext bindings.
+
+`Begin` still invokes the sole verifier exactly once per admitted attempt and
+then obtains current organization authority. `OrganizationLookup` exposes only
+the distinct organization owner, root and actual aggregate/credential epochs;
+`Lookup` remains USER-only. Opaque admission custody and a separate authenticated
+purpose prevent a caller-built result, USER blob or another organization from
+selecting authority. `Complete` can only narrow the current result and preserves
+the earliest original native/organization read and expiry, including promotion.
+It never returns cached quota as a new debit or creates a human principal.
+
+Creator removal denies that human's management but need not revoke the integration
+key. Actual owner withdrawal, key revocation, narrower current policy, exhausted
+quota or unknown/unavailable native authority cannot be bypassed by warm metadata.
+Original reconciliation is historical only; it never performs a new verification,
+debit or freshness renewal. The owned Valkey adapter provides the selected real
+standalone/TLS transport. Legacy and other cache topologies remain unselected.
+
 ## Current validity of an authenticated delegation source
 
 `NewSourceAuthorityBinding` snapshots the nonsecret root and effective ceiling of

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an explicitly selected modern organization positive-metadata codec with
+  distinct current-organization reader, lookup and authenticated purpose. Preserve
+  creator/owner separation, non-expanding grants and earliest original freshness;
+  existing USER constructors, exported struct shapes and stored bytes are unchanged.
+
 - Add explicitly composed encrypted modern USER positive metadata projections.
   Every admitted attempt still invokes the actual atomic verifier exactly once;
   restoration only narrows its current grant/original deadline and never replaces
