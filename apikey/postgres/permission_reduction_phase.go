@@ -88,16 +88,16 @@ var _ kernel.FeaturePreparationContributor = (*reductionPhase)(nil)
 func (*reductionPhase) Descriptor() kernel.ContributorDescriptor {
 	return kernel.ContributorDescriptor{Owner: "identity/apikey/postgres", ContractID: "identity.apikey", Version: 1}
 }
-func (*reductionPhase) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{permissionReductionOperation()}
+func (p *reductionPhase) FeatureOperations() []identity.FeatureOperation {
+	return []identity.FeatureOperation{p.store.operation()}
 }
 
 func (p *reductionPhase) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
-	if p == nil || p.store == nil || command != p.original && command != p.generated || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != permissionReductionOperation() || plan.SubjectType != "api_key" || plan.Lifecycle == nil {
+	if p == nil || p.store == nil || command != p.original && command != p.generated || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != p.store.operation() || plan.SubjectType != "api_key" || plan.Lifecycle == nil {
 		return apikey.ErrInvalid
 	}
 	spec, ok := command.Feature()
-	if !ok || spec.Binding != p.binding || spec.Operation != permissionReductionOperation() || plan.Lifecycle.EventType != "api_key.permissions_changed.v1" || plan.Lifecycle.BeforeVersion != p.decision.ExpectedKeyVersion || plan.Lifecycle.AfterVersion != p.decision.ExpectedKeyVersion+1 {
+	if !ok || spec.Binding != p.binding || spec.Operation != p.store.operation() || plan.Lifecycle.EventType != "api_key.permissions_changed.v1" || plan.Lifecycle.BeforeVersion != p.decision.ExpectedKeyVersion || plan.Lifecycle.AfterVersion != p.decision.ExpectedKeyVersion+1 {
 		return apikey.ErrInvalid
 	}
 	return p.store.validateDecision(p.decision)
@@ -108,7 +108,7 @@ func (p *reductionPhase) ValidateFeaturePreparation(command identity.Command, pl
 
 func (p *reductionPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.Work, command identity.Command) error {
 	binding, feature, _, err := w.FeatureScope(p)
-	if err != nil || command != p.original || binding != p.binding || feature.Operation != permissionReductionOperation() || p.actorVersion == 0 {
+	if err != nil || command != p.original || binding != p.binding || feature.Operation != p.store.operation() || p.actorVersion == 0 {
 		return apikey.ErrDenied
 	}
 	return authority.RequireAuthority(ctx, w, p.store.actorScope(), p.actorVersion, p.store.primary.config().MaximumDuration)
@@ -125,11 +125,11 @@ func (p *reductionPhase) plan() (kernel.CommandPlan, error) {
 	if err != nil {
 		return kernel.CommandPlan{}, err
 	}
-	digest, err := kernel.FeatureAuditBindingDigest(b, permissionReductionOperation(), "api_key", seed)
+	digest, err := kernel.FeatureAuditBindingDigest(b, p.store.operation(), "api_key", seed)
 	if err != nil {
 		return kernel.CommandPlan{}, err
 	}
-	plan := kernel.CommandPlan{Contributors: p.registry.Descriptors(), Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: permissionReductionOperation()}, SubjectType: "api_key", Lifecycle: &life, Audits: []kernel.AuditPlan{{EventType: "identity.api_key.update", SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: digest}}}
+	plan := kernel.CommandPlan{Contributors: p.registry.Descriptors(), Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: p.store.operation()}, SubjectType: "api_key", Lifecycle: &life, Audits: []kernel.AuditPlan{{EventType: "identity.api_key.update", SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: digest}}}
 	return p.coordinator.PrepareFeaturePreparationPlan(p.original, plan)
 }
 
@@ -164,22 +164,19 @@ func (p *reductionPhase) GenerateFeaturePreparation(ctx context.Context, command
 		return nil, err
 	}
 	record, err := primary.currentRecord(ctx, p.binding.TenantID, p.decision.KeyID)
-	if err != nil || record.Owner.Spec().Kind != apikey.OwnerUser || record.Owner.Spec().UserID != p.binding.UserID || record.Version != p.decision.ExpectedKeyVersion || record.AuthorityVersion != p.decision.ExpectedAuthorityVersion || !slices.Equal(record.Grant, p.decision.PriorGrant) {
+	if err != nil || !p.store.owns(record.Owner) || record.Version != p.decision.ExpectedKeyVersion || record.AuthorityVersion != p.decision.ExpectedAuthorityVersion || !slices.Equal(record.Grant, p.decision.PriorGrant) {
 		return nil, identity.ConflictError{}
 	}
-	observed, err := primary.ObserveSourceAuthority(ctx, sourceBindingForRecord(record, p.decision.ConfigurationAuthority))
+	var source verificationSnapshot
+	if p.store.organizationID != "" {
+		source, err = p.generateOrganization(ctx, generation, record)
+	} else {
+		source, err = p.generateUser(ctx, generation, record)
+	}
 	if err != nil {
 		return nil, err
 	}
-	actual, err := (apikey.ScopePolicy{}).DecidePermissionReduction(p.binding.CommandID, record, currentReductionAuthority(observed), primary.config().Configuration, observed.VerifiedAt)
-	if err != nil || !sameReductionDecision(actual, p.decision) {
-		return nil, apikey.ErrDenied
-	}
-	recordWire, err := encodeRecord(record, primary.config().Configuration)
-	if err != nil {
-		return nil, err
-	}
-	x := reductionSnapshot{Schema: 1, Generation: generation, Binding: storedBinding(p.binding), Decision: reductionWire(actual), ActorVersion: actorVersion, Source: verificationSnapshot{Schema: 1, Generation: generation, Binding: storedBinding(p.binding), Record: recordWire, GlobalVersion: observed.GlobalVersion, TenantVersion: observed.TenantVersion, UserVersion: observed.UserVersion, UserSecurity: observed.UserAuthorityVersion, UserStatus: identity.StatusActive, AuthorizationVersion: observed.AuthorizationVersion, PolicyVersion: observed.PolicyVersion, ConfigurationVersion: observed.ConfigurationAuthority.Version, Permissions: slices.Clone(observed.Grant), Started: observed.ReadStartedAt, Verified: observed.VerifiedAt, Until: observed.ValidUntil}}
+	x := reductionSnapshot{Schema: 1, Generation: generation, Binding: storedBinding(p.binding), Decision: reductionWire(p.decision), ActorVersion: actorVersion, Source: source}
 	aad, err := p.snapshotContext(generation)
 	if err != nil {
 		return nil, err
@@ -190,6 +187,23 @@ func (p *reductionPhase) GenerateFeaturePreparation(ctx context.Context, command
 		return nil, apikey.ErrInvalid
 	}
 	return primary.seal(ctx, aad, plain)
+}
+
+func (p *reductionPhase) generateUser(ctx context.Context, generation uint64, record apikey.Record) (verificationSnapshot, error) {
+	primary := p.store.primary
+	observed, err := primary.ObserveSourceAuthority(ctx, sourceBindingForRecord(record, p.decision.ConfigurationAuthority))
+	if err != nil {
+		return verificationSnapshot{}, err
+	}
+	actual, err := (apikey.ScopePolicy{}).DecidePermissionReduction(p.binding.CommandID, record, currentReductionAuthority(observed), primary.config().Configuration, observed.VerifiedAt)
+	if err != nil || !sameReductionDecision(actual, p.decision) {
+		return verificationSnapshot{}, apikey.ErrDenied
+	}
+	recordWire, err := encodeRecord(record, primary.config().Configuration)
+	if err != nil {
+		return verificationSnapshot{}, err
+	}
+	return verificationSnapshot{Schema: 1, Generation: generation, Binding: storedBinding(p.binding), Record: recordWire, GlobalVersion: observed.GlobalVersion, TenantVersion: observed.TenantVersion, UserVersion: observed.UserVersion, UserSecurity: observed.UserAuthorityVersion, UserStatus: identity.StatusActive, AuthorizationVersion: observed.AuthorizationVersion, PolicyVersion: observed.PolicyVersion, ConfigurationVersion: observed.ConfigurationAuthority.Version, Permissions: slices.Clone(observed.Grant), Started: observed.ReadStartedAt, Verified: observed.VerifiedAt, Until: observed.ValidUntil}, nil
 }
 
 func currentReductionAuthority(o apikey.SourceAuthorityObservation) apikey.CurrentAuthority {
@@ -240,6 +254,10 @@ func (p *reductionPhase) restore(ctx context.Context, generation uint64, wire []
 		return identity.ConflictError{}
 	}
 	p.snapshot = x
+	if p.store.organizationID != "" {
+		_, err = p.organizationObservation()
+		return err
+	}
 	_, err = p.observation()
 	return err
 }
@@ -265,8 +283,11 @@ func (p *reductionPhase) RestoreFeaturePreparation(ctx context.Context, original
 
 func (p *reductionPhase) check(ctx context.Context, w kernel.Work) error {
 	binding, feature, _, err := w.FeatureScope(p)
-	if err != nil || binding != p.binding || feature.Operation != permissionReductionOperation() {
+	if err != nil || binding != p.binding || feature.Operation != p.store.operation() {
 		return apikey.ErrDenied
+	}
+	if p.store.organizationID != "" {
+		return p.checkOrganization(ctx, w)
 	}
 	observed, err := p.observation()
 	if err != nil {
@@ -285,10 +306,14 @@ func (p *reductionPhase) check(ctx context.Context, w kernel.Work) error {
 	if err := primary.requireSourceOwner(ctx, w, p, observed); err != nil {
 		return err
 	}
-	if err := authority.RequireAuthority(ctx, w, p.store.actorScope(), p.snapshot.ActorVersion, primary.config().MaximumDuration); err != nil {
+	if err := p.requireActor(ctx, w); err != nil {
 		return err
 	}
 	return primary.requireSourceRecord(ctx, w, observed)
+}
+
+func (p *reductionPhase) requireActor(ctx context.Context, w kernel.Work) error {
+	return authority.RequireAuthority(ctx, w, p.store.actorScope(), p.snapshot.ActorVersion, p.store.primary.config().MaximumDuration)
 }
 
 func (p *reductionPhase) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
@@ -303,12 +328,23 @@ func (p *reductionPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 	if err := p.check(ctx, w); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	observed, err := p.observation()
-	if err != nil {
-		return identity.FeatureReceipt{}, err
+	var record apikey.Record
+	if p.store.organizationID != "" {
+		observed, err := p.organizationObservation()
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		record = observed.Record
+		record.Owner = observed.Owner
+	} else {
+		observed, err := p.observation()
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		record = observed.Record
+		record.Owner = observed.Owner
 	}
-	record := observed.Record
-	record.Owner, record.Grant = observed.Owner, slices.Clone(p.decision.Grant)
+	record.Grant = slices.Clone(p.decision.Grant)
 	record.Version++
 	record.AuthorityVersion++
 	record.RootVersion++
@@ -319,7 +355,7 @@ func (p *reductionPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 		return identity.FeatureReceipt{}, err
 	}
 	p.applied, p.result = true, &record
-	return identity.FeatureReceipt{Operation: permissionReductionOperation(), BeforeVersion: p.decision.ExpectedKeyVersion, AfterVersion: record.Version}, nil
+	return identity.FeatureReceipt{Operation: p.store.operation(), BeforeVersion: p.decision.ExpectedKeyVersion, AfterVersion: record.Version}, nil
 }
 
 func (p *reductionPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, command identity.Command) error {

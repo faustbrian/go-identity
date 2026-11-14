@@ -269,6 +269,13 @@ type nativeConsumerFixture struct {
 }
 
 func setupNativeConsumer(t *testing.T) nativeConsumerFixture {
+	return setupNativeConsumerWithMigrationBatches(t, nil)
+}
+
+// The default retains the original one-shot public bootstrap. Selected consumer
+// profiles may instead apply the same ordered complete owners in public batches;
+// each original migration operation keeps its own unchanged bounded deadline.
+func setupNativeConsumerWithMigrationBatches(t *testing.T, batches [][]reference.ModuleID) nativeConsumerFixture {
 	t.Helper()
 	ctx, pool, db := consumerDatabase(t)
 	names := []string{"fingerprint", "request", "counter", "risk-evidence", "risk-seal", "preauth-cookie", "session-token", "session-csrf", "http-device", "delivery-envelope", "dummy-password", "capability-binding", "capability-signing", "signin-proof", "migration", "counter-replay", "http-rate", "otp-lockout", "otp-wrap", "otp-attempt", "otp-code", "otp-intent", "identifier", "delivery-digest", "delivery-namespace", "password-flow", "signup-binding", "signup-intent", "verification-scope", "capability-replay", "capability-envelope", "counter-envelope", "verification-http", "api-key-pepper", "api-key-envelope"}
@@ -299,17 +306,41 @@ func setupNativeConsumer(t *testing.T) nativeConsumerFixture {
 		}
 	})
 	modules := []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/password/postgres", "identity/mfa/postgres", "capability/postgres/identity"}
-	plan, err := graph.stores.ReferenceMigrationPlan(ctx, reference.ReferenceMigrationPlanRequest{Modules: modules})
-	if err != nil {
-		t.Fatal("pre-Create public migration plan failed", err)
+	batched := batches != nil
+	if !batched {
+		batches = [][]reference.ModuleID{modules}
+	} else {
+		var selected []reference.ModuleID
+		for _, batch := range batches {
+			selected = append(selected, batch...)
+		}
+		if !slices.Equal(selected, modules) {
+			t.Fatal("selected public migration batches omitted or reordered owners")
+		}
 	}
-	install, err := identity.NewIdempotencyKey([]byte("api-key-real-consumer-install"))
-	if err != nil {
-		t.Fatal(err)
+	for i, batch := range batches {
+		plan, err := graph.stores.ReferenceMigrationPlan(ctx, reference.ReferenceMigrationPlanRequest{Modules: batch})
+		if err != nil {
+			t.Fatal("pre-Create public migration plan failed", err)
+		}
+		command, key := identity.CommandID("api_key_real_consumer_install"), "api-key-real-consumer-install"
+		if batched {
+			command, key = identity.CommandID(fmt.Sprintf("api_key_org_consumer_install_%d", i)), fmt.Sprintf("api-key-org-consumer-install-%d", i)
+		}
+		install, err := identity.NewIdempotencyKey([]byte(key))
+		if err != nil {
+			t.Fatal(err)
+		}
+		applied, err := graph.stores.ReferenceMigrationApply(ctx, reference.ReferenceMigrationApplyRequest{CommandID: command, Plan: plan.Plan, IdempotencyKey: install})
+		if err != nil || applied.Result.State() != reference.MigrationApplied {
+			t.Fatal("pre-Create public migrations failed", i, applied.Result.State(), err)
+		}
 	}
-	applied, err := graph.stores.ReferenceMigrationApply(ctx, reference.ReferenceMigrationApplyRequest{CommandID: "api_key_real_consumer_install", Plan: plan.Plan, IdempotencyKey: install})
-	if err != nil || applied.Result.State() != reference.MigrationApplied {
-		t.Fatal("pre-Create public migrations failed", applied.Result.State())
+	if batched {
+		complete, err := graph.stores.ReferenceMigrationPlan(ctx, reference.ReferenceMigrationPlanRequest{Modules: modules})
+		if err != nil || len(complete.Plan.Steps) != 0 {
+			t.Fatal("batched public bootstrap left selected native migrations pending", err)
+		}
 	}
 	kernelSteps, err := (kernel.CounterPreparationMigrationSource{Base: graph.stores.MigrationSource(), Version: 1700}).Load(ctx)
 	if err != nil {

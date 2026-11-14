@@ -35,10 +35,12 @@ func (PermissionReductionStoreConfig) MarshalJSON() ([]byte, error) { return nil
 // Caller decisions are compare-only inputs, never mutation authority. It owns
 // no pool, transaction, journal, authentication credential or background work.
 // Immutable composition supports concurrent calls with concurrent-safe borrowed
-// owners. Historical inquiry is restricted to this exact fixed scope.
+// owners. Historical inquiry is restricted to this exact fixed scope. The distinct
+// organization constructor selects a nonhuman owner without widening USER APIs.
 type PermissionReductionStore struct {
-	primary *Service
-	config  PermissionReductionStoreConfig
+	primary        *Service
+	config         PermissionReductionStoreConfig
+	organizationID apikey.OrganizationID
 }
 
 // NewPermissionReductionStore validates composition without I/O. It selects
@@ -80,6 +82,11 @@ func (s *PermissionReductionStore) authorizeActor(ctx context.Context) (uint64, 
 		"api-key.configuration-id":       authorization.StringValue(configurationID),
 		"api-key.actor-policy-namespace": authorization.StringValue(s.config.ActorPolicyNamespace),
 	}}}}
+	if s.organizationID != "" {
+		dc.Request.Resource.Type, dc.Request.Resource.ID = "organization-api-key", authorization.ResourceID(s.organizationID)
+		delete(dc.Request.Resource.Attributes, "api-key.owner-user-id")
+		dc.Request.Resource.Attributes["api-key.owner-organization-id"] = authorization.StringValue(string(s.organizationID))
+	}
 	if err := primary.allow(ctx, dc); err != nil {
 		return 0, err
 	}

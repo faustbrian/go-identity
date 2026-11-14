@@ -21,9 +21,8 @@ func (s *PermissionReductionStore) validateDecision(d apikey.PermissionReduction
 	if s == nil || s.primary == nil || s.primary.config == nil || d.Validate() != nil {
 		return apikey.ErrInvalid
 	}
-	owner := d.Owner.Spec()
 	profile := s.primary.config().Configuration.Spec()
-	if owner.Kind != apikey.OwnerUser || owner.TenantID != s.config.TenantID || owner.UserID != s.config.UserID || d.ConfigurationAuthority.ConfigurationID != profile.ID || d.PolicyVersion != s.primary.config().PolicyVersion || d.Disposition != apikey.PermissionReductionNarrow {
+	if !s.owns(d.Owner) || d.ConfigurationAuthority.ConfigurationID != profile.ID || d.PolicyVersion != s.primary.config().PolicyVersion || d.Disposition != apikey.PermissionReductionNarrow {
 		return apikey.ErrDenied
 	}
 	return nil
@@ -31,8 +30,11 @@ func (s *PermissionReductionStore) validateDecision(d apikey.PermissionReduction
 
 func (s *PermissionReductionStore) phase(d apikey.PermissionReductionDecision, actorVersion uint64) (*reductionPhase, error) {
 	c := s.primary.config()
-	op := permissionReductionOperation()
+	op := s.operation()
 	binding := identity.CommandBinding{CommandID: d.CommandID, TenantID: s.config.TenantID, UserID: s.config.UserID, ActorID: s.config.ActorID, ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, RecordID: string(d.KeyID), SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, CorrelationID: string(d.CommandID)}
+	if s.organizationID != "" {
+		binding.AnonymousFlowID = string(d.CommandID)
+	}
 	wire, err := json.Marshal(struct {
 		Decision       reductionDecisionWire
 		Configuration  apikey.ConfigurationSpec
@@ -52,7 +54,7 @@ func (s *PermissionReductionStore) phase(d apikey.PermissionReductionDecision, a
 }
 
 // ApplyPermissionReduction compares one original decision with actual current
-// USER/key/configuration/policy facts, fences both owner and maintenance actor,
+// selected owner/key/configuration/policy facts, fences owner and maintenance actor,
 // and commits the strict reduction through the existing coordinator. It performs
 // no verification, quota debit or raw-secret operation. Matching original retry
 // conserves retained preparation/effects; it cannot re-decide today's target.
@@ -92,10 +94,17 @@ func (s *PermissionReductionStore) ApplyPermissionReduction(ctx context.Context,
 	if err != nil {
 		return out, nativeError(ctx, err)
 	}
-	receipt, fingerprint, executionErr := p.coordinator.ExecutePreparedAPIKeyPermissionReduction(ctx, p.original, plan)
+	var receipt identity.CommandResult
+	var fingerprint [32]byte
+	var executionErr error
+	if s.organizationID != "" {
+		receipt, fingerprint, executionErr = p.coordinator.ExecutePreparedOrganizationAPIKeyPermissionReduction(ctx, p.original, plan)
+	} else {
+		receipt, fingerprint, executionErr = p.coordinator.ExecutePreparedAPIKeyPermissionReduction(ctx, p.original, plan)
+	}
 	captured = fingerprint
 	out = apikey.PermissionReductionResult{Decision: d, Outcome: receipt.Outcome}
-	if receipt.Validate() != nil || receipt.Binding != p.binding || receipt.Feature == nil || receipt.Feature.Operation != permissionReductionOperation() {
+	if receipt.Validate() != nil || receipt.Binding != p.binding || receipt.Feature == nil || receipt.Feature.Operation != s.operation() {
 		out.Outcome = identity.CommitOutcomeUnknown
 		return out, reductionUnknown(d.CommandID, s.config.TenantID, captured)
 	}
@@ -165,7 +174,7 @@ func (s *PermissionReductionStore) ReconcilePermissionReduction(ctx context.Cont
 	}
 	query := p.query()
 	receipt, err := p.coordinator.RecoverFeatureCommand(ctx, query, p.caller())
-	if err != nil || receipt.Validate() != nil || receipt.Binding != p.binding || receipt.Outcome != identity.CommitOutcomeCommitted || receipt.Feature == nil || receipt.Feature.Operation != permissionReductionOperation() || receipt.Feature.BeforeVersion != retained.Decision.ExpectedKeyVersion || receipt.Feature.AfterVersion != retained.Decision.ExpectedKeyVersion+1 {
+	if err != nil || receipt.Validate() != nil || receipt.Binding != p.binding || receipt.Outcome != identity.CommitOutcomeCommitted || receipt.Feature == nil || receipt.Feature.Operation != s.operation() || receipt.Feature.BeforeVersion != retained.Decision.ExpectedKeyVersion || receipt.Feature.AfterVersion != retained.Decision.ExpectedKeyVersion+1 {
 		return out, identity.UnknownCommitError{CommandID: q.CommandID}
 	}
 	return retained, nil
@@ -173,11 +182,15 @@ func (s *PermissionReductionStore) ReconcilePermissionReduction(ctx context.Cont
 
 func (p *reductionPhase) query() identity.RecoveryQuery {
 	b := p.binding
-	return identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, RecordID: b.RecordID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID}
+	return identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, AnonymousFlowID: b.AnonymousFlowID, RecordID: b.RecordID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID}
 }
 func (p *reductionPhase) caller() authorization.DecisionContext {
 	b := p.binding
-	return authorization.DecisionContext{PolicyRevision: authorization.Revision(b.PolicyVersion), CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{Kind: b.ActorKind, ID: authorization.SubjectID(b.ActorID)}, Action: authorization.Action(b.OperationID), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+	resource := authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}
+	if p.store.organizationID != "" {
+		resource.Type, resource.ID = "identity.anonymous-flow", authorization.ResourceID(b.AnonymousFlowID)
+	}
+	return authorization.DecisionContext{PolicyRevision: authorization.Revision(b.PolicyVersion), CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{Kind: b.ActorKind, ID: authorization.SubjectID(b.ActorID)}, Action: authorization.Action(b.OperationID), Resource: resource}}
 }
 
 type reductionEffect struct {
@@ -223,8 +236,12 @@ func (s *PermissionReductionStore) decodeEffect(command identity.CommandID, boun
 		return apikey.PermissionReductionResult{}, apikey.ErrDenied
 	}
 	b := identity.CommandBinding(binding)
-	op := permissionReductionOperation()
-	if b.ValidateFor(op) != nil || b.CommandID != command || b.TenantID != s.config.TenantID || b.UserID != s.config.UserID || b.ActorID != s.config.ActorID || b.ActorKind != authorization.SubjectServiceAccount || b.RecordID != string(d.KeyID) || b.PolicyID != s.primary.config().PolicyID || b.PolicyVersion != s.primary.config().PolicyVersion || b.CorrelationID != string(command) {
+	op := s.operation()
+	wantFlow := ""
+	if s.organizationID != "" {
+		wantFlow = string(command)
+	}
+	if b.ValidateFor(op) != nil || b.CommandID != command || b.TenantID != s.config.TenantID || b.UserID != s.config.UserID || b.AnonymousFlowID != wantFlow || b.ActorID != s.config.ActorID || b.ActorKind != authorization.SubjectServiceAccount || b.RecordID != string(d.KeyID) || b.PolicyID != s.primary.config().PolicyID || b.PolicyVersion != s.primary.config().PolicyVersion || b.CorrelationID != string(command) {
 		return apikey.PermissionReductionResult{}, apikey.ErrDenied
 	}
 	record, err := decodeRecord(effect.Record, s.primary.config().Configuration)
@@ -255,7 +272,7 @@ func (s *PermissionReductionStore) readEffect(ctx context.Context, command ident
 
 func (p *reductionPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
 	binding, feature, _, err := w.FeatureScope(p)
-	if err != nil || binding != p.binding || feature.Operation != permissionReductionOperation() {
+	if err != nil || binding != p.binding || feature.Operation != p.store.operation() {
 		return kernel.RecoveryUnknown, apikey.ErrDenied
 	}
 	rows, err := w.Query(ctx, `SELECT binding,fingerprint,record FROM identity_api_keys.command_effects WHERE command_id=$1 AND tenant_id=$2`, string(binding.CommandID), string(binding.TenantID))

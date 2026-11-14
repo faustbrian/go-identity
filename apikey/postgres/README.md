@@ -10,6 +10,23 @@ not issue browser sessions or treat the creator as the API key's human actor.
 
 ## Secret-free current source authority
 
+The standalone positive-metadata organization consumer additionally uses
+`NewOrganizationPermissionReductionStore(primary, config)` with a fixed tenant,
+organization, independent service actor and actor-policy namespace. The primary
+must be a genuine `NewOrganizationService`; no human owner is substituted. The
+actor's real scoped authority and current application policy are checked on every
+operation. Mutation independently re-observes/fences organization, configuration,
+key and actor through the existing protected Work, with required audit/outbox.
+The public organization source fence remains API-key-actor-only; the closed
+Store owns its separate service-actor guard. No new schema/journal is introduced.
+
+Decisions are compare-only, not mutation authority. Exact original retries and
+typed original-handle reconciliation retain the chosen intent, epochs and native
+outcome; missing pre-Apply effects remain Unknown. Historical results are not fresh
+credential authority. The existing USER Store constructor/encoding is unchanged.
+Use this Store and native verifier with Valkey's explicit `NewOrganization`;
+neither Valkey nor its ciphertext performs verification, quota debit or owner policy.
+
 First authenticate a user-owned key with the existing `VerifyAndConsume`
 owner and retain its exact successful result. Construct
 `apikey.NewSourceAuthorityBinding(result, configuration, now)` while that original

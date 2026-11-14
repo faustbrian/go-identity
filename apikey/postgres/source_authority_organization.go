@@ -132,6 +132,16 @@ func (s *Service) RequireOrganizationSourceAuthority(ctx context.Context, w kern
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
 	defer cancel()
+	if err := s.requireOrganizationSourceOwner(ctx, w, participant, observed); err != nil {
+		return err
+	}
+	return s.requireOrganizationSourceRecord(ctx, w, observed)
+}
+
+// Private native maintenance uses the same owner fences after its separately
+// closed service-actor guard. The public API-key guard above is unchanged.
+func (s *Service) requireOrganizationSourceOwner(ctx context.Context, w kernel.Work, participant kernel.FeatureExecutionContributor, observed apikey.OrganizationSourceAuthorityObservation) error {
+	owner := observed.Binding.Owner.Spec()
 	directory := kernel.DirectoryAuthorityAdmission{Query: kernel.DirectoryAuthorityQuery{GlobalAuthorityID: s.config().Profile.GlobalAuthorityID, TenantID: owner.TenantID}, GlobalVersion: observed.GlobalVersion, TenantVersion: observed.TenantVersion}
 	if err := w.RequireActiveDirectoryAuthority(ctx, participant, directory); err != nil {
 		return err
@@ -142,6 +152,12 @@ func (s *Service) RequireOrganizationSourceAuthority(ctx context.Context, w kern
 	if err := s.organization.repository.RequireCredentialAuthority(ctx, w, participant, organizationAuthority); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Service) requireOrganizationSourceRecord(ctx context.Context, w kernel.Work, observed apikey.OrganizationSourceAuthorityObservation) error {
+	configuration := s.config().Configuration
+	owner := observed.Binding.Owner.Spec()
 	if err := s.requireSourceConfiguration(ctx, w, apikey.SourceAuthorityBinding(observed.Binding), observed.ConfigurationAuthority); err != nil {
 		return err
 	}

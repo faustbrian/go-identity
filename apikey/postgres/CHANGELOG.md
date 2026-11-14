@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a fixed-organization/service-actor permission-reduction Store using the
+  existing original preparation, coordinator and atomic required effects. Current
+  organization authority is independent of creator membership; exact recovery,
+  rollback and non-expanding grants retain native custody without a new schema or
+  journal. Existing USER Store scope, source guards and fingerprint bytes remain.
+
 - Add an explicit fixed-USER/service-actor permission-reduction Store for modern
   keys. Re-evaluate actual current policy, fence independent owner/actor/config/
   key authority through existing Work, and atomically retain exact key lifecycle
