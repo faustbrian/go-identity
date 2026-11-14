@@ -172,6 +172,17 @@ func (s *Service) RequireSourceAuthority(ctx context.Context, w kernel.Work, par
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.config().MaximumDuration)
 	defer cancel()
+	if err := s.requireSourceOwner(ctx, w, participant, observed); err != nil {
+		return err
+	}
+	return s.requireSourceRecord(ctx, w, observed)
+}
+
+// These private fences share the existing owner/key lock order with native
+// policy maintenance. Each caller first validates its own exact command actor;
+// the public API-key-actor guard above is intentionally not widened.
+func (s *Service) requireSourceOwner(ctx context.Context, w kernel.Work, participant kernel.FeatureExecutionContributor, observed apikey.SourceAuthorityObservation) error {
+	owner := observed.Binding.Owner.Spec()
 	directory := kernel.DirectoryAuthorityAdmission{
 		Query:         kernel.DirectoryAuthorityQuery{GlobalAuthorityID: s.config().Profile.GlobalAuthorityID, TenantID: owner.TenantID},
 		GlobalVersion: observed.GlobalVersion,
@@ -191,6 +202,12 @@ func (s *Service) RequireSourceAuthority(ctx context.Context, w kernel.Work, par
 	if err := w.RequireActiveUserAuthorization(ctx, participant, policy); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Service) requireSourceRecord(ctx context.Context, w kernel.Work, observed apikey.SourceAuthorityObservation) error {
+	configuration := s.config().Configuration
+	owner := observed.Binding.Owner.Spec()
 	if err := s.requireSourceConfiguration(ctx, w, observed.Binding, observed.ConfigurationAuthority); err != nil {
 		return err
 	}

@@ -484,3 +484,35 @@ the selected absent-expiry variant, required-effect rollback and original unknow
 recovery. `TestGenuineOrganizationNoExpiryKeySurvivesCreatorRemoval` exercises
 the same metadata through current organization authority without a creator-user
 dependency. Quota, cache and broader management remain separate profiles.
+
+## Server-selected permission maintenance
+
+`NewPermissionReductionStore(primary, PermissionReductionStoreConfig{...})`
+implements the public `apikey.Store` through this same native coordinator. Fix
+trusted `TenantID`, `UserID`, service `ActorID` and `ActorPolicyNamespace` at
+composition. Provision the actor namespace with the public authorization owner;
+it must differ from the USER policy namespace. Actual current application policy
+must authorize `identity.apikey.update` for that service actor and fixed owner.
+No user session, API-key actor or caller decision substitutes for this admission.
+
+The selected profile is modern USER/Narrow. Each genuinely new command re-reads
+the exact current key, owner, configuration and permission policy and compares
+the entire strict reduction decision before mutation. Existing Work fences the
+owner and independent actor epoch, then configuration and key, and rechecks the
+original source deadline after waits/final checks. The truthful key-targeted
+permission-change lifecycle, audit, key/configuration successors and existing
+native command effect commit atomically. There is no new schema, journal,
+verification attempt, quota charge or secret operation. Existing constructors
+and uncached legacy/organization verification remain unchanged.
+
+For an unknown or in-progress result, declare `var lost
+apikey.PermissionReductionUnknownError` and use `errors.As(err, &lost)` to obtain
+available original recovery custody. Retain `lost.Recovery` and the exact original decision.
+`ReconcilePermissionReduction` authenticates the current fixed service scope and
+compares the actual retained fingerprint before disclosing original metadata.
+Wrong fingerprints/scopes disclose no result. Without a native effect row,
+including a terminal-before-Apply command, it remains Unknown with no invented
+decision or noncommit claim. Retry only the exact retained decision/command to
+retrieve its original coordinator receipt; do not issue a replacement command
+or re-decide current state. A zero captured fingerprint has no fabricated handle
+and retains the existing `identity.UnknownCommitError` classification.

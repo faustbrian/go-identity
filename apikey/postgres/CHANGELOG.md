@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add an explicit fixed-USER/service-actor permission-reduction Store for modern
+  keys. Re-evaluate actual current policy, fence independent owner/actor/config/
+  key authority through existing Work, and atomically retain exact key lifecycle
+  and original metadata. Unknown outcomes expose only genuinely captured original
+  recovery custody; absent pre-Apply effects remain Unknown and require the exact
+  original decision for retry. Preserve the full bounded grant ceiling, including
+  maximally JSON-escaped permissions, in original preparation and retry.
+  Existing service/default/legacy/organization
+  profiles, journals, schema and verification/quota behavior are unchanged.
+
 - Add distinct modern organization-source observation and real-Work fencing.
   Consume actual organization credential authority independently of creator
   membership, retain exact key roots/current policy and original bounded

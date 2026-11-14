@@ -475,15 +475,19 @@ func (p *verificationPhase) lockKey(ctx context.Context, w kernel.Work, expected
 }
 
 func (p *verificationPhase) persistReduction(ctx context.Context, w kernel.Work, record apikey.Record) error {
-	wire, err := encodeRecord(record, p.service.config().Configuration)
+	return p.service.persistReducedRecord(ctx, w, p.binding.TenantID, p.snapshot.ConfigurationVersion, record)
+}
+
+func (s *Service) persistReducedRecord(ctx context.Context, w kernel.Work, tenant identity.TenantID, configurationVersion uint64, record apikey.Record) error {
+	wire, err := encodeRecord(record, s.config().Configuration)
 	if err != nil {
 		return err
 	}
-	n, err := w.Exec(ctx, `UPDATE identity_api_keys.keys SET record=$4 WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3`, string(p.binding.TenantID), record.ConfigurationID, string(record.ID), wire)
+	n, err := w.Exec(ctx, `UPDATE identity_api_keys.keys SET record=$4 WHERE tenant_id=$1 AND configuration_id=$2 AND key_id=$3`, string(tenant), record.ConfigurationID, string(record.ID), wire)
 	if err != nil || n != 1 {
 		return identity.ConflictError{}
 	}
-	n, err = w.Exec(ctx, `UPDATE identity_api_keys.configurations SET authority_version=authority_version+1 WHERE tenant_id=$1 AND configuration_id=$2 AND authority_version=$3::numeric`, string(p.binding.TenantID), record.ConfigurationID, strconv.FormatUint(p.snapshot.ConfigurationVersion, 10))
+	n, err = w.Exec(ctx, `UPDATE identity_api_keys.configurations SET authority_version=authority_version+1 WHERE tenant_id=$1 AND configuration_id=$2 AND authority_version=$3::numeric`, string(tenant), record.ConfigurationID, strconv.FormatUint(configurationVersion, 10))
 	if err != nil || n != 1 {
 		return identity.ConflictError{}
 	}

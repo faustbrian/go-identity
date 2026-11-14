@@ -12,8 +12,9 @@ require (
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-http-client/v2 v2.1.0
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
-	github.com/faustbrian/go-identity v0.0.0-20261029011001-cc0c343afad6
-	github.com/faustbrian/go-identity/apikey v0.0.0-20261113215732-bf335a362cf6
+	github.com/faustbrian/go-identity v0.0.0-20261113182449-aa4bb5fcfafb
+	github.com/faustbrian/go-identity/apikey v0.0.0-20261114023702-7912c478b9b1
+	github.com/faustbrian/go-identity/apikey/valkey v0.0.0-20261114024843-eff5e5a538a7
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
@@ -26,7 +27,7 @@ require (
 	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6
 	github.com/faustbrian/go-identity/password v0.0.0-20261027053124-3051d2cd42b5
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261028082559-7ca5d4db76d2
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261029043806-601e478a297c
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261114005837-22465b3ce1b5
 	github.com/faustbrian/go-identity/reference v0.0.0-20261018031204-02c6195bd789
 	github.com/faustbrian/go-identity/risk v0.0.0-20261029003540-6fd24db35447
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261018021354-75e10d9681e0
@@ -71,6 +72,7 @@ require (
 	github.com/nyaruka/phonenumbers/v2 v2.0.14 // indirect
 	github.com/pressly/goose/v3 v3.28.0 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
+	github.com/valkey-io/valkey-go v1.0.78 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
