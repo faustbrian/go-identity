@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add separate enterprise OAuth 2.0 known-empty factor guards for the exact
+  existing-account callback, session reads and same-user revocation. Preserve
+  the original generation and coordinator locks; missing, enrolled or stale
+  authority denies without accepting OIDC or social OAuth profiles.
+
 - Fence the original known-empty MFA generation in the exact authenticated
   enterprise OIDC member-link start and callback. Missing, enrolled or stale
   state denies in preparation and final checks without initializing factors,

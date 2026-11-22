@@ -13,8 +13,12 @@ import (
 )
 
 func ssoOIDCSessionFactors(record session.Session) (session.SessionSpec, uint64, error) {
+	return ssoSessionFactors(record, "sso-oidc")
+}
+
+func ssoSessionFactors(record session.Session, method string) (session.SessionSpec, uint64, error) {
 	spec, err := record.Bindings()
-	if err != nil || spec.Authentication.Kind != session.AuthenticationVerified || spec.Authentication.Proof.Method != "sso-oidc" || spec.Authentication.Proof.Purpose != "session-issue" || spec.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || record.MFAAuthentication() != (session.MFAAuthentication{}) {
+	if err != nil || spec.Authentication.Kind != session.AuthenticationVerified || spec.Authentication.Proof.Method != method || spec.Authentication.Proof.Purpose != "session-issue" || spec.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || record.MFAAuthentication() != (session.MFAAuthentication{}) {
 		return session.SessionSpec{}, 0, invalidAuthority()
 	}
 	vector, err := spec.Authority.Bindings()
@@ -66,6 +70,10 @@ func RequireSSOOIDCSessionFactors(ctx context.Context, w kernel.Work, owner kern
 	if err != nil {
 		return err
 	}
+	return requireSSOSessionFactors(ctx, w, owner, spec, version)
+}
+
+func requireSSOSessionFactors(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, spec session.SessionSpec, version uint64) error {
 	binding, feature, life, err := w.FeatureScope(owner)
 	if err != nil || binding.ValidateFor(feature.Operation) != nil || binding.TenantID != spec.TenantID || binding.UserID != spec.UserID || binding.ActorKind != authorization.SubjectUser || string(binding.ActorID) != string(spec.UserID) || binding.AnonymousFlowID != "" {
 		return invalidAuthority()

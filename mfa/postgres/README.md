@@ -1,5 +1,20 @@
 # PostgreSQL MFA authority (in development)
 
+## Enterprise OAuth 2.0 single-factor sessions
+
+Use `ReadSSOOAuth2SigninFactors` to observe the selected existing account's
+known-empty factor generation. Fence the same generation with
+`RequireSSOOAuth2SigninFactors` in the exact original OAuth callback's Apply
+and final checks. It first requires the kernel's OAuth-selected SSO account;
+it does not accept an OIDC or social callback or initialize absent MFA state.
+
+`ReadSSOOAuth2SessionFactors` and `RequireSSOOAuth2SessionFactors` retain that
+original generation for reads and exact same-user session revocation. Only
+single-factor `sso-oauth2` sessions with organization authority qualify; OIDC
+and social OAuth profiles remain separate. Missing, enrolled or changed
+authority denies. Provider, organization membership, session and policy fences
+remain the responsibility of their existing owners in the same coordinator.
+
 ## Enterprise OIDC single-factor sessions
 
 Read the known-empty factor generation with `ReadSSOOIDCSigninFactors` and
