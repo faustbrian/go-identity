@@ -250,6 +250,24 @@ missing original keys or unknown historical metadata deny. New charges continue
 to require the full current key set. Request admission time is not new logical
 intent, but the original primary time still bounds every authorization and effect.
 
+## Explicit account unlink
+
+Select `NewUnlinkService` with the existing `LinkService` and a real
+`password/postgres.AccountUnlinkPrimarySource` on the same native primary
+pool. Install the kernel's account-unlink preparation and validation histories
+and the password owner's `AccountUnlinkReauthenticationMigrationSource` before
+enabling this profile. Its partial index is built in a bounded transaction;
+if that step times out, the earlier expansion remains recorded.
+
+Issue a fresh password proof for `identity.account.unlink`. Use the exact
+linked account versions and known-empty MFA generation, original session and
+cookie synchronizer (for cookie transport), and a new command ID. Retain those
+values for an exact retry. The command consumes the password proof, removes
+local encrypted provider tokens and invalidates dependent credentials together,
+while requiring working independent password access. For an uncertain result,
+call `Recover` with the original command, account, tenant and user under current
+authorization. Neither operation requests remote provider revocation.
+
 ## Storage ownership
 
 `MigrationSource{Schema: "identity_oauth", Version: allocatedVersion}` supplies

@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -133,5 +135,61 @@ func TestRPTokenVaultForwardStorageForeignKeysExactTimesAndRollback(t *testing.T
 	stop()
 	if _, err := db.Exec(cancelled, statement, args...); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled storage operation lost cancellation")
+	}
+
+	// Exercise the real vault row and transaction. This is storage proof, not
+	// the composed native password and unlink transaction acceptance.
+	erase := func(tx pgx.Tx, change identity.AccountUnlinkChange) error {
+		return eraseUnlinkProviderTokens(ctx, func(ctx context.Context, sql string, args ...any) (int64, error) {
+			tag, err := tx.Exec(ctx, sql, args...)
+			return tag.RowsAffected(), err
+		}, "oauth_rp", change)
+	}
+	change := identity.AccountUnlinkChange{TenantID: b.TenantID, UserID: b.UserID, AccountID: b.AccountID,
+		ExpectedAccountVersion: b.AccountVersion, ExpectedSocialLinkVersion: b.SocialLinkVersion}
+	tx, err = db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for _, modify := range []func(*identity.AccountUnlinkChange){
+		func(c *identity.AccountUnlinkChange) { c.TenantID = "other-tenant" },
+		func(c *identity.AccountUnlinkChange) { c.UserID = "other-user" },
+		func(c *identity.AccountUnlinkChange) { c.AccountID = "other-account" },
+		func(c *identity.AccountUnlinkChange) { c.ExpectedAccountVersion++ },
+		func(c *identity.AccountUnlinkChange) { c.ExpectedSocialLinkVersion++ },
+	} {
+		wrong := change
+		modify(&wrong)
+		var conflict identity.ConflictError
+		if err := erase(tx, wrong); !errors.As(err, &conflict) {
+			t.Fatal("foreign or stale token ownership appeared to erase", err)
+		}
+	}
+	if err := erase(tx, change); err != nil {
+		t.Fatal("exact native token row could not be erased", err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM oauth_rp.token_sets`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("provisional erasure retained provider tokens", err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal("rollback after token erasure failed", err)
+	}
+	if err := db.QueryRow(ctx, `SELECT token_ciphertext FROM oauth_rp.token_sets`).Scan(&ciphertext); err != nil || !bytes.Equal(ciphertext, prepared.Ciphertext) {
+		t.Fatal("rollback did not restore original encrypted custody", err)
+	}
+	committed, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = committed.Rollback(ctx) }()
+	if err := erase(committed, change); err != nil {
+		t.Fatal("could not provisionally repeat the rolled-back removal", err)
+	}
+	if err := committed.Commit(ctx); err != nil {
+		t.Fatal("committing exact provider token erasure", err)
+	}
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM oauth_rp.token_sets`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("committed removal retained encrypted tokens", err)
 	}
 }

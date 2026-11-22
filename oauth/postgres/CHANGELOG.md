@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicitly configured self-account unlink with fresh password proof,
+  one-use consumption, same-transaction encrypted token erasure, dependent
+  credential invalidation, and scoped original receipt recovery. No remote
+  token revocation or HTTP route is enabled.
+
 - Authenticate explicit GitHub OAuth-app token policy in native link/signin
   state, callback admission and token restoration. Add two forward optional-
   expiry vault migration phases before enabling that profile; store absent
