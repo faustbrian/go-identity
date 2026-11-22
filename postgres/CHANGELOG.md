@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support the separate admission-gated enterprise OIDC callback profile.
+  Reserve the original state before provider preparation and consume and
+  finalize it with the registered SSO contributor's native effects. Unattached
+  recovery retains the original reservation and does not infer rollback.
+
 - Support the exact admission-gated enterprise OIDC start profile and its
   original, one-use callback state purpose. Install the additive
   `SSOOIDCPreparationErasureMigrationSource` before opting in to an enterprise

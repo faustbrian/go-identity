@@ -390,7 +390,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if owned.MFACompletion != nil && validateMFACompletion(phase, original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
-	if oauthSigninPreparation(owned) && validateOAuthSigninConsumption(phase, original, admitted.snapshot()) != nil {
+	if providerSigninPreparation(owned) && validateProviderSigninConsumption(phase, original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
 	if owned.OTP != nil && (otpReservationOwner(admitted) == nil || validateOTPAttempt(otpAttemptOwner(admitted), original, *owned.OTP) != nil) {
@@ -422,7 +422,7 @@ func resetAuthenticationPreparation(p CommandPlan) bool {
 // session, never introduce or replace its authentication input. The ordinary
 // closed plan codec and native owner still validate the complete envelope.
 func consumptionAuthenticationPreparation(p CommandPlan) bool {
-	return oauthSigninPreparation(p) || resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1 || p.MFACompletion != nil && p.Feature != nil && mfaCompletionOperation(p.Feature.Operation) && p.Capability != nil && p.Capability.Purpose == "identity.mfa.complete" && p.Capability.MaxUses == 1
+	return providerSigninPreparation(p) || resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1 || p.MFACompletion != nil && p.Feature != nil && mfaCompletionOperation(p.Feature.Operation) && p.Capability != nil && p.Capability.Purpose == "identity.mfa.complete" && p.Capability.MaxUses == 1
 }
 
 func preparationRetainsDeclaration(p CommandPlan) bool {
@@ -431,7 +431,7 @@ func preparationRetainsDeclaration(p CommandPlan) bool {
 	// reserved before exchange, so recovery needs the same frozen declaration.
 	// Enterprise OIDC start likewise retains its admission-gated declaration
 	// through terminal state issuance and temporary output erasure.
-	return p.CommandCounters != nil || oauthSigninPreparation(p) || ssoOIDCStartSelected(p)
+	return p.CommandCounters != nil || providerSigninPreparation(p) || ssoOIDCStartSelected(p)
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
@@ -616,7 +616,7 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 			return preparationReservation{}, result, err
 		}
 	}
-	if !denied && oauthSigninPreparation(p.snapshot()) {
+	if !denied && providerSigninPreparation(p.snapshot()) {
 		// A provider code may be exchanged only after this original state is
 		// durably reserved. A retained-output takeover transfers that same
 		// reservation now, before any restore/attachment or external work.
@@ -785,7 +785,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 			}
 		}
 	}
-	stateReservedBeforeGeneration := oauthSigninPreparation(admitted.snapshot())
+	stateReservedBeforeGeneration := providerSigninPreparation(admitted.snapshot())
 	if admitted.otp != nil || admitted.risk != nil || admitted.capability != nil && !stateReservedBeforeGeneration {
 		// Denial must roll back the entire consuming prefix, not just its last
 		// participant. Otherwise a rejected command can strand the child's
@@ -913,7 +913,7 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	}
 	p := w.state.execution.reservation.preparation
 	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || plan.feature.Operation == oauthSigninAccountOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
+	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || providerSigninConsumptionOperation(plan.feature.Operation) || plan.mfaCompletion != nil) && plan.counters == nil {
 		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
 			return invalidPreparation()
 		}

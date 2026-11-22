@@ -7,28 +7,76 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
-func oauthSigninPreparation(p CommandPlan) bool {
-	return p.Feature != nil && p.Feature.Operation == oauthSigninAccountOperation() && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1}) && p.Capability != nil && p.Capability.Purpose == "identity.oauth.callback" && p.Capability.MaxUses == 1
+type providerSigninConsumptionProfile struct {
+	Contrib          ContributorDescriptor
+	SubjectType      string
+	AuditEvent       string
+	WireTag          string
+	Lifecycle        LifecyclePlan
+	ExternalRiskOnly bool
+}
+
+func providerSigninProfile(op identity.FeatureOperation) (providerSigninConsumptionProfile, bool) {
+	switch op {
+	case oauthSigninAccountOperation():
+		return providerSigninConsumptionProfile{
+			Contrib:     ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1},
+			SubjectType: "authentication_attempt", AuditEvent: "identity.oauth.handle_callback", WireTag: "identity-oauth-signin-consumption-v1",
+			Lifecycle: LifecyclePlan{EventType: "session.created.v1"},
+		}, true
+	case ssoOIDCSigninOperation():
+		return providerSigninConsumptionProfile{
+			Contrib:     ssoOIDCSigninDescriptor(),
+			SubjectType: "sso_login_transaction", AuditEvent: "identity.sso.login", WireTag: "identity-sso-oidc-signin-consumption-v1", ExternalRiskOnly: true,
+			Lifecycle: LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2},
+		}, true
+	default:
+		return providerSigninConsumptionProfile{}, false
+	}
+}
+
+func providerSigninConsumptionOperation(op identity.FeatureOperation) bool {
+	_, selected := providerSigninProfile(op)
+	return selected
+}
+
+func providerSigninBindingOperation(b identity.CommandBinding) (identity.FeatureOperation, bool) {
+	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation()} {
+		if b.OperationID == op.OperationID && b.SchemaID == op.SchemaID {
+			return op, true
+		}
+	}
+	return identity.FeatureOperation{}, false
+}
+
+func providerSigninPreparation(p CommandPlan) bool {
+	if p.Feature == nil || p.Capability == nil || p.Capability.MaxUses != 1 {
+		return false
+	}
+	profile, ok := providerSigninProfile(p.Feature.Operation)
+	return ok && p.Feature.Contributor == profile.Contrib && p.Capability.Purpose == capability.Purpose(p.Feature.Operation.OperationID)
 }
 
 // Only this fixed-depth envelope admits callback-state consumption for native
 // existing-account signin. Provider exchange and session effects remain owned
 // by the native contributor, not by a second coordinator or replay authority.
-func encodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
+func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
 	capabilityOwner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
 	if p.Feature == nil || p.Capability == nil || p.Lifecycle == nil {
 		return nil, invalidPlan()
 	}
-	if p.Feature.Operation != oauthSigninAccountOperation() || p.Feature.Contributor != (ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1}) {
+	profile, selected := providerSigninProfile(p.Feature.Operation)
+	if !selected || !providerSigninPreparation(p) || profile.ExternalRiskOnly && p.CommandCounters != nil {
 		return nil, invalidPlan()
 	}
-	if b.ValidateFor(p.Feature.Operation) != nil || b.ActorKind != authorization.SubjectServiceAccount || b.UserID != "" || b.RecordID != "" || b.AnonymousFlowID == "" {
+	if b.ValidateFor(p.Feature.Operation) != nil || b.ActorKind != authorization.SubjectServiceAccount || b.UserID != "" || b.AnonymousFlowID == "" {
 		return nil, invalidPlan()
 	}
-	if p.SubjectType != "authentication_attempt" || validateCapabilityPlan(b, p.Capability) != nil || *p.Lifecycle != (LifecyclePlan{EventType: "session.created.v1"}) {
+	if p.SubjectType != profile.SubjectType || validateCapabilityPlan(b, p.Capability) != nil || *p.Lifecycle != profile.Lifecycle {
 		return nil, invalidPlan()
 	}
 	owners := 5
@@ -38,7 +86,7 @@ func encodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32
 	if len(p.Contributors) != owners || p.Contributors[owners-1] != capabilityOwner || len(p.Audits) != 1 {
 		return nil, invalidPlan()
 	}
-	if p.Audits[0].EventType != "identity.oauth.handle_callback" || p.Audits[0].RetentionClass != "protected" {
+	if p.Audits[0].EventType != profile.AuditEvent || p.Audits[0].RetentionClass != "protected" {
 		return nil, invalidPlan()
 	}
 	unselectedAuthentication := p.APIKeyVerification != nil || p.MFACompletion != nil || p.MFAContinuation != nil || p.MagicLinkRegistration != nil || p.PasskeyRegistration != nil || p.SignupAcceptance || p.MagicLinkRequestAcceptance || p.IdentifierAdmission != nil
@@ -54,7 +102,7 @@ func encodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32
 		return nil, err
 	}
 	encoded := cborMap(map[string][]byte{
-		"base": cborBytes(wire), "profile": cborText("identity-oauth-signin-consumption-v1"), "version": cborUint(1),
+		"base": cborBytes(wire), "profile": cborText(profile.WireTag), "version": cborUint(1),
 		"capability":  encodeCapabilityPlan(p.Capability),
 		"contributor": cborMap(map[string][]byte{"owner": cborText(capabilityOwner.Owner), "contract_id": cborText(capabilityOwner.ContractID), "version": cborUint(uint64(capabilityOwner.Version))}),
 	})
@@ -64,11 +112,16 @@ func encodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32
 	return encoded, nil
 }
 
-func decodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32]byte, data []byte) (CommandPlan, error) {
+func decodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32]byte, data []byte) (CommandPlan, error) {
 	fail := func() (CommandPlan, error) { return CommandPlan{}, identity.UnavailableError{} }
 	if len(data) == 0 || len(data) > 65536 {
 		return fail()
 	}
+	op, selected := providerSigninBindingOperation(b)
+	if !selected {
+		return fail()
+	}
+	profile, _ := providerSigninProfile(op)
 	r := planReader{attributeReader: attributeReader{data: data}, ok: true}
 	r.expect(5, 5)
 	r.key("base")
@@ -83,12 +136,12 @@ func decodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32
 	}
 	r.data = r.data[int(count):]
 	r.key("profile")
-	r.consume(cborText("identity-oauth-signin-consumption-v1"))
+	r.consume(cborText(profile.WireTag))
 	r.key("version")
 	r.consume(cborUint(1))
 	r.key("capability")
 	r.expect(5, 7)
-	proof := &CapabilityPlan{Purpose: "identity.oauth.callback"}
+	proof := &CapabilityPlan{Purpose: capability.Purpose(op.OperationID)}
 	r.key("purpose")
 	r.consume(cborText(string(proof.Purpose)))
 	r.key("max_uses")
@@ -110,7 +163,7 @@ func decodeOAuthSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32
 	}
 	base.Capability = proof
 	base.Contributors = append(base.Contributors, owner)
-	canonical, err := encodeOAuthSigninConsumptionPlan(b, fingerprint, base)
+	canonical, err := encodeProviderSigninConsumptionPlan(b, fingerprint, base)
 	if err != nil || !bytes.Equal(canonical, data) {
 		return fail()
 	}

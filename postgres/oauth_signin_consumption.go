@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -20,6 +21,17 @@ type OAuthSigninContributor interface {
 	ValidateOAuthSigninConsumption(identity.Command, CapabilityPlan) error
 }
 
+// SSOOIDCSigninContributor owns enterprise callback consumption and its
+// final native effects. Its validation binds the original browser and one-use
+// enterprise grant to the exact start transaction, independently of social
+// OAuth. Generation may exchange only after the coordinator acknowledges the
+// original reservation. Apply and CheckFeatureCommit must enforce current
+// provider, member, account and session policy using that same transaction.
+type SSOOIDCSigninContributor interface {
+	FeatureCommitContributor
+	ValidateSSOOIDCSigninConsumption(identity.Command, CapabilityPlan) error
+}
+
 type oauthSigninConsumptionStage uint8
 
 const (
@@ -28,17 +40,26 @@ const (
 	oauthSigninStateFinalized
 )
 
-func validateOAuthSigninConsumption(owner FeatureExecutionContributor, command identity.Command, plan CommandPlan) error {
-	native, ok := owner.(OAuthSigninContributor)
+func validateProviderSigninConsumption(owner FeatureExecutionContributor, command identity.Command, plan CommandPlan) error {
 	feature, present := command.Feature()
 	_, cookie := command.PreAuthCookie()
 	_, code := command.OneTimeCode()
 	_, recovery := command.RecoveryCode()
 	_, bearer := command.SessionToken()
-	if !ok || !present || !cookie || code || recovery || bearer || plan.Feature == nil || feature.Operation != oauthSigninAccountOperation() || plan.Feature.Operation != feature.Operation || plan.Capability == nil || plan.Capability.Purpose != "identity.oauth.callback" {
+	if !present || !cookie || code || recovery || bearer || !providerSigninPreparation(plan) || plan.Feature.Operation != feature.Operation {
 		return invalidPlan()
 	}
-	return native.ValidateOAuthSigninConsumption(command, *plan.Capability)
+	switch feature.Operation {
+	case oauthSigninAccountOperation():
+		if native, ok := owner.(OAuthSigninContributor); ok {
+			return native.ValidateOAuthSigninConsumption(command, *plan.Capability)
+		}
+	case ssoOIDCSigninOperation():
+		if native, ok := owner.(SSOOIDCSigninContributor); ok && validSSOOIDCSigninBinding(feature.Binding) {
+			return native.ValidateSSOOIDCSigninConsumption(command, *plan.Capability)
+		}
+	}
+	return invalidPlan()
 }
 
 // OAuthSigninConsumption exposes original callback-state consumption only to
@@ -48,20 +69,32 @@ func validateOAuthSigninConsumption(owner FeatureExecutionContributor, command i
 // scalar copy contains no bearer, grants no delivery permission and renews no
 // validity. Session/browser effects and capability finalization may still fail.
 func (w Work) OAuthSigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
+	return w.providerSigninConsumption(owner, oauthSigninAccountOperation())
+}
+
+// SSOOIDCSigninConsumption exposes the exact enterprise state already consumed
+// provisionally by the capability owner during this native Apply invocation.
+// It does not expose verifier or bearer bytes, allow social substitution, or
+// establish provider, linked-account, membership or final session authority.
+func (w Work) SSOOIDCSigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
+	return w.providerSigninConsumption(owner, ssoOIDCSigninOperation())
+}
+
+func (w Work) providerSigninConsumption(owner FeatureExecutionContributor, operation identity.FeatureOperation) (CapabilityReservationBinding, error) {
 	binding, fingerprint, generation, err := w.FeatureCommandIdentity(owner)
 	if err != nil || w.state.oauthSigninStage != oauthSigninStateConsumed {
 		return CapabilityReservationBinding{}, invalidWork()
 	}
 	plan := w.state.execution.reservation.plan
-	if plan.feature == nil || plan.feature.Operation != oauthSigninAccountOperation() || plan.capability == nil || plan.capability.Purpose != "identity.oauth.callback" || plan.capability.MaxUses != 1 {
+	if plan.feature == nil || plan.feature.Operation != operation || plan.capability == nil || plan.capability.Purpose != capability.Purpose(operation.OperationID) || plan.capability.MaxUses != 1 {
 		return CapabilityReservationBinding{}, invalidWork()
 	}
 	return CapabilityReservationBinding{Command: binding, Plan: *plan.capability, Fingerprint: fingerprint, Generation: generation}, nil
 }
 
-func prepareOAuthSigninConsumption(ctx context.Context, w Work) error {
+func prepareProviderSigninConsumption(ctx context.Context, w Work) error {
 	plan := w.state.execution.reservation.plan
-	if plan.feature == nil || plan.feature.Operation != oauthSigninAccountOperation() || w.state.oauthSigninStage != oauthSigninStateAbsent {
+	if plan.feature == nil || !providerSigninConsumptionOperation(plan.feature.Operation) || w.state.oauthSigninStage != oauthSigninStateAbsent {
 		return w.fail(ctx, invalidPlan())
 	}
 	if err := w.state.execution.coordinator.runCapabilityExecution(ctx, w, false); err != nil {
@@ -71,12 +104,12 @@ func prepareOAuthSigninConsumption(ctx context.Context, w Work) error {
 	return nil
 }
 
-func (c *Coordinator) finalizeOAuthSigninConsumption(w Work) error {
+func (c *Coordinator) finalizeProviderSigninConsumption(w Work) error {
 	plan := w.state.execution.reservation.plan
-	if plan.feature == nil || plan.feature.Operation != oauthSigninAccountOperation() || plan.capability == nil {
+	if plan.feature == nil || !providerSigninConsumptionOperation(plan.feature.Operation) || plan.capability == nil {
 		return nil
 	}
-	if w.state.oauthSigninStage != oauthSigninStateConsumed || w.state.featureReceipt == nil || w.state.featureReceipt.Operation != oauthSigninAccountOperation() {
+	if w.state.oauthSigninStage != oauthSigninStateConsumed || w.state.featureReceipt == nil || w.state.featureReceipt.Operation != plan.feature.Operation {
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {

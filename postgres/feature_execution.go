@@ -161,8 +161,8 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		return validateMFAContinuation(phase, command, plan)
 	}
 	if plan.Capability != nil {
-		if plan.Feature != nil && plan.Feature.Operation == oauthSigninAccountOperation() {
-			return validateOAuthSigninConsumption(phase, command, plan)
+		if plan.Feature != nil && providerSigninConsumptionOperation(plan.Feature.Operation) {
+			return validateProviderSigninConsumption(phase, command, plan)
 		}
 		if plan.Feature != nil && oauthCallbackDenialSelected(plan.Feature.Operation) {
 			if _, ok := phase.(FeatureCommitContributor); !ok {
@@ -240,7 +240,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || !oauthCallbackDenialSelected(p.Feature.Operation) && p.Feature.Operation != oauthSigninAccountOperation() && p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || !oauthCallbackDenialSelected(p.Feature.Operation) && !providerSigninConsumptionOperation(p.Feature.Operation) && p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -384,8 +384,12 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		}
 	}
 	if p.Capability != nil {
-		if p.Feature.Operation == oauthSigninAccountOperation() {
-			if _, ok := feature.contributor.(OAuthSigninContributor); !ok {
+		if providerSigninConsumptionOperation(p.Feature.Operation) {
+			if p.Feature.Operation == ssoOIDCSigninOperation() {
+				if _, ok := feature.contributor.(SSOOIDCSigninContributor); !ok {
+					return nil, invalidPlan()
+				}
+			} else if _, ok := feature.contributor.(OAuthSigninContributor); !ok {
 				return nil, invalidPlan()
 			}
 			if p.CommandCounters == nil {
@@ -772,8 +776,8 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 	}
 	if p.capability != nil {
-		if p.feature.Operation == oauthSigninAccountOperation() {
-			if e := prepareOAuthSigninConsumption(ctx, w); e != nil {
+		if providerSigninConsumptionOperation(p.feature.Operation) {
+			if e := prepareProviderSigninConsumption(ctx, w); e != nil {
 				return result, e
 			}
 		} else if oauthCallbackDenialSelected(p.feature.Operation) {

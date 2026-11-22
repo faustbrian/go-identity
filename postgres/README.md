@@ -58,6 +58,24 @@ login record is the sole remaining owner; pending and uncertain work preserve
 the original encrypted output without regeneration. This infrastructure does
 not add callable SSO initiation, callback, or session behavior on its own.
 
+## Enterprise OIDC callback consumption
+
+The enterprise callback uses the distinct `identity.sso.oidc-callback`
+feature and the native `sso.oidc-login-callback` contributor. The callback
+command binds the original start command as its record, selects no user from
+browser input, and must keep the original one-use enterprise state and expiry.
+The registered SSO native owner implements `SSOOIDCSigninContributor` and
+admission-gated preparation. The coordinator reserves state before external
+preparation, exposes provisional consumption during the exact owner's Apply
+through `Work.SSOOIDCSigninConsumption`, and finalizes the state in the same
+commit. Retained-output takeover does not generate again. Unattached recovery
+does not infer that a provider exchange was never attempted.
+
+This profile is separate from social OAuth and does not authenticate the
+browser, validate a provider, link an account, grant membership or issue a
+session by itself. The native consumer owns those checks and effects and must
+keep provider secrets out of committed preparation output.
+
 ## API-key permission maintenance recovery
 
 Organization-owned maintenance explicitly selects

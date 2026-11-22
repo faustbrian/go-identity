@@ -102,6 +102,11 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// OIDC owns protocol validation; SSO PostgreSQL owns this exact native
+	// callback transition in the identity coordinator's Work.
+	if op.OperationID == ssoOIDCSigninPurpose {
+		return op == ssoOIDCSigninOperation() && d == ssoOIDCSigninDescriptor()
+	}
 	// A SCIM schema alias must not skip its mandatory kernel creation effect.
 	if op.OperationID == "identity.scim.user-create" {
 		return op == scimUserCreationOperation() && d == scimUserCreationDescriptor()

@@ -58,6 +58,57 @@ func (*signinPreparationPhase) apply(ctx context.Context, w Work, command identi
 // cryptographic admission or canonical counter algorithms.
 type signinAuthenticationPreparation struct{ *signinPreparationPhase }
 
+type enterpriseSigninPreparation struct{ *signinPreparationPhase }
+
+func (*enterpriseSigninPreparation) Descriptor() ContributorDescriptor {
+	return ssoOIDCSigninDescriptor()
+}
+func (*enterpriseSigninPreparation) FeatureOperations() []identity.FeatureOperation {
+	return []identity.FeatureOperation{ssoOIDCSigninOperation()}
+}
+func (*enterpriseSigninPreparation) ValidateSSOOIDCSigninConsumption(command identity.Command, plan CapabilityPlan) error {
+	spec, ok := command.Feature()
+	if !ok || !validSSOOIDCSigninBinding(spec.Binding) || plan.Purpose != ssoOIDCSigninPurpose {
+		return invalidWork()
+	}
+	return nil
+}
+func (p *enterpriseSigninPreparation) AdmitFeaturePreparation(_ context.Context, w Work, _ identity.Command) error {
+	_, _, _, err := w.FeatureScope(p)
+	return err
+}
+func (p *enterpriseSigninPreparation) apply(ctx context.Context, w Work, command identity.Command, owner FeatureExecutionContributor) (identity.FeatureReceipt, error) {
+	if _, err := w.OAuthSigninConsumption(owner); err == nil {
+		return identity.FeatureReceipt{}, invalidWork()
+	}
+	consumed, err := w.SSOOIDCSigninConsumption(owner)
+	spec, ok := command.Feature()
+	if err != nil || !ok || consumed.Command != spec.Binding || consumed.Plan.Purpose != ssoOIDCSigninPurpose || consumed.Generation != 2 {
+		return identity.FeatureReceipt{}, invalidWork()
+	}
+	_, err = w.Exec(ctx, `INSERT INTO public.signin_session_effect(command_id) VALUES($1)`, string(spec.Binding.CommandID))
+	return identity.FeatureReceipt{Operation: spec.Operation, BeforeVersion: 1, AfterVersion: 2}, err
+}
+func (p *enterpriseSigninPreparation) ApplyFeature(ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
+	return p.apply(ctx, w, command, p)
+}
+
+type enterpriseSigninAuthenticationPreparation struct{ *enterpriseSigninPreparation }
+
+func (p *enterpriseSigninAuthenticationPreparation) AdmitFeaturePreparation(_ context.Context, w Work, _ identity.Command) error {
+	_, _, _, err := w.FeatureScope(p)
+	return err
+}
+func (p *enterpriseSigninAuthenticationPreparation) ApplyFeature(ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
+	return p.apply(ctx, w, command, p)
+}
+func (*enterpriseSigninAuthenticationPreparation) PrepareFeatureAdmission(ctx context.Context, _ identity.Command) (FeaturePreparationAdmission, error) {
+	return signinPreparationAdmission{}, ctx.Err()
+}
+func (*enterpriseSigninAuthenticationPreparation) RestoreFeatureAdmission(ctx context.Context, _ identity.Command, _ uint64, _ []byte) (FeaturePreparationAdmission, error) {
+	return signinPreparationAdmission{}, ctx.Err()
+}
+
 func (p *signinAuthenticationPreparation) AdmitFeaturePreparation(_ context.Context, w Work, _ identity.Command) error {
 	_, _, _, err := w.FeatureScope(p)
 	return err
@@ -169,7 +220,7 @@ func (p *signinPreparationCapability) ReleaseCapability(ctx context.Context, w C
 func TestOAuthSigninPreparationReservesStateBeforeGenerationAndRebindsOnce(t *testing.T) {
 	for _, mode := range []string{"committed", "late-native-denial", "finalization-denial"} {
 		t.Run(mode, func(t *testing.T) {
-			testOAuthSigninPreparedExecution(t, mode)
+			testProviderSigninPreparedExecution(t, mode, false)
 		})
 	}
 }
@@ -177,12 +228,20 @@ func TestOAuthSigninPreparationReservesStateBeforeGenerationAndRebindsOnce(t *te
 func TestOAuthSigninAuthenticationPreparationRequiresGatedOriginalState(t *testing.T) {
 	for _, mode := range []string{"authentication-admission", "missing-authentication-admission", "generic-authentication-bypass", "expired-authentication-admission"} {
 		t.Run(mode, func(t *testing.T) {
-			testOAuthSigninPreparedExecution(t, mode)
+			testProviderSigninPreparedExecution(t, mode, false)
 		})
 	}
 }
 
-func testOAuthSigninPreparedExecution(t *testing.T, mode string) {
+func TestSSOOIDCSigninAuthenticationPreparationRequiresGatedOriginalState(t *testing.T) {
+	for _, mode := range []string{"authentication-admission", "missing-authentication-admission", "generic-authentication-bypass", "expired-authentication-admission"} {
+		t.Run(mode, func(t *testing.T) {
+			testProviderSigninPreparedExecution(t, mode, true)
+		})
+	}
+}
+
+func testProviderSigninPreparedExecution(t *testing.T, mode string, enterprise bool) {
 	ctx, pool, repo := newAccountAuthorityStore(t)
 	for _, schema := range []string{preparationSchemaSQL, admissionPreparationSchemaSQL, counterPreparationSchemaSQL, `CREATE TABLE public.signin_preparation_state(command_id text PRIMARY KEY,fingerprint bytea NOT NULL,generation numeric NOT NULL,state text NOT NULL);
 CREATE TABLE public.signin_session_effect(command_id text PRIMARY KEY);
@@ -201,6 +260,23 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 	if authentication && mode != "missing-authentication-admission" {
 		native = &signinAuthenticationPreparation{phase}
 	}
+	spec, command := signinAccountCommand(t, signinAccountFixture())
+	if enterprise {
+		startBound, enterprisePlan := ssoOIDCSigninPlanFixture(t)
+		plan = enterprisePlan
+		spec = identity.FeatureCommandSpec{Binding: startBound, Operation: plan.Feature.Operation}
+		cookie, _ := command.PreAuthCookie()
+		var err error
+		command, err = identity.NewFeaturePreAuthCommand(spec, cookie)
+		if err != nil {
+			t.Fatal("construct enterprise callback", err)
+		}
+		enterprisePhase := &enterpriseSigninPreparation{phase}
+		native = enterprisePhase
+		if mode != "missing-authentication-admission" {
+			native = &enterpriseSigninAuthenticationPreparation{enterprisePhase}
+		}
+	}
 	owners := []Contributor{repo, auditOwner, lifecycleOwner, native}
 	if authentication {
 		plan.CommandCounters = nil
@@ -216,7 +292,6 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec, command := signinAccountCommand(t, signinAccountFixture())
 	plan.Contributors = registry.Descriptors()
 	plan.Capability.ExpiresAt = time.Now().UTC().Add(4 * time.Minute).Truncate(time.Second)
 	plan.Audits[0].BindingDigest = securityAuditScopeDigest(spec.Binding, &spec.Operation, plan.SubjectType, featureAuditTargetID(spec.Binding, spec.Operation), audit.ActorService, "identity-feature-audit-binding-v1")

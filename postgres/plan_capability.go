@@ -55,6 +55,10 @@ func validateCapabilityPlan(binding identity.CommandBinding, plan *CapabilityPla
 		if !validOAuthCallbackDenialBinding(binding) && binding.ValidateFor(oauthSigninAccountOperation()) != nil {
 			return invalidPlan()
 		}
+	case ssoOIDCSigninPurpose:
+		if !validSSOOIDCSigninBinding(binding) {
+			return invalidPlan()
+		}
 	case "identity.identifier.attach", "identity.identifier.verify", "identity.identifier.make-primary", "identity.identifier.replace", "identity.identifier.remove", "identity.account.link-token", "identity.account.unlink", "identity.password.reset-complete", "identity.phone.password-reset-complete", "identity.magic-link.consume", "identity.organization.invitation.accept", "identity.anonymous.upgrade":
 	default:
 		if !mfa {

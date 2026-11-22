@@ -22,8 +22,10 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && binding.OperationID == oauthCallbackDenialOperation().OperationID && denialSchema {
 		return decodeOAuthCallbackDenialPlan(binding, fingerprint, encoded)
 	}
-	if !proofBase && binding.OperationID == oauthSigninAccountOperation().OperationID && binding.SchemaID == oauthSigninAccountOperation().SchemaID && len(encoded) > 0 && encoded[0] == 0xa5 {
-		return decodeOAuthSigninConsumptionPlan(binding, fingerprint, encoded)
+	if !proofBase {
+		if op, selected := providerSigninBindingOperation(binding); selected && (op == ssoOIDCSigninOperation() || len(encoded) > 0 && encoded[0] == 0xa5) {
+			return decodeProviderSigninConsumptionPlan(binding, fingerprint, encoded)
+		}
 	}
 	// Only the new closed envelope selects verification decoding. Generic
 	// descriptors have independent owners; an operation name alone cannot
