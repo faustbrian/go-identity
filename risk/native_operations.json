@@ -18,6 +18,7 @@
   "identity.sso.provider.credentials-rotate": "privileged",
   "identity.sso.provider.disable": "privileged",
   "identity.sso.provider.enable": "privileged",
+  "identity.sso.provider.register-oauth": "privileged",
   "identity.sso.provider.register-oidc": "privileged",
   "identity.sso.provider.update": "privileged",
   "identity.username.available": "state_neutral_read"

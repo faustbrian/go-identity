@@ -938,13 +938,17 @@ requires actor/resource/network-bound counters in the owning transaction; clean
 provider facts alone are not consent or issuance authority. Native entries may
 fill an omitted matrix classification, never override an explicit pinned class.
 
-Disabled static-OIDC provider registration
-(`identity.sso.provider.register-oidc`) uses that same Privileged profile.
+Disabled static provider registration uses that same Privileged profile for
+the exact OIDC (`identity.sso.provider.register-oidc`) and OAuth
+(`identity.sso.provider.register-oauth`) operations.
 Current required provider signals and tenant/actor/provider/network-bound
-counter reservation remain mandatory. This selects no organization authority,
-domain proof, credentials, enablement or login capability. Other provider
-registration protocols, administrative reads and aliases keep their existing
-closed classifications.
+counter reservation remain mandatory, bound to each operation's original
+command and exclusive expiry. Neither registration can consume the other's
+reservation. This selects no organization authority, domain proof, credentials,
+enablement or login capability; the SSO owner must still authenticate the
+original bearer and current organization write permission. SAML registration,
+`register-oauth2`, administrative reads and aliases keep their existing closed
+classifications.
 
 The exact provider metadata update (`identity.sso.provider.update`) has its
 own Privileged reservation bound to the original operation. It requires the

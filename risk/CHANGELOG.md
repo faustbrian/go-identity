@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit exact disabled OAuth provider registration through its own privileged,
+  tenant/actor/provider/network-bound counters, retaining required current
+  signals, original scope and exclusive expiry. This grants no organization
+  permission or provider enablement; OIDC reservations, SAML and aliases remain
+  separate.
+
 - Admit exact SSO provider disablement through its own privileged,
   operation-bound counters without granting provider or organization authority.
 
