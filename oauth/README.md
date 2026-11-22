@@ -138,6 +138,28 @@ trusted distinct route. `TokenSet.ExpiresAt()` is zero only when that selected
 provider omits expiry; identity evidence remains bounded to the original read's
 twenty seconds. No public config/profile struct shape or existing default changes.
 
+### Shared-redirect OAuth2 identity resource
+
+`NewSharedOAuth2UserInfoProvider(config, claimNames)` selects a separate
+nonce-free client for a shared callback. Its static HTTPS endpoints share the
+configured issuer origin and use POST client authentication. Select the exact
+string subject format or the positive JSON integer format; neither coerces the
+other. Explicit scalar claim selection retains absent, null, string, and
+boolean without granting policy authority. The legacy social `Provider` does
+not accept this profile.
+
+Build the authorization URL from the original native state and S256 challenge.
+Parse callbacks with `ParseSharedOAuth2QueryCallback` using the exact original
+provider profile and received route. The native owner must authenticate and
+reserve the transaction and decrypt its original verifier before calling
+`Exchange`. `Exchange` rejects wrong custody, state, or challenge before I/O;
+an admitted call performs one token POST and one bearer identity GET without
+redirects or retries. The identity is not an OIDC assertion or authentication
+timestamp. Its evidence deadline is fixed when the identity read begins and
+cannot outlive the bearer token. Preserve denial/unknown outcomes through the
+native owner. Move successful `TokenSet` custody directly to that owner's vault
+and destroy inputs, tokens, and provider-owned credentials when finished.
+
 ## Explicit ordinary OAuth2 refresh
 
 `NewOAuth2RefreshProvider(provider)` separately selects refresh for an existing

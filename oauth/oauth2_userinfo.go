@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	identity "github.com/faustbrian/go-identity"
@@ -25,6 +26,11 @@ type OAuth2SubjectEncoding string
 // OAuth2PositiveIntegerSubject selects a positive int64 JSON integer projected
 // to exact canonical decimal. Strings, floats, exponents, zero and negatives deny.
 const OAuth2PositiveIntegerSubject OAuth2SubjectEncoding = "positive_integer"
+
+// OAuth2StringSubject selects an exact nonempty UTF-8 JSON string of at most
+// 512 bytes in the shared-redirect profile. Control characters and the Unicode
+// replacement rune are rejected. Strings are not normalized or coerced.
+const OAuth2StringSubject OAuth2SubjectEncoding = "string"
 
 // OAuth2UserInfoDetails are immutable additional protocol facts. They are kept
 // outside ProviderProfile so existing public struct literals remain compatible.
@@ -88,14 +94,15 @@ func (OAuth2UserInfoConfig) MarshalText() ([]byte, error) { return nil, failure(
 // copied secret/closure only; no IO or callback runs under it. Calls may overlap
 // with separate custody. Close after admitted calls finish; no goroutine starts.
 type OAuth2UserInfoProvider struct {
-	profile   OAuth2UserInfoProfile
-	policy    OAuth2TokenPolicy
-	config    OIDCConfig // shared HTTP/token bounds only; never an OIDC validator
-	client    *http.Client
-	transport *http.Transport
-	mu        sync.Mutex
-	secret    []byte
-	closed    bool
+	profile    OAuth2UserInfoProfile
+	policy     OAuth2TokenPolicy
+	config     OIDCConfig // shared HTTP/token bounds only; never an OIDC validator
+	client     *http.Client
+	transport  *http.Transport
+	claimNames []string
+	mu         sync.Mutex
+	secret     []byte
+	closed     bool
 }
 
 // NewOAuth2UserInfoProvider validates/copies configuration without IO. The
@@ -111,6 +118,10 @@ func NewOAuth2UserInfoProvider(c OAuth2UserInfoConfig) (*OAuth2UserInfoProvider,
 // explicit closed response/resource policy. Unknown selections and mismatched
 // complete profiles reject before IO. Zero is exactly the original constructor.
 func NewOAuth2UserInfoProviderWithPolicy(c OAuth2UserInfoConfig, policy OAuth2TokenPolicy) (*OAuth2UserInfoProvider, error) {
+	return newOAuth2UserInfoProvider(c, policy, queryCallbackDistinctOAuth2)
+}
+
+func newOAuth2UserInfoProvider(c OAuth2UserInfoConfig, policy OAuth2TokenPolicy, protocol queryCallbackProtocol) (*OAuth2UserInfoProvider, error) {
 	if c.Clock == nil {
 		c.Clock = systemClock{}
 	}
@@ -131,7 +142,14 @@ func NewOAuth2UserInfoProviderWithPolicy(c OAuth2UserInfoConfig, policy OAuth2To
 	}
 	p := ProviderProfile{ID: c.ID, Version: c.Version, Issuer: c.Issuer, ClientID: c.ClientID, AuthorizationEndpoint: c.AuthorizationEndpoint, TokenEndpoint: c.TokenEndpoint, RedirectURI: c.RedirectURI, ClientAuthentication: c.ClientAuthentication, Scopes: slices.Clone(c.Scopes), ResponseMode: "query", PKCEMethod: "S256", StateBytes: 32, Timeout: c.Timeout, ClockSkew: time.Minute, MaxResponseBytes: c.MaxResponseBytes, MaxTokenBytes: c.MaxTokenBytes, MaxCodeBytes: c.MaxCodeBytes}
 	facts := OAuth2UserInfoProfile{Profile: p, Details: OAuth2UserInfoDetails{c.UserInfoEndpoint, c.SubjectClaim, c.SubjectEncoding, c.ProofLifetime}}
-	if facts.ValidateForTokenPolicy(policy) != nil || c.ClientAuthentication != ClientSecretPost || !visible(string(c.ClientSecret), 1, 4096) {
+	var valid bool
+	switch protocol {
+	case queryCallbackDistinctOAuth2:
+		valid = facts.ValidateForTokenPolicy(policy) == nil
+	case queryCallbackSharedOAuth2:
+		valid = policy == "" && sharedOAuth2UserInfoProfileValid(facts)
+	}
+	if !valid || c.ClientAuthentication != ClientSecretPost || !visible(string(c.ClientSecret), 1, 4096) {
 		return nil, failure(InvalidInput, nil)
 	}
 	shared := OIDCConfig{ID: c.ID, Version: c.Version, Issuer: c.Issuer, ClientID: c.ClientID, AuthorizationEndpoint: c.AuthorizationEndpoint, TokenEndpoint: c.TokenEndpoint, RedirectURI: c.RedirectURI, ClientAuthentication: c.ClientAuthentication, Scopes: slices.Clone(c.Scopes), Clock: c.Clock, HTTPClient: c.HTTPClient, Timeout: c.Timeout, MaxResponseBytes: c.MaxResponseBytes, MaxTokenBytes: c.MaxTokenBytes, MaxCodeBytes: c.MaxCodeBytes}
@@ -399,13 +417,17 @@ func (p *OAuth2UserInfoProvider) exchangeUserInfo(ctx context.Context, code, ver
 	if !ok {
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
-	number, ok := fields[p.profile.Details.SubjectClaim].(json.Number)
+	subject, ok := oauth2UserInfoSubject(fields[p.profile.Details.SubjectClaim], p.profile.Details.SubjectEncoding)
 	if !ok {
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
-	id, err := number.Int64()
-	if err != nil || id <= 0 || number.String() != strconv.FormatInt(id, 10) {
-		return ExchangeResult{}, failure(InvalidProof, ctx)
+	var projection *oauth2ClaimProjection
+	if len(p.claimNames) > 0 {
+		var valid bool
+		projection, valid = projectOAuth2UserInfoClaims(fields, p.claimNames)
+		if !valid {
+			return ExchangeResult{}, failure(InvalidProof, ctx)
+		}
 	}
 	until := observation.Add(p.profile.Details.ProofLifetime)
 	if !expires.IsZero() && expires.Before(until) {
@@ -416,5 +438,31 @@ func (p *OAuth2UserInfoProvider) exchangeUserInfo(ctx context.Context, code, ver
 	}
 	owner := &tokenOwner{access: bytes.Clone(parsed.access), refresh: bytes.Clone(parsed.refresh)}
 	tokens := TokenSet{owner: func() *tokenOwner { return owner }, receivedAt: received, expiresAt: expires, requested: slices.Clone(c.Scopes), granted: slices.Clone(parsed.scopes), scopeReported: parsed.scopeReported}
-	return ExchangeResult{Identity: ProviderIdentity{provider: c.ID, issuer: c.Issuer, subject: strconv.FormatInt(id, 10), evidenceExpiresAt: until.UTC()}, Tokens: tokens}, nil
+	return ExchangeResult{Identity: ProviderIdentity{provider: c.ID, issuer: c.Issuer, subject: subject, evidenceExpiresAt: until.UTC(), oauth2Claims: projection}, Tokens: tokens}, nil
+}
+
+func oauth2UserInfoSubject(value any, encoding OAuth2SubjectEncoding) (string, bool) {
+	switch encoding {
+	case OAuth2PositiveIntegerSubject:
+		number, ok := value.(json.Number)
+		if !ok {
+			return "", false
+		}
+		id, err := number.Int64()
+		if err != nil || id <= 0 || number.String() != strconv.FormatInt(id, 10) {
+			return "", false
+		}
+		return number.String(), true
+	case OAuth2StringSubject:
+		text, ok := value.(string)
+		if !ok || len(text) == 0 || len(text) > 512 || !utf8.ValidString(text) {
+			return "", false
+		}
+		if strings.IndexFunc(text, func(r rune) bool { return unicode.IsControl(r) || r == utf8.RuneError }) >= 0 {
+			return "", false
+		}
+		return text, true
+	default:
+		return "", false
+	}
 }

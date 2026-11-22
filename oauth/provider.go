@@ -354,6 +354,7 @@ type ProviderIdentity struct {
 	idTokenIssuedAt, idTokenExpiresAt time.Time
 	evidenceExpiresAt                 time.Time
 	oidcClaims                        *oidcClaimProjection
+	oauth2Claims                      *oauth2ClaimProjection
 }
 
 // EvidenceExpiresAt bounds use of this provider observation. For OIDC it is

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a separate shared-redirect OAuth2 token and HTTPS identity-resource
+  client. It checks issuer-parsed custody, exact profile, original state and
+  S256 challenge before exchange; retains bounded string or integer subject
+  evidence and optional scalar observations without inventing an ID token.
+  Distinct-route social providers and native reservation ownership are unchanged.
+
 - Add separately selected shared-redirect OAuth2 code/query/S256 callback
   parsing with exact trusted-route and decoded RFC 9207 issuer binding on
   success and denial. Reuse bounded code/state custody and destruction without

@@ -25,6 +25,7 @@ type QueryCallback struct {
 	oauth2           *OAuth2UserInfoDetails
 	tokenPolicy      OAuth2TokenPolicy
 	receivedRedirect string
+	protocol         queryCallbackProtocol
 }
 
 // Callback is the selected query-only callback contract. It is an alias, not a
@@ -83,8 +84,9 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 // code/state custody or denial lookup state: it authenticates/reserves nothing,
 // performs no IO and grants no exchange, identity or policy authority. No
 // OAuth2Details or token policy is selected, so existing distinct-route social
-// callback requests cannot accept this result. Native enterprise composition
-// must independently bind and reserve the transaction before using custody.
+// callback requests cannot accept this result. A SharedOAuth2UserInfoProvider
+// checks the exact originating profile before exchange. Native enterprise
+// composition must independently bind and reserve the transaction first.
 func ParseSharedOAuth2QueryCallback(ctx context.Context, rawQuery, receivedRedirect string, profile ProviderProfile) (QueryCallback, error) {
 	return parseQueryCallback(ctx, rawQuery, profile, nil, receivedRedirect, queryCallbackSharedOAuth2)
 }
@@ -214,7 +216,7 @@ func parseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 		if err != nil {
 			return QueryCallback{}, failure(InvalidInput, ctx)
 		}
-		return QueryCallback{input: input, profile: profile, success: true, oauth2: details, receivedRedirect: receivedRedirect}, nil
+		return QueryCallback{input: input, profile: profile, success: true, oauth2: details, receivedRedirect: receivedRedirect, protocol: protocol}, nil
 	}
 	if !queryErrorText(values["error"]) || seen["error_description"] && !queryErrorText(values["error_description"]) || seen["error_uri"] && !queryErrorURI(values["error_uri"]) {
 		return QueryCallback{}, failure(InvalidInput, ctx)
@@ -222,7 +224,7 @@ func parseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 	state := make([]byte, len(values["state"]))
 	copy(state, values["state"])
 	owner := &queryDeniedState{value: state}
-	return QueryCallback{denial: func() *queryDeniedState { return owner }, profile: profile, oauth2: details, receivedRedirect: receivedRedirect}, nil
+	return QueryCallback{denial: func() *queryDeniedState { return owner }, profile: profile, oauth2: details, receivedRedirect: receivedRedirect, protocol: protocol}, nil
 }
 
 func (q QueryCallback) validProfile() bool {
