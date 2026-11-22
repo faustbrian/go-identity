@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add a separately selected ordinary OAuth2 HTTPS token-endpoint refresh adapter
+  with original persisted-profile and actual-grant scope binding, redacted token
+  custody, explicit rotation or retain-original outcomes, and definitive grant
+  rejection versus refusal/unknown classification. Existing provider defaults and
+  public shapes are unchanged; no UserInfo, retry, storage, identity or session
+  authority is added.
+
 - Add explicit closed GitHub OAuth-app token/resource policy without changing
   existing public config/profile shapes or strict zero defaults. Bind fixed
   cross-origin UserInfo, comma reported scopes and honestly absent token expiry;

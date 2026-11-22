@@ -132,6 +132,55 @@ trusted distinct route. `TokenSet.ExpiresAt()` is zero only when that selected
 provider omits expiry; identity evidence remains bounded to the original read's
 twenty seconds. No public config/profile struct shape or existing default changes.
 
+## Explicit ordinary OAuth2 refresh
+
+`NewOAuth2RefreshProvider(provider)` separately selects refresh for an existing
+ordinary `OAuth2UserInfoProvider` with zero token policy. It does not add refresh
+to `Provider`, existing providers, OIDC, or any catalog preset. This selection
+uses that provider's exact immutable HTTPS token endpoint, POST client credentials,
+bounded owned HTTP/1 transport and lifetime; keep the provider open until admitted
+operations finish. Construction performs no I/O. Basic/public client methods and
+the GitHub response policy are not selected by this adapter.
+
+Only after the native owner authorizes the owned account, admits its expected
+durable token generation and decrypts the stored refresh secret may it construct
+`NewRefreshToken(secret, storedProviderProfile, actualStoredGrantScopes)`. Supply
+the original persisted profile and actual grant scopes, not current caller input
+or broader configured scopes. Construction snapshots them; refresh rejects any
+profile mismatch before releasing credentials. Copies share destruction and one
+concurrent borrow admission, but this is **not durable single-flight, one-use or
+retry authority**. Native generation locking, envelope encryption, finalization,
+unlink/version races and unknown-result recovery remain mandatory separate owners.
+
+`Refresh(ctx, custody)` performs at most one bounded POST and never requests
+UserInfo, follows a redirect, retries, issues identity evidence, changes an account,
+or issues a credential or session. The form omits `scope`: under
+[RFC 6749 section 6](https://www.rfc-editor.org/rfc/rfc6749#section-6), its effective
+scope is the original stored grant. Missing response `scope` therefore preserves
+those scopes, never the broader provider configuration. Explicit response scopes
+must be a subset; `Tokens.ScopeReported()` preserves the distinction.
+`Tokens.RequestedScopes()` records the effective original refresh-grant scopes,
+whereas `Tokens.GrantedScopes()` records the new access-token scopes. A narrower
+access-token scope does not redefine the refresh grant's original scope.
+
+Success returns owned redacted `TokenSet` custody and an explicit `Rotation`:
+`RotatedRefreshToken` supplies the returned replacement; `RetainOriginalRefreshToken`
+supplies **no** refresh bytes and instructs the native owner to preserve the safe
+predecessor. A replacement must replace the predecessor according to section 6;
+its presence does not prove when the provider invalidated the old token. Encrypt
+through `Tokens.Use` and destroy all temporary custody promptly on every path.
+Receipt time and required positive bounded expiry describe only provider tokens,
+not authentication age, native authorization or session validity.
+
+`RefreshGrantRejected` means a coherent `invalid_grant` response: the provider
+definitively rejected the submitted grant, which may be expired, invalid, revoked
+or bound to another client. It is not proof of a specific revocation cause.
+Other coherent refusals return `Refused` and must not erase the stored grant.
+Malformed/oversize responses, transport failures, cancellation after attempt,
+redirects and contradictory responses return `Unknown`, since rotation may have
+occurred. Local invalid custody/configuration returns `InvalidInput`; pre-attempt
+cancellation returns `Unavailable`. No error authorizes automatic retry.
+
 ## Query callback boundary
 
 `ParseQueryCallback` accepts only the query authorization-code profile. It
@@ -256,7 +305,7 @@ formatting is redacted and serialization of secret-bearing contracts is refused.
 ## Unsupported in this profile
 
 Provider catalogs, discovery/JWKS retrieval, extra audiences, UserInfo overrides,
-native/direct tokens, Apple/form-post/hybrid, signup/link policy, refresh,
+native/direct tokens, Apple/form-post/hybrid, signup/link policy, default refresh,
 revocation/logout, popup, One Tap and proxy are not exposed. Optional profiles
 must be separately implemented and verified; unsupported behavior is not inferred.
 
