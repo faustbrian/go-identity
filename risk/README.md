@@ -934,6 +934,13 @@ domain proof, credentials, enablement or login capability. Other provider
 registration protocols, administrative reads and aliases keep their existing
 closed classifications.
 
+The exact provider metadata update (`identity.sso.provider.update`) has its
+own Privileged reservation bound to the original operation. It requires the
+same signals and counter dimensions as registration; neither operation's
+reservation can authorize the other. The SSO owner still checks current
+organization write permission and provider state. Enablement and credential
+rotation remain separate and are not selected by this entry.
+
 Digest-only legacy API-key import (`identity.apikey.import`) uses the existing
 CredentialMutation reservation profile, with tenant, current user, original
 session and canonical network counters. Current required provider signals

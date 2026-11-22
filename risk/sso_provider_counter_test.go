@@ -59,3 +59,47 @@ func TestOIDCProviderRegistrationRequiresExactProtectedAdmission(t *testing.T) {
 		}
 	}
 }
+
+func TestOIDCProviderUpdateRequiresItsOwnProtectedAdmission(t *testing.T) {
+	policy := testPolicy(t)
+	scope := testContext()
+	scope.Operation = "identity.sso.provider.update"
+	subject := Subject{Actor: "organization-admin", Resource: "disabled-provider", Network: "192.0.2.1"}
+	key, err := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counters, err := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: policy, Keys: []CounterDigestKey{key}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signals := []Signal{testSignal(scope, "status", SignalClean), testSignal(scope, "captcha", SignalClean)}
+	for _, incomplete := range [][]Signal{nil, signals[:1]} {
+		assessment, err := policy.Assess(context.Background(), scope, incomplete)
+		if err != nil || assessment.Decision.Action != Deny {
+			t.Fatalf("update without all required current signals: want deny, got %v (%v)", assessment.Decision.Action, err)
+		}
+	}
+	assessment, err := policy.Assess(context.Background(), scope, signals)
+	if err != nil || assessment.Decision.Action != Allow {
+		t.Fatalf("clean update should reach protected reservation: got %v (%v)", assessment.Decision.Action, err)
+	}
+	command, err := counters.Prepare(scope, subject, scope.Now)
+	if err != nil || command.Bindings().Phase != ReserveWithCommand || len(command.Bindings().Targets) != 4 || counters.Validate(command, scope, subject, scope.Now) != nil {
+		t.Fatal("update did not receive its own tenant, actor, provider and network reservation", err)
+	}
+
+	registration := scope
+	registration.Operation = "identity.sso.provider.register-oidc"
+	if counters.Validate(command, registration, subject, scope.Now) == nil {
+		t.Fatal("update reservation authorized provider registration")
+	}
+	for _, operation := range []Action{"identity.sso.provider.enable", "identity.sso.provider.credentials-rotate", "identity.sso.provider.update "} {
+		unselected := scope
+		unselected.Operation = operation
+		if _, err := counters.Prepare(unselected, subject, scope.Now); err == nil {
+			t.Fatalf("unselected operation %q obtained provider update counters", operation)
+		}
+	}
+}

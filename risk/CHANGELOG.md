@@ -2,10 +2,14 @@
 
 ## Unreleased
 
+- Admit the exact SSO provider metadata update through privileged, operation-bound
+  counters. Keep required signals and the current organization checks at the
+  SSO owner. No provider enablement or credential rotation is selected.
+
 - Admit exact disabled OIDC provider registration through existing privileged
   protected counters, retaining current required signals, original scope and
   expiry. This grants no organization permission, domain proof or enablement;
-  other provider operations and aliases retain closed classifications.
+  unselected provider operations and aliases retain closed classifications.
 
 - Add explicit identifier-free OAuth provider discovery for signin-start and
   callback. Tenant, network and trusted browser-device admission remain counted
