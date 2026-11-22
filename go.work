@@ -25,6 +25,7 @@ use (
 	./http/passkey
 	./http/phone
 	./http/session
+	./http/sso
 	./i18n
 	./magiclink
 	./magiclink/postgres
