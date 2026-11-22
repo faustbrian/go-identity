@@ -24,6 +24,14 @@ func oauthRPInitiationClaim(q claimRequest) bool {
 	return q.feature != nil && q.purpose == q.feature.OperationID && (*q.feature == oauthRPInitiationOperation(false) || *q.feature == oauthRPInitiationOperation(true))
 }
 
+func oauthProviderRefreshPreparationClaim(q claimRequest) bool {
+	operation := identity.FeatureOperation{
+		Owner: "identity/oauth", OperationID: "identity.account.refresh-token", SchemaID: "identity.account.refresh-token.pg-v1",
+		SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired,
+	}
+	return q.feature != nil && *q.feature == operation && q.purpose == operation.OperationID
+}
+
 // The shared RP transaction profile fixes a ten-minute original state lifetime
 // (REFERENCE_CONFIGURATION.md, struct:ref.oauth.rp_transaction). Earlier native
 // deadlines may shorten it; restoration and issuance cannot renew or expand it.

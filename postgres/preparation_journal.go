@@ -80,7 +80,8 @@ FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR U
 	// this exception never admits pending/missing output or regeneration.
 	preparedLink := expectedProfile == 5 && q.purpose == "identity.account.link-token" && q.feature == nil
 	preparedUnlink := expectedProfile == 6 && q.purpose == "identity.account.unlink" && q.feature == nil
-	erasureProfile := expectedProfile <= 4 && oauthRPInitiationClaim(q) || preparedLink || preparedUnlink
+	preparedRefresh := (expectedProfile == 2 || expectedProfile == 4) && oauthProviderRefreshPreparationClaim(q)
+	erasureProfile := expectedProfile <= 4 && oauthRPInitiationClaim(q) || preparedLink || preparedUnlink || preparedRefresh
 	erasedOutput := erasureProfile && (state == "committed" || state == "aborted") && started != nil && output == nil && provenance == nil
 	if profile == nil || *profile != expectedProfile || plan != nil && output == nil && !deniedBeforeGeneration && !erasedOutput || !postgresExactTime(until) {
 		return preparationReservation{}, identity.ConflictError{}

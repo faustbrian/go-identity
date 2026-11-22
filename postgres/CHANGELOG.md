@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add forward journal support for erasing encrypted refresh preparation at
+  commit or abort while preserving the original result. Install
+  `OAuthProviderRefreshErasureMigrationSource` after account-unlink preparation
+  validation and before enabling native provider refresh. Existing preparation
+  profiles and installed migration history are unchanged.
+
 - Read an exact owner's linked provider account and advance its social-link
   version only within the registered native refresh transaction. The account
   record and login credential remain unchanged.

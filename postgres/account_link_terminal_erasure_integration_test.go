@@ -551,8 +551,19 @@ func TestAccountLinkErasureLeavesOtherPreparationProfilesUnchanged(t *testing.T)
 		t.Fatal(err)
 	}
 	installAccountLinkErasure(t, ctx, pool)
+	installProviderRefreshErasureHistory(t, ctx, pool.Raw())
 	if err := pool.Raw().QueryRow(ctx, snapshot).Scan(&after); err != nil || before != after {
 		t.Fatal("forward erasure migration changed populated legacy rows", err)
+	}
+	raw := func() []byte {
+		var id []byte
+		if err := pool.Raw().QueryRow(ctx, `SELECT command_id FROM identity.commands ORDER BY command_id LIMIT 1`).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}()
+	if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET preparation_ciphertext=decode('00','hex') WHERE command_id=$1`, raw); err == nil {
+		t.Fatal("refresh migration allowed rewriting an unrelated terminal preparation")
 	}
 }
 
@@ -564,6 +575,7 @@ func TestAccountLinkErasurePreservesRPStartTerminalErasure(t *testing.T) {
 		}
 	}
 	installAccountLinkErasure(t, ctx, pool)
+	installProviderRefreshErasureHistory(t, ctx, pool.Raw())
 	keys := claimKeys{current: 1, retained: map[uint32][32]byte{1: {1}}}
 	for _, anonymous := range []bool{false, true} {
 		for _, profile := range []int16{1, 2, 3, 4} {
