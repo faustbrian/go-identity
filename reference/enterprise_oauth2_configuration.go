@@ -167,7 +167,7 @@ func composeEnterpriseOAuth2(c StoreConfiguration, d ReferenceDependencies, eval
 		return nil, err
 	}
 	n.Exchange.Profile.ID = strings.ReplaceAll(namespace, ".", "-")
-	completion, err := ssopg.NewProviderOAuth2LoginCompletionServiceWithAdapter(start, n.Completion, []ssopg.StaticOAuth2CompletionProfile{{
+	start, completion, err := ssopg.NewProviderOAuth2LoginServicesWithAdapter(start, n.Completion, []ssopg.StaticOAuth2CompletionProfile{{
 		OrganizationID: profile.OrganizationID, ProviderID: profile.ProviderID, Profile: n.Exchange, HTTPClient: n.HTTPClient,
 	}}, newEnterpriseOAuth2ProtocolAdapter)
 	if err != nil {

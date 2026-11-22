@@ -10,17 +10,12 @@ import (
 )
 
 func newEnterpriseOAuth2ProtocolAdapter(config ssopg.OAuth2ProtocolAdapterConfig) (sso.ProtocolAdapter, error) {
-	return ssooauth2.New(ssooauth2.Config{
-		Transaction:          config.Transaction,
-		CredentialGeneration: config.CredentialGeneration,
-		Profile:              config.Profile,
-		IdentityProof:        config.IdentityProof,
-		Mapping:              config.Mapping,
-		Authorization:        config.Authorization,
-		CapabilityExpiresAt:  config.CapabilityExpiresAt,
-		Clock:                config.Clock,
-		HTTPClient:           config.HTTPClient,
-		Callback: &ssooauth2.CallbackCustody{
+	if (config.UseSecrets == nil) != (config.AcceptTokens == nil) {
+		return nil, sso.ErrInvalidInput
+	}
+	var callback *ssooauth2.CallbackCustody
+	if config.UseSecrets != nil {
+		callback = &ssooauth2.CallbackCustody{
 			ObservedAt: config.ObservedAt,
 			ValidUntil: config.ValidUntil,
 			UseSecrets: config.UseSecrets,
@@ -31,6 +26,18 @@ func newEnterpriseOAuth2ProtocolAdapter(config ssopg.OAuth2ProtocolAdapterConfig
 					ExpiresAt:   evidence.ExpiresAt,
 				}, tokens)
 			},
-		},
+		}
+	}
+	return ssooauth2.New(ssooauth2.Config{
+		Transaction:          config.Transaction,
+		CredentialGeneration: config.CredentialGeneration,
+		Profile:              config.Profile,
+		IdentityProof:        config.IdentityProof,
+		Mapping:              config.Mapping,
+		Authorization:        config.Authorization,
+		CapabilityExpiresAt:  config.CapabilityExpiresAt,
+		Clock:                config.Clock,
+		HTTPClient:           config.HTTPClient,
+		Callback:             callback,
 	})
 }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use the same standalone OAuth2 adapter for opt-in enterprise start and
+  callback without changing the original PostgreSQL reservation or browser flow.
+
 - Use the standalone enterprise OAuth2 adapter for the opt-in Reference
   callback. The existing PostgreSQL coordinator still reserves callbacks and
   atomically commits token, session and terminal state.

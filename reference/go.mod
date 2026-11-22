@@ -70,7 +70,7 @@ require (
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 	github.com/faustbrian/go-sso v0.0.0-20261122221900-3b3d0d840b54
 	github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db
-	github.com/faustbrian/go-sso/postgres v0.0.0-20261122225152-67d5605e7007
+	github.com/faustbrian/go-sso/postgres v0.0.0-20261122230438-5b938f048b0e
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b
 	github.com/faustbrian/go-transactional-outbox/v2 v2.1.1-0.20261022172917-6ed5e0861542
 	github.com/faustbrian/go-webauthn v0.0.0-20261020074004-ed89b240ab20
