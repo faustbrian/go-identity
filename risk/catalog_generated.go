@@ -2,7 +2,7 @@
 // Owned Golib planning sources (MIT); regenerate and review all classifications.
 // PUBLIC_CONTRACTS.json SHA-256: 3364b210cb3b5753ff7dd85f11763691519c546bdd6b4220e5e544ae2bf01e05
 // REFERENCE_CONFIGURATION.md SHA-256: dc766c02baefab3b9ebd86b897891b9ea505518ea19363e2b1e083183375a514
-// risk/native_operations.json SHA-256: b5f1c098bd335693d71ce5081deeda2ee20ebd73567ebb4b3c9e8d3113d599d8
+// risk/native_operations.json SHA-256: 4d40ca552a619ffeb2eaa1bcc359efe1cc6bf2c4d95f5de633da34fd184bbc8b
 package risk
 
 import "time"
@@ -321,7 +321,7 @@ var canonicalOperations = map[Action]ProfileClass{
 	"identity.sso.oidc-logout-complete":                 DefaultDeny,
 	"identity.sso.provider.credentials-rotate":          Privileged,
 	"identity.sso.provider.delete":                      DefaultDeny,
-	"identity.sso.provider.disable":                     DefaultDeny,
+	"identity.sso.provider.disable":                     Privileged,
 	"identity.sso.provider.enable":                      Privileged,
 	"identity.sso.provider.get":                         DefaultDeny,
 	"identity.sso.provider.list":                        DefaultDeny,

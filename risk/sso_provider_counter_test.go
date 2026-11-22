@@ -95,7 +95,7 @@ func TestOIDCProviderUpdateRequiresItsOwnProtectedAdmission(t *testing.T) {
 	if counters.Validate(command, registration, subject, scope.Now) == nil {
 		t.Fatal("update reservation authorized provider registration")
 	}
-	for _, operation := range []Action{"identity.sso.provider.disable", "identity.sso.provider.credentials-rotate ", "identity.sso.provider.update "} {
+	for _, operation := range []Action{"identity.sso.provider.disable ", "identity.sso.provider.credentials-rotate ", "identity.sso.provider.update "} {
 		unselected := scope
 		unselected.Operation = operation
 		if _, err := counters.Prepare(unselected, subject, scope.Now); err == nil {
@@ -188,7 +188,7 @@ func TestOIDCProviderEnableRequiresItsOwnProtectedAdmission(t *testing.T) {
 		if counters.Validate(command, scope, subject, scope.Now.Add(15*time.Minute)) == nil {
 			t.Fatal("enable reservation renewed its original deadline")
 		}
-		for _, operation := range []Action{"identity.sso.provider.register-oidc", "identity.sso.provider.update", "identity.sso.provider.credentials-rotate"} {
+		for _, operation := range []Action{"identity.sso.provider.register-oidc", "identity.sso.provider.update", "identity.sso.provider.credentials-rotate", "identity.sso.provider.disable"} {
 			other := scope
 			other.Operation = operation
 			foreignCommand, err := counters.Prepare(other, subject, scope.Now)
@@ -201,7 +201,7 @@ func TestOIDCProviderEnableRequiresItsOwnProtectedAdmission(t *testing.T) {
 		}
 	})
 	t.Run("unselected actions and aliases stay closed", func(t *testing.T) {
-		for _, operation := range []Action{"identity.sso.provider.disable", "identity.sso.provider.delete", "identity.sso.provider.get", "identity.sso.provider.list", "identity.sso.provider.register-oauth", "identity.sso.provider.register-saml", "identity.sso.provider.Enable", "identity.sso.provider.enable ", "identity.sso.provider.enable-oidc"} {
+		for _, operation := range []Action{"identity.sso.provider.disable ", "identity.sso.provider.delete", "identity.sso.provider.get", "identity.sso.provider.list", "identity.sso.provider.register-oauth", "identity.sso.provider.register-saml", "identity.sso.provider.Enable", "identity.sso.provider.enable ", "identity.sso.provider.enable-oidc"} {
 			other := scope
 			other.Operation = operation
 			assessment, err := policy.Assess(context.Background(), other, []Signal{testSignal(other, "status", SignalClean), testSignal(other, "captcha", SignalClean)})
@@ -213,6 +213,69 @@ func TestOIDCProviderEnableRequiresItsOwnProtectedAdmission(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestSSOProviderDisableHasItsOwnPrivilegedAdmission(t *testing.T) {
+	ctx := context.Background()
+	policy := testPolicy(t)
+	scope := testContext()
+	scope.Operation = "identity.sso.provider.disable"
+	scope.IndependentFactor = true
+	subject := Subject{Actor: "organization-admin", Resource: "target-provider", Network: "192.0.2.1"}
+	status := testSignal(scope, "status", SignalClean)
+	captcha := testSignal(scope, "captcha", SignalClean)
+	for _, signals := range [][]Signal{nil, {status}, {captcha}, {status, testSignal(scope, "captcha", SignalUnavailable)}} {
+		if assessment, err := policy.Assess(ctx, scope, signals); err != nil || assessment.Decision.Action != Deny {
+			t.Fatalf("disable without both current signals must deny: %v (%v)", assessment.Decision.Action, err)
+		}
+	}
+	if assessment, err := policy.Assess(ctx, scope, []Signal{status, captcha}); err != nil || assessment.Decision.Action != Allow {
+		t.Fatalf("exact disable did not reach protected admission: %v (%v)", assessment.Decision.Action, err)
+	}
+	key, err := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counters, err := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: policy, Keys: []CounterDigestKey{key}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := counters.Prepare(scope, subject, scope.Now)
+	if err != nil {
+		t.Fatal("disable lacks its own native reservation", err)
+	}
+	binding := command.Bindings()
+	dimensions := []Dimension{TenantDimension, ActorDimension, ResourceDimension, NetworkDimension}
+	if binding.Operation != scope.Operation || binding.Attempt != scope.Attempt || binding.Phase != ReserveWithCommand || len(binding.Targets) != len(dimensions) || counters.Validate(command, scope, subject, scope.Now) != nil {
+		t.Fatal("disable lost the exact protected operation/scope")
+	}
+	for i, dimension := range dimensions {
+		if binding.Targets[i].Dimension != dimension {
+			t.Fatal("disable lost a required abuse dimension", dimension)
+		}
+	}
+	for _, neighbor := range []Action{"identity.sso.provider.enable", "identity.sso.provider.update", "identity.sso.provider.credentials-rotate"} {
+		foreign := scope
+		foreign.Operation = neighbor
+		other, err := counters.Prepare(foreign, subject, scope.Now)
+		if err != nil || counters.Validate(other, scope, subject, scope.Now) == nil || counters.Validate(command, foreign, subject, scope.Now) == nil {
+			t.Fatal("protected counters cross an operation boundary", neighbor, err)
+		}
+	}
+	foreign := scope
+	foreign.Tenant = "another-tenant"
+	otherSubject := subject
+	otherSubject.Resource = "other-provider"
+	if counters.Validate(command, foreign, subject, scope.Now) == nil || counters.Validate(command, scope, otherSubject, scope.Now) == nil || counters.Validate(command, scope, subject, scope.Now.Add(15*time.Minute)) == nil {
+		t.Fatal("disable reservation crossed scope or renewed its original deadline")
+	}
+	for _, unselected := range []Action{"identity.sso.provider.delete", "identity.sso.provider.Disable", "identity.sso.provider.disable "} {
+		other := scope
+		other.Operation = unselected
+		if _, err := counters.Prepare(other, subject, scope.Now); err == nil {
+			t.Fatal("unselected operation obtained disable counters", unselected)
+		}
+	}
 }
 
 func TestOIDCProviderCredentialRotationUsesItsOwnProtectedAdmission(t *testing.T) {

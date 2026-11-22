@@ -16,6 +16,7 @@
   "identity.passkey.list": "state_neutral_read",
   "identity.sso.discover": "authentication",
   "identity.sso.provider.credentials-rotate": "privileged",
+  "identity.sso.provider.disable": "privileged",
   "identity.sso.provider.enable": "privileged",
   "identity.sso.provider.register-oidc": "privileged",
   "identity.sso.provider.update": "privileged",

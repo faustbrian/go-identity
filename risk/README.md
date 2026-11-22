@@ -963,6 +963,12 @@ and credential rotation cannot supply an enablement reservation. This profile
 does not establish organization permission, domain proof, current credential
 readiness or provider enablement; those remain with the SSO owner.
 
+The exact `identity.sso.provider.disable` operation independently reserves the
+same Privileged dimensions and still requires current signals. Enablement,
+configuration updates and credential rotation cannot provide disablement's
+reservation or consume it. The SSO owner must separately authorize and apply
+the provider transition and its transaction disposition.
+
 Digest-only legacy API-key import (`identity.apikey.import`) uses the existing
 CredentialMutation reservation profile, with tenant, current user, original
 session and canonical network counters. Current required provider signals
