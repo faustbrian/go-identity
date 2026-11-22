@@ -36,6 +36,10 @@ type EnterpriseOIDCConfiguration struct {
 	// authorization redirect. The callback and member policy remain native.
 	// Leave false to retain the previous renderer for existing installations.
 	StandaloneStart bool
+	// StandaloneCallback selects the standalone OIDC adapter for the admitted,
+	// already parsed callback. Native reservation, session, linking, JIT, and
+	// role policy remain unchanged. Leave false to retain native completion.
+	StandaloneCallback bool
 	// RoleSync optionally replaces provider-owned custom role grants during
 	// the existing callback. It requires this provider's exact pinned mapping
 	// and a configured organization dynamic-role permission owner.
@@ -100,23 +104,24 @@ type HTTPEnterpriseOIDCConfiguration struct {
 }
 
 type enterpriseOIDCState struct {
-	start           *ssopg.ProviderLoginService
-	completion      *ssopg.ProviderLoginCompletionService
-	preauth         *session.PreAuthIssuer
-	profile         ssopg.StaticOIDCLoginProfile
-	tenant          identity.TenantID
-	origin          string
-	policy          string
-	version         uint64
-	audience        string
-	sessionSchema   string
-	successCallback string
-	duration        time.Duration
-	callbacks       []string
-	csrfCookie      session.CSRFCookiePolicy
-	roleSync        bool
-	jit             bool
-	memberLink      bool
+	start              *ssopg.ProviderLoginService
+	completion         *ssopg.ProviderLoginCompletionService
+	preauth            *session.PreAuthIssuer
+	profile            ssopg.StaticOIDCLoginProfile
+	tenant             identity.TenantID
+	origin             string
+	policy             string
+	version            uint64
+	audience           string
+	sessionSchema      string
+	successCallback    string
+	duration           time.Duration
+	callbacks          []string
+	csrfCookie         session.CSRFCookiePolicy
+	roleSync           bool
+	jit                bool
+	memberLink         bool
+	standaloneCallback bool
 }
 
 func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
@@ -242,10 +247,17 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 			return nil, err
 		}
 	}
+	if n.StandaloneCallback {
+		complete, err = complete.WithOIDCCallbackAdapter(newEnterpriseOIDCCallbackAdapter)
+		if err != nil {
+			return nil, err
+		}
+	}
 	profile.Scopes = slices.Clone(profile.Scopes)
 	state := &enterpriseOIDCState{start: start, completion: complete, profile: profile, tenant: n.Login.TenantID, origin: n.Login.Origin,
 		policy: n.Login.PolicyID, version: selectedSession.PolicyVersion, audience: n.Completion.Audience, duration: n.Login.Coordinator.MaximumDuration,
-		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil, jit: n.JIT != nil, memberLink: memberLink}
+		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil, jit: n.JIT != nil, memberLink: memberLink,
+		standaloneCallback: n.StandaloneCallback}
 	if c.HTTPEnterpriseOIDC == nil {
 		return state, nil
 	}

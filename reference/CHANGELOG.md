@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add independently selected standalone enterprise OIDC callback completion
+  from the admitted parsed query, preserving native reservation, token, session,
+  explicit linking, first-login provisioning and role synchronization policy.
+  The default retains native completion; selected errors never fall back.
+
 - Add opt-in standalone OIDC rendering for enterprise start while retaining
   the native callback, first-login provisioning, role synchronization and
   explicit account linking owners.

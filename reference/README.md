@@ -142,6 +142,12 @@ redirect with the standalone OIDC adapter. The browser flow and native callback,
 session, linking, JIT, and role policies do not change. Leave it unset for the
 previous renderer.
 
+Set `EnterpriseOIDC.StandaloneCallback` independently to complete the admitted,
+already parsed callback with the standalone OIDC adapter. PostgreSQL still owns
+the original reservation, encrypted token custody, session issuance, explicit
+linking, first-login provisioning, and role synchronization. Adapter errors do
+not retry native completion. Leave it unset for the existing native callback.
+
 Select `HTTPEnterpriseOIDC` separately to expose the browser routes. Provide
 the original-flow key index, the allowlisted application `SuccessCallback`,
 and the secure CSRF cookie policy, and select

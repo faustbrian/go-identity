@@ -114,8 +114,9 @@ func configureReferenceEnterpriseOIDC(t *testing.T, c *reference.StoreConfigurat
 	grant := c.PasswordSignup.Issuer
 	grant.Audience = "reference-enterprise"
 	c.EnterpriseOIDC = &reference.EnterpriseOIDCConfiguration{
-		StandaloneStart: true,
-		Routing:         ssopg.ProviderRouterConfig{MaximumDuration: time.Second, Lifetime: 8 * time.Second, PolicyVersion: 9, MaximumProviders: 4},
+		StandaloneStart:    true,
+		StandaloneCallback: true,
+		Routing:            ssopg.ProviderRouterConfig{MaximumDuration: time.Second, Lifetime: 8 * time.Second, PolicyVersion: 9, MaximumProviders: 4},
 		Login: ssopg.ProviderLoginConfig{TenantID: otpTenant, ActorID: c.PasswordSignup.PreAuth.ActorID, PolicyID: "reference-enterprise", Origin: origin,
 			ConfigurationID: "reference-enterprise-v1", CallbackAllowlist: []string{origin + "/enterprise/complete", origin + "/enterprise/error"}, Profiles: []ssopg.StaticOIDCLoginProfile{profile},
 			FlowKeys: c.PasswordSignin.Native.FlowKeys, Coordinator: c.PasswordSignup.Native.Coordinator, RequestKeys: c.PasswordSignup.Native.RequestKeys,

@@ -8,6 +8,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	ssohttp "github.com/faustbrian/go-identity/http/sso"
+	"github.com/faustbrian/go-identity/oauth"
 	"github.com/faustbrian/go-identity/session"
 	"github.com/faustbrian/go-sso"
 	ssopg "github.com/faustbrian/go-sso/postgres"
@@ -87,6 +88,11 @@ func (s *Server) guardEnterpriseFeatures(features []identityhttp.Feature) ([]ide
 
 type enterpriseOIDCHTTP struct{ native *enterpriseOIDCState }
 
+var (
+	_ ssohttp.ParsedSigninCallbackOwner     = enterpriseOIDCHTTP{}
+	_ ssohttp.ParsedMemberLinkCallbackOwner = enterpriseOIDCHTTP{}
+)
+
 func (a enterpriseOIDCHTTP) StartSSOOIDC(ctx context.Context, tenant identity.TenantID, request sso.SigninStartRequest, browser ssohttp.SigninBrowser) (sso.SigninStartResult, error) {
 	if tenant != a.native.tenant {
 		return sso.SigninStartResult{}, sso.ErrForbidden
@@ -137,6 +143,20 @@ func (a enterpriseOIDCHTTP) CompleteSSOOIDC(ctx context.Context, request ssohttp
 	return ssohttp.SigninCallbackResult{Completion: out.Completion, Issuance: out.Issuance, CSRF: out.CSRF, RedirectURI: out.RedirectURI}, nil
 }
 
+func (a enterpriseOIDCHTTP) CompleteParsedSSOOIDC(ctx context.Context, request ssohttp.SigninCallbackRequest, parsed oauth.QueryCallback) (ssohttp.SigninCallbackResult, error) {
+	if !a.native.standaloneCallback {
+		return a.CompleteSSOOIDC(ctx, request)
+	}
+	if request.TenantID != a.native.tenant {
+		return ssohttp.SigninCallbackResult{}, sso.ErrForbidden
+	}
+	out, err := a.native.completion.SigninParsedCallback(ctx, enterpriseBrowser(request.Browser), request.ReceivedRedirectURI, parsed)
+	if err != nil {
+		return ssohttp.SigninCallbackResult{}, err
+	}
+	return ssohttp.SigninCallbackResult{Completion: out.Completion, Issuance: out.Issuance, CSRF: out.CSRF, RedirectURI: out.RedirectURI}, nil
+}
+
 func (a enterpriseOIDCHTTP) CompleteSSOOIDCLink(ctx context.Context, request ssohttp.SigninCallbackRequest, cookie authentication.BearerCredential) (ssohttp.MemberLinkCallbackResult, error) {
 	if !a.native.memberLink || request.TenantID != a.native.tenant {
 		return ssohttp.MemberLinkCallbackResult{}, sso.ErrForbidden
@@ -144,6 +164,22 @@ func (a enterpriseOIDCHTTP) CompleteSSOOIDCLink(ctx context.Context, request sso
 	browser := request.Browser
 	out, err := a.native.completion.LinkCallback(ctx, ssopg.ProviderLinkCallbackRequest{Session: cookie, Input: request.Input,
 		ReceivedRedirectURI: request.ReceivedRedirectURI, Origin: browser.Origin, Network: browser.Network, Device: browser.Device})
+	if err != nil {
+		return ssohttp.MemberLinkCallbackResult{}, err
+	}
+	return ssohttp.MemberLinkCallbackResult{CommandID: out.Completion.Binding.CommandID, RedirectURI: out.RedirectURI}, nil
+}
+
+func (a enterpriseOIDCHTTP) CompleteParsedSSOOIDCLink(ctx context.Context, request ssohttp.SigninCallbackRequest, cookie authentication.BearerCredential, parsed oauth.QueryCallback) (ssohttp.MemberLinkCallbackResult, error) {
+	if !a.native.standaloneCallback {
+		return a.CompleteSSOOIDCLink(ctx, request, cookie)
+	}
+	if !a.native.memberLink || request.TenantID != a.native.tenant {
+		return ssohttp.MemberLinkCallbackResult{}, sso.ErrForbidden
+	}
+	browser := request.Browser
+	out, err := a.native.completion.LinkParsedCallback(ctx, ssopg.ProviderLinkCallbackRequest{Session: cookie,
+		ReceivedRedirectURI: request.ReceivedRedirectURI, Origin: browser.Origin, Network: browser.Network, Device: browser.Device}, parsed)
 	if err != nil {
 		return ssohttp.MemberLinkCallbackResult{}, err
 	}
