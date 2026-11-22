@@ -111,6 +111,7 @@ type OIDCProvider struct {
 	secret         []byte
 	closed         bool
 	googleAccounts bool
+	claimNames     []string
 }
 
 // NewOIDCProvider validates configuration without network I/O. Zero limits select
@@ -352,6 +353,7 @@ type ProviderIdentity struct {
 	hasAuthenticationTime             bool
 	idTokenIssuedAt, idTokenExpiresAt time.Time
 	evidenceExpiresAt                 time.Time
+	oidcClaims                        *oidcClaimProjection
 }
 
 // EvidenceExpiresAt bounds use of this provider observation. For OIDC it is
@@ -571,9 +573,13 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	if hasTime {
 		identityTime = principal.AuthenticatedAt()
 	}
+	claims, ok := projectValidatedOIDCClaims(parsed.id, p.claimNames)
+	if !ok {
+		return ExchangeResult{}, failure(InvalidProof, ctx)
+	}
 	owner := &tokenOwner{access: bytes.Clone(parsed.access), refresh: bytes.Clone(parsed.refresh), id: bytes.Clone(parsed.id)}
 	tokens := TokenSet{owner: func() *tokenOwner { return owner }, receivedAt: receivedAt, expiresAt: receivedAt.Add(time.Duration(parsed.expires) * time.Second), requested: slices.Clone(p.config.Scopes), granted: slices.Clone(parsed.scopes), scopeReported: parsed.scopeReported}
-	return ExchangeResult{Identity: ProviderIdentity{provider: p.ID(), issuer: principal.Issuer(), subject: principal.Subject(), authenticatedAt: identityTime, hasAuthenticationTime: hasTime, idTokenIssuedAt: issuedAt, idTokenExpiresAt: expiresAt}, Tokens: tokens}, nil
+	return ExchangeResult{Identity: ProviderIdentity{provider: p.ID(), issuer: principal.Issuer(), subject: principal.Subject(), authenticatedAt: identityTime, hasAuthenticationTime: hasTime, idTokenIssuedAt: issuedAt, idTokenExpiresAt: expiresAt, oidcClaims: claims}, Tokens: tokens}, nil
 }
 
 type validatedTokenMetadata struct {

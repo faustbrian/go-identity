@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in bounded projection of selected verified OIDC ID-token claims.
+  Preserve absent, null, string and boolean values after full token validation;
+  default providers and refusal/unknown handling are unchanged. The result
+  grants no identity mapping or authorization policy.
+
 - Add a separately selected ordinary OAuth2 HTTPS token-endpoint refresh adapter
   with original persisted-profile and actual-grant scope binding, redacted token
   custody, explicit rotation or retain-original outcomes, and definitive grant

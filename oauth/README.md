@@ -10,6 +10,12 @@ account policy, token vault, identity mutation, session issuance, HTTP and refer
 composition remain separate required owners. Calling this client does not confer
 any of those authorities. It does not complete M17, M18 or unit qualification.
 
+`NewOIDCProviderWithClaims` optionally selects exact scalar ID-token claims for
+a trusted mapper. `ExchangeResult.VerifiedOIDCClaims` returns the validated
+token's selected strings and booleans, preserving absent and null separately.
+It returns no raw token or unselected claim map and confers no authorization.
+Default providers do not project claims.
+
 ## Consumer sequence
 
 1. Configure one `OIDCConfig` with explicit HTTPS authorization/token/issuer and
