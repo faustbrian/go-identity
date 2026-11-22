@@ -272,9 +272,17 @@ func (p *OAuth2UserInfoProvider) Authorization(ctx context.Context, a Authorizat
 	if closed {
 		return AuthorizationRequest{}, failure(InvalidInput, ctx)
 	}
-	c := p.config
-	q := url.Values{"response_type": {"code"}, "response_mode": {"query"}, "client_id": {c.ClientID}, "redirect_uri": {c.RedirectURI}, "scope": {strings.Join(c.Scopes, " ")}, "state": {a.State}, "code_challenge": {a.PKCEChallenge}, "code_challenge_method": {"S256"}}
-	return AuthorizationRequest{c.AuthorizationEndpoint + "?" + q.Encode()}, nil
+	return renderOAuth2Authorization(p.profile.Profile, a), nil
+}
+
+func renderOAuth2Authorization(profile ProviderProfile, a AuthorizationParameters) AuthorizationRequest {
+	q := url.Values{
+		"response_type": {"code"}, "response_mode": {"query"},
+		"client_id": {profile.ClientID}, "redirect_uri": {profile.RedirectURI},
+		"scope": {strings.Join(profile.Scopes, " ")}, "state": {a.State},
+		"code_challenge": {a.PKCEChallenge}, "code_challenge_method": {"S256"},
+	}
+	return AuthorizationRequest{profile.AuthorizationEndpoint + "?" + q.Encode()}
 }
 
 // Exchange makes one token request then one bearer UserInfo request. Callers

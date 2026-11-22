@@ -51,6 +51,23 @@ func sharedOAuth2UserInfoProfileValid(facts OAuth2UserInfoProfile) bool {
 		d.ProofLifetime >= time.Second && d.ProofLifetime <= 20*time.Second
 }
 
+// SharedOAuth2Authorization validates secret-free shared-redirect profile facts
+// and builds the fixed code/query/S256 URL without opening credentials or doing
+// I/O. State and challenge must be canonical 32-byte encodings from the caller's
+// original transaction; nonce is rejected. Invalid facts/parameters return
+// InvalidInput. Cancellation of a valid call returns Unavailable with its cause.
+// Inputs must not be mutated during the call. Profile shape is not transaction,
+// credential, callback or exchange authority; native binding remains required.
+func SharedOAuth2Authorization(ctx context.Context, profile OAuth2UserInfoProfile, a AuthorizationParameters) (AuthorizationRequest, error) {
+	if ctx == nil || !sharedOAuth2UserInfoProfileValid(profile) || a.Nonce != "" || !canonical32(a.State) || !canonical32(a.PKCEChallenge) {
+		return AuthorizationRequest{}, failure(InvalidInput, ctx)
+	}
+	if ctx.Err() != nil {
+		return AuthorizationRequest{}, failure(Unavailable, ctx)
+	}
+	return renderOAuth2Authorization(profile.Profile, a), nil
+}
+
 // Profile returns detached base facts for ParseSharedOAuth2QueryCallback.
 // Native composition must separately bind the configured identity resource,
 // claim selection, credential generation and original transaction.

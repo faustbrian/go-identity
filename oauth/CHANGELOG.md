@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add pure shared-redirect OAuth2 authorization rendering from validated
+  secret-free profile facts and original state/S256 challenge, without opening
+  credentials or starting a provider. Existing instance lifecycle checks and
+  distinct-route social behavior remain unchanged.
+
 - Add a separate shared-redirect OAuth2 token and HTTPS identity-resource
   client. It checks issuer-parsed custody, exact profile, original state and
   S256 challenge before exchange; retains bounded string or integer subject
