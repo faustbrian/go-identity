@@ -4643,6 +4643,7 @@
         "github.com/faustbrian/go-rate-limit/v2",
         "github.com/faustbrian/go-secret-envelope/v2",
         "github.com/faustbrian/go-sso/oauth2",
+        "github.com/faustbrian/go-sso/oidc",
         "github.com/faustbrian/go-transactional-outbox/postgres/identity",
         "github.com/faustbrian/go-transactional-outbox/v2",
         "github.com/faustbrian/go-webauthn",

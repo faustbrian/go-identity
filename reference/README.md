@@ -137,6 +137,11 @@ provider, verified domain and existing member link remain native authorities.
 Linked-member sign-in is the default. Apply the selected Reference migration
 plan before initialization.
 
+Set `EnterpriseOIDC.StandaloneStart` to render the committed authorization
+redirect with the standalone OIDC adapter. The browser flow and native callback,
+session, linking, JIT, and role policies do not change. Leave it unset for the
+previous renderer.
+
 Select `HTTPEnterpriseOIDC` separately to expose the browser routes. Provide
 the original-flow key index, the allowlisted application `SuccessCallback`,
 and the secure CSRF cookie policy, and select

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in standalone OIDC rendering for enterprise start while retaining
+  the native callback, first-login provisioning, role synchronization and
+  explicit account linking owners.
+
 - Use the same standalone OAuth2 adapter for opt-in enterprise start and
   callback without changing the original PostgreSQL reservation or browser flow.
 

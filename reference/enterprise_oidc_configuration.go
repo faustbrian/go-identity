@@ -32,6 +32,10 @@ type EnterpriseOIDCConfiguration struct {
 	Routing    ssopg.ProviderRouterConfig
 	Login      ssopg.ProviderLoginConfig
 	Completion ssopg.ProviderLoginCompletionConfig
+	// StandaloneStart selects the standalone OIDC renderer for the committed
+	// authorization redirect. The callback and member policy remain native.
+	// Leave false to retain the previous renderer for existing installations.
+	StandaloneStart bool
 	// RoleSync optionally replaces provider-owned custom role grants during
 	// the existing callback. It requires this provider's exact pinned mapping
 	// and a configured organization dynamic-role permission owner.
@@ -231,6 +235,12 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 	complete, err := composeEnterpriseOIDCCompletion(start, n, c.Organization.Core, profile)
 	if err != nil {
 		return nil, err
+	}
+	if n.StandaloneStart {
+		start, complete, err = complete.WithOIDCStartAdapter(newEnterpriseOIDCStartAdapter)
+		if err != nil {
+			return nil, err
+		}
 	}
 	profile.Scopes = slices.Clone(profile.Scopes)
 	state := &enterpriseOIDCState{start: start, completion: complete, profile: profile, tenant: n.Login.TenantID, origin: n.Login.Origin,
