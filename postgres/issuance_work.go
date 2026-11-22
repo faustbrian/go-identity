@@ -169,7 +169,7 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 	}
 	v, payload := d.plan.Grants[index], grant.Payload()
 	subject := string(w.state.binding.UserID)
-	if w.state.binding.OperationID == "identity.account.link-start" || w.state.binding.OperationID == "identity.oauth.signin-start" {
+	if w.state.binding.OperationID == "identity.account.link-start" || w.state.binding.OperationID == "identity.oauth.signin-start" || w.state.binding.OperationID == "identity.sso.signin-start" {
 		var err error
 		subject, err = oauthRPInitiationGrantSubject(w.state.binding, w.state.execution.reservation.plan.snapshot(), payload)
 		if err != nil {

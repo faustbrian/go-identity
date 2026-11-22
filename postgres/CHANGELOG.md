@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support the exact admission-gated enterprise OIDC start profile and its
+  original, one-use callback state purpose. Install the additive
+  `SSOOIDCPreparationErasureMigrationSource` before opting in to an enterprise
+  writer; terminalization erases temporary output without changing the receipt.
+
 - Add explicitly selected canonical POST correlation without a client key or
   alias. Versioned repeat operations retain one original command and prepared
   input; prepared-input recovery and namespace isolation continue to use the

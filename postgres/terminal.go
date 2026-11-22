@@ -67,7 +67,7 @@ FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR
 	// detection uses row metadata so ordinary schemas need no optional columns;
 	// scope-only recovery does not require the original request's secret input.
 	preparationErasure := ""
-	if oauthRPInitiationClaim(q) || eraseAccountPreparation {
+	if oauthRPInitiationClaim(q) || ssoOIDCStartClaim(q) || eraseAccountPreparation {
 		preparationErasure = ",preparation_ciphertext=NULL,preparation_ciphertext_generation=NULL"
 	}
 	// Ordinary installations need not select the optional preparation schema.

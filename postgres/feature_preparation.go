@@ -228,6 +228,9 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
+	if ssoOIDCStartClaim(q) && !gated {
+		return result, invalidPreparation()
+	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
 	if err != nil || r.journal.disposition != journalOwned {
 		return result, err
@@ -346,6 +349,9 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if !ok || p.Feature == nil || p.Feature.Operation != s.Operation || p.Delivery != nil || preparationProtected(p) || p.SubjectType == "" || validateOrganizationInvitationOriginCommand(original, p) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
+	if ssoOIDCStartSelected(p) && !validSSOOIDCStart(s.Binding, p) {
+		return q, nil, nil, invalidPreparation()
+	}
 	entry, e := c.registry.selectFeatureOperation(*p.Feature)
 	if e != nil {
 		return q, nil, nil, invalidPreparation()
@@ -423,11 +429,16 @@ func preparationRetainsDeclaration(p CommandPlan) bool {
 	// The OAuth Authentication/BeforeCredential profile uses retained external
 	// admission, not protected-mutation counters. Its state is nevertheless
 	// reserved before exchange, so recovery needs the same frozen declaration.
-	return p.CommandCounters != nil || oauthSigninPreparation(p)
+	// Enterprise OIDC start likewise retains its admission-gated declaration
+	// through terminal state issuance and temporary output erasure.
+	return p.CommandCounters != nil || oauthSigninPreparation(p) || ssoOIDCStartSelected(p)
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
 	if oauthRPInitiationSelected(original) && (!validOAuthRPInitiation(b, original) || !validOAuthRPInitiation(b, final) || final.CapabilityIssuance == nil) {
+		return false
+	}
+	if ssoOIDCStartSelected(original) && (!validSSOOIDCStart(b, original) || !validSSOOIDCStart(b, final) || final.CapabilityIssuance == nil) {
 		return false
 	}
 	if (original.APIKeyVerification == nil) != (final.APIKeyVerification == nil) || original.APIKeyVerification != nil && *original.APIKeyVerification != *final.APIKeyVerification {
@@ -458,8 +469,16 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	// original admission stays issuance-free and cannot introduce consumption.
 	withoutIssuance := final
 	withoutIssuance.CapabilityIssuance = nil
-	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) && !validOrganizationInvitationIssuance(b, final) && !phoneResetRequestPreparation(final) && !validAnonymousUpgradePreparation(b, final) && !validOAuthRPInitiation(b, final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
-		return false
+	if i := final.CapabilityIssuance; i != nil {
+		if !validCapabilityIssuancePlan(i) {
+			return false
+		}
+		selectedIssuance := final.MFAContinuation != nil || i.RegistrationUserID != "" || i.ResetRecipientUserID != "" || i.MagicLinkRecipientUserID != "" ||
+			validManagedEmailIssuance(b, final) || validOrganizationInvitationIssuance(b, final) || phoneResetRequestPreparation(final) ||
+			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validSSOOIDCStart(b, final)
+		if !selectedIssuance || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final) {
+			return false
+		}
 	}
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || original.MagicLinkRequestAcceptance != final.MagicLinkRequestAcceptance || len(original.Audits) != len(final.Audits) {
 		return false

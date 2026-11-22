@@ -38,17 +38,25 @@ func oauthProviderRefreshPreparationClaim(q claimRequest) bool {
 const oauthRPMaximumStateLifetime = 10 * time.Minute
 
 func oauthRPInitiationGrantSubject(b identity.CommandBinding, p CommandPlan, payload capability.Payload) (string, error) {
-	if !validOAuthRPInitiation(b, p) || p.CapabilityIssuance == nil {
+	enterprise := b.OperationID == "identity.sso.signin-start"
+	if p.CapabilityIssuance == nil || (enterprise && !validSSOOIDCStart(b, p)) || (!enterprise && !validOAuthRPInitiation(b, p)) {
 		return "", invalidWork()
 	}
 	subject := string(b.UserID)
-	if b.OperationID == "identity.oauth.signin-start" {
+	if enterprise || b.OperationID == "identity.oauth.signin-start" {
 		// A capability subject is an opaque scope string. An anonymous flow is
 		// not a local user and must never enter a UserID override or user fence.
 		subject = b.AnonymousFlowID
 	}
+	purpose := "identity.oauth.callback"
+	if enterprise {
+		purpose = "identity.sso.oidc-callback"
+		if payload.CorrelationID != b.CorrelationID {
+			return "", invalidWork()
+		}
+	}
 	meta := p.CapabilityIssuance.Grants[0]
-	if payload.Subject != subject || payload.Tenant != string(b.TenantID) || payload.Resource != b.RecordID || payload.ID != meta.CapabilityID || payload.Operation != "identity.oauth.callback" || payload.Bearer || payload.MaxUses != 1 || !payload.ExpiresAt.Equal(meta.ExpiresAt) || payload.IssuedAt.Location() != time.UTC || payload.IssuedAt.Nanosecond() != 0 || payload.IssuedAt.Unix() <= 0 || !payload.NotBefore.Equal(payload.IssuedAt) || !payload.ExpiresAt.After(payload.IssuedAt) || payload.ExpiresAt.Sub(payload.IssuedAt) > oauthRPMaximumStateLifetime {
+	if payload.Subject != subject || payload.Tenant != string(b.TenantID) || payload.Resource != b.RecordID || payload.ID != meta.CapabilityID || payload.Operation != purpose || payload.Bearer || payload.MaxUses != 1 || !payload.ExpiresAt.Equal(meta.ExpiresAt) || payload.IssuedAt.Location() != time.UTC || payload.IssuedAt.Nanosecond() != 0 || payload.IssuedAt.Unix() <= 0 || !payload.NotBefore.Equal(payload.IssuedAt) || !payload.ExpiresAt.After(payload.IssuedAt) || payload.ExpiresAt.Sub(payload.IssuedAt) > oauthRPMaximumStateLifetime {
 		return "", invalidWork()
 	}
 	return subject, nil

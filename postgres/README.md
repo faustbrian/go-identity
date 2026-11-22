@@ -38,6 +38,26 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
+## Enterprise OIDC start preparation
+
+The exact native `sso/postgres` contributor `sso.oidc-login-start` version 1
+uses `ExecutePreparedFeature` for enterprise OIDC start. Its frozen feature is
+`identity.sso.signin-start` (`identity.sso.signin-start.oidc-v1`), with an exact
+service actor and original pre-authentication flow, no user target, and a record
+ID equal to the server's start command ID. It uses admission-gated preparation
+with a retained declaration. Attachment authorizes one non-bearer state grant
+for `identity.sso.oidc-callback`, bound to the original tenant, flow, transaction
+and correlation; it does not select a user or grant a session.
+
+Install `SSOOIDCPreparationErasureMigrationSource` after
+`OAuthProviderRefreshErasureMigrationSource` before enabling this native writer.
+The forward migration replaces the existing guard, with no row rewrite or
+backfill. Once a definitive receipt commits, the journal retains original
+correlation and the receipt but erases its temporary sealed output. The native
+login record is the sole remaining owner; pending and uncertain work preserve
+the original encrypted output without regeneration. This infrastructure does
+not add callable SSO initiation, callback, or session behavior on its own.
+
 ## API-key permission maintenance recovery
 
 Organization-owned maintenance explicitly selects
