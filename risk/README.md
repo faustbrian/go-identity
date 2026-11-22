@@ -939,7 +939,10 @@ own Privileged reservation bound to the original operation. It requires the
 same signals and counter dimensions as registration; neither operation's
 reservation can authorize the other. The SSO owner still checks current
 organization write permission and provider state. Enablement and credential
-rotation remain separate and are not selected by this entry.
+rotation remain separate and are not selected by this entry. The exact
+`identity.sso.provider.credentials-rotate` entry uses the same Privileged
+profile with its own operation-bound counters. It grants no authority to update
+metadata, enable a provider, or bypass the SSO owner's fresh credentials policy.
 
 Digest-only legacy API-key import (`identity.apikey.import`) uses the existing
 CredentialMutation reservation profile, with tenant, current user, original

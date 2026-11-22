@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit the exact SSO provider credential rotation through privileged,
+  operation-bound counters without granting organization credentials authority.
+
 - Apply operation-bound credential-mutation risk and counters to stored OAuth
   provider-token refresh before the provider request.
 

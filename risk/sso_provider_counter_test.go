@@ -95,11 +95,47 @@ func TestOIDCProviderUpdateRequiresItsOwnProtectedAdmission(t *testing.T) {
 	if counters.Validate(command, registration, subject, scope.Now) == nil {
 		t.Fatal("update reservation authorized provider registration")
 	}
-	for _, operation := range []Action{"identity.sso.provider.enable", "identity.sso.provider.credentials-rotate", "identity.sso.provider.update "} {
+	for _, operation := range []Action{"identity.sso.provider.enable", "identity.sso.provider.credentials-rotate ", "identity.sso.provider.update "} {
 		unselected := scope
 		unselected.Operation = operation
 		if _, err := counters.Prepare(unselected, subject, scope.Now); err == nil {
 			t.Fatalf("unselected operation %q obtained provider update counters", operation)
+		}
+	}
+}
+
+func TestOIDCProviderCredentialRotationUsesItsOwnProtectedAdmission(t *testing.T) {
+	policy := testPolicy(t)
+	scope := testContext()
+	scope.Operation = "identity.sso.provider.credentials-rotate"
+	subject := Subject{Actor: "organization-admin", Resource: "disabled-provider", Network: "192.0.2.1"}
+	key, err := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counters, err := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: policy, Keys: []CounterDigestKey{key}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := testSignal(scope, "status", SignalClean)
+	captcha := testSignal(scope, "captcha", SignalClean)
+	withoutCaptcha, err := policy.Assess(context.Background(), scope, []Signal{status})
+	if err != nil || withoutCaptcha.Decision.Action != Deny {
+		t.Fatalf("missing current signal granted rotation admission: %v (%v)", withoutCaptcha.Decision.Action, err)
+	}
+	current, err := policy.Assess(context.Background(), scope, []Signal{status, captcha})
+	if err != nil || current.Decision.Action != Allow {
+		t.Fatalf("exact credential rotation could not reach privileged admission: %v (%v)", current.Decision.Action, err)
+	}
+	command, err := counters.Prepare(scope, subject, scope.Now)
+	if err != nil || command.Bindings().Phase != ReserveWithCommand || len(command.Bindings().Targets) != 4 || counters.Validate(command, scope, subject, scope.Now) != nil {
+		t.Fatal("credential rotation did not receive exact protected counters", err)
+	}
+	for _, action := range []Action{"identity.sso.provider.update", "identity.sso.provider.register-oidc"} {
+		other := scope
+		other.Operation = action
+		if counters.Validate(command, other, subject, scope.Now) == nil {
+			t.Fatalf("credential rotation custody authorized %q", action)
 		}
 	}
 }

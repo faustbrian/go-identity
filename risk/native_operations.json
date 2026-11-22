@@ -14,6 +14,7 @@
   "identity.organization.role.assign": "privileged",
   "identity.organization.role.revoke": "privileged",
   "identity.passkey.list": "state_neutral_read",
+  "identity.sso.provider.credentials-rotate": "privileged",
   "identity.sso.provider.register-oidc": "privileged",
   "identity.sso.provider.update": "privileged",
   "identity.username.available": "state_neutral_read"
