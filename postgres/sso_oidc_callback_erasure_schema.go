@@ -21,7 +21,24 @@ func (s SSOOIDCCallbackPreparationErasureMigrationSource) Load(ctx context.Conte
 	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_oidc_callback_preparation_erasure", ssoOIDCCallbackPreparationErasureSQL)
 }
 
-const ssoOIDCCallbackPreparationErasureSQL = `SET LOCAL lock_timeout = '5s';
+// SSOOAuth2CallbackPreparationErasureMigrationSource extends terminal-only
+// custody erasure to the separate OAuth 2.0 callback. Append after
+// SSOOIDCCallbackPreparationErasureMigrationSource before enabling the native
+// OAuth writer. It does not rewrite pending or historical rows.
+type SSOOAuth2CallbackPreparationErasureMigrationSource struct {
+	Base    migrations.Source
+	Version migrations.Version
+}
+
+// Load appends only the forward trigger-function update; it performs no I/O.
+func (s SSOOAuth2CallbackPreparationErasureMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
+	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_oauth2_callback_preparation_erasure", ssoOAuth2CallbackPreparationErasureSQL)
+}
+
+const ssoOIDCCallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose='identity.sso.oidc-callback'` + ssoCallbackPreparationErasureSuffix
+const ssoOAuth2CallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback')` + ssoCallbackPreparationErasureSuffix
+
+const ssoCallbackPreparationErasurePrefix = `SET LOCAL lock_timeout = '5s';
 CREATE OR REPLACE FUNCTION identity.guard_command_preparation() RETURNS trigger
  LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog AS $$
 DECLARE
@@ -30,7 +47,8 @@ DECLARE
   OR (OLD.purpose='identity.account.unlink' AND OLD.preparation_profile=6);
  provider_refresh boolean := OLD.purpose='identity.account.refresh-token' AND OLD.preparation_profile IN(2,4);
  enterprise_start boolean := OLD.purpose='identity.sso.signin-start' AND OLD.preparation_profile=4;
- enterprise_callback boolean := OLD.purpose='identity.sso.oidc-callback' AND OLD.preparation_profile=4;
+ enterprise_callback boolean := `
+const ssoCallbackPreparationErasureSuffix = ` AND OLD.preparation_profile=4;
  erasing boolean := ((rp_start AND OLD.preparation_profile IN(1,2,3,4)) OR account_preparation OR provider_refresh OR enterprise_start OR enterprise_callback)
   AND OLD.state='pending' AND NEW.state IN('committed','aborted')
   AND NEW.preparation_ciphertext IS NULL AND NEW.preparation_ciphertext_generation IS NULL;

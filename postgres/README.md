@@ -86,6 +86,25 @@ rows. A definitive callback receipt erases temporary encrypted output and its
 generation in the same transaction. Pending or unknown callbacks retain the
 original custody. Disable the writer for rollback and keep the forward guard.
 
+### Separate enterprise OAuth 2.0 callback consumption
+
+`SSOOAuth2SigninOperation` selects `identity.sso.oauth-callback` and the exact
+`sso.oauth2-login-callback` contributor. This profile requires its original
+anonymous pre-auth flow, distinct start record, matching one-use plan and
+admission-gated preparation. `Work.SSOOAuth2SigninConsumption` is available only
+during the registered owner's Apply. `SSOOAuth2SigninAccountFields` binds the
+verified linked account observation; `Work.RequireSSOOAuth2SigninProviderAccount`
+holds the existing identity account/credential locks through the final check.
+None of these entry points exchange a code, select membership or issue a session.
+
+Append `SSOOAuth2CallbackPreparationErasureMigrationSource` after the existing
+OIDC callback guard, before enabling an OAuth callback writer. It changes only
+the trigger function, and erases temporary ciphertext only with a definitive
+receipt. Pending/unknown and previously stored OIDC history are unchanged.
+Rollback disables the new writer and leaves the additive guard installed.
+
+### OIDC refusal and account policy
+
 The exact native callback owner can implement
 `SSOOIDCPreparationRefusalContributor` to settle an authenticated definitive
 refusal. The coordinator verifies the original marked generation has no final

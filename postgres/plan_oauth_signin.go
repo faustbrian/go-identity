@@ -35,6 +35,12 @@ func providerSigninProfile(op identity.FeatureOperation) (providerSigninConsumpt
 			SubjectType: "sso_login_transaction", AuditEvent: "identity.sso.login", AuditRetention: "protected", WireTag: "identity-sso-oidc-signin-consumption-v1", ExternalRiskOnly: true,
 			Lifecycle: LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2},
 		}, true
+	case SSOOAuth2SigninOperation():
+		return providerSigninConsumptionProfile{
+			Contrib:     ssoOAuth2SigninDescriptor(),
+			SubjectType: "sso_login_transaction", AuditEvent: "identity.sso.login", AuditRetention: "protected", WireTag: "identity-sso-oauth2-signin-consumption-v1", ExternalRiskOnly: true,
+			Lifecycle: LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2},
+		}, true
 	case SSOOIDCExplicitLinkCallbackOperation():
 		return providerSigninConsumptionProfile{
 			Contrib:     ssoOIDCSigninDescriptor(),
@@ -52,7 +58,7 @@ func providerSigninConsumptionOperation(op identity.FeatureOperation) bool {
 }
 
 func providerSigninBindingOperation(b identity.CommandBinding) (identity.FeatureOperation, bool) {
-	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
+	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation(), SSOOAuth2SigninOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
 		if b.OperationID == op.OperationID && b.SchemaID == op.SchemaID {
 			return op, true
 		}

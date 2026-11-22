@@ -159,7 +159,7 @@ VALUES('tenant-a','owner','local-credential',1,'identity/password',1,true)`} {
 				t.Fatal(err)
 			}
 			phase := &explicitLinkCoordinatorPhase{
-				enterpriseSigninAuthenticationPreparation: enterpriseSigninAuthenticationPreparation{&enterpriseSigninPreparation{&signinPreparationPhase{}}},
+				enterpriseSigninAuthenticationPreparation: enterpriseSigninAuthenticationPreparation{&enterpriseSigninPreparation{signinPreparationPhase: &signinPreparationPhase{}}},
 				repository: repository, intent: intent, withdrawActor: withdrawActor,
 			}
 			capability := &signinPreparationCapability{}

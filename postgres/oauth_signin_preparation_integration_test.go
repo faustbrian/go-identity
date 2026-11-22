@@ -58,17 +58,33 @@ func (*signinPreparationPhase) apply(ctx context.Context, w Work, command identi
 // cryptographic admission or canonical counter algorithms.
 type signinAuthenticationPreparation struct{ *signinPreparationPhase }
 
-type enterpriseSigninPreparation struct{ *signinPreparationPhase }
+type enterpriseSigninPreparation struct {
+	*signinPreparationPhase
+	oauth2 bool
+}
 
-func (*enterpriseSigninPreparation) Descriptor() ContributorDescriptor {
+func (p *enterpriseSigninPreparation) Descriptor() ContributorDescriptor {
+	if p.oauth2 {
+		return ssoOAuth2SigninDescriptor()
+	}
 	return ssoOIDCSigninDescriptor()
 }
-func (*enterpriseSigninPreparation) FeatureOperations() []identity.FeatureOperation {
+func (p *enterpriseSigninPreparation) FeatureOperations() []identity.FeatureOperation {
+	if p.oauth2 {
+		return []identity.FeatureOperation{SSOOAuth2SigninOperation()}
+	}
 	return []identity.FeatureOperation{ssoOIDCSigninOperation()}
 }
-func (*enterpriseSigninPreparation) ValidateSSOOIDCSigninConsumption(command identity.Command, plan CapabilityPlan) error {
+func (p *enterpriseSigninPreparation) ValidateSSOOIDCSigninConsumption(command identity.Command, plan CapabilityPlan) error {
 	spec, ok := command.Feature()
-	if !ok || !validSSOOIDCSigninBinding(spec.Binding) || plan.Purpose != ssoOIDCSigninPurpose {
+	if p.oauth2 || !ok || !validSSOOIDCSigninBinding(spec.Binding) || plan.Purpose != ssoOIDCSigninPurpose {
+		return invalidWork()
+	}
+	return nil
+}
+func (p *enterpriseSigninPreparation) ValidateSSOOAuth2SigninConsumption(command identity.Command, plan CapabilityPlan) error {
+	spec, ok := command.Feature()
+	if !p.oauth2 || !ok || !validSSOOAuth2SigninBinding(spec.Binding) || plan.Purpose != ssoOAuth2SigninPurpose {
 		return invalidWork()
 	}
 	return nil
@@ -81,9 +97,13 @@ func (p *enterpriseSigninPreparation) apply(ctx context.Context, w Work, command
 	if _, err := w.OAuthSigninConsumption(owner); err == nil {
 		return identity.FeatureReceipt{}, invalidWork()
 	}
-	consumed, err := w.SSOOIDCSigninConsumption(owner)
+	consume, purpose := w.SSOOIDCSigninConsumption, ssoOIDCSigninPurpose
+	if p.oauth2 {
+		consume, purpose = w.SSOOAuth2SigninConsumption, ssoOAuth2SigninPurpose
+	}
+	consumed, err := consume(owner)
 	spec, ok := command.Feature()
-	if err != nil || !ok || consumed.Command != spec.Binding || consumed.Plan.Purpose != ssoOIDCSigninPurpose || consumed.Generation != 2 {
+	if err != nil || !ok || consumed.Command != spec.Binding || string(consumed.Plan.Purpose) != purpose || consumed.Generation != 2 {
 		return identity.FeatureReceipt{}, invalidWork()
 	}
 	_, err = w.Exec(ctx, `INSERT INTO public.signin_session_effect(command_id) VALUES($1)`, string(spec.Binding.CommandID))
@@ -220,7 +240,7 @@ func (p *signinPreparationCapability) ReleaseCapability(ctx context.Context, w C
 func TestOAuthSigninPreparationReservesStateBeforeGenerationAndRebindsOnce(t *testing.T) {
 	for _, mode := range []string{"committed", "late-native-denial", "finalization-denial"} {
 		t.Run(mode, func(t *testing.T) {
-			testProviderSigninPreparedExecution(t, mode, false)
+			testProviderSigninPreparedExecution(t, mode, "")
 		})
 	}
 }
@@ -228,7 +248,7 @@ func TestOAuthSigninPreparationReservesStateBeforeGenerationAndRebindsOnce(t *te
 func TestOAuthSigninAuthenticationPreparationRequiresGatedOriginalState(t *testing.T) {
 	for _, mode := range []string{"authentication-admission", "missing-authentication-admission", "generic-authentication-bypass", "expired-authentication-admission"} {
 		t.Run(mode, func(t *testing.T) {
-			testProviderSigninPreparedExecution(t, mode, false)
+			testProviderSigninPreparedExecution(t, mode, "")
 		})
 	}
 }
@@ -236,12 +256,20 @@ func TestOAuthSigninAuthenticationPreparationRequiresGatedOriginalState(t *testi
 func TestSSOOIDCSigninAuthenticationPreparationRequiresGatedOriginalState(t *testing.T) {
 	for _, mode := range []string{"authentication-admission", "missing-authentication-admission", "generic-authentication-bypass", "expired-authentication-admission"} {
 		t.Run(mode, func(t *testing.T) {
-			testProviderSigninPreparedExecution(t, mode, true)
+			testProviderSigninPreparedExecution(t, mode, "oidc")
 		})
 	}
 }
 
-func testProviderSigninPreparedExecution(t *testing.T, mode string, enterprise bool) {
+func TestSSOOAuth2SigninAuthenticationPreparationRequiresGatedOriginalState(t *testing.T) {
+	for _, mode := range []string{"authentication-admission", "missing-authentication-admission", "generic-authentication-bypass", "expired-authentication-admission"} {
+		t.Run(mode, func(t *testing.T) {
+			testProviderSigninPreparedExecution(t, mode, "oauth2")
+		})
+	}
+}
+
+func testProviderSigninPreparedExecution(t *testing.T, mode, protocol string) {
 	ctx, pool, repo := newAccountAuthorityStore(t)
 	for _, schema := range []string{preparationSchemaSQL, admissionPreparationSchemaSQL, counterPreparationSchemaSQL, `CREATE TABLE public.signin_preparation_state(command_id text PRIMARY KEY,fingerprint bytea NOT NULL,generation numeric NOT NULL,state text NOT NULL);
 CREATE TABLE public.signin_session_effect(command_id text PRIMARY KEY);
@@ -261,11 +289,16 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 		native = &signinAuthenticationPreparation{phase}
 	}
 	spec, command := signinAccountCommand(t, signinAccountFixture())
-	if enterprise {
-		if _, err := pool.Raw().Exec(ctx, ssoOIDCCallbackPreparationErasureSQL); err != nil {
+	if protocol != "" {
+		startBound, enterprisePlan := ssoOIDCSigninPlanFixture(t)
+		erasure := ssoOIDCCallbackPreparationErasureSQL
+		if protocol == "oauth2" {
+			startBound, enterprisePlan = ssoOAuth2SigninPlanFixture(t)
+			erasure = ssoOAuth2CallbackPreparationErasureSQL
+		}
+		if _, err := pool.Raw().Exec(ctx, erasure); err != nil {
 			t.Fatal("enterprise callback erasure schema", err)
 		}
-		startBound, enterprisePlan := ssoOIDCSigninPlanFixture(t)
 		plan = enterprisePlan
 		spec = identity.FeatureCommandSpec{Binding: startBound, Operation: plan.Feature.Operation}
 		cookie, _ := command.PreAuthCookie()
@@ -274,7 +307,7 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 		if err != nil {
 			t.Fatal("construct enterprise callback", err)
 		}
-		enterprisePhase := &enterpriseSigninPreparation{phase}
+		enterprisePhase := &enterpriseSigninPreparation{signinPreparationPhase: phase, oauth2: protocol == "oauth2"}
 		native = enterprisePhase
 		if mode != "missing-authentication-admission" {
 			native = &enterpriseSigninAuthenticationPreparation{enterprisePhase}

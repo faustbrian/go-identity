@@ -18,8 +18,17 @@ import (
 // These opaque synthetic bytes isolate the journal's duplicate-custody lifetime
 // under its actual terminal owner, not token encryption or provider behavior.
 func TestSSOOIDCCallbackJournalErasesOnlyTerminalProfileFour(t *testing.T) {
+	testSSOCallbackJournalErasure(t, false, []int16{4, 2})
+}
+
+func TestSSOOAuth2CallbackJournalErasesOnlyAfterDefinitiveCommit(t *testing.T) {
+	testSSOCallbackJournalErasure(t, true, []int16{4})
+}
+
+func testSSOCallbackJournalErasure(t *testing.T, oauth2 bool, profiles []int16) {
+	t.Helper()
 	for _, committed := range []bool{true, false} {
-		for _, profile := range []int16{4, 2} {
+		for _, profile := range profiles {
 			name := "aborted"
 			if committed {
 				name = "committed"
@@ -39,7 +48,11 @@ func TestSSOOIDCCallbackJournalErasesOnlyTerminalProfileFour(t *testing.T) {
 
 				binding, plan := ssoOIDCSigninPlanFixture(t)
 				op := ssoOIDCSigninOperation()
-				if plan.Feature.Operation != op || !validSSOOIDCSigninBinding(binding) {
+				if oauth2 {
+					binding, plan = ssoOAuth2SigninPlanFixture(t)
+					op = SSOOAuth2SigninOperation()
+				}
+				if plan.Feature.Operation != op || !validEnterpriseSigninBinding(binding, op) {
 					t.Fatal("fixture lost the exact enterprise callback operation")
 				}
 				q := claimRequest{commandID: binding.CommandID, tenant: binding.TenantID, purpose: binding.OperationID, feature: &op, canonical: []byte{0xa0}, safeFields: commandSafeFields(binding, &op)}
@@ -84,7 +97,8 @@ func TestSSOOIDCCallbackJournalErasesOnlyTerminalProfileFour(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				installUnlinkPreparationHistory(t, ctx, pool, SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 24})
+				oidc := SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 24}
+				installUnlinkPreparationHistory(t, ctx, pool, oidc)
 				assertPending := func() {
 					t.Helper()
 					var stored, originalDeclaration, originalPlan, receipt []byte
@@ -122,6 +136,22 @@ func TestSSOOIDCCallbackJournalErasesOnlyTerminalProfileFour(t *testing.T) {
 					class, state = "committed", "committed"
 					result.Outcome, result.AuditEventID = identity.CommitOutcomeCommitted, "callback-audit"
 					result.Feature.BeforeVersion, result.Feature.AfterVersion = 1, 2
+				}
+				if oauth2 {
+					beforeExpansion, err := pool.Raw().Begin(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					err = terminalizeJournal(ctx, beforeExpansion, q, reservation.journal, owner, result, class)
+					if rollbackErr := beforeExpansion.Rollback(ctx); rollbackErr != nil {
+						t.Fatal(rollbackErr)
+					}
+					if err == nil {
+						t.Fatal("prior guard allowed OAuth callback to discard custody before migration")
+					}
+					assertPending()
+					installUnlinkPreparationHistory(t, ctx, pool, SSOOAuth2CallbackPreparationErasureMigrationSource{Base: oidc, Version: 25})
+					assertPending()
 				}
 				rolledBack, err := pool.Raw().Begin(ctx)
 				if err != nil {

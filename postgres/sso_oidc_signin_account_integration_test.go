@@ -13,6 +13,15 @@ import (
 // Primary admission borrows the existing identity lock order. The known-owner
 // fixture observes that narrow fence, not protocol proof or session issuance.
 func TestSSOOIDCSigninAccountPrimaryFence(t *testing.T) {
+	testSSOSigninAccountPrimaryFence(t, false, []string{"apply", "final", "blocked", "disabled", "expired", "unlinked", "missing-association", "stale-account", "stale-link", "stale-credential", "stale-user", "stale-identifier", "stale-credential-epoch"})
+}
+
+func TestSSOOAuth2SigninAccountPrimaryFence(t *testing.T) {
+	testSSOSigninAccountPrimaryFence(t, true, []string{"apply", "final", "blocked", "unlinked", "stale-credential"})
+}
+
+func testSSOSigninAccountPrimaryFence(t *testing.T, oauth2 bool, modes []string) {
+	t.Helper()
 	ctx, pool, repository := newAccountAuthorityStore(t)
 	exec := func(sql string) {
 		t.Helper()
@@ -27,7 +36,7 @@ INSERT INTO identity.accounts(tenant_id,user_id,account_id,provider,issuer,subje
 SELECT 'tenant','selected-user','account',provider,issuer,subject,sha256(convert_to(octet_length(provider)::text||':'||provider||octet_length(issuer)::text||':'||issuer||octet_length(subject)::text||':'||subject,'UTF8')),5,7,true FROM metadata;
 INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant','selected-user','provider-ref','account')`)
 	q := ProviderSigninAccountQuery{TenantID: "tenant", Provider: "sso-organization-provider", Issuer: "https://issuer.example", Subject: "subject"}
-	for _, mode := range []string{"apply", "final", "blocked", "disabled", "expired", "unlinked", "missing-association", "stale-account", "stale-link", "stale-credential", "stale-user", "stale-identifier", "stale-credential-epoch"} {
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			exec(`UPDATE identity.users SET status='active',authority_version=13,identifier_version=17,credential_version=19 WHERE tenant_id='tenant';
 UPDATE identity.credential_references SET enabled=true,version=11,expires_at=NULL WHERE tenant_id='tenant';
@@ -61,9 +70,15 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 			case "stale-credential-epoch":
 				exec(`UPDATE identity.users SET credential_version=20 WHERE tenant_id='tenant'`)
 			}
-			s, command := ssoOIDCSigninAccountCommand(t, expected)
-			owner := &ssoOIDCSigninAccountParticipant{}
-			_, plan := ssoOIDCSigninPlanFixture(t)
+			makeCommand, makePlan := ssoOIDCSigninAccountCommand, ssoOIDCSigninPlanFixture
+			var owner FeatureExecutionContributor = &ssoOIDCSigninAccountParticipant{}
+			require := Work.RequireSSOOIDCSigninProviderAccount
+			if oauth2 {
+				makeCommand, makePlan = ssoOAuth2SigninAccountCommand, ssoOAuth2SigninPlanFixture
+				owner, require = &ssoOAuth2SigninAccountParticipant{}, Work.RequireSSOOAuth2SigninProviderAccount
+			}
+			s, command := makeCommand(t, expected)
+			_, plan := makePlan(t)
 			frozen := &admittedKernelPlan{binding: s.Binding, feature: plan.Feature, lifecycle: plan.Lifecycle, fingerprint: [32]byte{7}}
 			reservation := &reservationState{plan: frozen, journal: journalReservation{generation: 3}}
 			tx, err := pool.Raw().Begin(ctx)
@@ -75,7 +90,7 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 			if mode == "final" {
 				w.state.featureApplying, w.state.featureApplyCommand, w.state.featureCommitCommand = false, nil, &command
 			}
-			now, err := w.RequireSSOOIDCSigninProviderAccount(ctx, owner, command)
+			now, err := require(w, ctx, owner, command)
 			if w.state.binding != s.Binding {
 				t.Fatal("enterprise account selection retargeted original flow")
 			}
@@ -99,6 +114,12 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 				var locked *pgconn.PgError
 				if !errors.As(err, &locked) || locked.Code != "55P03" {
 					t.Fatal("enterprise authority lock escaped Work", table, err)
+				}
+			}
+			if oauth2 {
+				reconstructed := ssoOIDCAccountPreAuthCommand(t, s)
+				if _, err := require(w, ctx, owner, reconstructed); err == nil || w.state.failed == nil {
+					t.Fatal("reconstructed OAuth command acquired the original invocation")
 				}
 			}
 		})

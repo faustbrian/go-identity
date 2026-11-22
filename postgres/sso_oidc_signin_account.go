@@ -8,6 +8,7 @@ import (
 )
 
 const ssoOIDCSigninAccountPrefix = "sso.oidc.signin.account."
+const ssoOAuth2SigninAccountPrefix = "sso.oauth2.signin.account."
 
 // SSOOIDCSigninAccountFields freezes an existing SSO-owned account and every
 // independent identity epoch in the original enterprise callback intent. The
@@ -23,15 +24,31 @@ func SSOOIDCSigninAccountFields(a ProviderAccountAdmission) ([]identity.FeatureF
 // observation, not authentication; provider/profile, organization, factor and
 // policy authority remain with their owners and require primary fencing.
 func SSOOIDCSigninAccount(command identity.Command) (ProviderAccountAdmission, error) {
+	return ssoEnterpriseSigninAccount(command, ssoOIDCSigninOperation(), ssoOIDCSigninAccountPrefix, ssoOAuth2SigninAccountPrefix)
+}
+
+// SSOOAuth2SigninAccountFields freezes the exact OAuth-linked account selected
+// by verified provider-subject evidence. These fields prove no current authority.
+func SSOOAuth2SigninAccountFields(a ProviderAccountAdmission) ([]identity.FeatureField, error) {
+	return signinAccountFields(a, ssoOAuth2SigninAccountPrefix, "sso")
+}
+
+// SSOOAuth2SigninAccount decodes only the native OAuth callback's original
+// pre-authentication command and exact account snapshot, not session authority.
+func SSOOAuth2SigninAccount(command identity.Command) (ProviderAccountAdmission, error) {
+	return ssoEnterpriseSigninAccount(command, SSOOAuth2SigninOperation(), ssoOAuth2SigninAccountPrefix, ssoOIDCSigninAccountPrefix)
+}
+
+func ssoEnterpriseSigninAccount(command identity.Command, op identity.FeatureOperation, prefix, otherEnterprisePrefix string) (ProviderAccountAdmission, error) {
 	f, ok := command.Feature()
 	_, cookie := command.PreAuthCookie()
 	_, code := command.OneTimeCode()
 	_, recovery := command.RecoveryCode()
 	_, bearer := command.SessionToken()
-	if !ok || !cookie || code || recovery || bearer || f.Operation != ssoOIDCSigninOperation() || !validSSOOIDCSigninBinding(f.Binding) {
+	if !ok || !cookie || code || recovery || bearer || f.Operation != op || !validEnterpriseSigninBinding(f.Binding, op) {
 		return ProviderAccountAdmission{}, invalidWork()
 	}
-	return signinAccountFromFields(f, ssoOIDCSigninAccountPrefix, "sso", oauthSigninAccountPrefix)
+	return signinAccountFromFields(f, prefix, "sso", oauthSigninAccountPrefix, otherEnterprisePrefix)
 }
 
 // RequireSSOOIDCSigninProviderAccount fences only the exact registered native
@@ -45,6 +62,18 @@ func SSOOIDCSigninAccount(command identity.Command) (ProviderAccountAdmission, e
 // provider/profile, assertion, browser, policy and factor authority and consume
 // its original one-use state in the same transaction.
 func (w Work) RequireSSOOIDCSigninProviderAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command) (time.Time, error) {
+	return w.requireSSOSigninProviderAccount(ctx, owner, command, ssoOIDCSigninOperation(), SSOOIDCSigninAccount)
+}
+
+// RequireSSOOAuth2SigninProviderAccount fences the selected linked account in
+// the original OAuth Apply or final check. It borrows the existing identity
+// locks, preserves the anonymous invocation, and cannot refresh evidence or
+// select an account from browser input.
+func (w Work) RequireSSOOAuth2SigninProviderAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command) (time.Time, error) {
+	return w.requireSSOSigninProviderAccount(ctx, owner, command, SSOOAuth2SigninOperation(), SSOOAuth2SigninAccount)
+}
+
+func (w Work) requireSSOSigninProviderAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command, op identity.FeatureOperation, decode func(identity.Command) (ProviderAccountAdmission, error)) (time.Time, error) {
 	if err := w.usable(); err != nil {
 		return time.Time{}, err
 	}
@@ -65,10 +94,10 @@ func (w Work) RequireSSOOIDCSigninProviderAccount(ctx context.Context, owner Fea
 	} else if w.state.featureCommitCommand == nil || *w.state.featureCommitCommand != command {
 		return time.Time{}, w.fail(ctx, invalidWork())
 	}
-	expected, decodeErr := SSOOIDCSigninAccount(command)
+	expected, decodeErr := decode(command)
 	spec, _ := command.Feature()
-	profile, _ := providerSigninProfile(ssoOIDCSigninOperation())
-	if decodeErr != nil || spec.Binding != b || feature.Operation != ssoOIDCSigninOperation() || feature.Contributor != profile.Contrib || life != profile.Lifecycle {
+	profile, _ := providerSigninProfile(op)
+	if decodeErr != nil || spec.Binding != b || feature.Operation != op || feature.Contributor != profile.Contrib || life != profile.Lifecycle {
 		return time.Time{}, w.fail(ctx, invalidWork())
 	}
 	// Only the lookup selects this user. Audit, replay and every effect retain

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit the separate native enterprise OAuth 2.0 callback to the existing
+  one-use coordinator and linked-account fences. Erase temporary preparation
+  only with a definitive receipt, keeping OIDC and social custody independent.
+
 - Select a separate anonymous enterprise OAuth 2.0 start schema for one
   OAuth-only callback grant bound to the original browser flow, tenant,
   transaction and correlation. Existing OIDC and social custody are unchanged.

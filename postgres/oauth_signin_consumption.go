@@ -32,6 +32,16 @@ type SSOOIDCSigninContributor interface {
 	ValidateSSOOIDCSigninConsumption(identity.Command, CapabilityPlan) error
 }
 
+// SSOOAuth2SigninContributor is the separate native enterprise OAuth callback
+// owner. It validates the original browser and one-use proof declaration before
+// preparation and fences the verified provider subject and current membership in
+// Work. The provider exchange runs only after acknowledged reservation, never
+// while the coordinator holds primary locks.
+type SSOOAuth2SigninContributor interface {
+	FeatureCommitContributor
+	ValidateSSOOAuth2SigninConsumption(identity.Command, CapabilityPlan) error
+}
+
 // SSOOIDCExplicitLinkContributor owns only the authenticated enterprise link
 // variant. Validation must bind the original session and one-use browser
 // transaction to the same user, provider and proof. Its final Work check owns
@@ -77,6 +87,10 @@ func validateProviderSigninConsumption(owner FeatureExecutionContributor, comman
 		if native, ok := owner.(SSOOIDCSigninContributor); ok && validSSOOIDCSigninBinding(feature.Binding) {
 			return native.ValidateSSOOIDCSigninConsumption(command, *plan.Capability)
 		}
+	case SSOOAuth2SigninOperation():
+		if native, ok := owner.(SSOOAuth2SigninContributor); ok && validSSOOAuth2SigninBinding(feature.Binding) {
+			return native.ValidateSSOOAuth2SigninConsumption(command, *plan.Capability)
+		}
 	}
 	return invalidPlan()
 }
@@ -97,6 +111,13 @@ func (w Work) OAuthSigninConsumption(owner FeatureExecutionContributor) (Capabil
 // establish provider, linked-account, membership or final session authority.
 func (w Work) SSOOIDCSigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
 	return w.providerSigninConsumption(owner, ssoOIDCSigninOperation())
+}
+
+// SSOOAuth2SigninConsumption exposes the exact enterprise OAuth state consumed
+// provisionally in synchronous Apply. OIDC and social proofs, foreign Work and
+// non-Apply invocations deny; the returned copy grants no session authority.
+func (w Work) SSOOAuth2SigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
+	return w.providerSigninConsumption(owner, SSOOAuth2SigninOperation())
 }
 
 func (w Work) providerSigninConsumption(owner FeatureExecutionContributor, operation identity.FeatureOperation) (CapabilityReservationBinding, error) {

@@ -45,11 +45,11 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 		// token ciphertext just to check a journal flag.
 		e = tx.QueryRow(ctx, oauthProviderRefreshTerminalFenceSQL, id, string(q.tenant), q.purpose,
 			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseRetainedPreparation)
-	} else if ssoOIDCCallbackClaim(q) {
+	} else if ssoEnterpriseCallbackClaim(q) {
 		// Only the selected external-admission profile hands provider tokens
 		// to the native vault. Its temporary deposit must not survive the
 		// same definitive receipt; the old guard still protects other rows.
-		e = tx.QueryRow(ctx, ssoOIDCCallbackTerminalFenceSQL, id, string(q.tenant), q.purpose,
+		e = tx.QueryRow(ctx, ssoEnterpriseCallbackTerminalFenceSQL, id, string(q.tenant), q.purpose,
 			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseRetainedPreparation)
 	} else {
 		e = tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
@@ -94,6 +94,6 @@ const oauthProviderRefreshTerminalFenceSQL = `SELECT state='pending' AND generat
  coalesce(preparation_profile IN (2,4), false)
  FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`
 
-const ssoOIDCCallbackTerminalFenceSQL = `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
+const ssoEnterpriseCallbackTerminalFenceSQL = `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
  coalesce(preparation_profile=4, false)
  FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`

@@ -78,14 +78,16 @@ func OAuthSigninAccount(command identity.Command) (ProviderAccountAdmission, err
 	if !ok || !cookie || code || recovery || bearer || f.Operation != oauthSigninAccountOperation() || f.Binding.UserID != "" || f.Binding.AnonymousFlowID == "" || f.Binding.ActorKind != authorization.SubjectServiceAccount {
 		return ProviderAccountAdmission{}, invalidWork()
 	}
-	return signinAccountFromFields(f, oauthSigninAccountPrefix, "identity/oauth", ssoOIDCSigninAccountPrefix)
+	return signinAccountFromFields(f, oauthSigninAccountPrefix, "identity/oauth", ssoOIDCSigninAccountPrefix, ssoOAuth2SigninAccountPrefix)
 }
 
-func signinAccountFromFields(f identity.FeatureCommandSpec, prefix, owner, foreignPrefix string) (ProviderAccountAdmission, error) {
+func signinAccountFromFields(f identity.FeatureCommandSpec, prefix, owner string, foreignPrefixes ...string) (ProviderAccountAdmission, error) {
 	fields := make(map[string]identity.FeatureValue, 13)
 	for _, field := range f.Fields {
-		if strings.HasPrefix(field.Name, foreignPrefix) {
-			return ProviderAccountAdmission{}, invalidWork()
+		for _, foreign := range foreignPrefixes {
+			if strings.HasPrefix(field.Name, foreign) {
+				return ProviderAccountAdmission{}, invalidWork()
+			}
 		}
 		if name, selected := strings.CutPrefix(field.Name, prefix); selected {
 			fields[name] = field.Value
