@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in, counted and audited anonymous SSO discovery admission. It
+  binds only tenant, peer network and trusted browser-device counters and
+  preserves the original decision freshness through disclosure.
+
 - Admit exact SSO provider enablement through its own privileged,
   operation-bound counters without granting provider or organization authority.
 

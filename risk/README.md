@@ -54,6 +54,18 @@ durable adapter accepts opaque variable-target commands. The retained Valkey
 layout is not qualified for this new profile and fails closed; no Valkey
 discovery support or whole-unit qualification is claimed here.
 
+### Anonymous SSO discovery
+
+`NewSSODiscoveryPolicy` selects Authentication for exactly
+`identity.sso.discover`; `NewPolicy` still denies this operation before reading
+signals. Use the same selected policy for the durable counter coordinator and
+audited evaluator. `NewSSODiscoveryAdmission` rejects unevaluated startup
+composition that lacks either owner. Call `Admit` with the server-resolved
+tenant, peer network and trusted browser-device identity before routing, then
+check the original permit immediately before disclosure. Neither call accepts
+an email, identifier digest or provider choice. Signal expiry, unknown counters
+and unacknowledged audit never allow discovery. This is not login authority.
+
 ### Anonymous upgrade counters
 
 `identity.anonymous.upgrade` selects protected CredentialMutation counters,

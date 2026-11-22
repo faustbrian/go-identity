@@ -2,7 +2,7 @@
 // Owned Golib planning sources (MIT); regenerate and review all classifications.
 // PUBLIC_CONTRACTS.json SHA-256: 3364b210cb3b5753ff7dd85f11763691519c546bdd6b4220e5e544ae2bf01e05
 // REFERENCE_CONFIGURATION.md SHA-256: dc766c02baefab3b9ebd86b897891b9ea505518ea19363e2b1e083183375a514
-// risk/native_operations.json SHA-256: 261ea9a705ca2582470e7d657fad321dadb5ba62fae2ccbb7dd487c5744e709a
+// risk/native_operations.json SHA-256: b5f1c098bd335693d71ce5081deeda2ee20ebd73567ebb4b3c9e8d3113d599d8
 package risk
 
 import "time"
@@ -311,7 +311,7 @@ var canonicalOperations = map[Action]ProfileClass{
 	"identity.sso.directory-sync-cancel":                DefaultDeny,
 	"identity.sso.directory-sync-start":                 DefaultDeny,
 	"identity.sso.directory-sync-status":                DefaultDeny,
-	"identity.sso.discover":                             DefaultDeny,
+	"identity.sso.discover":                             Authentication,
 	"identity.sso.domain-challenge":                     DefaultDeny,
 	"identity.sso.domain-verify":                        DefaultDeny,
 	"identity.sso.enforcement.update":                   DefaultDeny,

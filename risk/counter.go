@@ -360,11 +360,11 @@ func (c CounterCoordinator) admitScope(scope Context, phase Phase) (Admission, e
 func (c CounterCoordinator) prepareAdmitted(scope Context, subject Subject, phase Phase, a Admission, now time.Time) (CounterCommand, error) {
 	passkey := c.state.policy.state.passkeyDiscovery && (scope.Operation == "identity.passkey.signin-options" || scope.Operation == "identity.passkey.signin-verify")
 	oauth := c.state.policy.state.oauthDiscovery && (scope.Operation == "identity.oauth.signin-start" || scope.Operation == "identity.oauth.callback")
-	if (passkey || oauth) && phase == BeforeCredential && a.Profile.Class == Authentication && subject.IdentifierDigest == "" {
-		// Passkey discovery and provider discovery precede verified joint
-		// credential/handle or issuer/subject resolution. No local identifier exists:
-		// retain the configured authentication policy and actual shared buckets,
-		// rather than inventing an identifier or falling back to safe-read policy.
+	sso := scope.Operation == ssoDiscoveryAction
+	if (sso || (passkey || oauth) && subject.IdentifierDigest == "") && phase == BeforeCredential && a.Profile.Class == Authentication {
+		// Discovery precedes verified account resolution. In SSO, even a supplied
+		// identifier must not create an account-specific bucket: the owner only
+		// routes by domain. counterDimensions rejects dimensions omitted here.
 		a.Profile.Dimensions = []Dimension{TenantDimension, NetworkDimension, DeviceDimension}
 		a.Profile.MaxCounters = len(a.Profile.Dimensions)
 	}

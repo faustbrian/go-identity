@@ -151,6 +151,7 @@ type policyState struct {
 	hibpOperations   map[Action]bool
 	passkeyDiscovery bool
 	oauthDiscovery   bool
+	ssoDiscovery     bool
 }
 
 type profileBounds struct {
@@ -165,11 +166,22 @@ type profileBounds struct {
 // phases/dimensions/failure behavior return zero with ErrInvalidPolicy. It does
 // not imply durable counter ownership or production configuration readiness.
 func NewPolicy(c PolicyConfig) (Policy, error) {
+	return newPolicy(c, false)
+}
+
+// NewSSODiscoveryPolicy opts in to the anonymous Authentication profile for
+// the exact SSO discovery action. All other operations use the same decision
+// rules as NewPolicy. Use this same policy value for the counter and evaluator.
+func NewSSODiscoveryPolicy(c PolicyConfig) (Policy, error) {
+	return newPolicy(c, true)
+}
+
+func newPolicy(c PolicyConfig, ssoDiscovery bool) (Policy, error) {
 	l := c.Limits
 	if c.Version == 0 || len(c.Profiles) != 4 || l.MaxDimensions < 1 || l.MaxDimensions > 4 || l.MaxCounters < 1 || l.MaxCounters > 16 || l.MaxWindow <= 0 || l.MaxWindow > time.Hour || l.MaxLimit == 0 || l.MaxLimit > 120 || l.KeyBytes != 64 || l.RetryAfterMax <= 0 || l.RetryAfterMax > time.Hour {
 		return Policy{}, ErrInvalidPolicy
 	}
-	s := &policyState{version: c.Version, limits: l, profiles: make(map[ProfileClass]Profile, 4), passkeyDiscovery: c.PasskeyDiscovery, oauthDiscovery: c.OAuthProviderDiscovery}
+	s := &policyState{version: c.Version, limits: l, profiles: make(map[ProfileClass]Profile, 4), passkeyDiscovery: c.PasskeyDiscovery, oauthDiscovery: c.OAuthProviderDiscovery, ssoDiscovery: ssoDiscovery}
 	for _, p := range c.Profiles {
 		if _, duplicate := s.profiles[p.Class]; duplicate || !validProfile(p, l) {
 			return Policy{}, ErrInvalidPolicy
@@ -258,7 +270,7 @@ func (p Policy) Admit(action Action) (Admission, error) {
 		return Admission{}, ErrInvalidAction
 	}
 	a := Admission{Operation: action, PolicyVersion: p.state.version}
-	if class == DefaultDeny {
+	if class == DefaultDeny || action == ssoDiscoveryAction && !p.state.ssoDiscovery {
 		a.Preflight = Deny
 		return a, nil
 	}
