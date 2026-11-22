@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit exact SSO provider enablement through its own privileged,
+  operation-bound counters without granting provider or organization authority.
+
 - Admit the exact SSO provider credential rotation through privileged,
   operation-bound counters without granting organization credentials authority.
 

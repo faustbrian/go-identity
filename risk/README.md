@@ -944,6 +944,13 @@ rotation remain separate and are not selected by this entry. The exact
 profile with its own operation-bound counters. It grants no authority to update
 metadata, enable a provider, or bypass the SSO owner's fresh credentials policy.
 
+The exact `identity.sso.provider.enable` operation uses its own Privileged
+reservation, bound to the original tenant, actor, provider and network.
+Current required signals remain mandatory. Registration, metadata updates
+and credential rotation cannot supply an enablement reservation. This profile
+does not establish organization permission, domain proof, current credential
+readiness or provider enablement; those remain with the SSO owner.
+
 Digest-only legacy API-key import (`identity.apikey.import`) uses the existing
 CredentialMutation reservation profile, with tenant, current user, original
 session and canonical network counters. Current required provider signals
