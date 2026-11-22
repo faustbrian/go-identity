@@ -300,6 +300,7 @@ type signupGraphExtensions struct {
 	socialOIDCHTTPDenial        bool
 	socialOIDCHTTPForeignOrigin bool
 	socialOIDCPostAuth          bool
+	socialProviderRefresh       string
 	organizationKey             bool
 	organizationKeyUpgrade      bool
 	organizationKeyMetadata     bool
@@ -530,7 +531,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
 	var socialPolicy *referenceSocialOIDCPolicy
-	if extensions.socialOIDC {
+	if extensions.socialOIDC || extensions.socialProviderRefresh != "" {
 		socialPolicy = &referenceSocialOIDCPolicy{}
 		selectedAuthorization = socialPolicy
 	}
@@ -590,6 +591,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
 	var socialIssuer *referenceSocialOIDCIssuer
+	var refreshFixture *referenceProviderRefreshFixture
+	if extensions.socialProviderRefresh != "" {
+		refreshFixture = configureReferenceProviderRefresh(t, &c, origin, extensions.socialProviderRefresh)
+	}
 	if extensions.socialOIDC {
 		socialPolicy.actor = authorization.SubjectID(c.PasswordSignup.PreAuth.ActorID)
 		socialOrigin := origin
@@ -1999,6 +2004,11 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 	if extensions.apiKey {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
 			proveReferenceAPIKey(t, ctx, f, c, deps, workerConfigs, config, server, client, origin, user, cookies, extensions.apiKeyUpgrade, extensions.apiKeyLegacy, extensions.apiKeyLegacyNoExpiry, extensions.apiKeyMetadata, extensions.apiKeyUpdate)
+		}
+	}
+	if refreshFixture != nil {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			proveReferenceProviderRefresh(t, ctx, c, deps, refreshFixture, user, cookies, csrf, fresh)
 		}
 	}
 	if extensions.socialOIDC {

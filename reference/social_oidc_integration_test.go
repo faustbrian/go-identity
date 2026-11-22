@@ -445,6 +445,12 @@ func (p *referenceSocialOIDCPolicy) Decide(ctx context.Context, c authorization.
 	r := c.Request
 	if r.Tenant == otpTenant && c.PolicyRevision == 9 {
 		switch r.Action {
+		case "identity.account.refresh-token":
+			if r.Subject.Kind == authorization.SubjectUser && (r.Resource.Type == "identity.account" && r.Resource.ID != "" ||
+				r.Resource.Type == "identity.user" && r.Resource.ID == authorization.ResourceID(r.Subject.ID) ||
+				r.Resource.Type == "identity.request-admission" && r.Resource.ID == authorization.ResourceID(r.Action)) {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		case "identity.account.link-start", "identity.account.link-token", "identity.account.unlink", "identity.oauth.signin-start", "identity.oauth.callback":
 			self := r.Subject.Kind == authorization.SubjectUser && r.Resource.Type == "identity.user" && string(r.Resource.ID) == string(r.Subject.ID)
 			admission := p.actor != "" && r.Subject.Kind == authorization.SubjectServiceAccount && r.Subject.ID == p.actor && r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action)
@@ -532,6 +538,13 @@ func configureReferenceSocialOIDC(t *testing.T, c *reference.StoreConfiguration,
 		t.Fatal("configure controlled provider", err)
 	}
 	t.Cleanup(provider.Close)
+	configureReferenceSocialLink(t, c, origin, provider)
+	c.HTTPSocialOAuth = &reference.HTTPSocialOAuthConfiguration{LinkStart: true, SigninStart: !linkOnly, Callback: true}
+	return p
+}
+
+func configureReferenceSocialLink(t *testing.T, c *reference.StoreConfiguration, origin string, provider oauth.Provider) {
+	t.Helper()
 	c.SocialOAuth = &reference.SocialOAuthConfiguration{
 		Schema: "identity_social", ConfigurationID: "reference-social-v1", Origin: origin, IntentKey: [32]byte{174},
 		Providers: []oauth.Provider{provider}, PolicyID: "reference-social-link",
@@ -542,8 +555,6 @@ func configureReferenceSocialOIDC(t *testing.T, c *reference.StoreConfiguration,
 		CurrentPKCEKeyVersion: 1, PKCECommitmentKeys: map[uint32][32]byte{1: {172}},
 		CurrentEnvelopeKey: "social-v1", EnvelopeKeys: map[string][]byte{"social-v1": bytes.Repeat([]byte{173}, 32)},
 	}
-	c.HTTPSocialOAuth = &reference.HTTPSocialOAuthConfiguration{LinkStart: true, SigninStart: !linkOnly, Callback: true}
-	return p
 }
 
 func (p *referenceSocialOIDCIssuer) serve(w http.ResponseWriter, r *http.Request) {
