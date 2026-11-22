@@ -123,6 +123,15 @@ OAuth2 supplies no ID-token/authentication times. Native state and current
 authority remain separate mandatory owners. See the GitLab provider profile
 for finite existing-account adoption and unsupported operations.
 
+The additive `NewOAuth2UserInfoProviderWithPolicy` selects an explicit closed
+`OAuth2TokenPolicy`; zero preserves the original strict contract. The GitHub
+OAuth-app policy alone permits its fixed cross-origin UserInfo, comma response
+scopes and honestly absent token expiry. Native callers bind the optional policy
+alongside full UserInfo facts and use `ParseOAuth2QueryCallbackWithPolicy` at the
+trusted distinct route. `TokenSet.ExpiresAt()` is zero only when that selected
+provider omits expiry; identity evidence remains bounded to the original read's
+twenty seconds. No public config/profile struct shape or existing default changes.
+
 ## Query callback boundary
 
 `ParseQueryCallback` accepts only the query authorization-code profile. It

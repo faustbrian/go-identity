@@ -727,7 +727,7 @@ func NewProviderRegistry(providers ...Provider) (ProviderRegistry, error) {
 			continue
 		}
 		profile := facts.OAuth2Profile()
-		if profile.Validate() != nil || !reflect.DeepEqual(profile.Profile, p.Profile()) {
+		if profile.ValidateForTokenPolicy(ProviderOAuth2TokenPolicy(p)) != nil || !reflect.DeepEqual(profile.Profile, p.Profile()) {
 			return ProviderRegistry{}, failure(InvalidInput, nil)
 		}
 		for _, other := range providers {

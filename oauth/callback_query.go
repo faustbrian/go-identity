@@ -23,6 +23,7 @@ type QueryCallback struct {
 	profile          ProviderProfile
 	success          bool
 	oauth2           *OAuth2UserInfoDetails
+	tokenPolicy      OAuth2TokenPolicy
 	receivedRedirect string
 }
 
@@ -68,12 +69,27 @@ func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 // and unexpected iss responses are not this profile. Existing OIDC parsing is
 // unchanged and continues requiring RFC9207 issuer identification.
 func ParseOAuth2QueryCallback(ctx context.Context, rawQuery, receivedRedirect string, profile OAuth2UserInfoProfile) (QueryCallback, error) {
-	if profile.Validate() != nil || receivedRedirect != profile.Profile.RedirectURI {
+	return ParseOAuth2QueryCallbackWithPolicy(ctx, rawQuery, receivedRedirect, profile, "")
+}
+
+// ParseOAuth2QueryCallbackWithPolicy binds the explicit complete token/resource
+// policy to the same distinct-route callback custody. The policy and profile
+// come from trusted native configuration, never from callback parameters.
+func ParseOAuth2QueryCallbackWithPolicy(ctx context.Context, rawQuery, receivedRedirect string, profile OAuth2UserInfoProfile, policy OAuth2TokenPolicy) (QueryCallback, error) {
+	if profile.ValidateForTokenPolicy(policy) != nil || receivedRedirect != profile.Profile.RedirectURI {
 		return QueryCallback{}, failure(InvalidInput, ctx)
 	}
 	details := profile.Details
-	return parseQueryCallback(ctx, rawQuery, profile.Profile, &details, receivedRedirect)
+	out, err := parseQueryCallback(ctx, rawQuery, profile.Profile, &details, receivedRedirect)
+	if err == nil {
+		out.tokenPolicy = policy
+	}
+	return out, err
 }
+
+// OAuth2TokenPolicy returns the parsed immutable selection, not proof or native
+// admission. It must match the native authenticated transaction/configuration.
+func (q QueryCallback) OAuth2TokenPolicy() OAuth2TokenPolicy { return q.tokenPolicy }
 
 // OAuth2Details returns immutable protocol facts, never proof or credentials.
 func (q QueryCallback) OAuth2Details() (OAuth2UserInfoDetails, bool) {
@@ -174,7 +190,7 @@ func (q QueryCallback) validProfile() bool {
 	if q.oauth2 == nil {
 		return queryProfileValid(q.profile)
 	}
-	return q.receivedRedirect == q.profile.RedirectURI && (OAuth2UserInfoProfile{q.profile, *q.oauth2}).Validate() == nil
+	return q.receivedRedirect == q.profile.RedirectURI && (OAuth2UserInfoProfile{q.profile, *q.oauth2}).ValidateForTokenPolicy(q.tokenPolicy) == nil
 }
 
 func queryProfileSnapshot(profile ProviderProfile) ProviderProfile {

@@ -141,8 +141,10 @@ func (t TokenSet) ScopeReported() bool { return t.scopeReported }
 // ReceivedAt is the trusted clock instant the complete response was received.
 func (t TokenSet) ReceivedAt() time.Time { return t.receivedAt }
 
-// ExpiresAt is ReceivedAt plus the provider's required bounded expires_in, not
-// an ID-token or session expiry. No default expiry is invented.
+// ExpiresAt is ReceivedAt plus the provider's bounded expires_in, not an ID-token,
+// identity-evidence or session expiry. The explicitly selected ordinary GitHub
+// OAuth-app policy returns zero when expiry is absent. Other profiles require a
+// positive expiry. Zero never grants unbounded native identity/session proof.
 func (t TokenSet) ExpiresAt() time.Time { return t.expiresAt }
 
 // Destroy terminally clears retained tokens across all aliases, without waiting

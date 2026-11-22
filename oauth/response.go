@@ -25,7 +25,14 @@ func parseResponse(status int, contentType string, body []byte, c OIDCConfig, go
 }
 
 func parseTokenResponse(status int, contentType string, body []byte, c OIDCConfig, googleAccounts, requireIDToken bool) (tokenResponse, ErrorKind) {
+	return parseTokenResponseWithPolicy(status, contentType, body, c, googleAccounts, requireIDToken, "")
+}
+
+func parseTokenResponseWithPolicy(status int, contentType string, body []byte, c OIDCConfig, googleAccounts, requireIDToken bool, policy OAuth2TokenPolicy) (tokenResponse, ErrorKind) {
 	var out tokenResponse
+	if policy != "" && (policy != OAuth2GitHubOAuthAppPolicy || requireIDToken || googleAccounts) {
+		return out, Unknown
+	}
 	media, _, err := mime.ParseMediaType(contentType)
 	if err != nil || media != "application/json" || len(body) == 0 || int64(len(body)) > c.MaxResponseBytes || !utf8.Valid(body) {
 		return out, Unknown
@@ -81,11 +88,20 @@ func parseTokenResponse(status int, contentType string, body []byte, c OIDCConfi
 	}
 	kind, kindOK := fields["token_type"].(string)
 	expiry, expiryOK := fields["expires_in"].(json.Number)
-	if !accessOK || !idOK || !kindOK || !expiryOK || !visible(access, 1, c.MaxTokenBytes) || requireIDToken && !visible(id, 1, c.MaxTokenBytes) || !strings.EqualFold(kind, "Bearer") {
+	_, expiryPresent := fields["expires_in"]
+	if !accessOK || !idOK || !kindOK || !visible(access, 1, c.MaxTokenBytes) || requireIDToken && !visible(id, 1, c.MaxTokenBytes) || !strings.EqualFold(kind, "Bearer") {
 		return out, Unknown
 	}
-	seconds, err := expiry.Int64()
-	if err != nil || seconds <= 0 || seconds > 365*24*60*60 {
+	var seconds int64
+	if expiryPresent {
+		if !expiryOK {
+			return out, Unknown
+		}
+		seconds, err = expiry.Int64()
+		if err != nil || seconds <= 0 || seconds > 365*24*60*60 {
+			return out, Unknown
+		}
+	} else if policy != OAuth2GitHubOAuthAppPolicy {
 		return out, Unknown
 	}
 	refresh := ""
@@ -103,7 +119,11 @@ func parseTokenResponse(status int, contentType string, body []byte, c OIDCConfi
 		if !ok {
 			return out, Unknown
 		}
-		reportedScopes := strings.Split(raw, " ")
+		separator := " "
+		if policy == OAuth2GitHubOAuthAppPolicy {
+			separator = ","
+		}
+		reportedScopes := strings.Split(raw, separator)
 		if !validScopes(reportedScopes) {
 			return out, Unknown
 		}

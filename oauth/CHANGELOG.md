@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit closed GitHub OAuth-app token/resource policy without changing
+  existing public config/profile shapes or strict zero defaults. Bind fixed
+  cross-origin UserInfo, comma reported scopes and honestly absent token expiry;
+  original identity evidence remains bounded independently of token lifetime.
+  Add a policy-bound distinct-route callback parser; no refresh flow is added.
+
 - Add an explicit OAuth2 code/query/S256 and bearer-UserInfo variant with
   separate immutable protocol facts and distinct registered redirect-URI mix-up
   defense. Preserve strict OIDC callbacks and public ProviderProfile shape;

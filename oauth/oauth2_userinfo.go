@@ -89,6 +89,7 @@ func (OAuth2UserInfoConfig) MarshalText() ([]byte, error) { return nil, failure(
 // with separate custody. Close after admitted calls finish; no goroutine starts.
 type OAuth2UserInfoProvider struct {
 	profile   OAuth2UserInfoProfile
+	policy    OAuth2TokenPolicy
 	config    OIDCConfig // shared HTTP/token bounds only; never an OIDC validator
 	client    *http.Client
 	transport *http.Transport
@@ -103,6 +104,13 @@ type OAuth2UserInfoProvider struct {
 // Registry construction rejects route sharing with another provider. Native
 // admission must use ParseOAuth2QueryCallback and the full immutable facts.
 func NewOAuth2UserInfoProvider(c OAuth2UserInfoConfig) (*OAuth2UserInfoProvider, error) {
+	return NewOAuth2UserInfoProviderWithPolicy(c, "")
+}
+
+// NewOAuth2UserInfoProviderWithPolicy constructs the existing provider with an
+// explicit closed response/resource policy. Unknown selections and mismatched
+// complete profiles reject before IO. Zero is exactly the original constructor.
+func NewOAuth2UserInfoProviderWithPolicy(c OAuth2UserInfoConfig, policy OAuth2TokenPolicy) (*OAuth2UserInfoProvider, error) {
 	if c.Clock == nil {
 		c.Clock = systemClock{}
 	}
@@ -123,7 +131,7 @@ func NewOAuth2UserInfoProvider(c OAuth2UserInfoConfig) (*OAuth2UserInfoProvider,
 	}
 	p := ProviderProfile{ID: c.ID, Version: c.Version, Issuer: c.Issuer, ClientID: c.ClientID, AuthorizationEndpoint: c.AuthorizationEndpoint, TokenEndpoint: c.TokenEndpoint, RedirectURI: c.RedirectURI, ClientAuthentication: c.ClientAuthentication, Scopes: slices.Clone(c.Scopes), ResponseMode: "query", PKCEMethod: "S256", StateBytes: 32, Timeout: c.Timeout, ClockSkew: time.Minute, MaxResponseBytes: c.MaxResponseBytes, MaxTokenBytes: c.MaxTokenBytes, MaxCodeBytes: c.MaxCodeBytes}
 	facts := OAuth2UserInfoProfile{Profile: p, Details: OAuth2UserInfoDetails{c.UserInfoEndpoint, c.SubjectClaim, c.SubjectEncoding, c.ProofLifetime}}
-	if facts.Validate() != nil || c.ClientAuthentication != ClientSecretPost || !visible(string(c.ClientSecret), 1, 4096) {
+	if facts.ValidateForTokenPolicy(policy) != nil || c.ClientAuthentication != ClientSecretPost || !visible(string(c.ClientSecret), 1, 4096) {
 		return nil, failure(InvalidInput, nil)
 	}
 	shared := OIDCConfig{ID: c.ID, Version: c.Version, Issuer: c.Issuer, ClientID: c.ClientID, AuthorizationEndpoint: c.AuthorizationEndpoint, TokenEndpoint: c.TokenEndpoint, RedirectURI: c.RedirectURI, ClientAuthentication: c.ClientAuthentication, Scopes: slices.Clone(c.Scopes), Clock: c.Clock, HTTPClient: c.HTTPClient, Timeout: c.Timeout, MaxResponseBytes: c.MaxResponseBytes, MaxTokenBytes: c.MaxTokenBytes, MaxCodeBytes: c.MaxCodeBytes}
@@ -131,8 +139,23 @@ func NewOAuth2UserInfoProvider(c OAuth2UserInfoConfig) (*OAuth2UserInfoProvider,
 	if err != nil {
 		return nil, err
 	}
+	// GitHub's token and user resources use different TLS authorities. A fixed
+	// peer name would authenticate the resource against the token host instead.
+	if policy == OAuth2GitHubOAuthAppPolicy && transport.TLSClientConfig.ServerName != "" {
+		transport.CloseIdleConnections()
+		return nil, failure(InvalidInput, nil)
+	}
 	shared.HTTPClient = nil
-	return &OAuth2UserInfoProvider{profile: facts, config: shared, transport: transport, secret: bytes.Clone(c.ClientSecret), client: &http.Client{Transport: transport, Timeout: c.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+	return &OAuth2UserInfoProvider{profile: facts, policy: policy, config: shared, transport: transport, secret: bytes.Clone(c.ClientSecret), client: &http.Client{Transport: transport, Timeout: c.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+}
+
+// OAuth2TokenPolicy returns the immutable optional response/resource selection.
+// Nil returns strict zero and confers no usable provider capability.
+func (p *OAuth2UserInfoProvider) OAuth2TokenPolicy() OAuth2TokenPolicy {
+	if p == nil {
+		return ""
+	}
+	return p.policy
 }
 
 // Validate checks only profile shape; it grants no provider/native authority.
@@ -323,7 +346,7 @@ func (p *OAuth2UserInfoProvider) exchangeUserInfo(ctx context.Context, code, ver
 		return ExchangeResult{}, failure(Unknown, ctx)
 	}
 	received := c.Clock.Now()
-	parsed, kind := parseTokenResponse(response.StatusCode, response.Header.Get("Content-Type"), raw, c, false, false)
+	parsed, kind := parseTokenResponseWithPolicy(response.StatusCode, response.Header.Get("Content-Type"), raw, c, false, false, p.policy)
 	if kind != "" {
 		return ExchangeResult{}, failure(kind, ctx)
 	}
@@ -331,9 +354,12 @@ func (p *OAuth2UserInfoProvider) exchangeUserInfo(ctx context.Context, code, ver
 	if received.IsZero() {
 		return ExchangeResult{}, failure(Unknown, ctx)
 	}
-	expires := received.Add(time.Duration(parsed.expires) * time.Second)
+	var expires time.Time
+	if parsed.expires > 0 {
+		expires = received.Add(time.Duration(parsed.expires) * time.Second)
+	}
 	observation := c.Clock.Now()
-	if observation.Before(received) || !expires.After(observation) {
+	if observation.Before(received) || !expires.IsZero() && !expires.After(observation) {
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
 	r, err = http.NewRequestWithContext(ctx, http.MethodGet, p.profile.Details.UserInfoEndpoint, nil)
@@ -382,7 +408,7 @@ func (p *OAuth2UserInfoProvider) exchangeUserInfo(ctx context.Context, code, ver
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
 	until := observation.Add(p.profile.Details.ProofLifetime)
-	if expires.Before(until) {
+	if !expires.IsZero() && expires.Before(until) {
 		until = expires
 	}
 	if now := c.Clock.Now(); now.Before(observation) || !until.After(now) {
