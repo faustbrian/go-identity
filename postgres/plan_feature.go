@@ -44,7 +44,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && p.Feature != nil && oauthCallbackDenialSelected(p.Feature.Operation) {
 		return encodeOAuthCallbackDenialPlan(binding, fingerprint, p)
 	}
-	if !proofBase && p.Feature != nil && (p.Feature.Operation == ssoOIDCSigninOperation() || p.Feature.Operation == oauthSigninAccountOperation() && p.Capability != nil) {
+	if !proofBase && p.Feature != nil && (ssoOIDCConsumptionOperation(p.Feature.Operation) || p.Feature.Operation == oauthSigninAccountOperation() && p.Capability != nil) {
 		return encodeProviderSigninConsumptionPlan(binding, fingerprint, p)
 	}
 	if p.APIKeyVerification != nil {

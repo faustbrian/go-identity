@@ -103,6 +103,24 @@ and credential. `Work.SSOOIDCJITUser` proves only creation by that exact Work
 to the enlisted MFA and membership owners. Return any error to abort the
 original transaction; no API here authenticates a provider or issues a session.
 
+The explicit existing-member link uses `SSOOIDCExplicitLinkCallbackOperation`,
+a self-targeted session-bearing schema of the same callback. Its native owner
+implements `SSOOIDCExplicitLinkContributor` and proves the original fresh
+session, browser consent, provider assertion, and current organization and
+provider authority. It freezes identity intent with `SSOOIDCExplicitLinkField`.
+`Repository.ApplySSOOIDCExplicitLink` requires consumed callback state in the
+same Work, fences the original actor credential and all identity epochs, and
+links one previously unseen subject using the existing account writer. Install
+the retired-subject index even when JIT is not selected. Neither a historical
+subject nor a similarly named social account may be adopted.
+
+The coordinator checks the exact linked successor and original deadline after
+the native provider/member commit check. The credential epoch advances; no
+local session is issued or refreshed. A later enterprise sign-in must pass the
+normal current account, provider, organization and factor checks. Link uses
+`identity.account.link` audit and emits `enterprise_provider.account_linked.v1`
+for the completed link transaction. The change adds no routes by itself.
+
 For an already-issued enterprise session, `CheckLinkedSSOOIDCProviderCredential`
 reads the existing live association and exact `sso` credential/security epochs.
 `Work.RequireLinkedSSOOIDCProviderCredential` retains those locks only in exact

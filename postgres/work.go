@@ -50,6 +50,7 @@ type workState struct {
 	magicLinkFinalized        bool
 	oauthSigninStage          oauthSigninConsumptionStage
 	ssoOIDCJITCreation        *ssoOIDCJITCreation
+	ssoOIDCExplicitLink       *ssoOIDCExplicitLinkProgress
 	invitationConsumed        bool
 	invitationFinalized       bool
 	anonymousUpgradeConsumed  bool
@@ -319,6 +320,7 @@ func invalidateWork(w Work) {
 	w.state.counterCommand = nil
 	w.state.featureCommitCommand = nil
 	w.state.featureApplyCommand = nil
+	w.state.ssoOIDCExplicitLink = nil
 	w.state.passkeyRemoval = nil
 	w.state.emailVerification = nil
 	w.state.emailAttachment = nil

@@ -32,6 +32,16 @@ type SSOOIDCSigninContributor interface {
 	ValidateSSOOIDCSigninConsumption(identity.Command, CapabilityPlan) error
 }
 
+// SSOOIDCExplicitLinkContributor owns only the authenticated enterprise link
+// variant. Validation must bind the original session and one-use browser
+// transaction to the same user, provider and proof. Its final Work check owns
+// current session/consent, organization and provider authority. It must not
+// create a session or select a local identity from provider claims.
+type SSOOIDCExplicitLinkContributor interface {
+	FeatureCommitContributor
+	ValidateSSOOIDCExplicitLinkConsumption(identity.Command, CapabilityPlan) error
+}
+
 type oauthSigninConsumptionStage uint8
 
 const (
@@ -46,7 +56,16 @@ func validateProviderSigninConsumption(owner FeatureExecutionContributor, comman
 	_, code := command.OneTimeCode()
 	_, recovery := command.RecoveryCode()
 	_, bearer := command.SessionToken()
-	if !present || !cookie || code || recovery || bearer || !providerSigninPreparation(plan) || plan.Feature.Operation != feature.Operation {
+	if !present || code || recovery || !providerSigninPreparation(plan) || plan.Feature.Operation != feature.Operation {
+		return invalidPlan()
+	}
+	if feature.Operation == SSOOIDCExplicitLinkCallbackOperation() {
+		if native, ok := owner.(SSOOIDCExplicitLinkContributor); ok && bearer && !cookie && validSSOOIDCExplicitLinkBinding(feature.Binding) {
+			return native.ValidateSSOOIDCExplicitLinkConsumption(command, *plan.Capability)
+		}
+		return invalidPlan()
+	}
+	if !cookie || bearer {
 		return invalidPlan()
 	}
 	switch feature.Operation {

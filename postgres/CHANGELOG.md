@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit explicit enterprise OIDC account linking in the original authenticated
+  callback Work. Fence the actor, new SSO-owned credential and consumed state;
+  neither anonymous sign-in nor JIT can select the explicit-link schema.
+
 - Offer an explicit offline retired-subject index migration for atomic schema
   installation. Preserve published concurrent history; offline creation blocks
   writes until its enclosing transaction commits.

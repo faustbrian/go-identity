@@ -105,7 +105,7 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	// OIDC owns protocol validation; SSO PostgreSQL owns this exact native
 	// callback transition in the identity coordinator's Work.
 	if op.OperationID == ssoOIDCSigninPurpose {
-		return op == ssoOIDCSigninOperation() && d == ssoOIDCSigninDescriptor()
+		return ssoOIDCConsumptionOperation(op) && d == ssoOIDCSigninDescriptor()
 	}
 	// A SCIM schema alias must not skip its mandatory kernel creation effect.
 	if op.OperationID == "identity.scim.user-create" {

@@ -15,6 +15,7 @@ type providerSigninConsumptionProfile struct {
 	Contrib          ContributorDescriptor
 	SubjectType      string
 	AuditEvent       string
+	AuditRetention   string
 	WireTag          string
 	Lifecycle        LifecyclePlan
 	ExternalRiskOnly bool
@@ -25,14 +26,20 @@ func providerSigninProfile(op identity.FeatureOperation) (providerSigninConsumpt
 	case oauthSigninAccountOperation():
 		return providerSigninConsumptionProfile{
 			Contrib:     ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1},
-			SubjectType: "authentication_attempt", AuditEvent: "identity.oauth.handle_callback", WireTag: "identity-oauth-signin-consumption-v1",
+			SubjectType: "authentication_attempt", AuditEvent: "identity.oauth.handle_callback", AuditRetention: "protected", WireTag: "identity-oauth-signin-consumption-v1",
 			Lifecycle: LifecyclePlan{EventType: "session.created.v1"},
 		}, true
 	case ssoOIDCSigninOperation():
 		return providerSigninConsumptionProfile{
 			Contrib:     ssoOIDCSigninDescriptor(),
-			SubjectType: "sso_login_transaction", AuditEvent: "identity.sso.login", WireTag: "identity-sso-oidc-signin-consumption-v1", ExternalRiskOnly: true,
+			SubjectType: "sso_login_transaction", AuditEvent: "identity.sso.login", AuditRetention: "protected", WireTag: "identity-sso-oidc-signin-consumption-v1", ExternalRiskOnly: true,
 			Lifecycle: LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2},
+		}, true
+	case SSOOIDCExplicitLinkCallbackOperation():
+		return providerSigninConsumptionProfile{
+			Contrib:     ssoOIDCSigninDescriptor(),
+			SubjectType: "sso_login_transaction", AuditEvent: "identity.account.link", AuditRetention: "standard", WireTag: "identity-sso-oidc-explicit-link-consumption-v1", ExternalRiskOnly: true,
+			Lifecycle: LifecyclePlan{EventType: "enterprise_provider.account_linked.v1", BeforeVersion: 1, AfterVersion: 2},
 		}, true
 	default:
 		return providerSigninConsumptionProfile{}, false
@@ -45,7 +52,7 @@ func providerSigninConsumptionOperation(op identity.FeatureOperation) bool {
 }
 
 func providerSigninBindingOperation(b identity.CommandBinding) (identity.FeatureOperation, bool) {
-	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation()} {
+	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
 		if b.OperationID == op.OperationID && b.SchemaID == op.SchemaID {
 			return op, true
 		}
@@ -73,7 +80,7 @@ func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint 
 	if !selected || !providerSigninPreparation(p) || profile.ExternalRiskOnly && p.CommandCounters != nil {
 		return nil, invalidPlan()
 	}
-	if b.ValidateFor(p.Feature.Operation) != nil || b.ActorKind != authorization.SubjectServiceAccount || b.UserID != "" || b.AnonymousFlowID == "" {
+	if !validProviderConsumptionBinding(b, p.Feature.Operation) {
 		return nil, invalidPlan()
 	}
 	if p.SubjectType != profile.SubjectType || validateCapabilityPlan(b, p.Capability) != nil || *p.Lifecycle != profile.Lifecycle {
@@ -86,7 +93,7 @@ func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint 
 	if len(p.Contributors) != owners || p.Contributors[owners-1] != capabilityOwner || len(p.Audits) != 1 {
 		return nil, invalidPlan()
 	}
-	if p.Audits[0].EventType != profile.AuditEvent || p.Audits[0].RetentionClass != "protected" {
+	if p.Audits[0].EventType != profile.AuditEvent || p.Audits[0].RetentionClass != profile.AuditRetention {
 		return nil, invalidPlan()
 	}
 	unselectedAuthentication := p.APIKeyVerification != nil || p.MFACompletion != nil || p.MFAContinuation != nil || p.MagicLinkRegistration != nil || p.PasskeyRegistration != nil || p.SignupAcceptance || p.MagicLinkRequestAcceptance || p.IdentifierAdmission != nil
@@ -110,6 +117,13 @@ func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint 
 		return nil, invalidPlan()
 	}
 	return encoded, nil
+}
+
+func validProviderConsumptionBinding(b identity.CommandBinding, operation identity.FeatureOperation) bool {
+	if operation == SSOOIDCExplicitLinkCallbackOperation() {
+		return validSSOOIDCExplicitLinkBinding(b)
+	}
+	return b.ValidateFor(operation) == nil && b.ActorKind == authorization.SubjectServiceAccount && b.UserID == "" && b.AnonymousFlowID != ""
 }
 
 func decodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32]byte, data []byte) (CommandPlan, error) {

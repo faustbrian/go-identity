@@ -385,12 +385,19 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if p.Capability != nil {
 		if providerSigninConsumptionOperation(p.Feature.Operation) {
-			if p.Feature.Operation == ssoOIDCSigninOperation() {
+			switch p.Feature.Operation {
+			case SSOOIDCExplicitLinkCallbackOperation():
+				if _, ok := feature.contributor.(SSOOIDCExplicitLinkContributor); !ok {
+					return nil, invalidPlan()
+				}
+			case ssoOIDCSigninOperation():
 				if _, ok := feature.contributor.(SSOOIDCSigninContributor); !ok {
 					return nil, invalidPlan()
 				}
-			} else if _, ok := feature.contributor.(OAuthSigninContributor); !ok {
-				return nil, invalidPlan()
+			default:
+				if _, ok := feature.contributor.(OAuthSigninContributor); !ok {
+					return nil, invalidPlan()
+				}
 			}
 			if p.CommandCounters == nil {
 				if _, ok := feature.contributor.(FeatureAdmissionPreparationContributor); !ok {
@@ -832,6 +839,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if p.feature.Operation == scimUserCreationOperation() && w.state.scimUserCreation == nil {
 		return result, w.fail(ctx, invalidSCIMCreation())
 	}
+	if p.feature.Operation == SSOOIDCExplicitLinkCallbackOperation() && w.state.ssoOIDCExplicitLink == nil {
+		return result, w.fail(ctx, invalidSSOOIDCExplicitLink())
+	}
 	if scimUserUpdateSelected(p.feature.Operation) && (p.scimUserUpdate == nil || p.scimUserUpdate.Required != (w.state.scimUserUpdate != nil)) {
 		return result, w.fail(ctx, invalidSCIMUpdate())
 	}
@@ -981,6 +991,9 @@ func (c *Coordinator) checkFeatureCommit(w Work) (err error) {
 	// A bounded native final read can still span credential expiry. Fence
 	// successor authority after that work, not before it, without renewing
 	// the original recipient or proof observation.
+	if w.state.feature.Operation == SSOOIDCExplicitLinkCallbackOperation() {
+		return w.checkSSOOIDCExplicitLinkFinal()
+	}
 	return w.checkPasswordHashUpgradeFinal()
 }
 

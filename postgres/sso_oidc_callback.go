@@ -16,8 +16,11 @@ func ssoOIDCSigninDescriptor() ContributorDescriptor {
 }
 
 func ssoOIDCCallbackClaim(q claimRequest) bool {
-	op := ssoOIDCSigninOperation()
-	return q.feature != nil && q.purpose == op.OperationID && *q.feature == op
+	return q.feature != nil && q.purpose == ssoOIDCSigninPurpose && ssoOIDCConsumptionOperation(*q.feature)
+}
+
+func ssoOIDCConsumptionOperation(op identity.FeatureOperation) bool {
+	return op == ssoOIDCSigninOperation() || op == SSOOIDCExplicitLinkCallbackOperation()
 }
 
 // The signed enterprise state is resource-bound to the original start
