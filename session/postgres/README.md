@@ -1,5 +1,30 @@
 # PostgreSQL session storage
 
+## Native enterprise OIDC issuance
+
+Install `CSRFMigrationSource` when issuing CSRF-bearing sessions, and install
+both steps of `SSOOIDCSigninMigrationSource` before enabling enterprise
+issuance. Choose the validated installed purpose constraint and two unused
+permanent versions. If social OAuth is in use, install its expansion first.
+The enterprise expansion preserves the existing predicate and rows. It defers
+its populated-row validation to the second transaction. To roll back adoption,
+disable enterprise issuance; retain session history.
+
+Register the SSO callback's existing native coordinator participant. After it
+authenticates the original browser and verified provider result, freeze the
+account and `SSOOIDCSigninSessionFields` in the exact command. In Apply, pass
+that command and original browser to `NewSSOOIDCSigninEffect`'s `Apply` method
+after the capability participant provisionally consumes the original grant.
+Supply the real organization's `OrganizationSessionAuthority` on the same
+primary. The effect enforces current linked account, known-empty MFA, policy
+and selected membership, and stages a new session/family plus one-use browser
+effects. Call `CheckCurrent` in final admission after later SSO and audit/outbox
+writes. All errors must abort the whole Work. `Recover` votes on retained
+issuance only and cannot recover a bearer or imply current access.
+
+This effect does not exchange authorization codes, choose roles, own HTTP
+routes, provide bearer disclosure, or enable session reads or logout by itself.
+
 ## Combined password and OAuth admission
 
 `SingleFactorSessionAdmissionConfig.OAuth` independently selects the exact

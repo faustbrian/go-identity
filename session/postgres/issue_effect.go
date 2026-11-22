@@ -65,8 +65,12 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 	// Conflicting family creation cannot revive or overwrite retained authority.
 	// The exact family is checked again after uniqueness waits, under this Work.
 	if s.FamilyVersion == 1 {
-		if _, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.families(tenant_id,family_id,user_id,version,state,issued_at) VALUES($1,$2,$3,1,'active',$4) ON CONFLICT DO NOTHING`, string(s.TenantID), s.FamilyID, string(s.UserID), s.IssuedAt.UTC().Format(storedTimeLayout)); err != nil {
+		created, err := w.Exec(ctx, `INSERT INTO `+r.schema+`.families(tenant_id,family_id,user_id,version,state,issued_at) VALUES($1,$2,$3,1,'active',$4) ON CONFLICT DO NOTHING`, string(s.TenantID), s.FamilyID, string(s.UserID), s.IssuedAt.UTC().Format(storedTimeLayout))
+		if err != nil {
 			return err
+		}
+		if b.OperationID == ssoOIDCSessionOperation().OperationID && created != 1 {
+			return identity.ConflictError{}
 		}
 	}
 	if err = r.requireIssueFamily(ctx, w, s, true); err != nil {
@@ -107,6 +111,8 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		digest = passkeySignupIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == "identity.oauth.callback" {
 		digest = oauthSigninIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
+	} else if b.OperationID == ssoOIDCSessionOperation().OperationID {
+		digest = ssoOIDCSigninIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	}
 	if b.OperationID == "identity.email.verification-signin" {
 		if _, err := identity.ParseCommandID(b.RecordID); err != nil {

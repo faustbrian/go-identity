@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Stage native enterprise OIDC session, family, original browser consumption
+  and retained issuance together with the original callback Work. Current
+  linked-account, factor, policy and organization membership checks must pass
+  at Apply and final admission. Install the dedicated forward expansion and
+  validation before enabling this profile; existing session history survives.
+
 - Independently select OAuth and password profiles in one native session reader
   and revoker. Dispatch from original stored provenance without fallback, retain
   linked-provider and factor checks, and bind both selections into cache custody.

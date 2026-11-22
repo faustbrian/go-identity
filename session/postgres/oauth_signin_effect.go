@@ -103,7 +103,7 @@ func (e *OAuthSigninEffect) Apply(ctx context.Context, w kernel.Work, owner kern
 	if err := e.native.requireIssueFamily(bounded, w, spec, false); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err := requireOAuthSigninIssueTime(bounded, w, record); err != nil {
+	if err := requireProviderSigninIssueTime(bounded, w, record); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	_, feature, transition, err := w.FeatureScope(owner)
@@ -141,7 +141,7 @@ func (e *OAuthSigninEffect) CheckCurrent(ctx context.Context, w kernel.Work, own
 	if err := RequireSession(bounded, w, e.config, record); err != nil {
 		return err
 	}
-	return requireOAuthSigninIssueTime(bounded, w, record)
+	return requireProviderSigninIssueTime(bounded, w, record)
 }
 
 func (e *OAuthSigninEffect) checkAuthority(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session) error {
@@ -170,7 +170,7 @@ func (e *OAuthSigninEffect) checkAuthority(ctx context.Context, w kernel.Work, o
 	if _, err := mfapg.RequireOAuthSigninFactors(ctx, w, owner, command, vector.Factor.Binding.Version); err != nil {
 		return err
 	}
-	return requireOAuthSigninIssueTime(ctx, w, record)
+	return requireProviderSigninIssueTime(ctx, w, record)
 }
 
 func oauthSigninSessionAdmission(profile IdentifierAdmissionConfig, record session.Session, account kernel.ProviderAccountAdmission) (kernel.DirectoryAuthorityAdmission, kernel.UserAuthorizationAdmission, error) {
@@ -196,7 +196,7 @@ func oauthSigninSessionAdmission(profile IdentifierAdmissionConfig, record sessi
 	return directory, policy, nil
 }
 
-func requireOAuthSigninIssueTime(ctx context.Context, w kernel.Work, record session.Session) error {
+func requireProviderSigninIssueTime(ctx context.Context, w kernel.Work, record session.Session) error {
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
