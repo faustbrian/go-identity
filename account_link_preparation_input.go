@@ -48,18 +48,27 @@ func NewAccountLinkPreparationCommand(spec AccountLinkPreparationCommand, input 
 	if !validCommandBinding(b) || b.OperationID != "identity.account.link-token" || b.SchemaID != "identity-account" || b.SchemaVersion != 1 || b.LinkMode != AccountLinkExplicit || !validLinkActor(b.LinkMode, b.ActorKind, b.ActorID, b.UserID) || !validDirectoryID(spec.ProviderID) || spec.ProviderConfigVersion == 0 || !validDirectoryID(spec.FlowID) || spec.FlowFingerprint == ([32]byte{}) || !validDirectoryID(spec.SessionID) || spec.SessionVersion == 0 || !spec.Counters.valid() || !input.live() {
 		return Command{}, invalidAccountLinkPreparation()
 	}
+	frozen, ok := freezeAccountSessionBearer(bearer)
+	if !ok {
+		return Command{}, invalidAccountLinkPreparation()
+	}
+	spec.Counters.KeyVersions = slices.Clone(spec.Counters.KeyVersions)
+	return Command{linkPreparation: &accountLinkPreparationState{spec: spec, custody: func() (OAuthCallbackInput, authentication.BearerCredential) { return input, frozen }}}, nil
+}
+
+// Link and unlink freeze the same existing canonical session credential; only
+// their typed original workflow inputs and native authority differ.
+func freezeAccountSessionBearer(bearer authentication.BearerCredential) (authentication.BearerCredential, bool) {
 	wire := bearer.Token()
 	if len(wire) < 43 || len(wire) > 86 {
-		return Command{}, invalidAccountLinkPreparation()
+		return authentication.BearerCredential{}, false
 	}
 	raw, err := base64.RawURLEncoding.Strict().DecodeString(wire)
 	defer clear(raw)
 	if err != nil || len(raw) < 32 || len(raw) > 64 || base64.RawURLEncoding.EncodeToString(raw) != wire {
-		return Command{}, invalidAccountLinkPreparation()
+		return authentication.BearerCredential{}, false
 	}
-	spec.Counters.KeyVersions = slices.Clone(spec.Counters.KeyVersions)
-	frozen := authentication.NewBearerCredential(strings.Clone(wire))
-	return Command{linkPreparation: &accountLinkPreparationState{spec: spec, custody: func() (OAuthCallbackInput, authentication.BearerCredential) { return input, frozen }}}, nil
+	return authentication.NewBearerCredential(strings.Clone(wire)), true
 }
 
 func invalidAccountLinkPreparation() error {
@@ -72,7 +81,7 @@ func invalidAccountLinkPreparation() error {
 // Returned values are trusted adapter input, never diagnostics, recovery input,
 // proof verification or execution authority. Zero/mixed/other commands deny.
 func (c Command) AccountLinkPreparationInput() (AccountLinkPreparationCommand, OAuthCallbackInput, authentication.BearerCredential, bool) {
-	if c.linkPreparation == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.linkCounters != nil || c.identifier != nil || c.identifierProof != nil || c.feature != nil || c.privacy != nil || c.privacyProof != nil {
+	if c.linkPreparation == nil || c.unlinkPreparation != nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.accountCounters != nil || c.identifier != nil || c.identifierProof != nil || c.feature != nil || c.privacy != nil || c.privacyProof != nil {
 		return AccountLinkPreparationCommand{}, OAuthCallbackInput{}, authentication.BearerCredential{}, false
 	}
 	spec := c.linkPreparation.spec

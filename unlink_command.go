@@ -61,10 +61,7 @@ type AccountUnlinkCommand struct {
 // NewAccountUnlinkCommand freezes validated intent. Construction does not
 // authorize or establish freshness; only trusted composition crosses UnitOfWork.
 func NewAccountUnlinkCommand(s AccountUnlinkCommand) (Command, error) {
-	if s.Binding.RecordID != string(s.Change.AccountID) {
-		return Command{}, InvalidInputError{Field: "unlink_command"}
-	}
-	if !validCommandBinding(s.Binding) || s.Binding.OperationID != "identity.account.unlink" || s.Binding.SchemaID != "identity-account" || s.Binding.SchemaVersion != 1 || s.Binding.ActorKind != authorization.SubjectUser || string(s.Binding.ActorID) != string(s.Binding.UserID) || s.Change.TenantID != s.Binding.TenantID || s.Change.UserID != s.Binding.UserID || !validDirectoryID(string(s.Change.AccountID)) || !validDirectoryID(s.SessionID) || s.SessionVersion == 0 || !unlinkVersion(s.Change.ExpectedUserVersion) || !unlinkVersion(s.Change.ExpectedAccountVersion) || !unlinkVersion(s.Change.ExpectedSocialLinkVersion) || !unlinkVersion(s.Change.ExpectedCredentialVersion) {
+	if !validAccountUnlinkInput(s.Binding, s.Change, s.SessionID, s.SessionVersion) {
 		return Command{}, InvalidInputError{Field: "unlink_command"}
 	}
 	p := s.Proof.Payload()
@@ -74,9 +71,22 @@ func NewAccountUnlinkCommand(s AccountUnlinkCommand) (Command, error) {
 	return Command{unlink: &s}, nil
 }
 
+func validAccountUnlinkInput(b CommandBinding, change AccountUnlinkChange, sessionID string, sessionVersion uint64) bool {
+	if !validCommandBinding(b) || b.OperationID != "identity.account.unlink" || b.SchemaID != "identity-account" || b.SchemaVersion != 1 {
+		return false
+	}
+	if b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || change.TenantID != b.TenantID || change.UserID != b.UserID {
+		return false
+	}
+	if b.RecordID != string(change.AccountID) || !validDirectoryID(string(change.AccountID)) || !validDirectoryID(sessionID) || sessionVersion == 0 {
+		return false
+	}
+	return unlinkVersion(change.ExpectedUserVersion) && unlinkVersion(change.ExpectedAccountVersion) && unlinkVersion(change.ExpectedSocialLinkVersion) && unlinkVersion(change.ExpectedCredentialVersion)
+}
+
 // UnlinkAccount returns an immutable adapter value copy for this variant only.
 func (c Command) UnlinkAccount() (AccountUnlinkCommand, bool) {
-	if c.unlink == nil || c.linkPreparation != nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
+	if c.unlink == nil || c.accountCounters != nil || c.linkPreparation != nil || c.unlinkPreparation != nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
 		return AccountUnlinkCommand{}, false
 	}
 	return *c.unlink, true
@@ -149,23 +159,36 @@ type AccountUnlinkConfig struct {
 // It owns no store, transaction, locks, goroutines or provider I/O. Dependencies
 // are trusted composition capabilities and must honor concurrent bounded calls.
 type AccountUnlinkService struct {
-	repo   AccountUnlinkRepository
-	uow    UnitOfWork
-	caps   capability.Service
-	policy *AccountService
-	config AccountUnlinkConfig
+	repo     AccountUnlinkRepository
+	uow      UnitOfWork
+	caps     capability.Service
+	prepared PreparedAccountUnlinkUnitOfWork
+	policy   *AccountService
+	config   AccountUnlinkConfig
 }
 
 // NewAccountUnlinkService validates dependencies/configuration without I/O.
 func NewAccountUnlinkService(repo AccountUnlinkRepository, uow UnitOfWork, auth authorization.Service, redact RedactFunc, caps capability.Service, config AccountUnlinkConfig) (*AccountUnlinkService, error) {
-	if nilDependency(repo) || nilDependency(uow) || nilDependency(caps) || !validClaimIssuer(config.ProofIssuer) || !validDirectoryID(config.ProofAudience) || config.MaximumProofAge <= 0 || config.MaximumProofAge > 15*time.Minute {
+	if nilDependency(caps) {
+		return nil, InvalidInputError{Field: "unlink_configuration"}
+	}
+	s, err := newAccountUnlinkService(repo, uow, auth, redact, config)
+	if err != nil {
+		return nil, err
+	}
+	s.caps = caps
+	return s, nil
+}
+
+func newAccountUnlinkService(repo AccountUnlinkRepository, uow UnitOfWork, auth authorization.Service, redact RedactFunc, config AccountUnlinkConfig) (*AccountUnlinkService, error) {
+	if nilDependency(repo) || nilDependency(uow) || !validClaimIssuer(config.ProofIssuer) || !validDirectoryID(config.ProofAudience) || config.MaximumProofAge <= 0 || config.MaximumProofAge > 15*time.Minute {
 		return nil, InvalidInputError{Field: "unlink_configuration"}
 	}
 	p, e := newQueryPolicy(auth, redact, config.Query)
 	if e != nil {
 		return nil, e
 	}
-	return &AccountUnlinkService{repo: repo, uow: uow, caps: caps, policy: &AccountService{policy: p}, config: config}, nil
+	return &AccountUnlinkService{repo: repo, uow: uow, policy: &AccountService{policy: p}, config: config}, nil
 }
 
 // AccountUnlink verifies exact one-use capability bindings and current primary
@@ -173,6 +196,13 @@ func NewAccountUnlinkService(repo AccountUnlinkRepository, uow UnitOfWork, auth 
 // Signature validation never consumes the proof. Only same-command replay may
 // pass older expected versions; the durable owner rejects new stale commands.
 func (s *AccountUnlinkService) AccountUnlink(ctx context.Context, r AccountUnlinkRequest) (out AccountUnlinkResult, err error) {
+	if s == nil || nilDependency(s.caps) {
+		return out, InvalidInputError{Field: "unlink_configuration"}
+	}
+	return s.accountUnlink(ctx, r, nil)
+}
+
+func (s *AccountUnlinkService) accountUnlink(ctx context.Context, r AccountUnlinkRequest, prepared *AccountUnlinkCommand) (out AccountUnlinkResult, err error) {
 	attempted := false
 	defer func() {
 		if recover() != nil {
@@ -196,6 +226,9 @@ func (s *AccountUnlinkService) AccountUnlink(ctx context.Context, r AccountUnlin
 	if !validCommandBinding(b) {
 		return out, InvalidInputError{Field: "unlink_binding"}
 	}
+	if prepared != nil && prepared.Binding != b {
+		return out, ForbiddenError{}
+	}
 	out.CommandID = r.CommandID
 	ctx, cancel := context.WithTimeout(ctx, s.config.Query.MaximumDuration)
 	defer cancel()
@@ -203,7 +236,13 @@ func (s *AccountUnlinkService) AccountUnlink(ctx context.Context, r AccountUnlin
 	if e != nil {
 		return out, e
 	}
-	g, e := s.caps.Verify(ctx, r.Proof, "identity.account.unlink", s.config.ProofAudience)
+	var g capability.Grant
+	if prepared == nil {
+		g, e = s.caps.Verify(ctx, r.Proof, "identity.account.unlink", s.config.ProofAudience)
+	} else {
+		e = s.prepared.VerifyPreparedAccountUnlink(ctx, *prepared)
+		g = prepared.Proof
+	}
 	if ce := readContextError(ctx); ce != nil {
 		return out, ce
 	}

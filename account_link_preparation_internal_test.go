@@ -14,7 +14,7 @@ func TestAccountLinkPreparationMixedVariantsExposeNoPartialCommand(t *testing.T)
 		func(c *Command) { c.status = &UserStatusCommand{} },
 		func(c *Command) { c.unlink = &AccountUnlinkCommand{} },
 		func(c *Command) { c.link = &AccountLinkCommand{} },
-		func(c *Command) { c.linkCounters = &AccountLinkCounterContext{} },
+		func(c *Command) { c.accountCounters = &AccountLinkCounterContext{} },
 		func(c *Command) { c.identifier = &IdentifierCommand{} },
 		func(c *Command) { c.identifierProof = &capability.Proof{} },
 		func(c *Command) { c.privacy = &PrivacyExportRequestCommand{} },

@@ -99,19 +99,20 @@ type CreateUserCommand struct {
 // bounded named typed input for exhaustive feature-adapter schema mapping. It
 // grants no generic callback, transaction, receipt or execution authority.
 type Command struct {
-	create          *CreateUserCommand
-	update          *UpdateUserCommand
-	profile         *ProfileUpdateCommand
-	status          *UserStatusCommand
-	unlink          *AccountUnlinkCommand
-	link            *AccountLinkCommand
-	linkCounters    *AccountLinkCounterContext
-	linkPreparation *accountLinkPreparationState
-	identifier      *IdentifierCommand
-	identifierProof *capability.Proof
-	feature         *featureCommandState
-	privacy         *PrivacyExportRequestCommand
-	privacyProof    *capability.Proof
+	create            *CreateUserCommand
+	update            *UpdateUserCommand
+	profile           *ProfileUpdateCommand
+	status            *UserStatusCommand
+	unlink            *AccountUnlinkCommand
+	link              *AccountLinkCommand
+	accountCounters   *AccountLinkCounterContext
+	linkPreparation   *accountLinkPreparationState
+	unlinkPreparation *accountUnlinkPreparationState
+	identifier        *IdentifierCommand
+	identifierProof   *capability.Proof
+	feature           *featureCommandState
+	privacy           *PrivacyExportRequestCommand
+	privacyProof      *capability.Proof
 }
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.
@@ -144,7 +145,7 @@ func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
 // CreateUser returns a private copy and false for an invalid/zero command.
 // Returned contents are for trusted adapters, never diagnostics or snapshots.
 func (c Command) CreateUser() (CreateUserCommand, bool) {
-	if c.create == nil || c.linkPreparation != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
+	if c.create == nil || c.linkPreparation != nil || c.unlinkPreparation != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
 		return CreateUserCommand{}, false
 	}
 	spec := *c.create

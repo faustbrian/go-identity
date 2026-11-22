@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Build the canonical one-use unlink capability payload from the original
+  prepared action, bounded by its password proof interval. Native issuers
+  still authenticate the original authority and own signing and reservation.
+
+- Add explicit prepared-owner unlink admission for an authenticated retained
+  grant without exposing or re-signing its original bearer. The native producer
+  must validate exact cryptographic custody; core policy, configured proof
+  bounds, last-access checks and scoped recovery remain shared with raw-proof
+  unlink. Neither admission mode silently replaces the other. Complete native
+  password, token-cleanup and session composition remains separate work.
+
+- Retain original password-proof metadata and session custody in a closed
+  typed unlink preparation input. Ordinary executors reject it until the
+  native owner authenticates current authority and attaches the original
+  issuer checkpoint. Construction issues no grant and consumes no proof;
+  protected mutation still owns atomic password-proof and capability use.
+
+- Retain immutable protected counter context beside an unlink's original signed
+  intent without changing the public unlink-command struct or one-use proof.
+  Bare accessors reject decorated commands, preventing older native executors
+  from silently omitting attribution or counter checks. Durable unlink still
+  requires its explicit current-authority and atomic native owner.
+
 - Add an explicit record-targeted sequential-or-unchanged feature version policy
   for owner-fenced no-ops. Positive unchanged versions, including maximum width,
   are preserved without fabricating a mutation. Existing sequential/import

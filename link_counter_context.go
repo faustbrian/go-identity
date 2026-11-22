@@ -72,7 +72,7 @@ func NewAccountLinkCounterCommand(original Command, input AccountLinkCounterCont
 		return Command{}, invalidAccountLinkCounters()
 	}
 	input.KeyVersions = slices.Clone(input.KeyVersions)
-	command.linkCounters = &input
+	command.accountCounters = &input
 	return command, nil
 }
 
@@ -82,16 +82,16 @@ func NewAccountLinkCounterCommand(original Command, input AccountLinkCounterCont
 // verification; native execution must explicitly enforce both owners. The
 // original proof/session/intent/time remain unchanged and no freshness renews.
 func (c Command) AccountLinkCounterCommand() (AccountLinkCommand, AccountLinkCounterContext, bool) {
-	if c.linkCounters == nil {
+	if c.accountCounters == nil {
 		return AccountLinkCommand{}, AccountLinkCounterContext{}, false
 	}
 	plain := c
-	plain.linkCounters = nil
+	plain.accountCounters = nil
 	spec, ok := plain.LinkAccount()
 	if !ok {
 		return AccountLinkCommand{}, AccountLinkCounterContext{}, false
 	}
-	copy := *c.linkCounters
+	copy := *c.accountCounters
 	copy.KeyVersions = slices.Clone(copy.KeyVersions)
 	return spec, copy, true
 }

@@ -147,7 +147,7 @@ func (c Command) Feature() (FeatureCommandSpec, bool) {
 }
 
 func (c Command) validFeatureVariant() bool {
-	if c.linkPreparation != nil {
+	if c.linkPreparation != nil || c.unlinkPreparation != nil {
 		return false
 	}
 	// Compound phone recovery must never enter a legacy path that can omit its
