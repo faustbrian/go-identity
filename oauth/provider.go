@@ -324,6 +324,24 @@ func (AuthorizationRequest) MarshalJSON() ([]byte, error) { return nil, failure(
 // MarshalText refuses accidental authorization-state serialization.
 func (AuthorizationRequest) MarshalText() ([]byte, error) { return nil, failure(InvalidInput, nil) }
 
+// OIDCAuthorization validates normalized static OIDC profile facts and builds the
+// fixed code/query/S256 URL without opening credentials, consulting keys or doing
+// I/O. State, nonce and challenge must be canonical 32-byte encodings from the
+// caller's original transaction. GoogleAccounts selection is unsupported here;
+// existing Google provider instances retain their separate signed-issuer policy.
+// Invalid facts/parameters return InvalidInput. Cancellation of a valid call
+// returns Unavailable with its cause. Inputs must not be mutated during the call.
+// Profile shape grants no transaction, credential, callback or exchange authority.
+func OIDCAuthorization(ctx context.Context, profile ProviderProfile, a AuthorizationParameters) (AuthorizationRequest, error) {
+	if ctx == nil || profile.GoogleAccounts || profile.ValidateQueryCallback() != nil || !canonical32(a.State) || !canonical32(a.Nonce) || !canonical32(a.PKCEChallenge) {
+		return AuthorizationRequest{}, failure(InvalidInput, ctx)
+	}
+	if ctx.Err() != nil {
+		return AuthorizationRequest{}, failure(Unavailable, ctx)
+	}
+	return renderOIDCAuthorization(profile.AuthorizationEndpoint, profile.ClientID, profile.RedirectURI, profile.Scopes, a), nil
+}
+
 // Authorization builds fixed code/query/S256 parameters with exact configured
 // client, redirect and scopes. Caller parameters cannot override configuration.
 func (p *OIDCProvider) Authorization(ctx context.Context, a AuthorizationParameters) (AuthorizationRequest, error) {
@@ -339,8 +357,12 @@ func (p *OIDCProvider) Authorization(ctx context.Context, a AuthorizationParamet
 	if closed || !canonical32(a.State) || !canonical32(a.Nonce) || !canonical32(a.PKCEChallenge) {
 		return AuthorizationRequest{}, failure(InvalidInput, ctx)
 	}
-	q := url.Values{"response_type": {"code"}, "response_mode": {"query"}, "client_id": {p.config.ClientID}, "redirect_uri": {p.config.RedirectURI}, "scope": {strings.Join(p.config.Scopes, " ")}, "state": {a.State}, "nonce": {a.Nonce}, "code_challenge": {a.PKCEChallenge}, "code_challenge_method": {"S256"}}
-	return AuthorizationRequest{p.config.AuthorizationEndpoint + "?" + q.Encode()}, nil
+	return renderOIDCAuthorization(p.config.AuthorizationEndpoint, p.config.ClientID, p.config.RedirectURI, p.config.Scopes, a), nil
+}
+
+func renderOIDCAuthorization(endpoint, clientID, redirectURI string, scopes []string, a AuthorizationParameters) AuthorizationRequest {
+	q := url.Values{"response_type": {"code"}, "response_mode": {"query"}, "client_id": {clientID}, "redirect_uri": {redirectURI}, "scope": {strings.Join(scopes, " ")}, "state": {a.State}, "nonce": {a.Nonce}, "code_challenge": {a.PKCEChallenge}, "code_challenge_method": {"S256"}}
+	return AuthorizationRequest{endpoint + "?" + q.Encode()}
 }
 
 // ProviderIdentity contains only identity admitted by the selected strict OIDC

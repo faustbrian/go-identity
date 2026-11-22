@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add pure static OIDC authorization rendering from normalized secret-free
+  profile facts and original state, nonce and S256 challenge, without opening
+  credentials, consulting keys or starting a provider. Existing provider and
+  Google instance validation, lifecycle and authorization URLs remain unchanged.
+
 - Add pure shared-redirect OAuth2 authorization rendering from validated
   secret-free profile facts and original state/S256 challenge, without opening
   credentials or starting a provider. Existing instance lifecycle checks and
