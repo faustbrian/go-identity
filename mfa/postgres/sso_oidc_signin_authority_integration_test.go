@@ -183,12 +183,20 @@ func TestRequireSSOOIDCSigninFactorsPreparedPostgres(t *testing.T) {
 	ctx, pool, repository := newOAuthSigninFactorStore(t)
 	accounts := kernel.AccountMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 12}
 	preparation := kernel.AdmissionPreparationMigrationSource{Base: kernel.PreparationMigrationSource{Base: accounts, Version: 13}, Version: 14}
-	history, err := (kernel.CounterPreparationMigrationSource{Base: preparation, Version: 15}).Load(ctx)
+	counter := kernel.CounterPreparationMigrationSource{Base: preparation, Version: 15}
+	start := kernel.SSOOIDCPreparationErasureMigrationSource{Base: counter, Version: 16}
+	history, err := (kernel.SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 17}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Raw().Exec(ctx, history[len(history)-1].UpSQL()); err != nil {
-		t.Fatal("native retained callback declaration", err)
+	// The common fixture installs account/admission history through version 14.
+	// Match the real terminal callback's trigger before exercising the MFA fence.
+	for _, step := range history {
+		if step.Version() > 14 {
+			if _, err := pool.Raw().Exec(ctx, step.UpSQL()); err != nil {
+				t.Fatal("native enterprise callback journal history", err)
+			}
+		}
 	}
 	migrations := capabilitypg.Migrations()
 	entries, err := fs.ReadDir(migrations, ".")

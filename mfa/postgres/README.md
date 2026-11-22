@@ -9,6 +9,13 @@ enterprise callback command. `ReadSSOOIDCSessionFactors` and
 revocation. Missing, enrolled or changed authority denies. The session and SSO
 owners still verify the provider, organization membership and session effects.
 
+For opt-in first-login provisioning, install all three steps of
+`SSOOIDCJITFactorMigrationSource` before selecting JIT. The source adds
+alternate command provenance on the same factor row without replacing prior
+signup purpose checks; the last step builds its unique index concurrently.
+`InitializeSSOOIDCJIT` inserts the initial known-empty generation only for the
+user this exact callback created. It never resets existing factor authority.
+
 ## Passkey primary with an enrolled independent TOTP
 
 `PersistPasskeyContinuation` requires the exact original `PasskeyCommandID`

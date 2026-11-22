@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Initialize known-empty factor authority for the exact enterprise OIDC JIT
+  user and original callback command. The additive provenance migration keeps
+  existing signup purposes, factor generations and enrollment state intact.
+
 - Add a distinct enterprise OIDC known-empty factor profile for the exact
   existing-account callback, session read and same-user revocation. Missing,
   enrolled or stale factor authority denies; social OAuth remains unchanged.
