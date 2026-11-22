@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Offer an explicit offline retired-subject index migration for atomic schema
+  installation. Preserve published concurrent history; offline creation blocks
+  writes until its enclosing transaction commits.
+
 - Add the enterprise OIDC JIT identity owner. Bind the exact prospective
   verified mailbox and provider subject to original callback Work; reject
   occupied or retired ownership and expose provisional creation only to the

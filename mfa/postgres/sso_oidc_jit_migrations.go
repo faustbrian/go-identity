@@ -3,6 +3,7 @@ package mfapostgres
 import (
 	"context"
 	"math"
+	"strings"
 
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
@@ -57,6 +58,33 @@ func (s SSOOIDCJITFactorMigrationSource) Load(ctx context.Context) ([]migrations
 	}
 	history[len(history)-1] = expansion
 	return append(history, validation, index), nil
+}
+
+// LoadOffline selects transactional index creation for an offline installation
+// whose existing migration owner requires an atomic command. Base, expansion
+// and validation are identical to Load; only the final index step's transaction
+// mode, SQL and checksum differ. The index name, columns and predicate are the
+// same, with a five-second lock-acquisition timeout.
+//
+// Ordinary index creation blocks writes through its build and the enclosing
+// transaction's lifetime. Select this only while writers are quiescent, with a
+// bounded migration context; lock_timeout does not limit build or lock-hold
+// duration. Choose the history before application: this variant must never
+// replace an applied concurrent step at the same version. Version allocation
+// remains caller-owned. This method performs no I/O and starts no transaction.
+func (s SSOOIDCJITFactorMigrationSource) LoadOffline(ctx context.Context) ([]migrations.Migration, error) {
+	history, err := s.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	last := len(history) - 1
+	indexSQL := "SET LOCAL lock_timeout = '5s';\n" + strings.Replace(ssoOIDCJITFactorIndexSQL, "CREATE UNIQUE INDEX CONCURRENTLY ", "CREATE UNIQUE INDEX ", 1)
+	index, err := migrations.NewMigration(history[last].Version(), history[last].Name(), migrations.TransactionModeDefault, indexSQL, "")
+	if err != nil {
+		return nil, identity.UnavailableError{}
+	}
+	history[last] = index
+	return history, nil
 }
 
 // Legacy signup suffixes explicitly replace their original purpose CHECKs.

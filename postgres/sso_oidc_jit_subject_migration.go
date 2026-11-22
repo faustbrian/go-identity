@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"math"
+	"strings"
 
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
@@ -54,6 +55,31 @@ func (s SSOOIDCSubjectAvailabilityMigrationSource) Load(ctx context.Context) ([]
 		return nil, identity.UnavailableError{}
 	}
 	return append(append([]migrations.Migration(nil), history...), forward), nil
+}
+
+// LoadOffline selects ordinary transactional index creation for an explicit
+// offline installation, including an atomic schema batch. It reuses Load's
+// validation and preserves every Base migration, but generates a different
+// final checksum. Select it before first installation; it cannot replace
+// already-applied concurrent Load history at the same version.
+//
+// Ordinary CREATE INDEX blocks writes until its enclosing transaction ends.
+// The local five-second lock timeout bounds lock acquisition, not build time
+// or transaction duration; the caller must provide the offline window and a
+// bounded execution context. No I/O is performed by this method.
+func (s SSOOIDCSubjectAvailabilityMigrationSource) LoadOffline(ctx context.Context) ([]migrations.Migration, error) {
+	history, err := s.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	concurrent := history[len(history)-1]
+	sql := "SET LOCAL lock_timeout = '5s';\n" + strings.Replace(ssoOIDCSubjectAvailabilityIndexSQL, "CREATE INDEX CONCURRENTLY ", "CREATE INDEX ", 1)
+	offline, err := migrations.NewMigration(concurrent.Version(), concurrent.Name(), migrations.TransactionModeDefault, sql, "")
+	if err != nil {
+		return nil, identity.UnavailableError{}
+	}
+	history[len(history)-1] = offline
+	return history, nil
 }
 
 const ssoOIDCSubjectAvailabilityIndexSQL = `CREATE INDEX CONCURRENTLY identity_accounts_retired_subject ON identity.accounts(tenant_id,subject_key) WHERE NOT linked;`

@@ -84,6 +84,79 @@ func TestSSOOIDCJITFactorMigrationRejectsInvalidOrUnorderedHistory(t *testing.T)
 	}
 }
 
+func TestSSOOIDCJITFactorOfflineMigrationPreservesConcurrentHistory(t *testing.T) {
+	source := SSOOIDCJITFactorMigrationSource{
+		Base:    PasskeySignupMigrationSource{Base: MigrationSource{Version: 1}, Version: 2},
+		Version: 7, ValidationVersion: 8, IndexVersion: 9,
+	}
+	concurrent, err := source.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	offline, err := source.LoadOffline(t.Context())
+	if err != nil || len(offline) != len(concurrent) {
+		t.Fatal("offline choice changed migration history length", err)
+	}
+	for i := range concurrent[:len(concurrent)-1] {
+		if offline[i].Checksum() != concurrent[i].Checksum() {
+			t.Fatal("offline choice changed installed base, expansion or validation")
+		}
+	}
+	const concurrentSQL = `CREATE UNIQUE INDEX CONCURRENTLY factor_authorities_sso_oidc_command_unique ON identity_mfa.factor_authorities(tenant_id,initialized_command_id) WHERE sso_oidc_initialized_purpose IS NOT NULL;`
+	const offlineSQL = `SET LOCAL lock_timeout = '5s';
+CREATE UNIQUE INDEX factor_authorities_sso_oidc_command_unique ON identity_mfa.factor_authorities(tenant_id,initialized_command_id) WHERE sso_oidc_initialized_purpose IS NOT NULL;`
+	for _, choice := range []struct {
+		step migrations.Migration
+		mode migrations.TransactionMode
+		sql  string
+	}{
+		{concurrent[len(concurrent)-1], migrations.TransactionModeNone, concurrentSQL},
+		{offline[len(offline)-1], migrations.TransactionModeDefault, offlineSQL},
+	} {
+		expected, err := migrations.NewMigration(9, "identity_mfa_sso_oidc_jit_unique", choice.mode, choice.sql, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if choice.step.Checksum() != expected.Checksum() || choice.step.Version() != 9 || choice.step.Name() != expected.Name() || choice.step.TransactionMode() != choice.mode || choice.step.UpSQL() != choice.sql || choice.step.DownSQL() != "" {
+			t.Fatal("selected migration changed its concrete mode, SQL or immutable identity")
+		}
+	}
+	if offline[len(offline)-1].Checksum() == concurrent[len(concurrent)-1].Checksum() {
+		t.Fatal("different applied histories share a checksum")
+	}
+	unchanged, err := source.Load(t.Context())
+	if err != nil || len(unchanged) != len(concurrent) {
+		t.Fatal("offline load changed later default history", err)
+	}
+	for i := range concurrent {
+		if unchanged[i].Checksum() != concurrent[i].Checksum() {
+			t.Fatal("offline load mutated the default migration identity")
+		}
+	}
+}
+
+func TestSSOOIDCJITFactorOfflineMigrationPreservesValidationErrors(t *testing.T) {
+	valid := SSOOIDCJITFactorMigrationSource{Base: MigrationSource{Version: 1}, Version: 2, ValidationVersion: 3, IndexVersion: 4}
+	for _, invalid := range []SSOOIDCJITFactorMigrationSource{
+		{},
+		{Base: valid.Base, Version: 1, ValidationVersion: 3, IndexVersion: 4},
+		{Base: valid.Base, Version: 2, ValidationVersion: 2, IndexVersion: 4},
+		{Base: valid.Base, Version: 2, ValidationVersion: 3, IndexVersion: 3},
+	} {
+		if history, err := invalid.LoadOffline(t.Context()); err == nil || history != nil {
+			t.Fatal("offline choice admitted invalid or unordered history")
+		}
+	}
+	if history, err := valid.LoadOffline(nil); err == nil || history != nil {
+		t.Fatal("offline choice admitted nil context")
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if history, err := valid.LoadOffline(canceled); !errors.Is(err, context.Canceled) || history != nil {
+		t.Fatal("offline choice lost cancellation", err)
+	}
+}
+
 func TestSSOOIDCJITFactorInitializationRequiresActualProtectedCreation(t *testing.T) {
 	for _, ctx := range []context.Context{nil, t.Context()} {
 		if err := InitializeSSOOIDCJIT(ctx, kernel.Work{}, nil, identity.Command{}); err == nil {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit `SSOOIDCJITFactorMigrationSource.LoadOffline` for transactional
+  offline installations. It retains the default expansion and validation and
+  builds the same partial unique index with a five-second lock-acquisition
+  timeout. This choice blocks writes until the enclosing transaction commits;
+  select it before applying history, never in place of an applied concurrent
+  index step. Default `Load` history and checksums remain unchanged.
+
 - Initialize known-empty factor authority for the exact enterprise OIDC JIT
   user and original callback command. The additive provenance migration keeps
   existing signup purposes, factor generations and enrollment state intact.
