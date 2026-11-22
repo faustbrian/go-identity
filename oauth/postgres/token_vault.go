@@ -79,9 +79,30 @@ func rpTokenVaultScopes(scopes []string) bool {
 func (s *LinkService) tokenVaultIDTokenSize(profile oauth.ProviderProfile, size uint64) bool {
 	if details, selected := s.oauth2Profiles[profile.ID]; selected {
 		facts := oauth.OAuth2UserInfoProfile{Profile: profile, Details: details}
-		return facts.Validate() == nil && size == 0
+		return facts.ValidateForTokenPolicy(s.oauth2TokenPolicies[profile.ID]) == nil && size == 0
 	}
 	return size > 0 && size <= uint64(profile.MaxTokenBytes)
+}
+
+func (s *LinkService) tokenVaultExpiry(profile oauth.ProviderProfile, received, expires time.Time) bool {
+	if expires.IsZero() {
+		if s.oauth2TokenPolicies[profile.ID] != oauth.OAuth2GitHubOAuthAppPolicy {
+			return false
+		}
+		details, ok := s.oauth2Profiles[profile.ID]
+		facts := oauth.OAuth2UserInfoProfile{Profile: profile, Details: details}
+		return ok && facts.ValidateForTokenPolicy(oauth.OAuth2GitHubOAuthAppPolicy) == nil
+	}
+	return rpUTCTime(expires) && expires.After(received) && expires.Sub(received) <= 365*24*time.Hour && expires.Sub(received)%time.Second == 0
+}
+
+// NULL is an honest missing provider expiry, not a timestamp or a local TTL.
+// Only authenticated selected metadata reaches this SQL parameter projection.
+func rpTokenVaultExpiryParameters(expires time.Time) (any, any) {
+	if expires.IsZero() {
+		return nil, nil
+	}
+	return expires.Unix(), expires.Nanosecond()
 }
 
 func (s *LinkService) tokenVaultProfile(b rpTokenVaultBinding) (oauth.ProviderProfile, error) {
@@ -109,7 +130,7 @@ func (s *LinkService) tokenVaultMetadata(p rpPreparedTokenSet) (oauth.ProviderPr
 	if err != nil {
 		return oauth.ProviderProfile{}, err
 	}
-	if p.Schema != 1 || p.Version != 1 || p.SocialConnectionVersion != 1 || !rpTokenVaultScopes(p.RequestedScopes) || !rpTokenVaultScopes(p.GrantedScopes) || !slices.Equal(p.RequestedScopes, profile.Scopes) || !rpUTCTime(p.ReceivedAt) || !rpUTCTime(p.AccessExpiresAt) || !p.AccessExpiresAt.After(p.ReceivedAt) || p.AccessExpiresAt.Sub(p.ReceivedAt) > 365*24*time.Hour || p.AccessExpiresAt.Sub(p.ReceivedAt)%time.Second != 0 || !p.ScopeReported && !slices.Equal(p.RequestedScopes, p.GrantedScopes) {
+	if p.Schema != 1 || p.Version != 1 || p.SocialConnectionVersion != 1 || !rpTokenVaultScopes(p.RequestedScopes) || !rpTokenVaultScopes(p.GrantedScopes) || !slices.Equal(p.RequestedScopes, profile.Scopes) || !rpUTCTime(p.ReceivedAt) || !s.tokenVaultExpiry(profile, p.ReceivedAt, p.AccessExpiresAt) || !p.ScopeReported && !slices.Equal(p.RequestedScopes, p.GrantedScopes) {
 		return oauth.ProviderProfile{}, identity.ForbiddenError{}
 	}
 	for _, scope := range p.GrantedScopes {
@@ -288,7 +309,8 @@ func (s *LinkService) persistProviderTokens(ctx context.Context, w kernel.Accoun
 	// Work deliberately accepts bounded scalars, not driver-controlled array
 	// encoders. RFC 6749 section 3.3 forbids spaces inside scope tokens, so this
 	// validated, order-preserving encoding round-trips without broadening Work.
-	n, err := w.Exec(ctx, strings.ReplaceAll(rpTokenVaultInsert, "@schema@", rpQuotedSchema(s.config().Schema)), string(b.TenantID), string(b.UserID), string(b.AccountID), b.ProviderID, b.Issuer, b.ClientID, b.ConfigurationVersion, b.AccountVersion, b.SocialLinkVersion, strings.Join(p.RequestedScopes, " "), strings.Join(p.GrantedScopes, " "), p.ScopeReported, p.ReceivedAt.Unix(), p.ReceivedAt.Nanosecond(), p.AccessExpiresAt.Unix(), p.AccessExpiresAt.Nanosecond(), p.Ciphertext, origin)
+	expiresSeconds, expiresNanos := rpTokenVaultExpiryParameters(p.AccessExpiresAt)
+	n, err := w.Exec(ctx, strings.ReplaceAll(rpTokenVaultInsert, "@schema@", rpQuotedSchema(s.config().Schema)), string(b.TenantID), string(b.UserID), string(b.AccountID), b.ProviderID, b.Issuer, b.ClientID, b.ConfigurationVersion, b.AccountVersion, b.SocialLinkVersion, strings.Join(p.RequestedScopes, " "), strings.Join(p.GrantedScopes, " "), p.ScopeReported, p.ReceivedAt.Unix(), p.ReceivedAt.Nanosecond(), expiresSeconds, expiresNanos, p.Ciphertext, origin)
 	if err != nil {
 		return err
 	}

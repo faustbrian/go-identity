@@ -46,7 +46,7 @@ func (p *rpLinkPhase) GenerateAccountLinkPreparation(ctx context.Context, comman
 		return nil, identity.ForbiddenError{}
 	}
 	provider, ok := p.service.providers.Lookup(flow.Provider.ID)
-	if !ok || !reflect.DeepEqual(provider.Profile(), flow.Provider) || !oauth2ProviderMatches(provider, flow.OAuth2) {
+	if !ok || !reflect.DeepEqual(provider.Profile(), flow.Provider) || !oauth2ProviderMatches(provider, flow.OAuth2, flow.OAuth2TokenPolicy) {
 		return nil, identity.ForbiddenError{}
 	}
 	spec, input, _, ok := command.AccountLinkPreparationInput()

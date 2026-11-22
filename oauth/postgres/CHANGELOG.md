@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Authenticate explicit GitHub OAuth-app token policy in native link/signin
+  state, callback admission and token restoration. Add two forward optional-
+  expiry vault migration phases before enabling that profile; store absent
+  expiry as paired SQL NULL without rewriting installed history or positive
+  rows. Existing OIDC/GitLab expiry requirements and zero-policy bytes remain
+  unchanged; no refresh, signup or implicit linking is added.
+
 - Compose explicitly configured OAuth2/UserInfo providers through existing
   native link and existing-account signin owners. Bind full UserInfo facts and
   the distinct actual callback route to original encrypted state/configuration;

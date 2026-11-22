@@ -37,6 +37,14 @@ the strict OIDC parser or assume HTTP/Reference automatically selects it.
 UserInfo observation expiry and original access-token expiry are retained,
 never renewed during restore/replay. No provider nonce or ID-token claims are
 invented. Existing OIDC JSON and verifier AAD bytes remain unchanged.
+Explicit GitHub OAuth-app selection also authenticates its closed token/resource
+policy in the same snapshots and callback admission. Before enabling it, apply
+both forward phases from `TokenVaultOptionalExpiryMigrationSource` after the
+installed vault history, using two unused consecutive versions in its existing
+namespace. This preserves old migration bytes/positive rows and adds paired SQL
+NULL expiry for ordinary GitHub tokens. Existing OIDC/GitLab writers still require
+positive expiry; restore/replay never turns zero into a TTL or fresh evidence.
+See the providers module's GitHub profile for rollout and rollback constraints.
 The provider's verified issuer and subject must resolve to an already linked
 account with its current provider credential. `SignupDisabled` must be true.
 There is no implicit signup, email matching, MFA challenge, organization-session

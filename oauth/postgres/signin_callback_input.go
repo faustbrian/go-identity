@@ -58,7 +58,7 @@ func (s *SigninService) authenticateSigninBrowser(ctx context.Context, r oauth.S
 		return out, err
 	}
 	v := stored.Binding
-	if !oauth2CallbackMatches(r.Callback, v.OAuth2) {
+	if !oauth2CallbackMatches(r.Callback, v.OAuth2, v.OAuth2TokenPolicy) {
 		return out, identity.ForbiddenError{}
 	}
 	b := identity.CommandBinding(v.Input.Binding)
@@ -177,7 +177,7 @@ func (s *SigninService) loadSigninCallback(ctx context.Context, r oauth.SigninCa
 	}()
 	profile := r.Callback.Profile()
 	current, ok := s.profiles[profile.ID]
-	if !oauth2CallbackMatches(r.Callback, oauth2ProfileDetails(s.oauth2Profiles, profile.ID)) {
+	if !oauth2CallbackMatches(r.Callback, oauth2ProfileDetails(s.oauth2Profiles, profile.ID), s.oauth2TokenPolicies[profile.ID]) {
 		return out, identity.ForbiddenError{}
 	}
 	if !ok || !reflect.DeepEqual(current, profile) {

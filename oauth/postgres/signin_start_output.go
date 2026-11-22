@@ -31,6 +31,7 @@ type signinRPBinding struct {
 	Input                   signinStartInput
 	Provider                oauth.ProviderProfile
 	OAuth2                  *oauth.OAuth2UserInfoDetails `json:",omitempty"`
+	OAuth2TokenPolicy       oauth.OAuth2TokenPolicy      `json:",omitempty"`
 	CallbackCommandID       identity.CommandID
 	State, Nonce, Challenge string
 	StateKeyVersion         uint32
@@ -152,6 +153,7 @@ func (p *signinStartPhase) generateOutput(ctx context.Context, generation uint64
 	}
 	binding := signinRPBinding{Schema: 1, Input: *p.input, Provider: profile, CallbackCommandID: callbackID, State: base64.RawURLEncoding.EncodeToString(state[:]), Nonce: base64.RawURLEncoding.EncodeToString(nonce[:]), Challenge: base64.RawURLEncoding.EncodeToString(challenge[:]), StateKeyVersion: c.CurrentStateKeyVersion, StateReplayKeyVersion: c.Capability.CurrentReplayKeyVersion, StateDigest: digest, PKCEKeyVersion: pkce.keyVersion, PKCECommitment: pkce.commitment, IssuedAt: issued, ExpiresAt: expires}
 	binding.OAuth2 = oauth2ProfileDetails(s.oauth2Profiles, profile.ID)
+	binding.OAuth2TokenPolicy = s.oauth2TokenPolicies[profile.ID]
 	plainBinding, err := json.Marshal(binding)
 	if err != nil {
 		return nil, identity.UnavailableError{}
@@ -205,7 +207,7 @@ func (p *signinStartPhase) generateOutput(ctx context.Context, generation uint64
 }
 
 func (p *signinStartPhase) validateBinding(b signinRPBinding) error {
-	if !reflect.DeepEqual(b.OAuth2, oauth2ProfileDetails(p.service.oauth2Profiles, b.Provider.ID)) {
+	if !reflect.DeepEqual(b.OAuth2, oauth2ProfileDetails(p.service.oauth2Profiles, b.Provider.ID)) || b.OAuth2TokenPolicy != p.service.oauth2TokenPolicies[b.Provider.ID] {
 		return identity.ForbiddenError{}
 	}
 	issued, expires, err := p.stateLifetime()

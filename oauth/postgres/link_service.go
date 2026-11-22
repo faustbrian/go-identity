@@ -62,22 +62,23 @@ type LinkServiceConfig struct {
 // are borrowed and must remain usable until all calls return. No goroutines or
 // runtime resources are started or closed by this owner.
 type LinkService struct {
-	pool           *database.Pool
-	directory      *kernel.Repository
-	sessions       *session.SessionService
-	counters       *riskpg.Repository
-	issuer         *capabilitypg.Issuer
-	checkpoint     *capabilitypg.IssuancePreparationCodec
-	providers      oauth.ProviderRegistry
-	profiles       map[string]oauth.ProviderProfile
-	oauth2Profiles map[string]oauth.OAuth2UserInfoDetails
-	envelopes      *envelope.Service
-	verifiers      *rpVerifierCustody
-	intentKey      session.DigestKey
-	intentCSRF     session.CSRFKey
-	requestKey     kernel.RequestKeyConfig
-	profile        [32]byte
-	config         func() LinkServiceConfig
+	pool                *database.Pool
+	directory           *kernel.Repository
+	sessions            *session.SessionService
+	counters            *riskpg.Repository
+	issuer              *capabilitypg.Issuer
+	checkpoint          *capabilitypg.IssuancePreparationCodec
+	providers           oauth.ProviderRegistry
+	profiles            map[string]oauth.ProviderProfile
+	oauth2Profiles      map[string]oauth.OAuth2UserInfoDetails
+	oauth2TokenPolicies map[string]oauth.OAuth2TokenPolicy
+	envelopes           *envelope.Service
+	verifiers           *rpVerifierCustody
+	intentKey           session.DigestKey
+	intentCSRF          session.CSRFKey
+	requestKey          kernel.RequestKeyConfig
+	profile             [32]byte
+	config              func() LinkServiceConfig
 }
 
 var _ oauth.LinkStarter = (*LinkService)(nil)
@@ -125,6 +126,7 @@ func NewLinkService(pool *database.Pool, c LinkServiceConfig) (*LinkService, err
 	if err != nil {
 		return nil, invalid
 	}
+	oauth2TokenPolicies := oauth2ProviderTokenPolicies(c.Providers)
 	for _, provider := range c.Providers {
 		profile := provider.Profile()
 		if profile.ID != provider.ID() || profile.Version == 0 {
@@ -233,13 +235,14 @@ func NewLinkService(pool *database.Pool, c LinkServiceConfig) (*LinkService, err
 		StateTTL                   time.Duration
 		PolicyVersion              uint64
 		OAuth2                     map[string]oauth.OAuth2UserInfoDetails `json:",omitempty"`
-	}{c.Schema, c.ConfigurationID, c.PolicyID, c.Origin, c.CallbackAllowlist, profiles, rpStoredSessionProfile(c.Session.Profile), c.StateLifetime, c.Coordinator.AdmissionPolicy.PolicyVersion, oauth2Profiles})
+		OAuth2TokenPolicies        map[string]oauth.OAuth2TokenPolicy     `json:",omitempty"`
+	}{c.Schema, c.ConfigurationID, c.PolicyID, c.Origin, c.CallbackAllowlist, profiles, rpStoredSessionProfile(c.Session.Profile), c.StateLifetime, c.Coordinator.AdmissionPolicy.PolicyVersion, oauth2Profiles, oauth2TokenPolicies})
 	if err != nil {
 		return nil, invalid
 	}
 	profile := sha256.Sum256(frame)
 	clear(frame)
-	s := &LinkService{pool: pool, directory: directory, sessions: reader, counters: counters, issuer: issuer, checkpoint: checkpoint, providers: registry, profiles: profiles, oauth2Profiles: oauth2Profiles, envelopes: envelopes, verifiers: verifiers, intentKey: intentKey, intentCSRF: intentCSRF, requestKey: requestKeys, profile: profile, config: func() LinkServiceConfig { return c }}
+	s := &LinkService{pool: pool, directory: directory, sessions: reader, counters: counters, issuer: issuer, checkpoint: checkpoint, providers: registry, profiles: profiles, oauth2Profiles: oauth2Profiles, oauth2TokenPolicies: oauth2TokenPolicies, envelopes: envelopes, verifiers: verifiers, intentKey: intentKey, intentCSRF: intentCSRF, requestKey: requestKeys, profile: profile, config: func() LinkServiceConfig { return c }}
 	if _, _, err := s.startCoordinator(&rpStartPhase{service: s}); err != nil {
 		return nil, invalid
 	}

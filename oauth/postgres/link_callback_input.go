@@ -67,7 +67,7 @@ func (s *LinkService) loadRPLinkCallback(ctx context.Context, r oauth.CallbackRe
 	c := s.config()
 	profile := r.Callback.Profile()
 	current, ok := s.profiles[profile.ID]
-	if !oauth2CallbackMatches(r.Callback, oauth2ProfileDetails(s.oauth2Profiles, profile.ID)) {
+	if !oauth2CallbackMatches(r.Callback, oauth2ProfileDetails(s.oauth2Profiles, profile.ID), s.oauth2TokenPolicies[profile.ID]) {
 		return out, identity.ForbiddenError{}
 	}
 	if !ok || !reflect.DeepEqual(profile, current) || r.Origin != c.Origin {
@@ -217,7 +217,7 @@ func (s *LinkService) authenticateRPCallback(ctx context.Context, r oauth.Callba
 		}
 	}()
 	b := binding.Input.binding()
-	if !oauth2CallbackMatches(r.Callback, binding.OAuth2) {
+	if !oauth2CallbackMatches(r.Callback, binding.OAuth2, binding.OAuth2TokenPolicy) {
 		return out, identity.ForbiddenError{}
 	}
 	p := &rpStartPhase{service: s, input: &binding.Input}

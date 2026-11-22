@@ -21,7 +21,7 @@ func oauth2ProviderProfiles(providers []oauth.Provider) (map[string]oauth.OAuth2
 			continue
 		}
 		p := facts.OAuth2Profile()
-		if p.Validate() != nil || !reflect.DeepEqual(p.Profile, provider.Profile()) {
+		if p.ValidateForTokenPolicy(oauth.ProviderOAuth2TokenPolicy(provider)) != nil || !reflect.DeepEqual(p.Profile, provider.Profile()) {
 			return nil, identity.InvalidInputError{Field: "oauth2_profile"}
 		}
 		if selected == nil {
@@ -32,6 +32,21 @@ func oauth2ProviderProfiles(providers []oauth.Provider) (map[string]oauth.OAuth2
 	return selected, nil
 }
 
+// Zero policies stay absent, preserving existing OIDC/GitLab JSON and AAD.
+// Call only after oauth2ProviderProfiles has validated the full provider list.
+func oauth2ProviderTokenPolicies(providers []oauth.Provider) map[string]oauth.OAuth2TokenPolicy {
+	var selected map[string]oauth.OAuth2TokenPolicy
+	for _, provider := range providers {
+		if policy := oauth.ProviderOAuth2TokenPolicy(provider); policy != "" {
+			if selected == nil {
+				selected = make(map[string]oauth.OAuth2TokenPolicy)
+			}
+			selected[provider.ID()] = policy
+		}
+	}
+	return selected
+}
+
 func oauth2ProfileDetails(profiles map[string]oauth.OAuth2UserInfoDetails, id string) *oauth.OAuth2UserInfoDetails {
 	details, ok := profiles[id]
 	if !ok {
@@ -40,7 +55,10 @@ func oauth2ProfileDetails(profiles map[string]oauth.OAuth2UserInfoDetails, id st
 	return &details
 }
 
-func oauth2CallbackMatches(callback oauth.Callback, expected *oauth.OAuth2UserInfoDetails) bool {
+func oauth2CallbackMatches(callback oauth.Callback, expected *oauth.OAuth2UserInfoDetails, policy oauth.OAuth2TokenPolicy) bool {
+	if callback.OAuth2TokenPolicy() != policy {
+		return false
+	}
 	details, selected := callback.OAuth2Details()
 	if expected == nil {
 		return !selected
@@ -48,7 +66,10 @@ func oauth2CallbackMatches(callback oauth.Callback, expected *oauth.OAuth2UserIn
 	return selected && details == *expected
 }
 
-func oauth2ProviderMatches(provider oauth.Provider, expected *oauth.OAuth2UserInfoDetails) bool {
+func oauth2ProviderMatches(provider oauth.Provider, expected *oauth.OAuth2UserInfoDetails, policy oauth.OAuth2TokenPolicy) bool {
+	if oauth.ProviderOAuth2TokenPolicy(provider) != policy {
+		return false
+	}
 	facts, selected := provider.(oauth.OAuth2UserInfoFacts)
 	if expected == nil {
 		return !selected
@@ -57,7 +78,7 @@ func oauth2ProviderMatches(provider oauth.Provider, expected *oauth.OAuth2UserIn
 		return false
 	}
 	profile := facts.OAuth2Profile()
-	return profile.Validate() == nil && profile.Details == *expected && reflect.DeepEqual(profile.Profile, provider.Profile())
+	return profile.ValidateForTokenPolicy(policy) == nil && profile.Details == *expected && reflect.DeepEqual(profile.Profile, provider.Profile())
 }
 
 // Existing encrypted RP nonce bytes remain bound/erased as original auxiliary

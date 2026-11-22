@@ -34,6 +34,7 @@ type rpStartBinding struct {
 	Input                   rpStartInput
 	Provider                oauth.ProviderProfile
 	OAuth2                  *oauth.OAuth2UserInfoDetails `json:",omitempty"`
+	OAuth2TokenPolicy       oauth.OAuth2TokenPolicy      `json:",omitempty"`
 	CallbackCommandID       identity.CommandID
 	AccountRecordID         string
 	State, Nonce, Challenge string
@@ -249,6 +250,7 @@ func (p *rpStartPhase) generateOutput(ctx context.Context, generation uint64) ([
 	}
 	binding := rpStartBinding{Schema: 1, Input: *p.input, Provider: profile, CallbackCommandID: callbackID, AccountRecordID: string(accountID), State: base64.RawURLEncoding.EncodeToString(state[:]), Nonce: base64.RawURLEncoding.EncodeToString(nonce[:]), Challenge: base64.RawURLEncoding.EncodeToString(challenge[:]), StateKeyVersion: c.CurrentStateKeyVersion, StateReplayKeyVersion: c.Capability.CurrentReplayKeyVersion, StateDigest: digest, PKCEKeyVersion: pkce.keyVersion, PKCECommitment: pkce.commitment, IssuedAt: issued, ExpiresAt: expires}
 	binding.OAuth2 = oauth2ProfileDetails(s.oauth2Profiles, profile.ID)
+	binding.OAuth2TokenPolicy = s.oauth2TokenPolicies[profile.ID]
 	plain, err := json.Marshal(binding)
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "oauth_rp_binding"}
@@ -335,7 +337,7 @@ func (s *LinkService) openRPStoredTransaction(ctx context.Context, tenant identi
 }
 
 func (p *rpStartPhase) validateOutputBinding(out rpStartBinding) error {
-	if !reflect.DeepEqual(out.OAuth2, oauth2ProfileDetails(p.service.oauth2Profiles, out.Provider.ID)) {
+	if !reflect.DeepEqual(out.OAuth2, oauth2ProfileDetails(p.service.oauth2Profiles, out.Provider.ID)) || out.OAuth2TokenPolicy != p.service.oauth2TokenPolicies[out.Provider.ID] {
 		return identity.ForbiddenError{}
 	}
 	b := p.input.binding()

@@ -84,7 +84,7 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 		return nil, identity.ForbiddenError{}
 	}
 	provider, ok := s.providers.Lookup(v.Provider.ID)
-	if !ok || !reflect.DeepEqual(provider.Profile(), v.Provider) || !oauth2ProviderMatches(provider, v.OAuth2) {
+	if !ok || !reflect.DeepEqual(provider.Profile(), v.Provider) || !oauth2ProviderMatches(provider, v.OAuth2, v.OAuth2TokenPolicy) {
 		return nil, identity.ForbiddenError{}
 	}
 	input, ok := p.request.Callback.Input()
