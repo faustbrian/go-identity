@@ -31,7 +31,7 @@ func (r *Repository) PrepareAccountLinkCommandCounters(command identity.Command,
 	if !ok || spec.Change.Mode != identity.AccountLinkExplicit {
 		return fail()
 	}
-	projection, plan, err := r.prepareAccountLinkCounterProjection(spec.Binding, spec.SessionID, subject, primaryTime)
+	projection, plan, err := r.prepareProtectedAccountCounters(spec.Binding, spec.SessionID, subject, primaryTime)
 	if err != nil {
 		return fail()
 	}
@@ -63,7 +63,7 @@ func (r *Repository) PrepareAccountLinkPreparationCounters(spec identity.Account
 	if spec.Counters.Network != "" || !spec.Counters.PreparedAt.IsZero() || len(spec.Counters.KeyVersions) != 0 {
 		return fail()
 	}
-	projection, plan, err := r.prepareAccountLinkCounterProjection(spec.Binding, spec.SessionID, subject, primaryTime)
+	projection, plan, err := r.prepareProtectedAccountCounters(spec.Binding, spec.SessionID, subject, primaryTime)
 	if err != nil {
 		return fail()
 	}
@@ -75,14 +75,14 @@ func (r *Repository) PrepareAccountLinkPreparationCounters(spec identity.Account
 	return command, plan, nil
 }
 
-func (r *Repository) prepareAccountLinkCounterProjection(b identity.CommandBinding, sessionID string, subject risk.Subject, primaryTime time.Time) (identity.AccountLinkCounterContext, kernel.CommandCounterPlan, error) {
+func (r *Repository) prepareProtectedAccountCounters(b identity.CommandBinding, sessionID string, subject risk.Subject, primaryTime time.Time) (identity.AccountLinkCounterContext, kernel.CommandCounterPlan, error) {
 	fail := func() (identity.AccountLinkCounterContext, kernel.CommandCounterPlan, error) {
 		return identity.AccountLinkCounterContext{}, kernel.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
 	}
 	if r == nil || r.counters == nil || subject.User != string(b.UserID) || subject.Session != sessionID || subject.Actor != "" || subject.Resource != "" || subject.Device != "" || subject.IdentifierDigest != "" {
 		return fail()
 	}
-	scope := accountLinkCounterScope(b)
+	scope := protectedAccountCounterScope(b)
 	native, err := r.counterPolicy.Prepare(scope, subject, primaryTime)
 	if err != nil {
 		return fail()
@@ -102,7 +102,7 @@ func (r *Repository) prepareAccountLinkCounterProjection(b identity.CommandBindi
 	return identity.AccountLinkCounterContext{Network: subject.Network, PreparedAt: primaryTime, KeyVersions: versions}, plan, nil
 }
 
-func accountLinkCounterScope(b identity.CommandBinding) risk.Context {
+func protectedAccountCounterScope(b identity.CommandBinding) risk.Context {
 	return risk.Context{Tenant: string(b.TenantID), Operation: risk.Action(b.OperationID), Attempt: string(b.CommandID)}
 }
 
@@ -112,7 +112,7 @@ func (r *Repository) restoreAccountLinkCounter(command identity.Command, plan ke
 		return restoredCounter{}, risk.ErrInvalidCounterCommand
 	}
 	subject := risk.Subject{User: string(spec.Binding.UserID), Session: spec.SessionID, Network: original.Network}
-	return r.restorePreparedCounter(accountLinkCounterScope(spec.Binding), subject, "", original.PreparedAt, original.KeyVersions, plan)
+	return r.restorePreparedCounter(protectedAccountCounterScope(spec.Binding), subject, "", original.PreparedAt, original.KeyVersions, plan)
 }
 
 func (r *Repository) restoreAccountLinkPreparationCounter(command identity.Command, plan kernel.CommandCounterPlan) (restoredCounter, error) {
@@ -122,5 +122,5 @@ func (r *Repository) restoreAccountLinkPreparationCounter(command identity.Comma
 	}
 	original := spec.Counters
 	subject := risk.Subject{User: string(spec.Binding.UserID), Session: spec.SessionID, Network: original.Network}
-	return r.restorePreparedCounter(accountLinkCounterScope(spec.Binding), subject, "", original.PreparedAt, original.KeyVersions, plan)
+	return r.restorePreparedCounter(protectedAccountCounterScope(spec.Binding), subject, "", original.PreparedAt, original.KeyVersions, plan)
 }

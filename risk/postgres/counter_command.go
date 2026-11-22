@@ -319,6 +319,12 @@ func (r *Repository) ValidateCommandCounters(c identity.Command, p identitypostg
 }
 func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.CommandCounterPlan) (restoredCounter, error) {
 	fail := func() (restoredCounter, error) { return restoredCounter{}, risk.ErrInvalidCounterCommand }
+	if spec, _, ok := c.AccountUnlinkPreparationInput(); ok {
+		return r.restoreAccountUnlinkCounter(spec.Binding, spec.SessionID, spec.Counters, p)
+	}
+	if spec, original, ok := c.AccountUnlinkCounterCommand(); ok {
+		return r.restoreAccountUnlinkCounter(spec.Binding, spec.SessionID, original, p)
+	}
 	if _, _, _, ok := c.AccountLinkPreparationInput(); ok {
 		return r.restoreAccountLinkPreparationCounter(c, p)
 	}

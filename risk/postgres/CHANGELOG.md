@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind explicit account unlink to the existing protected user/session/network
+  counters. Original password preparation and the attached unlink capability
+  use the same charge; retry restores its original time and digest-key aliases
+  without granting fresh allowance. This adds no new risk store or schema.
+
 - Add opt-in `RetainCounterKeyVersions` and the forward-only
   `CounterKeyVersionMigrationSource`. Original protected charges retain their
   immutable key versions in the same transaction; existing rows remain unknown

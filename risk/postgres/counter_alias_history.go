@@ -25,8 +25,25 @@ import (
 // borrowed and caller-owned. RetainCounterKeyVersions must be selected and its
 // migration installed. Concurrent immutable calls perform bounded reads only.
 func (r *Repository) OriginalOAuthLinkCounterKeys(ctx context.Context, pool *database.Pool, b identity.CommandBinding, at time.Time, maximumDuration time.Duration) ([]uint32, bool, error) {
+	if b.OperationID != "identity.account.link-start" && b.OperationID != "identity.account.link-token" {
+		return nil, false, risk.ErrInvalidCounterCommand
+	}
+	return r.originalProtectedAccountCounterKeys(ctx, pool, b, at, maximumDuration)
+}
+
+// OriginalAccountUnlinkCounterKeys reads the exact retained aliases for a
+// typed self-unlink retry at its original primary time. It does not authorize
+// unlink, renew the primary evidence or return a protected counter allowance.
+func (r *Repository) OriginalAccountUnlinkCounterKeys(ctx context.Context, pool *database.Pool, b identity.CommandBinding, at time.Time, maximumDuration time.Duration) ([]uint32, bool, error) {
+	if b.OperationID != "identity.account.unlink" || b.SchemaID != "identity-account" || b.SchemaVersion != 1 || b.LinkMode != 0 || b.RecordID == "" {
+		return nil, false, risk.ErrInvalidCounterCommand
+	}
+	return r.originalProtectedAccountCounterKeys(ctx, pool, b, at, maximumDuration)
+}
+
+func (r *Repository) originalProtectedAccountCounterKeys(ctx context.Context, pool *database.Pool, b identity.CommandBinding, at time.Time, maximumDuration time.Duration) ([]uint32, bool, error) {
 	invalid := func() ([]uint32, bool, error) { return nil, false, risk.ErrInvalidCounterCommand }
-	if ctx == nil || r == nil || !r.counterKeyVersions || r.counters == nil || pool == nil || pool.Raw() == nil || maximumDuration < time.Millisecond || maximumDuration > 30*time.Second || at.IsZero() || at != at.UTC() || !at.Equal(at.Truncate(time.Microsecond)) || b.PolicyVersion != r.policy || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || b.UserID == "" || b.OperationID != "identity.account.link-start" && b.OperationID != "identity.account.link-token" {
+	if ctx == nil || r == nil || !r.counterKeyVersions || r.counters == nil || pool == nil || pool.Raw() == nil || maximumDuration < time.Millisecond || maximumDuration > 30*time.Second || at.IsZero() || at != at.UTC() || !at.Equal(at.Truncate(time.Microsecond)) || b.PolicyVersion != r.policy || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || b.UserID == "" {
 		return invalid()
 	}
 	if _, err := identity.ParseCommandID(string(b.CommandID)); err != nil {
