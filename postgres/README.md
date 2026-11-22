@@ -78,6 +78,13 @@ callback. `Work.RequireSSOOIDCSigninProviderAccount` then fences its live
 identity epochs during Apply and the final check without retargeting the
 anonymous flow. These operations do not link accounts or check membership.
 
+For an already-issued enterprise session, `CheckLinkedSSOOIDCProviderCredential`
+reads the existing live association and exact `sso` credential/security epochs.
+`Work.RequireLinkedSSOOIDCProviderCredential` retains those locks only in exact
+same-user native revoke-one Apply and final admission. The session owner must
+also check the original session, directory, policy, factors and organization;
+the association check grants no access and never renews validity.
+
 This profile is separate from social OAuth and does not authenticate the
 browser, validate a provider, link an account, grant membership or issue a
 session by itself. The native consumer owns those checks and effects and must

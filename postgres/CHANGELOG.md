@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Read the current `sso`-owned provider association for an issued enterprise
+  session. The exact native same-user revoke-one owner can lock that association
+  and recheck expiry without widening social provider credential checks.
+
 - Resolve and transactionally fence an existing enterprise OIDC account with
   an `sso`-owned provider credential. Freeze the account, link and credential
   epochs in the exact anonymous callback command without changing its actor or
