@@ -72,6 +72,15 @@ type SigninCallbackOwner interface {
 	CompleteSSOOIDC(context.Context, SigninCallbackRequest) (SigninCallbackResult, error)
 }
 
+// ParsedSigninCallbackOwner optionally completes with the already parsed
+// callback. Callback and request share borrowed custody destroyed when the
+// handler returns; neither may be retained. Its error never retries legacy
+// completion, and the owner must still repeat all protected current checks.
+type ParsedSigninCallbackOwner interface {
+	SigninCallbackOwner
+	CompleteParsedSSOOIDC(context.Context, SigninCallbackRequest, oauth.QueryCallback) (SigninCallbackResult, error)
+}
+
 // SharedCallbackRateContext carries the authenticated original profile; the
 // transport does not select it from cookie presence or protocol query fields.
 type SharedCallbackRateContext struct {
@@ -91,6 +100,15 @@ type MemberLinkCallbackResult struct {
 type MemberLinkCallbackOwner interface {
 	SharedCallbackRateSource(context.Context, SigninCallbackRequest, authentication.BearerCredential) (SharedCallbackRateContext, error)
 	CompleteSSOOIDCLink(context.Context, SigninCallbackRequest, authentication.BearerCredential) (MemberLinkCallbackResult, error)
+}
+
+// ParsedMemberLinkCallbackOwner optionally completes the admitted stored member
+// profile with the already parsed callback. Callback and request share borrowed
+// custody destroyed when the handler returns; neither may be retained. Its
+// error never retries legacy completion or falls back to sign-in.
+type ParsedMemberLinkCallbackOwner interface {
+	MemberLinkCallbackOwner
+	CompleteParsedSSOOIDCLink(context.Context, SigninCallbackRequest, authentication.BearerCredential, oauth.QueryCallback) (MemberLinkCallbackResult, error)
 }
 
 // SigninCallbackConfig selects one exact installed static provider. Query issuer
@@ -279,7 +297,13 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 			ctx := r.Context()
 			delivery := ctx.Value(signinDeliveryKey{}).(*signinDelivery)
 			if s.link {
-				out, err := link.CompleteSSOOIDCLink(ctx, s.request, s.cookie)
+				var out MemberLinkCallbackResult
+				var err error
+				if parsedOwner, ok := link.(ParsedMemberLinkCallbackOwner); ok {
+					out, err = parsedOwner.CompleteParsedSSOOIDCLink(ctx, s.request, s.cookie, delivery.parsed)
+				} else {
+					out, err = link.CompleteSSOOIDCLink(ctx, s.request, s.cookie)
+				}
 				if err != nil {
 					writeSigninError(w, r, err)
 					return
@@ -293,7 +317,13 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 				w.WriteHeader(http.StatusSeeOther)
 				return
 			}
-			out, err := c.Callback.CompleteSSOOIDC(ctx, s.request)
+			var out SigninCallbackResult
+			var err error
+			if parsedOwner, ok := c.Callback.(ParsedSigninCallbackOwner); ok {
+				out, err = parsedOwner.CompleteParsedSSOOIDC(ctx, s.request, delivery.parsed)
+			} else {
+				out, err = c.Callback.CompleteSSOOIDC(ctx, s.request)
+			}
 			if err != nil {
 				writeSigninError(w, r, err)
 				return

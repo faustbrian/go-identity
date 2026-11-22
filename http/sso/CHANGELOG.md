@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add optional parsed OIDC sign-in and member-link callback owners. Pass the
+  existing bounded callback custody without reparsing, retain legacy owners
+  when the extension is absent, and never retry legacy completion on a typed
+  owner's error.
+
 - Add opt-in linked-member OAuth2 browser sign-in. Share the keyed start
   route with a configured OIDC provider when both are selected, and use a
   separate OAuth2 callback with original transaction quotas, native issuer
