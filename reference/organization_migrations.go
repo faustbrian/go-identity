@@ -11,6 +11,19 @@ import (
 	organizationpg "github.com/faustbrian/go-organization/postgres"
 )
 
+func organizationCredentialAuthorityMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	const namespace = "identity_organization_credential_authority"
+	if slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == namespace }) {
+		return catalog, nil
+	}
+	steps, err := (organizationpg.CredentialAuthorityMigrationSource{Version: 1}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(catalog, migrationHistory{namespace: namespace, history: steps, owners: map[migrations.Version]ModuleID{1: "organization/postgres"},
+		guards: []migrationGuard{{version: 1, schema: "organization", columns: []string{"organizations.credential_version"}, functions: []string{"enforce_credential_epoch_transition"}}}}), nil
+}
+
 // New selections append independent native histories; installed baseline, risk
 // and session prefixes are unchanged. Invitation suffixes follow membership's
 // repeat-removal index so enabling invitations later cannot insert old steps.

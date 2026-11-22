@@ -425,19 +425,25 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
-	if state.features != nil && state.features.socialOAuth != nil && state.features.socialOAuth.signin != nil {
-		schema := state.features.socialOAuth.signin.sessionSchema
+	issuanceSchema, issuanceConstraint := "", ""
+	if f := state.features; f != nil {
+		if f.enterpriseOIDC != nil {
+			issuanceSchema, issuanceConstraint = f.enterpriseOIDC.sessionSchema, "session_issuances.session_issuances_purpose_sso_oidc_v1"
+		} else if f.socialOAuth != nil && f.socialOAuth.signin != nil {
+			issuanceSchema, issuanceConstraint = f.socialOAuth.signin.sessionSchema, "session_issuances.session_issuances_purpose_oauth_v1"
+		}
+	}
+	if issuanceConstraint != "" {
 		for i := range guards {
-			if guards[i].schema != schema {
+			if guards[i].schema != issuanceSchema {
 				continue
 			}
 			guards[i].constraints = slices.Clone(guards[i].constraints)
 			for j, constraint := range guards[i].constraints {
-				// OAuthSigninMigrationSource is the final selected purpose
-				// expansion. It preserves the installed predicate but replaces
-				// its name; collision/history guards must remain immutable.
+				// The final native purpose expansion preserves the installed
+				// predicate under a new name. Collision/history guards stay unchanged.
 				if strings.HasPrefix(constraint, "session_issuances.session_issuances_purpose_") {
-					guards[i].constraints[j] = "session_issuances.session_issuances_purpose_oauth_v1"
+					guards[i].constraints[j] = issuanceConstraint
 				}
 			}
 		}

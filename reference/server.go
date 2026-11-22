@@ -166,6 +166,11 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if socialFeature != nil {
 		contributions = append(contributions, *socialFeature)
 	}
+	enterpriseFeatures, err := server.enterpriseOIDCFeatures(c.HTTP.Network)
+	if err != nil {
+		return nil, err
+	}
+	contributions = append(contributions, enterpriseFeatures...)
 	oauthFeature, err := server.oauthWorkloadFeature(c.HTTP.Network)
 	if err != nil {
 		return nil, err

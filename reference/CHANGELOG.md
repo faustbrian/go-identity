@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose opt-in linked-member enterprise OIDC browser sign-in over the native
+  organization, provider, original-flow, and session owners. The selected graph
+  wires forward migrations, native callback attribution, session read, and
+  strict cookie signout. No enterprise routes are enabled by default.
+
 - Add opt-in native social account unlink and recovery, using the configured
   password owner and forward journal/password migrations. No route is enabled.
 

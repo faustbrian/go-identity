@@ -87,6 +87,7 @@ type DeliveryConfiguration struct {
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
 	socialOAuth                  *socialOAuthState
+	enterpriseOIDC               *enterpriseOIDCState
 	oauthWorkload                *oauthWorkloadState
 	apiKey                       *apiKeyState
 	httpAPIKey                   *apiKeyHTTPState
@@ -171,6 +172,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if err := validateEnterpriseOIDCSelection(c); err != nil {
+		return err
+	}
 	if c.OAuthWorkload != nil {
 		return s.composeOAuthWorkloads(c, d)
 	}
@@ -528,6 +532,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	passkeyAuthority, err := composePasskeySessionAuthority(c, d)
+	if err != nil {
+		return err
+	}
+	enterpriseOIDCOwner, err := composeEnterpriseOIDC(c, d, evaluator, crypto)
 	if err != nil {
 		return err
 	}
@@ -930,6 +938,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	s.features.session = sessionOwner
 	s.features.socialOAuth = socialOAuthOwner
+	s.features.enterpriseOIDC = enterpriseOIDCOwner
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

@@ -113,6 +113,10 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 	if selected := s.state.features.socialOAuth; selected != nil && selected.signin != nil && selected.http != nil && selected.http.SigninStart {
 		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "oauth", Service: composedPreAuth{state: s.state, issuer: selected.signin.preauth}, Action: "identity.oauth.callback", CallbackURL: selected.signin.callback, PolicyID: selected.policy, PolicyVersion: uint64(selected.version)})
 	}
+	if selected := s.state.features.enterpriseOIDC; selected != nil && selected.preauth != nil {
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "sso-oidc", Service: composedPreAuth{state: s.state, issuer: selected.preauth}, Action: enterpriseOIDCCallbackAction,
+			CallbackURL: selected.successCallback, PolicyID: selected.policy, PolicyVersion: selected.version})
+	}
 	if selected := s.state.features.httpPasswordSignin; selected != nil {
 		password, err := f.PasswordPreAuth()
 		if err != nil {

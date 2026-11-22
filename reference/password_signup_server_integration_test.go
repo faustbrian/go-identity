@@ -282,6 +282,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 
 type signupGraphExtensions struct {
 	sessionCache                *referenceSessionCacheProof
+	enterpriseOIDC              bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -541,6 +542,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
+	if extensions.enterpriseOIDC {
+		selectedAuthorization = referenceEnterpriseOIDCPolicy{}
+	}
 	if extensions.organizationKey {
 		selectedAuthorization = referenceOrganizationKeyPolicy{}
 	}
@@ -701,6 +705,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Error("unexpected shared rate degradation")
 		return nil
 	}}
+	var enterpriseIssuer *referenceEnterpriseIssuer
+	if extensions.enterpriseOIDC {
+		enterpriseIssuer = configureReferenceEnterpriseOIDC(t, &c, origin)
+	}
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
 		changeScreens = configureReferencePasswordProtection(t, &c, origin)
@@ -1353,6 +1361,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
+	if c.EnterpriseOIDC != nil {
+		modules = append(modules, "sso/postgres")
+	}
 	if c.APIKey != nil {
 		modules = append(modules, "identity/apikey/postgres")
 	}
@@ -1396,7 +1407,7 @@ END $$`); err != nil {
 		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
 		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
 	}
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -1731,12 +1742,14 @@ END $$`); err != nil {
 		{"identity.account.link-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.LinkStart},
 		{"identity.oauth.signin-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.SigninStart},
 		{"identity.oauth.callback", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.Callback},
+		{"identity.sso.signin-start", c.HTTPEnterpriseOIDC != nil},
+		{"identity.sso.oidc-callback", c.HTTPEnterpriseOIDC != nil},
 	} {
 		if selected.enabled {
 			wantOperations++
 		}
 		if seen[selected.id] != selected.enabled {
-			t.Fatal("social route selection diverged", selected.id)
+			t.Fatal("federation route selection diverged", selected.id)
 		}
 	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
@@ -1787,6 +1800,19 @@ END $$`); err != nil {
 	client.Timeout = 5 * time.Second
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if extensions.enterpriseOIDC {
+		if readiness := server.Readiness(ctx); !readiness.Ready {
+			t.Fatal("selected enterprise graph did not report ready after migrating", readiness.Failures)
+		}
+		proveReferenceEnterpriseOIDCBootstrapped(t, ctx, client, origin, c.EnterpriseOIDC.Login.Profiles[0].ProviderID)
+		selected := provisionReferenceEnterprise(t, ctx, c, deps, client, origin, enterpriseIssuer)
+		restarted, features := selectProvisionedEnterprise(t, ctx, c, deps, config, selected, workerConfigs, nil)
+		handler := restarted.Handler()
+		organizationHandler.Store(&handler)
+		proveReferenceEnterpriseOIDCJourney(t, ctx, client, origin, features, enterpriseIssuer, selected)
+		proveReferenceEnterpriseAllowsLaterSocialSelection(t, ctx, c, deps, config, selected, workerConfigs, modules, origin)
+		return
 	}
 	if extensions.socialOIDCNativeStart != "" {
 		proveNativeSocialSigninStart(t, ctx, c, deps, origin, extensions.socialOIDCNativeStart)

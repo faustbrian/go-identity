@@ -128,6 +128,40 @@ browser/persistent sessions and provider denial. Only the external TLS provider
 is controlled. This selected profile does not enable signup, MFA fallback,
 refresh, unlinking or other OAuth variants. It is not full M17/M18 qualification.
 
+## Optional linked-member enterprise OIDC sign-in
+
+Select `EnterpriseOIDC` on the PostgreSQL organization and common session graph.
+Configure one already-installed static provider by its exact organization ID,
+provider ID, enabled version, credential generation and mapping version. The
+provider, verified domain and existing member link remain native authorities;
+Reference does not install a provider, create a link, or provision a new user
+on sign-in. Apply the selected Reference migration plan before initialization.
+
+Select `HTTPEnterpriseOIDC` separately to expose the browser routes. Provide
+the original-flow key index, the allowlisted application `SuccessCallback`,
+and the secure CSRF cookie policy, and select
+HTTP rate admission, the browser device and flow owners, and the common cookie
+session routes. Use the same trusted HTTPS origin and the fixed provider return
+URI `<origin>/sso/oidc/callback`. When also selecting social OIDC browser sign-in,
+configure both to use the same CSRF cookie policy. Enterprise migrations retain
+the shared OAuth session schema prefix so later social opt-in preserves existing
+history; installing that prefix does not enable social admission or routes.
+
+1. Obtain the flow ID and browser cookies with `POST /v1/session/preauth-issue`
+   and `{"method":"sso-oidc"}`. Start with `POST /v1/sso/signin-start`, the exact
+   provider, flow, command, `SuccessCallback`, and an allowlisted error URL. Retain the body and
+   `Idempotency-Key` across retries.
+2. Follow the authorization URL and return to `GET /sso/oidc/callback` with the
+   original cookies. Only a fresh acknowledged callback sends the session and
+   CSRF cookies. Replay does not exchange the code again or return credentials.
+3. Use `GET /v1/session/get`. For `POST /v1/session/signout`, send the exact
+   `Origin` and copy the CSRF cookie into `X-CSRF-Token`; a successful signout
+   revokes the session and removes both cookies.
+
+The [Reference journey](enterprise_oidc_integration_test.go) uses a disposable
+PostgreSQL primary and a controlled TLS provider. It does not exercise JIT,
+new linking, repeat-login synchronization, or another federation protocol.
+
 ## Optional native social account unlink
 
 Select `SocialOAuth.Unlink` with a configured password verification target

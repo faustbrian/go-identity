@@ -10,6 +10,7 @@ import (
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	organizationpg "github.com/faustbrian/go-organization/postgres"
 )
 
 // SessionConfiguration selects native primary reads and self
@@ -146,11 +147,26 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 		}
 		passwordMFA = &profile
 	}
-	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey}, Validation: validation})
+	var enterprise *sessionpg.SSOOIDCSessionAdmission
+	if c.EnterpriseOIDC != nil {
+		if c.Organization == nil {
+			return nil, invalid
+		}
+		authority, err := organizationpg.NewRepository(d.PostgreSQL, c.Organization.Repository)
+		if err != nil {
+			return nil, err
+		}
+		enterprise = &sessionpg.SSOOIDCSessionAdmission{
+			Profile: sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: e.Profile.GlobalAuthorityID, PolicyNamespace: e.Profile.PolicyNamespace, Audience: e.Profile.Audience,
+				AuthenticationMethod: "sso-oidc", CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"},
+			Authority: authority,
+		}
+	}
+	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey, SSOOIDC: enterprise}, Validation: validation})
 	if err != nil {
 		return nil, invalid
 	}
-	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey}
+	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey, SSOOIDC: enterprise}
 	if selection.Verified == nil && selection.OAuth == nil && selection.OTP == nil && selection.MagicLink == nil {
 		execution.Admission = nil
 	}

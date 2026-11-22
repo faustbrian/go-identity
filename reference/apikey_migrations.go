@@ -7,7 +7,6 @@ import (
 	apikeypg "github.com/faustbrian/go-identity/apikey/postgres"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
-	organizationpg "github.com/faustbrian/go-organization/postgres"
 )
 
 func (s StoreSet) apiKeyMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
@@ -52,21 +51,16 @@ func (s StoreSet) apiKeyMigrationCatalog(ctx context.Context, catalog []migratio
 	// Independent optional histories preserve both installed base/legacy key
 	// prefixes and organization invitation/role histories. Enabling either
 	// profile later must not insert a lower step below another installed suffix.
-	for _, extension := range []struct {
-		namespace string
-		owner     ModuleID
-		source    migrations.Source
-		guard     migrationGuard
-	}{
-		{"identity_organization_credential_authority", "organization/postgres", organizationpg.CredentialAuthorityMigrationSource{Version: 1}, migrationGuard{version: 1, schema: "organization", columns: []string{"organizations.credential_version"}, functions: []string{"enforce_credential_epoch_transition"}}},
-		{"identity_api_key_organization_owner", "identity/apikey/postgres", apikeypg.OrganizationMigrationSource{Version: 1}, migrationGuard{version: 1, schema: "identity_api_keys", columns: []string{"keys.organization_id"}, constraints: []string{"keys.identity_api_keys_exact_owner", "keys.identity_api_keys_organization_owner"}}},
-	} {
-		steps, err := extension.source.Load(ctx)
-		if err != nil {
-			return nil, err
-		}
-		catalog = append(catalog, migrationHistory{namespace: extension.namespace, history: steps, owners: map[migrations.Version]ModuleID{1: extension.owner}, guards: []migrationGuard{extension.guard}})
+	catalog, err = organizationCredentialAuthorityMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
 	}
+	organizationSteps, err := (apikeypg.OrganizationMigrationSource{Version: 1}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	catalog = append(catalog, migrationHistory{namespace: "identity_api_key_organization_owner", history: organizationSteps, owners: map[migrations.Version]ModuleID{1: "identity/apikey/postgres"},
+		guards: []migrationGuard{{version: 1, schema: "identity_api_keys", columns: []string{"keys.organization_id"}, constraints: []string{"keys.identity_api_keys_exact_owner", "keys.identity_api_keys_organization_owner"}}}})
 	if s.state.features.apiKey.metadataPaging {
 		return apiKeyMetadataMigrationCatalog(ctx, catalog, true)
 	}

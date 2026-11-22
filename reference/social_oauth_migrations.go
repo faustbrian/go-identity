@@ -15,7 +15,8 @@ import (
 // Optional social linking appends native-owner histories after its real
 // password/session prerequisites; every previously installed prefix is intact.
 func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
-	if s.state.features == nil || s.state.features.socialOAuth == nil {
+	f := s.state.features
+	if f == nil || f.socialOAuth == nil && f.enterpriseOIDC == nil {
 		return catalog, nil
 	}
 	var err error
@@ -34,9 +35,16 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 	startErasure := kernel.OAuthRPPreparationErasureMigrationSource{Base: preparation, Version: 2402}
 	linkErasure := kernel.AccountLinkPreparationErasureMigrationSource{Base: startErasure, Version: 2403}
 	var accountHistory migrations.Source = kernel.AccountLinkPreparationErasureValidationMigrationSource{Base: linkErasure, Version: 2404}
-	if s.state.features.socialOAuth.unlink != nil {
+	if f.enterpriseOIDC != nil || f.socialOAuth.unlink != nil {
 		expand := kernel.AccountUnlinkPreparationMigrationSource{Base: accountHistory, Version: 2405}
 		accountHistory = kernel.AccountUnlinkPreparationValidationMigrationSource{Base: expand, Version: 2406}
+	}
+	if f.enterpriseOIDC != nil {
+		// This is the existing account/preparation history, not a second copy of
+		// the account tables. The enterprise erasure suffix retains social rules.
+		refresh := kernel.OAuthProviderRefreshErasureMigrationSource{Base: accountHistory, Version: 2407}
+		start := kernel.SSOOIDCPreparationErasureMigrationSource{Base: refresh, Version: 2408}
+		accountHistory = kernel.SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 2409}
 	}
 	full, err := accountHistory.Load(ctx)
 	if err != nil {
@@ -48,7 +56,10 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 		h.owners[m.Version()] = "identity/postgres"
 	}
 	catalog = append(catalog, h)
-	schema := s.state.features.socialOAuth.schema
+	if f.socialOAuth == nil {
+		return appendOAuthSigninSessionMigration(ctx, catalog, f.enterpriseOIDC.sessionSchema)
+	}
+	schema := f.socialOAuth.schema
 	rp, err := (oauthpg.MigrationSource{Schema: schema, Version: 1}).Load(ctx)
 	if err != nil {
 		return nil, err
@@ -58,7 +69,7 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 		return nil, err
 	}
 	catalog = append(catalog, migrationHistory{namespace: "identity_social_oauth", history: append(rp, vault...), owners: map[migrations.Version]ModuleID{1: "identity/oauth/postgres", 2: "identity/oauth/postgres"}, guards: []migrationGuard{{version: 1, schema: schema}, {version: 2, schema: schema, tables: []string{"token_sets"}}}})
-	if s.state.features.socialOAuth.unlink != nil {
+	if f.socialOAuth.unlink != nil {
 		var predecessors []migrations.Migration
 		for _, history := range catalog {
 			for _, step := range history.history {
@@ -77,25 +88,42 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 			guards: []migrationGuard{{version: 43, schema: "identity_password", columns: []string{"reauthentication_records.unlink_consumed_command_id"}}},
 		})
 	}
-	if signin := s.state.features.socialOAuth.signin; signin != nil {
-		previous := "session_issuances_purpose_check"
-		for _, history := range catalog {
-			for _, guard := range history.guards {
-				if guard.schema != signin.sessionSchema {
-					continue
-				}
-				for _, constraint := range guard.constraints {
-					if strings.HasPrefix(constraint, "session_issuances.session_issuances_purpose_") {
-						previous = strings.TrimPrefix(constraint, "session_issuances.")
-					}
+	if signin := f.socialOAuth.signin; signin != nil {
+		return appendOAuthSigninSessionMigration(ctx, catalog, signin.sessionSchema)
+	}
+	if f.enterpriseOIDC != nil {
+		return appendOAuthSigninSessionMigration(ctx, catalog, f.enterpriseOIDC.sessionSchema)
+	}
+	return catalog, nil
+}
+
+func appendOAuthSigninSessionMigration(ctx context.Context, catalog []migrationHistory, schema string) ([]migrationHistory, error) {
+	// Enterprise always extends this physical prefix, even with no social
+	// owner. Otherwise later social opt-in changes the installed enterprise
+	// checksum and targets a constraint that enterprise already replaced.
+	source := sessionpg.OAuthSigninMigrationSource{Schema: schema, Version: 1, ValidationVersion: 2, PreviousConstraint: sessionIssuancePredecessor(catalog, schema)}
+	steps, err := source.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(catalog, migrationHistory{namespace: "identity_social_signin_session", history: steps,
+		owners: map[migrations.Version]ModuleID{1: "identity/session/postgres", 2: "identity/session/postgres"},
+		guards: []migrationGuard{{version: 1, schema: schema, constraints: []string{"session_issuances.session_issuances_purpose_oauth_v1"}}}}), nil
+}
+
+func sessionIssuancePredecessor(catalog []migrationHistory, schema string) string {
+	previous := "session_issuances_purpose_check"
+	for _, history := range catalog {
+		for _, guard := range history.guards {
+			if guard.schema != schema {
+				continue
+			}
+			for _, constraint := range guard.constraints {
+				if strings.HasPrefix(constraint, "session_issuances.session_issuances_purpose_") {
+					previous = strings.TrimPrefix(constraint, "session_issuances.")
 				}
 			}
 		}
-		steps, err := (sessionpg.OAuthSigninMigrationSource{Schema: signin.sessionSchema, Version: 1, ValidationVersion: 2, PreviousConstraint: previous}).Load(ctx)
-		if err != nil {
-			return nil, err
-		}
-		catalog = append(catalog, migrationHistory{namespace: "identity_social_signin_session", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/session/postgres", 2: "identity/session/postgres"}, guards: []migrationGuard{{version: 1, schema: signin.sessionSchema, constraints: []string{"session_issuances.session_issuances_purpose_oauth_v1"}}}})
 	}
-	return catalog, nil
+	return previous
 }
