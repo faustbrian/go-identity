@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accept the selected enterprise OAuth2 callback's documented 303 response.
+  This adds no route or provider dependency to the base HTTP package.
+
 - Accept the selected enterprise OIDC query callback's documented 303 success
   response without advertising a 2xx response the handler cannot return.
 

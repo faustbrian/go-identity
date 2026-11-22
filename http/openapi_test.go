@@ -48,20 +48,22 @@ func TestDocumentedOAuthCallbackRedirectAdviceIsNarrow(t *testing.T) {
 
 func TestDocumentedEnterpriseCallbackAdvertisesItsActualRedirect(t *testing.T) {
 	for _, tc := range []struct {
-		name, responses string
-		accepted        bool
+		name, owner, operation, path, responses string
+		accepted                                bool
 	}{
-		{"selected 303", `{"303":{"description":"Original application callback"},"503":{"description":"Unavailable"}}`, true},
-		{"wrong redirect", `{"302":{"description":"Not the selected callback result"}}`, false},
+		{"OIDC 303", "sso/oidc", "identity.sso.oidc-callback", "/sso/oidc/callback", `{"303":{"description":"Original application callback"},"503":{"description":"Unavailable"}}`, true},
+		{"OIDC wrong redirect", "sso/oidc", "identity.sso.oidc-callback", "/sso/oidc/callback", `{"302":{"description":"Not the selected callback result"}}`, false},
+		{"OAuth2 303", "sso/oauth2", "identity.sso.oauth-callback", "/sso/oauth2/callback", `{"303":{"description":"Original application callback"},"503":{"description":"Unavailable"}}`, true},
+		{"OAuth2 wrong redirect", "sso/oauth2", "identity.sso.oauth-callback", "/sso/oauth2/callback", `{"302":{"description":"Not the selected callback result"}}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", Handler: http.NotFoundHandler(), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+			op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: identityhttp.ModuleID(tc.owner), OperationID: tc.operation, Handler: http.NotFoundHandler(), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
 			if err != nil {
 				t.Fatal(err)
 			}
-			op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.sso.oidc-callback","security":[],"responses":` + tc.responses + `}`)}
-			_, doc, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Enterprise", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{feature(t, "sso/oidc", nil, op)}})
-			if (err == nil) != tc.accepted || tc.accepted && (!bytes.Contains(doc.JSON(), []byte(`"/sso/oidc/callback"`)) || !bytes.Contains(doc.JSON(), []byte(`"303"`))) {
+			op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"` + tc.operation + `","security":[],"responses":` + tc.responses + `}`)}
+			_, doc, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Enterprise", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{feature(t, tc.owner, nil, op)}})
+			if (err == nil) != tc.accepted || tc.accepted && (!bytes.Contains(doc.JSON(), []byte(`"`+tc.path+`"`)) || !bytes.Contains(doc.JSON(), []byte(`"303"`))) {
 				t.Fatal("enterprise callback wire did not reflect the selected redirect", err)
 			}
 		})

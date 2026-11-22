@@ -235,6 +235,8 @@ func oauthCallbackResponsesLocation(op OperationDescriptor) string {
 		return "/paths/~1v1~1oauth~1callback/get/responses"
 	case op.Record.OperationID == "identity.sso.oidc-callback" && op.Route.Path == "/sso/oidc/callback":
 		return "/paths/~1sso~1oidc~1callback/get/responses"
+	case op.Record.OperationID == "identity.sso.oauth-callback" && op.Route.Path == "/sso/oauth2/callback":
+		return "/paths/~1sso~1oauth2~1callback/get/responses"
 	default:
 		return ""
 	}
