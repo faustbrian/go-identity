@@ -1,6 +1,10 @@
 package ssohttp
 
-import identityhttp "github.com/faustbrian/go-identity/http"
+import (
+	"encoding/json"
+
+	identityhttp "github.com/faustbrian/go-identity/http"
+)
 
 func signinCallbackWire() *identityhttp.WireOperation {
 	return &identityhttp.WireOperation{Definition: []byte(`{
@@ -26,6 +30,61 @@ func signinStartWire() *identityhttp.WireOperation {
   }
 }`),
 	}
+}
+
+func memberSigninStartWire(cookieName string) *identityhttp.WireOperation {
+	operation := signinStartWire()
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(operation.Definition, &fields) != nil {
+		return &identityhttp.WireOperation{}
+	}
+	fields["summary"] = json.RawMessage(`"Start opted-in enterprise sign-in or account linking"`)
+	fields["description"] = json.RawMessage(`"Omit link and provide flowID for anonymous sign-in. To link explicitly, send link:true, omit flowID, and use the original fresh password-session cookie and X-CSRF-Token. Both variants require the trusted device and exact Origin. Keep the original command ID, request and idempotency key on retry. Neither variant issues a session."`)
+	fields["requestBody"] = json.RawMessage(`{"required":true,"content":{"application/json":{"schema":{
+  "type":"object","additionalProperties":false,"required":["commandID","providerID","callback","errorCallback"],
+  "properties":{"flowID":{"type":"string","minLength":22,"maxLength":22},"link":{"const":true},"commandID":{"type":"string","minLength":22,"maxLength":22},"providerID":{"type":"string","minLength":1,"maxLength":128},"domain":{"type":"string","minLength":1,"maxLength":253},"callback":{"type":"string","format":"uri","maxLength":2048},"errorCallback":{"type":"string","format":"uri","maxLength":2048},"remember":{"type":"boolean"}},
+  "oneOf":[{"required":["flowID"],"not":{"required":["link"]}},{"required":["link"],"not":{"required":["flowID"]},"properties":{"remember":{"const":false}}}]
+}}}}`)
+	fields["security"] = json.RawMessage(`[{},{"SSOMemberLinkSession":[],"SSOMemberLinkCSRF":[]}]`)
+	definition, err := json.Marshal(fields)
+	if err != nil {
+		return &identityhttp.WireOperation{}
+	}
+	cookieScheme, err := json.Marshal(map[string]string{"type": "apiKey", "in": "cookie", "name": cookieName})
+	if err != nil {
+		return &identityhttp.WireOperation{}
+	}
+	operation.Definition = definition
+	operation.SecuritySchemes = []identityhttp.WireComponent{
+		{Name: "SSOMemberLinkSession", Definition: cookieScheme},
+		{Name: "SSOMemberLinkCSRF", Definition: []byte(`{"type":"apiKey","in":"header","name":"X-CSRF-Token"}`)},
+	}
+	return operation
+}
+
+func memberSigninCallbackWire() *identityhttp.WireOperation {
+	operation := signinCallbackWire()
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(operation.Definition, &fields) != nil {
+		return &identityhttp.WireOperation{}
+	}
+	fields["summary"] = json.RawMessage(`"Complete opted-in enterprise sign-in or member linking"`)
+	fields["description"] = json.RawMessage(`"Query-only return for the configured provider. The authenticated original transaction selects anonymous sign-in or explicit member linking. A committed sign-in issues secure session and CSRF cookies; a committed link requires the original local cookie and redirects without issuing credentials. Denied or unresolved returns neither redirect nor credentials."`)
+	var responses map[string]json.RawMessage
+	if json.Unmarshal(fields["responses"], &responses) != nil {
+		return &identityhttp.WireOperation{}
+	}
+	responses["303"] = json.RawMessage(`{"description":"Original success redirect; Set-Cookie is present only after sign-in.","headers":{"Location":{"schema":{"type":"string","format":"uri"}},"Set-Cookie":{"schema":{"type":"string"}}}}`)
+	wire, err := json.Marshal(responses)
+	if err != nil {
+		return &identityhttp.WireOperation{}
+	}
+	fields["responses"] = wire
+	operation.Definition, err = json.Marshal(fields)
+	if err != nil {
+		return &identityhttp.WireOperation{}
+	}
+	return operation
 }
 
 func discoveryWire() *identityhttp.WireOperation {

@@ -72,6 +72,27 @@ type SigninCallbackOwner interface {
 	CompleteSSOOIDC(context.Context, SigninCallbackRequest) (SigninCallbackResult, error)
 }
 
+// SharedCallbackRateContext carries the authenticated original profile; the
+// transport does not select it from cookie presence or protocol query fields.
+type SharedCallbackRateContext struct {
+	SigninCallbackRateContext
+	MemberLink bool
+}
+
+// MemberLinkCallbackResult acknowledges the original committed link. It has no
+// session or token fields. The owner returns it only after commit is known.
+type MemberLinkCallbackResult struct {
+	CommandID   identity.CommandID
+	RedirectURI string
+}
+
+// MemberLinkCallbackOwner selects and authenticates the original stored
+// profile, and repeats all protected checks on member completion.
+type MemberLinkCallbackOwner interface {
+	SharedCallbackRateSource(context.Context, SigninCallbackRequest, authentication.BearerCredential) (SharedCallbackRateContext, error)
+	CompleteSSOOIDCLink(context.Context, SigninCallbackRequest, authentication.BearerCredential) (MemberLinkCallbackResult, error)
+}
+
 // SigninCallbackConfig selects one exact installed static provider. Query issuer
 // and callback URL are from Provider, not inbound tenant/issuer selectors.
 // Cookies, Audience and allowlist must match the native composition.
@@ -96,6 +117,20 @@ func NewSigninCallbackFeature(c SigninCallbackConfig) (identityhttp.Feature, err
 // installed provider whose case-sensitive ID differs from the OAuth parser's
 // logical ID. It uses providerID for native attribution and provider quotas.
 func NewSigninCallbackFeatureForProvider(providerID string, c SigninCallbackConfig) (identityhttp.Feature, error) {
+	return newSigninCallbackFeature(providerID, c, nil)
+}
+
+// NewSigninCallbackFeatureWithLink selects the same provider callback and
+// allows the native owner to dispatch an authenticated stored member profile.
+// A member link never falls back to sign-in or writes browser credentials.
+func NewSigninCallbackFeatureWithLink(providerID string, c SigninCallbackConfig, link MemberLinkCallbackOwner) (identityhttp.Feature, error) {
+	if !configuredOwner(link) {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	return newSigninCallbackFeature(providerID, c, link)
+}
+
+func newSigninCallbackFeature(providerID string, c SigninCallbackConfig, link MemberLinkCallbackOwner) (identityhttp.Feature, error) {
 	if !validProviderID(providerID) || !configuredOwner(c.Callback) || c.Audience == "" || len(c.CallbackAllowlist) == 0 || len(c.CallbackAllowlist) > 64 ||
 		c.Provider.RedirectURI != string(c.Browser.Origin)+signinCallbackPath || c.Provider.ValidateQueryCallback() != nil || c.Provider.MaxCodeBytes > 4096 || c.Provider.GoogleAccounts {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
@@ -117,7 +152,10 @@ func NewSigninCallbackFeatureForProvider(providerID string, c SigninCallbackConf
 	if authErr != nil || csrfErr != nil || authCookie.Name == csrfCookie.Name || authCookie.Name == browser.flowName || authCookie.Name == browser.deviceName || csrfCookie.Name == browser.flowName || csrfCookie.Name == browser.deviceName {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	handler, err := newSigninCallbackHandler(c, browser, providerID)
+	if link != nil && authCookie.SameSite != http.SameSiteLaxMode {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	handler, err := newSigninCallbackHandler(c, browser, providerID, link, authCookie.Name)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
@@ -126,6 +164,9 @@ func NewSigninCallbackFeatureForProvider(providerID string, c SigninCallbackConf
 		return identityhttp.Feature{}, err
 	}
 	op.Wire = signinCallbackWire()
+	if link != nil {
+		op.Wire = memberSigninCallbackWire()
+	}
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "sso/oidc", Operations: []identityhttp.OperationDescriptor{op}})
 }
 
@@ -136,13 +177,15 @@ type signinCallbackState struct {
 	source   SigninCallbackRateContext
 	command  identity.CommandID
 	accepted bool
+	cookie   authentication.BearerCredential
+	link     bool
 }
 
 type signinDeliveryKey struct{}
 type signinDelivery struct {
 	parsed   oauth.QueryCallback
 	redirect string
-	cookies  [2]string
+	cookies  []string
 	current  func() bool
 }
 
@@ -150,7 +193,7 @@ func (*signinDelivery) Format(s fmt.State, _ rune) {
 	_, _ = fmt.Fprint(s, "ssohttp.signinDelivery(redacted)")
 }
 
-func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolicy, providerID string) (http.Handler, error) {
+func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolicy, providerID string, link MemberLinkCallbackOwner, sessionCookie string) (http.Handler, error) {
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[signinCallbackState]{
 		MaximumDuration: c.Browser.MaximumDuration, Reject: writeSigninError,
 		Decode: func(r *http.Request) (s signinCallbackState, err error) {
@@ -169,7 +212,17 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 			}
 			r.Context().Value(signinDeliveryKey{}).(*signinDelivery).parsed = parsed
 			input, accepted := parsed.Input()
-			s.facts, s.request.Browser, s.device, err = browser.resolve(r, false)
+			if link == nil {
+				s.facts, s.request.Browser, s.device, err = browser.resolve(r, false)
+			} else {
+				s.facts, s.request.Browser, s.device, err = browser.resolveDevice(r, false)
+				if err == nil {
+					s.request.Browser.FlowCookie, err = browser.sessionCookie(r, browser.flowName, identityhttp.HeaderOptional)
+				}
+				if err == nil {
+					s.cookie, err = browser.sessionCookie(r, sessionCookie, identityhttp.HeaderOptional)
+				}
+			}
 			s.request.TenantID, s.request.Input, s.request.ReceivedRedirectURI = s.facts.TenantID(), input, c.Provider.RedirectURI
 			s.accepted = accepted
 			return s, err
@@ -182,13 +235,31 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 			if !s.accepted {
 				return s, identity.ForbiddenError{}
 			}
-			source, err := c.Callback.CallbackRateSource(ctx, s.request)
+			var source SigninCallbackRateContext
+			var err error
+			if link == nil {
+				source, err = c.Callback.CallbackRateSource(ctx, s.request)
+			} else {
+				var shared SharedCallbackRateContext
+				shared, err = link.SharedCallbackRateSource(ctx, s.request, s.cookie)
+				source, s.link = shared.SigninCallbackRateContext, shared.MemberLink
+			}
 			if err != nil {
 				return s, err
 			}
-			flow, flowErr := identity.ParsePreAuthTransactionID(string(source.FlowID))
+			var flow identity.PreAuthTransactionID
+			if s.link {
+				if source.FlowID != "" || s.cookie.Token() == "" {
+					return s, identity.ForbiddenError{}
+				}
+			} else {
+				flow, err = identity.ParsePreAuthTransactionID(string(source.FlowID))
+				if err != nil || s.request.Browser.FlowCookie.Token() == "" {
+					return s, identity.ForbiddenError{}
+				}
+			}
 			command, commandErr := identity.ParseCommandID(source.TransactionID)
-			if source.ProviderID != providerID || flowErr != nil || commandErr != nil || !s.device.ExpiresAt().After(c.Browser.Now()) {
+			if source.ProviderID != providerID || commandErr != nil || !s.device.ExpiresAt().After(c.Browser.Now()) {
 				return s, identity.ForbiddenError{}
 			}
 			s.source, s.command, s.request.Browser.FlowID = source, command, flow
@@ -206,6 +277,22 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s signinCallbackState) {
 			ctx := r.Context()
+			delivery := ctx.Value(signinDeliveryKey{}).(*signinDelivery)
+			if s.link {
+				out, err := link.CompleteSSOOIDCLink(ctx, s.request, s.cookie)
+				if err != nil {
+					writeSigninError(w, r, err)
+					return
+				}
+				current := func() bool { return ctx.Err() == nil && s.device.ExpiresAt().After(c.Browser.Now()) }
+				if out.CommandID != s.command || !slices.Contains(c.CallbackAllowlist, out.RedirectURI) || !current() {
+					writeSigninError(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				delivery.redirect, delivery.current = out.RedirectURI, current
+				w.WriteHeader(http.StatusSeeOther)
+				return
+			}
 			out, err := c.Callback.CompleteSSOOIDC(ctx, s.request)
 			if err != nil {
 				writeSigninError(w, r, err)
@@ -217,8 +304,7 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 				writeSigninError(w, r, identityhttp.ErrUnavailable)
 				return
 			}
-			delivery := r.Context().Value(signinDeliveryKey{}).(*signinDelivery)
-			delivery.redirect, delivery.cookies = out.RedirectURI, [2]string{auth.String(), csrf.String()}
+			delivery.redirect, delivery.cookies = out.RedirectURI, []string{auth.String(), csrf.String()}
 			delivery.current = func() bool {
 				now := c.Browser.Now()
 				spec, err := out.Issuance.Session.Bindings()

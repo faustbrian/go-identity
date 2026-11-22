@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in explicit enterprise member linking on the existing keyed start
+  and shared OIDC callback. Require original cookie and same-origin CSRF;
+  authenticate native callback mode without fallback and deliver no cookies
+  on link completion. Unselected and ordinary sign-in are unchanged.
+
 - Support case-sensitive enterprise provider IDs in callback wiring without
   substituting them for the OAuth parser's logical ID.
 

@@ -62,5 +62,22 @@ success URL. Replay, denial and unresolved outcomes do not deliver credentials.
 
 Use the explicit enterprise session admission profile for session read and
 strict cookie logout. This transport does not select that policy, expose
-provider tokens, create links/provision accounts, or enable another federation
+provider tokens, implicitly create links/provision accounts, or enable another federation
 protocol. Do not record the raw callback URL, query, code, state or cookies.
+
+## Explicit linking for an active member
+
+Use `NewSigninStartFeatureWithLink` and `NewSigninCallbackFeatureWithLink`
+together to opt in. Send `link: true` on the existing keyed JSON start route,
+omit `flowID`, and supply the original fresh password-session cookie and
+`X-CSRF-Token` with the exact Origin. `remember` must be omitted or false.
+The session cookie must be `SameSite=Lax` for the top-level provider return;
+the existing signed device cookie remains required. Omitting `link` continues
+to use the anonymous flow and must not send `X-CSRF-Token`.
+
+Use the native `SharedCallbackRateSource` with both transport credentials.
+The authenticated stored transaction selects the callback mode and quota
+identity. A failed member check must not route to anonymous sign-in. A
+committed link redirects to the selected allowlisted URL without setting a
+session or CSRF cookie. Ordinary sign-in still issues its own credentials.
+The previous password session may be invalidated by the credential change.

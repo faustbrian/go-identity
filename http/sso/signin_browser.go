@@ -84,6 +84,28 @@ func newSigninBrowserPolicy(c SigninBrowserConfig) (signinBrowserPolicy, error) 
 }
 
 func (p signinBrowserPolicy) resolve(r *http.Request, requireOrigin bool) (identityhttp.NetworkFacts, SigninBrowser, session.BrowserDevice, error) {
+	facts, browser, device, err := p.resolveDevice(r, requireOrigin)
+	if err != nil {
+		return facts, browser, device, err
+	}
+	browser.FlowCookie, err = p.sessionCookie(r, p.flowName, identityhttp.HeaderRequired)
+	return facts, browser, device, err
+}
+
+func (p signinBrowserPolicy) sessionCookie(r *http.Request, name string, requirement identityhttp.HeaderRequirement) (authentication.BearerCredential, error) {
+	cookie, found, err := p.decoder.CookieBearer(r, name, requirement)
+	if err != nil {
+		return authentication.BearerCredential{}, identity.ForbiddenError{}
+	}
+	if found {
+		if _, err := session.ParseToken(cookie.Token()); err != nil {
+			return authentication.BearerCredential{}, identity.ForbiddenError{}
+		}
+	}
+	return cookie, nil
+}
+
+func (p signinBrowserPolicy) resolveDevice(r *http.Request, requireOrigin bool) (identityhttp.NetworkFacts, SigninBrowser, session.BrowserDevice, error) {
 	facts, err := p.network.Resolve(r)
 	if err != nil || facts.Realm() != identityhttp.RealmTenant || facts.TenantID() != p.config.TenantID || facts.Scheme() != "https" || facts.Origin() != string(p.config.Origin) {
 		return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
@@ -93,13 +115,6 @@ func (p signinBrowserPolicy) resolve(r *http.Request, requireOrigin bool) (ident
 			return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
 		}
 	}
-	flow, _, err := p.decoder.CookieBearer(r, p.flowName, identityhttp.HeaderRequired)
-	if err != nil {
-		return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
-	}
-	if _, err := session.ParseToken(flow.Token()); err != nil {
-		return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
-	}
 	device, _, err := p.decoder.CookieBearer(r, p.deviceName, identityhttp.HeaderRequired)
 	if err != nil {
 		return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
@@ -108,5 +123,5 @@ func (p signinBrowserPolicy) resolve(r *http.Request, requireOrigin bool) (ident
 	if err != nil {
 		return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
 	}
-	return facts, SigninBrowser{FlowCookie: flow, Origin: facts.Origin(), Network: facts.ClientIP(), Device: signed.DeviceID()}, signed, nil
+	return facts, SigninBrowser{Origin: facts.Origin(), Network: facts.ClientIP(), Device: signed.DeviceID()}, signed, nil
 }
