@@ -103,6 +103,13 @@ and credential. `Work.SSOOIDCJITUser` proves only creation by that exact Work
 to the enlisted MFA and membership owners. Return any error to abort the
 original transaction; no API here authenticates a provider or issues a session.
 
+`SSOOIDCExplicitLinkStartOperation` selects only authenticated member starts.
+Start commands carry the original self-user session. The registered SSO owner
+must freeze and fence original consent and current authority through admission
+and final prepared Work. It can issue one callback-state grant bound to the
+same member, using the existing OIDC lifecycle and original expiry. An
+anonymous or non-prepared command cannot select this schema.
+
 The explicit existing-member link uses `SSOOIDCExplicitLinkCallbackOperation`,
 a self-targeted session-bearing schema of the same callback. Its native owner
 implements `SSOOIDCExplicitLinkContributor` and proves the original fresh

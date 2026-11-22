@@ -43,7 +43,7 @@ func oauthRPInitiationGrantSubject(b identity.CommandBinding, p CommandPlan, pay
 		return "", invalidWork()
 	}
 	subject := string(b.UserID)
-	if enterprise || b.OperationID == "identity.oauth.signin-start" {
+	if (enterprise && p.Feature.Operation == ssoOIDCStartOperation()) || b.OperationID == "identity.oauth.signin-start" {
 		// A capability subject is an opaque scope string. An anonymous flow is
 		// not a local user and must never enter a UserID override or user fence.
 		subject = b.AnonymousFlowID

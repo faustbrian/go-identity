@@ -357,6 +357,9 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if ssoOIDCStartSelected(p) && !validSSOOIDCStart(s.Binding, p) {
 		return q, nil, nil, invalidPreparation()
 	}
+	if s.Operation == SSOOIDCExplicitLinkStartOperation() && !validSSOOIDCExplicitLinkStartCommand(original, p) {
+		return q, nil, nil, invalidPreparation()
+	}
 	entry, e := c.registry.selectFeatureOperation(*p.Feature)
 	if e != nil {
 		return q, nil, nil, invalidPreparation()
@@ -918,7 +921,7 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	}
 	p := w.state.execution.reservation.preparation
 	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || providerSigninConsumptionOperation(plan.feature.Operation) || plan.mfaCompletion != nil) && plan.counters == nil {
+	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || providerSigninConsumptionOperation(plan.feature.Operation) || plan.feature.Operation == SSOOIDCExplicitLinkStartOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
 		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
 			return invalidPreparation()
 		}

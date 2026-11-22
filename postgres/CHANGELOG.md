@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select a separate authenticated enterprise OIDC explicit-link start schema.
+  Require the self-user session and prepared authority gates and issue one
+  original-member callback grant without changing anonymous start behavior.
+
 - Admit explicit enterprise OIDC account linking in the original authenticated
   callback Work. Fence the actor, new SSO-owned credential and consumed state;
   neither anonymous sign-in nor JIT can select the explicit-link schema.

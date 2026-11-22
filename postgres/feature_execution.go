@@ -65,6 +65,13 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if plan.Feature != nil && plan.Feature.Operation == SSOOIDCExplicitLinkStartOperation() {
+		_, admission := phase.(FeatureAdmissionPreparationContributor)
+		_, final := phase.(FeatureCommitContributor)
+		if !admission || !final || !validSSOOIDCExplicitLinkStartCommand(command, plan) {
+			return invalidPlan()
+		}
+	}
 	if plan.Feature != nil && scimUserUpdateSelected(plan.Feature.Operation) {
 		update, err := scimUserUpdateCommandPlan(command)
 		_, finalCheck := phase.(FeatureCommitContributor)
