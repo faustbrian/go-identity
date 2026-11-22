@@ -139,6 +139,7 @@ type SessionService struct {
 	methods                uint8
 	cacheProfile           string
 	organizationBearerOnly bool
+	ssoOIDCCookieOnly      bool
 }
 
 // NewSelectedProfileSessionService freezes an explicit nonempty subset of
@@ -188,6 +189,23 @@ func NewOrganizationBearerProfileSessionService(reader SessionReader, config Ser
 	return s, nil
 }
 
+// NewSSOOIDCCookieProfileSessionService selects enterprise OIDC sessions only
+// on cookie transport with their issued CSRF state. Other organization-selected
+// records remain bearer-only. Unselected records keep their existing transport
+// behavior. The owned reader still must prove every current authority dimension;
+// the cache is bound to this distinct policy and never renews original evidence.
+func NewSSOOIDCCookieProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string) (*SessionService, error) {
+	s, err := NewOrganizationBearerProfileSessionService(reader, config, methods, cacheProfile)
+	if err != nil {
+		return nil, err
+	}
+	if !s.admitsMethod(AuthenticationVerified) {
+		return nil, ErrInvalidInput
+	}
+	s.ssoOIDCCookieOnly = true
+	return s, nil
+}
+
 func (s *SessionService) admitsTransport(record Session, kind CredentialKind) bool {
 	if !s.organizationBearerOnly {
 		return true
@@ -199,6 +217,9 @@ func (s *SessionService) admitsTransport(record Session, kind CredentialKind) bo
 	vector, err := spec.Authority.Bindings()
 	if err != nil {
 		return false
+	}
+	if s.ssoOIDCCookieOnly && spec.Authentication.Kind == AuthenticationVerified && spec.Authentication.Proof.Method == "sso-oidc" {
+		return vector.Organization.Present && kind == CredentialCookie && record.CSRFState().state != nil
 	}
 	return !vector.Organization.Present || kind == CredentialBearer && record.CSRFState().state == nil
 }

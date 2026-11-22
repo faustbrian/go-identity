@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit enterprise OIDC cookie-session admission. An enterprise token
+  must retain its original CSRF state and use cookie transport, including when
+  an encrypted cache is warm. Other organization-selected sessions retain
+  bearer-only behavior.
+
 - Add prospective single-factor enterprise OIDC session preparation with the
   original browser command, exact `sso` provider credential, selected
   organization authority and unchanged Remember policy. Bearer and optional
