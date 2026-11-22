@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select a separate anonymous enterprise OAuth 2.0 start schema for one
+  OAuth-only callback grant bound to the original browser flow, tenant,
+  transaction and correlation. Existing OIDC and social custody are unchanged.
+
 - Select a separate authenticated enterprise OIDC explicit-link start schema.
   Require the self-user session and prepared authority gates and issue one
   original-member callback grant without changing anonymous start behavior.

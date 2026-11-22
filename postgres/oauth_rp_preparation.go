@@ -39,18 +39,19 @@ const oauthRPMaximumStateLifetime = 10 * time.Minute
 
 func oauthRPInitiationGrantSubject(b identity.CommandBinding, p CommandPlan, payload capability.Payload) (string, error) {
 	enterprise := b.OperationID == "identity.sso.signin-start"
-	if p.CapabilityIssuance == nil || (enterprise && !validSSOOIDCStart(b, p)) || (!enterprise && !validOAuthRPInitiation(b, p)) {
+	if p.CapabilityIssuance == nil || (enterprise && !validSSOEnterpriseStart(b, p)) || (!enterprise && !validOAuthRPInitiation(b, p)) {
 		return "", invalidWork()
 	}
 	subject := string(b.UserID)
-	if (enterprise && p.Feature.Operation == ssoOIDCStartOperation()) || b.OperationID == "identity.oauth.signin-start" {
+	if (enterprise && p.Feature.Operation.SubjectRequirement == identity.FeatureSubjectAnonymousFlow) || b.OperationID == "identity.oauth.signin-start" {
 		// A capability subject is an opaque scope string. An anonymous flow is
 		// not a local user and must never enter a UserID override or user fence.
 		subject = b.AnonymousFlowID
 	}
 	purpose := "identity.oauth.callback"
 	if enterprise {
-		purpose = "identity.sso.oidc-callback"
+		_, selected := ssoEnterpriseStartProfile(p.Feature.Operation)
+		purpose = string(selected)
 		if payload.CorrelationID != b.CorrelationID {
 			return "", invalidWork()
 		}

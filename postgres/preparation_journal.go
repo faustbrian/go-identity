@@ -45,7 +45,7 @@ func reservePreparationJournal(ctx context.Context, tx pgx.Tx, q claimRequest, d
 	if expectedProfile == 6 && (q.purpose != "identity.account.unlink" || q.feature != nil) {
 		return preparationReservation{}, invalidPreparation()
 	}
-	if ssoOIDCStartClaim(q) && expectedProfile != 4 {
+	if ssoEnterpriseStartClaim(q) && expectedProfile != 4 {
 		return preparationReservation{}, invalidPreparation()
 	}
 	if !validJournalInput(ctx, tx, q, owner, lease) || (d != claimNew && d != claimReplay) {
@@ -84,7 +84,7 @@ FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR U
 	preparedLink := expectedProfile == 5 && q.purpose == "identity.account.link-token" && q.feature == nil
 	preparedUnlink := expectedProfile == 6 && q.purpose == "identity.account.unlink" && q.feature == nil
 	preparedRefresh := (expectedProfile == 2 || expectedProfile == 4) && oauthProviderRefreshPreparationClaim(q)
-	erasureProfile := expectedProfile <= 4 && oauthRPInitiationClaim(q) || preparedLink || preparedUnlink || preparedRefresh || expectedProfile == 4 && (ssoOIDCStartClaim(q) || ssoOIDCCallbackClaim(q))
+	erasureProfile := expectedProfile <= 4 && oauthRPInitiationClaim(q) || preparedLink || preparedUnlink || preparedRefresh || expectedProfile == 4 && (ssoEnterpriseStartClaim(q) || ssoOIDCCallbackClaim(q))
 	erasedOutput := erasureProfile && (state == "committed" || state == "aborted") && started != nil && output == nil && provenance == nil
 	if profile == nil || *profile != expectedProfile || plan != nil && output == nil && !deniedBeforeGeneration && !erasedOutput || !postgresExactTime(until) {
 		return preparationReservation{}, identity.ConflictError{}

@@ -38,7 +38,7 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
-## Enterprise OIDC start preparation
+## Enterprise sign-in start preparation
 
 The exact native `sso/postgres` contributor `sso.oidc-login-start` version 1
 uses `ExecutePreparedFeature` for enterprise OIDC start. Its frozen feature is
@@ -48,6 +48,14 @@ ID equal to the server's start command ID. It uses admission-gated preparation
 with a retained declaration. Attachment authorizes one non-bearer state grant
 for `identity.sso.oidc-callback`, bound to the original tenant, flow, transaction
 and correlation; it does not select a user or grant a session.
+
+`SSOOAuth2SigninStartOperation` selects the separate anonymous OAuth 2.0
+profile, `identity.sso.signin-start.oauth2-v1`. Only the registered
+`sso/postgres` contributor `sso.oauth2-login-start` version 1 may attach its
+single non-bearer `identity.sso.oauth-callback` grant. The same original
+pre-authentication admission and preparation erasure apply. Neither the OIDC
+nor social OAuth profile can attach this grant, and it does not establish a
+user, callback result or session.
 
 Install `SSOOIDCPreparationErasureMigrationSource` after
 `OAuthProviderRefreshErasureMigrationSource` before enabling this native writer.

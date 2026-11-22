@@ -228,7 +228,7 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
-	if ssoOIDCStartClaim(q) && !gated {
+	if ssoEnterpriseStartClaim(q) && !gated {
 		return result, invalidPreparation()
 	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
@@ -354,10 +354,13 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if !ok || p.Feature == nil || p.Feature.Operation != s.Operation || p.Delivery != nil || preparationProtected(p) || p.SubjectType == "" || validateOrganizationInvitationOriginCommand(original, p) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
-	if ssoOIDCStartSelected(p) && !validSSOOIDCStart(s.Binding, p) {
+	if ssoEnterpriseStartSelected(p) && !validSSOEnterpriseStart(s.Binding, p) {
 		return q, nil, nil, invalidPreparation()
 	}
 	if s.Operation == SSOOIDCExplicitLinkStartOperation() && !validSSOOIDCExplicitLinkStartCommand(original, p) {
+		return q, nil, nil, invalidPreparation()
+	}
+	if s.Operation == SSOOAuth2SigninStartOperation() && !validSSOOAuth2StartCommand(original, p) {
 		return q, nil, nil, invalidPreparation()
 	}
 	entry, e := c.registry.selectFeatureOperation(*p.Feature)
@@ -437,16 +440,16 @@ func preparationRetainsDeclaration(p CommandPlan) bool {
 	// The OAuth Authentication/BeforeCredential profile uses retained external
 	// admission, not protected-mutation counters. Its state is nevertheless
 	// reserved before exchange, so recovery needs the same frozen declaration.
-	// Enterprise OIDC start likewise retains its admission-gated declaration
+	// Enterprise start likewise retains its admission-gated declaration
 	// through terminal state issuance and temporary output erasure.
-	return p.CommandCounters != nil || providerSigninPreparation(p) || ssoOIDCStartSelected(p)
+	return p.CommandCounters != nil || providerSigninPreparation(p) || ssoEnterpriseStartSelected(p)
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
 	if oauthRPInitiationSelected(original) && (!validOAuthRPInitiation(b, original) || !validOAuthRPInitiation(b, final) || final.CapabilityIssuance == nil) {
 		return false
 	}
-	if ssoOIDCStartSelected(original) && (!validSSOOIDCStart(b, original) || !validSSOOIDCStart(b, final) || final.CapabilityIssuance == nil) {
+	if ssoEnterpriseStartSelected(original) && (!validSSOEnterpriseStart(b, original) || !validSSOEnterpriseStart(b, final) || final.CapabilityIssuance == nil) {
 		return false
 	}
 	if (original.APIKeyVerification == nil) != (final.APIKeyVerification == nil) || original.APIKeyVerification != nil && *original.APIKeyVerification != *final.APIKeyVerification {
@@ -483,7 +486,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		}
 		selectedIssuance := final.MFAContinuation != nil || i.RegistrationUserID != "" || i.ResetRecipientUserID != "" || i.MagicLinkRecipientUserID != "" ||
 			validManagedEmailIssuance(b, final) || validOrganizationInvitationIssuance(b, final) || phoneResetRequestPreparation(final) ||
-			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validSSOOIDCStart(b, final)
+			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validSSOEnterpriseStart(b, final)
 		if !selectedIssuance || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final) {
 			return false
 		}
@@ -921,7 +924,7 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	}
 	p := w.state.execution.reservation.preparation
 	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || providerSigninConsumptionOperation(plan.feature.Operation) || plan.feature.Operation == SSOOIDCExplicitLinkStartOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
+	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || providerSigninConsumptionOperation(plan.feature.Operation) || plan.feature.Operation == SSOOIDCExplicitLinkStartOperation() || plan.feature.Operation == SSOOAuth2SigninStartOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
 		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
 			return invalidPreparation()
 		}
