@@ -49,6 +49,10 @@ transaction identity; it does not deliver a session or cookie.
 
 Wire the native enterprise start and completion service, including its
 `SigninCallbackRateSource`, through the transport owner's typed interfaces.
+When the installed ID and the OAuth parser's logical ID differ, use
+`NewSigninCallbackFeatureForProvider` with the exact installed ID. The parser
+still uses its own configured profile; native attribution and both quotas use
+the installed ID unchanged.
 The provider return uses query mode with the exact configured issuer, code,
 state and original browser cookies. The flow ID comes from the native state
 lookup, never the query. The original bound native transaction is charged the

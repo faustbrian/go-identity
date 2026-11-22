@@ -87,8 +87,16 @@ type SigninCallbackConfig struct {
 
 // NewSigninCallbackFeature selects the fixed query callback, with no start,
 // discovery, signup, linking, browser error redirects or form-post support.
+// Provider.ID identifies both the installed provider and the parser profile.
 func NewSigninCallbackFeature(c SigninCallbackConfig) (identityhttp.Feature, error) {
-	if !configuredOwner(c.Callback) || c.Audience == "" || len(c.CallbackAllowlist) == 0 || len(c.CallbackAllowlist) > 64 ||
+	return NewSigninCallbackFeatureForProvider(c.Provider.ID, c)
+}
+
+// NewSigninCallbackFeatureForProvider selects the same callback for one exact
+// installed provider whose case-sensitive ID differs from the OAuth parser's
+// logical ID. It uses providerID for native attribution and provider quotas.
+func NewSigninCallbackFeatureForProvider(providerID string, c SigninCallbackConfig) (identityhttp.Feature, error) {
+	if !validProviderID(providerID) || !configuredOwner(c.Callback) || c.Audience == "" || len(c.CallbackAllowlist) == 0 || len(c.CallbackAllowlist) > 64 ||
 		c.Provider.RedirectURI != string(c.Browser.Origin)+signinCallbackPath || c.Provider.ValidateQueryCallback() != nil || c.Provider.MaxCodeBytes > 4096 || c.Provider.GoogleAccounts {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
@@ -109,7 +117,7 @@ func NewSigninCallbackFeature(c SigninCallbackConfig) (identityhttp.Feature, err
 	if authErr != nil || csrfErr != nil || authCookie.Name == csrfCookie.Name || authCookie.Name == browser.flowName || authCookie.Name == browser.deviceName || csrfCookie.Name == browser.flowName || csrfCookie.Name == browser.deviceName {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	handler, err := newSigninCallbackHandler(c, browser)
+	handler, err := newSigninCallbackHandler(c, browser, providerID)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
@@ -142,7 +150,7 @@ func (*signinDelivery) Format(s fmt.State, _ rune) {
 	_, _ = fmt.Fprint(s, "ssohttp.signinDelivery(redacted)")
 }
 
-func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolicy) (http.Handler, error) {
+func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolicy, providerID string) (http.Handler, error) {
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[signinCallbackState]{
 		MaximumDuration: c.Browser.MaximumDuration, Reject: writeSigninError,
 		Decode: func(r *http.Request) (s signinCallbackState, err error) {
@@ -168,7 +176,7 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 		},
 		Authenticate: func(r *http.Request, s signinCallbackState) (signinCallbackState, error) {
 			ctx := r.Context()
-			if err := admitSigninIP(ctx, c.Browser.Rate, s.facts, signinCallbackOperation, string(c.Provider.ID)); err != nil {
+			if err := admitSigninIP(ctx, c.Browser.Rate, s.facts, signinCallbackOperation, providerID); err != nil {
 				return s, err
 			}
 			if !s.accepted {
@@ -180,7 +188,7 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 			}
 			flow, flowErr := identity.ParsePreAuthTransactionID(string(source.FlowID))
 			command, commandErr := identity.ParseCommandID(source.TransactionID)
-			if source.ProviderID != string(c.Provider.ID) || flowErr != nil || commandErr != nil || !s.device.ExpiresAt().After(c.Browser.Now()) {
+			if source.ProviderID != providerID || flowErr != nil || commandErr != nil || !s.device.ExpiresAt().After(c.Browser.Now()) {
 				return s, identity.ForbiddenError{}
 			}
 			s.source, s.command, s.request.Browser.FlowID = source, command, flow

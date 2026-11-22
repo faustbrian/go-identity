@@ -47,6 +47,16 @@ func (p *signinCallbackProbe) CompleteSSOOIDC(_ context.Context, r SigninCallbac
 }
 
 func TestEnterpriseCallbackUsesNativeOriginalFlowAndWithholdsUnresolvedResult(t *testing.T) {
+	t.Run("same protocol and installed ID", func(t *testing.T) {
+		testEnterpriseCallbackOriginalFlow(t, "approved-oidc")
+	})
+	t.Run("distinct case-sensitive installed ID", func(t *testing.T) {
+		testEnterpriseCallbackOriginalFlow(t, "Enterprise_OIDC-01")
+	})
+}
+
+func testEnterpriseCallbackOriginalFlow(t *testing.T, installedProvider string) {
+	t.Helper()
 	discovery, _, _ := discoveryFixture(t)
 	flowPolicy, err := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_flow", SameSite: http.SameSiteLaxMode})
 	if err != nil {
@@ -84,13 +94,18 @@ func TestEnterpriseCallbackUsesNativeOriginalFlowAndWithholdsUnresolvedResult(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe := &signinCallbackProbe{flow: flow, transaction: transaction}
+	probe := &signinCallbackProbe{flow: flow, transaction: transaction, provider: installedProvider}
 	config := SigninCallbackConfig{
 		Browser:           SigninBrowserConfig{Network: discovery.Network, TenantID: testTenant, Origin: "https://tenant.example", FlowCookie: flowPolicy, Device: discovery.BrowserDevice, Rate: discovery.Rate, Now: discovery.Now, MaximumDuration: time.Second},
 		Provider:          oauth.ProviderProfile{ID: "approved-oidc", Version: 1, Issuer: "https://provider.example", AuthorizationEndpoint: "https://provider.example/authorize", TokenEndpoint: "https://provider.example/token", RedirectURI: "https://tenant.example/sso/oidc/callback", ClientID: "transport-client", ClientAuthentication: oauth.ClientSecretBasic, Scopes: []string{"openid"}, Algorithms: []string{"ES256"}, ResponseMode: "query", PKCEMethod: "S256", NonceRequired: true, StateBytes: 32, NonceBytes: 32, Timeout: time.Second, ClockSkew: time.Second, MaxResponseBytes: 4096, MaxTokenBytes: 1024, MaxCodeBytes: 512},
 		CallbackAllowlist: []string{"https://tenant.example/ok"}, Audience: "enterprise-app", Cookie: sessionCookie, CSRFCookie: csrfCookie, Callback: probe,
 	}
-	feature, err := NewSigninCallbackFeature(config)
+	var feature identityhttp.Feature
+	if installedProvider == config.Provider.ID {
+		feature, err = NewSigninCallbackFeature(config)
+	} else {
+		feature, err = NewSigninCallbackFeatureForProvider(installedProvider, config)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +192,7 @@ func TestEnterpriseCallbackUsesNativeOriginalFlowAndWithholdsUnresolvedResult(t 
 	if w.Code != http.StatusForbidden || probe.calls != before || w.Header().Get("Set-Cookie") != "" || w.Header().Get("Location") != "" {
 		t.Fatal("foreign native attribution reached callback completion", w.Code)
 	}
-	probe.provider = ""
+	probe.provider = installedProvider
 	probe.result = enterpriseIssueFixture(t, config, flow, transaction)
 	probe.result.RedirectURI = "https://fixture.example/wrong"
 	w = serve(query, "")
