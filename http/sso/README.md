@@ -1,4 +1,4 @@
-# Enterprise SSO discovery HTTP feature
+# Enterprise SSO HTTP features
 
 Select `NewFeature(Config{...})` to compose only `GET /v1/sso/discover` into
 `identityhttp.FeatureServices`. The base HTTP package does not import this
@@ -29,3 +29,34 @@ A match returns only `matched`, `providerID`, `protocol` and
 exhaustion is `429` with `Retry-After`; unavailable required authority fails
 closed. Neither the cookie nor any response authenticates a user or grants
 enterprise sign-in. Omit the feature entirely to disable discovery.
+
+## Existing-linked-member static OIDC
+
+Select `NewSigninStartFeature` for `POST /v1/sso/signin-start` and
+`NewSigninCallbackFeature` for `GET /sso/oidc/callback`. To select both start
+and discovery, set `Config.SigninStart` when calling `NewFeature`; both share
+the `sso` owner. The callback is a separate `sso/oidc` contribution. Omitted
+operations have neither a route nor an OpenAPI definition.
+
+Bind both configurations to the same exact HTTPS tenant, provider and shared
+limiter. Use the same Lax flow/device cookies, clock and Remember policy as
+the pre-authentication issuer. Start requires exact Origin, one
+`Idempotency-Key`, and JSON containing `flowID`, `commandID`, `providerID`,
+`callback`, `errorCallback`, and optional `domain` and `remember`. Retain the
+original body and key for a retry. Both callback URLs must be on the configured
+same-origin allowlist. Start returns the original authorization URL and
+transaction identity; it does not deliver a session or cookie.
+
+Wire the native enterprise start and completion service, including its
+`SigninCallbackRateSource`, through the transport owner's typed interfaces.
+The provider return uses query mode with the exact configured issuer, code,
+state and original browser cookies. The flow ID comes from the native state
+lookup, never the query. The original bound native transaction is charged the
+callback quota before exchange. Only a fresh acknowledged completion returns a
+303 with separate secure session and CSRF cookies at the exact allowlisted
+success URL. Replay, denial and unresolved outcomes do not deliver credentials.
+
+Use the explicit enterprise session admission profile for session read and
+strict cookie logout. This transport does not select that policy, expose
+provider tokens, create links/provision accounts, or enable another federation
+protocol. Do not record the raw callback URL, query, code, state or cookies.

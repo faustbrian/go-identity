@@ -45,11 +45,18 @@ type Config struct {
 	Rate            *identityhttp.AuthRateLimiter
 	Now             func() time.Time
 	MaximumDuration time.Duration
+	// SigninStart optionally adds the independently configured static OIDC
+	// sign-in start to this tenant SSO contribution. Nil preserves discovery.
+	SigninStart *SigninStartConfig
 }
 
-// NewFeature contributes only GET /v1/sso/discover and its wire contract.
-// Omit this feature to register no discovery route or OpenAPI operation.
+// NewFeature contributes the selected tenant SSO operations. When SigninStart
+// is nil, only configured discovery is selected. Discovery can be omitted when
+// selecting start, and the protocol callback remains a separate contribution.
 func NewFeature(c Config) (identityhttp.Feature, error) {
+	if c.Discovery == nil && c.SigninStart != nil {
+		return NewSigninStartFeature(*c.SigninStart)
+	}
 	h, err := newDiscoveryHandler(c)
 	if err != nil {
 		return identityhttp.Feature{}, err
@@ -59,7 +66,15 @@ func NewFeature(c Config) (identityhttp.Feature, error) {
 		return identityhttp.Feature{}, err
 	}
 	op.Wire = discoveryWire()
-	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "sso", Operations: []identityhttp.OperationDescriptor{op}})
+	operations := []identityhttp.OperationDescriptor{op}
+	if c.SigninStart != nil {
+		start, err := NewSigninStartFeature(*c.SigninStart)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		operations = append(operations, start.Operations()...)
+	}
+	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "sso", Operations: operations})
 }
 
 type discoveryRequestState struct {
@@ -69,7 +84,7 @@ type discoveryRequestState struct {
 }
 
 func newDiscoveryHandler(c Config) (http.Handler, error) {
-	if !discoveryConfigured(c.Discovery) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || len(c.Network.TenantHosts) == 0 {
+	if !configuredOwner(c.Discovery) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || len(c.Network.TenantHosts) == 0 {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
@@ -180,7 +195,7 @@ func discoveryHeadersAllowed(r *http.Request, facts identityhttp.NetworkFacts) b
 	return true
 }
 
-func discoveryConfigured(owner BrowserDiscovery) bool {
+func configuredOwner(owner any) bool {
 	if owner == nil {
 		return false
 	}
