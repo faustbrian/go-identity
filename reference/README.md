@@ -158,9 +158,28 @@ history; installing that prefix does not enable social admission or routes.
    `Origin` and copy the CSRF cookie into `X-CSRF-Token`; a successful signout
    revokes the session and removes both cookies.
 
-The [Reference journey](enterprise_oidc_integration_test.go) uses a disposable
-PostgreSQL primary and a controlled TLS provider. It does not exercise JIT,
-new linking, repeat-login synchronization, or another federation protocol.
+To synchronize provider-owned custom roles on repeat sign-in, also select
+`EnterpriseOIDC.RoleSync` and configure organization dynamic roles. Supply a
+`StaticOIDCRoleMapping` for the exact pinned organization, provider, and mapping
+version. Add each mapped claim to `ClaimNames` in the provider's
+`Completion.Profiles` entry. A verified boolean `true` grants the mapped role
+and `false` withdraws that provider's grant; missing or malformed claims deny
+sign-in.
+Organization permission checks combine provider roles with independent direct
+and team grants. Role changes deny older organization-bound sessions; the new
+cookie binds the current organization policy revision.
+
+Apply the role-sync migration plan before enabling the selected provider. An
+existing provider is not automatically projected by installing the migrations;
+the native provider lifecycle must establish its current eligible generation
+before role sync can issue a session. Keep the selected permission reader in
+place while any managed grants are active. Leaving `RoleSync` unset on an
+ordinary enterprise installation does not require these migrations.
+
+The [baseline journey](enterprise_oidc_integration_test.go) and the
+[role-sync upgrade journey](enterprise_oidc_role_integration_test.go) use a
+disposable PostgreSQL primary and controlled TLS provider. JIT, new account
+linking, and other enterprise federation protocols are separate capabilities.
 
 ## Optional native social account unlink
 

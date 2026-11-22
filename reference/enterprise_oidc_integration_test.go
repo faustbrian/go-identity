@@ -54,7 +54,8 @@ func (referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
 		switch c.Request.Action {
 		case "org:sso-write", "org:sso-read", "org:sso-credentials", "identity.sso.provider.register-oidc", "identity.sso.provider.register-oidc.recover",
-			"identity.sso.provider.credentials-rotate", "identity.sso.provider.credentials-rotate.recover", "identity.sso.provider.enable", "identity.sso.provider.enable.recover":
+			"identity.sso.provider.credentials-rotate", "identity.sso.provider.credentials-rotate.recover", "identity.sso.provider.enable", "identity.sso.provider.enable.recover",
+			"identity.organization.role.create", "identity.organization.role.create.recover", "identity.organization.permission-check":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -122,6 +123,8 @@ type referenceEnterpriseIssuer struct {
 	mux       sync.Mutex
 	grant     map[string]enterpriseGrant
 	posts     atomic.Int32
+	roleClaim string
+	roleGrant atomic.Bool
 }
 
 type enterpriseGrant struct{ nonce, challenge string }
@@ -195,14 +198,19 @@ func (p *referenceEnterpriseIssuer) tokenResponse(w http.ResponseWriter, r *http
 	} else {
 		ok = false
 	}
+	roleClaim := p.roleClaim
 	p.mux.Unlock()
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	now := time.Now().UTC()
-	claims, err := json.Marshal(map[string]any{"iss": p.server.URL, "aud": enterpriseProviderClient, "sub": enterpriseProviderSubject,
-		"nonce": grant.nonce, "iat": now.Unix(), "auth_time": now.Unix(), "exp": now.Add(5 * time.Minute).Unix()})
+	attributes := map[string]any{"iss": p.server.URL, "aud": enterpriseProviderClient, "sub": enterpriseProviderSubject,
+		"nonce": grant.nonce, "iat": now.Unix(), "auth_time": now.Unix(), "exp": now.Add(5 * time.Minute).Unix()}
+	if roleClaim != "" {
+		attributes[roleClaim] = p.roleGrant.Load()
+	}
+	claims, err := json.Marshal(attributes)
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -280,6 +288,12 @@ func selectProvisionedEnterprise(t *testing.T, ctx context.Context, c reference.
 	completion := native.Completion.Profiles[0]
 	completion.OrganizationID, completion.ProviderID = selected.organization, selected.provider
 	native.Completion.Profiles = []ssopg.StaticOIDCCompletionProfile{completion}
+	if native.RoleSync != nil {
+		mapping := *native.RoleSync
+		mapping.OrganizationID, mapping.ProviderID = selected.organization, selected.provider
+		mapping.Rules = append([]ssopg.StaticOIDCRoleRule(nil), mapping.Rules...)
+		native.RoleSync = &mapping
+	}
 	c.EnterpriseOIDC = &native
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {

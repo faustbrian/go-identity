@@ -44,6 +44,21 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	}
 	catalog = append(catalog, domains)
 
+	if f.enterpriseOIDC.roleSync {
+		roles := migrationHistory{namespace: "identity_organization_provider_roles", owners: map[migrations.Version]ModuleID{}}
+		if err := appendEnterpriseMigration(ctx, &roles, "organization/postgres", organizationpg.ProviderRoleGrantMigrationSource{Version: 1}, migrationGuard{
+			version: 1, schema: "organization", tables: []string{"provider_role_sources", "provider_role_grants"},
+		}); err != nil {
+			return nil, err
+		}
+		if err := appendEnterpriseMigration(ctx, &roles, "organization/postgres", organizationpg.ProviderRoleSourceProjectionMigrationSource{Version: 2}, migrationGuard{
+			version: 2, schema: "organization", functions: []string{"project_provider_role_source", "invalidate_provider_role_source_policy"},
+		}); err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, roles)
+	}
+
 	providers := migrationHistory{namespace: "identity_enterprise_oidc", owners: map[migrations.Version]ModuleID{}}
 	for _, step := range []struct {
 		source migrations.Source
@@ -58,6 +73,15 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	} {
 		step.guard.schema = "sso_providers"
 		if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", step.source, step.guard); err != nil {
+			return nil, err
+		}
+	}
+	if f.enterpriseOIDC.roleSync {
+		// Keep the baseline provider prefix: the optional trigger must run only
+		// after the organization's role history and the installed provider schema.
+		if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", ssopg.ProviderRoleSourceMigrationSource{Version: 7}, migrationGuard{
+			version: 7, schema: "sso_providers", functions: []string{"project_provider_role_source_change"},
+		}); err != nil {
 			return nil, err
 		}
 	}

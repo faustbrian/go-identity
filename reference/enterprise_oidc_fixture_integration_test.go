@@ -33,6 +33,7 @@ type enterpriseProvisioned struct {
 	user         identity.UserID
 	organization organization.ID
 	provider     sso.ProviderID
+	bearer       auth.BearerCredential
 }
 
 // Provision through the native admin owner. Test-only SQL supplies the
@@ -156,7 +157,7 @@ VALUES($1,$2,$3,$4,1,1,'dns-txt',$5,$6,false,$7)`, otpTenant, string(domain.Orga
 	if err != nil || !enabled.Provider.Enabled || enabled.Provider.Version != 3 {
 		t.Fatal("native provider enable did not commit from current proof", err)
 	}
-	selected := enterpriseProvisioned{user: user, organization: created.OrganizationID, provider: sso.ProviderID(providerID)}
+	selected := enterpriseProvisioned{user: user, organization: created.OrganizationID, provider: sso.ProviderID(providerID), bearer: bearer}
 	seedEnterpriseLink(t, ctx, pool, selected, provider.server.URL)
 	return selected
 }

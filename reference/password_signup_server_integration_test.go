@@ -283,6 +283,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	sessionCache                *referenceSessionCacheProof
 	enterpriseOIDC              bool
+	enterpriseOIDCRoles         bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -1805,11 +1806,34 @@ END $$`); err != nil {
 		if readiness := server.Readiness(ctx); !readiness.Ready {
 			t.Fatal("selected enterprise graph did not report ready after migrating", readiness.Failures)
 		}
+		if extensions.enterpriseOIDCRoles {
+			configureReferenceEnterpriseRoleSync(t, &c, enterpriseIssuer)
+			profile := c.EnterpriseOIDC.Login.Profiles[0]
+			bootstrap := enterpriseProvisioned{organization: profile.OrganizationID, provider: profile.ProviderID}
+			upgraded, _ := selectProvisionedEnterprise(t, ctx, c, deps, config, bootstrap, workerConfigs, func(stores reference.StoreSet) {
+				request := applyRequest(t, ctx, stores, modules)
+				request.CommandID, request.IdempotencyKey = "migration_command_0002", enterpriseKey(t, "enterprise-role-sync-migration")
+				result, err := stores.ReferenceMigrationApply(ctx, request)
+				if err != nil || result.Result.State() != reference.MigrationApplied {
+					t.Fatal("role-sync opt-in did not preserve the ordinary enterprise migration history", err, result.Result.State())
+				}
+			})
+			handler := upgraded.Handler()
+			organizationHandler.Store(&handler)
+		}
 		proveReferenceEnterpriseOIDCBootstrapped(t, ctx, client, origin, c.EnterpriseOIDC.Login.Profiles[0].ProviderID)
 		selected := provisionReferenceEnterprise(t, ctx, c, deps, client, origin, enterpriseIssuer)
+		var roleEpoch uint64
+		if extensions.enterpriseOIDCRoles {
+			roleEpoch = createReferenceEnterpriseRole(t, ctx, client, origin, c, selected)
+		}
 		restarted, features := selectProvisionedEnterprise(t, ctx, c, deps, config, selected, workerConfigs, nil)
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)
+		if extensions.enterpriseOIDCRoles {
+			proveReferenceEnterpriseRoleSyncJourney(t, ctx, client, origin, enterpriseIssuer, selected, roleEpoch)
+			return
+		}
 		proveReferenceEnterpriseOIDCJourney(t, ctx, client, origin, features, enterpriseIssuer, selected)
 		proveReferenceEnterpriseAllowsLaterSocialSelection(t, ctx, c, deps, config, selected, workerConfigs, modules, origin)
 		return

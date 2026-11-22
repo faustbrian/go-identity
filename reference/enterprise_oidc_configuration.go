@@ -29,6 +29,10 @@ type EnterpriseOIDCConfiguration struct {
 	Routing    ssopg.ProviderRouterConfig
 	Login      ssopg.ProviderLoginConfig
 	Completion ssopg.ProviderLoginCompletionConfig
+	// RoleSync optionally replaces provider-owned custom role grants during
+	// the existing callback. It requires this provider's exact pinned mapping
+	// and a configured organization dynamic-role permission owner.
+	RoleSync *ssopg.StaticOIDCRoleMapping
 }
 
 // Format redacts deployment and key custody.
@@ -73,6 +77,7 @@ type enterpriseOIDCState struct {
 	duration        time.Duration
 	callbacks       []string
 	csrfCookie      session.CSRFCookiePolicy
+	roleSync        bool
 }
 
 func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
@@ -84,6 +89,9 @@ func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
 		return nil
 	}
 	if c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil || c.Session == nil || c.Organization == nil || c.OTP == nil {
+		return invalid
+	}
+	if c.EnterpriseOIDC.RoleSync != nil && c.Organization.Core.DynamicRoles.Version == 0 {
 		return invalid
 	}
 	if c.HTTPEnterpriseOIDC != nil && (c.HTTPRate == nil || c.HTTPPreAuth == nil || c.HTTPPreAuth.Device == nil || c.OTP.PreAuth == nil ||
@@ -126,7 +134,12 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 	if err != nil {
 		return nil, err
 	}
-	complete, err := ssopg.NewProviderLoginCompletionService(start, n.Completion)
+	var complete *ssopg.ProviderLoginCompletionService
+	if n.RoleSync == nil {
+		complete, err = ssopg.NewProviderLoginCompletionService(start, n.Completion)
+	} else {
+		complete, err = ssopg.NewProviderLoginCompletionServiceWithRoleSync(start, n.Completion, []ssopg.StaticOIDCRoleMapping{*n.RoleSync})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +147,7 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 	profile.Scopes = slices.Clone(profile.Scopes)
 	state := &enterpriseOIDCState{start: start, completion: complete, profile: profile, tenant: n.Login.TenantID, origin: n.Login.Origin,
 		policy: n.Login.PolicyID, version: selectedSession.PolicyVersion, audience: n.Completion.Audience, duration: n.Login.Coordinator.MaximumDuration,
-		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist)}
+		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil}
 	if c.HTTPEnterpriseOIDC == nil {
 		return state, nil
 	}

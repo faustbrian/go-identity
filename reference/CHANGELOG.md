@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in enterprise OIDC repeat-login role synchronization. Reference
+  composes the native provider mapping, grant-aware organization permissions,
+  and additive migrations without exposing new routes. Signed withdrawals
+  preserve independent grants and invalidate older organization-bound sessions.
+
 - Compose opt-in linked-member enterprise OIDC browser sign-in over the native
   organization, provider, original-flow, and session owners. The selected graph
   wires forward migrations, native callback attribution, session read, and

@@ -230,7 +230,12 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 		n.Core.Lifecycle = organization.LifecycleConfig{Version: 1, ProofAudience: archive.Audience}
 		admission.Lifecycle = n.Core.Lifecycle
 	}
-	repository, err := organizationpg.NewRepository(d.PostgreSQL, n.Repository)
+	var repository *organizationpg.Repository
+	if c.EnterpriseOIDC != nil && c.EnterpriseOIDC.RoleSync != nil {
+		repository, err = organizationpg.NewRepositoryWithProviderRoleGrants(d.PostgreSQL, n.Repository)
+	} else {
+		repository, err = organizationpg.NewRepository(d.PostgreSQL, n.Repository)
+	}
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_organization_repository"}
 	}
