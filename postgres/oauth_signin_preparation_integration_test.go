@@ -262,6 +262,9 @@ CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id
 	}
 	spec, command := signinAccountCommand(t, signinAccountFixture())
 	if enterprise {
+		if _, err := pool.Raw().Exec(ctx, ssoOIDCCallbackPreparationErasureSQL); err != nil {
+			t.Fatal("enterprise callback erasure schema", err)
+		}
 		startBound, enterprisePlan := ssoOIDCSigninPlanFixture(t)
 		plan = enterprisePlan
 		spec = identity.FeatureCommandSpec{Binding: startBound, Operation: plan.Feature.Operation}

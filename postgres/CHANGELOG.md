@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settle an authenticated enterprise OIDC preparation refusal under the
+  original reservation. Record a denial and erase temporary callback custody
+  atomically; an uncertain provider response still cannot be retried blindly.
+
 - Erase the exact native enterprise OIDC callback's temporary encrypted
   preparation at terminal commit or abort. Keep the original receipt and
   pending/unknown custody; install the forward callback erasure migration

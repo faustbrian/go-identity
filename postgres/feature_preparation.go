@@ -268,10 +268,15 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 			return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 		}
 		wire = bytes.Clone(wire)
+		r.outputGeneration = r.journal.generation
+		if refusalOwner, ok := phase.(SSOOIDCPreparationRefusalContributor); ok && gated && ssoOIDCCallbackClaim(q) {
+			if result, handled, err := c.finishSSOOIDCPreparationRefusal(ctx, original, q, admitted, r.journal, owner, refusalOwner, wire); handled {
+				return result, err
+			}
+		}
 		if err := c.retainFeaturePreparation(ctx, q, r.journal, owner, wire); err != nil {
 			return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 		}
-		r.outputGeneration = r.journal.generation
 	}
 	generated, final, err := phase.RestoreFeaturePreparation(ctx, original, r.outputGeneration, bytes.Clone(wire))
 	if err != nil || ctx.Err() != nil || !preparationFinalDeclaration(b, admitted.snapshot(), final) {

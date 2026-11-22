@@ -78,6 +78,14 @@ rows. A definitive callback receipt erases temporary encrypted output and its
 generation in the same transaction. Pending or unknown callbacks retain the
 original custody. Disable the writer for rollback and keep the forward guard.
 
+The exact native callback owner can implement
+`SSOOIDCPreparationRefusalContributor` to settle an authenticated definitive
+refusal. The coordinator verifies the original marked generation has no final
+attachment and commits the denial audit, owner cleanup, original reservation
+release and terminal receipt together. No intermediate refusal is committed.
+A transport failure or missing output does not prove refusal and does not
+authorize a second provider attempt.
+
 After provider validation, `GetSSOOIDCSigninAccount` resolves the configured
 enterprise namespace and its exact `sso` credential, not a social account.
 Use `SSOOIDCSigninAccountFields` to bind that observation into the original
