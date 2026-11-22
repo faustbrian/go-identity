@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add prospective single-factor enterprise OIDC session preparation with the
+  original browser command, exact `sso` provider credential, selected
+  organization authority and unchanged Remember policy. Bearer and optional
+  CSRF delivery require one exact new commit; replay and unknown outcomes
+  disclose neither credential. The native executor still owns provider proof,
+  membership, factor checks and persistence.
+
 - Add a separate browser-readable, secure host-only synchronizer-cookie policy
   for original committed CSRF delivery after provider redirects. Authentication
   cookies remain HttpOnly; existing token/digest and protected logout validation

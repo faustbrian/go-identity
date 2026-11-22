@@ -98,6 +98,7 @@ type SessionIssuer struct {
 	passkey          bool
 	passkeySignup    bool
 	oauth            bool
+	ssoOIDC          bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -172,6 +173,7 @@ type preparedIssuanceState struct {
 	upgrade   *anonymousUpgradePreparationState
 	passkey   *passkeyPreparationState
 	oauth     *oauthPreparationState
+	ssoOIDC   *ssoOIDCPreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -187,7 +189,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || s.ssoOIDC || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -268,7 +270,7 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 // without bearer bytes. Zero, OTP and password preparations deny: secret-bearing
 // consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil || p.state.upgrade != nil || p.state.passkey != nil || p.state.oauth != nil {
+	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil || p.state.anonymous != nil || p.state.upgrade != nil || p.state.passkey != nil || p.state.oauth != nil || p.state.ssoOIDC != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -369,6 +371,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, err
 	}
 	now := s.config.Clock.Now()
+	if s.ssoOIDC {
+		if err := validateSSOOIDCIssuanceAt(out.Session, now); err != nil {
+			return out, err
+		}
+	}
 	if s.oauth {
 		if err := validateOAuthIssuanceAt(out.Session, now); err != nil {
 			return out, err
@@ -456,7 +463,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil || r.state.oauth != nil {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || s.ssoOIDC || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil || r.state.oauth != nil || r.state.ssoOIDC != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()
@@ -482,6 +489,10 @@ func (s *SessionIssuer) finish(ctx context.Context, r IssueRequest, e IssueExecu
 	before, after := uint64(0), uint64(0)
 	if operation.RecordRequirement == identity.FeatureRecordRequired {
 		after = 1
+	}
+	if operation == ssoOIDCSigninOperation() {
+		// The callback completes the existing version-one SSO login transaction.
+		before, after = 1, 2
 	}
 	if r.state != nil && r.state.upgrade != nil {
 		before, after = r.state.upgrade.before, r.state.upgrade.before+1

@@ -58,12 +58,28 @@ func (r *Repository) GetProviderSigninAccount(ctx context.Context, q ProviderSig
 	if !r.validAccountRead(ctx) || q.Validate() != nil {
 		return ProviderAccountAdmission{}, invalidAccountQuery()
 	}
-	return r.readProviderAccount(ctx, q.TenantID, func(a identity.Account) bool {
+	return r.readProviderAccount(ctx, q.TenantID, "identity/oauth", func(a identity.Account) bool {
 		return a.Provider == q.Provider && a.Issuer == q.Issuer && a.Subject == q.Subject
-	}, providerAccountReadSQL+`
- WHERE a.tenant_id=$1 AND a.linked AND a.subject_key=sha256(convert_to(
- octet_length($2::text)::text||':'||$2::text||octet_length($3::text)::text||':'||$3::text||octet_length($4::text)::text||':'||$4::text,'UTF8'))
- LIMIT 2`, string(q.TenantID), q.Provider, q.Issuer, q.Subject)
+	}, providerSigninAccountReadSQL, string(q.TenantID), q.Provider, q.Issuer, q.Subject)
+}
+
+// GetSSOOIDCSigninAccount resolves only an existing linked enterprise account
+// with an exact CredentialProvider reference owned by sso. The trusted SSO
+// caller supplies its configured organization/provider-namespaced Provider,
+// original tenant and fully verified issuer/subject, never callback-selected
+// routing claims. No identity, link, membership or session is created.
+//
+// Snapshot, bounds, cancellation and error semantics match
+// GetProviderSigninAccount. Freeze this observation with
+// SSOOIDCSigninAccountFields and fence it in the original callback Work with
+// RequireSSOOIDCSigninProviderAccount. It is neither proof nor a validity lease.
+func (r *Repository) GetSSOOIDCSigninAccount(ctx context.Context, q ProviderSigninAccountQuery) (ProviderAccountAdmission, error) {
+	if !r.validAccountRead(ctx) || q.Validate() != nil {
+		return ProviderAccountAdmission{}, invalidAccountQuery()
+	}
+	return r.readProviderAccount(ctx, q.TenantID, "sso", func(a identity.Account) bool {
+		return a.Provider == q.Provider && a.Issuer == q.Issuer && a.Subject == q.Subject
+	}, providerSigninAccountReadSQL, string(q.TenantID), q.Provider, q.Issuer, q.Subject)
 }
 
 // GetOwnedProviderAccount captures the exact current linked provider account
@@ -79,7 +95,7 @@ func (r *Repository) GetOwnedProviderAccount(ctx context.Context, tenant identit
 	if _, err := identity.ParseAccountID(string(account)); err != nil {
 		return ProviderAccountAdmission{}, invalidAccountQuery()
 	}
-	return r.readProviderAccount(ctx, tenant, func(a identity.Account) bool {
+	return r.readProviderAccount(ctx, tenant, "identity/oauth", func(a identity.Account) bool {
 		return a.UserID == user && a.ID == account
 	}, ownedProviderAccountReadSQL,
 		string(tenant), string(user), string(account))
@@ -94,7 +110,12 @@ const providerAccountReadSQL = `SELECT a.tenant_id,a.user_id,a.account_id,a.prov
 
 const ownedProviderAccountReadSQL = providerAccountReadSQL + ` WHERE a.tenant_id=$1 AND a.user_id=$2 AND a.account_id=$3 AND a.linked LIMIT 2`
 
-func (r *Repository) readProviderAccount(ctx context.Context, tenantID identity.TenantID, matches func(identity.Account) bool, query string, args ...any) (ProviderAccountAdmission, error) {
+const providerSigninAccountReadSQL = providerAccountReadSQL + `
+ WHERE a.tenant_id=$1 AND a.linked AND a.subject_key=sha256(convert_to(
+ octet_length($2::text)::text||':'||$2::text||octet_length($3::text)::text||':'||$3::text||octet_length($4::text)::text||':'||$4::text,'UTF8'))
+ LIMIT 2`
+
+func (r *Repository) readProviderAccount(ctx context.Context, tenantID identity.TenantID, credentialOwner string, matches func(identity.Account) bool, query string, args ...any) (ProviderAccountAdmission, error) {
 	bounded, stop := context.WithTimeout(ctx, r.maximumDuration)
 	defer stop()
 	rows, err := r.pool.Raw().Query(bounded, query, args...)
@@ -130,7 +151,7 @@ func (r *Repository) readProviderAccount(ctx context.Context, tenantID identity.
 		return ProviderAccountAdmission{}, readFailure(bounded, bounded.Err())
 	}
 	a := identity.Account{TenantID: identity.TenantID(tenant), UserID: identity.UserID(user), ID: identity.AccountID(account), Provider: provider, Issuer: issuer, Subject: subject}
-	if a.TenantID != tenantID || !matches(a) || kind != int16(identity.CredentialProvider) || owner != "identity/oauth" || !postgresExactTime(now.UTC()) {
+	if a.TenantID != tenantID || !matches(a) || kind != int16(identity.CredentialProvider) || owner != credentialOwner || !postgresExactTime(now.UTC()) {
 		return ProviderAccountAdmission{}, identity.UnavailableError{}
 	}
 	if status != string(identity.StatusActive) || !enabled || expires != nil && !now.Before(*expires) {
@@ -158,7 +179,7 @@ func (r *Repository) readProviderAccount(ctx context.Context, tenantID identity.
 			CredentialAuthorityVersion: version(credentialEpoch),
 		},
 	}
-	if !versionsValid || !validSigninAccount(out) {
+	if !versionsValid || !validSigninAccountForOwner(out, credentialOwner) {
 		return ProviderAccountAdmission{}, identity.UnavailableError{}
 	}
 	return out, nil

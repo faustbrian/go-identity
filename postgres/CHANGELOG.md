@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Resolve and transactionally fence an existing enterprise OIDC account with
+  an `sso`-owned provider credential. Freeze the account, link and credential
+  epochs in the exact anonymous callback command without changing its actor or
+  flow. Social account admission remains separate. This does not link users,
+  establish organization membership or issue a session.
+
 - Support the separate admission-gated enterprise OIDC callback profile.
   Reserve the original state before provider preparation and consume and
   finalize it with the registered SSO contributor's native effects. Unattached

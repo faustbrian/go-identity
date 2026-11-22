@@ -71,6 +71,13 @@ through `Work.SSOOIDCSigninConsumption`, and finalizes the state in the same
 commit. Retained-output takeover does not generate again. Unattached recovery
 does not infer that a provider exchange was never attempted.
 
+After provider validation, `GetSSOOIDCSigninAccount` resolves the configured
+enterprise namespace and its exact `sso` credential, not a social account.
+Use `SSOOIDCSigninAccountFields` to bind that observation into the original
+callback. `Work.RequireSSOOIDCSigninProviderAccount` then fences its live
+identity epochs during Apply and the final check without retargeting the
+anonymous flow. These operations do not link accounts or check membership.
+
 This profile is separate from social OAuth and does not authenticate the
 browser, validate a provider, link an account, grant membership or issue a
 session by itself. The native consumer owns those checks and effects and must

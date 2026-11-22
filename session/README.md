@@ -11,6 +11,16 @@ populate the cookie. Keep its name distinct from session, flow and device cookie
 It is not a bearer or CSRF authority channel. Existing digest-bound protected
 header validation remains mandatory; replay cannot recreate a token.
 
+## Prospective enterprise OIDC issuance
+
+`NewSSOOIDCSessionIssuer` and its CSRF variant select the enterprise callback
+profile. `PrepareSSOOIDC` takes a tokenless `SSOOIDCIssuanceSpec` with the
+matching `sso` provider reference and selected organization authority. Bind the
+original anonymous callback with `BindSSOOIDC`. The native executor must prove
+provider, membership and factor authority and commit state, session and required
+effects together. The issuer releases credentials only for the exact new commit;
+preparation, replay and unknown outcomes do not release them.
+
 ## Explicit password-bearer issuance
 
 `NewPasswordBearerSessionIssuer` uses the same prospective password preparation,

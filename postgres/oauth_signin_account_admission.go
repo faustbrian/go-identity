@@ -16,10 +16,14 @@ func oauthSigninAccountOperation() identity.FeatureOperation {
 }
 
 func validSigninAccount(a ProviderAccountAdmission) bool {
+	return validSigninAccountForOwner(a, "identity/oauth")
+}
+
+func validSigninAccountForOwner(a ProviderAccountAdmission, owner string) bool {
 	account, credential := a.Account, a.Credential
 	return account.Validate(account.TenantID, account.UserID) == nil && a.SocialLinkVersion != 0 &&
 		credential.Credential.Validate(account.TenantID, account.UserID) == nil &&
-		credential.Credential.Kind == identity.CredentialProvider && credential.Credential.Owner == "identity/oauth" &&
+		credential.Credential.Kind == identity.CredentialProvider && credential.Credential.Owner == owner &&
 		credential.UserAuthorityVersion != 0 && credential.IdentifierAuthorityVersion != 0 && credential.CredentialAuthorityVersion != 0
 }
 
@@ -29,15 +33,19 @@ func validSigninAccount(a ProviderAccountAdmission) bool {
 // Construct only after the owning provider validates its assertion and resolves
 // this exact tenant account. No IO, lookup, issuance or freshness renewal runs.
 func OAuthSigninAccountFields(a ProviderAccountAdmission) ([]identity.FeatureField, error) {
-	if !validSigninAccount(a) {
+	return signinAccountFields(a, oauthSigninAccountPrefix, "identity/oauth")
+}
+
+func signinAccountFields(a ProviderAccountAdmission, prefix, owner string) ([]identity.FeatureField, error) {
+	if !validSigninAccountForOwner(a, owner) {
 		return nil, invalidWork()
 	}
 	fields := make([]identity.FeatureField, 0, 13)
 	text := func(name, value string) {
-		fields = append(fields, identity.FeatureField{Name: oauthSigninAccountPrefix + name, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: value}})
+		fields = append(fields, identity.FeatureField{Name: prefix + name, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: value}})
 	}
 	number := func(name string, value uint64) {
-		fields = append(fields, identity.FeatureField{Name: oauthSigninAccountPrefix + name, Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: value}})
+		fields = append(fields, identity.FeatureField{Name: prefix + name, Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: value}})
 	}
 	text("tenant", string(a.Account.TenantID))
 	text("user", string(a.Account.UserID))
@@ -70,9 +78,16 @@ func OAuthSigninAccount(command identity.Command) (ProviderAccountAdmission, err
 	if !ok || !cookie || code || recovery || bearer || f.Operation != oauthSigninAccountOperation() || f.Binding.UserID != "" || f.Binding.AnonymousFlowID == "" || f.Binding.ActorKind != authorization.SubjectServiceAccount {
 		return ProviderAccountAdmission{}, invalidWork()
 	}
+	return signinAccountFromFields(f, oauthSigninAccountPrefix, "identity/oauth", ssoOIDCSigninAccountPrefix)
+}
+
+func signinAccountFromFields(f identity.FeatureCommandSpec, prefix, owner, foreignPrefix string) (ProviderAccountAdmission, error) {
 	fields := make(map[string]identity.FeatureValue, 13)
 	for _, field := range f.Fields {
-		if name, selected := strings.CutPrefix(field.Name, oauthSigninAccountPrefix); selected {
+		if strings.HasPrefix(field.Name, foreignPrefix) {
+			return ProviderAccountAdmission{}, invalidWork()
+		}
+		if name, selected := strings.CutPrefix(field.Name, prefix); selected {
 			fields[name] = field.Value
 		}
 	}
@@ -100,7 +115,7 @@ func OAuthSigninAccount(command identity.Command) (ProviderAccountAdmission, err
 	}
 	credential := identity.CredentialRef{
 		TenantID: a.TenantID, UserID: a.UserID, ID: identity.CredentialID(text("credential")),
-		Kind: identity.CredentialProvider, Owner: "identity/oauth", Version: number("credential-version"),
+		Kind: identity.CredentialProvider, Owner: owner, Version: number("credential-version"),
 	}
 	out := ProviderAccountAdmission{
 		Account: a, SocialLinkVersion: number("link-version"),
@@ -109,7 +124,7 @@ func OAuthSigninAccount(command identity.Command) (ProviderAccountAdmission, err
 			IdentifierAuthorityVersion: number("authority.identifier"), CredentialAuthorityVersion: number("authority.credential"),
 		},
 	}
-	if !valid || len(fields) != 0 || a.TenantID != f.Binding.TenantID || !validSigninAccount(out) {
+	if !valid || len(fields) != 0 || a.TenantID != f.Binding.TenantID || !validSigninAccountForOwner(out, owner) {
 		return ProviderAccountAdmission{}, invalidWork()
 	}
 	return out, nil
