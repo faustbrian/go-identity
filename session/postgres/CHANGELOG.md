@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Optionally apply provider-owned organization updates in the original OIDC
+  signin Work after native session/browser writes and before organization
+  admission locks. Update failures roll back with session issuance; the default
+  Apply path, original authority and final admission remain unchanged.
+
 - Opt in to enterprise OIDC session reads and native strict cookie logout.
   Require the original linked credential, known-empty factor generation,
   current user policy and selected organization membership without falling

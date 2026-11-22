@@ -31,7 +31,80 @@ import (
 // Organization/postgres already consumes session/postgres. This explicit
 // SQL-backed port avoids a reverse module edge while retaining membership and
 // epoch checks in the same Work. It is not the real organization's public owner.
-type ssoOIDCSessionOrganizationFixture struct{ pool *database.Pool }
+type ssoOIDCSessionOrganizationFixture struct {
+	pool         *database.Pool
+	requireCalls int
+	update       *ssoOIDCSessionOrganizationUpdateFixture
+}
+
+var errSSOOIDCSessionOrganizationUpdate = errors.New("organization update denied")
+
+type ssoOIDCSessionOrganizationUpdateFixture struct {
+	organization *ssoOIDCSessionOrganizationFixture
+	original     identity.Command
+	flow         session.PreAuthTransaction
+	wantWork     kernel.Work
+	wantOwner    kernel.FeatureExecutionContributor
+	calls        int
+	fail         bool
+	expire       bool
+}
+
+func (p *ssoOIDCSessionOrganizationUpdateFixture) UpdateSSOOIDCOrganization(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session) error {
+	p.calls++
+	if p.calls != 1 || p.organization.requireCalls != 0 || w != p.wantWork || owner != p.wantOwner || command != p.original {
+		return errors.New("organization update did not precede the first fence in the original Work")
+	}
+	wantRecord, err := SSOOIDCSigninSession(command)
+	if err != nil {
+		return err
+	}
+	wantWire, _, err := encodeRecord(wantRecord)
+	if err != nil {
+		return err
+	}
+	gotWire, _, err := encodeRecord(record)
+	if err != nil || !bytes.Equal(gotWire, wantWire) {
+		return errors.New("organization update changed the original session")
+	}
+	if err := RequireSession(ctx, w, Config{Schema: "session_store", MaximumDuration: time.Second}, record); err != nil {
+		return err
+	}
+	spec, _ := record.Bindings()
+	flow, _ := p.flow.Bindings()
+	rows, err := w.Query(ctx, `SELECT state,version FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2`, string(spec.TenantID), string(flow.Binding.ID))
+	if err != nil {
+		return err
+	}
+	var state string
+	var version uint64
+	if !rows.Next() {
+		rows.Close()
+		return errors.New("organization update ran before the original browser write")
+	}
+	err = rows.Scan(&state, &version)
+	complete := !rows.Next() && rows.Err() == nil
+	rows.Close()
+	if err != nil || !complete || state != "consumed" || version != 3 {
+		return errors.New("organization update ran before browser finalization")
+	}
+	if _, err := w.Exec(ctx, `UPDATE public.sso_session_membership SET provider_updates=provider_updates+1 WHERE tenant_id=$1 AND user_id=$2 AND organization_id='selected-org'`, string(spec.TenantID), string(spec.UserID)); err != nil {
+		return err
+	}
+	if p.fail {
+		return errSSOOIDCSessionOrganizationUpdate
+	}
+	if p.expire {
+		timer := time.NewTimer(time.Until(spec.Authentication.Proof.ExpiresAt.Add(time.Millisecond)))
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil
+}
 
 // Reuse the real test SQL audit adapter, but fail only its successful attempt.
 // The coordinator can then persist the required failure audit and release grant
@@ -71,7 +144,11 @@ func (p *ssoOIDCSessionOrganizationFixture) ObserveOrganizationSession(ctx conte
 	return OrganizationSessionAuthorityObservation{OrganizationID: vector.ActiveOrganizationID, Authority: session.AuthorityBinding{ScopeKey: key, Version: version}, ReadStartedAt: start, ValidUntil: start.Add(20 * time.Second)}, nil
 }
 
-func (*ssoOIDCSessionOrganizationFixture) RequireOrganizationSession(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session) error {
+func (p *ssoOIDCSessionOrganizationFixture) RequireOrganizationSession(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session) error {
+	p.requireCalls++
+	if p.update != nil && p.update.calls != 1 {
+		return errors.New("organization fence preceded the synchronous update")
+	}
 	binding, _, _, err := w.FeatureScope(owner)
 	spec, specErr := record.Bindings()
 	if err != nil || specErr != nil || binding.TenantID != spec.TenantID {
@@ -111,6 +188,8 @@ type ssoOIDCSessionInvocation struct {
 	applied, finalEntered, final bool
 	retained                     kernel.Work
 	consumption                  kernel.CapabilityReservationBinding
+	organizationUpdate           SSOOIDCOrganizationUpdate
+	applyErr                     error
 }
 
 func (*ssoOIDCSessionInvocation) Descriptor() kernel.ContributorDescriptor {
@@ -194,7 +273,16 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 		}
 	}
 	p.effectEntered = true
-	receipt, err := p.effect.Apply(ctx, w, p, command, p.flow)
+	var receipt identity.FeatureReceipt
+	if strings.HasPrefix(p.mode, "organization-update") {
+		if update, ok := p.organizationUpdate.(*ssoOIDCSessionOrganizationUpdateFixture); ok && update != nil {
+			update.wantWork, update.wantOwner = w, p
+		}
+		receipt, err = p.effect.ApplyWithOrganizationUpdate(ctx, w, p, command, p.flow, p.organizationUpdate)
+	} else {
+		receipt, err = p.effect.Apply(ctx, w, p, command, p.flow)
+	}
+	p.applyErr = err
 	p.applied = err == nil
 	if err != nil {
 		return identity.FeatureReceipt{}, err
@@ -271,8 +359,8 @@ WITH a AS (SELECT 'oidc'::text AS provider,'https://issuer.example'::text AS iss
 INSERT INTO identity.accounts(tenant_id,user_id,account_id,provider,issuer,subject,subject_key,version,social_link_version,linked)
 SELECT 'guest-tenant','enterprise-user','enterprise-account',provider,issuer,subject,sha256(convert_to(octet_length(provider)::text||':'||provider||octet_length(issuer)::text||':'||issuer||octet_length(subject)::text||':'||subject,'UTF8')),1,1,true FROM a;
 INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('guest-tenant','enterprise-user','enterprise-credential','enterprise-account');
-CREATE TABLE public.sso_session_membership(tenant_id text NOT NULL,user_id text NOT NULL,organization_id text NOT NULL,authority_key text NOT NULL,version bigint NOT NULL CHECK(version>0),active boolean NOT NULL,PRIMARY KEY(tenant_id,user_id,organization_id));
-INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user','selected-org','organization:guest-tenant:selected-org',7,true)`); err != nil {
+CREATE TABLE public.sso_session_membership(tenant_id text NOT NULL,user_id text NOT NULL,organization_id text NOT NULL,authority_key text NOT NULL,version bigint NOT NULL CHECK(version>0),active boolean NOT NULL,provider_updates integer NOT NULL DEFAULT 0,PRIMARY KEY(tenant_id,user_id,organization_id));
+INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,authority_key,version,active) VALUES('guest-tenant','enterprise-user','selected-org','organization:guest-tenant:selected-org',7,true)`); err != nil {
 		t.Fatal("actual account/factor and explicit organization fixture rows", err)
 	}
 	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "guest-deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "sso-oidc", CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
@@ -290,9 +378,10 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "existing-family", "reconstructed-command", "stale-organization", "late-membership-removed", "rollback", "audit-failure", "audit-fails-success-only", "outbox-failure"} {
+	for _, mode := range []string{"commit", "organization-update", "organization-update-failure", "organization-update-expired", "organization-update-nil", "organization-update-typed-nil", "existing-family", "reconstructed-command", "stale-organization", "late-membership-removed", "rollback", "audit-failure", "audit-fails-success-only", "outbox-failure"} {
 		t.Run(mode, func(t *testing.T) {
-			if _, err := pool.Raw().Exec(ctx, `UPDATE public.sso_session_membership SET version=7,active=true`); err != nil {
+			organization.requireCalls, organization.update = 0, nil
+			if _, err := pool.Raw().Exec(ctx, `UPDATE public.sso_session_membership SET version=7,active=true,provider_updates=0`); err != nil {
 				t.Fatal(err)
 			}
 			command, record, flow, capability := ssoOIDCSessionPreparedFixture(t, ctx, pool, repository, organization, profile, mode)
@@ -309,6 +398,12 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 				}
 			}
 			owner := &ssoOIDCSessionInvocation{effect: effect, original: command, flow: flow, mode: mode}
+			if mode == "organization-update" || mode == "organization-update-failure" || mode == "organization-update-expired" {
+				organization.update = &ssoOIDCSessionOrganizationUpdateFixture{organization: organization, original: command, flow: flow, fail: mode == "organization-update-failure", expire: mode == "organization-update-expired"}
+				owner.organizationUpdate = organization.update
+			} else if mode == "organization-update-typed-nil" {
+				owner.organizationUpdate = (*ssoOIDCSessionOrganizationUpdateFixture)(nil)
+			}
 			var auditing kernel.Contributor = &revokeAudit{fail: mode == "audit-failure"}
 			if mode == "audit-fails-success-only" {
 				auditing = &ssoOIDCSessionSuccessAuditFailure{}
@@ -345,7 +440,7 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 				}
 			}
 			result, executionErr := coordinator.ExecutePreparedFeature(ctx, command, plan)
-			success := mode == "commit"
+			success := mode == "commit" || mode == "organization-update"
 			if owner.retained == (kernel.Work{}) {
 				t.Fatal("callback did not reach Apply after actual capability consumption", executionErr)
 			}
@@ -359,6 +454,34 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 				}
 			} else if !success && (executionErr == nil || result.Outcome != identity.CommitOutcomeNotCommitted) {
 				t.Fatal("denied enterprise session did not roll back", result.Outcome, executionErr)
+			}
+			if organization.update != nil && organization.update.calls != 1 {
+				t.Fatal("organization update did not execute exactly once", organization.update.calls, executionErr)
+			}
+			if mode == "organization-update-failure" && (!errors.Is(owner.applyErr, errSSOOIDCSessionOrganizationUpdate) || owner.applied || owner.finalEntered || organization.requireCalls != 0) {
+				t.Fatal("update error was not propagated before the first organization fence", owner.applyErr)
+			}
+			if mode == "organization-update-expired" {
+				var forbidden identity.ForbiddenError
+				if !errors.As(owner.applyErr, &forbidden) || owner.applied || owner.finalEntered || organization.requireCalls != 1 {
+					t.Fatal("original proof expiry was not checked after organization update", owner.applyErr)
+				}
+			}
+			if mode == "organization-update-nil" || mode == "organization-update-typed-nil" {
+				if !errors.Is(owner.applyErr, session.ErrInvalidSessionCommand) || owner.applied || owner.finalEntered || organization.requireCalls != 0 {
+					t.Fatal("absent update did not fail closed", owner.applyErr)
+				}
+			}
+			var providerUpdates int
+			if err := pool.Raw().QueryRow(ctx, `SELECT provider_updates FROM public.sso_session_membership WHERE tenant_id='guest-tenant' AND user_id='enterprise-user' AND organization_id='selected-org'`).Scan(&providerUpdates); err != nil {
+				t.Fatal(err)
+			}
+			wantProviderUpdates := 0
+			if mode == "organization-update" {
+				wantProviderUpdates = 1
+			}
+			if providerUpdates != wantProviderUpdates {
+				t.Fatal("organization update did not commit or roll back with the session", providerUpdates)
 			}
 			if mode == "existing-family" {
 				var conflict identity.ConflictError
@@ -501,6 +624,9 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	spec.SessionID, spec.FamilyID, spec.TenantID, spec.UserID = "enterprise-session-"+mode, "enterprise-family-"+mode, binding.TenantID, account.Account.UserID
 	spec.Version, spec.FamilyVersion, spec.IssuedAt, spec.LastActivityAt = 1, 1, now, now
 	spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(id), Tenant: string(spec.TenantID), Subject: string(spec.UserID), Method: "sso-oidc", Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: profile.Audience, IssuedAt: now, ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: string(account.Credential.Credential.ID), CredentialVersion: account.Credential.Credential.Version}
+	if mode == "organization-update-expired" {
+		spec.Authentication.Proof.ExpiresAt = now.Add(500 * time.Millisecond)
+	}
 	spec.Audience = profile.Audience
 	key, err := session.NewDigestKey(1, bytes.Repeat([]byte{83}, 32))
 	if err != nil {

@@ -19,14 +19,25 @@ import (
 
 // SSOOIDCSigninEffect persists an existing linked member's original enterprise
 // session and browser use through the SSO callback's sole transaction. It does
-// not authenticate a provider, verify a browser cookie, grant roles or disclose
-// credentials. The native SSO owner must do those admission checks separately.
+// not authenticate a provider, verify a browser cookie or disclose credentials.
+// Provider verification and organization role decisions remain with native owners.
 // Immutable configuration may be used concurrently by distinct serial Works.
 type SSOOIDCSigninEffect struct {
 	native       Repository
 	config       Config
 	profile      IdentifierAdmissionConfig
 	organization OrganizationSessionAuthority
+}
+
+// SSOOIDCOrganizationUpdate applies provider-owned organization changes in the
+// original callback Work after its native session and browser writes, before
+// organization admission locks are acquired. Implementations must execute
+// synchronously, use only the supplied Work, and neither retain it nor start or
+// finish a transaction. The command and session retain their original authority;
+// an update must not replace that evidence. The callback owner must return any
+// error to abort the transaction.
+type SSOOIDCOrganizationUpdate interface {
+	UpdateSSOOIDCOrganization(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command, session.Session) error
 }
 
 func (*SSOOIDCSigninEffect) Format(s fmt.State, _ rune) {
@@ -56,6 +67,23 @@ func NewSSOOIDCSigninEffect(c Config, p IdentifierAdmissionConfig, org Organizat
 // consumed with the new session and issuance history. Return every error to
 // abort the transaction. Provisional success does not permit disclosure.
 func (e *SSOOIDCSigninEffect) Apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction) (identity.FeatureReceipt, error) {
+	return e.apply(ctx, w, owner, command, preauth, nil)
+}
+
+// ApplyWithOrganizationUpdate has Apply's contract and also invokes update
+// exactly once after native session/browser persistence and before the first
+// organization fence and final expiry check. This ordering lets the organization
+// owner acquire mutation locks without upgrading admission's shared locks.
+// The synchronous update shares Apply's bounded context and sole transaction;
+// return every error to abort all effects. Nil and typed-nil updates fail closed.
+func (e *SSOOIDCSigninEffect) ApplyWithOrganizationUpdate(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction, update SSOOIDCOrganizationUpdate) (identity.FeatureReceipt, error) {
+	if nilIssueDependency(update) {
+		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
+	}
+	return e.apply(ctx, w, owner, command, preauth, update)
+}
+
+func (e *SSOOIDCSigninEffect) apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction, update SSOOIDCOrganizationUpdate) (identity.FeatureReceipt, error) {
 	if !e.valid(ctx) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
@@ -92,6 +120,11 @@ func (e *SSOOIDCSigninEffect) Apply(ctx context.Context, w kernel.Work, owner ke
 	}
 	if err := FinalizePreAuth(bounded, w, e.config, preauth, use); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if update != nil {
+		if err := update.UpdateSSOOIDCOrganization(bounded, w, owner, command, record); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	// Organization operations lock in session→organization order. Both newly
 	// written rows are held here; final admission uses the same order below.
