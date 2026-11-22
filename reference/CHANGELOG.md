@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use the standalone enterprise OAuth2 adapter for the opt-in Reference
+  callback. The existing PostgreSQL coordinator still reserves callbacks and
+  atomically commits token, session and terminal state.
+
 - Compose opt-in linked-member enterprise OAuth2 sign-in through Reference's
   pre-auth, start, callback, cookie read and strict logout. Reuse the native
   provider, vault and revocation owners; plan forward-only PostgreSQL

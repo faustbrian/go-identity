@@ -40,7 +40,7 @@ require (
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261122204156-7fe274929216
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261122191530-fdf55fe0f9fb
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261122223201-ee93471203c3
 	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261122050153-ae44b7e223c1
 	github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089
 	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261023131125-38648609fbb6
@@ -68,8 +68,9 @@ require (
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
-	github.com/faustbrian/go-sso v0.0.0-20261122192319-e8dad64a97d0
-	github.com/faustbrian/go-sso/postgres v0.0.0-20261122213950-31c0fa2a686f
+	github.com/faustbrian/go-sso v0.0.0-20261122221900-3b3d0d840b54
+	github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db
+	github.com/faustbrian/go-sso/postgres v0.0.0-20261122225152-67d5605e7007
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b
 	github.com/faustbrian/go-transactional-outbox/v2 v2.1.1-0.20261022172917-6ed5e0861542
 	github.com/faustbrian/go-webauthn v0.0.0-20261020074004-ed89b240ab20

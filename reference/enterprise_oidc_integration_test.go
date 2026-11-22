@@ -144,6 +144,7 @@ type referenceEnterpriseIssuer struct {
 	posts          atomic.Int32
 	identities     atomic.Int32
 	oauth2         bool
+	unlinkedOAuth2 atomic.Bool
 	accessToken    string
 	roleClaim      string
 	roleGrant      atomic.Bool
@@ -220,7 +221,11 @@ func (p *referenceEnterpriseIssuer) serve(w http.ResponseWriter, r *http.Request
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"sub": enterpriseProviderSubject})
+		subject := enterpriseProviderSubject
+		if p.unlinkedOAuth2.Load() {
+			subject = "reference-enterprise-unlinked-subject"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"sub": subject})
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -655,6 +660,22 @@ func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context
 			if denied.StatusCode != http.StatusForbidden || len(denied.Cookies()) != 0 || denied.Header.Get("Location") != "" ||
 				provider.posts.Load() != previousPosts+1 || provider.identities.Load() != previousPosts+1 {
 				t.Fatal("definitive issuer refusal or its replay reached provider or exposed credentials", denied.StatusCode)
+			}
+		}
+		provider.unlinkedOAuth2.Store(true)
+		defer provider.unlinkedOAuth2.Store(false)
+		startBody["flowID"], startBody["commandID"] = issueFlow(), string(enterpriseCommand(t))
+		requestKey = "enterprise-oauth2-unlinked-" + startBody["commandID"]
+		input, err = json.Marshal(startBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		callbackURL = authorizeCallback(start().AuthorizationURL)
+		for range 2 {
+			denied := getCallback()
+			if denied.StatusCode != http.StatusForbidden || len(denied.Cookies()) != 0 || denied.Header.Get("Location") != "" ||
+				provider.posts.Load() != previousPosts+2 || provider.identities.Load() != previousPosts+2 {
+				t.Fatal("verified unlinked subject did not settle as one terminal refusal", denied.StatusCode)
 			}
 		}
 	}
