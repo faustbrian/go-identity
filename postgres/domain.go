@@ -248,20 +248,27 @@ func (r *Repository) insertCreation(ctx context.Context, w Work, spec identity.C
 			return identity.User{}, err
 		}
 	}
-	count, err := w.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1) ON CONFLICT(tenant_id,user_id) DO NOTHING`, string(spec.Binding.TenantID), string(spec.Binding.UserID))
+	user, err := insertInitialUser(ctx, w, spec.Binding.TenantID, spec.Binding.UserID)
 	if err != nil {
 		return identity.User{}, err
-	}
-	if count != 1 {
-		return identity.User{}, w.fail(ctx, identity.ConflictError{})
 	}
 	if attributes != nil {
 		if _, err := w.Exec(ctx, `INSERT INTO identity.user_attributes(tenant_id,user_id,schema_id,schema_version,encoding_version,document) VALUES($1,$2,$3,$4,1,$5)`, string(spec.Binding.TenantID), string(spec.Binding.UserID), registered.schema.ID, registered.schema.Version, attributes); err != nil {
 			return identity.User{}, err
 		}
 	}
-	user := identity.User{ID: spec.Binding.UserID, TenantID: spec.Binding.TenantID, Status: identity.StatusActive, Version: 1}
 	return user, nil
+}
+
+func insertInitialUser(ctx context.Context, w Work, tenant identity.TenantID, user identity.UserID) (identity.User, error) {
+	count, err := w.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1) ON CONFLICT(tenant_id,user_id) DO NOTHING`, string(tenant), string(user))
+	if err != nil {
+		return identity.User{}, err
+	}
+	if count != 1 {
+		return identity.User{}, w.fail(ctx, identity.ConflictError{})
+	}
+	return identity.User{ID: user, TenantID: tenant, Status: identity.StatusActive, Version: 1}, nil
 }
 
 // Commit verifies the receipt against the owned native result and required

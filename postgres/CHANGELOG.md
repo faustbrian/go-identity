@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the enterprise OIDC JIT identity owner. Bind the exact prospective
+  verified mailbox and provider subject to original callback Work; reject
+  occupied or retired ownership and expose provisional creation only to the
+  callback's enlisted effects.
+
 - Settle an authenticated enterprise OIDC preparation refusal under the
   original reservation. Record a denial and erase temporary callback custody
   atomically; an uncertain provider response still cannot be retried blindly.

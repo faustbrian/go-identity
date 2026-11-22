@@ -93,6 +93,16 @@ callback. `Work.RequireSSOOIDCSigninProviderAccount` then fences its live
 identity epochs during Apply and the final check without retargeting the
 anonymous flow. These operations do not link accounts or check membership.
 
+The opt-in JIT callback uses `SSOOIDCSubjectAvailable` to distinguish a never
+occupied subject from an ineligible existing link. Install the forward-only
+`SSOOIDCSubjectAvailabilityMigrationSource` before enabling JIT. The bounded
+read does not lease absence. `SSOOIDCJITDomain.Apply` checks the original
+one-use Work and command, rechecks current and retired ownership under the
+tenant lock, then inserts the new user, verified mailbox and provider account
+and credential. `Work.SSOOIDCJITUser` proves only creation by that exact Work
+to the enlisted MFA and membership owners. Return any error to abort the
+original transaction; no API here authenticates a provider or issues a session.
+
 For an already-issued enterprise session, `CheckLinkedSSOOIDCProviderCredential`
 reads the existing live association and exact `sso` credential/security epochs.
 `Work.RequireLinkedSSOOIDCProviderCredential` retains those locks only in exact

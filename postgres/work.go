@@ -49,6 +49,7 @@ type workState struct {
 	magicLinkConsumed         bool
 	magicLinkFinalized        bool
 	oauthSigninStage          oauthSigninConsumptionStage
+	ssoOIDCJITCreation        *ssoOIDCJITCreation
 	invitationConsumed        bool
 	invitationFinalized       bool
 	anonymousUpgradeConsumed  bool
