@@ -32,6 +32,22 @@ and strict logout require the exact linked account, current member, user policy
 and original known-empty factor generation. They never fall back to another
 authentication method. This is local cookie logout, not provider logout.
 
+### Selected enterprise OAuth2 issuance
+
+After applying the OIDC issuance history, install both steps of
+`SSOOAuth2SigninMigrationSource` using unused permanent versions. The first
+transaction adds the OAuth callback purpose without rewriting history; the
+second validates the populated constraint. Disable the selected writer to roll
+back adoption; do not drop either history.
+
+For an existing member selected by the authenticated enterprise OAuth2
+callback, bind the prospective record with `SSOOAuth2SigninSessionFields` and
+use `NewSSOOAuth2SigninEffect` with the exact `sso-oauth2` provider profile.
+Apply after the original OAuth-only state is provisionally consumed; call
+`CheckCurrent` before the original transaction commits. The writer stages the
+same session, family and browser effects, with a separate issuance recovery
+domain. It neither exchanges the provider code nor authorizes session reads.
+
 ## Combined password and OAuth admission
 
 `SingleFactorSessionAdmissionConfig.OAuth` independently selects the exact

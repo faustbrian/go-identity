@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Stage the selected enterprise OAuth2 session, initial family, original
+  browser and retained issuance in the exact callback transaction. Preserve
+  the current linked member and factor/policy fences, existing OIDC writes,
+  and old history through a two-step purpose migration. This writer does not
+  itself enable a callback route or session read/logout.
+
 - Optionally apply provider-owned organization updates in the original OIDC
   signin Work after native session/browser writes and before organization
   admission locks. Update failures roll back with session issuance; the default

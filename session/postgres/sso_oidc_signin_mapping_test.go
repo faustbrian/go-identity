@@ -12,6 +12,18 @@ import (
 )
 
 func TestSSOOIDCSigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T) {
+	testSSOSigninMapping(t, ssoOIDCSessionOperation(), "sso-oidc", SSOOIDCSigninSessionFields, SSOOIDCSigninSession, SSOOAuth2SigninSessionFields, SSOOAuth2SigninSession)
+}
+
+func TestSSOOAuth2SigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T) {
+	testSSOSigninMapping(t, ssoOAuth2SessionOperation(), "sso-oauth2", SSOOAuth2SigninSessionFields, SSOOAuth2SigninSession, SSOOIDCSigninSessionFields, SSOOIDCSigninSession)
+}
+
+func testSSOSigninMapping(t *testing.T, operation identity.FeatureOperation, method string,
+	fields func(session.Session) ([]identity.FeatureField, error), parse func(identity.Command) (session.Session, error),
+	otherFields func(session.Session) ([]identity.FeatureField, error), otherParse func(identity.Command) (session.Session, error),
+) {
+	t.Helper()
 	commandSpec, social, cookie := oauthSigninMappingFixture(t, true)
 	spec, _ := social.Bindings()
 	vector, _ := spec.Authority.Bindings()
@@ -22,7 +34,7 @@ func TestSSOOIDCSigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec.Authentication.Proof.Method = "sso-oidc"
+	spec.Authentication.Proof.Method = method
 	want, err := session.NewSession(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -31,10 +43,10 @@ func TestSSOOIDCSigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	commandSpec.Operation = identity.FeatureOperation{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", SchemaID: "sso-enterprise-oidc-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+	commandSpec.Operation = operation
 	commandSpec.Binding.OperationID, commandSpec.Binding.SchemaID = commandSpec.Operation.OperationID, commandSpec.Operation.SchemaID
 	commandSpec.Binding.RecordID = string(start)
-	commandSpec.Fields, err = SSOOIDCSigninSessionFields(want)
+	commandSpec.Fields, err = fields(want)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +55,7 @@ func TestSSOOIDCSigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := SSOOIDCSigninSession(command)
+	got, err := parse(command)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,11 +71,30 @@ func TestSSOOIDCSigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T)
 	if _, err := OAuthSigninSession(command); err == nil {
 		t.Fatal("enterprise command accepted by social OAuth")
 	}
-	if _, err := SSOOIDCSigninSessionFields(social); err == nil {
+	if _, err := otherParse(command); err == nil {
+		t.Fatal("enterprise command accepted by the other protocol")
+	}
+	if _, err := otherFields(want); err == nil {
+		t.Fatal("enterprise record mapped to the other protocol")
+	}
+	if _, err := fields(social); err == nil {
 		t.Fatal("social session mapped to enterprise")
 	}
+	mixedSpec := commandSpec
+	otherPrefix := ssoOAuth2SessionPrefix
+	if method == "sso-oauth2" {
+		otherPrefix = ssoOIDCSessionPrefix
+	}
+	mixedSpec.Fields = append(mixedSpec.Fields[:len(mixedSpec.Fields):len(mixedSpec.Fields)], identity.FeatureField{Name: otherPrefix + "tenant.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(spec.TenantID)}})
+	mixed, err := identity.NewFeaturePreAuthCommand(mixedSpec, cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parse(mixed); !errors.Is(err, session.ErrInvalidSessionCommand) {
+		t.Fatal("mixed enterprise session fields admitted", err)
+	}
 	plain, _ := identity.NewFeatureCommand(commandSpec)
-	if _, err := SSOOIDCSigninSession(plain); !errors.Is(err, session.ErrInvalidSessionCommand) {
+	if _, err := parse(plain); !errors.Is(err, session.ErrInvalidSessionCommand) {
 		t.Fatal("metadata without original browser custody admitted", err)
 	}
 	commandSpec.Binding.RecordID = string(commandSpec.Binding.CommandID)
@@ -71,7 +102,7 @@ func TestSSOOIDCSigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SSOOIDCSigninSession(sameRecord); !errors.Is(err, session.ErrInvalidSessionCommand) {
+	if _, err := parse(sameRecord); !errors.Is(err, session.ErrInvalidSessionCommand) {
 		t.Fatal("callback substituted its own ID for the original start", err)
 	}
 	commandSpec.Binding.RecordID = string(start)
@@ -84,7 +115,7 @@ func TestSSOOIDCSigninMappingRetainsOrganizationAndOriginalBrowser(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := SSOOIDCSigninSession(missing); !errors.Is(err, session.ErrInvalidSessionCommand) {
+		if _, err := parse(missing); !errors.Is(err, session.ErrInvalidSessionCommand) {
 			t.Fatal("incomplete organization binding decoded", err)
 		}
 		return

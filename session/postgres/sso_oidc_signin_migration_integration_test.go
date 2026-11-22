@@ -73,3 +73,59 @@ func TestSSOOIDCSigninMigrationPreservesPopulatedHistory(t *testing.T) {
 	}
 	requireValidation(true)
 }
+
+func TestSSOOAuth2SigninMigrationPreservesPopulatedOIDCHistory(t *testing.T) {
+	ctx, pool, _ := anonymousSessionDatabase(t)
+	const schema = "sso_oauth2_signin_migration"
+	const previous = "session_issuances_purpose_sso_oidc_v1"
+	const next = "session_issuances_purpose_sso_oauth2_v1"
+	const oauth = "identity.sso.oauth-callback"
+	if _, err := pool.Raw().Exec(ctx, `CREATE SCHEMA `+schema+`; CREATE TABLE `+schema+`.session_issuances(
+ purpose text NOT NULL, marker text PRIMARY KEY, CONSTRAINT `+previous+` CHECK(purpose IN('identity.password.signin','identity.sso.oidc-callback')));
+ INSERT INTO `+schema+`.session_issuances VALUES('identity.password.signin','password-history'),('identity.sso.oidc-callback','oidc-history')`); err != nil {
+		t.Fatal(err)
+	}
+	insert := func(purpose, marker string) error {
+		_, err := pool.Raw().Exec(ctx, `INSERT INTO `+schema+`.session_issuances VALUES($1,$2)`, purpose, marker)
+		return err
+	}
+	denied := func(purpose, constraint string) {
+		t.Helper()
+		var pgErr *pgconn.PgError
+		if err := insert(purpose, "denied"); !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != constraint {
+			t.Fatalf("unexpected result inserting %s: %v", purpose, err)
+		}
+	}
+	denied(oauth, previous)
+	steps, err := (SSOOAuth2SigninMigrationSource{Schema: schema, Version: 83, ValidationVersion: 84}).Load(ctx)
+	if err != nil || len(steps) != 2 {
+		t.Fatalf("want expansion and separate validation: %v", err)
+	}
+	checkValidation := func(want bool) {
+		t.Helper()
+		var validated bool
+		if err := pool.Raw().QueryRow(ctx, `SELECT convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND conname=$2`, schema+".session_issuances", next).Scan(&validated); err != nil || validated != want {
+			t.Fatalf("constraint validated = %v, want %v: %v", validated, want, err)
+		}
+	}
+	if _, err := pool.Raw().Exec(ctx, steps[0].UpSQL()); err != nil {
+		t.Fatal("expand without validation scan", err)
+	}
+	checkValidation(false)
+	if err := insert(oauth, "oauth-new"); err != nil {
+		t.Fatal("OAuth purpose unavailable after expansion", err)
+	}
+	denied("identity.oauth.unregistered", next)
+	if _, err := pool.Raw().Exec(ctx, steps[1].UpSQL()); err != nil {
+		t.Fatal("validate in separate migration", err)
+	}
+	checkValidation(true)
+	var retained int
+	if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM `+schema+`.session_issuances WHERE (purpose,marker) IN(('identity.password.signin','password-history'),('identity.sso.oidc-callback','oidc-history'))`).Scan(&retained); err != nil || retained != 2 {
+		t.Fatalf("lost previous history: %d, %v", retained, err)
+	}
+	if _, err := pool.Raw().Exec(ctx, steps[0].UpSQL()); err == nil {
+		t.Fatal("expansion accepted missing OIDC predecessor")
+	}
+	checkValidation(true)
+}

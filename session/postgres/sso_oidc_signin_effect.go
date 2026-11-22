@@ -23,10 +23,15 @@ import (
 // Provider verification and organization role decisions remain with native owners.
 // Immutable configuration may be used concurrently by distinct serial Works.
 type SSOOIDCSigninEffect struct {
+	effect *ssoSigninEffect
+}
+
+type ssoSigninEffect struct {
 	native       Repository
 	config       Config
 	profile      IdentifierAdmissionConfig
 	organization OrganizationSessionAuthority
+	oauth2       bool
 }
 
 // SSOOIDCOrganizationUpdate applies provider-owned organization changes in the
@@ -52,13 +57,32 @@ func (*SSOOIDCSigninEffect) MarshalText() ([]byte, error) { return nil, session.
 // require the current selected member. Install both SSO issuance migrations
 // before selecting this effect. Construction performs no IO.
 func NewSSOOIDCSigninEffect(c Config, p IdentifierAdmissionConfig, org OrganizationSessionAuthority) (*SSOOIDCSigninEffect, error) {
+	effect, err := newSSOSigninEffect(c, p, org, false)
+	if err != nil {
+		return nil, err
+	}
+	return &SSOOIDCSigninEffect{effect}, nil
+}
+
+func newSSOSigninEffect(c Config, p IdentifierAdmissionConfig, org OrganizationSessionAuthority, oauth2 bool) (*ssoSigninEffect, error) {
+	method := "sso-oidc"
+	if oauth2 {
+		method = "sso-oauth2"
+	}
 	if !validSchema(c.Schema) || c.MaximumDuration <= 0 || c.MaximumDuration > time.Minute ||
-		!p.valid() || p.AuthenticationMethod != "sso-oidc" || p.CredentialKind != identity.CredentialProvider || p.CredentialOwner != "sso" || nilIssueDependency(org) {
+		!p.valid() || p.AuthenticationMethod != method || p.CredentialKind != identity.CredentialProvider || p.CredentialOwner != "sso" || nilIssueDependency(org) {
 		return nil, session.ErrInvalidSessionCommand
 	}
 	c.Schema = strings.Clone(c.Schema)
 	p.GlobalAuthorityID, p.PolicyNamespace, p.Audience = strings.Clone(p.GlobalAuthorityID), strings.Clone(p.PolicyNamespace), strings.Clone(p.Audience)
-	return &SSOOIDCSigninEffect{native: Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), maximumDuration: c.MaximumDuration}, config: c, profile: p, organization: org}, nil
+	return &ssoSigninEffect{native: Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), maximumDuration: c.MaximumDuration}, config: c, profile: p, organization: org, oauth2: oauth2}, nil
+}
+
+func (e *SSOOIDCSigninEffect) core() *ssoSigninEffect {
+	if e == nil {
+		return nil
+	}
+	return e.effect
 }
 
 // Apply needs the exact original command, the SSO-authenticated browser and
@@ -67,7 +91,7 @@ func NewSSOOIDCSigninEffect(c Config, p IdentifierAdmissionConfig, org Organizat
 // consumed with the new session and issuance history. Return every error to
 // abort the transaction. Provisional success does not permit disclosure.
 func (e *SSOOIDCSigninEffect) Apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction) (identity.FeatureReceipt, error) {
-	return e.apply(ctx, w, owner, command, preauth, nil)
+	return e.core().apply(ctx, w, owner, command, preauth, nil)
 }
 
 // ApplyWithOrganizationUpdate has Apply's contract and also invokes update
@@ -80,21 +104,21 @@ func (e *SSOOIDCSigninEffect) ApplyWithOrganizationUpdate(ctx context.Context, w
 	if nilIssueDependency(update) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
-	return e.apply(ctx, w, owner, command, preauth, update)
+	return e.core().apply(ctx, w, owner, command, preauth, update)
 }
 
-func (e *SSOOIDCSigninEffect) apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction, update SSOOIDCOrganizationUpdate) (identity.FeatureReceipt, error) {
+func (e *ssoSigninEffect) apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction, update SSOOIDCOrganizationUpdate) (identity.FeatureReceipt, error) {
 	if !e.valid(ctx) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
 	if err := w.RequireFeatureCommand(ctx, owner, command); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	consumption, err := w.SSOOIDCSigninConsumption(owner)
+	consumption, err := e.consumption(w, owner)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	record, err := SSOOIDCSigninSession(command)
+	record, err := e.session(command)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -104,7 +128,7 @@ func (e *SSOOIDCSigninEffect) apply(ctx context.Context, w kernel.Work, owner ke
 		return identity.FeatureReceipt{}, err
 	}
 	b, feature, transition, err := w.FeatureScope(owner)
-	if err != nil || !ssoOIDCSigninEffectScope(feature, transition) || b != use.Command {
+	if err != nil || !e.scope(feature, transition) || b != use.Command {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
@@ -142,10 +166,14 @@ func (e *SSOOIDCSigninEffect) apply(ctx context.Context, w kernel.Work, owner ke
 // Apply or final admission. The native owner must run it after later writes;
 // no check replaces an original version or renews evidence.
 func (e *SSOOIDCSigninEffect) CheckCurrent(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command) error {
+	return e.core().checkCurrent(ctx, w, owner, command)
+}
+
+func (e *ssoSigninEffect) checkCurrent(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command) error {
 	if !e.valid(ctx) {
 		return session.ErrInvalidSessionCommand
 	}
-	record, err := SSOOIDCSigninSession(command)
+	record, err := e.session(command)
 	if err != nil {
 		return err
 	}
@@ -168,26 +196,38 @@ func (e *SSOOIDCSigninEffect) CheckCurrent(ctx context.Context, w kernel.Work, o
 // authority snapshot or read the provider. Missing evidence does not prove the
 // outcome of the other callback participants.
 func (e *SSOOIDCSigninEffect) Recover(ctx context.Context, w kernel.RecoveryWork, owner kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
+	return e.core().recover(ctx, w, owner)
+}
+
+func (e *ssoSigninEffect) recover(ctx context.Context, w kernel.RecoveryWork, owner kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
 	if !e.valid(ctx) {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	b, feature, transition, err := w.FeatureScope(owner)
-	if err != nil || !ssoOIDCSigninEffectScope(feature, transition) {
+	if err != nil || !e.scope(feature, transition) {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
 	defer stop()
-	_, status, err := readNativeIssuanceIdentity(bounded, w, e.native.schema, b, transition, ssoOIDCSigninIssuanceDigest)
+	digest := ssoOIDCSigninIssuanceDigest
+	if e.oauth2 {
+		digest = ssoOAuth2SigninIssuanceDigest
+	}
+	_, status, err := readNativeIssuanceIdentity(bounded, w, e.native.schema, b, transition, digest)
 	return status, err
 }
 
-func (e *SSOOIDCSigninEffect) valid(ctx context.Context) bool {
+func (e *ssoSigninEffect) valid(ctx context.Context) bool {
 	return ctx != nil && e != nil && e.config.MaximumDuration > 0
 }
 
-func ssoOIDCSigninEffectScope(feature kernel.FeatureRegistration, lifecycle kernel.LifecyclePlan) bool {
-	return feature.Operation == ssoOIDCSessionOperation() &&
-		feature.Contributor == (kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-login-callback", Version: 1}) &&
+func (e *ssoSigninEffect) scope(feature kernel.FeatureRegistration, lifecycle kernel.LifecyclePlan) bool {
+	operation, contract := ssoOIDCSessionOperation(), "sso.oidc-login-callback"
+	if e.oauth2 {
+		operation, contract = ssoOAuth2SessionOperation(), "sso.oauth2-login-callback"
+	}
+	return feature.Operation == operation &&
+		feature.Contributor == (kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: contract, Version: 1}) &&
 		lifecycle == (kernel.LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2})
 }
 
@@ -209,8 +249,12 @@ func ssoOIDCSigninPreAuth(spec session.SessionSpec, preauth session.PreAuthTrans
 	return PreAuthUse{Command: binding, Fingerprint: consumption.Fingerprint, Generation: consumption.Generation}, nil
 }
 
-func (e *SSOOIDCSigninEffect) requireAccountAuthority(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session) error {
-	account, err := kernel.SSOOIDCSigninAccount(command)
+func (e *ssoSigninEffect) requireAccountAuthority(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session) error {
+	decodeAccount := kernel.SSOOIDCSigninAccount
+	if e.oauth2 {
+		decodeAccount = kernel.SSOOAuth2SigninAccount
+	}
+	account, err := decodeAccount(command)
 	if err != nil {
 		return err
 	}
@@ -230,7 +274,12 @@ func (e *SSOOIDCSigninEffect) requireAccountAuthority(ctx context.Context, w ker
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, directory); err != nil {
 		return err
 	}
-	if _, err := w.RequireSSOOIDCSigninProviderAccount(ctx, owner, command); err != nil {
+	fenceAccount := w.RequireSSOOIDCSigninProviderAccount
+	fenceFactors := mfapg.RequireSSOOIDCSigninFactors
+	if e.oauth2 {
+		fenceAccount, fenceFactors = w.RequireSSOOAuth2SigninProviderAccount, mfapg.RequireSSOOAuth2SigninFactors
+	}
+	if _, err := fenceAccount(ctx, owner, command); err != nil {
 		return err
 	}
 	if err := authority.RequireAuthority(ctx, w, policy.Scope, policy.Version, e.config.MaximumDuration); err != nil {
@@ -239,7 +288,7 @@ func (e *SSOOIDCSigninEffect) requireAccountAuthority(ctx context.Context, w ker
 		}
 		return readError(ctx, err)
 	}
-	if _, err := mfapg.RequireSSOOIDCSigninFactors(ctx, w, owner, command, vector.Factor.Binding.Version); err != nil {
+	if _, err := fenceFactors(ctx, w, owner, command, vector.Factor.Binding.Version); err != nil {
 		return err
 	}
 	return requireProviderSigninIssueTime(ctx, w, record)

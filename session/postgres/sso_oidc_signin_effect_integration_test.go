@@ -179,7 +179,7 @@ func (p *ssoOIDCSessionOrganizationFixture) RequireOrganizationSession(ctx conte
 // verification. The kernel, capability participant and all non-organization
 // authority/persistence paths below use their real implementations.
 type ssoOIDCSessionInvocation struct {
-	effect                       *SSOOIDCSigninEffect
+	effect                       ssoSessionEffectFixture
 	original                     identity.Command
 	declaration                  kernel.CommandPlan
 	flow                         session.PreAuthTransaction
@@ -192,15 +192,35 @@ type ssoOIDCSessionInvocation struct {
 	applyErr                     error
 }
 
-func (*ssoOIDCSessionInvocation) Descriptor() kernel.ContributorDescriptor {
+type ssoSessionEffectFixture interface {
+	Apply(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command, session.PreAuthTransaction) (identity.FeatureReceipt, error)
+	CheckCurrent(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command) error
+	Recover(context.Context, kernel.RecoveryWork, kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error)
+}
+
+func (p *ssoOIDCSessionInvocation) operation() identity.FeatureOperation {
+	if _, ok := p.effect.(*SSOOAuth2SigninEffect); ok {
+		return kernel.SSOOAuth2SigninOperation()
+	}
+	return ssoOIDCSessionOperation()
+}
+
+func (p *ssoOIDCSessionInvocation) Descriptor() kernel.ContributorDescriptor {
+	if p.operation() == kernel.SSOOAuth2SigninOperation() {
+		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oauth2-login-callback", Version: 1}
+	}
 	return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-login-callback", Version: 1}
 }
-func (*ssoOIDCSessionInvocation) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{ssoOIDCSessionOperation()}
+func (p *ssoOIDCSessionInvocation) FeatureOperations() []identity.FeatureOperation {
+	return []identity.FeatureOperation{p.operation()}
 }
 func (p *ssoOIDCSessionInvocation) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
-	if command != p.original || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != ssoOIDCSessionOperation() || plan.Capability == nil || p.declaration.Capability == nil || *plan.Capability != *p.declaration.Capability {
+	if command != p.original || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != p.operation() || plan.Capability == nil || p.declaration.Capability == nil || *plan.Capability != *p.declaration.Capability {
 		return identity.ForbiddenError{}
+	}
+	if p.operation() == kernel.SSOOAuth2SigninOperation() {
+		_, err := SSOOAuth2SigninSession(command)
+		return err
 	}
 	_, err := SSOOIDCSigninSession(command)
 	return err
@@ -209,7 +229,13 @@ func (p *ssoOIDCSessionInvocation) ValidateFeaturePreparation(command identity.C
 	return p.ValidateFeatureCommand(command, plan)
 }
 func (p *ssoOIDCSessionInvocation) ValidateSSOOIDCSigninConsumption(command identity.Command, proof kernel.CapabilityPlan) error {
-	if command != p.original || p.declaration.Capability == nil || proof != *p.declaration.Capability {
+	if p.operation() != ssoOIDCSessionOperation() || command != p.original || p.declaration.Capability == nil || proof != *p.declaration.Capability {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
+func (p *ssoOIDCSessionInvocation) ValidateSSOOAuth2SigninConsumption(command identity.Command, proof kernel.CapabilityPlan) error {
+	if p.operation() != kernel.SSOOAuth2SigninOperation() || command != p.original || p.declaration.Capability == nil || proof != *p.declaration.Capability {
 		return identity.ForbiddenError{}
 	}
 	return nil
@@ -217,7 +243,7 @@ func (p *ssoOIDCSessionInvocation) ValidateSSOOIDCSigninConsumption(command iden
 func (p *ssoOIDCSessionInvocation) AdmitFeaturePreparation(ctx context.Context, w kernel.Work, command identity.Command) error {
 	spec, ok := command.Feature()
 	binding, feature, _, err := w.FeatureScope(p)
-	if err != nil || !ok || command != p.original || binding != spec.Binding || feature.Operation != ssoOIDCSessionOperation() {
+	if err != nil || !ok || command != p.original || binding != spec.Binding || feature.Operation != p.operation() {
 		return identity.ForbiddenError{}
 	}
 	return ctx.Err()
@@ -259,7 +285,13 @@ func (ssoOIDCSessionPreparation) Generate(ctx context.Context, generation uint64
 
 func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
 	p.retained = w
-	consumed, err := w.SSOOIDCSigninConsumption(p)
+	var consumed kernel.CapabilityReservationBinding
+	var err error
+	if p.operation() == kernel.SSOOAuth2SigninOperation() {
+		consumed, err = w.SSOOAuth2SigninConsumption(p)
+	} else {
+		consumed, err = w.SSOOIDCSigninConsumption(p)
+	}
 	spec, ok := command.Feature()
 	if err != nil || !ok || command != p.original || consumed.Command != spec.Binding || consumed.Plan != *p.declaration.Capability || consumed.Generation == 0 {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
@@ -278,7 +310,7 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 		if update, ok := p.organizationUpdate.(*ssoOIDCSessionOrganizationUpdateFixture); ok && update != nil {
 			update.wantWork, update.wantOwner = w, p
 		}
-		receipt, err = p.effect.ApplyWithOrganizationUpdate(ctx, w, p, command, p.flow, p.organizationUpdate)
+		receipt, err = p.effect.(*SSOOIDCSigninEffect).ApplyWithOrganizationUpdate(ctx, w, p, command, p.flow, p.organizationUpdate)
 	} else {
 		receipt, err = p.effect.Apply(ctx, w, p, command, p.flow)
 	}
@@ -310,10 +342,21 @@ func (p *ssoOIDCSessionInvocation) RecoverParticipant(ctx context.Context, w ker
 }
 
 func TestSSOOIDCSigninSessionPreparedPostgres(t *testing.T) {
+	testSSOSigninSessionPreparedPostgres(t, "sso-oidc")
+}
+
+func TestSSOOAuth2SigninSessionPreparedPostgres(t *testing.T) {
+	testSSOSigninSessionPreparedPostgres(t, "sso-oauth2")
+}
+
+func testSSOSigninSessionPreparedPostgres(t *testing.T, method string) {
+	t.Helper()
 	ctx, pool, repository := anonymousSessionDatabase(t)
 	accounts := kernel.AccountMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 30}
 	prepared := kernel.CounterPreparationMigrationSource{Base: kernel.AdmissionPreparationMigrationSource{Base: kernel.PreparationMigrationSource{Base: accounts, Version: 31}, Version: 32}, Version: 33}
-	history, err := prepared.Load(ctx)
+	start := kernel.SSOOIDCPreparationErasureMigrationSource{Base: prepared, Version: 39}
+	oidc := kernel.SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 40}
+	history, err := (kernel.SSOOAuth2CallbackPreparationErasureMigrationSource{Base: oidc, Version: 41}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +368,7 @@ func TestSSOOIDCSigninSessionPreparedPostgres(t *testing.T) {
 			t.Fatal("native account and retained preparation history", err)
 		}
 	}
-	for _, source := range []migrations.Source{mfapg.MigrationSource{Version: 34}, PreAuthMigrationSource{Schema: "session_store", Version: 35}, SSOOIDCSigninMigrationSource{Schema: "session_store", Version: 36, ValidationVersion: 37, PreviousConstraint: "session_issuances_purpose_anonymous_v1"}, CSRFMigrationSource{Schema: "session_store", Version: 38}} {
+	for _, source := range []migrations.Source{mfapg.MigrationSource{Version: 34}, PreAuthMigrationSource{Schema: "session_store", Version: 35}, SSOOIDCSigninMigrationSource{Schema: "session_store", Version: 36, ValidationVersion: 37, PreviousConstraint: "session_issuances_purpose_anonymous_v1"}, CSRFMigrationSource{Schema: "session_store", Version: 38}, SSOOAuth2SigninMigrationSource{Schema: "session_store", Version: 42, ValidationVersion: 43}} {
 		steps, err := source.Load(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -363,14 +406,19 @@ CREATE TABLE public.sso_session_membership(tenant_id text NOT NULL,user_id text 
 INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,authority_key,version,active) VALUES('guest-tenant','enterprise-user','selected-org','organization:guest-tenant:selected-org',7,true)`); err != nil {
 		t.Fatal("actual account/factor and explicit organization fixture rows", err)
 	}
-	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "guest-deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "sso-oidc", CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
+	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "guest-deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: method, CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
 	policyScope := policy.AuthorityScope{TenantID: "guest-tenant", PolicyNamespace: profile.PolicyNamespace, SubjectID: "enterprise-user"}
 	if _, err := policy.InitializeAuthority(ctx, pool.Raw(), policyScope, time.Second); err != nil {
 		t.Fatal(err)
 	}
 	organization := &ssoOIDCSessionOrganizationFixture{pool: pool}
 	config := Config{Schema: "session_store", MaximumDuration: time.Second}
-	effect, err := NewSSOOIDCSigninEffect(config, profile, organization)
+	var effect ssoSessionEffectFixture
+	if method == "sso-oauth2" {
+		effect, err = NewSSOOAuth2SigninEffect(config, profile, organization)
+	} else {
+		effect, err = NewSSOOIDCSigninEffect(config, profile, organization)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,6 +427,9 @@ INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,auth
 		t.Fatal(err)
 	}
 	for _, mode := range []string{"commit", "organization-update", "organization-update-failure", "organization-update-expired", "organization-update-nil", "organization-update-typed-nil", "existing-family", "reconstructed-command", "stale-organization", "late-membership-removed", "rollback", "audit-failure", "audit-fails-success-only", "outbox-failure"} {
+		if method == "sso-oauth2" && strings.HasPrefix(mode, "organization-update") {
+			continue // OAuth deliberately has no synchronous organization-update port.
+		}
 		t.Run(mode, func(t *testing.T) {
 			organization.requireCalls, organization.update = 0, nil
 			if _, err := pool.Raw().Exec(ctx, `UPDATE public.sso_session_membership SET version=7,active=true,provider_updates=0`); err != nil {
@@ -569,16 +620,31 @@ INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,auth
 				if readErr != nil || encodeErr != nil || !bytes.Equal(wantWire, gotWire) || stored.CurrentFamilyVersion != 1 || stored.Revoked || stored.FamilyRevoked {
 					t.Fatal("persisted enterprise session changed original authority/Remember/CSRF or new-family version", readErr, encodeErr)
 				}
-				retained, status, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, binding, transition, ssoOIDCSigninIssuanceDigest)
+				issuanceDigest, otherDigest := ssoOIDCSigninIssuanceDigest, ssoOAuth2SigninIssuanceDigest
+				if method == "sso-oauth2" {
+					issuanceDigest, otherDigest = otherDigest, issuanceDigest
+				}
+				retained, status, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, binding, transition, issuanceDigest)
 				if err != nil || status != kernel.RecoveryCommitted || retained.UserID != spec.UserID || retained.SessionID != spec.SessionID || retained.FamilyID != spec.FamilyID {
 					t.Fatal("retained issuance lost the selected identity", err)
 				}
 				if _, wrongStatus, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, binding, transition, oauthSigninIssuanceDigest); err != nil || wrongStatus != kernel.RecoveryUnknown {
 					t.Fatal("enterprise retained identity accepted social issuance domain", err)
 				}
+				if _, wrongStatus, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, binding, transition, otherDigest); err != nil || wrongStatus != kernel.RecoveryUnknown {
+					t.Fatal("enterprise retained identity accepted the other SSO protocol's issuance domain", err)
+				}
 				replayed, err := coordinator.ExecutePreparedFeature(ctx, command, plan)
 				if err != nil || replayed.Outcome != identity.CommitOutcomeCommitted || replayed.Binding != binding || replayed.Feature == nil || *replayed.Feature != *result.Feature {
 					t.Fatal("original enterprise callback replay lost its retained receipt", err)
+				}
+				var replaySessions, replayFamilies, replayIssuances, replayUses int
+				if err := pool.Raw().QueryRow(ctx, `SELECT uses,(SELECT count(*) FROM session_store.sessions WHERE tenant_id=$2 AND session_id=$3),(SELECT count(*) FROM session_store.families WHERE tenant_id=$2 AND family_id=$4),(SELECT count(*) FROM session_store.session_issuances WHERE tenant_id=$2 AND session_id=$3) FROM public.capability_identity_one_use WHERE capability_id=$1`, capability.CapabilityID, string(spec.TenantID), spec.SessionID, spec.FamilyID).Scan(&replayUses, &replaySessions, &replayFamilies, &replayIssuances); err != nil || replayUses != 1 || replaySessions != 1 || replayFamilies != 1 || replayIssuances != 1 {
+					t.Fatal("callback replay repeated capability consumption or session issuance", replayUses, replaySessions, replayFamilies, replayIssuances, err)
+				}
+				var ciphertext, ciphertextGeneration bool
+				if err := pool.Raw().QueryRow(ctx, `SELECT preparation_ciphertext IS NOT NULL,preparation_ciphertext_generation IS NOT NULL FROM identity.commands WHERE command_id=$1`, mustCommandBytes(t, binding.CommandID)).Scan(&ciphertext, &ciphertextGeneration); err != nil || ciphertext || ciphertextGeneration {
+					t.Fatal("committed callback retained temporary preparation custody", err)
 				}
 			}
 			if mode == "late-membership-removed" {
@@ -601,7 +667,11 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	if err != nil || !directory.Enabled {
 		t.Fatal("actual current directory", err)
 	}
-	factors, err := mfapg.ReadSSOOIDCSigninFactors(ctx, pool, account.Account.TenantID, account.Account.UserID, time.Second)
+	readFactors := mfapg.ReadSSOOIDCSigninFactors
+	if profile.AuthenticationMethod == "sso-oauth2" {
+		readFactors = mfapg.ReadSSOOAuth2SigninFactors
+	}
+	factors, err := readFactors(ctx, pool, account.Account.TenantID, account.Account.UserID, time.Second)
 	if err != nil {
 		t.Fatal("actual current known-empty MFA", err)
 	}
@@ -619,11 +689,14 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	op := ssoOIDCSessionOperation()
+	if profile.AuthenticationMethod == "sso-oauth2" {
+		op = kernel.SSOOAuth2SigninOperation()
+	}
 	binding := identity.CommandBinding{CommandID: id, TenantID: account.Account.TenantID, ActorID: "enterprise-signin-service", ActorKind: authorization.SubjectServiceAccount, AnonymousFlowID: string(flowID), RecordID: string(start), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "enterprise-signin", PolicyVersion: 1, CorrelationID: string(id)}
 	spec, _ := testSession(t).Bindings()
 	spec.SessionID, spec.FamilyID, spec.TenantID, spec.UserID = "enterprise-session-"+mode, "enterprise-family-"+mode, binding.TenantID, account.Account.UserID
 	spec.Version, spec.FamilyVersion, spec.IssuedAt, spec.LastActivityAt = 1, 1, now, now
-	spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(id), Tenant: string(spec.TenantID), Subject: string(spec.UserID), Method: "sso-oidc", Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: profile.Audience, IssuedAt: now, ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: string(account.Credential.Credential.ID), CredentialVersion: account.Credential.Credential.Version}
+	spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(id), Tenant: string(spec.TenantID), Subject: string(spec.UserID), Method: profile.AuthenticationMethod, Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: profile.Audience, IssuedAt: now, ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: string(account.Credential.Credential.ID), CredentialVersion: account.Credential.Credential.Version}
 	if mode == "organization-update-expired" {
 		spec.Authentication.Proof.ExpiresAt = now.Add(500 * time.Millisecond)
 	}
@@ -709,11 +782,17 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	if err != nil {
 		t.Fatal(err)
 	}
-	fields, err := SSOOIDCSigninSessionFields(record)
+	sessionFields := SSOOIDCSigninSessionFields
+	selectedAccountFields := kernel.SSOOIDCSigninAccountFields
+	if profile.AuthenticationMethod == "sso-oauth2" {
+		sessionFields = SSOOAuth2SigninSessionFields
+		selectedAccountFields = kernel.SSOOAuth2SigninAccountFields
+	}
+	fields, err := sessionFields(record)
 	if err != nil {
 		t.Fatal(err)
 	}
-	accountFields, err := kernel.SSOOIDCSigninAccountFields(account)
+	accountFields, err := selectedAccountFields(account)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -723,7 +802,10 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 		t.Fatal(err)
 	}
 	proof := kernel.CapabilityPlan{CapabilityID: string(id), Purpose: "identity.sso.oidc-callback", ReplayKeyVersion: 1, ReplayDigest: sha256.Sum256([]byte(id)), ProofFingerprint: [32]byte{83}, ExpiresAt: now.Add(2 * time.Minute).Truncate(time.Second), MaxUses: 1}
-	// Fixture issuance metadata does not claim cryptographic OIDC verification.
+	if profile.AuthenticationMethod == "sso-oauth2" {
+		proof.Purpose = "identity.sso.oauth-callback"
+	}
+	// Fixture issuance metadata does not claim cryptographic provider verification.
 	// The actual participant owns reservation, rollback release and finalization.
 	if _, err := pool.Raw().Exec(ctx, `INSERT INTO public.capability_identity_one_use(tenant_id,purpose,replay_key_version,replay_digest,capability_id,proof_fingerprint,expires_at,max_uses) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(binding.TenantID), string(proof.Purpose), proof.ReplayKeyVersion, proof.ReplayDigest[:], proof.CapabilityID, proof.ProofFingerprint[:], proof.ExpiresAt, proof.MaxUses); err != nil {
 		t.Fatal(err)
