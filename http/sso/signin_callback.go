@@ -298,20 +298,7 @@ func newSigninCallbackHandler(c SigninCallbackConfig, browser signinBrowserPolic
 				writeSigninError(w, r, err)
 				return
 			}
-			now := c.Browser.Now()
-			auth, csrf, err := c.deliveryCookies(out, s.command, s.request.Browser.FlowID, now)
-			if err != nil || ctx.Err() != nil || !s.device.ExpiresAt().After(now) {
-				writeSigninError(w, r, identityhttp.ErrUnavailable)
-				return
-			}
-			delivery.redirect, delivery.cookies = out.RedirectURI, []string{auth.String(), csrf.String()}
-			delivery.current = func() bool {
-				now := c.Browser.Now()
-				spec, err := out.Issuance.Session.Bindings()
-				_, lifetimeErr := out.Issuance.Session.Lifetime(now)
-				return err == nil && lifetimeErr == nil && ctx.Err() == nil && s.device.ExpiresAt().After(now) && spec.Authentication.Proof.ExpiresAt.After(now)
-			}
-			w.WriteHeader(http.StatusSeeOther)
+			writeSigninDelivery(w, r, c, signinCallbackOperation, "sso-oidc", out, s.command, s.request.Browser.FlowID, s.device.ExpiresAt())
 		},
 	})
 	if err != nil {
@@ -401,20 +388,39 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	h.pipeline.ServeHTTP(writer, r)
 }
 
-func (c SigninCallbackConfig) deliveryCookies(out SigninCallbackResult, command identity.CommandID, flow identity.PreAuthTransactionID, now time.Time) (http.Cookie, http.Cookie, error) {
+func writeSigninDelivery(w http.ResponseWriter, r *http.Request, c SigninCallbackConfig, operation, method string, out SigninCallbackResult, command identity.CommandID, flow identity.PreAuthTransactionID, deviceExpires time.Time) {
+	ctx := r.Context()
+	now := c.Browser.Now()
+	auth, csrf, err := c.deliveryCookies(operation, method, out, command, flow, now)
+	if err != nil || ctx.Err() != nil || !deviceExpires.After(now) {
+		writeSigninError(w, r, identityhttp.ErrUnavailable)
+		return
+	}
+	delivery := ctx.Value(signinDeliveryKey{}).(*signinDelivery)
+	delivery.redirect, delivery.cookies = out.RedirectURI, []string{auth.String(), csrf.String()}
+	delivery.current = func() bool {
+		now := c.Browser.Now()
+		spec, err := out.Issuance.Session.Bindings()
+		_, lifetimeErr := out.Issuance.Session.Lifetime(now)
+		return err == nil && lifetimeErr == nil && ctx.Err() == nil && deviceExpires.After(now) && spec.Authentication.Proof.ExpiresAt.After(now)
+	}
+	w.WriteHeader(http.StatusSeeOther)
+}
+
+func (c SigninCallbackConfig) deliveryCookies(operation, method string, out SigninCallbackResult, command identity.CommandID, flow identity.PreAuthTransactionID, now time.Time) (http.Cookie, http.Cookie, error) {
 	deny := func() (http.Cookie, http.Cookie, error) {
 		return http.Cookie{}, http.Cookie{}, identityhttp.ErrUnavailable
 	}
 	b := out.Completion.Binding
 	issued := out.Issuance
 	if out.Completion.Validate() != nil || out.Completion.Outcome != identity.CommitOutcomeCommitted || b.CommandID != command || b.TenantID != c.Browser.TenantID ||
-		b.OperationID != signinCallbackOperation || b.AnonymousFlowID != string(flow) || issued.Replayed || issued.CommandID != command ||
+		b.OperationID != operation || b.AnonymousFlowID != string(flow) || issued.Replayed || issued.CommandID != command ||
 		issued.CommitOutcome != identity.CommitOutcomeCommitted || !slices.Contains(c.CallbackAllowlist, out.RedirectURI) {
 		return deny()
 	}
 	spec, err := issued.Session.Bindings()
 	if err != nil || spec.TenantID != b.TenantID || spec.Audience != c.Audience || spec.Authentication.Kind != session.AuthenticationVerified ||
-		spec.Authentication.Proof.Method != "sso-oidc" || spec.Authentication.Proof.ID != authentication.ProofID(command) {
+		spec.Authentication.Proof.Method != method || spec.Authentication.Proof.ID != authentication.ProofID(command) {
 		return deny()
 	}
 	if spec.Authentication.Proof.Validate(authentication.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: "session-issue", Audience: c.Audience, Now: now}) != nil {

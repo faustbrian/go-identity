@@ -27,6 +27,21 @@ type SigninStarter interface {
 	StartSSOOIDC(context.Context, identity.TenantID, sso.SigninStartRequest, SigninBrowser) (sso.SigninStartResult, error)
 }
 
+// OAuth2SigninStarter invokes the configured native enterprise OAuth2 start.
+// The owner verifies original flow, provider activation and durable admission.
+type OAuth2SigninStarter interface {
+	StartSSOOAuth2(context.Context, identity.TenantID, sso.SigninStartRequest, SigninBrowser) (sso.SigninStartResult, error)
+}
+
+// OAuth2SigninStartConfig selects one installed OAuth2 provider by exact ID
+// and pinned authorization endpoint. The callback allowlist is same-origin.
+type OAuth2SigninStartConfig struct {
+	ProviderID            string
+	AuthorizationEndpoint string
+	CallbackAllowlist     []string
+	Start                 OAuth2SigninStarter
+}
+
 // MemberLinkStarter owns current session, original consent and durable start.
 type MemberLinkStarter interface {
 	StartSSOOIDCLink(context.Context, identity.TenantID, sso.SigninStartRequest, SigninBrowser, authentication.BearerCredential, session.CSRFToken) (sso.SigninStartResult, error)
@@ -72,24 +87,79 @@ func NewSigninStartFeatureWithLink(c SigninStartConfig, link MemberLinkStartConf
 }
 
 func newSigninStartFeature(c SigninStartConfig, link *MemberLinkStartConfig) (identityhttp.Feature, error) {
-	if !configuredOwner(c.Start) || !validProviderID(c.ProviderID) || len(c.CallbackAllowlist) == 0 || len(c.CallbackAllowlist) > 64 {
+	if !configuredOwner(c.Start) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	c.CallbackAllowlist = slices.Clone(c.CallbackAllowlist)
-	for _, callback := range c.CallbackAllowlist {
+	oidc, err := signinStartProviderFor(c.Browser.Origin, c.ProviderID, c.AuthorizationEndpoint, c.CallbackAllowlist, "oidc", c.Start.StartSSOOIDC)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	return composeSigninStartFeature(c.Browser, c.Lifetime, &oidc, nil, link)
+}
+
+// NewOAuth2SigninStartFeature selects the keyed start route for only the
+// configured OAuth2 provider. It does not expose discovery or callback.
+func NewOAuth2SigninStartFeature(browser SigninBrowserConfig, lifetime session.LifetimeConfig, c OAuth2SigninStartConfig) (identityhttp.Feature, error) {
+	if !configuredOwner(c.Start) {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	oauth2, err := signinStartProviderFor(browser.Origin, c.ProviderID, c.AuthorizationEndpoint, c.CallbackAllowlist, "oauth2", c.Start.StartSSOOAuth2)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	return composeSigninStartFeature(browser, lifetime, nil, &oauth2, nil)
+}
+
+// NewSigninStartFeatureWithOAuth2 selects exactly two distinct installed
+// providers on the same keyed start route. Provider ID selects its configured
+// owner; no request field chooses a protocol. Optional link is OIDC-only.
+func NewSigninStartFeatureWithOAuth2(c SigninStartConfig, oauth2 OAuth2SigninStartConfig, link *MemberLinkStartConfig) (identityhttp.Feature, error) {
+	if !configuredOwner(c.Start) || !configuredOwner(oauth2.Start) || c.ProviderID == oauth2.ProviderID {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	oidc, err := signinStartProviderFor(c.Browser.Origin, c.ProviderID, c.AuthorizationEndpoint, c.CallbackAllowlist, "oidc", c.Start.StartSSOOIDC)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	plain, err := signinStartProviderFor(c.Browser.Origin, oauth2.ProviderID, oauth2.AuthorizationEndpoint, oauth2.CallbackAllowlist, "oauth2", oauth2.Start.StartSSOOAuth2)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	return composeSigninStartFeature(c.Browser, c.Lifetime, &oidc, &plain, link)
+}
+
+type signinStartProvider struct {
+	id, protocol string
+	endpoint     url.URL
+	callbacks    []string
+	start        func(context.Context, identity.TenantID, sso.SigninStartRequest, SigninBrowser) (sso.SigninStartResult, error)
+}
+
+func signinStartProviderFor(origin identityhttp.Origin, id, endpoint string, callbacks []string, protocol string,
+	start func(context.Context, identity.TenantID, sso.SigninStartRequest, SigninBrowser) (sso.SigninStartResult, error),
+) (signinStartProvider, error) {
+	if !validProviderID(id) || len(callbacks) == 0 || len(callbacks) > 64 {
+		return signinStartProvider{}, identityhttp.ErrInvalidInput
+	}
+	callbacks = slices.Clone(callbacks)
+	for _, callback := range callbacks {
 		u, err := signinHTTPSURL(callback)
-		if err != nil || u.Scheme+"://"+u.Host != string(c.Browser.Origin) {
-			return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+		if err != nil || u.Scheme+"://"+u.Host != string(origin) {
+			return signinStartProvider{}, identityhttp.ErrInvalidInput
 		}
 	}
-	endpoint, err := signinHTTPSURL(c.AuthorizationEndpoint)
-	if err != nil || endpoint.RawQuery != "" {
+	authorization, err := signinHTTPSURL(endpoint)
+	if err != nil || authorization.RawQuery != "" {
+		return signinStartProvider{}, identityhttp.ErrInvalidInput
+	}
+	return signinStartProvider{id: id, protocol: protocol, endpoint: authorization, callbacks: callbacks, start: start}, nil
+}
+
+func composeSigninStartFeature(c SigninBrowserConfig, lifetime session.LifetimeConfig, oidc, oauth2 *signinStartProvider, link *MemberLinkStartConfig) (identityhttp.Feature, error) {
+	if _, err := session.ResolveRememberPolicy(session.RememberDefault, lifetime); err != nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	if _, err := session.ResolveRememberPolicy(session.RememberDefault, c.Lifetime); err != nil {
-		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
-	}
-	browser, err := newSigninBrowserPolicy(c.Browser)
+	browser, err := newSigninBrowserPolicy(c)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
@@ -105,7 +175,13 @@ func newSigninStartFeature(c SigninStartConfig, link *MemberLinkStartConfig) (id
 		}
 		member = &memberStartPolicy{owner: link.Start, name: cookie.Name, csrf: csrf}
 	}
-	handler, err := newSigninStartHandler(c, browser, endpoint, member)
+	providers := make(map[string]signinStartProvider, 2)
+	for _, selected := range []*signinStartProvider{oidc, oauth2} {
+		if selected != nil {
+			providers[selected.id] = *selected
+		}
+	}
+	handler, err := newSigninStartHandler(c, lifetime, browser, providers, member)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
@@ -117,22 +193,26 @@ func newSigninStartFeature(c SigninStartConfig, link *MemberLinkStartConfig) (id
 	if member != nil {
 		op.Wire = memberSigninStartWire(member.name)
 	}
+	if oauth2 != nil {
+		op.Wire = oauth2SigninStartWire(op.Wire, oidc != nil, member != nil)
+	}
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "sso", Operations: []identityhttp.OperationDescriptor{op}})
 }
 
 type signinStartState struct {
-	facts   identityhttp.NetworkFacts
-	browser SigninBrowser
-	device  session.BrowserDevice
-	request sso.SigninStartRequest
-	cookie  authentication.BearerCredential
-	csrf    session.CSRFToken
-	link    bool
+	facts    identityhttp.NetworkFacts
+	browser  SigninBrowser
+	device   session.BrowserDevice
+	request  sso.SigninStartRequest
+	cookie   authentication.BearerCredential
+	csrf     session.CSRFToken
+	link     bool
+	provider signinStartProvider
 }
 
-func newSigninStartHandler(c SigninStartConfig, browser signinBrowserPolicy, endpoint url.URL, member *memberStartPolicy) (http.Handler, error) {
+func newSigninStartHandler(c SigninBrowserConfig, lifetime session.LifetimeConfig, browser signinBrowserPolicy, providers map[string]signinStartProvider, member *memberStartPolicy) (http.Handler, error) {
 	return identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[signinStartState]{
-		MaximumDuration: c.Browser.MaximumDuration,
+		MaximumDuration: c.MaximumDuration,
 		Reject:          writeSigninError,
 		Decode: func(r *http.Request) (s signinStartState, err error) {
 			if r.URL == nil || r.Method != http.MethodPost || r.URL.Path != signinStartPath || r.URL.EscapedPath() != signinStartPath || r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Trailer) != 0 || headerPresent(r.Header, "Authorization") {
@@ -164,7 +244,17 @@ func newSigninStartHandler(c SigninStartConfig, browser signinBrowserPolicy, end
 				s.link = true
 				delete(body, "link")
 			}
-			s.request, s.browser.FlowID, err = c.decodeStart(body, key, s.link)
+			var providerID string
+			if json.Unmarshal(body["providerID"], &providerID) != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			delete(body, "providerID")
+			selected, ok := providers[providerID]
+			if !ok || s.link && selected.protocol != "oidc" {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.provider = selected
+			s.request, s.browser.FlowID, err = selected.decodeStart(body, key, lifetime, s.link)
 			if err != nil {
 				return s, err
 			}
@@ -188,10 +278,10 @@ func newSigninStartHandler(c SigninStartConfig, browser signinBrowserPolicy, end
 			return s, err
 		},
 		Authenticate: func(r *http.Request, s signinStartState) (signinStartState, error) {
-			return s, admitSigninIP(r.Context(), c.Browser.Rate, s.facts, signinStartOperation, c.ProviderID)
+			return s, admitSigninIP(r.Context(), c.Rate, s.facts, signinStartOperation, s.provider.id)
 		},
 		Admit: func(_ *http.Request, s signinStartState) error {
-			if !s.device.ExpiresAt().After(c.Browser.Now()) {
+			if !s.device.ExpiresAt().After(c.Now()) {
 				return identity.ForbiddenError{}
 			}
 			return nil
@@ -202,13 +292,13 @@ func newSigninStartHandler(c SigninStartConfig, browser signinBrowserPolicy, end
 			if s.link {
 				out, err = member.owner.StartSSOOIDCLink(r.Context(), s.facts.TenantID(), s.request, s.browser, s.cookie, s.csrf)
 			} else {
-				out, err = c.Start.StartSSOOIDC(r.Context(), s.facts.TenantID(), s.request, s.browser)
+				out, err = s.provider.start(r.Context(), s.facts.TenantID(), s.request, s.browser)
 			}
 			if err != nil {
 				writeSigninError(w, r, err)
 				return
 			}
-			if r.Context().Err() != nil || !s.device.ExpiresAt().After(c.Browser.Now()) || !validSigninStartResult(out, c.Browser.TenantID, s.browser.FlowID, c.ProviderID, endpoint) {
+			if r.Context().Err() != nil || !s.device.ExpiresAt().After(c.Now()) || !s.provider.validResult(out, c.TenantID, s.browser.FlowID) {
 				writeSigninError(w, r, identityhttp.ErrUnavailable)
 				return
 			}
@@ -222,10 +312,10 @@ func newSigninStartHandler(c SigninStartConfig, browser signinBrowserPolicy, end
 	})
 }
 
-func (c SigninStartConfig) decodeStart(body map[string]json.RawMessage, key identity.IdempotencyKey, link bool) (sso.SigninStartRequest, identity.PreAuthTransactionID, error) {
-	var flow, command, provider, domain, callback, errorCallback string
+func (provider signinStartProvider) decodeStart(body map[string]json.RawMessage, key identity.IdempotencyKey, lifetime session.LifetimeConfig, link bool) (sso.SigninStartRequest, identity.PreAuthTransactionID, error) {
+	var flow, command, domain, callback, errorCallback string
 	var remember bool
-	required := map[string]*string{"commandID": &command, "providerID": &provider, "callback": &callback, "errorCallback": &errorCallback}
+	required := map[string]*string{"commandID": &command, "callback": &callback, "errorCallback": &errorCallback}
 	if !link {
 		required["flowID"] = &flow
 	}
@@ -242,6 +332,9 @@ func (c SigninStartConfig) decodeStart(body map[string]json.RawMessage, key iden
 		}
 		delete(body, "domain")
 	}
+	if provider.protocol == "oauth2" && domain == "" {
+		return sso.SigninStartRequest{}, "", identityhttp.ErrInvalidInput
+	}
 	choice := session.RememberDefault
 	if link {
 		choice = session.BrowserSession
@@ -256,7 +349,7 @@ func (c SigninStartConfig) decodeStart(body map[string]json.RawMessage, key iden
 		}
 		delete(body, "remember")
 	}
-	if len(body) != 0 || provider != c.ProviderID || !slices.Contains(c.CallbackAllowlist, callback) || !slices.Contains(c.CallbackAllowlist, errorCallback) {
+	if len(body) != 0 || !slices.Contains(provider.callbacks, callback) || !slices.Contains(provider.callbacks, errorCallback) {
 		return sso.SigninStartRequest{}, "", identityhttp.ErrInvalidInput
 	}
 	var flowID identity.PreAuthTransactionID
@@ -267,19 +360,22 @@ func (c SigninStartConfig) decodeStart(body map[string]json.RawMessage, key iden
 	commandID, commandErr := identity.ParseCommandID(command)
 	success, successErr := signinHTTPSURL(callback)
 	failure, failureErr := signinHTTPSURL(errorCallback)
-	policy, policyErr := session.ResolveRememberPolicy(choice, c.Lifetime)
+	policy, policyErr := session.ResolveRememberPolicy(choice, lifetime)
 	intent, intentErr := sso.NewLoginIntent(policy)
 	if flowErr != nil || commandErr != nil || successErr != nil || failureErr != nil || policyErr != nil || intentErr != nil {
 		return sso.SigninStartRequest{}, "", identityhttp.ErrInvalidInput
 	}
-	request := sso.SigninStartRequest{CommandID: commandID, ProviderID: provider, Domain: domain, SuccessCallback: success, ErrorCallback: failure, LoginIntent: intent, IdempotencyKey: key}
+	request := sso.SigninStartRequest{CommandID: commandID, ProviderID: provider.id, Domain: domain, SuccessCallback: success, ErrorCallback: failure, LoginIntent: intent, IdempotencyKey: key}
 	return request, flowID, request.Validate()
 }
 
-func validSigninStartResult(out sso.SigninStartResult, tenant identity.TenantID, flow identity.PreAuthTransactionID, provider string, endpoint url.URL) bool {
+func (provider signinStartProvider) validResult(out sso.SigninStartResult, tenant identity.TenantID, flow identity.PreAuthTransactionID) bool {
 	b := out.Completion.Binding
 	if out.Completion.Validate() != nil || out.Completion.Outcome != identity.CommitOutcomeCommitted || b.TenantID != tenant ||
-		b.OperationID != signinStartOperation || b.AnonymousFlowID != string(flow) || b.RecordID != out.TransactionID || out.TransactionID != string(b.CommandID) || out.ProviderID != provider || out.Protocol != "oidc" {
+		b.OperationID != signinStartOperation || b.AnonymousFlowID != string(flow) || b.RecordID != out.TransactionID || out.TransactionID != string(b.CommandID) || out.ProviderID != provider.id || out.Protocol != provider.protocol {
+		return false
+	}
+	if provider.protocol == "oauth2" && (b.SchemaID != "identity.sso.signin-start.oauth2-v1" || flow == "") {
 		return false
 	}
 	if flow == "" && (b.SchemaID != "identity.sso.signin-start.oidc-link-v1" || b.UserID == "" || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID)) {
@@ -290,7 +386,7 @@ func validSigninStartResult(out sso.SigninStartResult, tenant identity.TenantID,
 		return false
 	}
 	redirect.RawQuery = ""
-	return redirect == endpoint
+	return redirect == provider.endpoint
 }
 
 func signinHTTPSURL(raw string) (url.URL, error) {

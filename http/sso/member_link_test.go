@@ -139,6 +139,23 @@ func TestEnterpriseMemberStartRequiresLocalCookieAndCSRF(t *testing.T) {
 	if got := serve("https://tenant.example", wire, true, body); got != http.StatusOK || owner.calls != 2 || legacy.calls != 0 {
 		t.Fatalf("acknowledged member start not delivered: status=%d member=%d legacy=%d", got, owner.calls, legacy.calls)
 	}
+
+	oauth2 := &oauth2StartProbe{}
+	mixed, err := NewSigninStartFeatureWithOAuth2(config, OAuth2SigninStartConfig{
+		ProviderID: "approved-oauth2", AuthorizationEndpoint: "https://other-provider.example/authorize",
+		CallbackAllowlist: config.CallbackAllowlist, Start: oauth2,
+	}, &MemberLinkStartConfig{Cookie: authCookie, Start: owner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router = memberLinkHandler(t, browser, mixed)
+	foreign := strings.Replace(body, `"providerID":"approved-oidc"`, `"providerID":"approved-oauth2","domain":"example.com"`, 1)
+	if got := serve("https://tenant.example", wire, true, foreign); got != http.StatusBadRequest || owner.calls != 2 || oauth2.calls != 0 || legacy.calls != 0 {
+		t.Fatal("mixed graph delegated OAuth2 link to a native owner", got)
+	}
+	if got := serve("https://tenant.example", wire, true, body); got != http.StatusOK || owner.calls != 3 || oauth2.calls != 0 || legacy.calls != 0 {
+		t.Fatal("mixed graph did not preserve OIDC-only member consent", got)
+	}
 }
 
 type memberStartProbe struct {

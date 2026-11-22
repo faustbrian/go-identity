@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in linked-member OAuth2 browser sign-in. Share the keyed start
+  route with a configured OIDC provider when both are selected, and use a
+  separate OAuth2 callback with original transaction quotas, native issuer
+  settlement and fresh-commit session and CSRF cookie delivery.
+
 - Add opt-in explicit enterprise member linking on the existing keyed start
   and shared OIDC callback. Require original cookie and same-origin CSRF;
   authenticate native callback mode without fallback and deliver no cookies

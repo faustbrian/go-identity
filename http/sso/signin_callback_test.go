@@ -232,11 +232,16 @@ func testEnterpriseCallbackOriginalFlow(t *testing.T, installedProvider string) 
 
 func enterpriseIssueFixture(t *testing.T, c SigninCallbackConfig, flow identity.PreAuthTransactionID, command identity.CommandID) SigninCallbackResult {
 	t.Helper()
+	op := identity.FeatureOperation{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", SchemaID: "sso-enterprise-oidc-callback-v1", SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordRequired}
+	return enterpriseIssueFixtureForOperation(t, c, flow, command, op, "sso-oidc")
+}
+
+func enterpriseIssueFixtureForOperation(t *testing.T, c SigninCallbackConfig, flow identity.PreAuthTransactionID, command identity.CommandID, op identity.FeatureOperation, method string) SigninCallbackResult {
+	t.Helper()
 	start, err := identity.NewCommandID()
 	if err != nil {
 		t.Fatal(err)
 	}
-	op := identity.FeatureOperation{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", SchemaID: "sso-enterprise-oidc-callback-v1", SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordRequired}
 	binding := identity.CommandBinding{CommandID: command, TenantID: c.Browser.TenantID, AnonymousFlowID: string(flow), ActorID: "sso-login", ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "signin-policy", PolicyVersion: 1, CorrelationID: string(command), RecordID: string(start)}
 	receipt := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeCommitted, AuditEventID: "callback-audit", Feature: &identity.FeatureReceipt{Operation: op, BeforeVersion: 1, AfterVersion: 2}}
 	if err := receipt.Validate(); err != nil {
@@ -276,7 +281,7 @@ func enterpriseIssueFixture(t *testing.T, c SigninCallbackConfig, flow identity.
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof := authentication.Proof{ID: authentication.ProofID(command), Tenant: string(binding.TenantID), Subject: "member", Method: "sso-oidc", Assurance: authentication.AssuranceSingleFactor, Purpose: "session-issue", Audience: c.Audience, IssuedAt: now, ExpiresAt: now.Add(10 * time.Second)}
+	proof := authentication.Proof{ID: authentication.ProofID(command), Tenant: string(binding.TenantID), Subject: "member", Method: method, Assurance: authentication.AssuranceSingleFactor, Purpose: "session-issue", Audience: c.Audience, IssuedAt: now, ExpiresAt: now.Add(10 * time.Second)}
 	metadata := session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: proof, ProofVersion: 1, CredentialID: "enterprise-provider", CredentialVersion: 1}
 	record, err := session.NewSessionWithCSRF(session.SessionSpec{SessionID: "session", FamilyID: "family", TenantID: binding.TenantID, UserID: "member", Audience: c.Audience, Version: 1, FamilyVersion: 1, Remember: remember, Authority: authority, Lookup: digest, IssuedAt: now, LastActivityAt: now, Authentication: metadata}, csrfState)
 	if err != nil {

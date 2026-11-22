@@ -81,3 +81,24 @@ identity. A failed member check must not route to anonymous sign-in. A
 committed link redirects to the selected allowlisted URL without setting a
 session or CSRF cookie. Ordinary sign-in still issues its own credentials.
 The previous password session may be invalidated by the credential change.
+
+## Existing-linked-member static OAuth2
+
+Select `NewOAuth2SigninStartFeature` and `NewOAuth2SigninCallbackFeature` for
+the keyed start and `GET /sso/oauth2/callback`. To retain a static OIDC
+provider on the same start route, use `NewSigninStartFeatureWithOAuth2` and
+select each callback separately. OAuth2 requires the configured `domain`;
+the exact Origin, original browser and idempotency contract stay the same. Only an installed
+`providerID` selects the configured owner. A caller cannot supply
+`protocol` or opt an OAuth2 provider into OIDC member linking.
+
+Bind the native linked-member OAuth2 completion owner and its read-only
+`SigninCallbackRateSource` through the typed transport interface. Use the
+exact tenant HTTPS origin plus `/sso/oauth2/callback` for the provider's
+registered redirect. The raw query remains native custody: authenticated
+original state supplies the transaction quota before native issuer validation,
+settlement and exchange. No issuer, query cookie or callback URL selects a
+provider or creates session authority. Only a fresh acknowledged native
+completion sets cookies and redirects. Select strict OAuth2 cookie admission
+for the later read and logout. Omit these features to expose no OAuth2 route
+or OpenAPI operation, and redact all raw callback URLs from access logs.

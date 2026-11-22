@@ -1,6 +1,7 @@
 package ssohttp
 
 import (
+	"bytes"
 	"encoding/json"
 
 	identityhttp "github.com/faustbrian/go-identity/http"
@@ -13,6 +14,16 @@ func signinCallbackWire() *identityhttp.WireOperation {
   "description":"Query-only callback for the exact configured provider and original browser flow. A fresh acknowledged commit issues secure session and CSRF cookies, then redirects to the original allowlisted URL. Refusal, replay and unresolved outcomes disclose no credentials.",
   "parameters":[{"name":"code","in":"query","required":false,"schema":{"type":"string","maxLength":4096}},{"name":"error","in":"query","required":false,"schema":{"type":"string","maxLength":256}},{"name":"state","in":"query","required":true,"schema":{"type":"string","minLength":43,"maxLength":43}},{"name":"iss","in":"query","required":true,"schema":{"type":"string","format":"uri","maxLength":2048}}],
   "responses":{"303":{"description":"Original success redirect with new credentials.","headers":{"Location":{"schema":{"type":"string","format":"uri"}},"Set-Cookie":{"schema":{"type":"string"}}}},"400":{"description":"Invalid query."},"403":{"description":"Callback denied."},"409":{"description":"Original callback conflict."},"429":{"description":"Provider quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable or unresolved; no redirect or cookie."}}
+}`)}
+}
+
+func oauth2SigninCallbackWire() *identityhttp.WireOperation {
+	return &identityhttp.WireOperation{Definition: []byte(`{
+  "operationId":"identity.sso.oauth-callback",
+  "summary":"Complete an opted-in enterprise OAuth2 sign-in",
+  "description":"Query return for the exact installed provider and original browser flow. Supply code or error, original state and the provider's exact issuer. Only a fresh committed sign-in redirects and issues cookies. Refused, replayed or unresolved callbacks disclose neither.",
+  "parameters":[{"name":"code","in":"query","required":false,"schema":{"type":"string","maxLength":4096}},{"name":"error","in":"query","required":false,"schema":{"type":"string","maxLength":256}},{"name":"state","in":"query","required":true,"schema":{"type":"string","minLength":43,"maxLength":43}},{"name":"iss","in":"query","required":true,"schema":{"type":"string","format":"uri","maxLength":2048}}],
+  "responses":{"303":{"description":"Original success redirect with new credentials.","headers":{"Location":{"schema":{"type":"string","format":"uri"}},"Set-Cookie":{"schema":{"type":"string"}}}},"400":{"description":"Invalid request."},"403":{"description":"Callback denied."},"409":{"description":"Original callback conflict."},"429":{"description":"Provider quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable or unresolved; no redirect or cookie."}}
 }`)}
 }
 
@@ -30,6 +41,38 @@ func signinStartWire() *identityhttp.WireOperation {
   }
 }`),
 	}
+}
+
+func oauth2SigninStartWire(operation *identityhttp.WireOperation, mixed, link bool) *identityhttp.WireOperation {
+	const oidc = `"const":"oidc"`
+	const originalRetry = "Keep the original command ID, request and idempotency key on retry."
+	if bytes.Count(operation.Definition, []byte(oidc)) != 1 {
+		return &identityhttp.WireOperation{}
+	}
+	protocol := `"const":"oauth2"`
+	summary := `Start opted-in static enterprise OAuth2 sign-in`
+	if mixed {
+		protocol = `"enum":["oidc","oauth2"]`
+		summary = `Start opted-in static enterprise sign-in`
+	}
+	if link {
+		operation.Definition = bytes.Replace(operation.Definition, []byte("To link explicitly,"), []byte("For an OIDC provider only, to link explicitly,"), 1)
+	} else {
+		operation.Definition = bytes.Replace(operation.Definition, []byte("Start opted-in static enterprise OIDC sign-in"), []byte(summary), 1)
+	}
+	if mixed {
+		operation.Definition = bytes.Replace(operation.Definition, []byte(originalRetry),
+			[]byte("The domain is required when providerID selects OAuth2. "+originalRetry), 1)
+	} else {
+		const required = `"required":["flowID","commandID","providerID","callback","errorCallback"]`
+		if bytes.Count(operation.Definition, []byte(required)) != 1 {
+			return &identityhttp.WireOperation{}
+		}
+		operation.Definition = bytes.Replace(operation.Definition, []byte(required),
+			[]byte(`"required":["flowID","commandID","providerID","callback","errorCallback","domain"]`), 1)
+	}
+	operation.Definition = bytes.Replace(operation.Definition, []byte(oidc), []byte(protocol), 1)
+	return operation
 }
 
 func memberSigninStartWire(cookieName string) *identityhttp.WireOperation {

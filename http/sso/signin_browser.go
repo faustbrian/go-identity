@@ -84,11 +84,15 @@ func newSigninBrowserPolicy(c SigninBrowserConfig) (signinBrowserPolicy, error) 
 }
 
 func (p signinBrowserPolicy) resolve(r *http.Request, requireOrigin bool) (identityhttp.NetworkFacts, SigninBrowser, session.BrowserDevice, error) {
-	facts, browser, device, err := p.resolveDevice(r, requireOrigin)
+	return p.resolveWithCookieRequest(r, r, requireOrigin)
+}
+
+func (p signinBrowserPolicy) resolveWithCookieRequest(r, cookieRequest *http.Request, requireOrigin bool) (identityhttp.NetworkFacts, SigninBrowser, session.BrowserDevice, error) {
+	facts, browser, device, err := p.resolveDeviceWithCookieRequest(r, cookieRequest, requireOrigin)
 	if err != nil {
 		return facts, browser, device, err
 	}
-	browser.FlowCookie, err = p.sessionCookie(r, p.flowName, identityhttp.HeaderRequired)
+	browser.FlowCookie, err = p.sessionCookie(cookieRequest, p.flowName, identityhttp.HeaderRequired)
 	return facts, browser, device, err
 }
 
@@ -106,6 +110,10 @@ func (p signinBrowserPolicy) sessionCookie(r *http.Request, name string, require
 }
 
 func (p signinBrowserPolicy) resolveDevice(r *http.Request, requireOrigin bool) (identityhttp.NetworkFacts, SigninBrowser, session.BrowserDevice, error) {
+	return p.resolveDeviceWithCookieRequest(r, r, requireOrigin)
+}
+
+func (p signinBrowserPolicy) resolveDeviceWithCookieRequest(r, cookieRequest *http.Request, requireOrigin bool) (identityhttp.NetworkFacts, SigninBrowser, session.BrowserDevice, error) {
 	facts, err := p.network.Resolve(r)
 	if err != nil || facts.Realm() != identityhttp.RealmTenant || facts.TenantID() != p.config.TenantID || facts.Scheme() != "https" || facts.Origin() != string(p.config.Origin) {
 		return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
@@ -115,7 +123,7 @@ func (p signinBrowserPolicy) resolveDevice(r *http.Request, requireOrigin bool) 
 			return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
 		}
 	}
-	device, _, err := p.decoder.CookieBearer(r, p.deviceName, identityhttp.HeaderRequired)
+	device, _, err := p.decoder.CookieBearer(cookieRequest, p.deviceName, identityhttp.HeaderRequired)
 	if err != nil {
 		return facts, SigninBrowser{}, session.BrowserDevice{}, identity.ForbiddenError{}
 	}
