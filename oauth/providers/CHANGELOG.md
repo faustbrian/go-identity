@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add `NewGitHub` for ordinary GitHub.com OAuth-app existing-account browser
+  linking/signin, closed code/query/S256/POST/scopes and bearer stable REST ID.
+  Support absent token expiry honestly; native consumers apply the forward
+  optional-expiry migration before enabling this profile. No email mapping,
+  signup, native-token, refresh, enterprise or remote logout is added.
+
 - Add `NewGitLab` for the catalog OAuth2/read_user existing-account browser
   profile, POST client authentication and bearer HTTPS stable integer user ID.
   Require a distinct registered callback route; no OIDC approximation, signup,

@@ -1,7 +1,7 @@
 # Built-in OAuth profiles and direct operations
 
-This experimental module supplies explicitly configured Google, Keycloak and
-GitLab code/query/S256 providers through the existing OAuth owners and
+This experimental module supplies explicitly configured Google, Keycloak,
+GitLab and GitHub code/query/S256 providers through the existing OAuth owners and
 `identity.oauth.provider-apple-client-secret-sign`, which signs an Apple
 client-secret JWT using an explicitly configured, preprovisioned encrypted
 P-256 key. It does **not** implement Apple authentication, hybrid/form-post
@@ -78,6 +78,19 @@ and parse it with `oauth.ParseOAuth2QueryCallback`, passing the actual trusted
 transport route. Existing strict OIDC HTTP/Reference routes do not select this
 variant automatically. See [the profile](docs/gitlab.md) and
 [official contracts and independent test oracle](docs/gitlab-sources.md).
+
+## GitHub existing-account browser flow
+
+`NewGitHub(GitHubConfig{Version: 1, ClientID: clientID, ClientSecret: secret,
+RedirectURI: "https://application.example/github/callback"})` fixes GitHub.com
+authorization/token endpoints, POST credentials, S256, `read:user`, `user:email`
+and bearer `https://api.github.com/user` integer ID. Its explicit closed token
+policy supports ordinary non-expiring responses without inventing a TTL; fresh
+UserInfo evidence remains bounded to twenty seconds. Native callers apply the
+forward optional-expiry vault migration before enabling the profile and use the
+policy-bound callback parser at a distinct registered route. See
+[adoption, rollout and unsupported operations](docs/github.md) and
+[official source pins and oracle boundary](docs/github-sources.md).
 
 ## Provision and use the Apple signer
 
