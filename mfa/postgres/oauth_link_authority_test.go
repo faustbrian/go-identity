@@ -27,6 +27,20 @@ func TestOAuthLinkFactorAuthorityRequiresOriginalInvocation(t *testing.T) {
 	}
 }
 
+func TestOAuthUnlinkFactorAuthorityRequiresOriginalInvocation(t *testing.T) {
+	for _, ctx := range []context.Context{nil, context.Background()} {
+		if state, err := ReadOAuthUnlinkFactors(ctx, nil, "tenant", "user", time.Second); err == nil || state.Version() != 0 {
+			t.Fatal("missing primary inferred empty factor authority")
+		}
+		if state, err := RequireOAuthUnlinkPreparationFactors(ctx, kernel.AccountUnlinkPreparationWork{}, nil); err == nil || state.Version() != 0 {
+			t.Fatal("unowned preparation admitted factor authority")
+		}
+		if state, err := RequireOAuthUnlinkFactors(ctx, kernel.AccountUnlinkWork{}, nil); err == nil || state.Version() != 0 {
+			t.Fatal("unowned execution admitted factor authority")
+		}
+	}
+}
+
 func oauthLinkStartFactorFixture(t *testing.T) (identity.FeatureCommandSpec, kernel.FeatureRegistration, kernel.LifecyclePlan) {
 	t.Helper()
 	id, err := identity.NewCommandID()

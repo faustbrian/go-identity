@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Require the original known-empty factor generation during fresh-password
+  account unlink preparation and protected execution.
+
 - Fence known-empty MFA for the exact native existing-account OAuth signin
   callback and its original provider-account selection, including final commit
   checks. Missing or enrolled state cannot become single-factor signin authority.

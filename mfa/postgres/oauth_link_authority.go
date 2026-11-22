@@ -68,7 +68,7 @@ func RequireOAuthLinkPreparationFactors(ctx context.Context, w kernel.AccountLin
 	if err != nil || oauthLinkFactorScope(s.Binding) != nil {
 		return mfa.FactorAuthority{}, invalidAuthority()
 	}
-	return requireOAuthLinkFactorQuery(ctx, w.Query, s.Binding, expectedVersion)
+	return requireKnownEmptyFactorQuery(ctx, w.Query, s.Binding, expectedVersion)
 }
 
 // RequireOAuthLinkFactors fences the same original known-empty generation in
@@ -88,7 +88,7 @@ func RequireOAuthLinkFactors(ctx context.Context, w kernel.AccountLinkWork, owne
 	if err != nil || oauthLinkFactorScope(s.Binding) != nil {
 		return mfa.FactorAuthority{}, invalidAuthority()
 	}
-	return requireOAuthLinkFactorQuery(ctx, w.Query, s.Binding, expectedVersion)
+	return requireKnownEmptyFactorQuery(ctx, w.Query, s.Binding, expectedVersion)
 }
 
 func oauthLinkFactorScope(b identity.CommandBinding) error {
@@ -102,7 +102,7 @@ func oauthLinkFactorScope(b identity.CommandBinding) error {
 	return nil
 }
 
-func requireOAuthLinkFactorQuery(ctx context.Context, query factorAuthorityQuery, b identity.CommandBinding, expectedVersion uint64) (mfa.FactorAuthority, error) {
+func requireKnownEmptyFactorQuery(ctx context.Context, query factorAuthorityQuery, b identity.CommandBinding, expectedVersion uint64) (mfa.FactorAuthority, error) {
 	state, err := readFactorAuthorityQuery(ctx, query, b, b.UserID, expectedVersion)
 	if err != nil {
 		return mfa.FactorAuthority{}, err
