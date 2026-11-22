@@ -102,9 +102,6 @@ type RequestKeyAdmission struct {
 // and zero admission, never execution permission. Retry the same key/intent.
 // No provider callbacks, goroutines or command journal/domain writes occur.
 func (c *Coordinator) ResolveRequestKey(ctx context.Context, scope RequestKeyScope, key identity.IdempotencyKey, intent identity.RequestIntent, caller authorization.DecisionContext) (RequestKeyAdmission, error) {
-	if c != nil && c.canonicalRequests {
-		return RequestKeyAdmission{}, invalidRequestKey()
-	}
 	return c.resolveRequestKey(ctx, scope, key, intent, caller, nil)
 }
 
@@ -116,7 +113,7 @@ func (c *Coordinator) resolveRequestKey(ctx context.Context, scope RequestKeySco
 	var lookup [32]byte
 	var err error
 	canonical := preparation != nil && preparation.canonicalLookup != nil
-	if c.canonicalRequests != canonical || canonical && scope.Method != "DELETE" {
+	if !c.acceptsRequestKeyMethod(scope.Method, canonical) {
 		return RequestKeyAdmission{}, invalidRequestKey()
 	}
 	if canonical {

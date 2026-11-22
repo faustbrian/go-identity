@@ -1562,11 +1562,19 @@ an optional `*identity.IdempotencyKey` attaches to that same command in the
 acknowledgement transaction. A key bound to another selector conflicts without
 retaining an orphan candidate. `ReadPreparedCanonicalRequest` never allocates
 or attaches a key. Neither API proves an outcome: recover through the existing
-command journal. Canonical mode supports DELETE only and retains that method
-through original-input queries/recovery; legacy POST behavior is unchanged.
-Namespace-mode identity rejects mixing ordinary key allocation and canonical
-admission in the same namespace. Keep the same lookup key and retain historical
-fingerprint keys for original retries.
+command journal. The DELETE constructor retains that exact method through
+original-input queries and recovery.
+
+For a protocol-defined repeatable POST without a client key, explicitly select
+`NewCoordinatorWithCanonicalPostRequestKeys`. Use the existing request-key and
+preparation migrations; this mode rejects a non-nil retry key and does not use
+the DELETE alias schema. For a versioned SSO provider command, the stable
+selector identifies the organization, provider and expected predecessor version;
+the complete `RequestIntent` additionally binds the reason, disposition and
+configuration, so changing those cannot select another command. Legacy keyed
+POST and canonical DELETE keep their original behavior and namespace identities.
+Canonical POST requires a separate trusted namespace. Keep its lookup key
+stable and retain historical fingerprint keys for original retries.
 
 Compose `RequestKeyMigrationSource{Base, Version}` after kernel history and use
 `NewCoordinatorWithRequestKeys` with a separate `RequestKeyConfig`. Existing

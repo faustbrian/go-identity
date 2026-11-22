@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicitly selected canonical POST correlation without a client key or
+  alias. Versioned repeat operations retain one original command and prepared
+  input; prepared-input recovery and namespace isolation continue to use the
+  existing coordinator. No new migration is required.
+
 - Report an original stored OAuth refresh as in progress when its protected
   declaration exists but the provider outcome has not attached. This read-only
   observation does not grant generic recovery or another provider attempt.

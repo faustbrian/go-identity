@@ -18,7 +18,7 @@ import (
 // immutable request-key mapping. It does not need a password, initiating key,
 // generated output or committed command. The exact registered input owner and
 // current CommandQueryPolicy must admit the request. Namespace/key/feature and
-// original actor/tenant/route and configured POST or canonical DELETE method
+// original actor/tenant/route and configured POST or canonical request method
 // must match; retained fingerprint keys remain required. Existing claims must
 // match full query scope and journal. Retired, foreign or corrupt claims fail
 // closed. Pending preparation
@@ -44,10 +44,7 @@ func (c *Coordinator) QueryRequestPreparation(ctx context.Context, q identity.Re
 
 func (c *Coordinator) queryRequestPreparation(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, feature FeatureRegistration, owner RequestKeyPreparationContributor, allowExpiry bool) (RequestKeyPreparationBinding, []byte, error) {
 	zero := RequestKeyPreparationBinding{}
-	scope := RequestKeyScope{TenantID: q.TenantID, ActorID: q.ActorID, ActorKind: q.ActorKind, Method: "POST", RouteID: q.OperationID}
-	if c != nil && c.canonicalRequests {
-		scope.Method = "DELETE"
-	}
+	scope := c.requestPreparationScope(q)
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || c.commandRead == nil || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || c.queryPolicy == nil || !validCommandQueryPolicy(*c.queryPolicy) || c.maximumDuration <= 0 || c.maximumDuration > time.Minute || !validRequestKeyScope(scope) || c.validateRequestPreparation(scope, feature, owner) != nil {
 		return zero, nil, invalidPreparation()
 	}
@@ -88,10 +85,7 @@ func (c *Coordinator) readRequestPreparation(ctx context.Context, q identity.Rec
 
 func (c *Coordinator) readRequestPreparationMode(ctx context.Context, q identity.RecoveryQuery, feature FeatureRegistration, observed commandObservation, missing, allowExpiry bool) (RequestKeyPreparationBinding, []byte, error) {
 	zero := RequestKeyPreparationBinding{}
-	scope := RequestKeyScope{TenantID: q.TenantID, ActorID: q.ActorID, ActorKind: q.ActorKind, Method: "POST", RouteID: q.OperationID}
-	if c != nil && c.canonicalRequests {
-		scope.Method = "DELETE"
-	}
+	scope := c.requestPreparationScope(q)
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.CommandID))
 	var safe, digest, identityDigest, namespace, input []byte
 	var keyVersion int64
@@ -141,6 +135,14 @@ AND (($7::boolean AND `+missingClaimSQL+`) OR (NOT $7 AND c.command_id IS NOT NU
 	}
 	binding := RequestKeyPreparationBinding{Namespace: c.requestKeys.Namespace, Scope: scope, Admission: RequestKeyAdmission{CommandID: q.CommandID, FingerprintKeyVersion: uint32(keyVersion)}, Feature: feature, PolicyVersion: policy, IntentDigest: [32]byte(digest)}
 	return binding, bytes.Clone(input), nil
+}
+
+func (c *Coordinator) requestPreparationScope(q identity.RecoveryQuery) RequestKeyScope {
+	method := "POST"
+	if c != nil && c.canonicalRequestMethod != "" {
+		method = c.canonicalRequestMethod
+	}
+	return RequestKeyScope{TenantID: q.TenantID, ActorID: q.ActorID, ActorKind: q.ActorKind, Method: method, RouteID: q.OperationID}
 }
 
 func requestPreparationClaimScope(q identity.RecoveryQuery, feature FeatureRegistration, observed commandObservation, profile int16) error {

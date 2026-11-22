@@ -20,25 +20,50 @@ import (
 // ownership. Install CanonicalRequestMigrationSource before activation.
 // Construction performs no I/O or callback; the pool remains borrowed.
 func NewCoordinatorWithCanonicalRequestKeys(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig) (*Coordinator, error) {
+	return newCoordinatorWithCanonicalRequestMethod(pool, registry, config, requestKeys, "DELETE")
+}
+
+// NewCoordinatorWithCanonicalPostRequestKeys selects protocol-canonical POST
+// correlation with no client retry key or alias. Install the request-key and
+// preparation migrations; the DELETE-only alias migration is not needed.
+// Use a distinct trusted namespace. It cannot be shared with legacy client
+// keys or canonical DELETE. The registered feature provides the stable
+// original selector and independently authorizes the requested command.
+// Construction performs no I/O or callback; the pool remains borrowed.
+func NewCoordinatorWithCanonicalPostRequestKeys(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig) (*Coordinator, error) {
+	return newCoordinatorWithCanonicalRequestMethod(pool, registry, config, requestKeys, "POST")
+}
+
+func newCoordinatorWithCanonicalRequestMethod(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig, method string) (*Coordinator, error) {
 	c, err := NewCoordinatorWithRequestKeys(pool, registry, config, requestKeys)
 	if err != nil {
 		return nil, err
 	}
-	c.canonicalRequests = true
+	c.canonicalRequestMethod = method
 	return c, nil
 }
 
 func (c *Coordinator) requestNamespaceIdentity() [32]byte {
 	namespace := c.requestKeys.Namespace
-	if c.canonicalRequests {
+	switch c.canonicalRequestMethod {
+	case "DELETE":
 		namespace = "canonical-delete-v1\x00" + namespace
+	case "POST":
+		namespace = "canonical-post-v1\x00" + namespace
 	}
 	return requestNamespaceIdentity(namespace, c.requestKeys.lookupKey())
 }
 
+func (c *Coordinator) acceptsRequestKeyMethod(method string, canonical bool) bool {
+	if c.canonicalRequestMethod == "" {
+		return !canonical
+	}
+	return canonical && c.canonicalRequestMethod == method
+}
+
 // ResolvePreparedCanonicalRequest retains one original random command and
-// authenticated native input for the stable protocol selector, with or without
-// a caller retry key. A supplied optional key is an immutable alias to that same
+// authenticated native input for the stable protocol selector. DELETE supports
+// an optional retry key; POST requires nil. A supplied DELETE key is an alias to the
 // original mapping, attached in its acknowledgement transaction; it never
 // selects another command. An alias already bound elsewhere conflicts and rolls
 // back any candidate mapping. Changed full intent conflicts, including after
@@ -91,7 +116,10 @@ func (c *Coordinator) ReadPreparedCanonicalRequest(ctx context.Context, scope Re
 }
 
 func (c *Coordinator) canonicalRequestLookups(scope RequestKeyScope, selector CanonicalRequestKey, optional *identity.IdempotencyKey) ([32]byte, *[32]byte, error) {
-	if c == nil || !c.canonicalRequests || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || !validRequestKeyScope(scope) || scope.Method != "DELETE" {
+	if c == nil || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || !validRequestKeyScope(scope) || !c.acceptsRequestKeyMethod(scope.Method, true) {
+		return [32]byte{}, nil, invalidRequestKey()
+	}
+	if optional != nil && scope.Method != "DELETE" {
 		return [32]byte{}, nil, invalidRequestKey()
 	}
 	key := c.requestKeys.lookupKey()

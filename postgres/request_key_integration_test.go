@@ -432,6 +432,9 @@ func TestRequestKeyIntegration(t *testing.T) {
 		if _, err := upgrade.Up(ctx); err != nil {
 			t.Fatal("upgrade replay", err)
 		}
+		t.Run("canonical POST without alias schema", func(t *testing.T) {
+			testCanonicalPostRequests(t, ctx, pool, conf, policy, requestKeys)
+		})
 		// Kernel tests only opaque byte retention; the OTP owner must separately
 		// prove authenticated encryption and typed original-input restoration.
 		_, command, plan := featurePlanFixture(t)
