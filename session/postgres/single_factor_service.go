@@ -96,10 +96,10 @@ func NewSingleFactorSessionService(pool *database.Pool, c SingleFactorSessionSer
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, c, nil, nil, nil, nil, nil, methods, profile)
+	return newSelectedNativeSessionService(pool, c, nil, nil, nil, nil, nil, nil, methods, profile)
 }
 
-func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, passkey *PasskeySessionAdmission, mfaPasskey *MFAPasskeySessionAdmission, organization *OrganizationPasswordSessionAdmission, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
+func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, passkey *PasskeySessionAdmission, mfaPasskey *MFAPasskeySessionAdmission, organization *OrganizationPasswordSessionAdmission, ssoOIDC *SSOOIDCSessionAdmission, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
 	if c.Repository.MaximumDuration > c.Validation.MaximumDuration {
 		return nil, session.ErrInvalidInput
 	}
@@ -129,6 +129,9 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 		audience = mfaPasskey.Profile.Audience
 	}
 	if p := organization; p != nil {
+		audience = p.Profile.Audience
+	}
+	if p := ssoOIDC; p != nil {
 		audience = p.Profile.Audience
 	}
 	if audience != c.Validation.Audience {
@@ -194,6 +197,13 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	if p := organization; p != nil {
 		copied := *p
 		r.organizationPasswordReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: copied.Profile, organizationPassword: &copied}
+	}
+	if p := ssoOIDC; p != nil {
+		copied := *p
+		r.ssoOIDCReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: copied.Profile, ssoOIDC: &copied}
+		return session.NewSSOOIDCCookieProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))
+	}
+	if organization != nil {
 		return session.NewOrganizationBearerProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))
 	}
 	return session.NewSelectedProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))

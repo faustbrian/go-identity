@@ -23,7 +23,14 @@ writes. All errors must abort the whole Work. `Recover` votes on retained
 issuance only and cannot recover a bearer or imply current access.
 
 This effect does not exchange authorization codes, choose roles, own HTTP
-routes, provide bearer disclosure, or enable session reads or logout by itself.
+routes or disclose credentials. For subsequent authenticated reads and local
+logout, supply the same `SSOOIDCSessionAdmission` to
+`SelectedSessionAdmissionConfig.SSOOIDC` and `RevokeOneExecutorConfig.SSOOIDC`.
+Set its method to `sso-oidc`, credential kind to provider, and owner to `sso`.
+Use `NewCookieRevokeOneExecutor` with the issued synchronizer's keys. The reader
+and strict logout require the exact linked account, current member, user policy
+and original known-empty factor generation. They never fall back to another
+authentication method. This is local cookie logout, not provider logout.
 
 ## Combined password and OAuth admission
 

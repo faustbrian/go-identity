@@ -60,6 +60,7 @@ type Repository struct {
 	revokePasskey              *passkeySessionSelection
 	revokeMFAPasskey           *mfaPasskeySessionSelection
 	revokeOrganizationPassword *OrganizationPasswordSessionAdmission
+	revokeSSOOIDC              *SSOOIDCSessionAdmission
 }
 
 // NewRepository validates configuration without IO. The database must already

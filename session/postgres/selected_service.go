@@ -27,6 +27,9 @@ type SelectedSessionAdmissionConfig struct {
 	// OrganizationPassword retains current organization/member authority for
 	// selected single-factor password sessions. Nil continues to reject them.
 	OrganizationPassword *OrganizationPasswordSessionAdmission
+	// SSOOIDC retains exact enterprise provider association, organization
+	// membership and known-empty MFA for issued browser sessions.
+	SSOOIDC *SSOOIDCSessionAdmission
 }
 
 // SelectedSessionServiceConfig retains the native repository and validation
@@ -39,6 +42,9 @@ type SelectedSessionServiceConfig struct {
 }
 
 func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.AuthenticationKind, string, error) {
+	if c.SSOOIDC != nil {
+		return selectedSSOOIDCAdmission(c)
+	}
 	if p := c.OrganizationPassword; p != nil {
 		if !p.valid() || c.SingleFactor.Verified != nil && *c.SingleFactor.Verified != p.Profile {
 			return nil, "", session.ErrInvalidInput
@@ -226,7 +232,7 @@ func NewSelectedSessionService(pool *database.Pool, c SelectedSessionServiceConf
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, c.Admission.MFAPasskey, c.Admission.OrganizationPassword, methods, profile)
+	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, c.Admission.MFAPasskey, c.Admission.OrganizationPassword, c.Admission.SSOOIDC, methods, profile)
 }
 
 // Format redacts deployment, profile and key configuration.

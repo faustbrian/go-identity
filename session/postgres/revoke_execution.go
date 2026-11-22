@@ -47,6 +47,9 @@ type RevokeOneExecutorConfig struct {
 	// fence as Sessions for single-factor password bearer callers/targets.
 	// Nil retains rejection of selected sessions; cookie/MFA profiles deny.
 	OrganizationPassword *OrganizationPasswordSessionAdmission
+	// SSOOIDC selects exact current enterprise cookie sessions. Use only
+	// through NewCookieRevokeOneExecutor, with the same reader selection.
+	SSOOIDC *SSOOIDCSessionAdmission
 }
 
 // RevokeOneExecutor owns kernel/native/audit/outbox composition. It accepts no
@@ -136,6 +139,14 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 		}
 		copied := *p
 		owned.native.revokeOrganizationPassword = &copied
+	}
+	if p := c.SSOOIDC; p != nil {
+		base := c.Execution.Profile
+		if !p.valid() || p.Profile.GlobalAuthorityID != base.GlobalAuthorityID || p.Profile.PolicyNamespace != base.PolicyNamespace || p.Profile.Audience != base.Audience {
+			return nil, session.ErrInvalidInput
+		}
+		copied := *p
+		owned.native.revokeSSOOIDC = &copied
 	}
 	return &RevokeOneExecutor{owned, c.Sessions}, nil
 }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Opt in to enterprise OIDC session reads and native strict cookie logout.
+  Require the original linked credential, known-empty factor generation,
+  current user policy and selected organization membership without falling
+  back to password or social OAuth.
+
 - Stage native enterprise OIDC session, family, original browser consumption
   and retained issuance together with the original callback Work. Current
   linked-account, factor, policy and organization membership checks must pass

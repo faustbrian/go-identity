@@ -120,6 +120,8 @@ type primarySessionReader struct {
 	mfaPasskeyReader           *primarySessionReader
 	organizationPassword       *OrganizationPasswordSessionAdmission
 	organizationPasswordReader *primarySessionReader
+	ssoOIDC                    *SSOOIDCSessionAdmission
+	ssoOIDCReader              *primarySessionReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -167,6 +169,12 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	spec, err := stored.Session.Bindings()
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnavailable
+	}
+	if spec.Authentication.Kind == session.AuthenticationVerified && spec.Authentication.Proof.Method == "sso-oidc" {
+		if r.ssoOIDCReader == nil {
+			return session.SessionObservation{}, session.ErrUnauthenticated
+		}
+		return r.ssoOIDCReader.observeCredential(bounded, stored, start)
 	}
 	if r.organizationPasswordReader != nil && spec.Authentication.Kind == session.AuthenticationVerified && spec.Authentication.Proof.Method == "password" && stored.Session.MFAAuthentication() == (session.MFAAuthentication{}) {
 		return r.organizationPasswordReader.observeCredential(bounded, stored, start)
@@ -249,6 +257,9 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	if r.organizationPassword != nil {
 		directory, credential, policy, err = OriginalOrganizationPasswordSessionAdmission(r.organizationPassword.Profile, stored.Session, binding)
 	}
+	if r.ssoOIDC != nil {
+		directory, credential, policy, err = ssoOIDCCredentialSessionAdmission(*r.ssoOIDC, stored.Session, binding)
+	}
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
@@ -257,6 +268,14 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 			return session.SessionObservation{}, observationError(err)
 		}
 		if err := mfapg.ReadOAuthSessionFactors(bounded, r.native.pool, stored.Session, r.native.maximumDuration); err != nil {
+			return session.SessionObservation{}, observationError(err)
+		}
+	}
+	if r.ssoOIDC != nil {
+		if err := r.domain.CheckLinkedSSOOIDCProviderCredential(bounded, credential); err != nil {
+			return session.SessionObservation{}, observationError(err)
+		}
+		if err := mfapg.ReadSSOOIDCSessionFactors(bounded, r.native.pool, stored.Session, r.native.maximumDuration); err != nil {
 			return session.SessionObservation{}, observationError(err)
 		}
 	}
@@ -287,8 +306,15 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	var mfaPasskeyObserved MFAPasskeySessionAuthorityObservation
 	var organizationObserved OrganizationSessionAuthorityObservation
 	originalVector, _ := spec.Authority.Bindings()
+	var selectedOrganization OrganizationSessionAuthority
 	if r.organizationPassword != nil && originalVector.Organization.Present {
-		organizationObserved, err = r.organizationPassword.Authority.ObserveOrganizationSession(bounded, stored.Session)
+		selectedOrganization = r.organizationPassword.Authority
+	}
+	if r.ssoOIDC != nil {
+		selectedOrganization = r.ssoOIDC.Authority
+	}
+	if selectedOrganization != nil {
+		organizationObserved, err = selectedOrganization.ObserveOrganizationSession(bounded, stored.Session)
 		if err != nil {
 			return session.SessionObservation{}, observationError(err)
 		}
@@ -357,7 +383,7 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 		return session.SessionObservation{}, session.ErrUnavailable
 	}
 	until := start.Add(20 * time.Second)
-	if r.organizationPassword != nil && originalVector.Organization.Present {
+	if selectedOrganization != nil {
 		start, until, err = organizationSessionObservationBounds(stored.Session, organizationObserved, start, now)
 		if err != nil {
 			return session.SessionObservation{}, err

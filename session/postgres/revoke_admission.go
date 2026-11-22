@@ -21,6 +21,7 @@ type revokeRecordAuthority struct {
 	mfaPasskey   bool
 	organization bool
 	oauth        bool
+	ssoOIDC      bool
 }
 
 func copySingleFactorAdmission(c SingleFactorSessionAdmissionConfig) SingleFactorSessionAdmissionConfig {
@@ -54,6 +55,16 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 	}
 	if s.Authentication.Kind == session.AuthenticationVerified {
 		vector, _ := s.Authority.Bindings()
+		if s.Authentication.Proof.Method == "sso-oidc" {
+			if r.revokeSSOOIDC == nil || r.cookieRevoke == nil {
+				return deny()
+			}
+			directory, credential, policy, err := ssoOIDCCredentialSessionAdmission(*r.revokeSSOOIDC, record, b)
+			if err != nil {
+				return deny()
+			}
+			return revokeRecordAuthority{directory: directory, credential: &credential, policy: policy, organization: true, ssoOIDC: true}, nil
+		}
 		if vector.Organization.Present {
 			if r.revokeOrganizationPassword == nil {
 				return deny()
@@ -191,6 +202,12 @@ func (r *Repository) requireRevokeOrganization(ctx context.Context, w kernel.Wor
 	if !v.Organization.Present {
 		return nil
 	}
+	if s.Authentication.Kind == session.AuthenticationVerified && s.Authentication.Proof.Method == "sso-oidc" {
+		if r.revokeSSOOIDC == nil || r.cookieRevoke == nil {
+			return identity.ForbiddenError{}
+		}
+		return r.revokeSSOOIDC.Authority.RequireOrganizationSession(ctx, w, owner, original)
+	}
 	if r.revokeOrganizationPassword == nil {
 		return identity.ForbiddenError{}
 	}
@@ -205,7 +222,14 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.directory); err != nil {
 		return err
 	}
-	if a.credential != nil {
+	if a.ssoOIDC {
+		if a.credential == nil {
+			return identity.ForbiddenError{}
+		}
+		if err := w.RequireLinkedSSOOIDCProviderCredential(ctx, owner, *a.credential); err != nil {
+			return err
+		}
+	} else if a.credential != nil {
 		if _, err := w.RequireActiveCredential(ctx, owner, *a.credential); err != nil {
 			return err
 		}
@@ -218,6 +242,9 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	}
 	if err := w.RequireActiveUserAuthorization(ctx, owner, a.policy); err != nil {
 		return err
+	}
+	if a.ssoOIDC {
+		return mfapg.RequireSSOOIDCSessionFactors(ctx, w, owner, record)
 	}
 	if a.oauth {
 		if a.credential == nil {
