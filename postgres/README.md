@@ -103,6 +103,16 @@ the trigger function, and erases temporary ciphertext only with a definitive
 receipt. Pending/unknown and previously stored OIDC history are unchanged.
 Rollback disables the new writer and leaves the additive guard installed.
 
+The exact registered OAuth callback owner can implement
+`SSOOAuth2PreparationRefusalContributor`. Its restore method authenticates
+only the original request and fresh generation's sealed refusal, outside SQL
+and without another provider attempt. The same preparation journal transaction
+commits its denial audit, native cleanup, original one-use reservation release
+and terminal receipt together. Successful output continues through ordinary
+attachment and Apply; an uncertain exchange, invalid output or failed cleanup
+does not establish refusal. OIDC refusal methods cannot settle OAuth callbacks,
+and OAuth refusal methods cannot settle OIDC or social callbacks.
+
 ### OIDC refusal and account policy
 
 The exact native callback owner can implement

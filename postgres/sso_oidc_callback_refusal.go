@@ -20,20 +20,62 @@ type SSOOIDCPreparationRefusalContributor interface {
 	CleanupSSOOIDCPreparationRefusal(context.Context, Work) error
 }
 
-func (c *Coordinator) finishSSOOIDCPreparationRefusal(ctx context.Context, original identity.Command, q claimRequest, plan *admittedKernelPlan, journal journalReservation, owner [16]byte, participant SSOOIDCPreparationRefusalContributor, wire []byte) (identity.CommandResult, bool, error) {
+// SSOOAuth2PreparationRefusalContributor is limited to the exact registered
+// enterprise OAuth 2.0 callback owner. Restore authenticates the original
+// command and fresh generation's encrypted output outside Work and returns
+// false only for non-refusal output. It must not exchange, perform I/O or renew
+// authority. Cleanup borrows fenced Work with FeatureScope to erase the original
+// RP custody, never to apply sign-in, consume state, issue credentials or close
+// Work. Cleanup, denial audit, original one-use reservation release and terminal
+// receipt commit together; errors preserve an unknown outcome without retrying
+// external work. Both methods obey cancellation and use invocation-local state.
+type SSOOAuth2PreparationRefusalContributor interface {
+	FeatureAdmissionPreparationContributor
+	RestoreSSOOAuth2PreparationRefusal(context.Context, identity.Command, uint64, []byte) (bool, error)
+	CleanupSSOOAuth2PreparationRefusal(context.Context, Work) error
+}
+
+func (c *Coordinator) finishSSOPreparationRefusal(ctx context.Context, original identity.Command, q claimRequest, plan *admittedKernelPlan, journal journalReservation, owner [16]byte, participant FeaturePreparationContributor, wire []byte) (identity.CommandResult, bool, error) {
 	binding := plan.binding
 	unknown := func() (identity.CommandResult, bool, error) {
 		return featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), true, identity.UnknownCommitError{CommandID: binding.CommandID}
 	}
-	refused, err := participant.RestoreSSOOIDCPreparationRefusal(ctx, original, journal.generation, bytes.Clone(wire))
+	var restore func(context.Context, identity.Command, uint64, []byte) (bool, error)
+	var cleanup func(context.Context, Work) error
+	var descriptor ContributorDescriptor
+	switch {
+	case ssoOIDCCallbackClaim(q):
+		refusalOwner, ok := participant.(SSOOIDCPreparationRefusalContributor)
+		if !ok {
+			return identity.CommandResult{}, false, nil
+		}
+		restore = refusalOwner.RestoreSSOOIDCPreparationRefusal
+		cleanup = refusalOwner.CleanupSSOOIDCPreparationRefusal
+		descriptor = ssoOIDCSigninDescriptor()
+	case ssoOAuth2CallbackClaim(q):
+		refusalOwner, ok := participant.(SSOOAuth2PreparationRefusalContributor)
+		if !ok {
+			return identity.CommandResult{}, false, nil
+		}
+		restore = refusalOwner.RestoreSSOOAuth2PreparationRefusal
+		cleanup = refusalOwner.CleanupSSOOAuth2PreparationRefusal
+		descriptor = ssoOAuth2SigninDescriptor()
+	default:
+		return identity.CommandResult{}, false, nil
+	}
+	if plan.feature == nil || plan.feature.Contributor != descriptor || plan.feature.Operation != *q.feature || !providerSigninPreparation(plan.snapshot()) {
+		return unknown()
+	}
+	entry, err := c.registry.selectFeatureOperation(*plan.feature)
+	if err != nil || !sameParticipant(entry.contributor, participant) {
+		return unknown()
+	}
+	refused, err := restore(ctx, original, journal.generation, bytes.Clone(wire))
 	if err != nil || ctx.Err() != nil {
 		return unknown()
 	}
 	if !refused {
 		return identity.CommandResult{}, false, nil
-	}
-	if plan.feature == nil || plan.feature.Contributor != ssoOIDCSigninDescriptor() || plan.capability == nil || !ssoOIDCCallbackClaim(q) {
-		return unknown()
 	}
 
 	tx, err := c.pool.Raw().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
@@ -68,11 +110,11 @@ func (c *Coordinator) finishSSOOIDCPreparationRefusal(ctx context.Context, origi
 	if err := configureKernelWork(ctx, w); err != nil {
 		return unknown()
 	}
-	if err := c.auditSSOOIDCRefusal(ctx, w, plan); err != nil {
+	if err := c.auditSSOPreparationRefusal(ctx, w, plan); err != nil {
 		return unknown()
 	}
 	w.state.featureInvocation = participant
-	err = participant.CleanupSSOOIDCPreparationRefusal(ctx, w)
+	err = cleanup(ctx, w)
 	w.state.featureInvocation = nil
 	if err != nil {
 		return unknown()
@@ -95,7 +137,7 @@ func (c *Coordinator) finishSSOOIDCPreparationRefusal(ctx context.Context, origi
 	return result, true, identity.ForbiddenError{}
 }
 
-func (c *Coordinator) auditSSOOIDCRefusal(ctx context.Context, w Work, plan *admittedKernelPlan) error {
+func (c *Coordinator) auditSSOPreparationRefusal(ctx context.Context, w Work, plan *admittedKernelPlan) error {
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Settle authenticated enterprise OAuth 2.0 callback refusals through the
+  existing preparation transaction. Denial audit, native cleanup, original
+  one-use reservation release and receipt remain atomic; uncertain exchanges
+  cannot become refusals or authorize another provider attempt.
+
 - Admit the separate native enterprise OAuth 2.0 callback to the existing
   one-use coordinator and linked-account fences. Erase temporary preparation
   only with a definitive receipt, keeping OIDC and social custody independent.

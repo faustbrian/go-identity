@@ -269,8 +269,8 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		}
 		wire = bytes.Clone(wire)
 		r.outputGeneration = r.journal.generation
-		if refusalOwner, ok := phase.(SSOOIDCPreparationRefusalContributor); ok && gated && ssoOIDCCallbackClaim(q) {
-			if result, handled, err := c.finishSSOOIDCPreparationRefusal(ctx, original, q, admitted, r.journal, owner, refusalOwner, wire); handled {
+		if gated && ssoEnterpriseCallbackClaim(q) {
+			if result, handled, err := c.finishSSOPreparationRefusal(ctx, original, q, admitted, r.journal, owner, phase, wire); handled {
 				return result, err
 			}
 		}
