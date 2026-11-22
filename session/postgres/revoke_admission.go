@@ -21,7 +21,19 @@ type revokeRecordAuthority struct {
 	mfaPasskey   bool
 	organization bool
 	oauth        bool
-	ssoOIDC      bool
+	ssoMethod    string
+}
+
+func (r *Repository) ssoRevokeProfile(method string) (IdentifierAdmissionConfig, OrganizationSessionAuthority) {
+	if r.cookieRevoke != nil {
+		if method == "sso-oidc" && r.revokeSSOOIDC != nil {
+			return r.revokeSSOOIDC.Profile, r.revokeSSOOIDC.Authority
+		}
+		if method == "sso-oauth2" && r.revokeSSOOAuth2 != nil {
+			return r.revokeSSOOAuth2.Profile, r.revokeSSOOAuth2.Authority
+		}
+	}
+	return IdentifierAdmissionConfig{}, nil
 }
 
 func copySingleFactorAdmission(c SingleFactorSessionAdmissionConfig) SingleFactorSessionAdmissionConfig {
@@ -55,15 +67,17 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 	}
 	if s.Authentication.Kind == session.AuthenticationVerified {
 		vector, _ := s.Authority.Bindings()
-		if s.Authentication.Proof.Method == "sso-oidc" {
-			if r.revokeSSOOIDC == nil || r.cookieRevoke == nil {
+		method := s.Authentication.Proof.Method
+		if method == "sso-oidc" || method == "sso-oauth2" {
+			profile, organization := r.ssoRevokeProfile(method)
+			if organization == nil {
 				return deny()
 			}
-			directory, credential, policy, err := ssoOIDCCredentialSessionAdmission(*r.revokeSSOOIDC, record, b)
+			directory, credential, policy, err := ssoCredentialSessionAdmission(profile, record, b)
 			if err != nil {
 				return deny()
 			}
-			return revokeRecordAuthority{directory: directory, credential: &credential, policy: policy, organization: true, ssoOIDC: true}, nil
+			return revokeRecordAuthority{directory: directory, credential: &credential, policy: policy, organization: true, ssoMethod: method}, nil
 		}
 		if vector.Organization.Present {
 			if r.revokeOrganizationPassword == nil {
@@ -202,11 +216,13 @@ func (r *Repository) requireRevokeOrganization(ctx context.Context, w kernel.Wor
 	if !v.Organization.Present {
 		return nil
 	}
-	if s.Authentication.Kind == session.AuthenticationVerified && s.Authentication.Proof.Method == "sso-oidc" {
-		if r.revokeSSOOIDC == nil || r.cookieRevoke == nil {
+	method := s.Authentication.Proof.Method
+	if s.Authentication.Kind == session.AuthenticationVerified && (method == "sso-oidc" || method == "sso-oauth2") {
+		_, organization := r.ssoRevokeProfile(method)
+		if organization == nil {
 			return identity.ForbiddenError{}
 		}
-		return r.revokeSSOOIDC.Authority.RequireOrganizationSession(ctx, w, owner, original)
+		return organization.RequireOrganizationSession(ctx, w, owner, original)
 	}
 	if r.revokeOrganizationPassword == nil {
 		return identity.ForbiddenError{}
@@ -222,7 +238,7 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.directory); err != nil {
 		return err
 	}
-	if a.ssoOIDC {
+	if a.ssoMethod != "" {
 		if a.credential == nil {
 			return identity.ForbiddenError{}
 		}
@@ -243,7 +259,10 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	if err := w.RequireActiveUserAuthorization(ctx, owner, a.policy); err != nil {
 		return err
 	}
-	if a.ssoOIDC {
+	if a.ssoMethod == "sso-oauth2" {
+		return mfapg.RequireSSOOAuth2SessionFactors(ctx, w, owner, record)
+	}
+	if a.ssoMethod == "sso-oidc" {
 		return mfapg.RequireSSOOIDCSessionFactors(ctx, w, owner, record)
 	}
 	if a.oauth {

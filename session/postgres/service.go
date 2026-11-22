@@ -120,8 +120,9 @@ type primarySessionReader struct {
 	mfaPasskeyReader           *primarySessionReader
 	organizationPassword       *OrganizationPasswordSessionAdmission
 	organizationPasswordReader *primarySessionReader
-	ssoOIDC                    *SSOOIDCSessionAdmission
+	ssoOrganization            OrganizationSessionAuthority
 	ssoOIDCReader              *primarySessionReader
+	ssoOAuth2Reader            *primarySessionReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -175,6 +176,12 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 			return session.SessionObservation{}, session.ErrUnauthenticated
 		}
 		return r.ssoOIDCReader.observeCredential(bounded, stored, start)
+	}
+	if spec.Authentication.Kind == session.AuthenticationVerified && spec.Authentication.Proof.Method == "sso-oauth2" {
+		if r.ssoOAuth2Reader == nil {
+			return session.SessionObservation{}, session.ErrUnauthenticated
+		}
+		return r.ssoOAuth2Reader.observeCredential(bounded, stored, start)
 	}
 	if r.organizationPasswordReader != nil && spec.Authentication.Kind == session.AuthenticationVerified && spec.Authentication.Proof.Method == "password" && stored.Session.MFAAuthentication() == (session.MFAAuthentication{}) {
 		return r.organizationPasswordReader.observeCredential(bounded, stored, start)
@@ -257,8 +264,8 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	if r.organizationPassword != nil {
 		directory, credential, policy, err = OriginalOrganizationPasswordSessionAdmission(r.organizationPassword.Profile, stored.Session, binding)
 	}
-	if r.ssoOIDC != nil {
-		directory, credential, policy, err = ssoOIDCCredentialSessionAdmission(*r.ssoOIDC, stored.Session, binding)
+	if r.ssoOrganization != nil {
+		directory, credential, policy, err = ssoCredentialSessionAdmission(r.profile, stored.Session, binding)
 	}
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnauthenticated
@@ -271,11 +278,17 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 			return session.SessionObservation{}, observationError(err)
 		}
 	}
-	if r.ssoOIDC != nil {
+	if r.ssoOrganization != nil {
+		// Both selected protocol profiles share the SSO-owned account
+		// association. The stored method and factor fence remain distinct.
 		if err := r.domain.CheckLinkedSSOOIDCProviderCredential(bounded, credential); err != nil {
 			return session.SessionObservation{}, observationError(err)
 		}
-		if err := mfapg.ReadSSOOIDCSessionFactors(bounded, r.native.pool, stored.Session, r.native.maximumDuration); err != nil {
+		readFactors := mfapg.ReadSSOOIDCSessionFactors
+		if r.profile.AuthenticationMethod == "sso-oauth2" {
+			readFactors = mfapg.ReadSSOOAuth2SessionFactors
+		}
+		if err := readFactors(bounded, r.native.pool, stored.Session, r.native.maximumDuration); err != nil {
 			return session.SessionObservation{}, observationError(err)
 		}
 	}
@@ -310,8 +323,8 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 	if r.organizationPassword != nil && originalVector.Organization.Present {
 		selectedOrganization = r.organizationPassword.Authority
 	}
-	if r.ssoOIDC != nil {
-		selectedOrganization = r.ssoOIDC.Authority
+	if r.ssoOrganization != nil {
+		selectedOrganization = r.ssoOrganization
 	}
 	if selectedOrganization != nil {
 		organizationObserved, err = selectedOrganization.ObserveOrganizationSession(bounded, stored.Session)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in reads and strict local cookie logout for enterprise OAuth2
+  sessions. Retain original linked-account, member, factor and policy
+  authority and deny protocol or transport fallback.
+
 - Stage the selected enterprise OAuth2 session, initial family, original
   browser and retained issuance in the exact callback transaction. Preserve
   the current linked member and factor/policy fences, existing OIDC writes,

@@ -232,7 +232,11 @@ func NewSelectedSessionService(pool *database.Pool, c SelectedSessionServiceConf
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, c.Admission.MFAPasskey, c.Admission.OrganizationPassword, c.Admission.SSOOIDC, methods, profile)
+	return newSelectedSessionService(pool, c, nil, methods, profile)
+}
+
+func newSelectedSessionService(pool *database.Pool, c SelectedSessionServiceConfig, oauth2 *SSOOAuth2SessionAdmission, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
+	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, c.Admission.Passkey, c.Admission.MFAPasskey, c.Admission.OrganizationPassword, c.Admission.SSOOIDC, oauth2, methods, profile)
 }
 
 // Format redacts deployment, profile and key configuration.

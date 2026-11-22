@@ -22,6 +22,7 @@ import (
 type CookieRevokeOneExecutor struct {
 	pool   *database.Pool
 	config RevokeOneExecutorConfig
+	oauth2 *SSOOAuth2SessionAdmission
 	keys   []session.CSRFKey
 	base   *RevokeOneExecutor
 }
@@ -42,6 +43,10 @@ var _ session.CSRFRevokeOneExecutor = (*CookieRevokeOneExecutor)(nil)
 // implementations must remain bounded/concurrency-safe; do not mutate inputs
 // during construction. The factory accepts no consumer transaction or store.
 func NewCookieRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, keys []session.CSRFKey) (*CookieRevokeOneExecutor, error) {
+	return newCookieRevokeOneExecutor(pool, c, keys, nil)
+}
+
+func newCookieRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, keys []session.CSRFKey, oauth2 *SSOOAuth2SessionAdmission) (*CookieRevokeOneExecutor, error) {
 	if len(keys) < 1 || len(keys) > 4 {
 		return nil, session.ErrInvalidCSRF
 	}
@@ -55,7 +60,7 @@ func NewCookieRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, 
 			}
 		}
 	}
-	base, err := NewRevokeOneExecutor(pool, c)
+	base, err := newRevokeOneExecutor(pool, c, oauth2)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +86,7 @@ func NewCookieRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, 
 		p := *c.SSOOIDC
 		c.SSOOIDC = &p
 	}
-	return &CookieRevokeOneExecutor{pool: pool, config: c, keys: append([]session.CSRFKey(nil), keys...), base: base}, nil
+	return &CookieRevokeOneExecutor{pool: pool, config: c, oauth2: oauth2, keys: append([]session.CSRFKey(nil), keys...), base: base}, nil
 }
 
 func copyRevokeCoordinatorConfig(c kernel.CoordinatorConfig) kernel.CoordinatorConfig {
@@ -122,7 +127,7 @@ func (e *CookieRevokeOneExecutor) ExecuteRevokeOneWithCSRF(ctx context.Context, 
 	}
 	// Construction performs no IO. Only this invocation owns the fresh native
 	// participant, while stable descriptors retain the original durable plan.
-	invocation, err := NewRevokeOneExecutor(e.pool, e.config)
+	invocation, err := newRevokeOneExecutor(e.pool, e.config, e.oauth2)
 	if err != nil {
 		return identity.CommandResult{}, session.ErrUnavailable
 	}

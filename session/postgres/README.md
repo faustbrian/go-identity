@@ -48,6 +48,13 @@ Apply after the original OAuth-only state is provisionally consumed; call
 same session, family and browser effects, with a separate issuance recovery
 domain. It neither exchanges the provider code nor authorizes session reads.
 
+For current-authority cookie reads and local logout, pass the same
+`SSOOAuth2SessionAdmission` to `NewSelectedSessionServiceWithSSOOAuth2` and
+`NewCookieRevokeOneExecutorWithSSOOAuth2`. OIDC may still be selected separately
+in both configurations. OAuth2 requires the original linked credential,
+organization membership, known-empty MFA generation and user policy. It
+cannot fall back to another login profile or be used as a bearer credential.
+
 ## Combined password and OAuth admission
 
 `SingleFactorSessionAdmissionConfig.OAuth` independently selects the exact

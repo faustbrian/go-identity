@@ -95,6 +95,8 @@ github.com/faustbrian/go-identity/session v0.0.0-20261122113133-8255a0f3eea8 h1:
 github.com/faustbrian/go-identity/session v0.0.0-20261122113133-8255a0f3eea8/go.mod h1:4881V+LxKRjNfZ8KZn7Xne258cP8IZZUPZGZd4TU/uc=
 github.com/faustbrian/go-identity/session v0.0.0-20261122203228-a75952d6980b h1:WiQWzlnh0xWzKQ2rFpcQwwl5IL6xmL0qFqPFchL8srw=
 github.com/faustbrian/go-identity/session v0.0.0-20261122203228-a75952d6980b/go.mod h1:4881V+LxKRjNfZ8KZn7Xne258cP8IZZUPZGZd4TU/uc=
+github.com/faustbrian/go-identity/session v0.0.0-20261122204416-c9eee338b1d2 h1:nHm45hbI8Br1xce3WoummgDwYZEMfY4+k2mU/YH6C2c=
+github.com/faustbrian/go-identity/session v0.0.0-20261122204416-c9eee338b1d2/go.mod h1:4881V+LxKRjNfZ8KZn7Xne258cP8IZZUPZGZd4TU/uc=
 github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEWMARORc=
 github.com/faustbrian/go-jsonrpc v1.1.1/go.mod h1:thOSBE3KGGNbPHY/OcreIcDPwusQ273v61n6TlmJdxE=
 github.com/faustbrian/go-migrations/v2 v2.0.0 h1:ipOKc3CA0p8vL5GPVh6xISQUfLiPCBfD6nT8stuWfUo=

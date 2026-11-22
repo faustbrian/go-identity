@@ -20,7 +20,11 @@ type SSOOIDCSessionAdmission struct {
 }
 
 func (p SSOOIDCSessionAdmission) valid() bool {
-	return p.Profile.valid() && p.Profile.AuthenticationMethod == "sso-oidc" && p.Profile.CredentialKind == identity.CredentialProvider && p.Profile.CredentialOwner == "sso" && !nilIssueDependency(p.Authority)
+	return validSSOSessionAdmission(p.Profile, p.Authority, "sso-oidc")
+}
+
+func validSSOSessionAdmission(profile IdentifierAdmissionConfig, authority OrganizationSessionAuthority, method string) bool {
+	return profile.valid() && profile.AuthenticationMethod == method && profile.CredentialKind == identity.CredentialProvider && profile.CredentialOwner == "sso" && !nilIssueDependency(authority)
 }
 
 // Format redacts deployment and borrowed authority details.
@@ -33,11 +37,11 @@ func (SSOOIDCSessionAdmission) MarshalJSON() ([]byte, error) {
 	return nil, session.ErrSecretSerialization
 }
 
-func ssoOIDCCredentialSessionAdmission(p SSOOIDCSessionAdmission, record session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+func ssoCredentialSessionAdmission(profile IdentifierAdmissionConfig, record session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 	deny := func() (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
 	}
-	if !p.valid() || record.MFAAuthentication() != (session.MFAAuthentication{}) {
+	if record.MFAAuthentication() != (session.MFAAuthentication{}) {
 		return deny()
 	}
 	if _, continued := record.CredentialContinuation(); continued {
@@ -54,7 +58,7 @@ func ssoOIDCCredentialSessionAdmission(p SSOOIDCSessionAdmission, record session
 	if err != nil || !vector.Organization.Present || !vector.Factor.Present || vector.Passkey.Present {
 		return deny()
 	}
-	return credentialSessionAdmissionBindingsWithOrganization(p.Profile, record, binding, spec.SessionID, spec.Version,
+	return credentialSessionAdmissionBindingsWithOrganization(profile, record, binding, spec.SessionID, spec.Version,
 		vector.Factor, session.OptionalAuthorityBinding{}, vector.Organization, authentication.AssuranceSingleFactor)
 }
 
@@ -63,7 +67,12 @@ func selectedSSOOIDCAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 	if p == nil || !p.valid() {
 		return nil, "", session.ErrInvalidInput
 	}
-	common := OTPAdmissionConfig{p.Profile.GlobalAuthorityID, p.Profile.PolicyNamespace, p.Profile.Audience}
+	c.SSOOIDC = nil
+	return selectedSSOSessionAdmission(c, p.Profile, "native-sso-oidc-cookie-session-v1")
+}
+
+func selectedSSOSessionAdmission(c SelectedSessionAdmissionConfig, profile IdentifierAdmissionConfig, cacheDomain string) ([]session.AuthenticationKind, string, error) {
+	common := OTPAdmissionConfig{profile.GlobalAuthorityID, profile.PolicyNamespace, profile.Audience}
 	var existingProfiles []OTPAdmissionConfig
 	for _, profile := range []*IdentifierAdmissionConfig{c.SingleFactor.Verified, c.SingleFactor.OAuth, c.MFAPassword} {
 		if profile != nil {
@@ -87,6 +96,9 @@ func selectedSSOOIDCAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 	if profile := c.OrganizationPassword; profile != nil {
 		existingProfiles = append(existingProfiles, OTPAdmissionConfig{profile.Profile.GlobalAuthorityID, profile.Profile.PolicyNamespace, profile.Profile.Audience})
 	}
+	if profile := c.SSOOIDC; profile != nil {
+		existingProfiles = append(existingProfiles, OTPAdmissionConfig{profile.Profile.GlobalAuthorityID, profile.Profile.PolicyNamespace, profile.Profile.Audience})
+	}
 	for _, profile := range existingProfiles {
 		if profile != common {
 			return nil, "", session.ErrInvalidInput
@@ -95,18 +107,16 @@ func selectedSSOOIDCAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 	var methods []session.AuthenticationKind
 	var previous string
 	if len(existingProfiles) > 0 {
-		prior := c
-		prior.SSOOIDC = nil
 		var err error
-		methods, previous, err = selectedSessionAdmission(prior)
+		methods, previous, err = selectedSessionAdmission(c)
 		if err != nil {
 			return nil, "", err
 		}
 	}
 	for _, method := range methods {
 		if method == session.AuthenticationVerified {
-			return methods, nativeAdmissionCacheProfile("native-sso-oidc-cookie-session-v1", previous, common.GlobalAuthorityID, common.PolicyNamespace, common.Audience), nil
+			return methods, nativeAdmissionCacheProfile(cacheDomain, previous, common.GlobalAuthorityID, common.PolicyNamespace, common.Audience), nil
 		}
 	}
-	return append(methods, session.AuthenticationVerified), nativeAdmissionCacheProfile("native-sso-oidc-cookie-session-v1", previous, common.GlobalAuthorityID, common.PolicyNamespace, common.Audience), nil
+	return append(methods, session.AuthenticationVerified), nativeAdmissionCacheProfile(cacheDomain, previous, common.GlobalAuthorityID, common.PolicyNamespace, common.Audience), nil
 }

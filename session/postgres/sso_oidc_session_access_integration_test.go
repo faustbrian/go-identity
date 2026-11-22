@@ -29,22 +29,27 @@ import (
 // This component proves native session access/logout, not protocol validation
 // or issuance. Only the existing SQL-backed organization-owner port is a fixture;
 // kernel, factor, linked-account, opaque-token and revocation persistence are real.
-type ssoOIDCSessionAccessFixture struct {
-	ctx        context.Context
-	pool       *database.Pool
-	profile    IdentifierAdmissionConfig
-	selection  SSOOIDCSessionAdmission
-	repository Config
-	validation session.ServiceConfig
-	reader     *session.SessionService
-	csrfKey    session.CSRFKey
-	request    session.GetRequest
-	csrf       session.CSRFToken
-	record     session.Session
+type ssoSessionAccessFixture struct {
+	ctx          context.Context
+	pool         *database.Pool
+	profile      IdentifierAdmissionConfig
+	selection    SSOOIDCSessionAdmission
+	oauth2       SSOOAuth2SessionAdmission
+	repository   Config
+	validation   session.ServiceConfig
+	reader       *session.SessionService
+	bothSelected bool
+	csrfKey      session.CSRFKey
+	request      session.GetRequest
+	csrf         session.CSRFToken
+	record       session.Session
 }
 
-func newSSOOIDCSessionAccessFixture(t *testing.T) ssoOIDCSessionAccessFixture {
+func newSSOSessionAccessFixture(t *testing.T, method string) ssoSessionAccessFixture {
 	t.Helper()
+	if method != "sso-oidc" && method != "sso-oauth2" {
+		t.Fatal("fixture requires an explicit enterprise authentication method")
+	}
 	ctx, pool, _ := anonymousSessionDatabase(t)
 	accountHistory, err := (kernel.AccountMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 30}).Load(ctx)
 	if err != nil {
@@ -88,7 +93,7 @@ CREATE TABLE public.sso_session_membership(tenant_id text NOT NULL,user_id text 
 INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user','selected-org','organization:guest-tenant:selected-org',7,true)`); err != nil {
 		t.Fatal("real identity/factor/link and controlled membership rows", err)
 	}
-	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "guest-deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "sso-oidc", CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
+	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "guest-deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: method, CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
 	scope := policy.AuthorityScope{TenantID: "guest-tenant", PolicyNamespace: "users", SubjectID: "enterprise-user"}
 	if _, err := policy.InitializeAuthority(ctx, pool.Raw(), scope, time.Second); err != nil {
 		t.Fatal(err)
@@ -124,7 +129,7 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 	spec.TenantID, spec.UserID, spec.SessionID, spec.FamilyID = "guest-tenant", "enterprise-user", "enterprise-access", "enterprise-family"
 	spec.Version, spec.FamilyVersion, spec.IssuedAt, spec.LastActivityAt = 1, 1, now, now
 	spec.Audience = profile.Audience
-	spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(proofID), Tenant: string(spec.TenantID), Subject: string(spec.UserID), Method: "sso-oidc", Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: profile.Audience, IssuedAt: now.Add(-time.Second), ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: "enterprise-credential", CredentialVersion: 1}
+	spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(proofID), Tenant: string(spec.TenantID), Subject: string(spec.UserID), Method: method, Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: profile.Audience, IssuedAt: now.Add(-time.Second), ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: "enterprise-credential", CredentialVersion: 1}
 	spec.Lookup, err = token.Digest(key, string(spec.TenantID))
 	if err != nil {
 		t.Fatal(err)
@@ -170,10 +175,21 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 	if _, err := pool.Raw().Exec(ctx, `INSERT INTO session_store.sessions(tenant_id,session_id,user_id,family_id,version,family_version,state,digest_version,digest,expires_at,record) VALUES($1,$2,$3,$4,1,1,'active',$5,$6,$7,$8::jsonb)`, string(spec.TenantID), spec.SessionID, string(spec.UserID), spec.FamilyID, int64(spec.Lookup.KeyVersion), spec.Lookup.Sum[:], expiry, wire); err != nil {
 		t.Fatal("actual opaque session persistence", err)
 	}
-	selection := SSOOIDCSessionAdmission{Profile: profile, Authority: &ssoOIDCSessionOrganizationFixture{pool: pool}}
+	organization := &ssoOIDCSessionOrganizationFixture{pool: pool}
+	oidcProfile, oauth2Profile := profile, profile
+	oidcProfile.AuthenticationMethod, oauth2Profile.AuthenticationMethod = "sso-oidc", "sso-oauth2"
+	selection := SSOOIDCSessionAdmission{Profile: oidcProfile, Authority: organization}
+	oauth2 := SSOOAuth2SessionAdmission{Profile: oauth2Profile, Authority: organization}
 	config := Config{Schema: "session_store", MaximumDuration: time.Second}
 	validation := session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: profile.Audience, Clock: clock.System{}, MaximumDuration: time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{key}}
-	reader, err := NewSelectedSessionService(pool, SelectedSessionServiceConfig{Repository: config, Validation: validation, Admission: SelectedSessionAdmissionConfig{SSOOIDC: &selection}})
+	readerConfig := SelectedSessionServiceConfig{Repository: config, Validation: validation}
+	var reader *session.SessionService
+	if method == "sso-oidc" {
+		readerConfig.Admission.SSOOIDC = &selection
+		reader, err = NewSelectedSessionService(pool, readerConfig)
+	} else {
+		reader, err = NewSelectedSessionServiceWithSSOOAuth2(pool, readerConfig, oauth2)
+	}
 	if err != nil {
 		t.Fatal("explicit enterprise session reader", err)
 	}
@@ -181,7 +197,7 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ssoOIDCSessionAccessFixture{ctx: ctx, pool: pool, profile: profile, selection: selection, repository: config, validation: validation, reader: reader, csrfKey: csrfKey, request: session.GetRequest{TenantID: spec.TenantID, Credential: credential}, csrf: csrf, record: record}
+	return ssoSessionAccessFixture{ctx: ctx, pool: pool, profile: profile, selection: selection, oauth2: oauth2, repository: config, validation: validation, reader: reader, csrfKey: csrfKey, request: session.GetRequest{TenantID: spec.TenantID, Credential: credential}, csrf: csrf, record: record}
 }
 
 func installSSOOIDCSessionAccessEffects(t *testing.T, ctx context.Context, pool *database.Pool) {
@@ -227,18 +243,37 @@ func installSSOOIDCSessionAccessEffects(t *testing.T, ctx context.Context, pool 
 }
 
 func TestSSOOIDCSessionAccessAndStrictCookieLogoutPostgres(t *testing.T) {
-	f := newSSOOIDCSessionAccessFixture(t)
+	assertSSOSessionAccessAndStrictCookieLogout(t, newSSOSessionAccessFixture(t, "sso-oidc"))
+}
+
+func assertSSOSessionAccessAndStrictCookieLogout(t *testing.T, f ssoSessionAccessFixture) {
+	t.Helper()
 	accepted, err := f.reader.Get(f.ctx, f.request)
 	if err != nil || !accepted.Authenticated || accepted.ValidateAt(time.Now().UTC()) != nil {
 		t.Fatal("real enterprise opaque session did not authenticate", err)
 	}
 	spec, _ := accepted.Session.Bindings()
 	vector, _ := spec.Authority.Bindings()
-	if spec.Authentication.Proof.Method != "sso-oidc" || spec.Authentication.CredentialID != "enterprise-credential" || vector.ActiveOrganizationID != "selected-org" || !vector.Organization.Present || !vector.Factor.Present {
+	original, _ := f.record.Bindings()
+	originalVector, _ := original.Authority.Bindings()
+	if spec.Authentication.Proof.Method != f.profile.AuthenticationMethod || spec.Authentication.CredentialID != "enterprise-credential" || vector.ActiveOrganizationID != "selected-org" || !vector.Organization.Present || !vector.Factor.Present {
 		t.Fatal("enterprise reader erased original ownership or selected authority")
 	}
+	if spec.Authentication != original.Authentication || vector != originalVector || spec.TenantID != original.TenantID || spec.UserID != original.UserID || spec.SessionID != original.SessionID || spec.FamilyID != original.FamilyID {
+		t.Fatal("enterprise reader substituted the original credential, proof or exact authority bindings")
+	}
 	execution := IssueExecutorConfig{Repository: f.repository, Profile: IssueAdmissionConfig(f.profile), Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, Authorization: revokeQueryPolicy{}, Clock: clock.System{}, PolicyID: "session-policy", PolicyVersion: 1, AuditRetentionVersion: 1}
-	executor, err := NewCookieRevokeOneExecutor(f.pool, RevokeOneExecutorConfig{Execution: execution, Sessions: f.reader, SSOOIDC: &f.selection}, []session.CSRFKey{f.csrfKey})
+	executorConfig := RevokeOneExecutorConfig{Execution: execution, Sessions: f.reader}
+	if f.bothSelected {
+		executorConfig.SSOOIDC = &f.selection
+	}
+	var executor *CookieRevokeOneExecutor
+	if f.profile.AuthenticationMethod == "sso-oidc" && !f.bothSelected {
+		executorConfig.SSOOIDC = &f.selection
+		executor, err = NewCookieRevokeOneExecutor(f.pool, executorConfig, []session.CSRFKey{f.csrfKey})
+	} else {
+		executor, err = NewCookieRevokeOneExecutorWithSSOOAuth2(f.pool, executorConfig, []session.CSRFKey{f.csrfKey}, f.oauth2)
+	}
 	if err != nil {
 		t.Fatal("native enterprise CSRF executor", err)
 	}
@@ -263,12 +298,22 @@ func TestSSOOIDCSessionAccessAndStrictCookieLogoutPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	denied, err := logout.SignOut(f.ctx, request, wrong)
-	if err == nil || denied.SignedOut || denied.ClearCookie || denied.CommitOutcome == identity.CommitOutcomeCommitted {
-		t.Fatal("enterprise logout accepted foreign synchronizer custody")
-	}
-	if got, err := f.reader.Get(f.ctx, f.request); err != nil || !got.Authenticated {
-		t.Fatal("CSRF rejection revoked the original session", err)
+	for _, tc := range []struct {
+		name  string
+		token session.CSRFToken
+	}{
+		{name: "missing CSRF", token: session.CSRFToken{}},
+		{name: "foreign CSRF", token: wrong},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			denied, err := logout.SignOut(f.ctx, request, tc.token)
+			if err == nil || denied.SignedOut || denied.ClearCookie || denied.CommitOutcome == identity.CommitOutcomeCommitted {
+				t.Fatal("enterprise logout accepted absent or foreign synchronizer custody")
+			}
+			if got, err := f.reader.Get(f.ctx, f.request); err != nil || !got.Authenticated {
+				t.Fatal("CSRF rejection revoked the original session", err)
+			}
+		})
 	}
 	for _, tc := range []struct{ name, change, restore string }{
 		{"membership withdrawal after authenticated read", `UPDATE public.sso_session_membership SET active=false`, `UPDATE public.sso_session_membership SET active=true`},
@@ -332,7 +377,11 @@ func TestSSOOIDCSessionAccessAndStrictCookieLogoutPostgres(t *testing.T) {
 }
 
 func TestSSOOIDCSessionAccessRequiresExplicitSelectionAndCurrentAuthorityPostgres(t *testing.T) {
-	f := newSSOOIDCSessionAccessFixture(t)
+	assertSSOSessionAccessRequiresExplicitSelectionAndCurrentAuthority(t, newSSOSessionAccessFixture(t, "sso-oidc"))
+}
+
+func assertSSOSessionAccessRequiresExplicitSelectionAndCurrentAuthority(t *testing.T, f ssoSessionAccessFixture) {
+	t.Helper()
 	if got, err := f.reader.Get(f.ctx, f.request); err != nil || !got.Authenticated {
 		t.Fatal("current enterprise fixture did not authenticate", err)
 	}
@@ -348,13 +397,40 @@ func TestSSOOIDCSessionAccessRequiresExplicitSelectionAndCurrentAuthorityPostgre
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, reader := range map[string]*session.SessionService{"default password": defaultReader, "selected social and password": withoutEnterprise} {
+	enterpriseConfig := SelectedSessionServiceConfig{Repository: f.repository, Validation: f.validation}
+	var otherEnterprise *session.SessionService
+	if f.profile.AuthenticationMethod == "sso-oauth2" {
+		enterpriseConfig.Admission.SSOOIDC = &f.selection
+		otherEnterprise, err = NewSelectedSessionService(f.pool, enterpriseConfig)
+	} else {
+		otherEnterprise, err = NewSelectedSessionServiceWithSSOOAuth2(f.pool, enterpriseConfig, f.oauth2)
+	}
+	if err != nil {
+		t.Fatal("independently selected other enterprise method", err)
+	}
+	for name, reader := range map[string]*session.SessionService{"default password": defaultReader, "selected social and password": withoutEnterprise, "only other enterprise method selected": otherEnterprise} {
 		t.Run(name, func(t *testing.T) {
 			if got, err := reader.Get(f.ctx, f.request); got.Authenticated || got.Session != (session.Session{}) {
 				t.Fatal("unselected enterprise session fell back to another credential owner", err)
 			}
 		})
 	}
+	enterpriseConfig.Admission.SingleFactor = SingleFactorSessionAdmissionConfig{Verified: &password, OAuth: &social}
+	enterpriseConfig.Admission.SSOOIDC = &f.selection
+	bothEnterprise, err := NewSelectedSessionServiceWithSSOOAuth2(f.pool, enterpriseConfig, f.oauth2)
+	if err != nil {
+		t.Fatal("explicit independent OIDC and OAuth2 selection", err)
+	}
+	accepted, err := bothEnterprise.Get(f.ctx, f.request)
+	if err != nil || !accepted.Authenticated {
+		t.Fatal("selecting both enterprise methods lost the original owner", err)
+	}
+	spec, _ := accepted.Session.Bindings()
+	original, _ := f.record.Bindings()
+	if spec.Authentication != original.Authentication || spec.Authority.CompareCurrent(original.Authority) != nil {
+		t.Fatal("combined enterprise selection changed the original proof or authority")
+	}
+	f.reader = bothEnterprise
 	foreign := f.request
 	foreign.TenantID = "different-tenant"
 	if got, err := f.reader.Get(f.ctx, foreign); got.Authenticated || got.Session != (session.Session{}) {
