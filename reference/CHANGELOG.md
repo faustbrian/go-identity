@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add opt-in native social account unlink and recovery, using the configured
+  password owner and forward journal/password migrations. No route is enabled.
+
 - Explicitly select an encrypted standalone-TLS Valkey session cache for ordinary
   reads while protected metadata and signout retain the native primary. Validate
   cache configuration without IO, probe only at initialization, preserve the

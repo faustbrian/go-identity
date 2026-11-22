@@ -544,6 +544,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	if err := composeSocialOAuthUnlink(c.SocialOAuth, socialOAuthOwner, passwordVerificationOwner); err != nil {
+		return err
+	}
 	organizationOwner, err := composeOrganization(c, d, sessionOwner, deliveryOwner, passwordVerificationOwner)
 	if err != nil {
 		return err

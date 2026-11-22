@@ -445,7 +445,7 @@ func (p *referenceSocialOIDCPolicy) Decide(ctx context.Context, c authorization.
 	r := c.Request
 	if r.Tenant == otpTenant && c.PolicyRevision == 9 {
 		switch r.Action {
-		case "identity.account.link-start", "identity.account.link-token", "identity.oauth.signin-start", "identity.oauth.callback":
+		case "identity.account.link-start", "identity.account.link-token", "identity.account.unlink", "identity.oauth.signin-start", "identity.oauth.callback":
 			self := r.Subject.Kind == authorization.SubjectUser && r.Resource.Type == "identity.user" && string(r.Resource.ID) == string(r.Subject.ID)
 			admission := p.actor != "" && r.Subject.Kind == authorization.SubjectServiceAccount && r.Subject.ID == p.actor && r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action)
 			selfAdmission := r.Action == "identity.account.link-start" && r.Subject.Kind == authorization.SubjectUser && r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action)

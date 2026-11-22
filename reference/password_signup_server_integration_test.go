@@ -294,6 +294,7 @@ type signupGraphExtensions struct {
 	socialOIDCNativeStart       string
 	socialOIDCNativeSignin      bool
 	socialOIDCNativeMode        string
+	socialOIDCUnlink            string
 	socialOIDCHTTPSignin        bool
 	socialOIDCHTTPRemember      bool
 	socialOIDCHTTPDenial        bool
@@ -470,6 +471,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown" || extensions.verificationHooks == "unknown"
 		f.completionFault.mfaChallenge = extensions.verificationSignin == "totp-child-unknown"
 		f.completionFault.socialLinkAttachment = extensions.socialOIDCFailure == socialAttachedProofExpiry || extensions.socialOIDCFailure == socialAttachedRPExpiry
+		f.completionFault.socialUnlink = extensions.socialOIDCUnlink == "unknown"
 		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
 			f.completionFault.factorProof = false
 			f.completionFault.emailFactorUse = extensions.emailChangeCase == "totp-change-unknown-request"
@@ -480,7 +482,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			if f.verificationMFAHook != nil {
 				pc.ConnConfig.Tracer = f.verificationMFAHook
 			}
-			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification || f.completionFault.phonePasswordReset || f.completionFault.socialLinkAttachment {
+			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification || f.completionFault.phonePasswordReset || f.completionFault.socialLinkAttachment || f.completionFault.socialUnlink {
 				// Keep parameterized extended queries, but send their SQL rather
 				// than a previously cached statement name to the fault boundary.
 				pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
@@ -697,6 +699,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
 		changeScreens = configureReferencePasswordProtection(t, &c, origin)
+	}
+	if extensions.socialOIDCUnlink != "" {
+		configureReferenceNativeUnlink(&c)
 	}
 	if extensions.organizationTransfer {
 		configureReferenceOrganizationTransfer(t, &c, origin)
@@ -1375,7 +1380,17 @@ END $$`); err != nil {
 		proveIndependentRemovalRateMigrations(t, ctx, f, c, deps, workerConfigs, modules)
 	}
 	migrationRequest := applyRequest(t, ctx, stores, modules)
+	if extensions.socialOIDCUnlink == "migration-resume" {
+		failUnlinkMigrationValidation(t, ctx, deps)
+	}
 	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
+	if extensions.socialOIDCUnlink == "migration-resume" {
+		if migrationErr == nil || migrationResult.Result.State() != reference.MigrationApplyPending {
+			t.Fatal("expected interrupted unlink validation after committed expansion", migrationErr, migrationResult.Result.State())
+		}
+		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
+		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
+	}
 	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
@@ -2128,6 +2143,12 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			}
 			if err := deps.PostgreSQL.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_social.transactions WHERE tenant_id=$1 AND user_id=$2 AND version=2 AND secrets_erased_at IS NOT NULL AND pkce_ciphertext IS NULL AND state_proof_ciphertext IS NULL`, otpTenant, string(user)).Scan(&erased); err != nil || erased != wantErased {
 				t.Fatal("committed linking retained exchange-secret custody")
+			}
+			if extensions.socialOIDCUnlink != "" {
+				proveReferenceNativeUnlink(t, ctx, deps, features, user, fresh, readSession, extensions.socialOIDCUnlink, f.completionFault)
+				if extensions.socialOIDCUnlink == "success" {
+					proveReferenceSocialSigninHTTP(t, ctx, client, network.URL, origin, socialIssuer, user, false, false, true)
+				}
 			}
 		}
 	}

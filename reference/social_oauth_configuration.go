@@ -43,6 +43,7 @@ type SocialOAuthConfiguration struct {
 	CurrentEnvelopeKey                        string
 	EnvelopeKeys                              map[string][]byte
 	Signin                                    *SocialOAuthSigninConfiguration
+	Unlink                                    *SocialOAuthUnlinkConfiguration
 }
 
 // HTTPSocialOAuthConfiguration independently selects initiation and callback.
@@ -62,6 +63,7 @@ type socialOAuthState struct {
 	http           *HTTPSocialOAuthConfiguration
 	policy         string
 	signin         *socialSigninState
+	unlink         *oauthpg.UnlinkService
 }
 
 func composeSocialOAuth(c StoreConfiguration, d ReferenceDependencies, selectedSession *sessionState, evaluation risk.Evaluator) (*socialOAuthState, error) {

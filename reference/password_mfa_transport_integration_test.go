@@ -31,6 +31,7 @@ type completionCommitFault struct {
 	registrationVerification bool
 	emailFactorUse           bool
 	socialLinkAttachment     bool
+	socialUnlink             bool
 	armed                    atomic.Bool
 	hit                      atomic.Bool
 }
@@ -121,6 +122,9 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 			c.linkPlan.Store(true)
 		}
 		selected = c.linkPlan.Load() && bytes.Contains(p, []byte("identity.account.link-token"))
+	}
+	if c.fault.socialUnlink {
+		selected = bytes.Contains(p, []byte(`DELETE FROM "identity_social".token_sets`))
 	}
 	if c.fault.armed.Load() && selected {
 		c.mutation.Store(true)

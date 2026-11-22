@@ -135,7 +135,7 @@ func testNativeReauthenticationService(t *testing.T, ctx context.Context, pool *
 	}
 	// Isolated email databases borrow only the cluster-wide roles already
 	// reserved by their enclosing fixture; all tables and authority are fresh.
-	if len(emailProfile) == 0 || emailProfile[0] == "action-primary" {
+	if len(emailProfile) == 0 || emailProfile[0] == "action-primary" || emailProfile[0] == "unlink-primary" {
 		if _, err = pool.Raw().Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
 			t.Fatal("audit installation failed", err)
 		}
@@ -226,6 +226,8 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	if len(emailProfile) == 1 {
 		if emailProfile[0] == "action-primary" {
 			testNativeActionPrimary(t, ctx, pool, configuration, request)
+		} else if emailProfile[0] == "unlink-primary" {
+			testNativeUnlinkPrimary(t, ctx, pool, configuration, request)
 		} else if emailProfile[0] == "primary" {
 			testNativeEmailPrimary(t, ctx, pool, configuration, request)
 		} else {

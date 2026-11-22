@@ -86,8 +86,9 @@ func configureReferenceSocialSigninHTTP(t *testing.T, c *reference.StoreConfigur
 // A new cookie jar represents a browser with no authenticated session. Only the
 // external issuer is controlled; preauth, exchange, persistence, reading and
 // strict logout all enter the actual configured public HTTP server.
-func proveReferenceSocialSigninHTTP(t *testing.T, ctx context.Context, base *http.Client, endpoint, origin string, provider *referenceSocialOIDCIssuer, user identity.UserID, remember, denied bool) {
+func proveReferenceSocialSigninHTTP(t *testing.T, ctx context.Context, base *http.Client, endpoint, origin string, provider *referenceSocialOIDCIssuer, user identity.UserID, remember, denied bool, unlinked ...bool) {
 	t.Helper()
+	removed := len(unlinked) == 1 && unlinked[0]
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +126,11 @@ func proveReferenceSocialSigninHTTP(t *testing.T, ctx context.Context, base *htt
 	body, _ := json.Marshal(map[string]any{"flowID": flow.FlowID, "provider": "reference-oidc", "callback": origin + "/social/complete", "errorCallback": origin + "/social/error", "scopes": []string{"openid", "profile"}, "signupDisabled": true, "remember": remember})
 	initiate := func() (string, string) {
 		t.Helper()
-		out := post("/v1/oauth/signin-start", string(body), map[string]string{"Idempotency-Key": "reference-http-original"})
+		key := "reference-http-original"
+		if removed {
+			key = "reference-http-after-local-unlink"
+		}
+		out := post("/v1/oauth/signin-start", string(body), map[string]string{"Idempotency-Key": key})
 		var result struct{ RedirectURI, TransactionID string }
 		err := json.NewDecoder(out.Body).Decode(&result)
 		out.Body.Close()
@@ -154,6 +159,21 @@ func proveReferenceSocialSigninHTTP(t *testing.T, ctx context.Context, base *htt
 		t.Fatal(err)
 	}
 	callback.Body.Close()
+	if removed {
+		if callback.StatusCode == 303 && callback.Header.Get("Location") == origin+"/social/complete" || len(callback.Cookies()) != 0 || provider.exchanges.Load() != before+1 {
+			t.Fatal("removed account's valid provider response issued local access", callback.StatusCode)
+		}
+		out, err := client.Get(endpoint + "/v1/session/get")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Body.Close()
+		var state struct{ Authenticated bool }
+		if out.StatusCode != 200 || json.NewDecoder(out.Body).Decode(&state) != nil || state.Authenticated {
+			t.Fatal("unlinked provider browser acquired a session", out.StatusCode)
+		}
+		return
+	}
 	if denied {
 		if callback.StatusCode != 303 || callback.Header.Get("Location") != origin+"/social/error" || len(callback.Cookies()) != 0 || provider.exchanges.Load() != before {
 			t.Fatal("provider denial created credentials, exchanged or lost its original redirect", callback.StatusCode)

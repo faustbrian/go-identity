@@ -128,6 +128,20 @@ browser/persistent sessions and provider denial. Only the external TLS provider
 is controlled. This selected profile does not enable signup, MFA fallback,
 refresh, unlinking or other OAuth variants. It is not full M17/M18 qualification.
 
+## Optional native social account unlink
+
+Select `SocialOAuth.Unlink` with a configured password verification target
+for `identity.account.unlink`, the corresponding native password-proof
+profile, and query and redaction policy. Apply the selected Reference migration
+plan before initialization, then obtain the native service through
+`FeatureSet.SocialAccountUnlink()`. This selection adds no HTTP route.
+
+The [native unlink consumer](social_oauth_unlink_integration_test.go) shows a
+real PostgreSQL link followed by fresh password verification, unlink, exact
+retry and authorized recovery. It also demonstrates that a failed audit
+does not consume the proof or delete the vault, and that the old session
+and provider login no longer work after a committed unlink.
+
 ## Optional workload OAuth backend
 
 `OAuthWorkload` selects a configured confidential Basic client-credentials
