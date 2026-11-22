@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accept the selected enterprise OIDC query callback's documented 303 success
+  response without advertising a 2xx response the handler cannot return.
+
 - Expose anonymous SSO discovery admission against the existing shared auth IP
   budget, without an account or challenge selector. No route is enabled.
 
