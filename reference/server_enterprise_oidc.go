@@ -16,8 +16,9 @@ import (
 func (s *Server) enterpriseOIDCFeatures(network identityhttp.NetworkConfig) ([]identityhttp.Feature, error) {
 	f := s.state.features
 	n := f.enterpriseOIDC
+	oauth2 := f.enterpriseOAuth2
 	if n == nil || n.preauth == nil {
-		return nil, nil
+		return s.enterpriseOAuth2OnlyFeatures(network)
 	}
 	if f.session == nil || f.httpPreAuth == nil || f.httpPreAuth.device == nil || s.state.httpRate == nil {
 		return nil, identity.InvalidInputError{Field: "reference_http_enterprise_oidc"}
@@ -35,7 +36,14 @@ func (s *Server) enterpriseOIDCFeatures(network identityhttp.NetworkConfig) ([]i
 	callbackConfig := ssohttp.SigninCallbackConfig{Browser: browser, Provider: protocol, CallbackAllowlist: n.callbacks, Audience: n.audience,
 		Cookie: f.session.config.Cookie, CSRFCookie: n.csrfCookie, Callback: owner}
 	var start, callback identityhttp.Feature
-	if n.memberLink {
+	if oauth2 != nil && oauth2.preauth != nil {
+		var link *ssohttp.MemberLinkStartConfig
+		if n.memberLink {
+			link = &ssohttp.MemberLinkStartConfig{Cookie: callbackConfig.Cookie, Start: owner}
+		}
+		startConfig.Browser.MaximumDuration = min(startConfig.Browser.MaximumDuration, oauth2.duration)
+		start, err = ssohttp.NewSigninStartFeatureWithOAuth2(startConfig, oauth2.httpStartConfig(), link)
+	} else if n.memberLink {
 		start, err = ssohttp.NewSigninStartFeatureWithLink(startConfig, ssohttp.MemberLinkStartConfig{Cookie: callbackConfig.Cookie, Start: owner})
 	} else {
 		start, err = ssohttp.NewSigninStartFeature(startConfig)
@@ -52,15 +60,27 @@ func (s *Server) enterpriseOIDCFeatures(network identityhttp.NetworkConfig) ([]i
 		return nil, err
 	}
 	features := []identityhttp.Feature{start, callback}
+	if oauth2 != nil && oauth2.preauth != nil {
+		plain, err := s.enterpriseOAuth2HTTPCallback(network)
+		if err != nil {
+			return nil, err
+		}
+		features = append(features, plain)
+	}
+	return s.guardEnterpriseFeatures(features)
+}
+
+func (s *Server) guardEnterpriseFeatures(features []identityhttp.Feature) ([]identityhttp.Feature, error) {
 	for i, feature := range features {
 		ops := feature.Operations()
 		for j := range ops {
 			ops[j].Handler = s.guardSessionLifetime(ops[j].Handler)
 		}
-		features[i], err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: feature.ID(), Operations: ops})
+		protected, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: feature.ID(), Operations: ops})
 		if err != nil {
 			return nil, err
 		}
+		features[i] = protected
 	}
 	return features, nil
 }

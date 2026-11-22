@@ -73,4 +73,10 @@ func TestOAuthReadinessRequiresSelectedSuccessorWithoutChangingHistoricalGuards(
 	if got := readinessCatalogGuards(state, history); got[0].constraints[0] != history.guards[0].constraints[0] {
 		t.Fatal("unselected OAuth changed readiness")
 	}
+	state.features.enterpriseOIDC = &enterpriseOIDCState{sessionSchema: "session_store"}
+	state.features.enterpriseOAuth2 = &enterpriseOAuth2State{sessionSchema: "session_store"}
+	if got := readinessCatalogGuards(state, history); got[0].constraints[0] != "session_issuances.session_issuances_purpose_sso_oauth2_v1" ||
+		got[0].constraints[1] != history.guards[0].constraints[1] || history.guards[0].constraints[0] != "session_issuances.session_issuances_purpose_v3" {
+		t.Fatal("mixed federation must require the OAuth2 session successor without altering installed-prefix guards")
+	}
 }

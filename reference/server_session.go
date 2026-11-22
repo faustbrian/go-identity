@@ -98,6 +98,10 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 			policy := enterprise.csrfCookie
 			c.CSRFCookie = &policy
 		}
+		if enterprise := s.state.features.enterpriseOAuth2; enterprise != nil && enterprise.preauth != nil {
+			policy := enterprise.csrfCookie
+			c.CSRFCookie = &policy
+		}
 	} else {
 		c.BearerSignOut = owner.bearer
 	}

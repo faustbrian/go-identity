@@ -15,7 +15,7 @@ import (
 
 func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
 	f := s.state.features
-	if f == nil || f.enterpriseOIDC == nil {
+	if f == nil || f.enterpriseSessionSchema() == "" {
 		return catalog, nil
 	}
 	catalog, err := organizationCredentialAuthorityMigrationCatalog(ctx, catalog)
@@ -46,7 +46,8 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	}
 	catalog = append(catalog, domains)
 
-	if f.enterpriseOIDC.roleSync {
+	roleSync := f.enterpriseOIDC != nil && f.enterpriseOIDC.roleSync
+	if roleSync {
 		roles := migrationHistory{namespace: "identity_organization_provider_roles", owners: map[migrations.Version]ModuleID{}}
 		if err := appendEnterpriseMigration(ctx, &roles, "organization/postgres", organizationpg.ProviderRoleGrantMigrationSource{Version: 1}, migrationGuard{
 			version: 1, schema: "organization", tables: []string{"provider_role_sources", "provider_role_grants"},
@@ -78,7 +79,7 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 			return nil, err
 		}
 	}
-	if f.enterpriseOIDC.roleSync {
+	if roleSync {
 		// Keep the baseline provider prefix: the optional trigger must run only
 		// after the organization's role history and the installed provider schema.
 		if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", ssopg.ProviderRoleSourceMigrationSource{Version: 7}, migrationGuard{
@@ -89,7 +90,7 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	}
 	catalog = append(catalog, providers)
 
-	schema := f.enterpriseOIDC.sessionSchema
+	schema := f.enterpriseSessionSchema()
 	sessions := migrationHistory{namespace: "identity_enterprise_oidc_session", owners: map[migrations.Version]ModuleID{}}
 	source := sessionpg.SSOOIDCSigninMigrationSource{Schema: schema, Version: 1, ValidationVersion: 2, PreviousConstraint: sessionIssuancePredecessor(catalog, schema)}
 	if err := appendEnterpriseMigration(ctx, &sessions, "identity/session/postgres", source, migrationGuard{version: 1, schema: schema,
@@ -97,6 +98,9 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 		return nil, err
 	}
 	catalog = append(catalog, sessions)
+	if f.enterpriseOIDC == nil {
+		return catalog, nil
+	}
 	switch {
 	case f.enterpriseOIDC.jit:
 		return enterpriseOIDCJITMigrationCatalog(ctx, catalog)
@@ -105,6 +109,50 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	default:
 		return catalog, nil
 	}
+}
+
+func (f *featureState) enterpriseSessionSchema() string {
+	if f.enterpriseOIDC != nil {
+		return f.enterpriseOIDC.sessionSchema
+	}
+	if f.enterpriseOAuth2 != nil {
+		return f.enterpriseOAuth2.sessionSchema
+	}
+	return ""
+}
+
+func (s StoreSet) enterpriseOAuth2MigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	f := s.state.features
+	if f == nil || f.enterpriseOAuth2 == nil {
+		return catalog, nil
+	}
+	// The existing provider history owns optional OIDC role migration 7.
+	// A separate suffix allows selecting it after installing OAuth2.
+	protocol := migrationHistory{namespace: "identity_enterprise_oauth2", owners: map[migrations.Version]ModuleID{}}
+	for _, step := range []struct {
+		source migrations.Source
+		guard  migrationGuard
+	}{
+		{ssopg.ProviderProtocolMigrationSource{Version: 1, ValidationVersion: 2}, migrationGuard{version: 1,
+			columns: []string{"providers.protocol"}, constraints: []string{"providers.sso_providers_protocol_check"}}},
+		{ssopg.LoginTransactionProtocolMigrationSource{Version: 3, ValidationVersion: 4}, migrationGuard{version: 3,
+			constraints: []string{"login_transactions.login_transactions_protocol_check"}, constraintValue: "oauth2"}},
+		{ssopg.ProviderLoginTokenVaultProtocolMigrationSource{Version: 5, ValidationVersion: 6}, migrationGuard{version: 5,
+			constraints: []string{"provider_login_token_sets.provider_login_token_sets_origin_operation_check"}, constraintValue: enterpriseOAuth2CallbackAction}},
+	} {
+		step.guard.schema = "sso_providers"
+		if err := appendEnterpriseMigration(ctx, &protocol, "sso/postgres", step.source, step.guard); err != nil {
+			return nil, err
+		}
+	}
+	schema := f.enterpriseOAuth2.sessionSchema
+	sessions := migrationHistory{namespace: "identity_enterprise_oauth2_session", owners: map[migrations.Version]ModuleID{}}
+	source := sessionpg.SSOOAuth2SigninMigrationSource{Schema: schema, Version: 1, ValidationVersion: 2}
+	if err := appendEnterpriseMigration(ctx, &sessions, "identity/session/postgres", source, migrationGuard{version: 1, schema: schema,
+		constraints: []string{"session_issuances.session_issuances_purpose_sso_oauth2_v1"}}); err != nil {
+		return nil, err
+	}
+	return append(catalog, protocol, sessions), nil
 }
 
 func enterpriseOIDCJITMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {

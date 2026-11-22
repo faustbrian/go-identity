@@ -196,6 +196,12 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 	if err != nil {
 		return nil, err
 	}
+	if c.EnterpriseOAuth2 != nil {
+		router, err = router.WithProtocolRegistry()
+		if err != nil {
+			return nil, err
+		}
+	}
 	memberLink := c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ExplicitLink
 	var start *ssopg.ProviderLoginService
 	if memberLink {

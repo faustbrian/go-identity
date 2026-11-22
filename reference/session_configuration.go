@@ -148,7 +148,8 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 		passwordMFA = &profile
 	}
 	var enterprise *sessionpg.SSOOIDCSessionAdmission
-	if c.EnterpriseOIDC != nil {
+	var enterpriseOAuth2 *sessionpg.SSOOAuth2SessionAdmission
+	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil {
 		if c.Organization == nil {
 			return nil, invalid
 		}
@@ -156,13 +157,25 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 		if err != nil {
 			return nil, err
 		}
-		enterprise = &sessionpg.SSOOIDCSessionAdmission{
-			Profile: sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: e.Profile.GlobalAuthorityID, PolicyNamespace: e.Profile.PolicyNamespace, Audience: e.Profile.Audience,
-				AuthenticationMethod: "sso-oidc", CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"},
-			Authority: authority,
+		profile := sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: e.Profile.GlobalAuthorityID, PolicyNamespace: e.Profile.PolicyNamespace,
+			Audience: e.Profile.Audience, CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
+		if c.EnterpriseOIDC != nil {
+			profile.AuthenticationMethod = "sso-oidc"
+			enterprise = &sessionpg.SSOOIDCSessionAdmission{Profile: profile, Authority: authority}
+		}
+		if c.EnterpriseOAuth2 != nil {
+			profile.AuthenticationMethod = "sso-oauth2"
+			enterpriseOAuth2 = &sessionpg.SSOOAuth2SessionAdmission{Profile: profile, Authority: authority}
 		}
 	}
-	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey, SSOOIDC: enterprise}, Validation: validation})
+	readerConfig := sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection,
+		MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey, SSOOIDC: enterprise}, Validation: validation}
+	var reader *session.SessionService
+	if enterpriseOAuth2 != nil {
+		reader, err = sessionpg.NewSelectedSessionServiceWithSSOOAuth2(d.PostgreSQL, readerConfig, *enterpriseOAuth2)
+	} else {
+		reader, err = sessionpg.NewSelectedSessionService(d.PostgreSQL, readerConfig)
+	}
 	if err != nil {
 		return nil, invalid
 	}
@@ -181,7 +194,12 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 	}
 	state := &sessionState{reader: reader, bearer: bearer, revoke: revoke, config: n, readerAudience: n.Validation.Audience}
 	if len(c.Session.CSRFKeys) > 0 {
-		executor, err := sessionpg.NewCookieRevokeOneExecutor(d.PostgreSQL, execution, c.Session.CSRFKeys)
+		var executor *sessionpg.CookieRevokeOneExecutor
+		if enterpriseOAuth2 != nil {
+			executor, err = sessionpg.NewCookieRevokeOneExecutorWithSSOOAuth2(d.PostgreSQL, execution, c.Session.CSRFKeys, *enterpriseOAuth2)
+		} else {
+			executor, err = sessionpg.NewCookieRevokeOneExecutor(d.PostgreSQL, execution, c.Session.CSRFKeys)
+		}
 		if err != nil {
 			return nil, invalid
 		}

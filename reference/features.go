@@ -88,6 +88,7 @@ type DeliveryConfiguration struct {
 type featureState struct {
 	socialOAuth                  *socialOAuthState
 	enterpriseOIDC               *enterpriseOIDCState
+	enterpriseOAuth2             *enterpriseOAuth2State
 	oauthWorkload                *oauthWorkloadState
 	apiKey                       *apiKeyState
 	httpAPIKey                   *apiKeyHTTPState
@@ -173,6 +174,9 @@ type featureState struct {
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
 	if err := validateEnterpriseOIDCSelection(c); err != nil {
+		return err
+	}
+	if err := validateEnterpriseOAuth2Selection(c); err != nil {
 		return err
 	}
 	if c.OAuthWorkload != nil {
@@ -536,6 +540,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	enterpriseOIDCOwner, err := composeEnterpriseOIDC(c, d, evaluator, crypto)
+	if err != nil {
+		return err
+	}
+	enterpriseOAuth2Owner, err := composeEnterpriseOAuth2(c, d, evaluator, crypto)
 	if err != nil {
 		return err
 	}
@@ -939,6 +947,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.session = sessionOwner
 	s.features.socialOAuth = socialOAuthOwner
 	s.features.enterpriseOIDC = enterpriseOIDCOwner
+	s.features.enterpriseOAuth2 = enterpriseOAuth2Owner
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

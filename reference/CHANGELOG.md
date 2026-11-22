@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose opt-in linked-member enterprise OAuth2 sign-in through Reference's
+  pre-auth, start, callback, cookie read and strict logout. Reuse the native
+  provider, vault and revocation owners; plan forward-only PostgreSQL
+  expansions independently of optional OIDC features.
+
 - Compose opt-in enterprise OIDC member account linking with the common
   browser endpoints, existing password cookie, and same-origin consent.
   Linking does not issue credentials. Ordinary sign-in and first-login

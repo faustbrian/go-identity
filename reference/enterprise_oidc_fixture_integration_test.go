@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -60,7 +61,13 @@ func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference
 	if err != nil || response.StatusCode != http.StatusOK || !created.Committed || created.OrganizationID == "" {
 		t.Fatal("native organization creation did not commit", response.StatusCode, err)
 	}
-	profile := c.EnterpriseOIDC.Login.Profiles[0]
+	var login ssopg.ProviderLoginConfig
+	var providerDomain string
+	if provider.oauth2 {
+		login, providerDomain = c.EnterpriseOAuth2.Login, c.EnterpriseOAuth2.Profile.Domain
+	} else {
+		login, providerDomain = c.EnterpriseOIDC.Login, c.EnterpriseOIDC.Login.Profiles[0].Domain
+	}
 	organizations, err := organizationpg.NewRepository(pool, c.Organization.Repository)
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +87,7 @@ func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference
 	if err != nil {
 		t.Fatal(err)
 	}
-	execution, login := c.Session.Native.Execution, c.EnterpriseOIDC.Login
+	execution := c.Session.Native.Execution
 	setup, err := ssopg.NewProviderService(pool, ssopg.ProviderServiceConfig{Clock: execution.Clock, MaximumDuration: 4 * time.Second,
 		Sessions: sessions, Session: execution.Repository, Profile: c.PasswordSignin.Native.Profile, LookupKeys: map[uint32]session.DigestKey{
 			enterpriseLookupVersion(t, validation.LookupKeys[0]): validation.LookupKeys[0],
@@ -90,10 +97,6 @@ func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference
 	if err != nil {
 		t.Fatal("compose native provider setup", err)
 	}
-	metadata, err := sso.NewOIDCStaticMetadata(provider.metadata())
-	if err != nil {
-		t.Fatal(err)
-	}
 	mappingSpec := sso.AttributeMappingSpec{Version: 1, SubjectClaim: "sub"}
 	if provider.jitMapping {
 		mappingSpec.EmailClaim, mappingSpec.VerifiedEmailClaim = "work_mail", "verified_work_mail"
@@ -102,23 +105,58 @@ func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference
 	if err != nil {
 		t.Fatal(err)
 	}
-	registered, err := setup.ProviderRegisterOidc(ctx, sso.ProviderRegisterOidcRequest{OrganizationID: string(created.OrganizationID), CommandID: enterpriseCommand(t),
-		Issuer: provider.server.URL, StaticMetadata: metadata, Mapping: mapping, Domains: []string{profile.Domain}, IdempotencyKey: enterpriseKey(t, "enterprise-register")})
-	if err != nil || registered.Provider.ID == "" || registered.Provider.Version != 1 || registered.Provider.Enabled {
-		t.Fatal("native provider registration did not commit disabled version", err)
+	var providerID string
+	protocol := "oidc"
+	if provider.oauth2 {
+		protocol = "oauth2"
+		setup, err = setup.WithOAuthRegistration()
+		if err != nil {
+			t.Fatal(err)
+		}
+		endpoint := func(path string) url.URL {
+			u, err := url.Parse(provider.server.URL + path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return *u
+		}
+		proof, err := sso.NewIdentityProofPolicy(sso.IdentityProofPolicySpec{Version: 1, Issuer: provider.server.URL,
+			SubjectKind: sso.OAuthSubjectString, EmailVerification: sso.OAuthEmailUnverified})
+		if err != nil {
+			t.Fatal(err)
+		}
+		registered, err := setup.ProviderRegisterOauth(ctx, sso.ProviderRegisterOauthRequest{
+			OrganizationID: string(created.OrganizationID), CommandID: enterpriseCommand(t),
+			AuthorizationEndpoint: endpoint("/authorize"), TokenEndpoint: endpoint("/token"), IdentityEndpoint: endpoint("/identity"),
+			IdentityProofPolicy: proof, Mapping: mapping, Domains: []string{providerDomain}, IdempotencyKey: enterpriseKey(t, "enterprise-register"),
+		})
+		if err != nil || registered.Provider.ID == "" || registered.Provider.Version != 1 || registered.Provider.Enabled {
+			t.Fatal("native OAuth2 provider registration did not commit disabled version", err)
+		}
+		providerID = registered.Provider.ID
+	} else {
+		metadata, err := sso.NewOIDCStaticMetadata(provider.metadata())
+		if err != nil {
+			t.Fatal(err)
+		}
+		registered, err := setup.ProviderRegisterOidc(ctx, sso.ProviderRegisterOidcRequest{OrganizationID: string(created.OrganizationID), CommandID: enterpriseCommand(t),
+			Issuer: provider.server.URL, StaticMetadata: metadata, Mapping: mapping, Domains: []string{providerDomain}, IdempotencyKey: enterpriseKey(t, "enterprise-register")})
+		if err != nil || registered.Provider.ID == "" || registered.Provider.Version != 1 || registered.Provider.Enabled {
+			t.Fatal("native provider registration did not commit disabled version", err)
+		}
+		providerID = registered.Provider.ID
 	}
-	providerID := registered.Provider.ID
 	setup, err = setup.ForOrganization(string(created.OrganizationID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy := referenceEnterpriseOIDCPolicy{}
+	policy := referenceEnterpriseOIDCPolicy{allowOAuth2: provider.oauth2}
 	credentials, err := ssopg.NewProviderCredentialsService(setup, ssopg.ProviderCredentialsConfig{Authorization: policy, IngressKeyID: login.KeyReference, MaximumReferenceLifetime: time.Minute})
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	binding := sso.CredentialReferenceContext{TenantID: otpTenant, OrganizationID: string(created.OrganizationID), ProviderID: providerID, Protocol: "oidc", Purpose: "client-secret",
+	binding := sso.CredentialReferenceContext{TenantID: otpTenant, OrganizationID: string(created.OrganizationID), ProviderID: providerID, Protocol: protocol, Purpose: "client-secret",
 		Generation: 1, ProviderVersion: 1, Audience: "identity.sso.provider.credentials-rotate", EnvelopeKeyID: login.KeyReference, IssuedAt: now, ExpiresAt: now.Add(time.Minute)}
 	aad, err := binding.EncryptionContext()
 	if err != nil {
@@ -146,11 +184,21 @@ func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkpoint, err := setup.ObserveProviderCredentialCheckpoint(ctx, providerID, 2)
+	if provider.oauth2 {
+		setup, err = setup.WithProviderDisableAuthorization(policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	observeCredential := setup.ObserveProviderCredentialCheckpoint
+	if provider.oauth2 {
+		observeCredential = setup.ObserveOAuth2ProviderCredentialCheckpoint
+	}
+	checkpoint, err := observeCredential(ctx, providerID, 2)
 	if err != nil {
 		t.Fatal("native installed credential not observable", err)
 	}
-	domain := organization.DomainProof{TenantID: otpTenant, OrganizationID: created.OrganizationID, ClaimID: "reference-enterprise-domain", Domain: profile.Domain,
+	domain := organization.DomainProof{TenantID: otpTenant, OrganizationID: created.OrganizationID, ClaimID: "reference-enterprise-domain", Domain: providerDomain,
 		ClaimVersion: 1, ProofVersion: 1, Method: organization.DomainDNS, ObservedAt: now, ExpiresAt: now.Add(15 * time.Minute)}
 	execEnterpriseFixture(t, ctx, pool, `INSERT INTO organization.domain_claims(tenant_id,organization_id,claim_id,canonical_domain,state,version) VALUES($1,$2,$3,$4,'requested',1)`, otpTenant, string(domain.OrganizationID), string(domain.ClaimID), domain.Domain)
 	execEnterpriseFixture(t, ctx, pool, `INSERT INTO organization.domain_evidence(tenant_id,organization_id,claim_id,canonical_domain,claim_version,proof_version,method,observed_at,expires_at,revoked,command_id)
@@ -163,7 +211,7 @@ VALUES($1,$2,$3,$4,1,1,'dns-txt',$5,$6,false,$7)`, otpTenant, string(domain.Orga
 	}
 	selected := enterpriseProvisioned{user: user, organization: created.OrganizationID, provider: sso.ProviderID(providerID), bearer: bearer}
 	if member.user == "" {
-		seedEnterpriseLink(t, ctx, pool, selected, provider.server.URL)
+		seedEnterpriseLink(t, ctx, pool, selected, provider.server.URL, provider.oauth2)
 		return selected
 	}
 	payload, err := json.Marshal(map[string]any{"organizationID": created.OrganizationID, "organizationVersion": created.AfterVersion,
@@ -264,9 +312,13 @@ VALUES($1,$2,$3,$4,1,1,'active',$5,$6,$7,$8)`, otpTenant, sessionID, string(user
 	return user, auth.NewBearerCredential(plain)
 }
 
-func seedEnterpriseLink(t *testing.T, ctx context.Context, pool *database.Pool, selected enterpriseProvisioned, issuer string) {
+func seedEnterpriseLink(t *testing.T, ctx context.Context, pool *database.Pool, selected enterpriseProvisioned, issuer string, oauth2 bool) {
 	t.Helper()
-	provider, err := ssopg.SSOOIDCAccountProviderNamespace(selected.organization, selected.provider)
+	namespace := ssopg.SSOOIDCAccountProviderNamespace
+	if oauth2 {
+		namespace = ssopg.SSOOAuth2AccountProviderNamespace
+	}
+	provider, err := namespace(selected.organization, selected.provider)
 	if err != nil {
 		t.Fatal(err)
 	}

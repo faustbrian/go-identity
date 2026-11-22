@@ -286,6 +286,8 @@ type signupGraphExtensions struct {
 	enterpriseOIDCRoles         bool
 	enterpriseOIDCJIT           bool
 	enterpriseOIDCLink          bool
+	enterpriseOAuth2            bool
+	enterpriseOAuth2Upgrade     bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -545,8 +547,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
-	if extensions.enterpriseOIDC {
-		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink}
+	if extensions.enterpriseOIDC || extensions.enterpriseOAuth2 {
+		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink,
+			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade}
 	}
 	if extensions.organizationKey {
 		selectedAuthorization = referenceOrganizationKeyPolicy{}
@@ -714,6 +717,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if extensions.enterpriseOIDCJIT {
 			prepareReferenceEnterpriseJITMapping(&c, enterpriseIssuer)
 		}
+	}
+	var enterpriseOAuth2Issuer *referenceEnterpriseIssuer
+	if extensions.enterpriseOAuth2 {
+		enterpriseOAuth2Issuer = configureReferenceEnterpriseOAuth2(t, &c, origin)
 	}
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
@@ -1367,7 +1374,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
-	if c.EnterpriseOIDC != nil {
+	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil {
 		modules = append(modules, "sso/postgres")
 	}
 	if c.APIKey != nil {
@@ -1413,7 +1420,7 @@ END $$`); err != nil {
 		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
 		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
 	}
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -1748,8 +1755,9 @@ END $$`); err != nil {
 		{"identity.account.link-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.LinkStart},
 		{"identity.oauth.signin-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.SigninStart},
 		{"identity.oauth.callback", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.Callback},
-		{"identity.sso.signin-start", c.HTTPEnterpriseOIDC != nil},
+		{"identity.sso.signin-start", c.HTTPEnterpriseOIDC != nil || c.HTTPEnterpriseOAuth2 != nil},
 		{"identity.sso.oidc-callback", c.HTTPEnterpriseOIDC != nil},
+		{"identity.sso.oauth-callback", c.HTTPEnterpriseOAuth2 != nil},
 	} {
 		if selected.enabled {
 			wantOperations++
@@ -1806,6 +1814,17 @@ END $$`); err != nil {
 	client.Timeout = 5 * time.Second
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if extensions.enterpriseOAuth2 {
+		if readiness := server.Readiness(ctx); !readiness.Ready {
+			t.Fatal("selected OAuth2 graph did not report ready after migrating", readiness.Failures)
+		}
+		selected := provisionReferenceEnterprise(t, ctx, c, deps, client, origin, enterpriseOAuth2Issuer, enterpriseProvisioned{})
+		restarted, features := selectProvisionedEnterprise(t, ctx, c, deps, config, selected, workerConfigs, nil)
+		handler := restarted.Handler()
+		organizationHandler.Store(&handler)
+		proveReferenceEnterpriseOIDCJourney(t, ctx, client, origin, features, enterpriseOAuth2Issuer, selected)
+		return
 	}
 	if extensions.enterpriseOIDC {
 		if readiness := server.Readiness(ctx); !readiness.Ready {
@@ -1873,6 +1892,13 @@ END $$`); err != nil {
 			return
 		}
 		proveReferenceEnterpriseOIDCJourney(t, ctx, client, origin, features, enterpriseIssuer, selected)
+		if extensions.enterpriseOAuth2Upgrade {
+			upgraded, upgradedFeatures := proveReferenceEnterpriseOAuth2Upgrade(t, ctx, c, deps, config, selected, workerConfigs, modules, origin)
+			handler := upgraded.Handler()
+			organizationHandler.Store(&handler)
+			proveReferenceEnterpriseOIDCJourney(t, ctx, client, origin, upgradedFeatures, enterpriseIssuer, selected)
+			return
+		}
 		proveReferenceEnterpriseAllowsLaterSocialSelection(t, ctx, c, deps, config, selected, workerConfigs, modules, origin)
 		return
 	}

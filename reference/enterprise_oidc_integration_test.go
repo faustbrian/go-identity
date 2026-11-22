@@ -39,7 +39,7 @@ func TestReferencePostgresEnterpriseOIDCJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseOIDC: true})
 }
 
-type referenceEnterpriseOIDCPolicy struct{ allowLink bool }
+type referenceEnterpriseOIDCPolicy struct{ allowLink, allowOAuth2 bool }
 
 func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
@@ -49,6 +49,10 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 		switch c.Request.Action {
 		case "identity.sso.oidc-callback", "identity.sso.signin-start", "identity.sso.signin-start.recover", "identity.sso.oidc-callback.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		case "identity.sso.oauth-callback", "identity.sso.oauth-callback.recover":
+			if p.allowOAuth2 {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		}
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
@@ -59,6 +63,10 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 			}
 		}
 		switch c.Request.Action {
+		case "identity.sso.provider.register-oauth", "identity.sso.provider.register-oauth.recover":
+			if p.allowOAuth2 {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		case "org:sso-write", "org:sso-read", "org:sso-credentials", "identity.sso.provider.register-oidc", "identity.sso.provider.register-oidc.recover",
 			"identity.sso.provider.credentials-rotate", "identity.sso.provider.credentials-rotate.recover", "identity.sso.provider.enable", "identity.sso.provider.enable.recover",
 			"identity.organization.role.create", "identity.organization.role.create.recover", "identity.organization.permission-check":
@@ -76,6 +84,11 @@ func (p referenceEnterpriseOIDCPolicy) ObserveProviderEnableAuthorization(ctx co
 func (p referenceEnterpriseOIDCPolicy) ObserveProviderCredentialsAuthorization(ctx context.Context, d authorization.DecisionContext, version uint64) (ssopg.ProviderCredentialsAuthorizationEvidence, error) {
 	decision, err := p.Decide(ctx, d)
 	return ssopg.ProviderCredentialsAuthorizationEvidence{Context: d.Clone(), Decision: decision, ActorAuthorizationVersion: version, ValidUntil: d.Request.Environment.Time.Add(15 * time.Second)}, err
+}
+
+func (p referenceEnterpriseOIDCPolicy) ObserveProviderDisableAuthorization(ctx context.Context, d authorization.DecisionContext, version uint64) (ssopg.ProviderDisableAuthorizationEvidence, error) {
+	decision, err := p.Decide(ctx, d)
+	return ssopg.ProviderDisableAuthorizationEvidence{Context: d.Clone(), Decision: decision, ActorAuthorizationVersion: version, ValidUntil: d.Request.Environment.Time.Add(15 * time.Second)}, err
 }
 
 func configureReferenceEnterpriseOIDC(t *testing.T, c *reference.StoreConfiguration, origin string) *referenceEnterpriseIssuer {
@@ -129,6 +142,9 @@ type referenceEnterpriseIssuer struct {
 	mux            sync.Mutex
 	grant          map[string]enterpriseGrant
 	posts          atomic.Int32
+	identities     atomic.Int32
+	oauth2         bool
+	accessToken    string
 	roleClaim      string
 	roleGrant      atomic.Bool
 	jitMapping     bool
@@ -138,6 +154,11 @@ type referenceEnterpriseIssuer struct {
 type enterpriseGrant struct{ nonce, challenge string }
 
 func newReferenceEnterpriseIssuer(t *testing.T, returnURI string) *referenceEnterpriseIssuer {
+	t.Helper()
+	return newReferenceEnterpriseIssuerForProtocol(t, returnURI, false)
+}
+
+func newReferenceEnterpriseIssuerForProtocol(t *testing.T, returnURI string, oauth2 bool) *referenceEnterpriseIssuer {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -149,7 +170,16 @@ func newReferenceEnterpriseIssuer(t *testing.T, returnURI string) *referenceEnte
 	}
 	secret := base64.RawURLEncoding.AppendEncode(nil, entropy[:])
 	clear(entropy[:])
-	p := &referenceEnterpriseIssuer{key: key, secret: secret, returnURI: returnURI, grant: make(map[string]enterpriseGrant)}
+	access, err := session.NewToken(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accessToken, err := access.Reveal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &referenceEnterpriseIssuer{key: key, secret: secret, returnURI: returnURI, grant: make(map[string]enterpriseGrant),
+		oauth2: oauth2, accessToken: accessToken}
 	p.server = httptest.NewTLSServer(http.HandlerFunc(p.serve))
 	t.Cleanup(func() { p.server.Close(); clear(secret) })
 	return p
@@ -165,8 +195,9 @@ func (p *referenceEnterpriseIssuer) serve(w http.ResponseWriter, r *http.Request
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/authorize":
 		q := r.URL.Query()
+		validNonce := !p.oauth2 && len(q.Get("nonce")) == 43 || p.oauth2 && !q.Has("nonce")
 		if q.Get("client_id") != enterpriseProviderClient || q.Get("redirect_uri") != p.returnURI || q.Get("response_type") != "code" || q.Get("response_mode") != "query" ||
-			q.Get("code_challenge_method") != "S256" || len(q.Get("state")) != 43 || len(q.Get("nonce")) != 43 || len(q.Get("code_challenge")) != 43 {
+			q.Get("code_challenge_method") != "S256" || len(q.Get("state")) != 43 || !validNonce || len(q.Get("code_challenge")) != 43 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -182,6 +213,14 @@ func (p *referenceEnterpriseIssuer) serve(w http.ResponseWriter, r *http.Request
 		http.Redirect(w, r, p.returnURI+"?"+returnQuery.Encode(), http.StatusSeeOther)
 	case r.Method == http.MethodPost && r.URL.Path == "/token":
 		p.tokenResponse(w, r)
+	case p.oauth2 && r.Method == http.MethodGet && r.URL.Path == "/identity":
+		p.identities.Add(1)
+		if r.Header.Get("Authorization") != "Bearer "+p.accessToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"sub": enterpriseProviderSubject})
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -190,9 +229,16 @@ func (p *referenceEnterpriseIssuer) serve(w http.ResponseWriter, r *http.Request
 func (p *referenceEnterpriseIssuer) tokenResponse(w http.ResponseWriter, r *http.Request) {
 	p.posts.Add(1)
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	if r.ParseForm() != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	clientID, escaped, authenticated := r.BasicAuth()
 	secret, parseErr := url.QueryUnescape(escaped)
-	if !authenticated || clientID != enterpriseProviderClient || parseErr != nil || !bytes.Equal([]byte(secret), p.secret) || r.ParseForm() != nil ||
+	if p.oauth2 {
+		clientID, secret, parseErr, authenticated = r.PostForm.Get("client_id"), r.PostForm.Get("client_secret"), nil, r.Header.Get("Authorization") == ""
+	}
+	if !authenticated || clientID != enterpriseProviderClient || parseErr != nil || !bytes.Equal([]byte(secret), p.secret) ||
 		r.PostForm.Get("grant_type") != "authorization_code" || r.PostForm.Get("redirect_uri") != p.returnURI {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -214,6 +260,12 @@ func (p *referenceEnterpriseIssuer) tokenResponse(w http.ResponseWriter, r *http
 	p.mux.Unlock()
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if p.oauth2 {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": p.accessToken, "refresh_token": "fixture-enterprise-oauth-refresh",
+			"token_type": "Bearer", "expires_in": 300, "scope": "read:identity"})
 		return
 	}
 	now := time.Now().UTC()
@@ -296,6 +348,12 @@ func proveReferenceEnterpriseOIDCBootstrapped(t *testing.T, ctx context.Context,
 
 func selectProvisionedEnterprise(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, config reference.ReferenceConfig, selected enterpriseProvisioned, workers []deliverypg.WorkerConfig, migrate func(reference.StoreSet)) (*reference.Server, reference.FeatureSet) {
 	t.Helper()
+	if c.EnterpriseOIDC == nil && c.EnterpriseOAuth2 != nil {
+		native := *c.EnterpriseOAuth2
+		native.Profile.OrganizationID, native.Profile.ProviderID = selected.organization, selected.provider
+		c.EnterpriseOAuth2 = &native
+		return startProvisionedEnterprise(t, ctx, c, deps, config, workers, migrate)
+	}
 	native := *c.EnterpriseOIDC
 	login := native.Login.Profiles[0]
 	login.OrganizationID, login.ProviderID = selected.organization, selected.provider
@@ -310,6 +368,11 @@ func selectProvisionedEnterprise(t *testing.T, ctx context.Context, c reference.
 		native.RoleSync = &mapping
 	}
 	c.EnterpriseOIDC = &native
+	return startProvisionedEnterprise(t, ctx, c, deps, config, workers, migrate)
+}
+
+func startProvisionedEnterprise(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, config reference.ReferenceConfig, workers []deliverypg.WorkerConfig, migrate func(reference.StoreSet)) (*reference.Server, reference.FeatureSet) {
+	t.Helper()
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		t.Fatal("compose installed enterprise graph", err)
@@ -397,10 +460,15 @@ func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base
 func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context, base *http.Client, origin string, features reference.FeatureSet, provider *referenceEnterpriseIssuer, selected enterpriseProvisioned, created func(identity.UserID)) {
 	t.Helper()
 	previousPosts := provider.posts.Load()
+	method, callbackPath := "sso-oidc", "/sso/oidc/callback"
+	if provider.oauth2 {
+		method, callbackPath = "sso-oauth2", "/sso/oauth2/callback"
+	}
 	requestKey := "enterprise-original-signin"
 	if created != nil {
 		requestKey = "enterprise-jit-first-signin"
 	}
+	requestKey += "-" + string(enterpriseCommand(t))
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -431,16 +499,23 @@ func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context
 		return out
 	}
 	const preauthPath = "/v1/session/preauth-issue"
-	issued := request(http.MethodPost, preauthPath, []byte(`{"method":"sso-oidc"}`), "", "")
-	var flow struct{ FlowID string }
-	err = json.NewDecoder(issued.Body).Decode(&flow)
-	_ = issued.Body.Close()
-	if issued.StatusCode != http.StatusOK || err != nil || flow.FlowID == "" {
-		t.Fatal("installed provider pre-auth flow was not issued", issued.StatusCode)
+	issueFlow := func() string {
+		t.Helper()
+		issued := request(http.MethodPost, preauthPath, []byte(`{"method":"`+method+`"}`), "", "")
+		defer issued.Body.Close()
+		var flow struct{ FlowID string }
+		if issued.StatusCode != http.StatusOK || json.NewDecoder(issued.Body).Decode(&flow) != nil || flow.FlowID == "" {
+			t.Fatal("installed provider pre-auth flow was not issued", issued.StatusCode)
+		}
+		return flow.FlowID
 	}
 	success := origin + "/enterprise/complete"
-	input, err := json.Marshal(map[string]string{"flowID": flow.FlowID, "commandID": string(enterpriseCommand(t)), "providerID": string(selected.provider),
-		"callback": success, "errorCallback": origin + "/enterprise/error"})
+	startBody := map[string]string{"flowID": issueFlow(), "commandID": string(enterpriseCommand(t)), "providerID": string(selected.provider),
+		"callback": success, "errorCallback": origin + "/enterprise/error"}
+	if provider.oauth2 {
+		startBody["domain"] = "enterprise.example"
+	}
+	input, err := json.Marshal(startBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,15 +534,20 @@ func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context
 	}
 	external := *provider.server.Client()
 	external.CheckRedirect = client.CheckRedirect
-	authorize, err := external.Get(original.AuthorizationURL)
-	if err != nil {
-		t.Fatal("controlled provider authorization failed")
+	authorizeCallback := func(authorizationURL string) string {
+		t.Helper()
+		authorize, err := external.Get(authorizationURL)
+		if err != nil {
+			t.Fatal("controlled provider authorization failed")
+		}
+		defer authorize.Body.Close()
+		callback := authorize.Header.Get("Location")
+		if authorize.StatusCode != http.StatusSeeOther || !strings.HasPrefix(callback, origin+callbackPath+"?") {
+			t.Fatal("provider did not return to the exact configured callback", authorize.StatusCode)
+		}
+		return callback
 	}
-	_ = authorize.Body.Close()
-	callbackURL := authorize.Header.Get("Location")
-	if authorize.StatusCode != http.StatusSeeOther || !strings.HasPrefix(callbackURL, origin+"/sso/oidc/callback?") {
-		t.Fatal("provider did not return to the exact configured callback", authorize.StatusCode)
-	}
+	callbackURL := authorizeCallback(original.AuthorizationURL)
 	getCallback := func() *http.Response {
 		t.Helper()
 		response, err := client.Get(callbackURL)
@@ -480,6 +560,9 @@ func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context
 	callback := getCallback()
 	if callback.StatusCode != http.StatusSeeOther || callback.Header.Get("Location") != success || provider.posts.Load() != previousPosts+1 || len(callback.Cookies()) != 2 {
 		t.Fatal("linked enterprise login did not deliver one committed browser session", callback.StatusCode, provider.posts.Load())
+	}
+	if provider.oauth2 && provider.identities.Load() != previousPosts+1 {
+		t.Fatal("OAuth2 sign-in must authenticate the separate identity endpoint")
 	}
 	var csrf, token string
 	for _, cookie := range callback.Cookies() {
@@ -521,7 +604,7 @@ func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context
 	if created != nil {
 		created(selected.user)
 	}
-	checkReferenceEnterpriseOrganization(t, ctx, features, token, public.Session.ID, selected)
+	checkReferenceEnterpriseOrganization(t, ctx, features, token, public.Session.ID, method, selected)
 	wrong := request(http.MethodPost, "/v1/session/signout", []byte(`{}`), "", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	_ = wrong.Body.Close()
 	if wrong.StatusCode != http.StatusForbidden || len(wrong.Cookies()) != 0 {
@@ -551,9 +634,33 @@ func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context
 	if replay.StatusCode == http.StatusSeeOther || len(replay.Cookies()) != 0 || replay.Header.Get("Location") != "" || provider.posts.Load() != previousPosts+1 {
 		t.Fatal("historical enterprise callback re-exchanged or disclosed credentials", replay.StatusCode)
 	}
+	if provider.oauth2 {
+		startBody["flowID"], startBody["commandID"] = issueFlow(), string(enterpriseCommand(t))
+		requestKey = "enterprise-oauth2-refusal-" + startBody["commandID"]
+		input, err = json.Marshal(startBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		good := authorizeCallback(start().AuthorizationURL)
+		bad, err := url.Parse(good)
+		if err != nil {
+			t.Fatal(err)
+		}
+		query := bad.Query()
+		query.Del("iss")
+		bad.RawQuery = query.Encode() + "&iss=%ZZ"
+		for _, target := range []string{bad.String(), good} {
+			callbackURL = target
+			denied := getCallback()
+			if denied.StatusCode != http.StatusForbidden || len(denied.Cookies()) != 0 || denied.Header.Get("Location") != "" ||
+				provider.posts.Load() != previousPosts+1 || provider.identities.Load() != previousPosts+1 {
+				t.Fatal("definitive issuer refusal or its replay reached provider or exposed credentials", denied.StatusCode)
+			}
+		}
+	}
 }
 
-func checkReferenceEnterpriseOrganization(t *testing.T, ctx context.Context, features reference.FeatureSet, token, publicSession string, selected enterpriseProvisioned) {
+func checkReferenceEnterpriseOrganization(t *testing.T, ctx context.Context, features reference.FeatureSet, token, publicSession, method string, selected enterpriseProvisioned) {
 	t.Helper()
 	service, err := features.Sessions()
 	if err != nil {
@@ -572,7 +679,7 @@ func checkReferenceEnterpriseOrganization(t *testing.T, ctx context.Context, fea
 		t.Fatal("common native reader rejected the browser's enterprise credential", err)
 	}
 	spec, err := read.Session.Bindings()
-	if err != nil || spec.SessionID != publicSession || spec.UserID != selected.user || spec.Authentication.Kind != session.AuthenticationVerified || spec.Authentication.Proof.Method != "sso-oidc" {
+	if err != nil || spec.SessionID != publicSession || spec.UserID != selected.user || spec.Authentication.Kind != session.AuthenticationVerified || spec.Authentication.Proof.Method != method {
 		t.Fatal("common native reader changed enterprise provenance")
 	}
 	authority, err := spec.Authority.Bindings()

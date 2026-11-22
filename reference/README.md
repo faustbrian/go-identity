@@ -206,6 +206,44 @@ together. Do not mix this Reference history with the standalone concurrent
 index history on the same primary. HTTP uses the same routes and cookies. No
 extra public capability is advertised.
 
+## Optional enterprise OAuth2 sign-in
+
+Select `EnterpriseOAuth2` for an existing linked member of one installed
+static provider. Pin the verified domain, organization, provider version,
+credential generation, mapping, client, scopes, and separate authenticated
+identity endpoint in its native configuration. Leave `Exchange.Profile.ID`
+unset so Reference derives it from that installed provider. This profile
+does not use ID tokens, match users by email, or enable provisioning, member
+linking, role sync, or provider-token export. Install and activate the provider
+through the native SSO management owners, with disable authority configured.
+
+Select `HTTPEnterpriseOAuth2` separately. Use the common cookie session routes,
+original flow and browser-device policies, strong rate admission, and the
+exact trusted HTTPS origin. Register `<origin>/sso/oauth2/callback` at the
+provider. Set `SuccessCallback` to the distinct, allowlisted landing URL.
+When sharing the start route with OIDC, use distinct installed provider IDs
+and a common tenant, origin and CSRF cookie policy. A selected social callback
+must also share that CSRF policy.
+
+1. Obtain the original flow with `POST /v1/session/preauth-issue` and
+   `{"method":"sso-oauth2"}`. Send the flow ID, command ID, provider ID, exact
+   domain and both application landing URLs to `POST /v1/sso/signin-start`
+   with the exact Origin and a retained `Idempotency-Key`.
+2. Follow the returned authorization URL. The browser returns with the
+   original cookies, state, and exact issuer. Successful acknowledged
+   callbacks redirect to the stored application URL and deliver session and
+   CSRF cookies. Refusal and replay deliver neither; do not log callback URLs.
+3. Read the resulting session at `GET /v1/session/get`. Sign out via
+   `POST /v1/session/signout` using the exact Origin and the session-bound
+   CSRF token. The common routes keep OAuth2 cookie authority separate from
+   OIDC, social sign-in, and bearer credentials.
+
+Explicitly check, plan and apply the forward OAuth2 migrations before startup.
+An existing OIDC installation keeps its original history; OAuth2 extends the
+shared provider and session schema without enabling OIDC routes on a fresh
+OAuth2-only installation. To remove the OAuth2 browser routes without changing
+installed history, remove `HTTPEnterpriseOAuth2` and keep the native selection.
+
 The [baseline](enterprise_oidc_integration_test.go),
 [role-sync](enterprise_oidc_role_integration_test.go),
 [first-login](enterprise_oidc_jit_integration_test.go), and

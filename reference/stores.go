@@ -48,6 +48,10 @@ type StoreConfiguration struct {
 	// HTTPEnterpriseOIDC independently opts into its browser start and callback.
 	EnterpriseOIDC     *EnterpriseOIDCConfiguration
 	HTTPEnterpriseOIDC *HTTPEnterpriseOIDCConfiguration
+	// EnterpriseOAuth2 selects native linked-member OAuth2 without an ID token.
+	// HTTPEnterpriseOAuth2 independently opts into that browser workflow.
+	EnterpriseOAuth2     *EnterpriseOAuth2Configuration
+	HTTPEnterpriseOAuth2 *HTTPEnterpriseOAuth2Configuration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

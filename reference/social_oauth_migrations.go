@@ -16,7 +16,7 @@ import (
 // password/session prerequisites; every previously installed prefix is intact.
 func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
 	f := s.state.features
-	if f == nil || f.socialOAuth == nil && f.enterpriseOIDC == nil {
+	if f == nil || f.socialOAuth == nil && f.enterpriseSessionSchema() == "" {
 		return catalog, nil
 	}
 	var err error
@@ -35,16 +35,20 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 	startErasure := kernel.OAuthRPPreparationErasureMigrationSource{Base: preparation, Version: 2402}
 	linkErasure := kernel.AccountLinkPreparationErasureMigrationSource{Base: startErasure, Version: 2403}
 	var accountHistory migrations.Source = kernel.AccountLinkPreparationErasureValidationMigrationSource{Base: linkErasure, Version: 2404}
-	if f.enterpriseOIDC != nil || f.socialOAuth.unlink != nil {
+	enterpriseSchema := f.enterpriseSessionSchema()
+	if enterpriseSchema != "" || f.socialOAuth.unlink != nil {
 		expand := kernel.AccountUnlinkPreparationMigrationSource{Base: accountHistory, Version: 2405}
 		accountHistory = kernel.AccountUnlinkPreparationValidationMigrationSource{Base: expand, Version: 2406}
 	}
-	if f.enterpriseOIDC != nil {
+	if enterpriseSchema != "" {
 		// This is the existing account/preparation history, not a second copy of
 		// the account tables. The enterprise erasure suffix retains social rules.
 		refresh := kernel.OAuthProviderRefreshErasureMigrationSource{Base: accountHistory, Version: 2407}
 		start := kernel.SSOOIDCPreparationErasureMigrationSource{Base: refresh, Version: 2408}
 		accountHistory = kernel.SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 2409}
+	}
+	if f.enterpriseOAuth2 != nil {
+		accountHistory = kernel.SSOOAuth2CallbackPreparationErasureMigrationSource{Base: accountHistory, Version: 2410}
 	}
 	full, err := accountHistory.Load(ctx)
 	if err != nil {
@@ -57,7 +61,7 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 	}
 	catalog = append(catalog, h)
 	if f.socialOAuth == nil {
-		return appendOAuthSigninSessionMigration(ctx, catalog, f.enterpriseOIDC.sessionSchema)
+		return appendOAuthSigninSessionMigration(ctx, catalog, enterpriseSchema)
 	}
 	schema := f.socialOAuth.schema
 	rp, err := (oauthpg.MigrationSource{Schema: schema, Version: 1}).Load(ctx)
@@ -91,8 +95,8 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 	if signin := f.socialOAuth.signin; signin != nil {
 		return appendOAuthSigninSessionMigration(ctx, catalog, signin.sessionSchema)
 	}
-	if f.enterpriseOIDC != nil {
-		return appendOAuthSigninSessionMigration(ctx, catalog, f.enterpriseOIDC.sessionSchema)
+	if enterpriseSchema != "" {
+		return appendOAuthSigninSessionMigration(ctx, catalog, enterpriseSchema)
 	}
 	return catalog, nil
 }
