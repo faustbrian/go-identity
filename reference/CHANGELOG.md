@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose opt-in enterprise OIDC first-login provisioning. The Reference
+  graph reuses its existing organization policies and browser routes, and
+  applies additive native migrations for the new identity, member and session.
+
 - Add opt-in enterprise OIDC repeat-login role synchronization. Reference
   composes the native provider mapping, grant-aware organization permissions,
   and additive migrations without exposing new routes. Signed withdrawals

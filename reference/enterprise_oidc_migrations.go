@@ -5,6 +5,8 @@ import (
 	"slices"
 
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	organizationpg "github.com/faustbrian/go-organization/postgres"
@@ -94,7 +96,53 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 		constraints: []string{"session_issuances.session_issuances_purpose_sso_oidc_v1"}}); err != nil {
 		return nil, err
 	}
-	return append(catalog, sessions), nil
+	catalog = append(catalog, sessions)
+	if !f.enterpriseOIDC.jit {
+		return catalog, nil
+	}
+	return enterpriseOIDCJITMigrationCatalog(ctx, catalog)
+}
+
+func enterpriseOIDCJITMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	catalog, err := identifierMutationMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	base := fixedMigrationSource(catalog[0].history)
+	if !slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == "identity_username_kernel" }) {
+		// Reuse the directory normalization allocation even when username and
+		// phone are off so selecting them later cannot reapply these columns.
+		const version = 1800
+		steps, err := (kernel.IdentifierNormalizationMigrationSource{Base: base, Version: version}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_username_kernel", history: steps[len(steps)-1:],
+			owners: map[migrations.Version]ModuleID{version: "identity/postgres"},
+			guards: []migrationGuard{{version: version, schema: "identity", columns: []string{"identifiers.normalization_profile", "identifiers.normalization_version"}}}})
+	}
+	const subjectVersion = 1850
+	// The Reference command commits each migration and its receipt together.
+	// Select the native offline index variants; concurrent builds cannot join it.
+	steps, err := (kernel.SSOOIDCSubjectAvailabilityMigrationSource{Base: base, Version: subjectVersion}).LoadOffline(ctx)
+	if err != nil {
+		return nil, err
+	}
+	catalog = append(catalog, migrationHistory{namespace: "identity_enterprise_oidc_jit_directory", history: steps[len(steps)-1:],
+		owners: map[migrations.Version]ModuleID{subjectVersion: "identity/postgres"},
+		guards: []migrationGuard{{version: subjectVersion, schema: "identity", tables: []string{"identity_accounts_retired_subject"}}}})
+
+	// Physical factor authority keeps its existing namespace and legacy signup
+	// checks. These independent steps affect only the alternate JIT provenance.
+	factors, err := (mfapg.SSOOIDCJITFactorMigrationSource{Base: mfapg.MigrationSource{Version: 1}, Version: 2, ValidationVersion: 3, IndexVersion: 4}).LoadOffline(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(catalog, migrationHistory{namespace: "identity_enterprise_oidc_jit_factors", history: factors[1:],
+		owners: map[migrations.Version]ModuleID{2: "identity/mfa/postgres", 3: "identity/mfa/postgres", 4: "identity/mfa/postgres"},
+		guards: []migrationGuard{{version: 2, schema: "identity_mfa", columns: []string{"factor_authorities.sso_oidc_initialized_purpose"},
+			constraints: []string{"factor_authorities.factor_authorities_initialization_provenance_v1", "factor_authorities.factor_authorities_sso_oidc_command_fkey"}},
+			{version: 4, schema: "identity_mfa", tables: []string{"factor_authorities_sso_oidc_command_unique"}}}}), nil
 }
 
 func appendEnterpriseMigration(ctx context.Context, history *migrationHistory, owner ModuleID, source migrations.Source, guard migrationGuard) error {

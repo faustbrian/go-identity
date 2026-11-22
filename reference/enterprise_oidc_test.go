@@ -59,6 +59,26 @@ func TestReferenceEnterpriseRoleSyncRequiresOrganizationRoles(t *testing.T) {
 	}
 }
 
+func TestReferenceEnterpriseJITRequiresExplicitPolicy(t *testing.T) {
+	c := StoreConfiguration{EnterpriseOIDC: &EnterpriseOIDCConfiguration{},
+		Session: &SessionConfiguration{}, Organization: &OrganizationConfiguration{}, OTP: &OTPSendConfiguration{}}
+	if err := validateEnterpriseOIDCSelection(c); err != nil {
+		t.Fatal("ordinary linked sign-in unexpectedly requires JIT policy", err)
+	}
+	c.EnterpriseOIDC.JIT = &EnterpriseOIDCJITConfiguration{}
+	if err := validateEnterpriseOIDCSelection(c); err == nil {
+		t.Fatal("JIT selection accepted an absent explicit provisioning policy")
+	}
+	c.EnterpriseOIDC.JIT.PolicyVersion = 1
+	if err := validateEnterpriseOIDCSelection(c); err == nil {
+		t.Fatal("JIT selection accepted absent organization membership admission")
+	}
+	c.Organization.Core.PolicyVersion, c.Organization.Core.MaximumMembers, c.Organization.Core.MaximumPerUser = 1, 10, 1
+	if err := validateEnterpriseOIDCSelection(c); err != nil {
+		t.Fatal("explicit first-login and membership policy were not selected", err)
+	}
+}
+
 func TestReferenceEnterpriseRoleSyncAppendsOnlyNativeMigrationHistories(t *testing.T) {
 	enterprise := &enterpriseOIDCState{sessionSchema: "session_store"}
 	stores := StoreSet{state: &storeState{features: &featureState{enterpriseOIDC: enterprise}}}

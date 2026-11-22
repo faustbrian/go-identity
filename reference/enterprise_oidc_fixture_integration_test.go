@@ -94,7 +94,11 @@ func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference
 	if err != nil {
 		t.Fatal(err)
 	}
-	mapping, err := sso.NewAttributeMapping(sso.AttributeMappingSpec{Version: 1, SubjectClaim: "sub"})
+	mappingSpec := sso.AttributeMappingSpec{Version: 1, SubjectClaim: "sub"}
+	if provider.jitMapping {
+		mappingSpec.EmailClaim, mappingSpec.VerifiedEmailClaim = "work_mail", "verified_work_mail"
+	}
+	mapping, err := sso.NewAttributeMapping(mappingSpec)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -128,14 +128,14 @@ browser/persistent sessions and provider denial. Only the external TLS provider
 is controlled. This selected profile does not enable signup, MFA fallback,
 refresh, unlinking or other OAuth variants. It is not full M17/M18 qualification.
 
-## Optional linked-member enterprise OIDC sign-in
+## Optional enterprise OIDC sign-in
 
 Select `EnterpriseOIDC` on the PostgreSQL organization and common session graph.
 Configure one already-installed static provider by its exact organization ID,
 provider ID, enabled version, credential generation and mapping version. The
-provider, verified domain and existing member link remain native authorities;
-Reference does not install a provider, create a link, or provision a new user
-on sign-in. Apply the selected Reference migration plan before initialization.
+provider, verified domain and existing member link remain native authorities.
+Linked-member sign-in is the default. Apply the selected Reference migration
+plan before initialization.
 
 Select `HTTPEnterpriseOIDC` separately to expose the browser routes. Provide
 the original-flow key index, the allowlisted application `SuccessCallback`,
@@ -176,10 +176,27 @@ before role sync can issue a session. Keep the selected permission reader in
 place while any managed grants are active. Leaving `RoleSync` unset on an
 ordinary enterprise installation does not require these migrations.
 
+For eligible first logins, explicitly set `EnterpriseOIDC.JIT` to an
+`EnterpriseOIDCJITConfiguration` with a positive `PolicyVersion`, the tenant's
+existing mailbox `Address` parser and identifier-retirement `Directory`
+settings. Project the installed mailbox and verification claims in the
+provider's `ClaimNames`. Only a never-linked subject with a signed boolean
+verification of a mailbox at the exact routed domain can create a new user.
+The organization graph supplies its existing membership policy and limits;
+the new account is an ordinary member. Existing users are never linked by
+email. Apply the upgraded plan before enabling this selection. Its additive
+histories preserve existing users, memberships and factor generations. Run it
+in a maintenance window with writes stopped: the Reference operator uses
+transactional index builds so the new indexes and migration receipts commit
+together. Do not mix this Reference history with the standalone concurrent
+index history on the same primary. HTTP uses the same routes and cookies. No
+extra public capability is advertised.
+
 The [baseline journey](enterprise_oidc_integration_test.go) and the
-[role-sync upgrade journey](enterprise_oidc_role_integration_test.go) use a
-disposable PostgreSQL primary and controlled TLS provider. JIT, new account
-linking, and other enterprise federation protocols are separate capabilities.
+[role-sync](enterprise_oidc_role_integration_test.go) and
+[first-login](enterprise_oidc_jit_integration_test.go) upgrade journeys use a
+disposable PostgreSQL primary and controlled TLS provider. New account linking
+and other enterprise federation protocols are separate workflows.
 
 ## Optional native social account unlink
 

@@ -7,11 +7,13 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/email"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	organization "github.com/faustbrian/go-organization"
 	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
@@ -19,7 +21,7 @@ import (
 const enterpriseOIDCCallbackAction = "identity.sso.oidc-callback"
 
 // EnterpriseOIDCConfiguration selects one installed static OIDC provider and
-// existing active linked members. It borrows this graph's primary, organization,
+// defaults to existing active linked members. It borrows this graph's primary, organization,
 // session, envelope, and evaluated risk owners. Leave Routing.Clock/Envelope,
 // Login.Session/GlobalAuthorityID/Envelope/AuditRetentionPolicyVersion,
 // Login.Risk.Evaluation/Keys, and Completion.Issuer.Clock unset; the graph
@@ -33,6 +35,32 @@ type EnterpriseOIDCConfiguration struct {
 	// the existing callback. It requires this provider's exact pinned mapping
 	// and a configured organization dynamic-role permission owner.
 	RoleSync *ssopg.StaticOIDCRoleMapping
+	// JIT optionally creates an ordinary member at first sign-in. It requires
+	// the installed provider's exact verified mailbox claim mapping. Nil is
+	// the linked-member-only profile and installs no JIT migrations.
+	JIT *EnterpriseOIDCJITConfiguration
+}
+
+// EnterpriseOIDCJITConfiguration selects an explicit first-login policy and
+// the tenant directory's existing mailbox comparison and retirement settings.
+// The graph supplies the selected provider, organization membership version
+// and limits; claims cannot choose an organization, policy or role.
+type EnterpriseOIDCJITConfiguration struct {
+	Address       email.AddressParser
+	Directory     kernel.SSOOIDCJITDomainConfig
+	PolicyVersion uint64
+}
+
+func (EnterpriseOIDCJITConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "reference.EnterpriseOIDCJITConfiguration(redacted)")
+}
+
+func (EnterpriseOIDCJITConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+
+func (EnterpriseOIDCJITConfiguration) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
 }
 
 // Format redacts deployment and key custody.
@@ -78,6 +106,7 @@ type enterpriseOIDCState struct {
 	callbacks       []string
 	csrfCookie      session.CSRFCookiePolicy
 	roleSync        bool
+	jit             bool
 }
 
 func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
@@ -94,11 +123,36 @@ func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
 	if c.EnterpriseOIDC.RoleSync != nil && c.Organization.Core.DynamicRoles.Version == 0 {
 		return invalid
 	}
+	if jit := c.EnterpriseOIDC.JIT; jit != nil {
+		membership := c.Organization.Core
+		if jit.PolicyVersion == 0 || membership.PolicyVersion == 0 || membership.MaximumMembers == 0 || membership.MaximumPerUser == 0 {
+			return invalid
+		}
+	}
 	if c.HTTPEnterpriseOIDC != nil && (c.HTTPRate == nil || c.HTTPPreAuth == nil || c.HTTPPreAuth.Device == nil || c.OTP.PreAuth == nil ||
 		c.HTTPSession == nil || c.HTTPSession.Transport != session.CredentialCookie || len(c.Session.CSRFKeys) == 0) {
 		return invalid
 	}
 	return nil
+}
+
+func composeEnterpriseOIDCCompletion(start *ssopg.ProviderLoginService, config EnterpriseOIDCConfiguration, membership organization.Config, profile ssopg.StaticOIDCLoginProfile) (*ssopg.ProviderLoginCompletionService, error) {
+	var roles []ssopg.StaticOIDCRoleMapping
+	if config.RoleSync != nil {
+		roles = []ssopg.StaticOIDCRoleMapping{*config.RoleSync}
+	}
+	if jit := config.JIT; jit != nil {
+		return ssopg.NewProviderLoginCompletionServiceWithJIT(start, config.Completion, ssopg.ProviderLoginJITConfig{
+			Address: jit.Address, Directory: jit.Directory, RoleSync: roles,
+			Profiles: []ssopg.StaticOIDCJITPolicy{{OrganizationID: profile.OrganizationID, ProviderID: profile.ProviderID,
+				Version: jit.PolicyVersion, MappingVersion: profile.MappingVersion, MembershipVersion: membership.PolicyVersion,
+				MaximumMembers: membership.MaximumMembers, MaximumPerUser: membership.MaximumPerUser}},
+		})
+	}
+	if len(roles) != 0 {
+		return ssopg.NewProviderLoginCompletionServiceWithRoleSync(start, config.Completion, roles)
+	}
+	return ssopg.NewProviderLoginCompletionService(start, config.Completion)
 }
 
 func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evaluator risk.Evaluator, crypto *envelope.Service) (*enterpriseOIDCState, error) {
@@ -134,20 +188,15 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 	if err != nil {
 		return nil, err
 	}
-	var complete *ssopg.ProviderLoginCompletionService
-	if n.RoleSync == nil {
-		complete, err = ssopg.NewProviderLoginCompletionService(start, n.Completion)
-	} else {
-		complete, err = ssopg.NewProviderLoginCompletionServiceWithRoleSync(start, n.Completion, []ssopg.StaticOIDCRoleMapping{*n.RoleSync})
-	}
+	profile := n.Login.Profiles[0]
+	complete, err := composeEnterpriseOIDCCompletion(start, n, c.Organization.Core, profile)
 	if err != nil {
 		return nil, err
 	}
-	profile := n.Login.Profiles[0]
 	profile.Scopes = slices.Clone(profile.Scopes)
 	state := &enterpriseOIDCState{start: start, completion: complete, profile: profile, tenant: n.Login.TenantID, origin: n.Login.Origin,
 		policy: n.Login.PolicyID, version: selectedSession.PolicyVersion, audience: n.Completion.Audience, duration: n.Login.Coordinator.MaximumDuration,
-		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil}
+		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil, jit: n.JIT != nil}
 	if c.HTTPEnterpriseOIDC == nil {
 		return state, nil
 	}

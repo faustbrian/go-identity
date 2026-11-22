@@ -43,7 +43,8 @@ type StoreConfiguration struct {
 	// explicitly selected routes and metadata over those actual native owners.
 	SocialOAuth     *SocialOAuthConfiguration
 	HTTPSocialOAuth *HTTPSocialOAuthConfiguration
-	// EnterpriseOIDC selects native federation for one already-linked provider.
+	// EnterpriseOIDC selects native federation for one configured provider.
+	// It defaults to linked members; provisioning requires explicit JIT policy.
 	// HTTPEnterpriseOIDC independently opts into its browser start and callback.
 	EnterpriseOIDC     *EnterpriseOIDCConfiguration
 	HTTPEnterpriseOIDC *HTTPEnterpriseOIDCConfiguration

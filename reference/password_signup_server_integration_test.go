@@ -284,6 +284,7 @@ type signupGraphExtensions struct {
 	sessionCache                *referenceSessionCacheProof
 	enterpriseOIDC              bool
 	enterpriseOIDCRoles         bool
+	enterpriseOIDCJIT           bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -709,6 +710,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var enterpriseIssuer *referenceEnterpriseIssuer
 	if extensions.enterpriseOIDC {
 		enterpriseIssuer = configureReferenceEnterpriseOIDC(t, &c, origin)
+		if extensions.enterpriseOIDCJIT {
+			prepareReferenceEnterpriseJITMapping(&c, enterpriseIssuer)
+		}
 	}
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
@@ -1823,6 +1827,29 @@ END $$`); err != nil {
 		}
 		proveReferenceEnterpriseOIDCBootstrapped(t, ctx, client, origin, c.EnterpriseOIDC.Login.Profiles[0].ProviderID)
 		selected := provisionReferenceEnterprise(t, ctx, c, deps, client, origin, enterpriseIssuer)
+		if extensions.enterpriseOIDCJIT {
+			ordinary, ordinaryFeatures := selectProvisionedEnterprise(t, ctx, c, deps, config, selected, workerConfigs, nil)
+			handler := ordinary.Handler()
+			organizationHandler.Store(&handler)
+			proveReferenceEnterpriseOIDCJourney(t, ctx, client, origin, ordinaryFeatures, enterpriseIssuer, selected)
+			legacy := readReferenceEnterpriseJITLegacyState(t, ctx, deps, selected)
+			configureReferenceEnterpriseJIT(t, &c, enterpriseIssuer)
+			upgraded, jitFeatures := selectProvisionedEnterprise(t, ctx, c, deps, config, selected, workerConfigs, func(stores reference.StoreSet) {
+				request := applyRequest(t, ctx, stores, modules)
+				request.CommandID, request.IdempotencyKey = "migration_command_0002", enterpriseKey(t, "enterprise-jit-migration")
+				result, err := stores.ReferenceMigrationApply(ctx, request)
+				if err != nil || result.Result.State() != reference.MigrationApplied {
+					t.Fatal("JIT opt-in did not preserve the populated ordinary enterprise migration history", err, result.Result.State())
+				}
+			})
+			handler = upgraded.Handler()
+			organizationHandler.Store(&handler)
+			if readReferenceEnterpriseJITLegacyState(t, ctx, deps, selected) != legacy {
+				t.Fatal("JIT opt-in migrations rewrote the existing enterprise identity, membership or factor authority")
+			}
+			proveReferenceEnterpriseOIDCJITJourney(t, ctx, client, origin, jitFeatures, enterpriseIssuer, selected, deps, c)
+			return
+		}
 		var roleEpoch uint64
 		if extensions.enterpriseOIDCRoles {
 			roleEpoch = createReferenceEnterpriseRole(t, ctx, client, origin, c, selected)

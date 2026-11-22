@@ -116,15 +116,17 @@ const (
 )
 
 type referenceEnterpriseIssuer struct {
-	server    *httptest.Server
-	key       *ecdsa.PrivateKey
-	secret    []byte
-	returnURI string
-	mux       sync.Mutex
-	grant     map[string]enterpriseGrant
-	posts     atomic.Int32
-	roleClaim string
-	roleGrant atomic.Bool
+	server         *httptest.Server
+	key            *ecdsa.PrivateKey
+	secret         []byte
+	returnURI      string
+	mux            sync.Mutex
+	grant          map[string]enterpriseGrant
+	posts          atomic.Int32
+	roleClaim      string
+	roleGrant      atomic.Bool
+	jitMapping     bool
+	assertedClaims map[string]any
 }
 
 type enterpriseGrant struct{ nonce, challenge string }
@@ -199,6 +201,10 @@ func (p *referenceEnterpriseIssuer) tokenResponse(w http.ResponseWriter, r *http
 		ok = false
 	}
 	roleClaim := p.roleClaim
+	selectedClaims := make(map[string]any, len(p.assertedClaims))
+	for name, value := range p.assertedClaims {
+		selectedClaims[name] = value
+	}
 	p.mux.Unlock()
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
@@ -209,6 +215,9 @@ func (p *referenceEnterpriseIssuer) tokenResponse(w http.ResponseWriter, r *http
 		"nonce": grant.nonce, "iat": now.Unix(), "auth_time": now.Unix(), "exp": now.Add(5 * time.Minute).Unix()}
 	if roleClaim != "" {
 		attributes[roleClaim] = p.roleGrant.Load()
+	}
+	for name, value := range selectedClaims {
+		attributes[name] = value
 	}
 	claims, err := json.Marshal(attributes)
 	if err != nil {
@@ -376,6 +385,17 @@ func proveReferenceEnterpriseAllowsLaterSocialSelection(t *testing.T, ctx contex
 
 func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base *http.Client, origin string, features reference.FeatureSet, provider *referenceEnterpriseIssuer, selected enterpriseProvisioned) {
 	t.Helper()
+	proveReferenceEnterpriseOIDCCookieJourney(t, ctx, base, origin, features, provider, selected, nil)
+}
+
+func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context, base *http.Client, origin string, features reference.FeatureSet, provider *referenceEnterpriseIssuer, selected enterpriseProvisioned, created func(identity.UserID)) {
+	t.Helper()
+	previousPosts := int32(0)
+	requestKey := "enterprise-original-signin"
+	if created != nil {
+		previousPosts = provider.posts.Load()
+		requestKey = "enterprise-jit-first-signin"
+	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -421,7 +441,7 @@ func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base
 	}
 	start := func() (out struct{ AuthorizationURL, TransactionID string }) {
 		t.Helper()
-		response := request(http.MethodPost, "/v1/sso/signin-start", input, "enterprise-original-signin", "")
+		response := request(http.MethodPost, "/v1/sso/signin-start", input, requestKey, "")
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&out) != nil || out.AuthorizationURL == "" || out.TransactionID == "" {
 			t.Fatal("native enterprise sign-in start did not commit", response.StatusCode)
@@ -429,7 +449,7 @@ func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base
 		return out
 	}
 	original := start()
-	if retry := start(); retry != original || provider.posts.Load() != 0 {
+	if retry := start(); retry != original || provider.posts.Load() != previousPosts {
 		t.Fatal("keyed retry changed the original authorization or exchanged before callback")
 	}
 	external := *provider.server.Client()
@@ -453,7 +473,7 @@ func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base
 		return response
 	}
 	callback := getCallback()
-	if callback.StatusCode != http.StatusSeeOther || callback.Header.Get("Location") != success || provider.posts.Load() != 1 || len(callback.Cookies()) != 2 {
+	if callback.StatusCode != http.StatusSeeOther || callback.Header.Get("Location") != success || provider.posts.Load() != previousPosts+1 || len(callback.Cookies()) != 2 {
 		t.Fatal("linked enterprise login did not deliver one committed browser session", callback.StatusCode, provider.posts.Load())
 	}
 	var csrf, token string
@@ -479,12 +499,23 @@ func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base
 		if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&result) != nil || result.Authenticated != authenticated {
 			t.Fatal("common session route did not report expected enterprise session state", response.StatusCode)
 		}
-		if authenticated && (result.Principal == nil || result.Session == nil || result.Principal.TenantID != otpTenant || result.Principal.UserID != selected.user) {
-			t.Fatal("enterprise cookie did not authenticate the exact linked identity")
+		if authenticated {
+			if result.Principal == nil || result.Session == nil || result.Principal.TenantID != otpTenant || result.Principal.UserID == "" {
+				t.Fatal("enterprise cookie did not authenticate an exact tenant identity")
+			}
+			if selected.user == "" && created != nil {
+				selected.user = result.Principal.UserID
+			}
+			if result.Principal.UserID != selected.user {
+				t.Fatal("enterprise cookie did not authenticate the exact linked identity")
+			}
 		}
 		return result
 	}
 	public := read(true)
+	if created != nil {
+		created(selected.user)
+	}
 	checkReferenceEnterpriseOrganization(t, ctx, features, token, public.Session.ID, selected)
 	wrong := request(http.MethodPost, "/v1/session/signout", []byte(`{}`), "", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	_ = wrong.Body.Close()
@@ -512,7 +543,7 @@ func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base
 	client.Jar.SetCookies(appURL, callback.Cookies())
 	read(false)
 	replay := getCallback()
-	if replay.StatusCode == http.StatusSeeOther || len(replay.Cookies()) != 0 || replay.Header.Get("Location") != "" || provider.posts.Load() != 1 {
+	if replay.StatusCode == http.StatusSeeOther || len(replay.Cookies()) != 0 || replay.Header.Get("Location") != "" || provider.posts.Load() != previousPosts+1 {
 		t.Fatal("historical enterprise callback re-exchanged or disclosed credentials", replay.StatusCode)
 	}
 }
