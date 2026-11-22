@@ -21,6 +21,14 @@ provider, membership and factor authority and commit state, session and required
 effects together. The issuer releases credentials only for the exact new commit;
 preparation, replay and unknown outcomes do not release them.
 
+`NewSSOOAuth2SessionIssuer` and its CSRF variant select the distinct enterprise
+OAuth 2.0 callback. `PrepareSSOOAuth2` and `BindSSOOAuth2` require the exact
+`sso-oauth2` method, original browser command and linked provider credential.
+The executor sees its original command only through `IssueRequest.SSOOAuth2Command`;
+OIDC, social and generic issuance cannot read or execute that request. The same
+commit, replay and Remember rules apply. This does not supply a native session
+writer or reader by itself.
+
 ## Explicit password-bearer issuance
 
 `NewPasswordBearerSessionIssuer` uses the same prospective password preparation,

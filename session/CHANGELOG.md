@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a separately selected prospective enterprise OAuth 2.0 session issuer.
+  Preserve original callback, linked credential and Remember custody; release
+  credentials only for an exact new commit without accepting OIDC provenance.
+
 - Add explicit enterprise OIDC cookie-session admission. An enterprise token
   must retain its original CSRF state and use cookie transport, including when
   an encrypted cache is warm. Other organization-selected sessions retain

@@ -20,6 +20,11 @@ import (
 
 func ssoOIDCIssuerFixture(t *testing.T, persistent bool) (*session.SessionIssuer, session.PreparedIssuance, identity.Command, *issueExecutor, *mutableIssueClock) {
 	t.Helper()
+	return ssoIssuerFixture(t, persistent, false)
+}
+
+func ssoIssuerFixture(t *testing.T, persistent, oauth2 bool) (*session.SessionIssuer, session.PreparedIssuance, identity.Command, *issueExecutor, *mutableIssueClock) {
+	t.Helper()
 	spec := sessionSpec(t)
 	vector, _ := spec.Authority.Bindings()
 	vector.Session.Version, vector.SessionFamily.Version = 1, 1
@@ -41,10 +46,15 @@ func ssoOIDCIssuerFixture(t *testing.T, persistent bool) (*session.SessionIssuer
 	b.OperationID, b.SchemaID = "identity.sso.oidc-callback", "sso-enterprise-oidc-callback-v1"
 	spec.Authentication.Proof.ID = auth.ProofID(b.CommandID)
 	spec.Authentication.Proof.Method = "sso-oidc"
+	opOwner := "sso/oidc"
+	if oauth2 {
+		b.OperationID, b.SchemaID = "identity.sso.oauth-callback", "sso-enterprise-oauth2-callback-v1"
+		spec.Authentication.Proof.Method, opOwner = "sso-oauth2", "sso/oauth2"
+	}
 	spec.Authentication.CredentialID = "enterprise-provider-account"
 	executor := &issueExecutor{}
 	executor.execute = func(_ context.Context, request session.IssueRequest) (session.IssueExecution, error) {
-		return committedSSOOIDCIssue(t, request), nil
+		return committedSSOIssue(t, request, oauth2), nil
 	}
 	executor.recover = func(context.Context, session.IssueRequest) (session.IssueExecution, error) {
 		t.Fatal("secret-bearing enterprise recovery was invoked")
@@ -54,16 +64,25 @@ func ssoOIDCIssuerFixture(t *testing.T, persistent bool) (*session.SessionIssuer
 	key, _ := session.NewDigestKey(1, make([]byte, 32))
 	csrf, _ := session.NewCSRFKey(2, make([]byte, 32))
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-session", SameSite: http.SameSiteLaxMode})
-	issuer, err := session.NewSSOOIDCSessionIssuerWithCSRF(executor, session.IssuerConfig{Clock: clock, MaximumDuration: time.Second, LookupKey: key, TokenSize: 32, Cookie: cookie}, csrf)
+	newIssuer := session.NewSSOOIDCSessionIssuerWithCSRF
+	if oauth2 {
+		newIssuer = session.NewSSOOAuth2SessionIssuerWithCSRF
+	}
+	issuer, err := newIssuer(executor, session.IssuerConfig{Clock: clock, MaximumDuration: time.Second, LookupKey: key, TokenSize: 32, Cookie: cookie}, csrf)
 	if err != nil {
 		t.Fatal("construct enterprise issuer", err)
 	}
 	credential := identity.CredentialRef{ID: identity.CredentialID(spec.Authentication.CredentialID), TenantID: spec.TenantID, UserID: spec.UserID, Kind: identity.CredentialProvider, Owner: "sso", Version: spec.Authentication.CredentialVersion}
-	prepared, err := issuer.PrepareSSOOIDC(b, session.SSOOIDCIssuanceSpec{Session: spec, Credential: credential})
+	var prepared session.PreparedIssuance
+	if oauth2 {
+		prepared, err = issuer.PrepareSSOOAuth2(b, session.SSOOAuth2IssuanceSpec{Session: spec, Credential: credential})
+	} else {
+		prepared, err = issuer.PrepareSSOOIDC(b, session.SSOOIDCIssuanceSpec{Session: spec, Credential: credential})
+	}
 	if err != nil {
 		t.Fatal("prepare original enterprise session", err)
 	}
-	op := identity.FeatureOperation{Owner: "sso/oidc", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordRequired}
+	op := identity.FeatureOperation{Owner: opOwner, OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordRequired}
 	command, err := identity.NewFeaturePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: op}, auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32))))
 	if err != nil {
 		t.Fatal("map native enterprise preauth command", err)
@@ -73,7 +92,20 @@ func ssoOIDCIssuerFixture(t *testing.T, persistent bool) (*session.SessionIssuer
 
 func committedSSOOIDCIssue(t testing.TB, request session.IssueRequest) session.IssueExecution {
 	t.Helper()
+	return committedSSOIssue(t, request, false)
+}
+
+func committedSSOIssue(t testing.TB, request session.IssueRequest, oauth2 bool) session.IssueExecution {
+	t.Helper()
 	command, record, ok := request.SSOOIDCCommand()
+	if oauth2 {
+		if ok {
+			t.Fatal("OAuth2 issuance acquired an OIDC command")
+		}
+		command, record, ok = request.SSOOAuth2Command()
+	} else if _, _, ok := request.SSOOAuth2Command(); ok {
+		t.Fatal("OIDC issuance acquired an OAuth2 command")
+	}
 	if !ok {
 		t.Fatal("enterprise original command unavailable")
 	}

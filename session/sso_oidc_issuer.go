@@ -33,16 +33,51 @@ func (SSOOIDCIssuanceSpec) MarshalJSON() ([]byte, error) { return nil, ErrSecret
 // MarshalText prevents accidental text or map-key disclosure.
 func (SSOOIDCIssuanceSpec) MarshalText() ([]byte, error) { return nil, ErrSecretSerialization }
 
-type ssoOIDCPreparationState struct {
+// SSOOAuth2IssuanceSpec binds a prospective enterprise OAuth session to its
+// exact SSO-owned linked provider credential. It is not authentication.
+type SSOOAuth2IssuanceSpec SSOOIDCIssuanceSpec
+
+// Format redacts prospective authentication and organization linkage.
+func (SSOOAuth2IssuanceSpec) Format(s fmt.State, _ rune) {
+	io.WriteString(s, "session.SSOOAuth2IssuanceSpec(redacted)")
+}
+
+// MarshalJSON prevents accidental authentication metadata serialization.
+func (SSOOAuth2IssuanceSpec) MarshalJSON() ([]byte, error) { return nil, ErrSecretSerialization }
+
+// MarshalText prevents accidental text or map-key disclosure.
+func (SSOOAuth2IssuanceSpec) MarshalText() ([]byte, error) { return nil, ErrSecretSerialization }
+
+type enterpriseSessionProtocol uint8
+
+const (
+	noEnterpriseSession enterpriseSessionProtocol = iota
+	enterpriseOIDCSession
+	enterpriseOAuth2Session
+)
+
+func (p enterpriseSessionProtocol) selection() (identity.FeatureOperation, string) {
+	switch p {
+	case enterpriseOIDCSession:
+		return identity.FeatureOperation{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", SchemaID: "sso-enterprise-oidc-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, "sso-oidc"
+	case enterpriseOAuth2Session:
+		return identity.FeatureOperation{Owner: "sso/oauth2", OperationID: "identity.sso.oauth-callback", SchemaID: "sso-enterprise-oauth2-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, "sso-oauth2"
+	default:
+		return identity.FeatureOperation{}, ""
+	}
+}
+
+type enterpriseSSOPreparationState struct {
 	binding identity.CommandBinding
 	record  Session
 	bound   atomic.Bool
 }
 
-type ssoOIDCIssueRequestState struct {
-	command identity.Command
-	binding identity.CommandBinding
-	record  Session
+type enterpriseSSOIssueRequestState struct {
+	protocol enterpriseSessionProtocol
+	command  identity.Command
+	binding  identity.CommandBinding
+	record   Session
 }
 
 // NewSSOOIDCSessionIssuer selects only prospective enterprise OIDC issuance.
@@ -53,6 +88,18 @@ type ssoOIDCIssueRequestState struct {
 // with session/audit/lifecycle effects in one commit. No protocol, persistence,
 // transaction or goroutine is owned here. IssuerConfig's bounds still apply.
 func NewSSOOIDCSessionIssuer(executor IssueExecutor, config IssuerConfig) (*SessionIssuer, error) {
+	return newEnterpriseSessionIssuer(executor, config, enterpriseOIDCSession)
+}
+
+// NewSSOOAuth2SessionIssuer selects only prospective enterprise OAuth 2.0
+// issuance. The native executor must validate the provider subject and current
+// linked account, member and factor policy, then commit the original proof and
+// session effects together. It does not exchange a code or fabricate OIDC proof.
+func NewSSOOAuth2SessionIssuer(executor IssueExecutor, config IssuerConfig) (*SessionIssuer, error) {
+	return newEnterpriseSessionIssuer(executor, config, enterpriseOAuth2Session)
+}
+
+func newEnterpriseSessionIssuer(executor IssueExecutor, config IssuerConfig, protocol enterpriseSessionProtocol) (*SessionIssuer, error) {
 	if config.Authority != nil {
 		return nil, ErrInvalidIssuer
 	}
@@ -60,7 +107,7 @@ func NewSSOOIDCSessionIssuer(executor IssueExecutor, config IssuerConfig) (*Sess
 	if err != nil {
 		return nil, err
 	}
-	issuer.otp, issuer.ssoOIDC = false, true
+	issuer.otp, issuer.enterpriseSSO = false, protocol
 	return issuer, nil
 }
 
@@ -68,19 +115,25 @@ func NewSSOOIDCSessionIssuer(executor IssueExecutor, config IssuerConfig) (*Sess
 // enterprise session. Both credentials require an exact new error-free commit;
 // unknown outcomes, replay and historical recovery disclose neither.
 func NewSSOOIDCSessionIssuerWithCSRF(executor IssueExecutor, config IssuerConfig, key CSRFKey) (*SessionIssuer, error) {
+	return newEnterpriseSessionIssuerWithCSRF(executor, config, key, enterpriseOIDCSession)
+}
+
+// NewSSOOAuth2SessionIssuerWithCSRF lends a synchronizer only after an exact
+// new committed OAuth session. Failed, replayed and unknown outcomes withhold it.
+func NewSSOOAuth2SessionIssuerWithCSRF(executor IssueExecutor, config IssuerConfig, key CSRFKey) (*SessionIssuer, error) {
+	return newEnterpriseSessionIssuerWithCSRF(executor, config, key, enterpriseOAuth2Session)
+}
+
+func newEnterpriseSessionIssuerWithCSRF(executor IssueExecutor, config IssuerConfig, key CSRFKey, protocol enterpriseSessionProtocol) (*SessionIssuer, error) {
 	if key.key.state == nil {
 		return nil, ErrInvalidIssuer
 	}
-	issuer, err := NewSSOOIDCSessionIssuer(executor, config)
+	issuer, err := newEnterpriseSessionIssuer(executor, config, protocol)
 	if err != nil {
 		return nil, err
 	}
 	issuer.csrfKey = key
 	return issuer, nil
-}
-
-func ssoOIDCSigninOperation() identity.FeatureOperation {
-	return identity.FeatureOperation{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", SchemaID: "sso-enterprise-oidc-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 }
 
 // PrepareSSOOIDC freezes a tokenless prospective enterprise session before
@@ -94,20 +147,30 @@ func ssoOIDCSigninOperation() identity.FeatureOperation {
 // Lookup must be zero; Remember and original authentication times are retained.
 // No IO, protocol exchange, reservation or authority verification occurs.
 func (s *SessionIssuer) PrepareSSOOIDC(binding identity.CommandBinding, input SSOOIDCIssuanceSpec) (out PreparedIssuance, err error) {
+	return s.prepareEnterpriseSession(binding, input.Session, input.Credential, enterpriseOIDCSession)
+}
+
+// PrepareSSOOAuth2 freezes a tokenless session for the exact OAuth callback,
+// original pre-auth flow and linked SSO credential. No authority is granted.
+func (s *SessionIssuer) PrepareSSOOAuth2(binding identity.CommandBinding, input SSOOAuth2IssuanceSpec) (PreparedIssuance, error) {
+	return s.prepareEnterpriseSession(binding, input.Session, input.Credential, enterpriseOAuth2Session)
+}
+
+func (s *SessionIssuer) prepareEnterpriseSession(binding identity.CommandBinding, spec SessionSpec, credential identity.CredentialRef, protocol enterpriseSessionProtocol) (out PreparedIssuance, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = PreparedIssuance{}, ErrIssuerUnavailable
 		}
 	}()
-	spec, credential := input.Session, input.Credential
 	start, startErr := identity.ParseCommandID(binding.RecordID)
-	if s == nil || !s.ssoOIDC || startErr != nil || start == binding.CommandID || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || binding.TenantID != spec.TenantID || binding.UserID != "" || binding.AnonymousFlowID == "" || binding.ActorKind != authorization.SubjectServiceAccount || string(spec.Authentication.Proof.ID) != string(binding.CommandID) {
+	if s == nil || s.enterpriseSSO != protocol || startErr != nil || start == binding.CommandID || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || binding.TenantID != spec.TenantID || binding.UserID != "" || binding.AnonymousFlowID == "" || binding.ActorKind != authorization.SubjectServiceAccount || string(spec.Authentication.Proof.ID) != string(binding.CommandID) {
 		return out, ErrInvalidIssuance
 	}
 	if credential.Validate(spec.TenantID, spec.UserID) != nil || credential.Kind != identity.CredentialProvider || credential.Owner != "sso" || string(credential.ID) != spec.Authentication.CredentialID || credential.Version != spec.Authentication.CredentialVersion {
 		return out, ErrInvalidIssuance
 	}
-	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: ssoOIDCSigninOperation()})
+	operation, _ := protocol.selection()
+	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: operation})
 	if err != nil {
 		return out, ErrInvalidIssuance
 	}
@@ -117,14 +180,14 @@ func (s *SessionIssuer) PrepareSSOOIDC(binding identity.CommandBinding, input SS
 	if err != nil {
 		return out, err
 	}
-	if err := validateSSOOIDCIssuanceAt(record, s.config.Clock.Now()); err != nil {
+	if err := validateEnterpriseIssuanceAt(record, s.config.Clock.Now(), protocol); err != nil {
 		return out, err
 	}
 	token, record, csrf, err := s.prepareTokenRecord(record)
 	if err != nil {
 		return out, err
 	}
-	return PreparedIssuance{state: &preparedIssuanceState{owner: s, token: token, csrf: csrf, ssoOIDC: &ssoOIDCPreparationState{binding: frozen.Binding, record: record}}}, nil
+	return PreparedIssuance{state: &preparedIssuanceState{owner: s, token: token, csrf: csrf, enterpriseSSO: &enterpriseSSOPreparationState{binding: frozen.Binding, record: record}}}, nil
 }
 
 // BindSSOOIDC lends the exact native enterprise command and original preauth
@@ -134,7 +197,17 @@ func (s *SessionIssuer) PrepareSSOOIDC(binding identity.CommandBinding, input SS
 // OAuth, password, code and bearer profiles are disjoint. Never persist this
 // borrowed input or use it for historical recovery.
 func (s *SessionIssuer) BindSSOOIDC(prepared PreparedIssuance, command identity.Command) (PreparedIssuance, error) {
-	if s == nil || !s.ssoOIDC || prepared.state == nil || prepared.state.owner != s || prepared.state.ssoOIDC == nil {
+	return s.bindEnterpriseSession(prepared, command, enterpriseOIDCSession)
+}
+
+// BindSSOOAuth2 lends the original OAuth callback command with its pre-auth
+// cookie to the selected executor. It rejects OIDC or social callback custody.
+func (s *SessionIssuer) BindSSOOAuth2(prepared PreparedIssuance, command identity.Command) (PreparedIssuance, error) {
+	return s.bindEnterpriseSession(prepared, command, enterpriseOAuth2Session)
+}
+
+func (s *SessionIssuer) bindEnterpriseSession(prepared PreparedIssuance, command identity.Command, protocol enterpriseSessionProtocol) (PreparedIssuance, error) {
+	if s == nil || s.enterpriseSSO != protocol || prepared.state == nil || prepared.state.owner != s || prepared.state.enterpriseSSO == nil {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if prepared.state.request.state != nil {
@@ -145,14 +218,15 @@ func (s *SessionIssuer) BindSSOOIDC(prepared PreparedIssuance, command identity.
 	_, code := command.OneTimeCode()
 	_, recovery := command.RecoveryCode()
 	_, bearer := command.SessionToken()
-	if !ok || !cookie || code || recovery || bearer || feature.Binding != prepared.state.ssoOIDC.binding || feature.Operation != ssoOIDCSigninOperation() {
+	operation, _ := protocol.selection()
+	if !ok || !cookie || code || recovery || bearer || feature.Binding != prepared.state.enterpriseSSO.binding || feature.Operation != operation {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
-	if !prepared.state.ssoOIDC.bound.CompareAndSwap(false, true) {
+	if !prepared.state.enterpriseSSO.bound.CompareAndSwap(false, true) {
 		return PreparedIssuance{}, ErrIssuanceAlreadyBound
 	}
-	request := IssueRequest{state: &issueRequestState{ssoOIDC: &ssoOIDCIssueRequestState{command: command, binding: feature.Binding, record: prepared.state.ssoOIDC.record}}}
-	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: prepared.state.token, csrf: prepared.state.csrf, ssoOIDC: prepared.state.ssoOIDC}}, nil
+	request := IssueRequest{state: &issueRequestState{enterpriseSSO: &enterpriseSSOIssueRequestState{protocol: protocol, command: command, binding: feature.Binding, record: prepared.state.enterpriseSSO.record}}}
+	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: prepared.state.token, csrf: prepared.state.csrf, enterpriseSSO: prepared.state.enterpriseSSO}}, nil
 }
 
 // SSOOIDCCommand returns original borrowed browser custody and the tokenless
@@ -161,19 +235,30 @@ func (s *SessionIssuer) BindSSOOIDC(prepared PreparedIssuance, command identity.
 // all exact sso credential, organization/member and lifecycle bindings in its
 // authoritative commit. Zero and every other issuance variant return false.
 func (r IssueRequest) SSOOIDCCommand() (identity.Command, Session, bool) {
-	if r.state == nil || r.state.ssoOIDC == nil {
-		return identity.Command{}, Session{}, false
-	}
-	return r.state.ssoOIDC.command, r.state.ssoOIDC.record, true
+	return r.enterpriseSessionCommand(enterpriseOIDCSession)
 }
 
-func validateSSOOIDCIssuanceAt(record Session, now time.Time) error {
+// SSOOAuth2Command returns the original borrowed enterprise OAuth command and
+// the prospective session. They are not reusable authentication or recovery.
+func (r IssueRequest) SSOOAuth2Command() (identity.Command, Session, bool) {
+	return r.enterpriseSessionCommand(enterpriseOAuth2Session)
+}
+
+func (r IssueRequest) enterpriseSessionCommand(protocol enterpriseSessionProtocol) (identity.Command, Session, bool) {
+	if r.state == nil || r.state.enterpriseSSO == nil || r.state.enterpriseSSO.protocol != protocol {
+		return identity.Command{}, Session{}, false
+	}
+	return r.state.enterpriseSSO.command, r.state.enterpriseSSO.record, true
+}
+
+func validateEnterpriseIssuanceAt(record Session, now time.Time, protocol enterpriseSessionProtocol) error {
 	spec, err := record.Bindings()
 	if err != nil || record.MFAAuthentication() != (MFAAuthentication{}) {
 		return ErrInvalidIssuance
 	}
 	vector, err := spec.Authority.Bindings()
-	if err != nil || !vector.Organization.Present || !vector.Factor.Present || vector.Passkey.Present || spec.Authentication.Kind != AuthenticationVerified || spec.Authentication.Proof.Method != "sso-oidc" || spec.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || spec.Authentication.Proof.Purpose != "session-issue" {
+	_, method := protocol.selection()
+	if method == "" || err != nil || !vector.Organization.Present || !vector.Factor.Present || vector.Passkey.Present || spec.Authentication.Kind != AuthenticationVerified || spec.Authentication.Proof.Method != method || spec.Authentication.Proof.Assurance != auth.AssuranceSingleFactor || spec.Authentication.Proof.Purpose != "session-issue" {
 		return ErrInvalidIssuance
 	}
 	proof := spec.Authentication.Proof

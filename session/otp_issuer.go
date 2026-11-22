@@ -131,8 +131,8 @@ func (p PreparedIssuance) Session() (Session, bool) {
 	if p.state == nil {
 		return Session{}, false
 	}
-	if p.state.ssoOIDC != nil {
-		return p.state.ssoOIDC.record, true
+	if p.state.enterpriseSSO != nil {
+		return p.state.enterpriseSSO.record, true
 	}
 	if p.state.oauth != nil {
 		return p.state.oauth.record, true
@@ -201,9 +201,10 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	if r.state == nil {
 		return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
 	}
-	if r.state.ssoOIDC != nil {
-		p := r.state.ssoOIDC
-		return p.binding, ssoOIDCSigninOperation(), p.record, true
+	if r.state.enterpriseSSO != nil {
+		p := r.state.enterpriseSSO
+		operation, method := p.protocol.selection()
+		return p.binding, operation, p.record, method != ""
 	}
 	if r.state.oauth != nil {
 		p := r.state.oauth
@@ -256,13 +257,13 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 }
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
-	if s.ssoOIDC {
-		if r.state == nil || r.state.ssoOIDC == nil {
+	if s.enterpriseSSO != noEnterpriseSession {
+		if r.state == nil || r.state.enterpriseSSO == nil || r.state.enterpriseSSO.protocol != s.enterpriseSSO {
 			return ErrInvalidIssuance
 		}
-		return validateSSOOIDCIssuanceAt(r.state.ssoOIDC.record, now)
+		return validateEnterpriseIssuanceAt(r.state.enterpriseSSO.record, now, s.enterpriseSSO)
 	}
-	if r.state != nil && r.state.ssoOIDC != nil {
+	if r.state != nil && r.state.enterpriseSSO != nil {
 		return ErrInvalidIssuance
 	}
 	if s.oauth {
