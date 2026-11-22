@@ -168,6 +168,112 @@ func TestReauthenticationConsumptionMigrationAdmitsOnlyOwnedMFAEnable(t *testing
 	}
 	checkMFAPrimaryStorageConstraints(t, ctx, conn, command)
 	checkPasswordContinuationUpgrade(t, ctx, conn, backend, command)
+	t.Run("account-unlink-expansion", func(t *testing.T) {
+		const unlinkID = "unlink-proof-aaaaaaaaa"
+		proof, consume := command("identity.password.verify"), command("identity.account.unlink")
+		if _, err := conn.Exec(ctx, `INSERT INTO identity_password.reauthentication_records(proof_id,tenant_id,user_id,command_id,purpose,record) VALUES($1,'tenant-a','user-a',$2,'identity.password.verify',$3)`, unlinkID, proof, payload); err != nil {
+			t.Fatal("unconsumed unlink fixture:", err)
+		}
+		consumeAs := func(id string, consumer []byte, action string) error {
+			_, err := conn.Exec(ctx, `UPDATE identity_password.reauthentication_records SET consumed_command_id=$2,consumed_purpose=$3,consumed_at=clock_timestamp() WHERE proof_id=$1`, id, consumer, action)
+			return err
+		}
+		checkViolation(consumeAs(unlinkID, consume, "identity.account.unlink"))
+		consumeUnlink := func(id string, consumer []byte, action string) error {
+			_, err := conn.Exec(ctx, `UPDATE identity_password.reauthentication_records SET unlink_consumed_command_id=$2,unlink_consumed_purpose=$3,unlink_consumed_at=clock_timestamp() WHERE proof_id=$1`, id, consumer, action)
+			return err
+		}
+		source := passworddb.AccountUnlinkReauthenticationMigrationSource{Base: passworddb.MigrationSource{}, Version: 90}
+		steps, err := source.Load(ctx)
+		if err != nil || len(steps) < 3 {
+			t.Fatal("compose three-step opt-in unlink history:", err)
+		}
+		prefixRunner, err := migrations.NewRunner(reauthenticationMigrationPrefix(steps[:len(steps)-2]), owned)
+		if err != nil {
+			t.Fatal("compose expansion-only history:", err)
+		}
+		if _, err := prefixRunner.Up(ctx); err != nil {
+			t.Fatal("apply only the populated expansion:", err)
+		}
+		var partial bool
+		if err := conn.QueryRow(ctx, `SELECT NOT convalidated FROM pg_constraint
+WHERE conrelid='identity_password.reauthentication_records'::regclass AND conname='reauthentication_unlink_consumption_complete'`).Scan(&partial); err != nil || !partial {
+			t.Fatal("expansion unexpectedly validated the populated proof table", err)
+		}
+		migration, err := migrations.NewRunner(source, owned)
+		if err != nil {
+			t.Fatal("compose opt-in unlink history:", err)
+		}
+		if _, err := migration.Up(ctx); err != nil {
+			t.Fatal("expand and validate populated password history:", err)
+		}
+		var legacyAdoptedUsername bool
+		if err := conn.QueryRow(ctx, `SELECT position('identity.username.update' IN pg_get_constraintdef(oid)) > 0
+FROM pg_constraint WHERE conrelid='identity_password.reauthentication_records'::regclass AND conname='reauthentication_consumption_complete'`).Scan(&legacyAdoptedUsername); err != nil || legacyAdoptedUsername {
+			t.Fatal("unlink changed the independently owned username allowance", err)
+		}
+		if err := consumeUnlink(unlinkID, consume, "identity.account.unlink"); err != nil {
+			t.Fatal("matching unlink command cannot consume original proof:", err)
+		}
+		const secondUnlinkID = "unlink-proof-bbbbbbbbb"
+		if _, err := conn.Exec(ctx, `INSERT INTO identity_password.reauthentication_records(proof_id,tenant_id,user_id,command_id,purpose,record) VALUES($1,'tenant-a','user-a',$2,'identity.password.verify',$3)`, secondUnlinkID, command("identity.password.verify"), payload); err != nil {
+			t.Fatal("second unconsumed proof fixture:", err)
+		}
+		if err := consumeUnlink(secondUnlinkID, consume, "identity.account.unlink"); err == nil {
+			t.Fatal("two proofs could bind to the same consumer command")
+		} else {
+			var unique *pgconn.PgError
+			if !errors.As(err, &unique) || unique.Code != "23505" {
+				t.Fatal("unlink uniqueness did not protect two proofs")
+			}
+		}
+		checkViolation(consumeUnlink(newID, command("identity.account.unlink"), "identity.account.unlink"))
+		checkViolation(consumeAs(unlinkID, command("identity.password.change"), "identity.password.change"))
+		checkViolation(consumeUnlink(secondUnlinkID, unsupportedConsumer, "identity.mfa.disable"))
+		checkViolation(consumeAs(unlinkID, unsupportedConsumer, "identity.mfa.disable"))
+		later, err := (passworddb.ActionReauthenticationMigrationSource{Base: passworddb.MigrationSource{}, Version: 21}).Load(ctx)
+		if err != nil {
+			t.Fatal("later legacy username action history", err)
+		}
+		laterOwned, err := backend.ForNamespace("identity_username_actions")
+		if err != nil {
+			t.Fatal("optional username action namespace", err)
+		}
+		laterRunner, err := migrations.NewRunner(reauthenticationMigrationPrefix(later[len(later)-1:]), laterOwned)
+		if err != nil {
+			t.Fatal("compose separately owned username action history", err)
+		}
+		if _, err := laterRunner.Up(ctx); err != nil {
+			t.Fatal("unlink-first installation blocked later username activation", err)
+		}
+		if err := consumeAs(secondUnlinkID, command("identity.username.update"), "identity.username.update"); err != nil {
+			t.Fatal("later username action could not use the original consumption contract", err)
+		}
+		var actual []byte
+		if err := conn.QueryRow(ctx, `SELECT unlink_consumed_command_id FROM identity_password.reauthentication_records WHERE proof_id=$1`, unlinkID).Scan(&actual); err != nil || !bytes.Equal(actual, consume) {
+			t.Fatal("later legacy action rewrote populated unlink custody", err)
+		}
+		for _, previous := range []struct {
+			id, action string
+			consumer   []byte
+		}{{oldID, "identity.password.change", oldConsumer}, {newID, "identity.mfa.enable", newConsumer}} {
+			var original, storedConsumer []byte
+			var action string
+			err := conn.QueryRow(ctx, `SELECT record,consumed_command_id,consumed_purpose FROM identity_password.reauthentication_records WHERE proof_id=$1`, previous.id).Scan(&original, &storedConsumer, &action)
+			if err != nil || !bytes.Equal(original, payload) || !bytes.Equal(storedConsumer, previous.consumer) || action != previous.action {
+				t.Fatal("legacy proof or consumption changed", err)
+			}
+		}
+		if _, err := migration.Up(ctx); err != nil {
+			t.Fatal("unlink migration replay failed", err)
+		}
+	})
+}
+
+type reauthenticationMigrationPrefix []migrations.Migration
+
+func (p reauthenticationMigrationPrefix) Load(ctx context.Context) ([]migrations.Migration, error) {
+	return append([]migrations.Migration(nil), p...), ctx.Err()
 }
 
 func checkPasswordContinuationUpgrade(t *testing.T, ctx context.Context, conn *pgx.Conn, backend *migrationdb.Backend, command func(string) []byte) {

@@ -132,7 +132,7 @@ func (p *reauthenticationPhase) ApplyFeature(ctx context.Context, w kernel.Work,
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	rows, err := w.Query(ctx, `SELECT version::text,CASE WHEN octet_length(encoded_hash)<=$4 THEN encoded_hash ELSE '' END FROM identity_password.credentials WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3 FOR SHARE`, string(b.TenantID), string(b.UserID), string(credential.Credential.ID), p.service.repository.limits.EncodedHashBytes)
+	rows, err := w.Query(ctx, lockReauthenticationPasswordSQL, string(b.TenantID), string(b.UserID), string(credential.Credential.ID), p.service.repository.limits.EncodedHashBytes)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}

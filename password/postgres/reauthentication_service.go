@@ -318,7 +318,16 @@ func (s *ReauthenticationService) verify(ctx context.Context, r Reauthentication
 	if err != nil {
 		return result, identity.ForbiddenError{}
 	}
-	until := now.Add(s.c.TTL)
+	issuedAt := now
+	if r.Target.Action == accountUnlinkPrimaryAction && r.Target.Purpose == "identity.password.verify" {
+		// The unlink child uses whole-second capability timestamps. Align the
+		// signed parent before it leaves this owner so same-second unlink works
+		// without waiting or backdating the child outside its parent's interval.
+		// The actual password/session checks already ran; rounding can only
+		// move expiry and maximum-age deadlines earlier.
+		issuedAt = now.Truncate(time.Second)
+	}
+	until := issuedAt.Add(s.c.TTL)
 	if lifetime.ExpiresAt.Before(until) {
 		until = lifetime.ExpiresAt
 	}
@@ -326,7 +335,10 @@ func (s *ReauthenticationService) verify(ctx context.Context, r Reauthentication
 	if !credential.ExpiresAt.IsZero() && credential.ExpiresAt.Before(until) {
 		until = credential.ExpiresAt
 	}
-	record, err := s.c.SigningKey.sign(auth.SignedReauthenticationRecord{Issuer: s.c.Issuer, Environment: s.c.Environment, ProofVersion: 1, CredentialID: string(credential.Credential.ID), CredentialVersion: comparison.CredentialVersion, Proof: auth.ReauthenticationProof{Proof: auth.Proof{ID: auth.ProofID(id), Tenant: string(b.TenantID), Subject: string(b.UserID), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: r.Target.Purpose, Audience: r.Target.Audience, IssuedAt: now, ExpiresAt: until}, SessionID: spec.SessionID, SessionVersion: spec.Version, Action: r.Target.Action}})
+	if !until.After(now) {
+		return result, identity.ForbiddenError{}
+	}
+	record, err := s.c.SigningKey.sign(auth.SignedReauthenticationRecord{Issuer: s.c.Issuer, Environment: s.c.Environment, ProofVersion: 1, CredentialID: string(credential.Credential.ID), CredentialVersion: comparison.CredentialVersion, Proof: auth.ReauthenticationProof{Proof: auth.Proof{ID: auth.ProofID(id), Tenant: string(b.TenantID), Subject: string(b.UserID), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: r.Target.Purpose, Audience: r.Target.Audience, IssuedAt: issuedAt, ExpiresAt: until}, SessionID: spec.SessionID, SessionVersion: spec.Version, Action: r.Target.Action}})
 	if err != nil {
 		return result, err
 	}

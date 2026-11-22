@@ -11,22 +11,22 @@ require (
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
-	github.com/faustbrian/go-identity v0.0.0-20261021021214-46ae60703809
+	github.com/faustbrian/go-identity v0.0.0-20261122023921-087c28e1764c
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
 	github.com/faustbrian/go-identity/http v0.0.0-20261019082356-e97faf1a4604
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261016111510-a2bc669715c6
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261018164858-91ea1f9395f6
-	github.com/faustbrian/go-identity/mfa v0.0.0-20261018013113-bb569ec9d44c
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261020163503-ea96b3da9b18
+	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261122024743-ab8874f713b4
 	github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6
 	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6
 	github.com/faustbrian/go-identity/password v0.0.0-20261027053124-3051d2cd42b5
 	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261021074754-2eafc2592af0
-	github.com/faustbrian/go-identity/risk v0.0.0-20261020133538-6d5c539268df
-	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261020123641-81bbbbbffa8e
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261122024426-2287216ac03a
+	github.com/faustbrian/go-identity/risk v0.0.0-20261024004351-b030e8e364ac
+	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261122024644-105adde9ae64
 	github.com/faustbrian/go-identity/session v0.0.0-20261027053124-3051d2cd42b5
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261020162400-f96bcf8bf25d
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94

@@ -173,7 +173,33 @@ func (p *passwordChangePhase) consume(ctx context.Context, w kernel.Work, b iden
 // consumer lock. The calling native phase must first fence its current owners;
 // checkTime rechecks original expiry after waiting, never renews it.
 func consumeReauthenticationRecord(ctx context.Context, w kernel.Work, b identity.CommandBinding, record auth.SignedReauthenticationRecord, checkTime func(context.Context, kernel.Work) error) error {
-	if ctx == nil || checkTime == nil || record.Proof.Proof.Tenant != string(b.TenantID) || record.Proof.Proof.Subject != string(b.UserID) || record.Proof.Action != b.OperationID || !reauthenticationConsumptionAction(b.OperationID) {
+	if checkTime == nil || !reauthenticationConsumptionAction(b.OperationID) {
+		return identity.ForbiddenError{}
+	}
+	return consumeBoundReauthenticationRecord(ctx, w, b, record, func(ctx context.Context) error {
+		return checkTime(ctx, w)
+	})
+}
+
+type reauthenticationConsumptionWork interface {
+	Query(context.Context, string, ...any) (*kernel.WorkRows, error)
+	Exec(context.Context, string, ...any) (int64, error)
+	DatabaseTime(context.Context) (time.Time, error)
+}
+
+// Callers fence the exact owning action before sharing the password-store lock
+// and write. The typed unlink path does not extend the generic action allowlist.
+func consumeBoundReauthenticationRecord(ctx context.Context, w reauthenticationConsumptionWork, b identity.CommandBinding, record auth.SignedReauthenticationRecord, checkTime func(context.Context) error) error {
+	return consumeReauthenticationWith(ctx, w, b, record, checkTime, lockLegacyReauthentication, consumeLegacyReauthentication)
+}
+
+const lockLegacyReauthentication = `SELECT CASE WHEN octet_length(p.record)<=$4 THEN p.record ELSE ''::bytea END,p.consumed_command_id IS NULL
+FROM identity_password.reauthentication_records p JOIN identity.commands c USING(tenant_id,purpose,command_id)
+WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' FOR UPDATE OF p`
+const consumeLegacyReauthentication = `UPDATE identity_password.reauthentication_records SET consumed_command_id=$4,consumed_purpose=$5,consumed_at=$6 WHERE proof_id=$1 AND tenant_id=$2 AND user_id=$3 AND consumed_command_id IS NULL`
+
+func consumeReauthenticationWith(ctx context.Context, w reauthenticationConsumptionWork, b identity.CommandBinding, record auth.SignedReauthenticationRecord, checkTime func(context.Context) error, lockSQL, consumeSQL string) error {
+	if ctx == nil || checkTime == nil || record.Proof.Proof.Tenant != string(b.TenantID) || record.Proof.Proof.Subject != string(b.UserID) || record.Proof.Action != b.OperationID {
 		return identity.ForbiddenError{}
 	}
 	expected, err := encodeReauthenticationRecord(record)
@@ -181,9 +207,7 @@ func consumeReauthenticationRecord(ctx context.Context, w kernel.Work, b identit
 		return err
 	}
 	defer clear(expected)
-	rows, err := w.Query(ctx, `SELECT CASE WHEN octet_length(p.record)<=$4 THEN p.record ELSE ''::bytea END,p.consumed_command_id IS NULL
-FROM identity_password.reauthentication_records p JOIN identity.commands c USING(tenant_id,purpose,command_id)
-WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' FOR UPDATE OF p`, string(record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), maximumReauthenticationRecordBytes)
+	rows, err := w.Query(ctx, lockSQL, string(record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), maximumReauthenticationRecordBytes)
 	if err != nil {
 		return err
 	}
@@ -198,6 +222,7 @@ WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' 
 	var payload []byte
 	var unused bool
 	err = rows.Scan(&payload, &unused)
+	defer clear(payload)
 	extra := rows.Next()
 	rowErr := rows.Err()
 	rows.Close()
@@ -208,7 +233,7 @@ WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' 
 		return identity.ForbiddenError{}
 	}
 	// Recheck original expiry after waiting for the exclusive one-use lock.
-	if err = checkTime(ctx, w); err != nil {
+	if err = checkTime(ctx); err != nil {
 		return err
 	}
 	now, err := w.DatabaseTime(ctx)
@@ -219,7 +244,7 @@ WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' 
 	if err != nil {
 		return password.ErrPasswordWork
 	}
-	n, err := w.Exec(ctx, `UPDATE identity_password.reauthentication_records SET consumed_command_id=$4,consumed_purpose=$5,consumed_at=$6 WHERE proof_id=$1 AND tenant_id=$2 AND user_id=$3 AND consumed_command_id IS NULL`, string(record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), id, b.OperationID, now)
+	n, err := w.Exec(ctx, consumeSQL, string(record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), id, b.OperationID, now)
 	if err != nil {
 		return err
 	}

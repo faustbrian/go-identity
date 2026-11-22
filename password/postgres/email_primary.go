@@ -115,10 +115,17 @@ func newPrimarySource(source *ReauthenticationService, factor *mfapg.EmailChange
 	if action {
 		op, maximumAge = actionPrimaryOperation(config.Action), 15*time.Minute
 	}
-	if source == nil || source.repository == nil || !source.repository.configuredWriter() || source.sessions == nil || source.c.Verifier.Now == nil || config.MaximumAge <= 0 || config.MaximumAge > maximumAge || op.Owner == "" || !reauthenticationText(config.Audience, 256) {
+	if op.Owner == "" {
 		return nil, password.ErrPasswordWork
 	}
 	if config.AdministrativeTargets && !(config.Action == "identity.email.address-remove" && !action || config.Action == "identity.organization.owner-transfer" && action) {
+		return nil, password.ErrPasswordWork
+	}
+	return newSelectedPrimarySource(source, factor, config, action, maximumAge)
+}
+
+func newSelectedPrimarySource(source *ReauthenticationService, factor *mfapg.EmailChangeFactorSource, config EmailPrimaryConfig, action bool, maximumAge time.Duration) (*EmailPrimarySource, error) {
+	if source == nil || source.repository == nil || !source.repository.configuredWriter() || source.sessions == nil || source.c.Verifier.Now == nil || config.MaximumAge <= 0 || config.MaximumAge > maximumAge || !reauthenticationText(config.Audience, 256) {
 		return nil, password.ErrPasswordWork
 	}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: config.Action, Audience: config.Audience}
@@ -165,6 +172,13 @@ func newPrimarySource(source *ReauthenticationService, factor *mfapg.EmailChange
 // Prepare authenticates original bearer and signed action/session-bound proof.
 // It performs no mutation, proof consumption or freshness renewal.
 func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRequest) (out EmailPrimaryAdmission, err error) {
+	return s.prepare(ctx, request, "")
+}
+
+// Only the closed, already validated account command supplies accountSubject;
+// its account ID is not an identifier ID. Other callers keep their original
+// record validation and target-selection rules.
+func (s *EmailPrimarySource) prepare(ctx context.Context, request EmailPrimaryRequest, accountSubject identity.UserID) (out EmailPrimaryAdmission, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = EmailPrimaryAdmission{}, password.ErrPasswordWork
@@ -181,8 +195,10 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 	if _, err := identity.ParseCommandID(string(request.CommandID)); err != nil {
 		return out, identity.ForbiddenError{}
 	}
-	if _, err := identity.ParseIdentifierID(string(request.AddressID)); err != nil {
-		return out, identity.ForbiddenError{}
+	if accountSubject == "" {
+		if _, err := identity.ParseIdentifierID(string(request.AddressID)); err != nil {
+			return out, identity.ForbiddenError{}
+		}
 	}
 	if !validEmailPrimaryCaller(request.Caller) {
 		return out, identity.ForbiddenError{}
@@ -197,6 +213,9 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 	bindings, err := original.Bindings()
 	if err != nil {
 		return out, password.ErrPasswordWork
+	}
+	if accountSubject != "" && bindings.UserID != accountSubject {
+		return out, identity.ForbiddenError{}
 	}
 	subject, err := emailPrimarySubject(s, request, bindings.UserID)
 	if err != nil {

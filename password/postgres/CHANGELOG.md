@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Authenticate the original password and session for typed account unlink
+  without admitting it as an email or generic feature operation. Install the
+  optional forward unlink proof history before enabling protected consumption.
+  The same proof row has a mutually exclusive unlink marker; the existing
+  password-action allowlist, proof bytes and historical migrations do not change.
+
 - Select explicit email/password bearer-only signin with `SigninConfig.Transport`.
   It uses the same real comparison, pre-auth consumption, signed authentication,
   atomic session/audit/outbox and recovery, but stores no CSRF and emits no
