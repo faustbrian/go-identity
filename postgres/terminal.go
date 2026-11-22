@@ -38,10 +38,11 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 		return e
 	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.commandID))
-	var matched, preparedAccountLink bool
+	var matched, preparedAccountChange bool
 	e = tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
-CASE WHEN $6 THEN coalesce(to_jsonb(j)->>'preparation_profile','')='5' ELSE false END
-FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:], q.purpose == "identity.account.link-token" && q.feature == nil).Scan(&matched, &preparedAccountLink)
+CASE WHEN $6 THEN (j.purpose='identity.account.link-token' AND coalesce(to_jsonb(j)->>'preparation_profile','')='5')
+ OR (j.purpose='identity.account.unlink' AND coalesce(to_jsonb(j)->>'preparation_profile','')='6') ELSE false END
+FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:], (q.purpose == "identity.account.link-token" || q.purpose == "identity.account.unlink") && q.feature == nil).Scan(&matched, &preparedAccountChange)
 	if e != nil {
 		return readFailure(ctx, e)
 	}
@@ -52,13 +53,13 @@ FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR
 	// Once terminal, its native transaction row is the sole secret owner so the
 	// RP profile's later erasure cannot leave a recoverable journal duplicate
 	// (REFERENCE_CONFIGURATION.md, struct:ref.oauth.rp_transaction). Pending and
-	// uncertain starts retain original recovery output. Prepared root links also
-	// erase their temporary provider-response/issuance checkpoint only alongside
+	// uncertain starts retain original recovery output. Prepared account changes
+	// erase temporary provider-response/issuance checkpoints only alongside
 	// the definitive receipt (TRANSACTION_CONTRACT.md, provider effects). Profile
 	// detection uses row metadata so ordinary schemas need no optional columns;
 	// scope-only recovery does not require the original request's secret input.
 	preparationErasure := ""
-	if oauthRPInitiationClaim(q) || preparedAccountLink {
+	if oauthRPInitiationClaim(q) || preparedAccountChange {
 		preparationErasure = ",preparation_ciphertext=NULL,preparation_ciphertext_generation=NULL"
 	}
 	// Ordinary installations need not select the optional preparation schema.

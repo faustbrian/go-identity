@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add conservative primary unlink snapshots, retained tombstone/credential
+  retirement storage phases and typed provisional unlink result ownership.
+  Original password/session preparation is distinct from an issued command;
+  restoring a child cannot change frozen intent or expand its proof interval.
+  Only retained, issuer-attached preparation may enter the protected transaction;
+  current/final owner checks, both audit actions, lifecycle, capability
+  consumption and original counter/proof expiry close through the same
+  coordinator. Public native unlink composition remains unavailable pending
+  genuine fresh-proof, token-cleanup and session-effect integration. These
+  APIs alone do not authenticate remaining access or consume a password proof.
+
 - Add explicit original-command fingerprint capture for organization-owned
   API-key permission maintenance. The separate anonymous-flow/service-actor
   profile preserves owner/actor separation and original recovery custody;

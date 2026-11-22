@@ -17,6 +17,9 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 		return decodeAccountLinkStatePlan(binding, fingerprint, encoded)
 	}
 	if len(encoded) > 0 && encoded[0] == 0xa5 && bytes.HasPrefix(encoded[1:], cborText("base")) {
+		if accountUnlinkBinding(binding) {
+			return decodeAccountUnlinkPlan(binding, fingerprint, encoded)
+		}
 		return decodeAccountLinkPlan(binding, fingerprint, encoded)
 	}
 	if len(encoded) > 0 && encoded[0] == 0xa4 {

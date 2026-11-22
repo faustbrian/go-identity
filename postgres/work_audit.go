@@ -157,7 +157,8 @@ func bindAuditPlans(w Work, plans []AuditPlan) error {
 		return err
 	}
 	// Ordinary kernel commands declare one action. The closed OAuth link
-	// profile additionally requires its two orchestration actions; feature
+	// profile additionally requires its two orchestration actions; unlink
+	// requires its distinct orchestration action. Feature
 	// composition declares its own exhaustive mapping. Slots freeze before IO.
 	if w.state.audits != nil || w.state.sqlStarted {
 		return invalidAudit()
@@ -171,6 +172,12 @@ func bindAuditPlans(w Work, plans []AuditPlan) error {
 
 func validateWorkAuditPlans(w Work, plans []AuditPlan) error {
 	if w.state.feature == nil {
+		if len(plans) == 2 && w.state.execution != nil {
+			plan := w.state.execution.reservation.plan
+			if plan != nil && plan.accountUnlink != nil {
+				return validateOAuthAccountUnlinkAudits(w.state.binding, plans)
+			}
+		}
 		if len(plans) == 3 && w.state.execution != nil {
 			plan := w.state.execution.reservation.plan
 			if plan != nil && plan.accountLinkState != nil {

@@ -242,6 +242,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if _, _, ok := command.AccountLinkCounterCommand(); ok {
 		return c.prepareAccountLink(binding, command, plan)
 	}
+	if _, _, ok := command.AccountUnlinkCounterCommand(); ok {
+		return c.prepareAccountUnlink(binding, command, plan)
+	}
 	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}

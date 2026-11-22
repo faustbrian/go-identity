@@ -64,6 +64,7 @@ type workState struct {
 	identifier                *identifierWorkResult
 	identifierAdmission       *identifierAdmissionProgress
 	accountLink               *accountLinkProgress
+	accountUnlink             *accountUnlinkProgress
 	feature                   *FeatureRegistration
 	subjectType               string
 	featureAttempted          bool

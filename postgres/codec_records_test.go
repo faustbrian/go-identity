@@ -18,6 +18,10 @@ func recordGrant(t *testing.T, p capability.Payload, keyID string) capability.Gr
 }
 
 func recordGrantWithLimits(t *testing.T, p capability.Payload, keyID string, limits capability.Limits) capability.Grant {
+	return recordGrantAt(t, p, keyID, limits, time.Unix(1000, 0))
+}
+
+func recordGrantAt(t *testing.T, p capability.Payload, keyID string, limits capability.Limits, now time.Time) capability.Grant {
 	t.Helper()
 	key := bytes.Repeat([]byte{1}, 32)
 	signer, e := capability.NewHMACSHA256Signer(keyID, key)
@@ -38,7 +42,7 @@ func recordGrantWithLimits(t *testing.T, p capability.Payload, keyID string, lim
 	if e != nil {
 		t.Fatal("synthetic issuance")
 	}
-	grant, e := capability.Verify(ctx, token, resolver, capability.VerifyOptions{Issuer: p.Issuer, Now: time.Unix(1000, 0), Limits: limits})
+	grant, e := capability.Verify(ctx, token, resolver, capability.VerifyOptions{Issuer: p.Issuer, Now: now, Limits: limits})
 	if e != nil {
 		t.Fatal("synthetic verification")
 	}

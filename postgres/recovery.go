@@ -170,7 +170,7 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if observed.until.After(observed.now) {
 		return result, nil
 	}
-	if result.Feature == nil && q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" && q.OperationID != "identity.account.link-token" && !statusOperation(q.OperationID) {
+	if result.Feature == nil && q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" && q.OperationID != "identity.account.link-token" && q.OperationID != "identity.account.unlink" && !statusOperation(q.OperationID) {
 		return result, identity.UnavailableError{}
 	}
 	fingerprint := [32]byte(observed.fingerprint)
@@ -217,6 +217,9 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 		return result, identity.UnavailableError{}
 	}
 	if q.OperationID == "identity.account.link-token" && admitted.accountLink == nil {
+		return result, identity.UnavailableError{}
+	}
+	if q.OperationID == "identity.account.unlink" && admitted.accountUnlink == nil {
 		return result, identity.UnavailableError{}
 	}
 	if !preparationOnly && admitted.otp != nil && otpExecutionOwner(admitted) == nil {
@@ -335,6 +338,8 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	} else {
 		if admitted.accountLink != nil {
 			records, e = accountLinkMutationAudits(bounded, admitted, now, terminalClass)
+		} else if admitted.accountUnlink != nil {
+			records, e = accountUnlinkMutationAudits(bounded, admitted, now, terminalClass)
 		} else {
 			var record audit.Record
 			record, e = kernelMutationAudit(bounded, result.Binding, admitted.lifecycle.BeforeVersion, now, "dependency-failure")

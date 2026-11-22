@@ -199,6 +199,9 @@ func cloneStoredProfile(p identity.UserProfile) identity.UserProfile {
 }
 
 func matchesDomainResult(w Work, result identity.CommandResult) bool {
+	if owned := w.state.accountUnlink; owned != nil {
+		return matchesAccountUnlinkResult(w, result)
+	}
 	if owned := w.state.accountLink; owned != nil {
 		return owned.initial && owned.persisted && owned.applied && !owned.finalized && w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.status == nil && w.state.identifier == nil && w.state.feature == nil && result.Binding == w.state.binding && result.Link != nil && *result.Link == owned.receipt && result.User == owned.user && owned.user.Version > 1 && result.ExpectedVersion == owned.user.Version-1
 	}

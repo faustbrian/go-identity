@@ -36,6 +36,14 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		if err != nil {
 			return claimRequest{}, err
 		}
+	case isAccountUnlinkPreparation(c):
+		spec, _, _ := c.AccountUnlinkPreparationInput()
+		binding = spec.Binding
+		var err error
+		payload, err = encodeAccountUnlinkPreparation(c, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
 	case isCreation(c):
 		s, _ := c.CreateUser()
 		binding = s.Binding
@@ -99,6 +107,18 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		binding = s.Binding
 		var err error
 		payload, err = encodeLink(s, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
+	case isCounterUnlink(c):
+		s, counters, _ := c.AccountUnlinkCounterCommand()
+		binding = s.Binding
+		var err error
+		payload, err = encodeUnlink(s, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
+		payload["protected_counters"], err = encodeAccountCommandCounters(counters, key, "account.unlink.counter.network")
 		if err != nil {
 			return claimRequest{}, err
 		}
@@ -289,6 +309,14 @@ func isProfile(c identity.Command) bool     { _, ok := c.UpdateProfile(); return
 func isStatus(c identity.Command) bool      { _, ok := c.UserStatus(); return ok }
 func isLink(c identity.Command) bool        { _, ok := c.LinkAccount(); return ok }
 func isCounterLink(c identity.Command) bool { _, _, ok := c.AccountLinkCounterCommand(); return ok }
+func isCounterUnlink(c identity.Command) bool {
+	_, _, ok := c.AccountUnlinkCounterCommand()
+	return ok
+}
+func isAccountUnlinkPreparation(c identity.Command) bool {
+	_, _, ok := c.AccountUnlinkPreparationInput()
+	return ok
+}
 func isAccountLinkPreparation(c identity.Command) bool {
 	_, _, _, ok := c.AccountLinkPreparationInput()
 	return ok

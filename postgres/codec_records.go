@@ -74,17 +74,24 @@ func encodeLink(s identity.AccountLinkCommand, key [32]byte) (map[string][]byte,
 }
 
 func encodeUnlink(s identity.AccountUnlinkCommand, key [32]byte) (map[string][]byte, error) {
-	c := s.Change
 	proof, e := encodeCommandProof(s.Proof, key)
 	if e != nil {
 		return nil, e
 	}
+	payload := encodeAccountUnlinkIntent(s.Change, s.SessionID, s.SessionVersion, s.RevokeProvider)
+	payload["proof"] = proof
+	return payload, nil
+}
+
+// Preparation and issued execution bind the same original mutation scope;
+// their distinct proof/profile fields remain with their actual owners.
+func encodeAccountUnlinkIntent(c identity.AccountUnlinkChange, sessionID string, sessionVersion uint64, revokeProvider bool) map[string][]byte {
 	return map[string][]byte{
 		"tenant_id": cborText(string(c.TenantID)), "user_id": cborText(string(c.UserID)), "account_id": cborText(string(c.AccountID)),
 		"expected_user_version": cborUint(c.ExpectedUserVersion), "expected_account_version": cborUint(c.ExpectedAccountVersion),
 		"expected_social_link_version": cborUint(c.ExpectedSocialLinkVersion), "expected_credential_version": cborUint(c.ExpectedCredentialVersion),
-		"session_id": cborText(s.SessionID), "session_version": cborUint(s.SessionVersion), "revoke_provider": cborBool(s.RevokeProvider), "proof": proof,
-	}, nil
+		"session_id": cborText(sessionID), "session_version": cborUint(sessionVersion), "revoke_provider": cborBool(revokeProvider),
+	}
 }
 
 func encodeIdentifier(s identity.IdentifierCommand, key [32]byte) (map[string][]byte, error) {

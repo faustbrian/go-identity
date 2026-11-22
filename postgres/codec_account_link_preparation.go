@@ -79,7 +79,14 @@ func encodeAccountLinkPreparation(command identity.Command, key [32]byte) (map[s
 }
 
 func encodeAccountLinkCounters(counters identity.AccountLinkCounterContext, key [32]byte) ([]byte, error) {
-	network, err := commandSecret(key, "account.link.counter.network", []byte(counters.Network), 128)
+	return encodeAccountCommandCounters(counters, key, "account.link.counter.network")
+}
+
+// The domain distinguishes link and unlink attribution without changing the
+// historical link bytes. Only the complete command fingerprint grants replay
+// identity; these keyed projections do not establish allowance or freshness.
+func encodeAccountCommandCounters(counters identity.AccountLinkCounterContext, key [32]byte, domain string) ([]byte, error) {
+	network, err := commandSecret(key, domain, []byte(counters.Network), 128)
 	if err != nil || !postgresExactTime(counters.PreparedAt) {
 		return nil, codecError()
 	}

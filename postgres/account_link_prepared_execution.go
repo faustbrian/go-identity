@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/jackc/pgx/v5"
 )
@@ -387,7 +388,7 @@ func (c *Coordinator) attachAccountLinkPreparation(ctx context.Context, original
 		// The issuer's positive row proves this preparation prerequisite only.
 		// Do not freeze it among the final domain recovery participants: that
 		// would mistake successful issuance for an account link that rolled back.
-		if err := c.issueAccountLinkAttachment(ctx, tx, state, fence, issuance, spec); err != nil {
+		if err := c.issuePreparedAccountCapability(ctx, tx, state, fence, issuance, spec.Binding, spec.Proof); err != nil {
 			return Reservation{}, err
 		}
 		journal.previousGeneration = 0
@@ -403,9 +404,9 @@ func (c *Coordinator) attachAccountLinkPreparation(ctx context.Context, original
 	return Reservation{state: state}, nil
 }
 
-func (c *Coordinator) issueAccountLinkAttachment(ctx context.Context, tx pgx.Tx, r *reservationState, fence journalWorkFence, issuance CapabilityIssuancePlan, spec identity.AccountLinkCommand) error {
+func (c *Coordinator) issuePreparedAccountCapability(ctx context.Context, tx pgx.Tx, r *reservationState, fence journalWorkFence, issuance CapabilityIssuancePlan, binding identity.CommandBinding, grant capability.Grant) error {
 	entries, err := c.registry.selectContributors([]ContributorDescriptor{issuance.Contributor})
-	if err != nil || len(entries) != 1 || validateIssuanceContributor(spec.Binding, &issuance, entries) != nil {
+	if err != nil || len(entries) != 1 || validateIssuanceContributor(binding, &issuance, entries) != nil {
 		return invalidPreparation()
 	}
 	issuer, ok := entries[0].contributor.(CapabilityIssuanceContributor)
@@ -418,7 +419,7 @@ func (c *Coordinator) issueAccountLinkAttachment(ctx context.Context, tx pgx.Tx,
 	// Keep temporary issuance custody distinct without copying the final
 	// reservation's atomic single-use Begin state.
 	attachment := &reservationState{coordinator: r.coordinator, request: r.request, executionRequest: r.executionRequest, preparation: r.preparation, plan: &plan, journal: r.journal, owner: r.owner}
-	w, err := newWork(ctx, tx, spec.Binding, r.request, fence)
+	w, err := newWork(ctx, tx, binding, r.request, fence)
 	if err != nil {
 		return err
 	}
@@ -431,7 +432,7 @@ func (c *Coordinator) issueAccountLinkAttachment(ctx context.Context, tx pgx.Tx,
 	if err := configureKernelWork(ctx, w); err != nil {
 		return err
 	}
-	if err := w.StageCapabilityIssuanceFor(issuer, 0, spec.Proof); err != nil {
+	if err := w.StageCapabilityIssuanceFor(issuer, 0, grant); err != nil {
 		return err
 	}
 	return c.persistCapabilityIssuance(w)

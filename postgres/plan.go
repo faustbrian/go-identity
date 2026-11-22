@@ -149,6 +149,9 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.AccountLinkState != nil {
 		return encodeAccountLinkStatePlan(binding, fingerprint, plan)
 	}
+	if accountUnlinkBinding(binding) && plan.CommandCounters != nil {
+		return encodeAccountUnlinkPlan(binding, fingerprint, plan)
+	}
 	if accountLinkBinding(binding) && plan.CommandCounters != nil {
 		return encodeAccountLinkPlan(binding, fingerprint, plan)
 	}
@@ -236,6 +239,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 type admittedKernelPlan struct {
 	scimUserUpdate             *SCIMUserUpdatePlan
 	accountLink                *registeredContributor
+	accountUnlink              *registeredContributor
 	apiKeyVerification         *APIKeyVerificationPlan
 	invitationOrigin           *OrganizationInvitationOriginPlan
 	mfaCompletion              *MFACompletionPlan
@@ -275,6 +279,9 @@ func (r *ContributorRegistry) admitKernelPlanMode(binding identity.CommandBindin
 	if p.AccountLinkState != nil && p.Capability == nil && !preparation {
 		return nil, invalidPlan()
 	}
+	if accountUnlinkBinding(binding) && p.CommandCounters != nil && p.Capability == nil && !preparation {
+		return nil, invalidPlan()
+	}
 	digest, err := KernelPlanDigest(binding, fingerprint, p)
 	if err != nil || digest != p.Digest {
 		return nil, invalidPlan()
@@ -309,9 +316,10 @@ func (r *ContributorRegistry) admitKernelPlanMode(binding identity.CommandBindin
 	var lifecycle *LifecyclePlan
 	var checker *registeredContributor
 	var linkOwner *registeredContributor
+	var unlinkOwner *registeredContributor
 	var counters *CommandCounterPlan
 	if p.CommandCounters != nil {
-		if !accountLinkBinding(binding) || len(entries) != 6 {
+		if !accountLinkBinding(binding) && !accountUnlinkBinding(binding) || len(entries) != 6 {
 			return nil, invalidPlan()
 		}
 		for _, entry := range entries {
@@ -319,14 +327,28 @@ func (r *ContributorRegistry) admitKernelPlanMode(binding identity.CommandBindin
 				return nil, invalidPlan()
 			}
 		}
-		participant, ok := entries[5].contributor.(AccountLinkContributor)
-		if !ok || !sameParticipant(participant, participant) {
-			return nil, invalidPlan()
-		}
-		if p.AccountLinkState != nil {
-			if _, ok := participant.(AccountLinkPreparationContributor); !ok {
+		if accountUnlinkBinding(binding) {
+			participant, ok := entries[5].contributor.(AccountUnlinkContributor)
+			if !ok || !sameParticipant(participant, participant) || p.AccountLinkState != nil {
 				return nil, invalidPlan()
 			}
+			if p.Capability == nil {
+				if _, ok := participant.(AccountUnlinkPreparationContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+			unlinkOwner = &entries[5]
+		} else {
+			participant, ok := entries[5].contributor.(AccountLinkContributor)
+			if !ok || !sameParticipant(participant, participant) {
+				return nil, invalidPlan()
+			}
+			if p.AccountLinkState != nil {
+				if _, ok := participant.(AccountLinkPreparationContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+			linkOwner = &entries[5]
 		}
 		if _, ok := entries[3].contributor.(CapabilityExecutionContributor); !ok {
 			return nil, invalidPlan()
@@ -334,7 +356,6 @@ func (r *ContributorRegistry) admitKernelPlanMode(binding identity.CommandBindin
 		if _, ok := entries[4].contributor.(RecoveryContributor); !ok {
 			return nil, invalidPlan()
 		}
-		linkOwner = &entries[5]
 		copy := *p.CommandCounters
 		counters = &copy
 	}
@@ -363,7 +384,7 @@ func (r *ContributorRegistry) admitKernelPlanMode(binding identity.CommandBindin
 		copy := *p.AccountLinkState
 		state = &copy
 	}
-	admitted := &admittedKernelPlan{accountLink: linkOwner, accountLinkState: state, counters: counters, identifierAdmission: checker, registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}
+	admitted := &admittedKernelPlan{accountLink: linkOwner, accountUnlink: unlinkOwner, accountLinkState: state, counters: counters, identifierAdmission: checker, registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}
 	if counters != nil && counterAdmissionParticipant(admitted) == nil {
 		return nil, invalidPlan()
 	}

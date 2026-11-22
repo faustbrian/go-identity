@@ -88,6 +88,18 @@ func (w RecoveryWork) AccountLinkScope(owner AccountLinkContributor) (identity.C
 	return w.state.plan.binding, *w.state.plan.accountLinkState, *w.state.plan.capability, nil
 }
 
+// AccountUnlinkScope returns the exact retained account scope and predecessor
+// version only to the enlisted unlink recovery participant. An attached child
+// is not a committed unlink; this exposes no proof or execution authority.
+func (w RecoveryWork) AccountUnlinkScope(owner AccountUnlinkContributor) (identity.CommandBinding, uint64, error) {
+	if w.usable() != nil || w.state.entry.descriptor != accountUnlinkOwnerDescriptor() || w.state.plan.accountUnlink == nil ||
+		w.state.plan.lifecycle == nil || w.state.plan.capability == nil || !sameParticipant(owner, w.state.entry.contributor) ||
+		!sameParticipant(owner, w.state.plan.accountUnlink.contributor) {
+		return identity.CommandBinding{}, 0, invalidWork()
+	}
+	return w.state.plan.binding, w.state.plan.lifecycle.BeforeVersion, nil
+}
+
 // Query reads only this contributor's authoritative evidence using bounded
 // coordinator-owned rows. Close/drain every cursor before returning; failures
 // poison recovery and rows do not survive the invocation.
@@ -224,6 +236,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 	b, err := recovery.Scope()
 	if err == nil && recovery.state.plan.accountLink != nil {
 		return recoverAccountLink(ctx, recovery)
+	}
+	if err == nil && recovery.state.plan.accountUnlink != nil {
+		return recoverAccountUnlink(ctx, recovery)
 	}
 	if err == nil && recovery.state.plan.feature != nil {
 		if scimUserUpdateSelected(recovery.state.plan.feature.Operation) {

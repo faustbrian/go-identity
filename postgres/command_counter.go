@@ -257,6 +257,8 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 	var records []audit.Record
 	if p.accountLink != nil {
 		records, err = accountLinkMutationAudits(ctx, p, now, "denied")
+	} else if p.accountUnlink != nil {
+		records, err = accountUnlinkMutationAudits(ctx, p, now, "denied")
 	} else {
 		records, err = featureMutationAudits(ctx, p, now, "denied")
 	}
