@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Report an original stored OAuth refresh as in progress when its protected
+  declaration exists but the provider outcome has not attached. This read-only
+  observation does not grant generic recovery or another provider attempt.
+
 - Add forward journal support for erasing encrypted refresh preparation at
   commit or abort while preserving the original result. Install
   `OAuthProviderRefreshErasureMigrationSource` after account-unlink preparation

@@ -146,7 +146,9 @@ FROM identity.identity_command_id_claims c JOIN identity.commands j USING(comman
 WHERE c.command_id=$1 AND c.tenant_id=$2 AND c.purpose=$3 AND c.safe_fields=$4 AND c.fingerprint=$5
 AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL AND j.state=$6 AND j.lease_until=$7`, id, observed.tenant, observed.purpose, observed.scope, observed.fingerprint, *observed.state, *observed.until).Scan(&observed.preparationProfile)
 	}
-	selected := feature == nil && (accountLinkBinding(binding) || accountUnlinkBinding(binding)) || feature != nil && (feature.OperationID == "identity.mfa.otp-verify" || organizationInvitationIssuanceOperation(*feature) || oauthRegistrationPreparationSelected(*feature) || *feature == oauthSigninAccountOperation())
+	refreshPending := observed.state != nil && *observed.state == "pending" &&
+		oauthProviderRefreshPreparationClaim(claimRequest{purpose: observed.purpose, feature: feature})
+	selected := refreshPending || feature == nil && (accountLinkBinding(binding) || accountUnlinkBinding(binding)) || feature != nil && (feature.OperationID == "identity.mfa.otp-verify" || organizationInvitationIssuanceOperation(*feature) || oauthRegistrationPreparationSelected(*feature) || *feature == oauthSigninAccountOperation())
 	if err != nil || observed.plan != nil || !selected || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
 		return nil
 	}
@@ -264,7 +266,7 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
 	var plan CommandPlan
-	if !pendingAPIKeyPreparation(binding, feature, observed) {
+	if !pendingAPIKeyPreparation(binding, feature, observed) && !pendingProviderRefreshPreparation(binding, feature, observed) {
 		plan, _, err = observedCommandPlan(binding, feature, observed)
 		if err != nil || feature != nil && (plan.Feature == nil || plan.Feature.Operation != *feature) {
 			return identity.CommandResult{}, identity.UnavailableError{}
@@ -326,6 +328,23 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	default:
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
+}
+
+// Native refresh may have sent the original provider request without safely
+// attaching its result. Permit only a read-only pending observation; do not
+// add this profile to observedCommandPlan, which also decides whether generic
+// recovery may take ownership or conclude absence of effects.
+func pendingProviderRefreshPreparation(binding identity.CommandBinding, feature *identity.FeatureOperation, observed commandObservation) bool {
+	if observed.plan != nil || observed.state == nil || *observed.state != "pending" ||
+		observed.preparationProfile == nil || *observed.preparationProfile != 4 || len(observed.fingerprint) != 32 ||
+		!oauthProviderRefreshPreparationClaim(claimRequest{purpose: observed.purpose, feature: feature}) {
+		return false
+	}
+	plan, err := decodeFeaturePlan(binding, [32]byte(observed.fingerprint), observed.declaration)
+	if err != nil || plan.Feature == nil || plan.Feature.Operation != *feature || plan.CommandCounters == nil {
+		return false
+	}
+	return plan.Feature.Contributor == (ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.provider-refresh", Version: 1})
 }
 
 // An authenticated preparation declaration permits observation of pending or
