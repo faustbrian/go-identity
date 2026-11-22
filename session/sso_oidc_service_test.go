@@ -12,8 +12,27 @@ import (
 )
 
 func TestSSOOIDCCookieProfileRejectsTransportSwitch(t *testing.T) {
-	issuer, prepared, command, _, clock := ssoOIDCIssuerFixture(t, false)
-	bound, err := issuer.BindSSOOIDC(prepared, command)
+	testSSOCookieProfile(t, false, session.NewSSOOIDCCookieProfileSessionService)
+}
+
+func TestSSOOAuth2CookieProfileRejectsTransportAndUnselectedCache(t *testing.T) {
+	for _, selected := range []session.EnterpriseCookieSelection{{OAuth2: true}, {OIDC: true, OAuth2: true}} {
+		t.Run(map[bool]string{false: "oauth2-only", true: "both"}[selected.OIDC], func(t *testing.T) {
+			testSSOCookieProfile(t, true, func(reader session.SessionReader, config session.ServiceConfig, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
+				return session.NewEnterpriseCookieProfileSessionService(reader, config, methods, profile, selected)
+			})
+		})
+	}
+}
+
+func testSSOCookieProfile(t *testing.T, oauth2 bool, newService func(session.SessionReader, session.ServiceConfig, []session.AuthenticationKind, string) (*session.SessionService, error)) {
+	t.Helper()
+	issuer, prepared, command, _, clock := ssoIssuerFixture(t, true, oauth2)
+	bind := issuer.BindSSOOIDC
+	if oauth2 {
+		bind = issuer.BindSSOOAuth2
+	}
+	bound, err := bind(prepared, command)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +55,7 @@ func TestSSOOIDCCookieProfileRejectsTransportSwitch(t *testing.T) {
 	config := session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: spec.Audience, Clock: clock,
 		MaximumDuration: time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{lookup}}
 	methods := []session.AuthenticationKind{session.AuthenticationVerified}
-	profile, err := session.NewSSOOIDCCookieProfileSessionService(reader, config, methods, "enterprise-primary")
+	profile, err := newService(reader, config, methods, "enterprise-primary")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +103,7 @@ func TestSSOOIDCCookieProfileRejectsTransportSwitch(t *testing.T) {
 		reads++
 		return session.SessionObservation{}, session.ErrUnavailable
 	})
-	restarted, err := session.NewSSOOIDCCookieProfileSessionService(unavailable, config, methods, "enterprise-primary")
+	restarted, err := newService(unavailable, config, methods, "enterprise-primary")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +128,19 @@ func TestSSOOIDCCookieProfileRejectsTransportSwitch(t *testing.T) {
 	}
 	if got, err := plainCodec.Get(t.Context(), cookieRequest, blob); !errors.Is(err, session.ErrUnavailable) || got.Authenticated || reads != 2 {
 		t.Fatal("enterprise cached cookie crossed into an organization-bearer profile", err)
+	}
+	if oauth2 {
+		oidcOnly, err := session.NewSSOOIDCCookieProfileSessionService(reader, config, methods, "enterprise-primary")
+		if err != nil {
+			t.Fatal(err)
+		}
+		oidcCodec, err := session.NewEncryptedCacheCodec(oidcOnly, crypto, cacheConfig)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := oidcCodec.Get(t.Context(), cookieRequest, blob); err != nil || got.Authenticated {
+			t.Fatal("OAuth2 cache or primary record crossed into an OIDC-only profile", err)
+		}
 	}
 	clock.now = original.ValidUntil()
 	if got, err := restartedCodec.Get(t.Context(), cookieRequest, blob); !errors.Is(err, session.ErrUnavailable) || got.Authenticated || reads != 3 {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select enterprise OAuth2 cookie reads independently of OIDC. Keep both
+  methods cookie-only with original CSRF state, and isolate cache profiles
+  without extending the original primary authority deadline.
+
 - Add a separately selected prospective enterprise OAuth 2.0 session issuer.
   Preserve original callback, linked credential and Remember custody; release
   credentials only for an exact new commit without accepting OIDC provenance.

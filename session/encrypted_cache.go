@@ -336,7 +336,12 @@ func (c *EncryptedCacheCodec) additionalData(tenant identity.TenantID) (envelope
 	if c.service.organizationBearerOnly {
 		fields["organization-transport"] = "bearer-only-v1"
 	}
-	if c.service.ssoOIDCCookieOnly {
+	switch {
+	case c.service.ssoOIDCCookieOnly && c.service.ssoOAuth2CookieOnly:
+		fields["organization-transport"] = "enterprise-oidc-oauth2-cookie-else-bearer-v1"
+	case c.service.ssoOAuth2CookieOnly:
+		fields["organization-transport"] = "enterprise-oauth2-cookie-else-bearer-v1"
+	case c.service.ssoOIDCCookieOnly:
 		fields["organization-transport"] = "enterprise-oidc-cookie-else-bearer-v1"
 	}
 	return envelope.NewContext(fields)

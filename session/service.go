@@ -140,6 +140,7 @@ type SessionService struct {
 	cacheProfile           string
 	organizationBearerOnly bool
 	ssoOIDCCookieOnly      bool
+	ssoOAuth2CookieOnly    bool
 }
 
 // NewSelectedProfileSessionService freezes an explicit nonempty subset of
@@ -195,6 +196,25 @@ func NewOrganizationBearerProfileSessionService(reader SessionReader, config Ser
 // behavior. The owned reader still must prove every current authority dimension;
 // the cache is bound to this distinct policy and never renews original evidence.
 func NewSSOOIDCCookieProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string) (*SessionService, error) {
+	return NewEnterpriseCookieProfileSessionService(reader, config, methods, cacheProfile, EnterpriseCookieSelection{OIDC: true})
+}
+
+// EnterpriseCookieSelection opts into exact issued enterprise cookie profiles
+// independently. It does not select social OAuth or a current-authority reader.
+type EnterpriseCookieSelection struct {
+	OIDC   bool
+	OAuth2 bool
+}
+
+// NewEnterpriseCookieProfileSessionService selects OIDC, OAuth2 or both on
+// cookie transport only, with original session-bound CSRF state. Unselected
+// enterprise methods deny; other organization-selected records retain the
+// bearer-only rule. The reader must separately prove every current authority
+// dimension. Cache custody binds the exact selection without renewing evidence.
+func NewEnterpriseCookieProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string, selected EnterpriseCookieSelection) (*SessionService, error) {
+	if !selected.OIDC && !selected.OAuth2 {
+		return nil, ErrInvalidInput
+	}
 	s, err := NewOrganizationBearerProfileSessionService(reader, config, methods, cacheProfile)
 	if err != nil {
 		return nil, err
@@ -202,7 +222,7 @@ func NewSSOOIDCCookieProfileSessionService(reader SessionReader, config ServiceC
 	if !s.admitsMethod(AuthenticationVerified) {
 		return nil, ErrInvalidInput
 	}
-	s.ssoOIDCCookieOnly = true
+	s.ssoOIDCCookieOnly, s.ssoOAuth2CookieOnly = selected.OIDC, selected.OAuth2
 	return s, nil
 }
 
@@ -218,8 +238,14 @@ func (s *SessionService) admitsTransport(record Session, kind CredentialKind) bo
 	if err != nil {
 		return false
 	}
-	if s.ssoOIDCCookieOnly && spec.Authentication.Kind == AuthenticationVerified && spec.Authentication.Proof.Method == "sso-oidc" {
-		return vector.Organization.Present && kind == CredentialCookie && record.CSRFState().state != nil
+	if (s.ssoOIDCCookieOnly || s.ssoOAuth2CookieOnly) && spec.Authentication.Kind == AuthenticationVerified {
+		selectedCookie := vector.Organization.Present && kind == CredentialCookie && record.CSRFState().state != nil
+		switch spec.Authentication.Proof.Method {
+		case "sso-oidc":
+			return s.ssoOIDCCookieOnly && selectedCookie
+		case "sso-oauth2":
+			return s.ssoOAuth2CookieOnly && selectedCookie
+		}
 	}
 	return !vector.Organization.Present || kind == CredentialBearer && record.CSRFState().state == nil
 }
