@@ -15,6 +15,11 @@ func ssoOIDCSigninDescriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-login-callback", Version: 1}
 }
 
+func ssoOIDCCallbackClaim(q claimRequest) bool {
+	op := ssoOIDCSigninOperation()
+	return q.feature != nil && q.purpose == op.OperationID && *q.feature == op
+}
+
 // The signed enterprise state is resource-bound to the original start
 // command. The callback is a different command; it cannot pick a user.
 func validSSOOIDCSigninBinding(b identity.CommandBinding) bool {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Erase the exact native enterprise OIDC callback's temporary encrypted
+  preparation at terminal commit or abort. Keep the original receipt and
+  pending/unknown custody; install the forward callback erasure migration
+  after enterprise start erasure and before enabling the callback writer.
+
 - Read the current `sso`-owned provider association for an issued enterprise
   session. The exact native same-user revoke-one owner can lock that association
   and recheck expiry without widening social provider credential checks.

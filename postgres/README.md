@@ -71,6 +71,13 @@ through `Work.SSOOIDCSigninConsumption`, and finalizes the state in the same
 commit. Retained-output takeover does not generate again. Unattached recovery
 does not infer that a provider exchange was never attempted.
 
+Install `SSOOIDCCallbackPreparationErasureMigrationSource` after the enterprise
+start erasure and before enabling the callback writer. This forward update
+only changes the existing trigger function; it does not rewrite or backfill
+rows. A definitive callback receipt erases temporary encrypted output and its
+generation in the same transaction. Pending or unknown callbacks retain the
+original custody. Disable the writer for rollback and keep the forward guard.
+
 After provider validation, `GetSSOOIDCSigninAccount` resolves the configured
 enterprise namespace and its exact `sso` credential, not a social account.
 Use `SSOOIDCSigninAccountFields` to bind that observation into the original

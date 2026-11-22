@@ -38,18 +38,24 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 		return e
 	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.commandID))
-	var matched, eraseAccountPreparation bool
+	var matched, eraseRetainedPreparation bool
 	if oauthProviderRefreshPreparationClaim(q) {
 		// The refresh path already requires the preparation schema. Read the
 		// scalar profile directly so terminalizing never encodes the retained
 		// token ciphertext just to check a journal flag.
 		e = tx.QueryRow(ctx, oauthProviderRefreshTerminalFenceSQL, id, string(q.tenant), q.purpose,
-			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseAccountPreparation)
+			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseRetainedPreparation)
+	} else if ssoOIDCCallbackClaim(q) {
+		// Only the selected external-admission profile hands provider tokens
+		// to the native vault. Its temporary deposit must not survive the
+		// same definitive receipt; the old guard still protects other rows.
+		e = tx.QueryRow(ctx, ssoOIDCCallbackTerminalFenceSQL, id, string(q.tenant), q.purpose,
+			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseRetainedPreparation)
 	} else {
 		e = tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
 CASE WHEN $6 THEN (j.purpose='identity.account.link-token' AND coalesce(to_jsonb(j)->>'preparation_profile','')='5')
  OR (j.purpose='identity.account.unlink' AND coalesce(to_jsonb(j)->>'preparation_profile','')='6') ELSE false END
-FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:], (q.purpose == "identity.account.link-token" || q.purpose == "identity.account.unlink") && q.feature == nil).Scan(&matched, &eraseAccountPreparation)
+FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:], (q.purpose == "identity.account.link-token" || q.purpose == "identity.account.unlink") && q.feature == nil).Scan(&matched, &eraseRetainedPreparation)
 	}
 	if e != nil {
 		return readFailure(ctx, e)
@@ -67,7 +73,7 @@ FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR
 	// detection uses row metadata so ordinary schemas need no optional columns;
 	// scope-only recovery does not require the original request's secret input.
 	preparationErasure := ""
-	if oauthRPInitiationClaim(q) || ssoOIDCStartClaim(q) || eraseAccountPreparation {
+	if oauthRPInitiationClaim(q) || ssoOIDCStartClaim(q) || eraseRetainedPreparation {
 		preparationErasure = ",preparation_ciphertext=NULL,preparation_ciphertext_generation=NULL"
 	}
 	// Ordinary installations need not select the optional preparation schema.
@@ -86,4 +92,8 @@ FROM instant WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 AND lease_until
 
 const oauthProviderRefreshTerminalFenceSQL = `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
  coalesce(preparation_profile IN (2,4), false)
+ FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`
+
+const ssoOIDCCallbackTerminalFenceSQL = `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
+ coalesce(preparation_profile=4, false)
  FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`
