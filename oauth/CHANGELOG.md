@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add separately selected shared-redirect OAuth2 code/query/S256 callback
+  parsing with exact trusted-route and decoded RFC 9207 issuer binding on
+  success and denial. Reuse bounded code/state custody and destruction without
+  inventing OIDC proof, distinct-route UserInfo facts or exchange authority;
+  existing OIDC and social OAuth2 callback selections remain unchanged.
+
 - Add opt-in bounded projection of selected verified OIDC ID-token claims.
   Preserve absent, null, string and boolean values after full token validation;
   default providers and refusal/unknown handling are unchanged. The result

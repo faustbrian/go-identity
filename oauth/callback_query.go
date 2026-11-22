@@ -39,6 +39,14 @@ type queryDeniedState struct {
 	busy  bool
 }
 
+type queryCallbackProtocol uint8
+
+const (
+	queryCallbackOIDC queryCallbackProtocol = iota
+	queryCallbackDistinctOAuth2
+	queryCallbackSharedOAuth2
+)
+
 // ParseQueryCallback parses a raw URL query (without '?') under the exact trusted
 // transaction-bound ProviderProfile. Profile, issuer and version must come from
 // the native transaction/configuration, never callback-selected data. A caller
@@ -59,7 +67,26 @@ type queryDeniedState struct {
 // 1024-byte description and 4096-byte ignored extension. Limits reject, never
 // truncate. Nil/malformed profiles/contexts deny; cancellation is Unavailable.
 func ParseQueryCallback(ctx context.Context, rawQuery string, profile ProviderProfile) (QueryCallback, error) {
-	return parseQueryCallback(ctx, rawQuery, profile, nil, "")
+	return parseQueryCallback(ctx, rawQuery, profile, nil, "", queryCallbackOIDC)
+}
+
+// ParseSharedOAuth2QueryCallback selects a nonce-free OAuth2 code/query/S256
+// transport with RFC9207 issuer identification on both success and denial.
+// receivedRedirect must be the exact trusted transport route without a query,
+// and profile must come from the native transaction/configuration, never from
+// callback-selected issuer, Host or redirect data. The selected profile requires
+// same-issuer-origin HTTPS authorization/token endpoints, client_secret_post,
+// no openid scope or signing algorithms, and the existing OAuth2 query bounds.
+//
+// The same bounded form parser, exact decoded issuer comparison and shared
+// secret destruction as ParseQueryCallback apply. This retains only root
+// code/state custody or denial lookup state: it authenticates/reserves nothing,
+// performs no IO and grants no exchange, identity or policy authority. No
+// OAuth2Details or token policy is selected, so existing distinct-route social
+// callback requests cannot accept this result. Native enterprise composition
+// must independently bind and reserve the transaction before using custody.
+func ParseSharedOAuth2QueryCallback(ctx context.Context, rawQuery, receivedRedirect string, profile ProviderProfile) (QueryCallback, error) {
+	return parseQueryCallback(ctx, rawQuery, profile, nil, receivedRedirect, queryCallbackSharedOAuth2)
 }
 
 // ParseOAuth2QueryCallback selects RFC9700 distinct-redirect mix-up defense.
@@ -80,7 +107,7 @@ func ParseOAuth2QueryCallbackWithPolicy(ctx context.Context, rawQuery, receivedR
 		return QueryCallback{}, failure(InvalidInput, ctx)
 	}
 	details := profile.Details
-	out, err := parseQueryCallback(ctx, rawQuery, profile.Profile, &details, receivedRedirect)
+	out, err := parseQueryCallback(ctx, rawQuery, profile.Profile, &details, receivedRedirect, queryCallbackDistinctOAuth2)
 	if err == nil {
 		out.tokenPolicy = policy
 	}
@@ -99,8 +126,17 @@ func (q QueryCallback) OAuth2Details() (OAuth2UserInfoDetails, bool) {
 	return *q.oauth2, true
 }
 
-func parseQueryCallback(ctx context.Context, rawQuery string, profile ProviderProfile, details *OAuth2UserInfoDetails, receivedRedirect string) (QueryCallback, error) {
-	if ctx == nil || details == nil && !queryProfileValid(profile) || details != nil && (!oauth2QueryProfileValid(profile) || receivedRedirect != profile.RedirectURI) {
+func parseQueryCallback(ctx context.Context, rawQuery string, profile ProviderProfile, details *OAuth2UserInfoDetails, receivedRedirect string, protocol queryCallbackProtocol) (QueryCallback, error) {
+	profileValid := false
+	switch protocol {
+	case queryCallbackOIDC:
+		profileValid = details == nil && queryProfileValid(profile)
+	case queryCallbackDistinctOAuth2:
+		profileValid = details != nil && oauth2QueryProfileValid(profile) && receivedRedirect == profile.RedirectURI
+	case queryCallbackSharedOAuth2:
+		profileValid = details == nil && oauth2QueryProfileValid(profile) && receivedRedirect == profile.RedirectURI
+	}
+	if ctx == nil || !profileValid {
 		return QueryCallback{}, failure(InvalidInput, ctx)
 	}
 	if ctx.Err() != nil {
@@ -160,7 +196,10 @@ func parseQueryCallback(ctx context.Context, rawQuery string, profile ProviderPr
 	}
 	// RFC9207 section2.4 requires exact decoded string comparison, including
 	// error responses. The issuer is not normalized or used to select a provider.
-	issuerInvalid := details == nil && string(values["iss"]) != profile.Issuer || details != nil && seen["iss"]
+	issuerInvalid := string(values["iss"]) != profile.Issuer
+	if protocol == queryCallbackDistinctOAuth2 {
+		issuerInvalid = seen["iss"]
+	}
 	if issuerInvalid || !canonical32(string(values["state"])) || seen["code"] == seen["error"] {
 		return QueryCallback{}, failure(InvalidInput, ctx)
 	}
