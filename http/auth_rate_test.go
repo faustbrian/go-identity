@@ -33,6 +33,30 @@ func authLimiter(t *testing.T, clock func() time.Time) (*identityhttp.AuthRateLi
 	return l, shared
 }
 
+func TestSSODiscoveryIPUsesSharedAuthBudgetWithoutIdentifier(t *testing.T) {
+	ctx := context.Background()
+	limiter, backend := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	facts := safeFacts(t, "198.51.100.1")
+	for range 19 {
+		if result, err := limiter.AdmitOriginalFlow(ctx, facts); err != nil || !result.Allowed {
+			t.Fatal("shared browser IP budget denied too early", err)
+		}
+	}
+	if result, err := limiter.AdmitSSODiscoveryIP(ctx, facts); err != nil || !result.Allowed {
+		t.Fatal("last shared IP debit was not available to discovery", err)
+	}
+	if result, err := limiter.AdmitSSODiscoveryIP(ctx, facts); !errors.Is(err, identityhttp.ErrRateLimited) || result.Allowed || result.RetryAfter != 30*time.Second {
+		t.Fatal("discovery bypassed the existing auth IP limit or lost retry metadata", err)
+	}
+	if _, err := limiter.AdmitSSODiscoveryIP(ctx, identityhttp.NetworkFacts{}); !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("discovery accepted untrusted network facts", err)
+	}
+	backend.mode.Store(1)
+	if result, err := limiter.AdmitSSODiscoveryIP(ctx, safeFacts(t, "198.51.100.2")); !errors.Is(err, identityhttp.ErrRateUnavailable) || result.Allowed {
+		t.Fatal("shared rate outage allowed discovery", err)
+	}
+}
+
 func TestAuthRateSplitDeliverySharesOriginalBudgets(t *testing.T) {
 	l, backend := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
 	ctx := context.Background()

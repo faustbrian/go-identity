@@ -110,7 +110,19 @@ func (l *AuthRateLimiter) Configured() bool {
 // The caller still owns HTTPS, origin and all other operation admission.
 // Outage, ambiguity, panic and cancellation fail closed without fallback;
 // an earlier caller deadline wins. Admission is not a reusable clearance.
-func (l *AuthRateLimiter) AdmitOriginalFlow(ctx context.Context, facts NetworkFacts) (out AuthRateResult, err error) {
+func (l *AuthRateLimiter) AdmitOriginalFlow(ctx context.Context, facts NetworkFacts) (AuthRateResult, error) {
+	return l.admitAnonymousAuthIP(ctx, facts)
+}
+
+// AdmitSSODiscoveryIP applies the shared rate.auth IP-only 20/10m bucket to
+// anonymous SSO discovery. This operation selects a domain, never an account
+// or challenge: neither an email local part nor a synthetic identifier enters
+// the edge budget. The native owner still requires its own abuse admission.
+func (l *AuthRateLimiter) AdmitSSODiscoveryIP(ctx context.Context, facts NetworkFacts) (AuthRateResult, error) {
+	return l.admitAnonymousAuthIP(ctx, facts)
+}
+
+func (l *AuthRateLimiter) admitAnonymousAuthIP(ctx context.Context, facts NetworkFacts) (out AuthRateResult, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = AuthRateResult{}, ErrRateUnavailable

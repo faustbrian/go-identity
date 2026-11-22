@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose anonymous SSO discovery admission against the existing shared auth IP
+  budget, without an account or challenge selector. No route is enabled.
+
 - Admit native session-bound synchronizers for explicit OAuth link initiation,
   without origin-only fallback or an independently aged token. Validate the
   selected callback's actual 303 redirect contract without inventing a 2xx
