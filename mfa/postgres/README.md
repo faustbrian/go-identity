@@ -1,5 +1,14 @@
 # PostgreSQL MFA authority (in development)
 
+## Enterprise OIDC single-factor sessions
+
+Read the known-empty factor generation with `ReadSSOOIDCSigninFactors` and
+fence that same generation in `RequireSSOOIDCSigninFactors` through the exact
+enterprise callback command. `ReadSSOOIDCSessionFactors` and
+`RequireSSOOIDCSessionFactors` retain it for session reads and same-user
+revocation. Missing, enrolled or changed authority denies. The session and SSO
+owners still verify the provider, organization membership and session effects.
+
 ## Passkey primary with an enrolled independent TOTP
 
 `PersistPasskeyContinuation` requires the exact original `PasskeyCommandID`

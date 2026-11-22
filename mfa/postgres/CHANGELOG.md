@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a distinct enterprise OIDC known-empty factor profile for the exact
+  existing-account callback, session read and same-user revocation. Missing,
+  enrolled or stale factor authority denies; social OAuth remains unchanged.
+
 - Require the original known-empty factor generation during fresh-password
   account unlink preparation and protected execution.
 
