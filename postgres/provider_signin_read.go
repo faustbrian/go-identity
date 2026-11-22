@@ -58,17 +58,46 @@ func (r *Repository) GetProviderSigninAccount(ctx context.Context, q ProviderSig
 	if !r.validAccountRead(ctx) || q.Validate() != nil {
 		return ProviderAccountAdmission{}, invalidAccountQuery()
 	}
-	bounded, stop := context.WithTimeout(ctx, r.maximumDuration)
-	defer stop()
-	rows, err := r.pool.Raw().Query(bounded, `SELECT a.tenant_id,a.user_id,a.account_id,a.provider,a.issuer,a.subject,
+	return r.readProviderAccount(ctx, q.TenantID, func(a identity.Account) bool {
+		return a.Provider == q.Provider && a.Issuer == q.Issuer && a.Subject == q.Subject
+	}, providerAccountReadSQL+`
+ WHERE a.tenant_id=$1 AND a.linked AND a.subject_key=sha256(convert_to(
+ octet_length($2::text)::text||':'||$2::text||octet_length($3::text)::text||':'||$3::text||octet_length($4::text)::text||':'||$4::text,'UTF8'))
+ LIMIT 2`, string(q.TenantID), q.Provider, q.Issuer, q.Subject)
+}
+
+// GetOwnedProviderAccount captures the exact current linked provider account
+// and its credential epochs on the primary. Native refresh uses the already
+// authenticated owner and account ID without accepting a provider subject from
+// the caller. Missing, foreign or ineligible authority uniformly denies.
+// The snapshot does not prove possession or authorization and must be fenced
+// again in the sole Work before sending or mutating provider custody.
+func (r *Repository) GetOwnedProviderAccount(ctx context.Context, tenant identity.TenantID, user identity.UserID, account identity.AccountID) (ProviderAccountAdmission, error) {
+	if !r.validAccountRead(ctx) || !validAccountQuery(identity.AccountQuery{TenantID: tenant, UserID: user, MaximumAccounts: 1}) {
+		return ProviderAccountAdmission{}, invalidAccountQuery()
+	}
+	if _, err := identity.ParseAccountID(string(account)); err != nil {
+		return ProviderAccountAdmission{}, invalidAccountQuery()
+	}
+	return r.readProviderAccount(ctx, tenant, func(a identity.Account) bool {
+		return a.UserID == user && a.ID == account
+	}, ownedProviderAccountReadSQL,
+		string(tenant), string(user), string(account))
+}
+
+const providerAccountReadSQL = `SELECT a.tenant_id,a.user_id,a.account_id,a.provider,a.issuer,a.subject,
  a.version::text,a.social_link_version::text,c.credential_id,c.kind,c.owner,c.version::text,c.enabled,c.expires_at,
  u.status,u.authority_version::text,u.identifier_version::text,u.credential_version::text,clock_timestamp()
  FROM identity.accounts a JOIN identity.users u ON u.tenant_id=a.tenant_id AND u.user_id=a.user_id
  JOIN identity.account_credentials m ON m.tenant_id=a.tenant_id AND m.user_id=a.user_id AND m.account_id=a.account_id
- JOIN identity.credential_references c ON c.tenant_id=m.tenant_id AND c.user_id=m.user_id AND c.credential_id=m.credential_id
- WHERE a.tenant_id=$1 AND a.linked AND a.subject_key=sha256(convert_to(
- octet_length($2::text)::text||':'||$2::text||octet_length($3::text)::text||':'||$3::text||octet_length($4::text)::text||':'||$4::text,'UTF8'))
- LIMIT 2`, string(q.TenantID), q.Provider, q.Issuer, q.Subject)
+ JOIN identity.credential_references c ON c.tenant_id=m.tenant_id AND c.user_id=m.user_id AND c.credential_id=m.credential_id`
+
+const ownedProviderAccountReadSQL = providerAccountReadSQL + ` WHERE a.tenant_id=$1 AND a.user_id=$2 AND a.account_id=$3 AND a.linked LIMIT 2`
+
+func (r *Repository) readProviderAccount(ctx context.Context, tenantID identity.TenantID, matches func(identity.Account) bool, query string, args ...any) (ProviderAccountAdmission, error) {
+	bounded, stop := context.WithTimeout(ctx, r.maximumDuration)
+	defer stop()
+	rows, err := r.pool.Raw().Query(bounded, query, args...)
 	if err != nil {
 		return ProviderAccountAdmission{}, readFailure(bounded, err)
 	}
@@ -100,7 +129,8 @@ func (r *Repository) GetProviderSigninAccount(ctx context.Context, q ProviderSig
 	if bounded.Err() != nil {
 		return ProviderAccountAdmission{}, readFailure(bounded, bounded.Err())
 	}
-	if tenant != string(q.TenantID) || provider != q.Provider || issuer != q.Issuer || subject != q.Subject || kind != int16(identity.CredentialProvider) || owner != "identity/oauth" || !postgresExactTime(now.UTC()) {
+	a := identity.Account{TenantID: identity.TenantID(tenant), UserID: identity.UserID(user), ID: identity.AccountID(account), Provider: provider, Issuer: issuer, Subject: subject}
+	if a.TenantID != tenantID || !matches(a) || kind != int16(identity.CredentialProvider) || owner != "identity/oauth" || !postgresExactTime(now.UTC()) {
 		return ProviderAccountAdmission{}, identity.UnavailableError{}
 	}
 	if status != string(identity.StatusActive) || !enabled || expires != nil && !now.Before(*expires) {
@@ -114,12 +144,9 @@ func (r *Repository) GetProviderSigninAccount(ctx context.Context, q ProviderSig
 		}
 		return value
 	}
+	a.Version = version(accountVersion)
 	out := ProviderAccountAdmission{
-		Account: identity.Account{
-			TenantID: identity.TenantID(tenant), UserID: identity.UserID(user),
-			ID: identity.AccountID(account), Provider: provider, Issuer: issuer,
-			Subject: subject, Version: version(accountVersion),
-		},
+		Account:           a,
 		SocialLinkVersion: version(linkVersion),
 		Credential: CredentialAdmission{
 			Credential: identity.CredentialRef{

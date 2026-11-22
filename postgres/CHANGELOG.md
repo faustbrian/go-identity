@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Read an exact owner's linked provider account and advance its social-link
+  version only within the registered native refresh transaction. The account
+  record and login credential remain unchanged.
+
 - Add conservative primary unlink snapshots, retained tombstone/credential
   retirement storage phases and typed provisional unlink result ownership.
   Original password/session preparation is distinct from an issued command;

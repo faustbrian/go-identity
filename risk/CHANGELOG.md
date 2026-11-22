@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Apply operation-bound credential-mutation risk and counters to stored OAuth
+  provider-token refresh before the provider request.
+
 - Admit the exact SSO provider metadata update through privileged, operation-bound
   counters. Keep required signals and the current organization checks at the
   SSO owner. No provider enablement or credential rotation is selected.

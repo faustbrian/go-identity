@@ -34,6 +34,32 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 	if observed, err := repository.GetProviderSigninAccount(cancelled, query); !errors.Is(err, context.Canceled) || observed != (ProviderAccountAdmission{}) {
 		t.Fatal("provider read cancellation lost", err)
 	}
+	for _, item := range []struct {
+		name    string
+		tenant  identity.TenantID
+		user    identity.UserID
+		account identity.AccountID
+		match   bool
+	}{
+		{"exact", "tenant", "selected-user", "account", true},
+		{"foreign tenant", "other", "selected-user", "account", false},
+		{"foreign owner", "tenant", "other", "account", false},
+		{"unknown account", "tenant", "selected-user", "other", false},
+	} {
+		t.Run("owned-read/"+item.name, func(t *testing.T) {
+			out, err := repository.GetOwnedProviderAccount(ctx, item.tenant, item.user, item.account)
+			if item.match {
+				if err != nil || out != signinAccountFixture() {
+					t.Fatal("exact linked account did not return its authority", err)
+				}
+			} else {
+				var denied identity.ForbiddenError
+				if !errors.As(err, &denied) || out != (ProviderAccountAdmission{}) {
+					t.Fatal("foreign account read did not deny uniformly", err)
+				}
+			}
+		})
+	}
 	for _, mode := range []string{"current", "current-final", "blocked", "disabled", "expired", "expired-final", "unlinked", "missing-association", "stale-link", "stale-credential", "stale-user-epoch", "changed-subject"} {
 		t.Run(mode, func(t *testing.T) {
 			exec(`UPDATE identity.users SET status='active',authority_version=13 WHERE tenant_id='tenant';
@@ -71,6 +97,10 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 				var denied identity.ForbiddenError
 				if !errors.As(readErr, &denied) || observed != (ProviderAccountAdmission{}) {
 					t.Fatal("ineligible provider subject selected a user", readErr)
+				}
+				observed, readErr = repository.GetOwnedProviderAccount(ctx, "tenant", "selected-user", "account")
+				if !errors.As(readErr, &denied) || observed != (ProviderAccountAdmission{}) {
+					t.Fatal("ineligible owned account remained visible for refresh", readErr)
 				}
 			}
 			s, command := signinAccountCommand(t, expected)

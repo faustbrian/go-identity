@@ -1,4 +1,5 @@
 {
+  "identity.account.refresh-token": "credential_mutation",
   "identity.anonymous.delete": "credential_mutation",
   "identity.anonymous.upgrade": "credential_mutation",
   "identity.apikey.import": "credential_mutation",

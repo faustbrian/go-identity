@@ -992,6 +992,13 @@ address confirmations remain CredentialMutation operations. The generator binds
 the native additions' source checksum as well as both historical source inputs;
 adding this signin profile does not change unrelated classifications.
 
+Stored OAuth refresh (`identity.account.refresh-token`) uses the existing
+protected credential-mutation profile. Native refresh reserves the original
+tenant, user, session and network counters before contacting the provider.
+Admission is retry-scoped and grants neither account ownership nor permission
+to disclose provider tokens. Link and refresh cannot reuse each other's
+counter custody.
+
 ## Verification and tradeoffs
 
 Use `go test ./...` and `go test -race ./...`; adversarial seeds cover exact
