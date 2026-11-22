@@ -36,10 +36,10 @@ type enterpriseProvisioned struct {
 	bearer       auth.BearerCredential
 }
 
-// Provision through the native admin owner. Test-only SQL supplies the
-// pre-existing human, domain proof and link; installing a provider must still
-// use the same checked/encrypted PostgreSQL transitions as a deployment.
-func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, browser *http.Client, origin string, provider *referenceEnterpriseIssuer) enterpriseProvisioned {
+// Provision through the native admin owner. The management port deliberately
+// uses a distinct bearer-only administrator. For an actual link journey,
+// admit the independently registered member without seeding a provider link.
+func provisionReferenceEnterprise(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, browser *http.Client, origin string, provider *referenceEnterpriseIssuer, member enterpriseProvisioned) enterpriseProvisioned {
 	t.Helper()
 	pool := deps.PostgreSQL
 	user, bearer := seedEnterpriseAdministrator(t, ctx, pool, c)
@@ -162,7 +162,32 @@ VALUES($1,$2,$3,$4,1,1,'dns-txt',$5,$6,false,$7)`, otpTenant, string(domain.Orga
 		t.Fatal("native provider enable did not commit from current proof", err)
 	}
 	selected := enterpriseProvisioned{user: user, organization: created.OrganizationID, provider: sso.ProviderID(providerID), bearer: bearer}
-	seedEnterpriseLink(t, ctx, pool, selected, provider.server.URL)
+	if member.user == "" {
+		seedEnterpriseLink(t, ctx, pool, selected, provider.server.URL)
+		return selected
+	}
+	payload, err := json.Marshal(map[string]any{"organizationID": created.OrganizationID, "organizationVersion": created.AfterVersion,
+		"userID": member.user, "memberVersion": 0, "role": "member"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	add, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+"/v1/organization/member/add", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	add.Header.Set("Authorization", "Bearer "+bearer.Token())
+	add.Header.Set("Content-Type", "application/json")
+	add.Header.Set("Idempotency-Key", "enterprise-link-admit-member")
+	admission, err := browser.Do(add)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admission.Body.Close()
+	var added organizationhttp.MutationResponse
+	if admission.StatusCode != http.StatusOK || json.NewDecoder(admission.Body).Decode(&added) != nil || !added.Committed || added.MemberID != member.user {
+		t.Fatal("admit the separately registered enterprise member", admission.StatusCode)
+	}
+	selected.user, selected.bearer = member.user, member.bearer
 	return selected
 }
 

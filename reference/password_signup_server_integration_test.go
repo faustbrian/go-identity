@@ -285,6 +285,7 @@ type signupGraphExtensions struct {
 	enterpriseOIDC              bool
 	enterpriseOIDCRoles         bool
 	enterpriseOIDCJIT           bool
+	enterpriseOIDCLink          bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -545,7 +546,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
 	if extensions.enterpriseOIDC {
-		selectedAuthorization = referenceEnterpriseOIDCPolicy{}
+		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink}
 	}
 	if extensions.organizationKey {
 		selectedAuthorization = referenceOrganizationKeyPolicy{}
@@ -1826,7 +1827,17 @@ END $$`); err != nil {
 			organizationHandler.Store(&handler)
 		}
 		proveReferenceEnterpriseOIDCBootstrapped(t, ctx, client, origin, c.EnterpriseOIDC.Login.Profiles[0].ProviderID)
-		selected := provisionReferenceEnterprise(t, ctx, c, deps, client, origin, enterpriseIssuer)
+		var member enterpriseProvisioned
+		var memberBrowser *http.Client
+		var memberCSRF string
+		if extensions.enterpriseOIDCLink {
+			member, memberBrowser, memberCSRF = prepareReferenceEnterpriseLinkMember(t, ctx, client, origin, workers, messages)
+		}
+		selected := provisionReferenceEnterprise(t, ctx, c, deps, client, origin, enterpriseIssuer, member)
+		if extensions.enterpriseOIDCLink {
+			proveReferenceEnterpriseLinkUpgrade(t, ctx, c, deps, config, modules, workerConfigs, selected, &organizationHandler, client, memberBrowser, memberCSRF, origin, enterpriseIssuer)
+			return
+		}
 		if extensions.enterpriseOIDCJIT {
 			ordinary, ordinaryFeatures := selectProvisionedEnterprise(t, ctx, c, deps, config, selected, workerConfigs, nil)
 			handler := ordinary.Handler()

@@ -97,10 +97,14 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 		return nil, err
 	}
 	catalog = append(catalog, sessions)
-	if !f.enterpriseOIDC.jit {
+	switch {
+	case f.enterpriseOIDC.jit:
+		return enterpriseOIDCJITMigrationCatalog(ctx, catalog)
+	case f.enterpriseOIDC.memberLink:
+		return enterpriseOIDCSubjectMigrationCatalog(ctx, catalog)
+	default:
 		return catalog, nil
 	}
-	return enterpriseOIDCJITMigrationCatalog(ctx, catalog)
 }
 
 func enterpriseOIDCJITMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
@@ -121,16 +125,10 @@ func enterpriseOIDCJITMigrationCatalog(ctx context.Context, catalog []migrationH
 			owners: map[migrations.Version]ModuleID{version: "identity/postgres"},
 			guards: []migrationGuard{{version: version, schema: "identity", columns: []string{"identifiers.normalization_profile", "identifiers.normalization_version"}}}})
 	}
-	const subjectVersion = 1850
-	// The Reference command commits each migration and its receipt together.
-	// Select the native offline index variants; concurrent builds cannot join it.
-	steps, err := (kernel.SSOOIDCSubjectAvailabilityMigrationSource{Base: base, Version: subjectVersion}).LoadOffline(ctx)
+	catalog, err = enterpriseOIDCSubjectMigrationCatalog(ctx, catalog)
 	if err != nil {
 		return nil, err
 	}
-	catalog = append(catalog, migrationHistory{namespace: "identity_enterprise_oidc_jit_directory", history: steps[len(steps)-1:],
-		owners: map[migrations.Version]ModuleID{subjectVersion: "identity/postgres"},
-		guards: []migrationGuard{{version: subjectVersion, schema: "identity", tables: []string{"identity_accounts_retired_subject"}}}})
 
 	// Physical factor authority keeps its existing namespace and legacy signup
 	// checks. These independent steps affect only the alternate JIT provenance.
@@ -143,6 +141,20 @@ func enterpriseOIDCJITMigrationCatalog(ctx context.Context, catalog []migrationH
 		guards: []migrationGuard{{version: 2, schema: "identity_mfa", columns: []string{"factor_authorities.sso_oidc_initialized_purpose"},
 			constraints: []string{"factor_authorities.factor_authorities_initialization_provenance_v1", "factor_authorities.factor_authorities_sso_oidc_command_fkey"}},
 			{version: 4, schema: "identity_mfa", tables: []string{"factor_authorities_sso_oidc_command_unique"}}}}), nil
+}
+
+func enterpriseOIDCSubjectMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	const version = 1850
+	// Retain the JIT allocation for both opt-in profiles. The Reference command
+	// commits each migration with its receipt, so it uses the offline variant.
+	base := fixedMigrationSource(catalog[0].history)
+	steps, err := (kernel.SSOOIDCSubjectAvailabilityMigrationSource{Base: base, Version: version}).LoadOffline(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(catalog, migrationHistory{namespace: "identity_enterprise_oidc_jit_directory", history: steps[len(steps)-1:],
+		owners: map[migrations.Version]ModuleID{version: "identity/postgres"},
+		guards: []migrationGuard{{version: version, schema: "identity", tables: []string{"identity_accounts_retired_subject"}}}}), nil
 }
 
 func appendEnterpriseMigration(ctx context.Context, history *migrationHistory, owner ModuleID, source migrations.Source, guard migrationGuard) error {

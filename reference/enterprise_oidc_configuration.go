@@ -3,6 +3,7 @@ package reference
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"slices"
 	"time"
 
@@ -88,6 +89,10 @@ type HTTPEnterpriseOIDCConfiguration struct {
 	FlowKeyIndex    uint32
 	SuccessCallback string
 	CSRFCookie      session.CSRFCookiePolicy
+	// ExplicitLink permits a fresh local password session to grant same-origin
+	// consent to link one enterprise account. The callback never issues another
+	// session for that link. The existing anonymous start remains available.
+	ExplicitLink bool
 }
 
 type enterpriseOIDCState struct {
@@ -107,6 +112,7 @@ type enterpriseOIDCState struct {
 	csrfCookie      session.CSRFCookiePolicy
 	roleSync        bool
 	jit             bool
+	memberLink      bool
 }
 
 func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
@@ -132,6 +138,12 @@ func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
 	if c.HTTPEnterpriseOIDC != nil && (c.HTTPRate == nil || c.HTTPPreAuth == nil || c.HTTPPreAuth.Device == nil || c.OTP.PreAuth == nil ||
 		c.HTTPSession == nil || c.HTTPSession.Transport != session.CredentialCookie || len(c.Session.CSRFKeys) == 0) {
 		return invalid
+	}
+	if c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ExplicitLink {
+		cookie, err := c.Session.Native.Cookie.DeletionAttributes()
+		if c.PasswordSignin == nil || err != nil || cookie.SameSite != http.SameSiteLaxMode {
+			return invalid
+		}
 	}
 	return nil
 }
@@ -184,9 +196,30 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 	if err != nil {
 		return nil, err
 	}
-	start, err := ssopg.NewProviderLoginService(router, n.Login)
-	if err != nil {
-		return nil, err
+	memberLink := c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ExplicitLink
+	var start *ssopg.ProviderLoginService
+	if memberLink {
+		validation := c.Session.Native.Validation
+		validation.Clock = selectedSession.Clock
+		profile := c.PasswordSignin.Native.Profile
+		sessions, err := sessionpg.NewSessionService(d.PostgreSQL, sessionpg.SessionServiceConfig{
+			Repository: selectedSession.Repository, Profile: profile, Validation: validation,
+		})
+		if err != nil {
+			return nil, err
+		}
+		start, err = ssopg.NewProviderLoginServiceWithLink(router, n.Login, ssopg.ProviderLinkConfig{
+			ConfigurationID: n.Login.ConfigurationID, Sessions: *sessions, Profile: profile,
+			LookupKeys: validation.LookupKeys, CSRFKeys: c.Session.CSRFKeys,
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		start, err = ssopg.NewProviderLoginService(router, n.Login)
+		if err != nil {
+			return nil, err
+		}
 	}
 	profile := n.Login.Profiles[0]
 	complete, err := composeEnterpriseOIDCCompletion(start, n, c.Organization.Core, profile)
@@ -196,7 +229,7 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 	profile.Scopes = slices.Clone(profile.Scopes)
 	state := &enterpriseOIDCState{start: start, completion: complete, profile: profile, tenant: n.Login.TenantID, origin: n.Login.Origin,
 		policy: n.Login.PolicyID, version: selectedSession.PolicyVersion, audience: n.Completion.Audience, duration: n.Login.Coordinator.MaximumDuration,
-		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil, jit: n.JIT != nil}
+		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil, jit: n.JIT != nil, memberLink: memberLink}
 	if c.HTTPEnterpriseOIDC == nil {
 		return state, nil
 	}

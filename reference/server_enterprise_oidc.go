@@ -4,9 +4,11 @@ import (
 	"context"
 	"time"
 
+	authentication "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	ssohttp "github.com/faustbrian/go-identity/http/sso"
+	"github.com/faustbrian/go-identity/session"
 	"github.com/faustbrian/go-sso"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
@@ -28,13 +30,24 @@ func (s *Server) enterpriseOIDCFeatures(network identityhttp.NetworkConfig) ([]i
 		Device: *f.httpPreAuth.device, Rate: s.state.httpRate.limiter, Now: time.Now, MaximumDuration: n.duration}
 	owner := enterpriseOIDCHTTP{native: n}
 	provider := string(n.profile.ProviderID)
-	start, err := ssohttp.NewSigninStartFeature(ssohttp.SigninStartConfig{Browser: browser, ProviderID: provider, AuthorizationEndpoint: protocol.AuthorizationEndpoint,
-		CallbackAllowlist: n.callbacks, Lifetime: f.httpPreAuth.lifetime, Start: owner})
+	startConfig := ssohttp.SigninStartConfig{Browser: browser, ProviderID: provider, AuthorizationEndpoint: protocol.AuthorizationEndpoint,
+		CallbackAllowlist: n.callbacks, Lifetime: f.httpPreAuth.lifetime, Start: owner}
+	callbackConfig := ssohttp.SigninCallbackConfig{Browser: browser, Provider: protocol, CallbackAllowlist: n.callbacks, Audience: n.audience,
+		Cookie: f.session.config.Cookie, CSRFCookie: n.csrfCookie, Callback: owner}
+	var start, callback identityhttp.Feature
+	if n.memberLink {
+		start, err = ssohttp.NewSigninStartFeatureWithLink(startConfig, ssohttp.MemberLinkStartConfig{Cookie: callbackConfig.Cookie, Start: owner})
+	} else {
+		start, err = ssohttp.NewSigninStartFeature(startConfig)
+	}
 	if err != nil {
 		return nil, err
 	}
-	callback, err := ssohttp.NewSigninCallbackFeatureForProvider(provider, ssohttp.SigninCallbackConfig{Browser: browser, Provider: protocol,
-		CallbackAllowlist: n.callbacks, Audience: n.audience, Cookie: f.session.config.Cookie, CSRFCookie: n.csrfCookie, Callback: owner})
+	if n.memberLink {
+		callback, err = ssohttp.NewSigninCallbackFeatureWithLink(provider, callbackConfig, owner)
+	} else {
+		callback, err = ssohttp.NewSigninCallbackFeatureForProvider(provider, callbackConfig)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -61,12 +74,36 @@ func (a enterpriseOIDCHTTP) StartSSOOIDC(ctx context.Context, tenant identity.Te
 	return a.native.start.SigninStart(ctx, request, enterpriseBrowser(browser))
 }
 
+func (a enterpriseOIDCHTTP) StartSSOOIDCLink(ctx context.Context, tenant identity.TenantID, request sso.SigninStartRequest, browser ssohttp.SigninBrowser,
+	cookie authentication.BearerCredential, csrf session.CSRFToken,
+) (sso.SigninStartResult, error) {
+	if !a.native.memberLink || tenant != a.native.tenant {
+		return sso.SigninStartResult{}, sso.ErrForbidden
+	}
+	return a.native.start.LinkStart(ctx, request, ssopg.ProviderLinkBrowser{Session: cookie, CSRF: csrf, Origin: browser.Origin, Network: browser.Network, Device: browser.Device})
+}
+
 func (a enterpriseOIDCHTTP) CallbackRateSource(ctx context.Context, request ssohttp.SigninCallbackRequest) (ssohttp.SigninCallbackRateContext, error) {
 	out, err := a.native.completion.SigninCallbackRateSource(ctx, request.TenantID, enterpriseCallback(request))
 	if err != nil {
 		return ssohttp.SigninCallbackRateContext{}, err
 	}
-	return ssohttp.SigninCallbackRateContext{ProviderID: string(out.ProviderID), FlowID: out.FlowID, TransactionID: out.TransactionID, Lifetime: out.Lifetime}, nil
+	return enterpriseCallbackRate(out), nil
+}
+
+func (a enterpriseOIDCHTTP) SharedCallbackRateSource(ctx context.Context, request ssohttp.SigninCallbackRequest, cookie authentication.BearerCredential) (ssohttp.SharedCallbackRateContext, error) {
+	if !a.native.memberLink {
+		return ssohttp.SharedCallbackRateContext{}, sso.ErrForbidden
+	}
+	out, err := a.native.completion.SharedCallbackRateSource(ctx, request.TenantID, enterpriseCallback(request), cookie)
+	if err != nil {
+		return ssohttp.SharedCallbackRateContext{}, err
+	}
+	return ssohttp.SharedCallbackRateContext{SigninCallbackRateContext: enterpriseCallbackRate(out.ProviderLoginCallbackRateContext), MemberLink: out.MemberLink}, nil
+}
+
+func enterpriseCallbackRate(in ssopg.ProviderLoginCallbackRateContext) ssohttp.SigninCallbackRateContext {
+	return ssohttp.SigninCallbackRateContext{ProviderID: string(in.ProviderID), FlowID: in.FlowID, TransactionID: in.TransactionID, Lifetime: in.Lifetime}
 }
 
 func (a enterpriseOIDCHTTP) CompleteSSOOIDC(ctx context.Context, request ssohttp.SigninCallbackRequest) (ssohttp.SigninCallbackResult, error) {
@@ -78,6 +115,19 @@ func (a enterpriseOIDCHTTP) CompleteSSOOIDC(ctx context.Context, request ssohttp
 		return ssohttp.SigninCallbackResult{}, err
 	}
 	return ssohttp.SigninCallbackResult{Completion: out.Completion, Issuance: out.Issuance, CSRF: out.CSRF, RedirectURI: out.RedirectURI}, nil
+}
+
+func (a enterpriseOIDCHTTP) CompleteSSOOIDCLink(ctx context.Context, request ssohttp.SigninCallbackRequest, cookie authentication.BearerCredential) (ssohttp.MemberLinkCallbackResult, error) {
+	if !a.native.memberLink || request.TenantID != a.native.tenant {
+		return ssohttp.MemberLinkCallbackResult{}, sso.ErrForbidden
+	}
+	browser := request.Browser
+	out, err := a.native.completion.LinkCallback(ctx, ssopg.ProviderLinkCallbackRequest{Session: cookie, Input: request.Input,
+		ReceivedRedirectURI: request.ReceivedRedirectURI, Origin: browser.Origin, Network: browser.Network, Device: browser.Device})
+	if err != nil {
+		return ssohttp.MemberLinkCallbackResult{}, err
+	}
+	return ssohttp.MemberLinkCallbackResult{CommandID: out.Completion.Binding.CommandID, RedirectURI: out.RedirectURI}, nil
 }
 
 func enterpriseBrowser(browser ssohttp.SigninBrowser) ssopg.ProviderLoginBrowser {

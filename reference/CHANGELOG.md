@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose opt-in enterprise OIDC member account linking with the common
+  browser endpoints, existing password cookie, and same-origin consent.
+  Linking does not issue credentials. Ordinary sign-in and first-login
+  provisioning retain separate behavior.
+
 - Compose opt-in enterprise OIDC first-login provisioning. The Reference
   graph reuses its existing organization policies and browser routes, and
   applies additive native migrations for the new identity, member and session.

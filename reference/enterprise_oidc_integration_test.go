@@ -39,9 +39,9 @@ func TestReferencePostgresEnterpriseOIDCJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseOIDC: true})
 }
 
-type referenceEnterpriseOIDCPolicy struct{}
+type referenceEnterpriseOIDCPolicy struct{ allowLink bool }
 
-func (referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
+func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
 		return authorization.Decision{}, err
 	}
@@ -52,6 +52,12 @@ func (referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization
 		}
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
+		if p.allowLink {
+			switch c.Request.Action {
+			case "identity.sso.oidc-callback", "identity.sso.signin-start", "identity.sso.signin-start.recover", "identity.sso.oidc-callback.recover":
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
+		}
 		switch c.Request.Action {
 		case "org:sso-write", "org:sso-read", "org:sso-credentials", "identity.sso.provider.register-oidc", "identity.sso.provider.register-oidc.recover",
 			"identity.sso.provider.credentials-rotate", "identity.sso.provider.credentials-rotate.recover", "identity.sso.provider.enable", "identity.sso.provider.enable.recover",
@@ -390,10 +396,9 @@ func proveReferenceEnterpriseOIDCJourney(t *testing.T, ctx context.Context, base
 
 func proveReferenceEnterpriseOIDCCookieJourney(t *testing.T, ctx context.Context, base *http.Client, origin string, features reference.FeatureSet, provider *referenceEnterpriseIssuer, selected enterpriseProvisioned, created func(identity.UserID)) {
 	t.Helper()
-	previousPosts := int32(0)
+	previousPosts := provider.posts.Load()
 	requestKey := "enterprise-original-signin"
 	if created != nil {
-		previousPosts = provider.posts.Load()
 		requestKey = "enterprise-jit-first-signin"
 	}
 	jar, err := cookiejar.New(nil)

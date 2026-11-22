@@ -158,6 +158,20 @@ history; installing that prefix does not enable social admission or routes.
    `Origin` and copy the CSRF cookie into `X-CSRF-Token`; a successful signout
    revokes the session and removes both cookies.
 
+For explicit linking, set `HTTPEnterpriseOIDC.ExplicitLink` and apply the
+selected migration plan. This profile requires the native password-session
+owner and a host-only SameSite=Lax session cookie. A current member with a
+fresh password session and no enrolled factors sends `POST /v1/sso/signin-start`
+with `"link":true`, the exact origin, session-bound `X-CSRF-Token`, and a
+retained `Idempotency-Key`. Omit the anonymous flow ID and do not request a
+persistent session. The same provider return URL links the previously unseen
+subject to the member without issuing session or CSRF credentials. The
+member can then use ordinary enterprise sign-in; the link is never inferred
+from the provider's email claim. If the selected plan adds the retired-subject
+index, stop writes during that migration. Reference builds the index
+transactionally and must not share its migration history with the standalone
+concurrent build on the same primary.
+
 To synchronize provider-owned custom roles on repeat sign-in, also select
 `EnterpriseOIDC.RoleSync` and configure organization dynamic roles. Supply a
 `StaticOIDCRoleMapping` for the exact pinned organization, provider, and mapping
@@ -192,11 +206,11 @@ together. Do not mix this Reference history with the standalone concurrent
 index history on the same primary. HTTP uses the same routes and cookies. No
 extra public capability is advertised.
 
-The [baseline journey](enterprise_oidc_integration_test.go) and the
-[role-sync](enterprise_oidc_role_integration_test.go) and
-[first-login](enterprise_oidc_jit_integration_test.go) upgrade journeys use a
-disposable PostgreSQL primary and controlled TLS provider. New account linking
-and other enterprise federation protocols are separate workflows.
+The [baseline](enterprise_oidc_integration_test.go),
+[role-sync](enterprise_oidc_role_integration_test.go),
+[first-login](enterprise_oidc_jit_integration_test.go), and
+[explicit-link](enterprise_oidc_link_integration_test.go) journeys use a
+disposable PostgreSQL primary and controlled TLS provider.
 
 ## Optional native social account unlink
 
