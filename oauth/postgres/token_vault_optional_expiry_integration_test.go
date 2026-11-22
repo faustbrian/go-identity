@@ -145,4 +145,5 @@ func TestRPTokenVaultOptionalExpiryPopulatedForwardHistoryAndMixedRows(t *testin
 	if db.QueryRow(ctx, `SELECT count(*) FROM oauth_rp.token_sets`).Scan(&count) != nil || count != 3 {
 		t.Fatal("query-plan rollback or mixed writer changed custody cardinality")
 	}
+	testProviderRefreshRejectedStorage(t, ctx, db)
 }

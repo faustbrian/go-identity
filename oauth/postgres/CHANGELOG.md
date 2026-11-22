@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in stored-grant refresh for configured confidential OAuth2/UserInfo
+  providers using POST client authentication. Keep one provider attempt per
+  bound grant generation; rotate or retire encrypted custody transactionally
+  and return the original non-secret outcome. No HTTP route is installed.
+
 - Add explicitly configured self-account unlink with fresh password proof,
   one-use consumption, same-transaction encrypted token erasure, dependent
   credential invalidation, and scoped original receipt recovery. No remote

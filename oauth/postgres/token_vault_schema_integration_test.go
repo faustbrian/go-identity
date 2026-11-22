@@ -131,6 +131,9 @@ func TestRPTokenVaultForwardStorageForeignKeysExactTimesAndRollback(t *testing.T
 	if _, err := db.Exec(ctx, `DELETE FROM identity.accounts WHERE tenant_id='tenant-a' AND account_id='account-a'`); err == nil {
 		t.Fatal("account deletion orphaned provider token custody")
 	}
+	t.Run("refresh compare-and-set", func(t *testing.T) {
+		testProviderRefreshVersionedVault(t, ctx, db, prepared, origin)
+	})
 	cancelled, stop := context.WithCancel(ctx)
 	stop()
 	if _, err := db.Exec(cancelled, statement, args...); !errors.Is(err, context.Canceled) {

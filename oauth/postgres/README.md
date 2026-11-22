@@ -268,6 +268,30 @@ while requiring working independent password access. For an uncertain result,
 call `Recover` with the original command, account, tenant and user under current
 authorization. Neither operation requests remote provider revocation.
 
+## Stored provider grant refresh
+
+Construct `NewProviderRefreshService` from an existing `LinkService` and the
+IDs of the confidential OAuth2/UserInfo providers that may refresh using POST
+client authentication. This does not enable HTTP, OIDC refresh, or session
+rotation. Apply the protected-counter and
+`postgres.OAuthProviderRefreshErasureMigrationSource` histories, both
+`TokenVaultOptionalExpiryMigrationSource` phases, and the
+`ProviderRefreshReceiptMigrationSource` in the OAuth schema before opting in.
+
+Call `Refresh` from trusted transport with the account ID, expected stored
+grant version, current owning password session, cookie CSRF token, origin,
+network, and `identity.account.refresh-token` authorization context. The
+service selects the configured provider and derives the original command key
+from the account and grant version; neither can be overridden by the request.
+
+The result contains command and vault versions, access expiry on success, or
+`Rejected` when the provider definitively refused the original grant. Refusal
+retires local custody; it does not claim remote revocation. For an uncertain
+result, retry the same account and original grant version. Retained history
+never grants a second provider attempt or renews the original session and
+deadline; a current owning session may read an already committed receipt.
+Neither successful nor uncertain results expose access or refresh tokens.
+
 ## Storage ownership
 
 `MigrationSource{Schema: "identity_oauth", Version: allocatedVersion}` supplies
