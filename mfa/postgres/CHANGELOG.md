@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence the original known-empty MFA generation in the exact authenticated
+  enterprise OIDC member-link start and callback. Missing, enrolled or stale
+  state denies in preparation and final checks without initializing factors,
+  renewing freshness or broadening anonymous or social OAuth admission.
+
 - Add explicit `SSOOIDCJITFactorMigrationSource.LoadOffline` for transactional
   offline installations. It retains the default expansion and validation and
   builds the same partial unique index with a five-second lock-acquisition
