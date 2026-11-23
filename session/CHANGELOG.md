@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select an exact, host-only post-arrival correlation cookie for unsolicited
+  SAML confirmation without enabling it for SP-initiated sign-in or granting
+  any session authority. The original cutoff and five-minute cap are retained.
+
 - Select enterprise SAML cookie validation independently of OIDC and OAuth2,
   preserving session-bound CSRF and the original encrypted-cache expiry.
 

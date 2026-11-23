@@ -14,6 +14,7 @@ const (
 	appleFormPostPath      = "/v1/oauth/callback/form-post"
 	samlCallbackPrefix     = "/saml2/"
 	samlCallbackSuffix     = "/acs"
+	samlIDPConfirmSuffix   = "/idp-init"
 	maximumSAMLProviderID  = 128
 )
 
@@ -22,7 +23,7 @@ func samlFrontchannelPath(origin, callback string) (string, bool) {
 	return path, sameOrigin && strings.HasPrefix(origin, "https://") && validSAMLFrontchannelPath(path)
 }
 
-// FrontchannelCookiePolicy holds attributes for one exact cross-site callback.
+// FrontchannelCookiePolicy holds attributes for one exact cross-site POST path.
 // It owns no correlation state, session authority or response writing. The
 // selected coordinator must issue and atomically consume its original opaque
 // correlation, independently of browser cookie expiration or deletion.
@@ -39,13 +40,29 @@ func NewFrontchannelCookiePolicy(callbackPath string) (FrontchannelCookiePolicy,
 	return FrontchannelCookiePolicy{path: callbackPath}, nil
 }
 
+// NewSAMLIDPConfirmationCookiePolicy selects only the exact configured
+// unsolicited SAML POST path. The cookie is issued after the response arrives;
+// it is not an SP pre-authentication cookie or a normal session cookie. The
+// native owner still has to check same-browser confirmation and consume it
+// before a session may be issued. Disabled profiles must never use this policy.
+func NewSAMLIDPConfirmationCookiePolicy(callbackPath string) (FrontchannelCookiePolicy, error) {
+	if !validSAMLFrontchannelPathWithSuffix(callbackPath, samlIDPConfirmSuffix) {
+		return FrontchannelCookiePolicy{}, ErrInvalidPolicy
+	}
+	return FrontchannelCookiePolicy{path: callbackPath}, nil
+}
+
 func validSAMLFrontchannelPath(path string) bool {
-	if !strings.HasPrefix(path, samlCallbackPrefix) || !strings.HasSuffix(path, samlCallbackSuffix) ||
-		len(path) <= len(samlCallbackPrefix)+len(samlCallbackSuffix) ||
-		len(path) > len(samlCallbackPrefix)+maximumSAMLProviderID+len(samlCallbackSuffix) {
+	return validSAMLFrontchannelPathWithSuffix(path, samlCallbackSuffix)
+}
+
+func validSAMLFrontchannelPathWithSuffix(path, suffix string) bool {
+	if !strings.HasPrefix(path, samlCallbackPrefix) || !strings.HasSuffix(path, suffix) ||
+		len(path) <= len(samlCallbackPrefix)+len(suffix) ||
+		len(path) > len(samlCallbackPrefix)+maximumSAMLProviderID+len(suffix) {
 		return false
 	}
-	provider := path[len(samlCallbackPrefix) : len(path)-len(samlCallbackSuffix)]
+	provider := path[len(samlCallbackPrefix) : len(path)-len(suffix)]
 	// Match the provider router's exact, unescaped path segment rule. This
 	// admits all generated base64url IDs, including leading '-' and '_'.
 	// A cookie Path additionally cannot contain a semicolon (RFC 6265 §4.1.1).

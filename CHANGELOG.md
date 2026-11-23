@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain distinct browser and form inputs for an exact pending, user-targeted
+  unsolicited SAML confirmation. Generic feature, SP pre-auth and session
+  accessors cannot substitute for the paired custody. This contract does not
+  verify a confirmation, reserve replay state, or expose an endpoint.
+
 - Build the canonical one-use unlink capability payload from the original
   prepared action, bounded by its password proof interval. Native issuers
   still authenticate the original authority and own signing and reservation.

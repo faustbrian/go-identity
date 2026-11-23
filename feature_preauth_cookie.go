@@ -33,13 +33,17 @@ func NewFeatureOneTimeCodePreAuthCommand(spec FeatureCommandSpec, code authentic
 }
 
 func freezeFeaturePreAuthCookie(cookie authentication.BearerCredential) (authentication.BearerCredential, error) {
-	wire := cookie.Token()
-	if len(wire) < 43 || len(wire) > 86 {
+	return freezeFeatureBearer(cookie, 32, 64)
+}
+
+func freezeFeatureBearer(bearer authentication.BearerCredential, minBytes, maxBytes int) (authentication.BearerCredential, error) {
+	wire := bearer.Token()
+	if len(wire) < base64.RawURLEncoding.EncodedLen(minBytes) || len(wire) > base64.RawURLEncoding.EncodedLen(maxBytes) {
 		return authentication.BearerCredential{}, invalidFeatureCommand()
 	}
 	raw, err := base64.RawURLEncoding.Strict().DecodeString(wire)
 	defer clear(raw)
-	if err != nil || len(raw) < 32 || len(raw) > 64 || base64.RawURLEncoding.EncodeToString(raw) != wire {
+	if err != nil || len(raw) < minBytes || len(raw) > maxBytes || base64.RawURLEncoding.EncodeToString(raw) != wire {
 		return authentication.BearerCredential{}, invalidFeatureCommand()
 	}
 	return authentication.NewBearerCredential(strings.Clone(wire)), nil

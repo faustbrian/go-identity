@@ -89,6 +89,7 @@ type featureCommandState struct {
 	passwordSignup      func() (string, authentication.BearerCredential)
 	passwordSignupInput func() (primitive.Secret, authentication.BearerCredential)
 	phonePasswordReset  func() phonePasswordResetCommandState
+	samlIDPConfirmation func() samlIDPConfirmationCommandState
 }
 
 // NewFeatureCommand validates and freezes structural feature input, copying
@@ -132,9 +133,9 @@ func validFeatureFields(fields []FeatureField) bool {
 }
 
 // Feature returns an owned projection for trusted adapter schema mapping and
-// false for zero, kernel, mixed or password-custody commands. Password owners
-// must explicitly select their matching metadata/custody pair; older
-// coordinators cannot silently omit verifier or submitted password material.
+// false for zero, kernel, mixed, password or dedicated joint-custody commands. Those
+// owners must explicitly select their matching projection; older coordinators
+// cannot silently omit a required credential.
 // Mutating returned fields or Bytes
 // cannot change retained command intent. Copies of Command are immutable and
 // safe for concurrent reads. The projection must never become a log, snapshot,
@@ -150,9 +151,9 @@ func (c Command) validFeatureVariant() bool {
 	if c.linkPreparation != nil || c.unlinkPreparation != nil {
 		return false
 	}
-	// Compound phone recovery must never enter a legacy path that can omit its
-	// independent factor. Only its exact joint-custody accessors admit it.
-	if c.feature != nil && c.feature.phonePasswordReset != nil {
+	// Compound recovery and confirmation must not enter a legacy path that can
+	// omit an input. Only their exact joint-custody accessors admit them.
+	if c.feature != nil && (c.feature.phonePasswordReset != nil || c.feature.samlIDPConfirmation != nil) {
 		return false
 	}
 	if c.feature != nil && c.feature.recovery != nil && (c.feature.code != nil || c.feature.sessionToken != nil || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordReset != nil || c.feature.passwordResetInput != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil) {
