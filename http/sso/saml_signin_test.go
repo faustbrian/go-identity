@@ -15,6 +15,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/session"
+	"github.com/faustbrian/go-rate-limit/v2/memory"
 	"github.com/faustbrian/go-sso"
 )
 
@@ -47,6 +48,12 @@ func (p samlHTTPProbe) SAMLCallbackRateSource(_ context.Context, r SAMLSigninCal
 }
 func (p samlHTTPProbe) CompleteSSOSAML(_ context.Context, r SAMLSigninCallbackRequest) (SigninCallbackResult, error) {
 	return p.complete(r)
+}
+
+type samlMetadataProbe func(context.Context, identity.TenantID, string) (SAMLMetadataDocument, error)
+
+func (p samlMetadataProbe) ReadSAMLMetadata(ctx context.Context, tenant identity.TenantID, provider string) (SAMLMetadataDocument, error) {
+	return p(ctx, tenant, provider)
 }
 
 func TestSAMLHTTPSelectedFlowUsesOnlyExactFrontchannelAndNativeReceipt(t *testing.T) {
@@ -83,6 +90,7 @@ func TestSAMLHTTPSelectedFlowUsesOnlyExactFrontchannelAndNativeReceipt(t *testin
 		ProviderID: provider, AuthorizationEndpoint: idpOrigin + "/login", SuccessCallback: finish, ErrorCallback: finish,
 		CallbackAllowlist: []string{finish}, Audience: "enterprise-app", Cookie: auth, CSRFCookie: csrf, Frontchannel: issuer,
 		FlowSignalKey: signal, Lifetime: lifetime, Rate: discovery.Rate, Now: discovery.Now, MaximumDuration: time.Second}
+	config.Network.TenantHosts = append(config.Network.TenantHosts, identityhttp.TenantHost{Host: "alias.example", TenantID: testTenant})
 	startOp := identity.FeatureOperation{Owner: "sso", OperationID: "identity.sso.saml-start", SchemaID: "identity.sso.saml-start.v1", SchemaVersion: 1,
 		SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordRequired}
 	acsOp := identity.FeatureOperation{Owner: "sso/saml", OperationID: "identity.sso.saml-acs", SchemaID: "sso-enterprise-saml-acs-v1", SchemaVersion: 1,
@@ -248,4 +256,80 @@ func TestSAMLHTTPSelectedFlowUsesOnlyExactFrontchannelAndNativeReceipt(t *testin
 	if completeCalls != 1 {
 		t.Fatal("terminal callback ran protected completion")
 	}
+	t.Run("public SP metadata requires separate selection and fresh owner result", func(t *testing.T) {
+		const metadataPath = "/saml2/" + provider + "/metadata"
+		const contentType = "application/samlmetadata+xml"
+		const document = `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="` + spOrigin + metadataPath + `"/>`
+		if response := serve(http.MethodGet, metadataPath, "", ""); response.Code != 404 {
+			t.Fatal("sign-in alone exposed metadata", response.Code)
+		}
+		storage, err := memory.New(memory.Options{MaxKeys: 128, Shards: 4})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { storage.Close() })
+		rate, err := identityhttp.NewSafeRateLimiter(identityhttp.SafeRateConfig{Shared: testSharedRate{storage}, Namespace: "saml-metadata-test",
+			Now: discovery.Now, MaximumDuration: time.Second, EmergencyMaximumKeys: 128, Degraded: func(context.Context, identityhttp.SafeRateEvent) error {
+				t.Fatal("strong rate owner degraded")
+				return nil
+			}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { rate.Close() })
+		calls := 0
+		cutoff := discovery.Now().Add(8 * time.Second)
+		reader := samlMetadataProbe(func(ctx context.Context, tenant identity.TenantID, gotProvider string) (SAMLMetadataDocument, error) {
+			if _, bounded := ctx.Deadline(); !bounded || tenant != testTenant || gotProvider != provider {
+				t.Fatal("metadata owner lost exact provider scope")
+			}
+			calls++
+			return SAMLMetadataDocument{XML: []byte(document), ValidUntil: cutoff}, nil
+		})
+		selected, err := NewSAMLSigninFeatureWithMetadata(config, rate, reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ops, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{selected}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		selectedRouter, docs, err := identityhttp.NewRouter(transport, ops, nil)
+		if err != nil || !strings.Contains(string(docs.JSON()), contentType) {
+			t.Fatal("selected metadata is missing its actual OpenAPI content type", err)
+		}
+		router = selectedRouter
+		deny(serve(http.MethodGet, "/saml2/unknown/metadata", "", ""), 404)
+		deny(serve(http.MethodGet, metadataPath+"?provider=other", "", ""), 400)
+		for _, host := range []string{"other.example", "alias.example"} {
+			r := httptest.NewRequest(http.MethodGet, "https://"+host+metadataPath, nil)
+			r.RequestURI = r.URL.RequestURI()
+			r.RemoteAddr = "192.0.2.17:32000"
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, r)
+			deny(w, http.StatusForbidden)
+		}
+		if calls != 0 {
+			t.Fatal("invalid requests reached metadata owner")
+		}
+		response := serve(http.MethodGet, metadataPath, "", "")
+		if response.Code != http.StatusOK || response.Body.String() != document || response.Header().Get("Content-Type") != contentType ||
+			response.Header().Get("Cache-Control") != "no-store" || len(response.Result().Cookies()) != 0 || calls != 1 {
+			t.Fatal("metadata did not expose exact public XML without cookie/cache custody", response.Code)
+		}
+		cutoff = discovery.Now()
+		if expired := serve(http.MethodGet, metadataPath, "", ""); expired.Code != http.StatusServiceUnavailable || strings.Contains(expired.Body.String(), document) {
+			t.Fatal("expired native metadata was disclosed", expired.Code)
+		}
+		for calls < 100 {
+			previous := calls
+			response := serve(http.MethodGet, metadataPath, "", "")
+			if response.Code != http.StatusServiceUnavailable || calls != previous+1 {
+				t.Fatal("unexpected strong safe admission before its limit", response.Code)
+			}
+		}
+		if blocked := serve(http.MethodGet, metadataPath, "", ""); blocked.Code != http.StatusTooManyRequests || blocked.Header().Get("Retry-After") == "" || calls != 100 {
+			t.Fatal("rate exhaustion reached the metadata owner", blocked.Code)
+		}
+	})
 }

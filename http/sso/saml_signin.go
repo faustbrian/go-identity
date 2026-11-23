@@ -135,6 +135,10 @@ type samlSigninProfile struct {
 // NewSAMLSigninFeature selects the canonical signed login and POST ACS pair.
 // It adds no wildcard, implicit provider, IdP-init, SLO or metadata route.
 func NewSAMLSigninFeature(c SAMLSigninConfig) (identityhttp.Feature, error) {
+	return newSAMLSigninFeature(c, nil)
+}
+
+func newSAMLSigninFeature(c SAMLSigninConfig, metadata *samlMetadataSelection) (identityhttp.Feature, error) {
 	p, err := newSAMLSigninProfile(c)
 	if err != nil {
 		return identityhttp.Feature{}, err
@@ -162,6 +166,13 @@ func NewSAMLSigninFeature(c SAMLSigninConfig) (identityhttp.Feature, error) {
 			return identityhttp.Feature{}, err
 		}
 		op.Wire = endpoint.wire
+		operations = append(operations, op)
+	}
+	if metadata != nil {
+		op, err := p.metadataOperation(owner, *metadata)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
 		operations = append(operations, op)
 	}
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: owner, Operations: operations})

@@ -2,6 +2,16 @@ package ssohttp
 
 import identityhttp "github.com/faustbrian/go-identity/http"
 
+func samlMetadataWire() *identityhttp.WireOperation {
+	return &identityhttp.WireOperation{Definition: []byte(`{
+  "operationId":"identity.sso.saml-metadata",
+  "summary":"Read the installed SAML service provider's metadata",
+  "description":"Anonymous exact HTTPS GET for the selected SP-initiated profile. The response uses only current SP information and the public signing certificate. It is not cached and sets no cookie.",
+  "parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string","minLength":1,"maxLength":128}}],
+  "responses":{"200":{"description":"Current unsigned SAML SP metadata.","content":{"application/samlmetadata+xml":{"schema":{"type":"string"}}}},"400":{"description":"Invalid request."},"403":{"description":"Tenant or transport denied."},"404":{"description":"No current metadata for this path."},"429":{"description":"Safe read quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable; no metadata disclosed."}}
+}`)}
+}
+
 func samlStartWire() *identityhttp.WireOperation {
 	return &identityhttp.WireOperation{Definition: []byte(`{
   "operationId":"identity.sso.saml-start",

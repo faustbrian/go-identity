@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a separately selected, anonymous SAML SP metadata GET for the installed
+  sign-in pair. Use the shared safe-read quota and publish only fresh public XML.
+
 - Add opt-in SAML login and signed POST assertion consumer transport for an
   installed SP-initiated linked-member profile. The exact path-scoped
   correlation cookie, provider quotas and native commitment gate delivery.
