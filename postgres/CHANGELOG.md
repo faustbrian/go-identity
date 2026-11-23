@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit the exact SAML logout-start owner to fence the authenticated user's
+  original session and linked provider credential. This does not enable a
+  logout route or let another protocol select the session transition.
+
 - Register an internal unsolicited SAML arrival that creates the linked user's
   pending confirmation and stages exactly one confirmation grant together.
   This command is not an SP request, callback or session issuance.

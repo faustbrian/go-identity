@@ -73,9 +73,16 @@ func TestSSOOIDCSessionCredentialRequiresActualCurrentAssociation(t *testing.T) 
 			logout.state.binding.OperationID, logout.state.binding.SchemaID = op.OperationID, op.SchemaID
 			logout.state.feature = &FeatureRegistration{Operation: op, Contributor: logoutOwner.Descriptor()}
 			logoutErr := logout.RequireLinkedSSOOIDCLogoutCredential(ctx, logoutOwner, expected, b.RecordID, 7)
+			saml, _, _ := ssoOIDCSessionCredentialFixture()
+			samlOwner, samlOp := &samlLogoutStartParticipant{}, SSOSAMLLogoutStartOperation()
+			saml.state.ctx, saml.state.tx, saml.state.featureInvocation = ctx, tx, samlOwner
+			saml.state.subjectType = "session"
+			saml.state.binding.OperationID, saml.state.binding.SchemaID = samlOp.OperationID, samlOp.SchemaID
+			saml.state.feature = &FeatureRegistration{Operation: samlOp, Contributor: samlOwner.Descriptor()}
+			samlErr := saml.RequireLinkedSSOSAMLLogoutStartCredential(ctx, samlOwner, expected, b.RecordID, 7)
 			if tc.allowed {
-				if readErr != nil || workErr != nil || logoutErr != nil {
-					t.Fatal("current SSO authority denied", readErr, workErr, logoutErr)
+				if readErr != nil || workErr != nil || logoutErr != nil || samlErr != nil {
+					t.Fatal("current SSO authority denied", readErr, workErr, logoutErr, samlErr)
 				}
 				for _, sql := range []string{
 					`SELECT user_id FROM identity.users WHERE tenant_id=$1 AND user_id=$2 AND $3<>'' FOR UPDATE NOWAIT`,
@@ -113,10 +120,16 @@ func TestSSOOIDCSessionCredentialRequiresActualCurrentAssociation(t *testing.T) 
 				if err := logout.RequireLinkedSSOOIDCLogoutCredential(ctx, logoutOwner, expected, b.RecordID, 7); !errors.As(err, &denied) || logout.state.failed == nil {
 					t.Fatal("logout final check ignored newly expired original", err)
 				}
+				if err := saml.RequireLinkedSSOSAMLLogoutStartCredential(ctx, samlOwner, expected, b.RecordID, 7); !errors.As(err, &denied) || saml.state.failed == nil {
+					t.Fatal("SAML logout final check ignored newly expired original", err)
+				}
 			} else {
 				var denied identity.ForbiddenError
 				if !errors.As(readErr, &denied) || !errors.As(workErr, &denied) || !errors.As(work.usable(), &denied) || !errors.As(logoutErr, &denied) || !errors.As(logout.usable(), &denied) {
 					t.Fatal("stale SSO authority admitted or denial ignored", readErr, workErr, logoutErr)
+				}
+				if !errors.As(samlErr, &denied) || !errors.As(saml.usable(), &denied) {
+					t.Fatal("stale SAML logout authority admitted or denial ignored", samlErr)
 				}
 			}
 		})

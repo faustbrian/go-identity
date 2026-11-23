@@ -11,14 +11,14 @@ import (
 // Enterprise and social provider ownership are intentionally separate. Keep the
 // same current account association and epoch fences as the social query without
 // making either evidence boundary accept an arbitrary credential owner.
-const linkedSSOOIDCProviderCredentialSelect = `SELECT c.expires_at FROM identity.users u
+const linkedSSOProviderCredentialSelect = `SELECT c.expires_at FROM identity.users u
  JOIN identity.credential_references c ON c.tenant_id=u.tenant_id AND c.user_id=u.user_id
  JOIN identity.account_credentials m ON m.tenant_id=c.tenant_id AND m.user_id=c.user_id AND m.credential_id=c.credential_id
  JOIN identity.accounts a ON a.tenant_id=m.tenant_id AND a.user_id=m.user_id AND a.account_id=m.account_id
  WHERE u.tenant_id=$1 AND u.user_id=$2 AND c.credential_id=$3 AND c.kind=3 AND c.owner='sso' AND c.version=$4::numeric AND c.enabled
  AND u.status='active' AND u.authority_version=$5::numeric AND u.identifier_version=$6::numeric AND u.credential_version=$7::numeric AND a.linked LIMIT 2`
 
-func validSSOOIDCSessionCredential(a CredentialAdmission) bool {
+func validSSOProviderSessionCredential(a CredentialAdmission) bool {
 	c := a.Credential
 	return c.Validate(c.TenantID, c.UserID) == nil && c.Kind == identity.CredentialProvider && c.Owner == "sso" && a.UserAuthorityVersion != 0 && a.IdentifierAuthorityVersion != 0 && a.CredentialAuthorityVersion != 0
 }
@@ -31,12 +31,12 @@ func validSSOOIDCSessionCredential(a CredentialAdmission) bool {
 // separately fence directory, policy, factors, organization and session state,
 // preserve the earliest read-start budget and repeat this check under Work.
 func (r *Repository) CheckLinkedSSOOIDCProviderCredential(ctx context.Context, expected CredentialAdmission) error {
-	if !r.validAccountRead(ctx) || !validSSOOIDCSessionCredential(expected) {
+	if !r.validAccountRead(ctx) || !validSSOProviderSessionCredential(expected) {
 		return invalidAccountQuery()
 	}
 	bounded, stop := context.WithTimeout(ctx, r.maximumDuration)
 	defer stop()
-	rows, err := r.pool.Raw().Query(bounded, linkedSSOOIDCProviderCredentialSelect, providerSessionCredentialArgs(expected)...)
+	rows, err := r.pool.Raw().Query(bounded, linkedSSOProviderCredentialSelect, providerSessionCredentialArgs(expected)...)
 	if err != nil {
 		return readFailure(bounded, err)
 	}
@@ -74,7 +74,7 @@ func (w Work) RequireLinkedSSOOIDCProviderCredential(ctx context.Context, owner 
 	if err := ctx.Err(); err != nil {
 		return w.fail(ctx, err)
 	}
-	if !validSSOOIDCSessionCredential(expected) {
+	if !validSSOProviderSessionCredential(expected) {
 		return w.fail(ctx, invalidWork())
 	}
 	b, feature, life, err := w.FeatureScope(owner)
@@ -88,7 +88,7 @@ func (w Work) RequireLinkedSSOOIDCProviderCredential(ctx context.Context, owner 
 	if feature.Operation != revokeOne || feature.Contributor != store || w.state.featurePreparationPlan != nil || life.EventType != "session.revoked.v1" || life.EventIndex != 0 || life.BeforeVersion == 0 || life.BeforeVersion == ^uint64(0) || life.AfterVersion != life.BeforeVersion+1 {
 		return w.fail(ctx, invalidWork())
 	}
-	return w.lockLinkedSSOOIDCCredential(ctx, owner, expected)
+	return w.lockLinkedSSOProviderCredential(ctx, owner, expected)
 }
 
 // RequireLinkedSSOOIDCLogoutCredential retains the original linked provider
@@ -101,18 +101,18 @@ func (w Work) RequireLinkedSSOOIDCLogoutCredential(ctx context.Context, owner Fe
 	if err := w.RequireSSOOIDCLogoutScope(ctx, owner, c.TenantID, c.UserID, sessionID, version); err != nil {
 		return err
 	}
-	if !validSSOOIDCSessionCredential(expected) {
+	if !validSSOProviderSessionCredential(expected) {
 		return w.fail(ctx, invalidWork())
 	}
-	return w.lockLinkedSSOOIDCCredential(ctx, owner, expected)
+	return w.lockLinkedSSOProviderCredential(ctx, owner, expected)
 }
 
-func (w Work) lockLinkedSSOOIDCCredential(ctx context.Context, owner FeatureExecutionContributor, expected CredentialAdmission) error {
+func (w Work) lockLinkedSSOProviderCredential(ctx context.Context, owner FeatureExecutionContributor, expected CredentialAdmission) error {
 	// Preserve the kernel's user/credential-before-account lock ordering.
 	if _, err := w.RequireActiveCredential(ctx, owner, expected); err != nil {
 		return err
 	}
-	rows, err := w.Query(ctx, linkedSSOOIDCProviderCredentialSelect+` FOR SHARE OF a,m`, providerSessionCredentialArgs(expected)...)
+	rows, err := w.Query(ctx, linkedSSOProviderCredentialSelect+` FOR SHARE OF a,m`, providerSessionCredentialArgs(expected)...)
 	if err != nil {
 		return err
 	}

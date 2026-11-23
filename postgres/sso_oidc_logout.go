@@ -46,6 +46,10 @@ func SSOOIDCLogoutCompleteDescriptor() ContributorDescriptor {
 // evidence, or authorize any effect by itself. Denials poison live Work so
 // ignoring this result cannot commit earlier effects.
 func (w Work) RequireSSOOIDCLogoutScope(ctx context.Context, owner FeatureExecutionContributor, tenant identity.TenantID, user identity.UserID, sessionID string, version uint64) error {
+	return w.requireSSOSelfLogoutScope(ctx, owner, tenant, user, sessionID, version, SSOOIDCLogoutOperation(), SSOOIDCLogoutDescriptor())
+}
+
+func (w Work) requireSSOSelfLogoutScope(ctx context.Context, owner FeatureExecutionContributor, tenant identity.TenantID, user identity.UserID, sessionID string, version uint64, op identity.FeatureOperation, descriptor ContributorDescriptor) error {
 	if err := w.usable(); err != nil {
 		return err
 	}
@@ -56,8 +60,7 @@ func (w Work) RequireSSOOIDCLogoutScope(ctx context.Context, owner FeatureExecut
 		return w.fail(ctx, err)
 	}
 	b, feature, life, err := w.FeatureScope(owner)
-	op := SSOOIDCLogoutOperation()
-	if err != nil || feature.Operation != op || feature.Contributor != SSOOIDCLogoutDescriptor() || w.state.featurePreparationPlan != nil {
+	if err != nil || feature.Operation != op || feature.Contributor != descriptor || w.state.featurePreparationPlan != nil {
 		return w.fail(ctx, invalidWork())
 	}
 	if b.ValidateFor(op) != nil || b.TenantID != tenant || b.UserID != user || b.ActorKind != authorization.SubjectUser || b.ActorID != identity.ActorID(user) {
