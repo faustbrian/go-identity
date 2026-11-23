@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select the original stored session synchronizer for exact device approval
+  and denial, without an origin-only fallback or an invented token age.
+  Base HTTP still installs no routes.
+
 - Bind selected OIDC logout operations to a finite set of installed provider
   paths while retaining their canonical OpenAPI templates. No route is selected
   by the base HTTP package.

@@ -491,6 +491,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if (r.OperationID == "identity.account.link-start" || r.OperationID == "identity.sso.oidc-logout") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
+		// Device decisions authenticate the original stored synchronizer under
+		// their native session and effect fences, not a separately aged token.
+		if (r.OperationID == "identity.oauth-server.device-approve" || r.OperationID == "identity.oauth-server.device-deny") &&
+			r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Native cookie-only MFA enrollment authenticates the synchronizer
 		// against original session state under mutation fences. It never issues
 		// a separately aged CSRF token or admits an origin-only/bearer fallback.
