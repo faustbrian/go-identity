@@ -103,6 +103,31 @@ completion sets cookies and redirects. Select strict OAuth2 cookie admission
 for the later read and logout. Omit these features to expose no OAuth2 route
 or OpenAPI operation, and redact all raw callback URLs from access logs.
 
+## Existing-linked-member SAML browser sign-in
+
+Select `NewSAMLSigninFeature` for one installed provider and add the same
+`SAMLSigninConfig.ACSNavigationPolicy()` to `NewRouter`'s `TransportPolicy.CORS`.
+Configure the tenant HTTPS SP origin, the IdP HTTPS origin and signed Redirect
+endpoint, allowlisted application return URLs, and native start/completion
+owners. The other SAML endpoints are not selected, and the ACS can never
+grant CORS access or a preflight.
+
+Initiate at `GET /saml2/{provider_id}/login` from a document on the selected
+SP origin. Ordinary browser navigation must supply same-origin Fetch Metadata;
+clients that send `Origin` must send the exact SP origin. There is no Referer
+fallback. An optional `Idempotency-Key` aliases the original native command;
+it does not select a flow. Start delivers only the signed Redirect and a
+dedicated five-minute, exact ACS-path correlation cookie.
+
+The IdP returns by form POST to `POST /saml2/{provider_id}/acs` using its
+configured Origin, the original RelayState and the signed SAML response. No
+normal Lax session/device cookie or browser-supplied flow ID is required. Only
+fresh acknowledged native settlement returns the allowlisted redirect, normal
+session and CSRF cookies and removal of the dedicated cookie. Replay or denial
+never returns those credentials. Do not log `Location`, cookies, RelayState
+or the SAML response. Select native SAML session access and local logout
+separately; this feature does not select JIT, IdP-initiated sign-in or SLO.
+
 ## Enterprise OIDC provider logout
 
 Select `NewProviderLogoutFeature` with the same tenant network and shared

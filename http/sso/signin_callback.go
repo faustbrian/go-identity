@@ -418,21 +418,21 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	h.pipeline.ServeHTTP(writer, r)
 }
 
-func writeSigninDelivery(w http.ResponseWriter, r *http.Request, c SigninCallbackConfig, operation, method string, out SigninCallbackResult, command identity.CommandID, flow identity.PreAuthTransactionID, deviceExpires time.Time) {
+func writeSigninDelivery(w http.ResponseWriter, r *http.Request, c SigninCallbackConfig, operation, method string, out SigninCallbackResult, command identity.CommandID, flow identity.PreAuthTransactionID, deliveryExpires time.Time, clearCookies ...string) {
 	ctx := r.Context()
 	now := c.Browser.Now()
 	auth, csrf, err := c.deliveryCookies(operation, method, out, command, flow, now)
-	if err != nil || ctx.Err() != nil || !deviceExpires.After(now) {
+	if err != nil || ctx.Err() != nil || !deliveryExpires.After(now) {
 		writeSigninError(w, r, identityhttp.ErrUnavailable)
 		return
 	}
 	delivery := ctx.Value(signinDeliveryKey{}).(*signinDelivery)
-	delivery.redirect, delivery.cookies = out.RedirectURI, []string{auth.String(), csrf.String()}
+	delivery.redirect, delivery.cookies = out.RedirectURI, append([]string{auth.String(), csrf.String()}, clearCookies...)
 	delivery.current = func() bool {
 		now := c.Browser.Now()
 		spec, err := out.Issuance.Session.Bindings()
 		_, lifetimeErr := out.Issuance.Session.Lifetime(now)
-		return err == nil && lifetimeErr == nil && ctx.Err() == nil && deviceExpires.After(now) && spec.Authentication.Proof.ExpiresAt.After(now)
+		return err == nil && lifetimeErr == nil && ctx.Err() == nil && deliveryExpires.After(now) && spec.Authentication.Proof.ExpiresAt.After(now)
 	}
 	w.WriteHeader(http.StatusSeeOther)
 }

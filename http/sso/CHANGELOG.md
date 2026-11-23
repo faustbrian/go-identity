@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in SAML login and signed POST assertion consumer transport for an
+  installed SP-initiated linked-member profile. The exact path-scoped
+  correlation cookie, provider quotas and native commitment gate delivery.
+
 - Expose explicitly selected enterprise OIDC provider logout routes. Start
   requires the original cookie, synchronizer and retry key. The one-use
   return is cookie-free and cannot disclose a redirect on refusal, timeout
