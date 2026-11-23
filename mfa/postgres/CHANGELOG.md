@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the original known-empty MFA generation in the native enterprise
+  OAuth2 grant-revocation transaction. Require the exact original OAuth2
+  session identity and version without widening session logout admission.
+
 - Fence the original known-empty MFA generation during exact native enterprise
   OIDC logout-start Apply and final checks. Require the original session ID and
   version under the canonical logout owner; missing, enrolled or changed factor
