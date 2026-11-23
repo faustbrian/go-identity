@@ -78,7 +78,7 @@ func OAuthSigninAccount(command identity.Command) (ProviderAccountAdmission, err
 	if !ok || !cookie || code || recovery || bearer || f.Operation != oauthSigninAccountOperation() || f.Binding.UserID != "" || f.Binding.AnonymousFlowID == "" || f.Binding.ActorKind != authorization.SubjectServiceAccount {
 		return ProviderAccountAdmission{}, invalidWork()
 	}
-	return signinAccountFromFields(f, oauthSigninAccountPrefix, "identity/oauth", ssoOIDCSigninAccountPrefix, ssoOAuth2SigninAccountPrefix)
+	return signinAccountFromFields(f, oauthSigninAccountPrefix, "identity/oauth", ssoOIDCSigninAccountPrefix, ssoOAuth2SigninAccountPrefix, ssoSAMLSigninAccountPrefix)
 }
 
 func signinAccountFromFields(f identity.FeatureCommandSpec, prefix, owner string, foreignPrefixes ...string) (ProviderAccountAdmission, error) {

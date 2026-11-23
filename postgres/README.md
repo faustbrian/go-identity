@@ -113,6 +113,23 @@ attachment and Apply; an uncertain exchange, invalid output or failed cleanup
 does not establish refusal. OIDC refusal methods cannot settle OAuth callbacks,
 and OAuth refusal methods cannot settle OIDC or social callbacks.
 
+### Separate enterprise SAML callback consumption
+
+`SSOSAMLSigninOperation` admits the exact native `sso.saml-login-callback`
+contributor for SP-initiated ACS. The callback must use gated preparation, the
+distinct original start record, and a matching one-use SAML capability. The
+capability can stay internal when RelayState is absent. The native owner must
+authenticate the original browser correlation and signed Response, hold the
+current linked-account, organization, and provider authority, and stage the
+atomic replay set and session in the same Work. This profile does not itself
+enable SAML or link by email.
+
+Append `SSOSAMLCallbackPreparationErasureMigrationSource` after the existing
+grant-refresh erasure guard and before enabling the native ACS writer. The
+forward trigger change keeps pending and historical custody and clears the
+temporary sealed output only with a definitive receipt. Leave it installed
+on code rollback.
+
 ### OIDC refusal and account policy
 
 The exact native callback owner can implement

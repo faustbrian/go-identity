@@ -49,9 +49,25 @@ func (s SSOEnterpriseGrantRefreshPreparationErasureMigrationSource) Load(ctx con
 	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_enterprise_grant_refresh_preparation_erasure", ssoEnterpriseGrantRefreshPreparationErasureSQL)
 }
 
+// SSOSAMLCallbackPreparationErasureMigrationSource lets the exact native ACS
+// discard temporary encrypted preparation only with a definitive result.
+// Append after SSOEnterpriseGrantRefreshPreparationErasureMigrationSource and
+// before admitting SAML callbacks. Existing pending and historical rows stay
+// unchanged; rollback keeps the widened trigger and all retained output.
+type SSOSAMLCallbackPreparationErasureMigrationSource struct {
+	Base    migrations.Source
+	Version migrations.Version
+}
+
+// Load appends the forward-only trigger change without I/O.
+func (s SSOSAMLCallbackPreparationErasureMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
+	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_saml_callback_preparation_erasure", ssoSAMLCallbackPreparationErasureSQL)
+}
+
 const ssoOIDCCallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose='identity.sso.oidc-callback'` + ssoCallbackPreparationErasureSuffix
 const ssoOAuth2CallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback')` + ssoCallbackPreparationErasureSuffix
 const ssoEnterpriseGrantRefreshPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh')` + ssoCallbackPreparationErasureSuffix
+const ssoSAMLCallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh','identity.sso.saml-acs')` + ssoCallbackPreparationErasureSuffix
 
 const ssoCallbackPreparationErasurePrefix = `SET LOCAL lock_timeout = '5s';
 CREATE OR REPLACE FUNCTION identity.guard_command_preparation() RETURNS trigger

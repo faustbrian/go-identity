@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	identity "github.com/faustbrian/go-identity"
@@ -13,14 +14,18 @@ import (
 // Primary admission borrows the existing identity lock order. The known-owner
 // fixture observes that narrow fence, not protocol proof or session issuance.
 func TestSSOOIDCSigninAccountPrimaryFence(t *testing.T) {
-	testSSOSigninAccountPrimaryFence(t, false, []string{"apply", "final", "blocked", "disabled", "expired", "unlinked", "missing-association", "stale-account", "stale-link", "stale-credential", "stale-user", "stale-identifier", "stale-credential-epoch"})
+	testSSOSigninAccountPrimaryFence(t, "oidc", []string{"apply", "final", "blocked", "disabled", "expired", "unlinked", "missing-association", "stale-account", "stale-link", "stale-credential", "stale-user", "stale-identifier", "stale-credential-epoch"})
 }
 
 func TestSSOOAuth2SigninAccountPrimaryFence(t *testing.T) {
-	testSSOSigninAccountPrimaryFence(t, true, []string{"apply", "final", "blocked", "unlinked", "stale-credential"})
+	testSSOSigninAccountPrimaryFence(t, "oauth2", []string{"apply", "final", "blocked", "unlinked", "stale-credential"})
 }
 
-func testSSOSigninAccountPrimaryFence(t *testing.T, oauth2 bool, modes []string) {
+func TestSSOSAMLCallbackAccountPrimaryFence(t *testing.T) {
+	testSSOSigninAccountPrimaryFence(t, "saml", []string{"apply", "final", "blocked", "unlinked", "missing-association", "stale-credential"})
+}
+
+func testSSOSigninAccountPrimaryFence(t *testing.T, protocol string, modes []string) {
 	t.Helper()
 	ctx, pool, repository := newAccountAuthorityStore(t)
 	exec := func(sql string) {
@@ -30,20 +35,28 @@ func testSSOSigninAccountPrimaryFence(t *testing.T, oauth2 bool, modes []string)
 		}
 	}
 	exec(`INSERT INTO identity.users(tenant_id,user_id,status,version,authority_version,identifier_version,credential_version) VALUES('tenant','selected-user','active',101,13,17,19);
-INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES('tenant','selected-user','provider-ref',3,'sso',11,true);
-WITH metadata AS (SELECT 'sso-organization-provider'::text AS provider,'https://issuer.example'::text AS issuer,'subject'::text AS subject)
+INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES('tenant','selected-user','provider-ref',3,'sso',11,true)`)
+	want := ssoOIDCSigninAccountFixture()
+	read := repository.GetSSOOIDCSigninAccount
+	if protocol == "saml" {
+		want.Account.Provider, want.Account.Issuer = "sso.saml.v1."+strings.Repeat("a", 64), "urn:example:trusted-saml-idp"
+		read = repository.GetSSOSAMLSigninAccount
+	}
+	q := ProviderSigninAccountQuery{TenantID: want.Account.TenantID, Provider: want.Account.Provider, Issuer: want.Account.Issuer, Subject: want.Account.Subject}
+	if _, err := pool.Raw().Exec(ctx, `WITH metadata AS (SELECT $1::text AS provider,$2::text AS issuer,$3::text AS subject)
 INSERT INTO identity.accounts(tenant_id,user_id,account_id,provider,issuer,subject,subject_key,version,social_link_version,linked)
-SELECT 'tenant','selected-user','account',provider,issuer,subject,sha256(convert_to(octet_length(provider)::text||':'||provider||octet_length(issuer)::text||':'||issuer||octet_length(subject)::text||':'||subject,'UTF8')),5,7,true FROM metadata;
-INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant','selected-user','provider-ref','account')`)
-	q := ProviderSigninAccountQuery{TenantID: "tenant", Provider: "sso-organization-provider", Issuer: "https://issuer.example", Subject: "subject"}
+SELECT 'tenant','selected-user','account',provider,issuer,subject,sha256(convert_to(octet_length(provider)::text||':'||provider||octet_length(issuer)::text||':'||issuer||octet_length(subject)::text||':'||subject,'UTF8')),5,7,true FROM metadata`, q.Provider, q.Issuer, q.Subject); err != nil {
+		t.Fatal("write exact provider account tuple", err)
+	}
+	exec(`INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant','selected-user','provider-ref','account')`)
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			exec(`UPDATE identity.users SET status='active',authority_version=13,identifier_version=17,credential_version=19 WHERE tenant_id='tenant';
 UPDATE identity.credential_references SET enabled=true,version=11,expires_at=NULL WHERE tenant_id='tenant';
 UPDATE identity.accounts SET linked=true,version=5,social_link_version=7 WHERE tenant_id='tenant';
 INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant','selected-user','provider-ref','account') ON CONFLICT DO NOTHING`)
-			expected, err := repository.GetSSOOIDCSigninAccount(ctx, q)
-			if err != nil || expected != ssoOIDCSigninAccountFixture() {
+			expected, err := read(ctx, q)
+			if err != nil || expected != want {
 				t.Fatal("enterprise account lookup lost original authority", err)
 			}
 			switch mode {
@@ -73,9 +86,13 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 			makeCommand, makePlan := ssoOIDCSigninAccountCommand, ssoOIDCSigninPlanFixture
 			var owner FeatureExecutionContributor = &ssoOIDCSigninAccountParticipant{}
 			require := Work.RequireSSOOIDCSigninProviderAccount
-			if oauth2 {
+			switch protocol {
+			case "oauth2":
 				makeCommand, makePlan = ssoOAuth2SigninAccountCommand, ssoOAuth2SigninPlanFixture
 				owner, require = &ssoOAuth2SigninAccountParticipant{}, Work.RequireSSOOAuth2SigninProviderAccount
+			case "saml":
+				makeCommand, makePlan = samlSigninAccountCommand, samlSigninPlanFixture
+				owner, require = &samlSigninAccountParticipant{}, Work.RequireSSOSAMLSigninProviderAccount
 			}
 			s, command := makeCommand(t, expected)
 			_, plan := makePlan(t)
@@ -116,10 +133,10 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 					t.Fatal("enterprise authority lock escaped Work", table, err)
 				}
 			}
-			if oauth2 {
+			if protocol != "oidc" {
 				reconstructed := ssoOIDCAccountPreAuthCommand(t, s)
 				if _, err := require(w, ctx, owner, reconstructed); err == nil || w.state.failed == nil {
-					t.Fatal("reconstructed OAuth command acquired the original invocation")
+					t.Fatal("reconstructed callback command acquired the original invocation")
 				}
 			}
 		})
@@ -131,7 +148,7 @@ UPDATE identity.accounts SET linked=true,version=5,social_link_version=7 WHERE t
 		if _, err := pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET owner=$1 WHERE tenant_id='tenant'`, owner); err != nil {
 			t.Fatal(err)
 		}
-		out, ssoErr := repository.GetSSOOIDCSigninAccount(ctx, q)
+		out, ssoErr := read(ctx, q)
 		_, socialErr := repository.GetProviderSigninAccount(ctx, q)
 		if owner == "identity/oauth" && (ssoErr == nil || out != (ProviderAccountAdmission{}) || socialErr != nil) {
 			t.Fatal("enterprise read broadened social credential acceptance")

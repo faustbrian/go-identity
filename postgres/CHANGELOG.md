@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select the original native SAML ACS capability, account fence and gated
+  preparation independently of OIDC and OAuth 2.0. Erase temporary sealed
+  output only with a definitive receipt. This does not enable a SAML route.
+
 - Reserve the native enterprise OAuth2 grant refresh preparation profile and
   allow the definitive settlement to erase temporary encrypted token custody.
 

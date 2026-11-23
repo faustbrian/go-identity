@@ -110,6 +110,9 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	if op.OperationID == ssoOAuth2SigninPurpose {
 		return op == SSOOAuth2SigninOperation() && d == ssoOAuth2SigninDescriptor()
 	}
+	if op.OperationID == ssoSAMLSigninPurpose {
+		return op == SSOSAMLSigninOperation() && d == ssoSAMLSigninDescriptor()
+	}
 	if op.OperationID == ssoEnterpriseGrantRefreshPurpose {
 		return op == SSOEnterpriseGrantRefreshOperation() && d == ssoEnterpriseGrantRefreshDescriptor()
 	}

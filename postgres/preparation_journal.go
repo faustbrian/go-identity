@@ -45,7 +45,7 @@ func reservePreparationJournal(ctx context.Context, tx pgx.Tx, q claimRequest, d
 	if expectedProfile == 6 && (q.purpose != "identity.account.unlink" || q.feature != nil) {
 		return preparationReservation{}, invalidPreparation()
 	}
-	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoEnterpriseGrantRefreshClaim(q)) && expectedProfile != 4 {
+	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoEnterpriseGrantRefreshClaim(q)) && expectedProfile != 4 {
 		return preparationReservation{}, invalidPreparation()
 	}
 	if !validJournalInput(ctx, tx, q, owner, lease) || (d != claimNew && d != claimReplay) {

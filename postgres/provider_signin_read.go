@@ -74,6 +74,22 @@ func (r *Repository) GetProviderSigninAccount(ctx context.Context, q ProviderSig
 // SSOOIDCSigninAccountFields and fence it in the original callback Work with
 // RequireSSOOIDCSigninProviderAccount. It is neither proof nor a validity lease.
 func (r *Repository) GetSSOOIDCSigninAccount(ctx context.Context, q ProviderSigninAccountQuery) (ProviderAccountAdmission, error) {
+	return r.getSSOProviderSigninAccount(ctx, q)
+}
+
+// GetSSOSAMLSigninAccount observes an existing SSO-owned linked account for the
+// exact trusted SAML provider namespace, verified issuer and signed NameID.
+// It uses the same bounded primary lookup as GetSSOOIDCSigninAccount, supports
+// identity's existing federation issuer forms, and does not link by email or
+// issue authority. Fence the original observation with the SAML Apply owner.
+func (r *Repository) GetSSOSAMLSigninAccount(ctx context.Context, q ProviderSigninAccountQuery) (ProviderAccountAdmission, error) {
+	if !validSAMLAccountProvider(q.Provider) {
+		return ProviderAccountAdmission{}, invalidAccountQuery()
+	}
+	return r.getSSOProviderSigninAccount(ctx, q)
+}
+
+func (r *Repository) getSSOProviderSigninAccount(ctx context.Context, q ProviderSigninAccountQuery) (ProviderAccountAdmission, error) {
 	if !r.validAccountRead(ctx) || q.Validate() != nil {
 		return ProviderAccountAdmission{}, invalidAccountQuery()
 	}

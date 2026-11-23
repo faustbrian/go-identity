@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
@@ -9,6 +10,7 @@ import (
 
 const ssoOIDCSigninAccountPrefix = "sso.oidc.signin.account."
 const ssoOAuth2SigninAccountPrefix = "sso.oauth2.signin.account."
+const ssoSAMLSigninAccountPrefix = "sso.saml.signin.account."
 
 // SSOOIDCSigninAccountFields freezes an existing SSO-owned account and every
 // independent identity epoch in the original enterprise callback intent. The
@@ -24,7 +26,7 @@ func SSOOIDCSigninAccountFields(a ProviderAccountAdmission) ([]identity.FeatureF
 // observation, not authentication; provider/profile, organization, factor and
 // policy authority remain with their owners and require primary fencing.
 func SSOOIDCSigninAccount(command identity.Command) (ProviderAccountAdmission, error) {
-	return ssoEnterpriseSigninAccount(command, ssoOIDCSigninOperation(), ssoOIDCSigninAccountPrefix, ssoOAuth2SigninAccountPrefix)
+	return ssoEnterpriseSigninAccount(command, ssoOIDCSigninOperation(), ssoOIDCSigninAccountPrefix, ssoOAuth2SigninAccountPrefix, ssoSAMLSigninAccountPrefix)
 }
 
 // SSOOAuth2SigninAccountFields freezes the exact OAuth-linked account selected
@@ -36,10 +38,45 @@ func SSOOAuth2SigninAccountFields(a ProviderAccountAdmission) ([]identity.Featur
 // SSOOAuth2SigninAccount decodes only the native OAuth callback's original
 // pre-authentication command and exact account snapshot, not session authority.
 func SSOOAuth2SigninAccount(command identity.Command) (ProviderAccountAdmission, error) {
-	return ssoEnterpriseSigninAccount(command, SSOOAuth2SigninOperation(), ssoOAuth2SigninAccountPrefix, ssoOIDCSigninAccountPrefix)
+	return ssoEnterpriseSigninAccount(command, SSOOAuth2SigninOperation(), ssoOAuth2SigninAccountPrefix, ssoOIDCSigninAccountPrefix, ssoSAMLSigninAccountPrefix)
 }
 
-func ssoEnterpriseSigninAccount(command identity.Command, op identity.FeatureOperation, prefix, otherEnterprisePrefix string) (ProviderAccountAdmission, error) {
+// SSOSAMLSigninAccountFields freezes the existing account selected by the
+// trusted native owner after validating the signed SAML subject. These fields
+// neither prove the assertion nor create an account link.
+func SSOSAMLSigninAccountFields(a ProviderAccountAdmission) ([]identity.FeatureField, error) {
+	if !validSAMLAccountProvider(a.Account.Provider) {
+		return nil, invalidWork()
+	}
+	return signinAccountFields(a, ssoSAMLSigninAccountPrefix, "sso")
+}
+
+// SSOSAMLSigninAccount decodes the original, browser-bound SAML callback's
+// linked account snapshot. Other protocols and metadata-only commands deny.
+func SSOSAMLSigninAccount(command identity.Command) (ProviderAccountAdmission, error) {
+	account, err := ssoEnterpriseSigninAccount(command, SSOSAMLSigninOperation(), ssoSAMLSigninAccountPrefix, ssoOIDCSigninAccountPrefix, ssoOAuth2SigninAccountPrefix)
+	if err != nil || !validSAMLAccountProvider(account.Account.Provider) {
+		return ProviderAccountAdmission{}, invalidWork()
+	}
+	return account, nil
+}
+
+// The SSO module owns the hash of the trusted organization/provider tuple;
+// identity checks only the versioned SAML namespace, not the tuple itself.
+func validSAMLAccountProvider(provider string) bool {
+	digest, match := strings.CutPrefix(provider, "sso.saml.v1.")
+	if !match || len(digest) != 64 {
+		return false
+	}
+	for _, character := range []byte(digest) {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func ssoEnterpriseSigninAccount(command identity.Command, op identity.FeatureOperation, prefix, otherEnterprisePrefix1, otherEnterprisePrefix2 string) (ProviderAccountAdmission, error) {
 	f, ok := command.Feature()
 	_, cookie := command.PreAuthCookie()
 	_, code := command.OneTimeCode()
@@ -48,7 +85,7 @@ func ssoEnterpriseSigninAccount(command identity.Command, op identity.FeatureOpe
 	if !ok || !cookie || code || recovery || bearer || f.Operation != op || !validEnterpriseSigninBinding(f.Binding, op) {
 		return ProviderAccountAdmission{}, invalidWork()
 	}
-	return signinAccountFromFields(f, prefix, "sso", oauthSigninAccountPrefix, otherEnterprisePrefix)
+	return signinAccountFromFields(f, prefix, "sso", oauthSigninAccountPrefix, otherEnterprisePrefix1, otherEnterprisePrefix2)
 }
 
 // RequireSSOOIDCSigninProviderAccount fences only the exact registered native
@@ -71,6 +108,13 @@ func (w Work) RequireSSOOIDCSigninProviderAccount(ctx context.Context, owner Fea
 // select an account from browser input.
 func (w Work) RequireSSOOAuth2SigninProviderAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command) (time.Time, error) {
 	return w.requireSSOSigninProviderAccount(ctx, owner, command, SSOOAuth2SigninOperation(), SSOOAuth2SigninAccount)
+}
+
+// RequireSSOSAMLSigninProviderAccount holds the existing current linked
+// account and credential fences during exact ACS Apply and final commit. It
+// does not authenticate the browser, provider, organization or replay set.
+func (w Work) RequireSSOSAMLSigninProviderAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command) (time.Time, error) {
+	return w.requireSSOSigninProviderAccount(ctx, owner, command, SSOSAMLSigninOperation(), SSOSAMLSigninAccount)
 }
 
 func (w Work) requireSSOSigninProviderAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command, op identity.FeatureOperation, decode func(identity.Command) (ProviderAccountAdmission, error)) (time.Time, error) {

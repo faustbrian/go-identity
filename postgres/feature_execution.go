@@ -405,6 +405,10 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 				if _, ok := feature.contributor.(SSOOAuth2SigninContributor); !ok {
 					return nil, invalidPlan()
 				}
+			case SSOSAMLSigninOperation():
+				if _, ok := feature.contributor.(SSOSAMLSigninContributor); !ok {
+					return nil, invalidPlan()
+				}
 			default:
 				if _, ok := feature.contributor.(OAuthSigninContributor); !ok {
 					return nil, invalidPlan()

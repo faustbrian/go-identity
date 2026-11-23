@@ -42,6 +42,17 @@ type SSOOAuth2SigninContributor interface {
 	ValidateSSOOAuth2SigninConsumption(identity.Command, CapabilityPlan) error
 }
 
+// SSOSAMLSigninContributor owns the exact SAML frontchannel callback. Its
+// admission binds the original browser and capability to the registered ACS.
+// Apply and final checks must keep current provider/member authority and the
+// response/assertion replay set in the same Work as the session. The original
+// capability may remain internal when RelayState is absent.
+type SSOSAMLSigninContributor interface {
+	FeatureAdmissionPreparationContributor
+	FeatureCommitContributor
+	ValidateSSOSAMLSigninConsumption(identity.Command, CapabilityPlan) error
+}
+
 // SSOOIDCExplicitLinkContributor owns only the authenticated enterprise link
 // variant. Validation must bind the original session and one-use browser
 // transaction to the same user, provider and proof. Its final Work check owns
@@ -91,6 +102,10 @@ func validateProviderSigninConsumption(owner FeatureExecutionContributor, comman
 		if native, ok := owner.(SSOOAuth2SigninContributor); ok && validSSOOAuth2SigninBinding(feature.Binding) {
 			return native.ValidateSSOOAuth2SigninConsumption(command, *plan.Capability)
 		}
+	case SSOSAMLSigninOperation():
+		if native, ok := owner.(SSOSAMLSigninContributor); ok && validEnterpriseSigninBinding(feature.Binding, feature.Operation) {
+			return native.ValidateSSOSAMLSigninConsumption(command, *plan.Capability)
+		}
 	}
 	return invalidPlan()
 }
@@ -118,6 +133,13 @@ func (w Work) SSOOIDCSigninConsumption(owner FeatureExecutionContributor) (Capab
 // non-Apply invocations deny; the returned copy grants no session authority.
 func (w Work) SSOOAuth2SigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
 	return w.providerSigninConsumption(owner, SSOOAuth2SigninOperation())
+}
+
+// SSOSAMLSigninConsumption exposes the original capability provisionally
+// consumed inside the exact native ACS Apply. It grants no replay, browser,
+// provider or session authority and never renews the capability's lifetime.
+func (w Work) SSOSAMLSigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
+	return w.providerSigninConsumption(owner, SSOSAMLSigninOperation())
 }
 
 func (w Work) providerSigninConsumption(owner FeatureExecutionContributor, operation identity.FeatureOperation) (CapabilityReservationBinding, error) {
