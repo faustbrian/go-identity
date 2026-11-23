@@ -1885,6 +1885,7 @@ END $$`); err != nil {
 		}
 		selected := provisionReferenceEnterpriseSAML(t, ctx, c, deps, client, origin, enterpriseSAMLIdP)
 		c.EnterpriseSAML.Profile.OrganizationID, c.EnterpriseSAML.Profile.ProviderID = selected.organization, selected.provider
+		proveReferenceSAMLIDPAdmission(t, ctx, c, deps, enterpriseSAMLIdP)
 		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Verify real signed IdP-initiated SAML evidence against current PostgreSQL
+  trust without selecting an HTTP route or issuing a session.
+
 - Verify native SAML provider registration from approved offline IdP metadata.
 
 - Opt into public SP metadata for an installed SAML sign-in profile. Serve the

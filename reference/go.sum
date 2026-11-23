@@ -211,12 +211,16 @@ github.com/faustbrian/go-sso/postgres v0.0.0-20261123091731-876dfc7b917d h1:IuE7
 github.com/faustbrian/go-sso/postgres v0.0.0-20261123091731-876dfc7b917d/go.mod h1:FILfjQstNMbOgwbv9yROy5eUJA4/OyCDo8NpVeeEFoA=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261123102447-2049d60f48a2 h1:T7SDDljgz3GULIAO/xc+2JkZTBlwVwYZgBLR7MWplBc=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261123102447-2049d60f48a2/go.mod h1:FILfjQstNMbOgwbv9yROy5eUJA4/OyCDo8NpVeeEFoA=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261123112014-cdb4909c7e1d h1:Q/0DO/oZezEGyzkGqWlu9fKtzaYs/nTHuSd4fEuCGGU=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261123112014-cdb4909c7e1d/go.mod h1:FILfjQstNMbOgwbv9yROy5eUJA4/OyCDo8NpVeeEFoA=
 github.com/faustbrian/go-sso/saml v0.0.0-20261123062954-268aa7f0bfe3 h1:7bf4ka7K/soLAJvYvWVwxjQ1JnOySI9W22dl1bcXL1Q=
 github.com/faustbrian/go-sso/saml v0.0.0-20261123062954-268aa7f0bfe3/go.mod h1:YFWxOvtD5iJVnBc6NexgoMu/hda7xZRtgDpdhsabChE=
 github.com/faustbrian/go-sso/saml v0.0.0-20261123102447-2049d60f48a2 h1:lRSnwFjmJ+H823Qb/eyaoifPWkP3D1t0iRVOOLcRs2Q=
 github.com/faustbrian/go-sso/saml v0.0.0-20261123102447-2049d60f48a2/go.mod h1:YFWxOvtD5iJVnBc6NexgoMu/hda7xZRtgDpdhsabChE=
 github.com/faustbrian/go-sso/saml v0.0.0-20261123103901-e26599c93796 h1:2Pa2QW2iW16Kye4+Lw70iJEf77m1TnQBkkyKxgUbtYs=
 github.com/faustbrian/go-sso/saml v0.0.0-20261123103901-e26599c93796/go.mod h1:YFWxOvtD5iJVnBc6NexgoMu/hda7xZRtgDpdhsabChE=
+github.com/faustbrian/go-sso/saml v0.0.0-20261123110445-7fbf49766536 h1:gc1HZULIvvv7laetBJuWYm9ctwk0iXiwHGQrpDBXZxE=
+github.com/faustbrian/go-sso/saml v0.0.0-20261123110445-7fbf49766536/go.mod h1:junxGTiEU39EWU6Nu6hxNb9nTVAO3T7+TRE+51mCTu4=
 github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b h1:CeHhZjRWDLDjhvzCLOTEpwe3ujAxwZWZLvSSUGp1nwU=
 github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b/go.mod h1:tTPj46u63YbrZTYvSyNw5yvWDjKr1hquEtVEGUNBYuw=
 github.com/faustbrian/go-transactional-outbox/v2 v2.1.1-0.20261022172917-6ed5e0861542 h1:Tsd/8V+gBSfm17oWbrCLzeX5mVMrUhXayFKRUmG8ric=

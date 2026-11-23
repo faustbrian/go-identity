@@ -62,11 +62,28 @@ type referenceSAMLResponseInput struct {
 // independent of the SP verifier; no verification or identity policy runs here.
 func (f referenceSAMLIdPFixture) signedPOSTResponse(t *testing.T, input referenceSAMLResponseInput) string {
 	t.Helper()
+	if !xdm.IsNCName(input.RequestID) {
+		t.Fatal("SAML fixture requires the original request ID")
+	}
+	return f.signPOSTResponse(t, input)
+}
+
+// Both omissions are part of the signed XML, not edits to a signed message.
+func (f referenceSAMLIdPFixture) signedUnsolicitedPOSTResponse(t *testing.T, input referenceSAMLResponseInput) string {
+	t.Helper()
+	if input.RequestID != "" {
+		t.Fatal("unsolicited SAML fixture requires no request ID")
+	}
+	return f.signPOSTResponse(t, input)
+}
+
+func (f referenceSAMLIdPFixture) signPOSTResponse(t *testing.T, input referenceSAMLResponseInput) string {
+	t.Helper()
 	if f.key == nil || input.Now.IsZero() || input.Issuer == "" || input.Audience == "" || input.NameID == "" {
 		t.Fatal("SAML fixture requires a signing key, timestamp, issuer, audience and NameID")
 	}
-	if !xdm.IsNCName(input.RequestID) || !xdm.IsNCName(input.ResponseID) || !xdm.IsNCName(input.AssertionID) || input.ResponseID == input.AssertionID {
-		t.Fatal("SAML fixture requires the original request ID and distinct response and assertion IDs")
+	if !xdm.IsNCName(input.ResponseID) || !xdm.IsNCName(input.AssertionID) || input.ResponseID == input.AssertionID {
+		t.Fatal("SAML fixture requires distinct response and assertion IDs")
 	}
 	acs, err := url.Parse(input.ACS)
 	if err != nil || acs.Scheme != "https" || acs.Host == "" {
@@ -80,6 +97,10 @@ func (f referenceSAMLIdPFixture) signedPOSTResponse(t *testing.T, input referenc
 		}
 		return out.String()
 	}
+	correlation := ""
+	if input.RequestID != "" {
+		correlation = fmt.Sprintf(` InResponseTo="%s"`, escape(input.RequestID))
+	}
 	now := input.Now.UTC()
 	issued := now.Format(time.RFC3339Nano)
 	confirmationExpiry := now.Add(3 * time.Minute).Format(time.RFC3339Nano)
@@ -88,7 +109,7 @@ func (f referenceSAMLIdPFixture) signedPOSTResponse(t *testing.T, input referenc
 	assertionOpen := fmt.Sprintf(`<a:Assertion xmlns:a="urn:oasis:names:tc:SAML:2.0:assertion" ID="%s" IssueInstant="%s" Version="2.0">`, escape(input.AssertionID), issued)
 	subject := `<a:Subject><a:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">` + escape(input.NameID) + `</a:NameID>` +
 		`<a:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">` +
-		fmt.Sprintf(`<a:SubjectConfirmationData InResponseTo="%s" NotOnOrAfter="%s" Recipient="%s"></a:SubjectConfirmationData>`, escape(input.RequestID), confirmationExpiry, escape(input.ACS)) +
+		fmt.Sprintf(`<a:SubjectConfirmationData%s NotOnOrAfter="%s" Recipient="%s"></a:SubjectConfirmationData>`, correlation, confirmationExpiry, escape(input.ACS)) +
 		`</a:SubjectConfirmation></a:Subject>`
 	conditions := fmt.Sprintf(`<a:Conditions NotBefore="%s" NotOnOrAfter="%s"><a:AudienceRestriction><a:Audience>%s</a:Audience></a:AudienceRestriction></a:Conditions>`, issued, assertionExpiry, escape(input.Audience))
 	authentication := fmt.Sprintf(`<a:AuthnStatement AuthnInstant="%s" SessionIndex="%s">`, issued, escape(input.AssertionID)) +
@@ -97,7 +118,7 @@ func (f referenceSAMLIdPFixture) signedPOSTResponse(t *testing.T, input referenc
 	assertionSignature := f.signXML(t, input.AssertionID, assertionOpen+issuer+assertionContent)
 	assertion := assertionOpen + issuer + assertionSignature + assertionContent
 
-	responseOpen := fmt.Sprintf(`<p:Response xmlns:p="urn:oasis:names:tc:SAML:2.0:protocol" Destination="%s" ID="%s" InResponseTo="%s" IssueInstant="%s" Version="2.0">`, escape(input.ACS), escape(input.ResponseID), escape(input.RequestID), issued)
+	responseOpen := fmt.Sprintf(`<p:Response xmlns:p="urn:oasis:names:tc:SAML:2.0:protocol" Destination="%s" ID="%s"%s IssueInstant="%s" Version="2.0">`, escape(input.ACS), escape(input.ResponseID), correlation, issued)
 	responseIssuer := `<a:Issuer xmlns:a="urn:oasis:names:tc:SAML:2.0:assertion">` + escape(input.Issuer) + `</a:Issuer>`
 	status := `<p:Status><p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"></p:StatusCode></p:Status>`
 	responseContent := status + assertion + `</p:Response>`
