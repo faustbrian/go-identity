@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+- Admit one configured IdP Origin on each selected SAML POST ACS path, with no
+  Fetch CORS grants and no preflight handling.
+
 - Bind SAML browser login and assertion consumer routes only for explicitly
-  installed provider IDs while keeping canonical OpenAPI path templates.
+  installed provider IDs while keeping canonical OpenAPI path templates. The
+  exact selected routes may document 303 as their protocol success response.
 
 - Select the original stored session synchronizer for exact device approval
   and denial, without an origin-only fallback or an invented token age.

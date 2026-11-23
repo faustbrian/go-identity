@@ -70,6 +70,33 @@ func TestDocumentedEnterpriseCallbackAdvertisesItsActualRedirect(t *testing.T) {
 	}
 }
 
+func TestDocumentedSAMLRedirectAdviceIsNarrow(t *testing.T) {
+	for _, action := range []struct{ id, path string }{
+		{"identity.sso.saml-start", "/saml2/{provider_id}/login"},
+		{"identity.sso.saml-acs", "/saml2/{provider_id}/acs"},
+	} {
+		for _, status := range []string{"303", "302"} {
+			t.Run(action.id+"/"+status, func(t *testing.T) {
+				const owner = "sso/saml"
+				op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: owner, OperationID: action.id,
+					ProviderPathIDs: []string{"installed"}, Handler: http.NotFoundHandler(), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin,
+						RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 8192})
+				if err != nil {
+					t.Fatal(err)
+				}
+				op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"` + action.id + `","parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string"}}],"responses":{"` + status + `":{"description":"Original redirect"}}}`)}
+				_, doc, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "SAML", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{feature(t, owner, nil, op)}})
+				if status == "303" && (err != nil || !bytes.Contains(doc.JSON(), []byte(action.path))) {
+					t.Fatal("exact selected SAML 303 did not document", err)
+				}
+				if status != "303" && err == nil {
+					t.Fatal("accepted another redirect as a SAML success equivalent")
+				}
+			})
+		}
+	}
+}
+
 func TestDocumentedSelectionExportsRealProbeWire(t *testing.T) {
 	checks := 0
 	f, err := identityhttp.NewProbeFeature(identityhttp.ProbeConfig{State: func() identityhttp.ServerState { return identityhttp.ServerRunning }, Timeout: time.Second, Readiness: identityhttp.ReadinessProvider{Check: func(context.Context) (identityhttp.ReadinessSnapshot, error) {

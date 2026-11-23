@@ -93,14 +93,15 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	if !uniqueOperations(operations) || len(policy.CORS) > 1024 {
 		return nil, OpenAPIDocument{}, ErrInvalidInput
 	}
-	selected := make(map[string]bool, len(operations))
+	selected := make(map[string]string, len(operations))
 	for _, op := range operations {
 		for _, path := range dispatchPaths(op) {
-			selected[op.Route.Method+" "+path] = true
+			selected[op.Route.Method+" "+path] = op.Record.OperationID
 		}
 	}
 	for _, route := range policy.CORS {
-		if !selected[route.Method+" "+route.Path] {
+		operationID, exists := selected[route.Method+" "+route.Path]
+		if !exists || (operationID == "identity.sso.saml-acs") != (route.Credentials == CORSSAMLPostNavigation) {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
 		}
 	}

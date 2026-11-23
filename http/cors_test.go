@@ -121,6 +121,72 @@ func TestCORSPreflightStopsBeforeHandler(t *testing.T) {
 	}
 }
 
+func TestSAMLPostNavigationRequiresExactOriginAndNeverGrantsCORS(t *testing.T) {
+	const path = "/saml2/installed/acs"
+	const idp = "https://idp.example"
+	cfg := corsConfig(t)
+	cfg.Routes = []identityhttp.CORSRoutePolicy{{Method: http.MethodPost, Path: path,
+		Credentials: identityhttp.CORSSAMLPostNavigation, Origins: []identityhttp.Origin{idp}}}
+	calls := 0
+	h, err := identityhttp.NewCORSHandler(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Access-Control-Allow-Origin", idp)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Location", "/complete")
+		w.WriteHeader(http.StatusSeeOther)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Routes[0].Origins[0] = "https://other.example"
+	for _, tc := range []struct {
+		name, method, path, origin string
+		preflight                  bool
+		status                     int
+	}{
+		{"configured form navigation", "POST", path, idp, false, 303},
+		{"preflight", "OPTIONS", path, idp, true, 403},
+		{"foreign origin", "POST", path, "https://other.example", false, 403},
+		{"unconfigured same origin", "POST", path, "https://login.example", false, 403},
+		{"missing origin", "POST", path, "", false, 403},
+		{"wrong method", "GET", path, idp, false, 403},
+		{"other provider", "POST", "/saml2/other/acs", idp, false, 403},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := corsRequest(tc.method, tc.path, tc.origin)
+			if tc.preflight {
+				r.Header.Set("Access-Control-Request-Method", "POST")
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			headers := w.Result().Header
+			if w.Code != tc.status || (headers.Get("Location") != "") != (tc.status == 303) {
+				t.Fatalf("unexpected navigation response: got %d want %d", w.Code, tc.status)
+			}
+			assertCORSGrants(t, headers, "", "", "")
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("only the configured POST may reach the handler; got %d calls", calls)
+	}
+	for _, mutate := range []func(*identityhttp.CORSRoutePolicy){
+		func(p *identityhttp.CORSRoutePolicy) { p.Method = "GET" },
+		func(p *identityhttp.CORSRoutePolicy) { p.Path = "/another/post" },
+		func(p *identityhttp.CORSRoutePolicy) { p.Origins = nil },
+		func(p *identityhttp.CORSRoutePolicy) { p.Origins = []identityhttp.Origin{idp, "https://other.example"} },
+		func(p *identityhttp.CORSRoutePolicy) { p.AllowedHeaders = []string{"Content-Type"} },
+		func(p *identityhttp.CORSRoutePolicy) { p.ExposedHeaders = []string{"Location"} },
+		func(p *identityhttp.CORSRoutePolicy) { p.MaxAge = time.Second },
+	} {
+		policy := cfg.Routes[0]
+		mutate(&policy)
+		invalid := identityhttp.CORSConfig{Network: cfg.Network, Routes: []identityhttp.CORSRoutePolicy{policy}}
+		if _, err := identityhttp.NewCORSHandler(invalid, http.NotFoundHandler()); !errors.Is(err, identityhttp.ErrInvalidInput) {
+			t.Fatal("navigation policy accepted non-SAML path or CORS grants")
+		}
+	}
+}
+
 func TestCORSDenialRemovesLocationAliases(t *testing.T) {
 	h, err := identityhttp.NewCORSHandler(corsConfig(t), http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("denial invoked handler") }))
 	if err != nil {

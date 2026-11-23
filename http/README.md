@@ -702,6 +702,13 @@ network facts itself, never using cached/caller-submitted facts or arbitrary Hos
 It passes the original borrowed request to `next`, using a detached bounded
 header map only for the existing generic Fetch CORS engine.
 
+SAML's HTTP-POST binding is a navigation, not script access. Select
+`CORSSAMLPostNavigation` for the canonical POST ACS and one exact configured
+IdP origin, with no request headers, exposed headers, or max age in the policy.
+The router rejects preflight, missing or different origins, and CORS grant
+modes on the selected ACS. The SAML feature still owns cookie and assertion
+verification.
+
 Response controls remove all case aliases of downstream CORS grants and restore
 only the approved snapshot before ordinary status/write/flush/ReaderFrom paths
 and after header-only return. Vary preserves initial and downstream dimensions

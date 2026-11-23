@@ -130,7 +130,7 @@ func documentedOperations(ctx context.Context, config DocumentConfig, ops []Oper
 		return nil, OpenAPIDocument{}, err
 	}
 	paths, schemas, security := map[string]any{}, map[string]any{}, map[string]any{}
-	callbackRedirects := make(map[string]bool, 2)
+	protocolRedirects := make(map[string]bool, 5)
 	for _, op := range ops {
 		if op.Wire == nil {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
@@ -140,9 +140,9 @@ func documentedOperations(ctx context.Context, config DocumentConfig, ops []Oper
 			return nil, OpenAPIDocument{}, ErrInvalidInput
 		}
 		definition["x-identity-policy"] = map[string]any{"operation": op.Record.OperationID, "owner": op.Record.HandlerOwner, "access": op.Record.Access, "rate": op.Record.RatePolicy, "idempotency": op.Record.Idempotency}
-		if location := oauthCallbackResponsesLocation(op); location != "" {
+		if location := protocolRedirectResponsesLocation(op); location != "" {
 			responses, _ := definition["responses"].(map[string]any)
-			_, callbackRedirects[location] = responses["303"].(map[string]any)
+			_, protocolRedirects[location] = responses["303"].(map[string]any)
 		}
 		path, ok := paths[op.Route.Path].(map[string]any)
 		if !ok {
@@ -208,11 +208,9 @@ func documentedOperations(ctx context.Context, config DocumentConfig, ops []Oper
 		return nil, OpenAPIDocument{}, wireError(ctx)
 	}
 	for _, diagnostic := range report.Diagnostics() {
-		// OAS 3.1.1 Responses Object permits every HTTP status. This callback's
-		// successful outcome is the RFC 9110 section 15.4.4 redirect, not a 2xx
-		// body. Only its exact generic 2xx advice is
-		// inapplicable when the actual selected wire declares that 303.
-		redirectAdvice := callbackRedirects[diagnostic.InstanceLocation] && diagnostic.Code == "openapi.responses.success.missing"
+		// OAS 3.1.1 permits 303 as the successful response. Ignore the generic
+		// 2xx advice only for these exact protocol routes when they declare 303.
+		redirectAdvice := protocolRedirects[diagnostic.InstanceLocation] && diagnostic.Code == "openapi.responses.success.missing"
 		if diagnostic.Severity != validate.SeverityWarning || diagnostic.Code != "openapi.operation-id.nonportable" && !redirectAdvice {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
 		}
@@ -226,11 +224,14 @@ func documentedOperations(ctx context.Context, config DocumentConfig, ops []Oper
 	return handler, OpenAPIDocument{data: data, operations: ops, coverage: documentCoverage(ops)}, nil
 }
 
-func oauthCallbackResponsesLocation(op OperationDescriptor) string {
-	if op.Route.Method != http.MethodGet {
-		return ""
-	}
+func protocolRedirectResponsesLocation(op OperationDescriptor) string {
 	switch {
+	case op.Record.OperationID == "identity.sso.saml-acs" && op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/acs":
+		return "/paths/~1saml2~1{provider_id}~1acs/post/responses"
+	case op.Route.Method != http.MethodGet:
+		return ""
+	case op.Record.OperationID == "identity.sso.saml-start" && op.Route.Path == "/saml2/{provider_id}/login":
+		return "/paths/~1saml2~1{provider_id}~1login/get/responses"
 	case op.Record.OperationID == "identity.oauth.callback" && op.Route.Path == "/v1/oauth/callback":
 		return "/paths/~1v1~1oauth~1callback/get/responses"
 	case op.Record.OperationID == "identity.sso.oidc-callback" && op.Route.Path == "/sso/oidc/callback":

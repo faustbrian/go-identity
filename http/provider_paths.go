@@ -28,12 +28,25 @@ func validProviderPaths(op OperationDescriptor) bool {
 	}
 	seen := make(map[string]bool, len(op.ProviderPathIDs))
 	for _, id := range op.ProviderPathIDs {
-		if !ascii(id, 128, false) || !validPath("/"+id) || strings.ContainsAny(id, "/{}") || url.PathEscape(id) != id || seen[id] {
+		if !validProviderPathID(id) || seen[id] {
 			return false
 		}
 		seen[id] = true
 	}
 	return true
+}
+
+func validProviderPathID(id string) bool {
+	return ascii(id, 128, false) && validPath("/"+id) && !strings.ContainsAny(id, "/{}") && url.PathEscape(id) == id
+}
+
+func validSAMLACSPath(path string) bool {
+	providerAndEndpoint, ok := strings.CutPrefix(path, "/saml2/")
+	if !ok {
+		return false
+	}
+	provider, ok := strings.CutSuffix(providerAndEndpoint, "/acs")
+	return ok && validProviderPathID(provider)
 }
 
 func dispatchPaths(op OperationDescriptor) []string {

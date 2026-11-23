@@ -25,6 +25,10 @@ const (
 	// CORSBearerCredentials never grants ambient credentials and forces no-store,
 	// including ordinary requests without Origin. Bearer acquisition is separate.
 	CORSBearerCredentials
+	// CORSSAMLPostNavigation admits a SAML HTTP-POST binding from one exact
+	// IdP Origin. It never grants script access or handles preflight. Cookie
+	// correlation and assertion verification belong to the ACS handler.
+	CORSSAMLPostNavigation
 )
 
 // CORSRoutePolicy binds one exact method/path to copied CORS policy. Methods
@@ -35,6 +39,8 @@ const (
 // Header lists contain <=64 distinct case-insensitive HTTP tokens, each <=128
 // bytes, with no wildcard; exposed Set-Cookie/Set-Cookie2 are forbidden. MaxAge
 // is whole seconds in [0,24h]. No implicit header, method or credential grant.
+// SAML navigation requires one Origin, a concrete POST ACS path, and empty
+// header/exposure and MaxAge settings.
 type CORSRoutePolicy struct {
 	Method, Path   string
 	Credentials    CORSCredentialMode
@@ -54,10 +60,11 @@ type CORSConfig struct {
 }
 
 type corsRoute struct {
-	origins map[Origin]struct{}
-	headers map[string]struct{}
-	bearer  bool
-	wrap    func(http.Handler) http.Handler
+	origins    map[Origin]struct{}
+	headers    map[string]struct{}
+	bearer     bool
+	navigation bool
+	wrap       func(http.Handler) http.Handler
 }
 
 type corsHandler struct {
@@ -92,14 +99,18 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 	}
 	h := &corsHandler{network: config.Network, next: next, routes: make(map[string]corsRoute, len(config.Routes))}
 	for _, policy := range config.Routes {
-		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSBearerCredentials || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
+		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSSAMLPostNavigation || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
 			return nil, ErrInvalidInput
 		}
 		key := policy.Method + " " + policy.Path
 		if _, duplicate := h.routes[key]; duplicate {
 			return nil, ErrInvalidInput
 		}
-		route := corsRoute{bearer: policy.Credentials == CORSBearerCredentials}
+		route := corsRoute{bearer: policy.Credentials == CORSBearerCredentials, navigation: policy.Credentials == CORSSAMLPostNavigation}
+		if route.navigation && (policy.Method != http.MethodPost || !validSAMLACSPath(policy.Path) || len(policy.Origins) != 1 ||
+			len(policy.AllowedHeaders) != 0 || len(policy.ExposedHeaders) != 0 || policy.MaxAge != 0) {
+			return nil, ErrInvalidInput
+		}
 		if len(policy.Origins) == 0 {
 			if len(policy.AllowedHeaders) != 0 || len(policy.ExposedHeaders) != 0 || policy.MaxAge != 0 {
 				return nil, ErrInvalidInput
@@ -112,6 +123,10 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 			return nil, err
 		}
 		route.origins = guard.origins
+		if route.navigation {
+			h.routes[key] = route
+			continue
+		}
 		route.headers, err = corsHeaderSet(policy.AllowedHeaders, false)
 		if err != nil {
 			return nil, err
@@ -201,7 +216,12 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	route, selected := h.routes[selectedMethod+" "+r.URL.Path]
 	_, allowed := route.origins[Origin(origin)]
-	if preflight {
+	if route.navigation {
+		if preflight || !originPresent || !allowed {
+			deny(http.StatusForbidden)
+			return
+		}
+	} else if preflight {
 		if !selected || !allowed || !corsRequestedHeaders(requestedHeaders, headersPresent, route.headers) {
 			deny(http.StatusForbidden)
 			return
@@ -214,7 +234,7 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		deny(http.StatusRequestTimeout)
 		return
 	}
-	if !originPresent || !allowed {
+	if route.navigation || !originPresent || !allowed {
 		serveCORSCustody(h.next, w, r, nil, required, route.bearer)
 		return
 	}
