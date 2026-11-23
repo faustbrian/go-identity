@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Map the exact SAML browser start GET to one server-owned original command.
+  An optional retry key can alias that command but cannot select another;
+  existing keyed, canonical POST and canonical DELETE custody are unchanged.
+
 - Select a distinct SP-initiated SAML start with its original browser-scoped
   capability and forward-only terminal preparation erasure.
 

@@ -636,6 +636,9 @@ func TestRequestKeyIntegration(t *testing.T) {
 	})
 	t.Run("canonical DELETE custody", func(t *testing.T) {
 		testCanonicalRequests(t, ctx, db, pool, conf, policy, requestKeys)
+		t.Run("SAML start expands populated custody", func(t *testing.T) {
+			testCanonicalSAMLStartRequests(t, ctx, db, pool, conf, policy, requestKeys)
+		})
 	})
 }
 

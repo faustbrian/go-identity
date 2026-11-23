@@ -34,6 +34,16 @@ func NewCoordinatorWithCanonicalPostRequestKeys(pool *database.Pool, registry *C
 	return newCoordinatorWithCanonicalRequestMethod(pool, registry, config, requestKeys, "POST")
 }
 
+// NewCoordinatorWithCanonicalSSOSAMLStartRequestKeys correlates only the
+// service-owned SAML browser start GET. The feature supplies the stable
+// server-owned selector; an optional client key aliases that same original
+// command. Use a distinct namespace and install
+// CanonicalSAMLStartRequestMigrationSource before enabling this profile.
+// Construction performs no I/O or callback; the pool remains borrowed.
+func NewCoordinatorWithCanonicalSSOSAMLStartRequestKeys(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig) (*Coordinator, error) {
+	return newCoordinatorWithCanonicalRequestMethod(pool, registry, config, requestKeys, "GET")
+}
+
 func newCoordinatorWithCanonicalRequestMethod(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig, method string) (*Coordinator, error) {
 	c, err := NewCoordinatorWithRequestKeys(pool, registry, config, requestKeys)
 	if err != nil {
@@ -50,21 +60,23 @@ func (c *Coordinator) requestNamespaceIdentity() [32]byte {
 		namespace = "canonical-delete-v1\x00" + namespace
 	case "POST":
 		namespace = "canonical-post-v1\x00" + namespace
+	case "GET":
+		namespace = "canonical-sso-saml-start-v1\x00" + namespace
 	}
 	return requestNamespaceIdentity(namespace, c.requestKeys.lookupKey())
 }
 
 func (c *Coordinator) acceptsRequestKeyMethod(method string, canonical bool) bool {
 	if c.canonicalRequestMethod == "" {
-		return !canonical
+		return !canonical && method != "GET"
 	}
 	return canonical && c.canonicalRequestMethod == method
 }
 
 // ResolvePreparedCanonicalRequest retains one original random command and
-// authenticated native input for the stable protocol selector. DELETE supports
-// an optional retry key; POST requires nil. A supplied DELETE key is an alias to the
-// original mapping, attached in its acknowledgement transaction; it never
+// authenticated native input for the stable protocol selector. DELETE and the
+// exact SAML start GET support an optional retry key; POST requires nil. A
+// supplied key aliases the original mapping in its acknowledgement transaction; it never
 // selects another command. An alias already bound elsewhere conflicts and rolls
 // back any candidate mapping. Changed full intent conflicts, including after
 // fingerprint rotation unless its original key remains retained.
@@ -119,7 +131,7 @@ func (c *Coordinator) canonicalRequestLookups(scope RequestKeyScope, selector Ca
 	if c == nil || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || !validRequestKeyScope(scope) || !c.acceptsRequestKeyMethod(scope.Method, true) {
 		return [32]byte{}, nil, invalidRequestKey()
 	}
-	if optional != nil && scope.Method != "DELETE" {
+	if optional != nil && scope.Method != "DELETE" && scope.Method != "GET" {
 		return [32]byte{}, nil, invalidRequestKey()
 	}
 	key := c.requestKeys.lookupKey()

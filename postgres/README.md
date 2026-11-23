@@ -1741,6 +1741,15 @@ POST and canonical DELETE keep their original behavior and namespace identities.
 Canonical POST requires a separate trusted namespace. Keep its lookup key
 stable and retain historical fingerprint keys for original retries.
 
+For SP-initiated SAML browser start, select
+`NewCoordinatorWithCanonicalSSOSAMLStartRequestKeys` with a separate trusted
+namespace and install `CanonicalSAMLStartRequestMigrationSource` after the
+canonical alias migration. The exact native SAML contributor derives the
+selector from the authorized original browser flow and selected provider.
+A client retry key, if supplied, aliases the same command; it does not select
+another command or replace browser possession. The migration reserves two
+versions and preserves all existing request mappings and aliases.
+
 Compose `RequestKeyMigrationSource{Base, Version}` after kernel history and use
 `NewCoordinatorWithRequestKeys` with a separate `RequestKeyConfig`. Existing
 `CoordinatorConfig` and `NewCoordinator` remain unchanged; the ordinary

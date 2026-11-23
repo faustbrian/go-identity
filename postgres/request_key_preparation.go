@@ -93,6 +93,13 @@ func (c *Coordinator) validateRequestPreparation(scope RequestKeyScope, feature 
 	if c == nil || c.registry == nil || scope.RouteID != feature.Operation.OperationID {
 		return invalidRequestKey()
 	}
+	if scope.Method == "GET" {
+		operation := SSOSAMLSigninStartOperation()
+		descriptor, _ := ssoEnterpriseStartProfile(operation)
+		if feature.Operation != operation || feature.Contributor != descriptor {
+			return invalidRequestKey()
+		}
+	}
 	entry, err := c.registry.selectFeatureOperation(feature)
 	if err != nil || !sameParticipant(entry.contributor, owner) {
 		return invalidRequestKey()

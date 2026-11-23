@@ -63,7 +63,8 @@ func (RequestKeyConfig) LogValue() slog.Value {
 
 // RequestKeyScope is the exact lookup scope, independent of body, target user,
 // purpose, expected versions and all other intent. Actor includes its closed
-// authorization kind. Method is POST, PUT, PATCH or DELETE, without normalization;
+// authorization kind. Method is POST, PUT, PATCH or DELETE, without
+// normalization. Only the dedicated canonical SAML start admits GET.
 // RouteID is the trusted canonical route identifier (not a URL or raw path).
 // IDs are 1..128 bounded UTF-8 bytes without controls/space. Trusted feature/HTTP
 // composition selects method/route; direct callers must use that same mapping.
@@ -293,6 +294,9 @@ func validRequestKeyScope(s RequestKeyScope) bool {
 	}
 	if s.ActorKind != authorization.SubjectUser && s.ActorKind != authorization.SubjectAPIKey && s.ActorKind != authorization.SubjectServiceAccount {
 		return false
+	}
+	if s.RouteID == SSOSAMLSigninStartOperation().OperationID {
+		return s.Method == "GET" && s.ActorKind == authorization.SubjectServiceAccount
 	}
 	switch s.Method {
 	case "POST", "PUT", "PATCH", "DELETE":
