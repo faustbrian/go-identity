@@ -113,6 +113,9 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	if op.OperationID == ssoOIDCLogoutPurpose {
 		return op == SSOOIDCLogoutOperation() && d == SSOOIDCLogoutDescriptor()
 	}
+	if op.OperationID == ssoOIDCLogoutCompletePurpose {
+		return op == SSOOIDCLogoutCompleteOperation() && d == SSOOIDCLogoutCompleteDescriptor()
+	}
 	// A SCIM schema alias must not skip its mandatory kernel creation effect.
 	if op.OperationID == "identity.scim.user-create" {
 		return op == scimUserCreationOperation() && d == scimUserCreationDescriptor()

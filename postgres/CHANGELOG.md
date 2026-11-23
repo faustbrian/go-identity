@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select the separate native enterprise OIDC logout-completion contributor with
+  its exact user-targeted, record-required schema. Completion uses the existing
+  coordinator lifecycle without widening logout-start or session authority.
+
 - Select the native enterprise OIDC logout-start contributor and require the
   original self-user session transition before taking linked-account locks.
   Ordinary single-session revocation retains its separate admission profile.

@@ -8,6 +8,7 @@ import (
 )
 
 const ssoOIDCLogoutPurpose = "identity.sso.oidc-logout"
+const ssoOIDCLogoutCompletePurpose = "identity.sso.oidc-logout-complete"
 
 // SSOOIDCLogoutOperation selects the authenticated enterprise OIDC logout
 // start. The command targets the original local session, not the provider or
@@ -21,6 +22,23 @@ func SSOOIDCLogoutOperation() identity.FeatureOperation {
 // Scope checks also require the coordinator's exact active instance.
 func SSOOIDCLogoutDescriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-logout", Version: 1}
+}
+
+// SSOOIDCLogoutCompleteOperation selects enterprise OIDC logout completion.
+// Its trusted service actor targets the original user and logout transaction
+// selected by sealed callback state, never an inbound issuer or session cookie.
+// The SSO owner must validate and consume that state; this declaration grants
+// no session, credential or provider authority.
+func SSOOIDCLogoutCompleteOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "sso/oidc", OperationID: ssoOIDCLogoutCompletePurpose,
+		SchemaID: "sso-enterprise-oidc-logout-complete-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+// SSOOIDCLogoutCompleteDescriptor identifies the native SSO completion owner,
+// separately from logout start. It grants no execution or state-consumption
+// authority; the coordinator selects the exact registered participant.
+func SSOOIDCLogoutCompleteDescriptor() ContributorDescriptor {
+	return ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-logout-complete", Version: 1}
 }
 
 // RequireSSOOIDCLogoutScope admits the exact native logout start invocation and
