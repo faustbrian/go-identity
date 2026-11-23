@@ -292,6 +292,7 @@ type signupGraphExtensions struct {
 	enterpriseOAuth2            bool
 	enterpriseOAuth2Upgrade     bool
 	enterpriseSAML              bool
+	enterpriseSAMLIDP           bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -742,6 +743,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var enterpriseSAMLIdP referenceSAMLIdPFixture
 	if extensions.enterpriseSAML {
 		enterpriseSAMLIdP = configureReferenceEnterpriseSAML(t, &c, origin)
+		if extensions.enterpriseSAMLIDP {
+			c.EnterpriseSAML.IDPInitiated = &reference.EnterpriseSAMLIDPConfiguration{
+				MaximumAge: time.Minute, CurrentConfirmationKey: 1, ConfirmationKeys: map[uint32][32]byte{1: {0xd4}},
+			}
+		}
 	}
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
@@ -1675,6 +1681,9 @@ END $$`); err != nil {
 	} else if seen["identity.sso.saml-metadata"] {
 		t.Fatal("unselected SAML metadata route advertised")
 	}
+	if seen["identity.sso.saml-idp-init"] {
+		t.Fatal("installing native history implicitly advertised IdP-initiated HTTP")
+	}
 	if c.HTTPMFAList != nil {
 		wantOperations++
 		if !seen["identity.mfa.list"] {
@@ -1886,9 +1895,26 @@ END $$`); err != nil {
 		selected := provisionReferenceEnterpriseSAML(t, ctx, c, deps, client, origin, enterpriseSAMLIdP)
 		c.EnterpriseSAML.Profile.OrganizationID, c.EnterpriseSAML.Profile.ProviderID = selected.organization, selected.provider
 		proveReferenceSAMLIDPAdmission(t, ctx, c, deps, enterpriseSAMLIdP)
+		if extensions.enterpriseSAMLIDP {
+			c.HTTPEnterpriseSAML.IDPInitiated = true
+		}
 		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)
+		if extensions.enterpriseSAMLIDP {
+			proveReferenceEnterpriseSAMLIDPJourney(t, ctx, client, origin, features, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP)
+			c.HTTPEnterpriseSAML.IDPInitiated = false
+			disabled, _ := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
+			if readiness := disabled.Readiness(ctx); !readiness.Ready {
+				t.Fatal("disabling IdP HTTP selection made the installed SP profile unready", readiness.Failures)
+			}
+			for _, operation := range disabled.OpenAPI().Operations() {
+				if operation.Record.OperationID == "identity.sso.saml-idp-init" {
+					t.Fatal("disabling IdP HTTP selection left its route advertised")
+				}
+			}
+			return
+		}
 		proveReferenceEnterpriseSAMLJourney(t, ctx, client, origin, features, deps, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP)
 		c.HTTPEnterpriseSAML = nil
 		nativeOnly, _ := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)

@@ -291,7 +291,25 @@ Set `HTTPEnterpriseSAML.Metadata` to expose `GET /saml2/{provider_id}/metadata`
 for this installed profile. The anonymous HTTPS response is uncached, uses the
 shared safe-read quota and includes the exact SP entity, default POST ACS and
 current public SP signing certificate. Login and ACS still work with metadata
-turned off. This profile does not expose IdP-initiated login, JIT or SLO.
+turned off.
+
+To prepare unsolicited sign-in for that exact installed provider, configure
+`EnterpriseSAML.IDPInitiated` with a bounded `MaximumAge`, a dedicated 32-byte
+`ConfirmationKeys` keyring and its `CurrentConfirmationKey` version. Supply
+independently generated material and retain old keys until pending
+confirmations under those versions expire. Apply the selected forward
+migration plan first, then set `HTTPEnterpriseSAML.IDPInitiated` to expose the
+route. To turn off the route, clear the HTTP option and keep the native
+configuration and installed history. When metadata is also selected,
+`/saml2/{provider_id}/idp-init` appears as a separate non-default HTTP-POST ACS,
+without replacing `/acs`.
+
+The IdP posts only its signed `SAMLResponse` to `/idp-init`. No SP transaction
+or RelayState is required. The arrival sets short-lived confirmation custody,
+not a session. The user submits the confirmation page from the same origin
+and browser; only then does Reference atomically settle replay custody and
+issue the ordinary session and CSRF cookies. The selected profile supports
+existing linked members and does not include optional RelayState, JIT, or SLO.
 
 ## Optional enterprise OIDC provider logout
 

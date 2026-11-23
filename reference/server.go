@@ -178,7 +178,7 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	}
 	if samlFeature != nil {
 		contributions = append(contributions, *samlFeature)
-		c.HTTP.CORS = append(slices.Clone(c.HTTP.CORS), samlNavigation)
+		c.HTTP.CORS = append(slices.Clone(c.HTTP.CORS), samlNavigation...)
 	}
 	oauthFeature, err := server.oauthWorkloadFeature(c.HTTP.Network)
 	if err != nil {

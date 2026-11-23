@@ -12,14 +12,14 @@ import (
 	"github.com/faustbrian/go-sso/saml"
 )
 
-func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*identityhttp.Feature, identityhttp.CORSRoutePolicy, error) {
+func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*identityhttp.Feature, []identityhttp.CORSRoutePolicy, error) {
 	f := s.state.features
 	n := f.enterpriseSAML
 	if n == nil || n.http == nil {
-		return nil, identityhttp.CORSRoutePolicy{}, nil
+		return nil, nil, nil
 	}
 	if n.preauth == nil || f.session == nil || s.state.httpRate == nil {
-		return nil, identityhttp.CORSRoutePolicy{}, identity.InvalidInputError{Field: "reference_http_enterprise_saml"}
+		return nil, nil, identity.InvalidInputError{Field: "reference_http_enterprise_saml"}
 	}
 	h := n.http
 	owner := enterpriseSAMLHTTP{native: n}
@@ -32,20 +32,35 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 	var err error
 	if h.Metadata {
 		if n.metadata == nil || f.httpSession == nil || !f.httpSession.rate.Configured() {
-			return nil, identityhttp.CORSRoutePolicy{}, identity.InvalidInputError{Field: "reference_http_enterprise_saml_metadata"}
+			return nil, nil, identity.InvalidInputError{Field: "reference_http_enterprise_saml_metadata"}
 		}
 		feature, err = ssohttp.NewSAMLSigninFeatureWithMetadata(c, f.httpSession.rate, owner)
 	} else {
 		feature, err = ssohttp.NewSAMLSigninFeature(c)
 	}
 	if err != nil {
-		return nil, identityhttp.CORSRoutePolicy{}, err
+		return nil, nil, err
+	}
+	navigation := []identityhttp.CORSRoutePolicy{c.ACSNavigationPolicy()}
+	if n.idp != nil {
+		config := ssohttp.SAMLIDPSigninConfig{Network: network, TenantID: n.tenant, Origin: c.Origin, IdentityProviderOrigin: h.IdentityProviderOrigin,
+			ProviderID: c.ProviderID, SuccessCallback: h.SuccessCallback, Audience: n.audience, Cookie: c.Cookie, CSRFCookie: h.CSRFCookie,
+			Rate: c.Rate, Now: c.Now, MaximumDuration: n.duration, Owner: owner}
+		op, err := ssohttp.NewSAMLIDPInitiatedOperation(config)
+		if err != nil {
+			return nil, nil, err
+		}
+		feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: feature.ID(), Operations: append(feature.Operations(), op)})
+		if err != nil {
+			return nil, nil, err
+		}
+		navigation = append(navigation, config.NavigationPolicy())
 	}
 	guarded, err := s.guardEnterpriseFeatures([]identityhttp.Feature{feature})
 	if err != nil {
-		return nil, identityhttp.CORSRoutePolicy{}, err
+		return nil, nil, err
 	}
-	return &guarded[0], c.ACSNavigationPolicy(), nil
+	return &guarded[0], navigation, nil
 }
 
 type enterpriseSAMLHTTP struct{ native *enterpriseSAMLState }
@@ -58,8 +73,13 @@ func (a enterpriseSAMLHTTP) ReadSAMLMetadata(ctx context.Context, tenant identit
 	if err != nil {
 		return ssohttp.SAMLMetadataDocument{}, err
 	}
-	document, err := saml.ExportSPMetadata(saml.SPMetadataConfig{EntityID: installed.EntityID,
-		AssertionConsumerURL: installed.AssertionConsumerURL, SigningCertificates: [][]byte{installed.SigningCertificate}})
+	config := saml.SPMetadataConfig{EntityID: installed.EntityID, AssertionConsumerURL: installed.AssertionConsumerURL,
+		SigningCertificates: [][]byte{installed.SigningCertificate}}
+	exportMetadata := saml.ExportSPMetadata
+	if a.native.idp != nil {
+		exportMetadata = saml.ExportSPMetadataWithIDPInitiatedACS
+	}
+	document, err := exportMetadata(config)
 	if err != nil || ctx.Err() != nil {
 		return ssohttp.SAMLMetadataDocument{}, sso.ErrUnavailable
 	}

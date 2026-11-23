@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose opt-in IdP-initiated SAML sign-in for a linked member. Keep signed
+  arrival and browser confirmation separate, and issue the ordinary session
+  only after native confirmation and replay settlement.
+
 - Verify real signed IdP-initiated SAML evidence against current PostgreSQL
   trust without selecting an HTTP route or issuing a session.
 

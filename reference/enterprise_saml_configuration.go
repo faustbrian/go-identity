@@ -33,6 +33,9 @@ type EnterpriseSAMLConfiguration struct {
 	Profile    ssopg.StaticSAMLLoginProfile
 	Completion ssopg.ProviderSAMLLoginCompletionConfig
 	ClockSkew  time.Duration
+	// IDPInitiated selects forward storage for unsolicited sign-in. Keep it
+	// selected after applying the migrations, even when HTTP exposure is off.
+	IDPInitiated *EnterpriseSAMLIDPConfiguration
 }
 
 func (EnterpriseSAMLConfiguration) Format(s fmt.State, _ rune) {
@@ -59,12 +62,36 @@ type HTTPEnterpriseSAMLConfiguration struct {
 	Lifetime                       session.LifetimeConfig
 	// Metadata opts into an anonymous read of the installed public SP metadata.
 	Metadata bool
+	// IDPInitiated opts into the linked-user unsolicited POST route. It requires
+	// the corresponding native configuration and applied migrations.
+	IDPInitiated bool
+}
+
+// EnterpriseSAMLIDPConfiguration selects a signed assertion age limit and a
+// dedicated versioned keyring for confirmation commitments. Retain versions
+// needed by in-flight confirmations until their original deadlines expire.
+type EnterpriseSAMLIDPConfiguration struct {
+	MaximumAge             time.Duration
+	CurrentConfirmationKey uint32
+	ConfirmationKeys       map[uint32][32]byte
+}
+
+func (EnterpriseSAMLIDPConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "reference.EnterpriseSAMLIDPConfiguration(redacted)")
+}
+func (EnterpriseSAMLIDPConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+func (EnterpriseSAMLIDPConfiguration) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
 }
 
 type enterpriseSAMLState struct {
 	start            *ssopg.ProviderLoginService
 	completion       *ssopg.ProviderSAMLLoginCompletionService
 	metadata         *ssopg.ProviderSAMLMetadataService
+	idp              *enterpriseSAMLIDPState
+	idpStorage       bool
 	profile          ssopg.StaticSAMLLoginProfile
 	preauth          *session.PreAuthIssuer
 	http             *HTTPEnterpriseSAMLConfiguration
@@ -101,7 +128,8 @@ func validateEnterpriseSAMLSelection(c StoreConfiguration) error {
 	if c.HTTPRate == nil || c.HTTPSession == nil || c.HTTPSession.Transport != session.CredentialCookie ||
 		!slices.Contains(c.HTTPSession.TrustedOrigins, identityhttp.Origin(n.Login.Origin)) ||
 		uint64(h.FlowKeyIndex) >= uint64(len(n.Login.FlowKeys)) || h.FlowSignalKey == (session.DigestKey{}) ||
-		!slices.Contains(n.Login.CallbackAllowlist, h.SuccessCallback) || !slices.Contains(n.Login.CallbackAllowlist, h.ErrorCallback) {
+		!slices.Contains(n.Login.CallbackAllowlist, h.SuccessCallback) || !slices.Contains(n.Login.CallbackAllowlist, h.ErrorCallback) ||
+		h.IDPInitiated && n.IDPInitiated == nil {
 		return invalid
 	}
 	csrf, err := h.CSRFCookie.DeletionAttributes()
@@ -166,7 +194,7 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 	if err != nil {
 		return nil, err
 	}
-	state := &enterpriseSAMLState{start: start, completion: complete, profile: n.Profile, tenant: n.Login.TenantID,
+	state := &enterpriseSAMLState{start: start, completion: complete, profile: n.Profile, tenant: n.Login.TenantID, idpStorage: n.IDPInitiated != nil,
 		origin: n.Login.Origin, audience: n.Completion.Audience, sessionSchema: selected.Repository.Schema,
 		callbacks: slices.Clone(n.Login.CallbackAllowlist), duration: n.Login.Coordinator.MaximumDuration}
 	if c.HTTPEnterpriseSAML == nil {
@@ -194,6 +222,12 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 	}
 	if h.Metadata {
 		state.metadata, err = ssopg.NewProviderSAMLMetadataService(start, saml.SPSigningCertificate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if h.IDPInitiated {
+		state.idp, err = composeEnterpriseSAMLIDP(router, n, h)
 		if err != nil {
 			return nil, err
 		}

@@ -39,6 +39,11 @@ func (s StoreSet) enterpriseSAMLMigrationCatalog(ctx context.Context, catalog []
 		constraints: []string{"session_issuances.session_issuances_purpose_sso_saml_v1"}}); err != nil {
 		return nil, err
 	}
+	if f.enterpriseSAML.idpStorage {
+		if err := appendEnterpriseSAMLIDPMigrations(ctx, &providers, &sessions, schema); err != nil {
+			return nil, err
+		}
+	}
 
 	base := catalog[0].history
 	const aliasesVersion migrations.Version = 2451
@@ -56,4 +61,20 @@ func (s StoreSet) enterpriseSAMLMigrationCatalog(ctx context.Context, catalog []
 		requests.owners[migration.Version()] = "identity/postgres"
 	}
 	return append(catalog, providers, sessions, requests), nil
+}
+
+func appendEnterpriseSAMLIDPMigrations(ctx context.Context, providers, sessions *migrationHistory, sessionSchema string) error {
+	if err := appendEnterpriseMigration(ctx, providers, "sso/postgres", ssopg.SAMLIDPReplayMigrationSource{Version: 6, ValidationVersion: 7}, migrationGuard{
+		version: 6, schema: "sso_providers", constraints: []string{"saml_replay_members.saml_replay_members_callback_purpose_check"}, constraintValue: "identity.sso.saml-idp-init",
+	}); err != nil {
+		return err
+	}
+	if err := appendEnterpriseMigration(ctx, providers, "sso/postgres", ssopg.SAMLIDPConfirmationMigrationSource{Version: 8}, migrationGuard{
+		version: 8, schema: "sso_providers", tables: []string{"saml_idp_confirmations"},
+	}); err != nil {
+		return err
+	}
+	return appendEnterpriseMigration(ctx, sessions, "identity/session/postgres", sessionpg.SSOSAMLIDPSigninMigrationSource{
+		Schema: sessionSchema, Version: 3, ValidationVersion: 4,
+	}, migrationGuard{version: 3, schema: sessionSchema, constraints: []string{samlIDPSessionIssuanceConstraint}})
 }
