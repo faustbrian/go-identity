@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select a prospective SAML session independently of OIDC and OAuth 2.0.
+  Keep original callback and remember policy, and disclose only after a new
+  acknowledged session commit with the required CSRF synchronizer.
+
 - Add a dedicated SAML frontchannel issuer that binds original correlation to
   the exact HTTPS ACS and delivers its separate cookie only on a new commit.
 

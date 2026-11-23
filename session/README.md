@@ -29,6 +29,13 @@ OIDC, social and generic issuance cannot read or execute that request. The same
 commit, replay and Remember rules apply. This does not supply a native session
 writer or reader by itself.
 
+`NewSSOSAMLSessionIssuerWithCSRF` selects the distinct `sso-saml` method and
+binds only the original SP-initiated ACS command. The native executor must
+authenticate the frontchannel correlation, reserve both signed replay IDs,
+and commit the selected linked-account session with those effects. The
+session cookie uses the normal cookie policy, not the cross-site correlation
+policy. Replay and unknown outcomes reveal neither credential nor synchronizer.
+
 ## Explicit password-bearer issuance
 
 `NewPasswordBearerSessionIssuer` uses the same prospective password preparation,

@@ -54,6 +54,7 @@ const (
 	noEnterpriseSession enterpriseSessionProtocol = iota
 	enterpriseOIDCSession
 	enterpriseOAuth2Session
+	enterpriseSAMLSession
 )
 
 func (p enterpriseSessionProtocol) selection() (identity.FeatureOperation, string) {
@@ -62,6 +63,8 @@ func (p enterpriseSessionProtocol) selection() (identity.FeatureOperation, strin
 		return identity.FeatureOperation{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", SchemaID: "sso-enterprise-oidc-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, "sso-oidc"
 	case enterpriseOAuth2Session:
 		return identity.FeatureOperation{Owner: "sso/oauth2", OperationID: "identity.sso.oauth-callback", SchemaID: "sso-enterprise-oauth2-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, "sso-oauth2"
+	case enterpriseSAMLSession:
+		return identity.FeatureOperation{Owner: "sso/saml", OperationID: "identity.sso.saml-acs", SchemaID: "sso-enterprise-saml-acs-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, "sso-saml"
 	default:
 		return identity.FeatureOperation{}, ""
 	}
