@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into device authorization, session-bound consent, and the device grant
+  on the single shared token route. Keep device and workload IP budgets
+  separate and document only the selected grant and cookie contracts.
+
 - Add independently selected confidential-workload token, owning-client
   introspection and revocation HTTP features with strict Basic/form custody,
   canonical shared rate admission, typed router/OpenAPI composition and

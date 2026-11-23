@@ -1,4 +1,4 @@
-# Opt-in workload OAuth HTTP
+# Opt-in workload and device OAuth HTTP
 
 Go 1.27 development profile. This optional module connects the public native
 OAuth service to the existing identity HTTP router. It owns transport and
@@ -31,6 +31,29 @@ Pass the returned feature to `identityhttp.NewOperationDescriptors`, then
 owns raw header/read/write/shutdown limits. Handlers and borrowed dependencies
 must remain alive until serving is drained; this feature starts no goroutines
 and does not close their stores.
+
+## Device authorization
+
+Use `NewFeaturesWithDevice` to select the native device service and normal
+session cookie. Pass both returned contributions to the router. Without this
+constructor, the existing workload profile exposes no device operations.
+`FeatureConfig.Token` still independently controls the workload grant.
+
+- `POST /oauth2/device_authorization` accepts native public-client or Basic
+  custody. The native owner issues and retains the device and user codes.
+- `GET /v1/oauth-server/device-inspect` projects only the current consent
+  prompt. Approval and denial are POSTs on the corresponding
+  `/v1/oauth-server/device-approve` and `/v1/oauth-server/device-deny` paths.
+  They require the genuine recent session, exact Origin, and its original
+  CSRF token. Approval requires the separately confirmed user code.
+  Repeated denial exposes no original command identifier.
+- `POST /oauth2/token` selects the exact device grant without registering a
+  second token route. Device polling has a distinct transport IP budget;
+  the native owner still enforces the device's own polling interval and
+  issues credentials only after acknowledged commitment.
+
+These handlers are backend routes. They neither render a consent UI nor
+bootstrap a Reference server or a native device store.
 
 ## Credentials, rate and outcomes
 

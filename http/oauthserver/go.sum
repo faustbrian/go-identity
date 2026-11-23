@@ -20,8 +20,8 @@ github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0 h1:9
 github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0/go.mod h1:Js70Ed9P2OFoP6fWMgJvzPb29O+sauJo687HIMK/ApU=
 github.com/faustbrian/go-identity v0.0.0-20261021074754-2eafc2592af0 h1:iO7vithgLFJNvTtUpFsJyZ96QPCGFfNpSKJGtvpNkI0=
 github.com/faustbrian/go-identity v0.0.0-20261021074754-2eafc2592af0/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
-github.com/faustbrian/go-identity/http v0.0.0-20261029134808-263bb625f20b h1:vXXYHFoShmsEzO1nOXPoAksfyW8/7YLBaQdOcNuBdWw=
-github.com/faustbrian/go-identity/http v0.0.0-20261029134808-263bb625f20b/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261123075224-813192c47fcb h1:OCyOJYpJdV37X8+i+wrfP00WkQo+qc1/NYtIpCtTqX0=
+github.com/faustbrian/go-identity/http v0.0.0-20261123075224-813192c47fcb/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/session v0.0.0-20261016125355-af740fb7fb76 h1:OcdRDyR/8DyxVDrQXmXNnmu8PULsfBOmUYA8CwpeQOw=
 github.com/faustbrian/go-identity/session v0.0.0-20261016125355-af740fb7fb76/go.mod h1:NBreLFQkvdM4rXtArd++mg7h4abmowUHB5rqnWc7vSQ=
 github.com/faustbrian/go-json-schema/v2 v2.0.0 h1:88kzwDCcP8Xo3SaDyUzc6oWtl83id9P6uY/gjgyQ/74=
@@ -30,6 +30,8 @@ github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEW
 github.com/faustbrian/go-jsonrpc v1.1.1/go.mod h1:thOSBE3KGGNbPHY/OcreIcDPwusQ273v61n6TlmJdxE=
 github.com/faustbrian/go-oauth-server v0.0.0-20261101021712-d442ceeccf14 h1:lM0RpEejjLUXSABEt8S/Rfi+bZccC4cOCgD+hbe//7g=
 github.com/faustbrian/go-oauth-server v0.0.0-20261101021712-d442ceeccf14/go.mod h1:BEWGKsMbTZljFS5ELmVgC5akTyt3SRYQYWQIe7+yRVk=
+github.com/faustbrian/go-oauth-server/device v0.0.0-20261109235233-d58912788557 h1:Z/o6/bGoCDLqLReSJDH9zzjnn/+TRSfqB2X0a4vjsao=
+github.com/faustbrian/go-oauth-server/device v0.0.0-20261109235233-d58912788557/go.mod h1:LnZF60y+g1e0FBhKL9mKphKBx5G1RKlGsLot5E1CjbE=
 github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820 h1:/5nveXXAZ0rYYsxG8uJbQDxkC9rse6kIEOeq2yGr2C8=
 github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820/go.mod h1:BpEy2DPz/YR5C9gcBcKAxkG4fO+jo6WLwjNDy075MYY=
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff h1:8BIB469appqyn79T6j/sJQAS3dN6+budadfpPLwtqIg=

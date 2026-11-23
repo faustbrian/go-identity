@@ -13,6 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	oauth "github.com/faustbrian/go-oauth-server"
+	"github.com/faustbrian/go-oauth-server/device"
 )
 
 type protocolInput struct {
@@ -20,6 +21,7 @@ type protocolInput struct {
 	client     string
 	credential oauth.ClientAuthentication
 	token      oauth.TokenRequest
+	devicePoll *device.TokenExchange
 	inspect    oauth.IntrospectRequest
 	revoke     oauth.RevokeRequest
 }
@@ -94,7 +96,14 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_, _ = w.Write(body)
 }
 
-func newHandler(c FeatureConfig, action, issuer string, network *identityhttp.NetworkResolver, decoder *identityhttp.RequestDecoder, rate *protocolRate) (http.Handler, error) {
+func newHandlerWithDevice(c FeatureConfig, action, issuer string, network *identityhttp.NetworkResolver, decoder *identityhttp.RequestDecoder, rate *protocolRate, deviceService *device.Service) (http.Handler, error) {
+	rejectInput := reject
+	if deviceService != nil {
+		if action != "token" || !deviceService.Enabled() || deviceService.Metadata().TokenEndpoint != issuer+"/oauth2/token" {
+			return nil, identityhttp.ErrInvalidInput
+		}
+		rejectInput = rejectDevice
+	}
 	return identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[*protocolInput]{MaximumDuration: c.MaximumDuration,
 		Decode: func(r *http.Request) (*protocolInput, error) {
 			if r == nil || r.URL == nil || r.URL.Path != "/oauth2/"+action || r.URL.RawPath != "" {
@@ -113,21 +122,51 @@ func newHandler(c FeatureConfig, action, issuer string, network *identityhttp.Ne
 			if err != nil || facts.Scheme() != "https" || facts.Origin() != issuer {
 				return nil, protocolFailure{status: 421, code: "invalid_request"}
 			}
-			if retry, err := rate.admitIP(r.Context(), facts, action); err != nil {
-				return nil, rateFailure(retry, err)
+			if deviceService == nil {
+				if retry, err := rate.admitIP(r.Context(), facts, action); err != nil {
+					return nil, rateFailure(retry, err)
+				}
 			}
-			fields, err := decoder.Form(r)
-			if err != nil {
+			fields, formErr := decoder.Form(r)
+			devicePoll := deviceService != nil && formErr == nil && fields.Get("grant_type") == device.GrantType
+			if deviceService != nil {
+				// A shared path does not share rate budgets between grants.
+				// Decode the bounded form once to select the exact IP bucket;
+				// native device polling independently enforces its own interval.
+				var retry time.Duration
+				if devicePoll {
+					retry, err = rate.admit(r.Context(), rate.tokenIP, "device-poll-ip", facts.ClientIP().String())
+				} else {
+					retry, err = rate.admitIP(r.Context(), facts, action)
+				}
+				if err != nil {
+					return nil, rateFailure(retry, err)
+				}
+			}
+			if formErr != nil {
 				return nil, oauth.ErrInvalidRequest
 			}
 			var headers []string
+			var authorizationHeaders int
 			for name, values := range r.Header {
 				if strings.EqualFold(name, "Proxy-Authorization") {
 					return nil, oauth.ErrInvalidRequest
 				}
 				if strings.EqualFold(name, "Authorization") {
+					authorizationHeaders++
 					headers = append(headers, values...)
 				}
+			}
+			if devicePoll {
+				if authorizationHeaders > 1 || authorizationHeaders == 1 && len(headers) == 0 {
+					return nil, device.ErrInvalidRequest
+				}
+				exchange, err := device.ParseTokenExchange(fields.Encode(), headers)
+				if err != nil {
+					return nil, err
+				}
+				exchange.Network = facts.ClientIP().String()
+				return &protocolInput{facts: facts, devicePoll: &exchange}, nil
 			}
 			if len(headers) != 1 {
 				return nil, oauth.ErrInvalidClient
@@ -136,6 +175,9 @@ func newHandler(c FeatureConfig, action, issuer string, network *identityhttp.Ne
 			raw := fields.Encode()
 			switch action {
 			case "token":
+				if !c.Token {
+					return nil, oauth.ErrUnsupportedGrant
+				}
 				in.token, err = oauth.ParseTokenFormWithClientAuthentication(raw, headers)
 				if err == nil && in.token.GrantType != oauth.ClientCredentialsGrant {
 					return nil, oauth.ErrUnsupportedGrant
@@ -159,6 +201,11 @@ func newHandler(c FeatureConfig, action, issuer string, network *identityhttp.Ne
 			return in, nil
 		},
 		Authenticate: func(r *http.Request, in *protocolInput) (*protocolInput, error) {
+			if in.devicePoll != nil {
+				// Poll reauthenticates the exact device client and atomically
+				// enforces native per-device polling policy in its own use case.
+				return in, nil
+			}
 			if err := c.Service.AuthenticateClient(r.Context(), in.client, in.credential); err != nil {
 				if errors.Is(err, oauth.ErrInvalidRequest) || errors.Is(err, oauth.ErrAccessDenied) {
 					err = oauth.ErrInvalidClient
@@ -168,6 +215,9 @@ func newHandler(c FeatureConfig, action, issuer string, network *identityhttp.Ne
 			return in, nil
 		},
 		Admit: func(r *http.Request, in *protocolInput) error {
+			if in.devicePoll != nil {
+				return r.Context().Err()
+			}
 			retry, err := rate.admitClient(r.Context(), in.facts, action, in.client)
 			if err != nil {
 				return rateFailure(retry, err)
@@ -177,6 +227,11 @@ func newHandler(c FeatureConfig, action, issuer string, network *identityhttp.Ne
 		Handle: func(w http.ResponseWriter, r *http.Request, in *protocolInput) {
 			switch action {
 			case "token":
+				if in.devicePoll != nil {
+					out, err := deviceService.Poll(r.Context(), *in.devicePoll)
+					writeDevicePoll(w, r, c.Now(), out, err)
+					return
+				}
 				out, err := c.Service.Token(r.Context(), in.token)
 				if err != nil {
 					reject(w, r, err)
@@ -221,5 +276,5 @@ func newHandler(c FeatureConfig, action, issuer string, network *identityhttp.Ne
 				w.Header().Set("Pragma", "no-cache")
 				w.WriteHeader(200)
 			}
-		}, Reject: reject})
+		}, Reject: rejectInput})
 }
