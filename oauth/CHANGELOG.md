@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Allow callers to request the exact scopes bound to a stored OAuth2 refresh
+  token explicitly. Existing refresh calls still omit scope on the wire.
+
 - Add an explicitly selected shared-issuer OAuth2 refresh adapter, including
   string-subject profiles, using the existing scoped refresh engine and exact
   original profile/token custody. Preserve original grant scopes and explicit

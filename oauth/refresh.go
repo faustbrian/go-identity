@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -32,8 +33,8 @@ const (
 
 // RefreshResult owns provider-token custody only, with no identity or session
 // proof. Destroy Tokens after bounded encryption/use, including native failure.
-// RequestedScopes preserves original refresh-grant scopes; GrantedScopes applies
-// to the new access token and may be narrower without changing refresh authority.
+// RequestedScopes preserves the custody's selected scopes; GrantedScopes applies
+// to the new access token. Neither proves that refresh-token authority narrowed.
 type RefreshResult struct {
 	Tokens   TokenSet
 	Rotation RefreshRotation
@@ -108,7 +109,24 @@ func (*OAuth2RefreshProvider) Format(s fmt.State, _ rune) {
 // RefreshGrantRejected is definitive invalid_grant, Refused another coherent
 // refusal, and Unknown preserves any possible rotation after an ambiguous attempt.
 // No error authorizes automatic retry. Nil context/adapter/custody is invalid.
+// It omits wire scope; custody must therefore retain the original grant scopes,
+// not narrowed access-token scopes (RFC 6749 section 6).
 func (p *OAuth2RefreshProvider) Refresh(ctx context.Context, input RefreshToken) (result RefreshResult, err error) {
+	return p.refresh(ctx, input, "")
+}
+
+// RefreshWithExplicitScope has the same admission, lifetime, one-attempt and
+// outcome contract as Refresh, but sends exactly the immutable custody scopes
+// as the space-delimited scope parameter. An omitted response scope denotes
+// that explicit selection, allowing native custody to retain narrowed effective
+// access without restoring the original grant's broader access-token scope.
+// RFC 6749 section 6 keeps any replacement refresh token's original grant scope;
+// this method neither changes nor proves a narrowing of that grant authority.
+func (p *OAuth2RefreshProvider) RefreshWithExplicitScope(ctx context.Context, input RefreshToken) (RefreshResult, error) {
+	return p.refresh(ctx, input, strings.Join(input.scopes, " "))
+}
+
+func (p *OAuth2RefreshProvider) refresh(ctx context.Context, input RefreshToken, explicitScope string) (result RefreshResult, err error) {
 	if ctx == nil || p == nil || p.provider == nil || input.owner == nil {
 		return result, failure(InvalidInput, ctx)
 	}
@@ -142,18 +160,22 @@ func (p *OAuth2RefreshProvider) Refresh(ctx context.Context, input RefreshToken)
 		}
 	}()
 	err = input.use(ctx, func(token []byte) error {
-		result, err = provider.refreshTokens(ctx, token, secret, input.scopes, &attempted)
+		result, err = provider.refreshTokens(ctx, token, secret, input.scopes, explicitScope, &attempted)
 		return err
 	})
 	return result, err
 }
 
-func (p *OAuth2UserInfoProvider) refreshTokens(ctx context.Context, token, secret []byte, scopes []string, attempted *bool) (RefreshResult, error) {
+func (p *OAuth2UserInfoProvider) refreshTokens(ctx context.Context, token, secret []byte, scopes []string, explicitScope string, attempted *bool) (RefreshResult, error) {
 	c := p.config
-	// RFC6749 section6: omitting scope means the original grant, never current
-	// configured scopes. The response parser must use that same upper bound.
+	// RFC 6749 sections 5.1 and 6: omitted response scope means the request
+	// selection, or the original grant when request scope is absent. Neither
+	// path may infer scope from the provider's current configuration.
 	c.Scopes = scopes
 	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {string(token)}, "client_id": {c.ClientID}, "client_secret": {string(secret)}}
+	if explicitScope != "" {
+		form.Set("scope", explicitScope)
+	}
 	body := newTokenRequestBody([]byte(form.Encode()))
 	defer body.Close()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.TokenEndpoint, body)
