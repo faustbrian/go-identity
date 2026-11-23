@@ -178,6 +178,97 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 			}
 		}
 	})
+	t.Run("SAML frontchannel uses committed exact ACS custody", func(t *testing.T) {
+		front := config
+		front.Action = "identity.sso.saml-acs"
+		front.CallbackURL = "https://identity.test/saml2/_saml-provider/acs"
+		native, err := NewPreAuthIssueExecutor(pool, front)
+		if err != nil {
+			t.Fatal("construct exact native ACS executor", err)
+		}
+		var keyBytes [32]byte
+		if _, err := rand.Read(keyBytes[:]); err != nil {
+			t.Fatal(err)
+		}
+		key, err := session.NewDigestKey(8, keyBytes[:])
+		clear(keyBytes[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		issuerConfig := session.PreAuthIssuerConfig{
+			ActorID: front.ActorID, Action: front.Action, Origin: front.Origin, CallbackURL: front.CallbackURL,
+			PolicyID: front.PolicyID, PolicyVersion: front.PolicyVersion, Clock: front.Clock, MaximumDuration: 2 * time.Second,
+			FlowTTL: 5 * time.Minute, LookupKey: key, TokenSize: 32,
+		}
+		issuer, err := session.NewSAMLFrontchannelIssuer(native, issuerConfig)
+		if err != nil {
+			t.Fatal("construct ACS cookie issuer", err)
+		}
+		remember, err := session.ResolveRememberPolicy(session.PersistentSession, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
+		if err != nil {
+			t.Fatal(err)
+		}
+		commandID, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		prepared, err := issuer.Prepare(session.PreAuthPrepareInput{CommandID: commandID, TenantID: "issue", CorrelationID: "saml-frontchannel", Remember: remember})
+		if err != nil {
+			t.Fatal(err)
+		}
+		command, _ := prepared.Command()
+		committed, err := issuer.Issue(ctx, prepared)
+		if err != nil || committed.Replayed || committed.CommitOutcome != identity.CommitOutcomeCommitted {
+			t.Fatal("no committed native ACS cookie", err)
+		}
+		cookie := committed.Cookie
+		if cookie.Name != "__Secure-identity_frontchannel" || cookie.Path != "/saml2/_saml-provider/acs" || cookie.Value != "" || cookie.Domain != "" || !cookie.Secure || !cookie.HttpOnly || cookie.SameSite != http.SameSiteNoneMode || cookie.MaxAge < 1 || cookie.MaxAge > 300 {
+			t.Fatal("incorrect committed ACS cookie scope")
+		}
+		counts(t, command, 1, 1)
+		original, _ := command.Record.Bindings()
+		stored, err := ReadPreAuth(ctx, pool.Raw(), front.Repository, original.Binding.Intent.TenantID, original.Binding.ID)
+		if err != nil {
+			t.Fatal("fresh primary read could not load ACS flow", err)
+		}
+		durable, err := stored.Bindings()
+		if err != nil || durable != original || durable.Binding.Intent.CallbackURL != front.CallbackURL || durable.Binding.Intent.Remember != remember {
+			t.Fatal("durable ACS flow changed its original binding", err)
+		}
+		wire, err := committed.Token.Reveal()
+		if err != nil {
+			t.Fatal("missing committed browser credential", err)
+		}
+		token, err := session.ParseToken(wire)
+		if err != nil {
+			t.Fatal("invalid committed browser credential", err)
+		}
+		digest, err := token.PreAuthDigest(key, durable.Binding)
+		if err != nil || stored.Check(front.Clock.Now(), durable.Binding, digest) != nil {
+			t.Fatal("original correlation did not authenticate the original durable record", err)
+		}
+		wrongACS := durable.Binding
+		wrongACS.Intent.CallbackURL = "https://identity.test/saml2/another-provider/acs"
+		if stored.Check(front.Clock.Now(), wrongACS, digest) == nil {
+			t.Fatal("original correlation was accepted at another ACS")
+		}
+		restarted, err := NewPreAuthIssueExecutor(pool, front)
+		if err != nil {
+			t.Fatal("restart native ACS flow service", err)
+		}
+		fresh, err := session.NewSAMLFrontchannelIssuer(restarted, issuerConfig)
+		if err != nil {
+			t.Fatal("restart exact ACS cookie issuer", err)
+		}
+		recovered, err := fresh.Recover(ctx, command)
+		if err != nil || recovered.CommitOutcome != identity.CommitOutcomeCommitted || !recovered.Replayed || recovered.Flow != (session.PreAuthTransaction{}) || !reflect.DeepEqual(recovered.Cookie, http.Cookie{}) {
+			t.Fatal("restart returned more than the original committed outcome", err)
+		}
+		if _, err = recovered.Token.Reveal(); !errors.Is(err, session.ErrInvalidToken) {
+			t.Fatal("restart delivered a historical credential")
+		}
+		counts(t, command, 1, 1)
+	})
 	t.Run("sessionless phone recovery", func(t *testing.T) {
 		recoveryConfig := config
 		recoveryConfig.Action = "identity.phone.password-reset-request"
