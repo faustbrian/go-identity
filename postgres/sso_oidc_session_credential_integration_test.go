@@ -66,9 +66,16 @@ func TestSSOOIDCSessionCredentialRequiresActualCurrentAssociation(t *testing.T) 
 			work, _, _ := ssoOIDCSessionCredentialFixture()
 			work.state.ctx, work.state.tx, work.state.featureInvocation = ctx, tx, owner
 			workErr := work.RequireLinkedSSOOIDCProviderCredential(ctx, owner, expected)
+			logout, _, _ := ssoOIDCSessionCredentialFixture()
+			logoutOwner, op := &logoutScopeParticipant{}, SSOOIDCLogoutOperation()
+			logout.state.ctx, logout.state.tx, logout.state.featureInvocation = ctx, tx, logoutOwner
+			logout.state.subjectType = "session"
+			logout.state.binding.OperationID, logout.state.binding.SchemaID = op.OperationID, op.SchemaID
+			logout.state.feature = &FeatureRegistration{Operation: op, Contributor: logoutOwner.Descriptor()}
+			logoutErr := logout.RequireLinkedSSOOIDCLogoutCredential(ctx, logoutOwner, expected, b.RecordID, 7)
 			if tc.allowed {
-				if readErr != nil || workErr != nil {
-					t.Fatal("current SSO authority denied", readErr, workErr)
+				if readErr != nil || workErr != nil || logoutErr != nil {
+					t.Fatal("current SSO authority denied", readErr, workErr, logoutErr)
 				}
 				for _, sql := range []string{
 					`SELECT user_id FROM identity.users WHERE tenant_id=$1 AND user_id=$2 AND $3<>'' FOR UPDATE NOWAIT`,
@@ -93,6 +100,9 @@ func TestSSOOIDCSessionCredentialRequiresActualCurrentAssociation(t *testing.T) 
 				if err := work.RequireLinkedSSOOIDCProviderCredential(ctx, owner, expected); err != nil {
 					t.Fatal("final eligibility denied", err)
 				}
+				if err := logout.RequireLinkedSSOOIDCLogoutCredential(ctx, logoutOwner, expected, b.RecordID, 7); err != nil {
+					t.Fatal("final exact logout eligibility denied", err)
+				}
 				if _, err := tx.Exec(ctx, `UPDATE identity.credential_references SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3`, string(b.TenantID), string(b.UserID), string(expected.Credential.ID)); err != nil {
 					t.Fatal(err)
 				}
@@ -100,10 +110,13 @@ func TestSSOOIDCSessionCredentialRequiresActualCurrentAssociation(t *testing.T) 
 				if err := work.RequireLinkedSSOOIDCProviderCredential(ctx, owner, expected); !errors.As(err, &denied) || work.state.failed == nil {
 					t.Fatal("final check ignored newly expired original", err)
 				}
+				if err := logout.RequireLinkedSSOOIDCLogoutCredential(ctx, logoutOwner, expected, b.RecordID, 7); !errors.As(err, &denied) || logout.state.failed == nil {
+					t.Fatal("logout final check ignored newly expired original", err)
+				}
 			} else {
 				var denied identity.ForbiddenError
-				if !errors.As(readErr, &denied) || !errors.As(workErr, &denied) || !errors.As(work.usable(), &denied) {
-					t.Fatal("stale SSO authority admitted or denial ignored", readErr, workErr)
+				if !errors.As(readErr, &denied) || !errors.As(workErr, &denied) || !errors.As(work.usable(), &denied) || !errors.As(logoutErr, &denied) || !errors.As(logout.usable(), &denied) {
+					t.Fatal("stale SSO authority admitted or denial ignored", readErr, workErr, logoutErr)
 				}
 			}
 		})

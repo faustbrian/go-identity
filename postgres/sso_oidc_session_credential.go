@@ -88,6 +88,26 @@ func (w Work) RequireLinkedSSOOIDCProviderCredential(ctx context.Context, owner 
 	if feature.Operation != revokeOne || feature.Contributor != store || w.state.featurePreparationPlan != nil || life.EventType != "session.revoked.v1" || life.EventIndex != 0 || life.BeforeVersion == 0 || life.BeforeVersion == ^uint64(0) || life.AfterVersion != life.BeforeVersion+1 {
 		return w.fail(ctx, invalidWork())
 	}
+	return w.lockLinkedSSOOIDCCredential(ctx, owner, expected)
+}
+
+// RequireLinkedSSOOIDCLogoutCredential retains the original linked provider
+// credential and account only for the exact native self-logout session
+// transition. The caller must match the linked account to the selected
+// provider and independently fence the original session and organization.
+// The locks and expiry check create no fresh evidence or provider authority.
+func (w Work) RequireLinkedSSOOIDCLogoutCredential(ctx context.Context, owner FeatureExecutionContributor, expected CredentialAdmission, sessionID string, version uint64) error {
+	c := expected.Credential
+	if err := w.RequireSSOOIDCLogoutScope(ctx, owner, c.TenantID, c.UserID, sessionID, version); err != nil {
+		return err
+	}
+	if !validSSOOIDCSessionCredential(expected) {
+		return w.fail(ctx, invalidWork())
+	}
+	return w.lockLinkedSSOOIDCCredential(ctx, owner, expected)
+}
+
+func (w Work) lockLinkedSSOOIDCCredential(ctx context.Context, owner FeatureExecutionContributor, expected CredentialAdmission) error {
 	// Preserve the kernel's user/credential-before-account lock ordering.
 	if _, err := w.RequireActiveCredential(ctx, owner, expected); err != nil {
 		return err

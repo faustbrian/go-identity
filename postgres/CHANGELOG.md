@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select the native enterprise OIDC logout-start contributor and require the
+  original self-user session transition before taking linked-account locks.
+  Ordinary single-session revocation retains its separate admission profile.
+
 - Settle authenticated enterprise OAuth 2.0 callback refusals through the
   existing preparation transaction. Denial audit, native cleanup, original
   one-use reservation release and receipt remain atomic; uncertain exchanges
