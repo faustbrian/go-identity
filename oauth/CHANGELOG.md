@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicitly configured RFC7009 refresh-token revocation for ordinary and
+  shared-issuer OAuth2 profiles. Borrow existing original-token custody and
+  provider credentials for one bounded same-origin HTTPS POST; distinguish
+  HTTP200 acknowledgement from coherent refusal and unknown outcomes without
+  retrying, following redirects or inferring related-token/session effects.
+  Native admission, storage and recovery remain separate.
+
 - Add pure static OIDC authorization rendering from normalized secret-free
   profile facts and original state, nonce and S256 challenge, without opening
   credentials, consulting keys or starting a provider. Existing provider and
