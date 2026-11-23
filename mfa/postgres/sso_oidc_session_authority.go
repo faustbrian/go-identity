@@ -73,6 +73,36 @@ func RequireSSOOIDCSessionFactors(ctx context.Context, w kernel.Work, owner kern
 	return requireSSOSessionFactors(ctx, w, owner, spec, version)
 }
 
+// RequireSSOOIDCLogoutFactors locks the original known-empty factor generation
+// for the exact native enterprise OIDC logout-start session and version. Unlike
+// revoke-one admission, a same-user sibling session cannot supply this authority.
+// The session owner must independently fence session, directory, credential,
+// policy and organization authority in the same Work. Call in Apply and final
+// checks; every error must abort the coordinator. Locks remain with that sole
+// coordinator until commit or rollback. No factor, proof, session, refreshed
+// authority or transaction is created; returned Work retains no authority.
+func RequireSSOOIDCLogoutFactors(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session) error {
+	if ctx == nil {
+		return invalidAuthority()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	spec, version, err := ssoOIDCSessionFactors(record)
+	if err != nil {
+		return err
+	}
+	if err := w.RequireSSOOIDCLogoutScope(ctx, owner, spec.TenantID, spec.UserID, spec.SessionID, spec.Version); err != nil {
+		return err
+	}
+	binding, _, _, err := w.FeatureScope(owner)
+	if err != nil {
+		return err
+	}
+	_, err = readKnownEmptyFactors(ctx, w, binding, spec.UserID, version)
+	return err
+}
+
 func requireSSOSessionFactors(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, spec session.SessionSpec, version uint64) error {
 	binding, feature, life, err := w.FeatureScope(owner)
 	if err != nil || binding.ValidateFor(feature.Operation) != nil || binding.TenantID != spec.TenantID || binding.UserID != spec.UserID || binding.ActorKind != authorization.SubjectUser || string(binding.ActorID) != string(spec.UserID) || binding.AnonymousFlowID != "" {

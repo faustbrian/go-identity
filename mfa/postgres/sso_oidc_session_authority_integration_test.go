@@ -71,13 +71,26 @@ func TestReadSSOOIDCFactorsPostgres(t *testing.T) {
 // This narrow native participant observes the real coordinator and MFA row.
 // Session ownership, organization membership and OIDC verification stay with
 // their separate owners; this fixture does not claim complete logout proof.
-type ssoOIDCSessionFactorInvocation struct{ oauthSessionFactorInvocation }
+type ssoOIDCSessionFactorInvocation struct {
+	oauthSessionFactorInvocation
+	logout bool
+}
+
+func (p *ssoOIDCSessionFactorInvocation) Descriptor() kernel.ContributorDescriptor {
+	if p.op == kernel.SSOOIDCLogoutOperation() {
+		return kernel.SSOOIDCLogoutDescriptor()
+	}
+	return p.oauthSessionFactorInvocation.Descriptor()
+}
 
 func (p *ssoOIDCSessionFactorInvocation) checkSSO(ctx context.Context, w kernel.Work) error {
 	owner := p
 	if p.mode == "foreign-owner" {
 		copy := *p
 		owner = &copy
+	}
+	if p.logout {
+		return RequireSSOOIDCLogoutFactors(ctx, w, owner, p.record)
 	}
 	return RequireSSOOIDCSessionFactors(ctx, w, owner, p.record)
 }
@@ -109,13 +122,33 @@ func (p *ssoOIDCSessionFactorInvocation) CheckFeatureCommit(ctx context.Context,
 	if err := p.checkSSO(ctx, w); err != nil {
 		return err
 	}
+	locked, err := p.factorLocked(ctx)
+	if err != nil || !locked {
+		return identity.UnavailableError{}
+	}
 	p.final = true
 	return nil
 }
 
 func TestRequireSSOOIDCSessionFactorsPostgres(t *testing.T) {
+	testRequireSSOOIDCSessionFactorsPostgres(t, session.RevokeOneOperation())
+}
+
+func TestRequireSSOOIDCLogoutFactorsPostgres(t *testing.T) {
+	testRequireSSOOIDCSessionFactorsPostgres(t, kernel.SSOOIDCLogoutOperation())
+}
+
+func testRequireSSOOIDCSessionFactorsPostgres(t *testing.T, operation identity.FeatureOperation) {
+	t.Helper()
+	logout := operation == kernel.SSOOIDCLogoutOperation()
 	ctx, pool, repository := newOAuthSigninFactorStore(t)
-	for _, mode := range []string{"current-target", "current-caller", "missing", "enrolled", "advanced", "foreign-owner", "foreign-user", "foreign-tenant", "foreign-schema", "foreign-lifecycle", "original-version", "late-enrolled", "social-record"} {
+	modes := []string{"current-target", "current-caller", "missing", "enrolled", "advanced", "foreign-owner", "foreign-user", "foreign-tenant", "foreign-lifecycle", "original-version", "late-enrolled", "social-record"}
+	if logout {
+		modes = append(modes, "revoke-one-fallback")
+	} else {
+		modes = append(modes, "foreign-schema")
+	}
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			resetOAuthSessionFactors(t, ctx, pool, mode)
 			record := ssoOIDCFactorSession(t)
@@ -127,7 +160,10 @@ func TestRequireSSOOIDCSessionFactorsPostgres(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			op := session.RevokeOneOperation()
+			op := operation
+			if mode == "revoke-one-fallback" {
+				op = session.RevokeOneOperation()
+			}
 			life := kernel.LifecyclePlan{EventType: "session.revoked.v1", BeforeVersion: 1, AfterVersion: 2}
 			binding := identity.CommandBinding{CommandID: id, TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, RecordID: spec.SessionID, PolicyID: "policy", PolicyVersion: 1, CorrelationID: string(id)}
 			switch mode {
@@ -149,7 +185,7 @@ func TestRequireSSOOIDCSessionFactorsPostgres(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			owner := &ssoOIDCSessionFactorInvocation{oauthSessionFactorInvocation{op: op, record: record, pool: pool, mode: mode}}
+			owner := &ssoOIDCSessionFactorInvocation{oauthSessionFactorInvocation: oauthSessionFactorInvocation{op: op, record: record, pool: pool, mode: mode}, logout: logout}
 			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repository, &signupFactorAudit{}, &signupFactorOutbox{}, owner})
 			if err != nil {
 				t.Fatal(err)
@@ -173,7 +209,7 @@ func TestRequireSSOOIDCSessionFactorsPostgres(t *testing.T) {
 			declaration := kernel.CommandPlan{Contributors: registry.Descriptors(), SubjectType: "session", Feature: &kernel.FeatureRegistration{Contributor: owner.Descriptor(), Operation: op}, Lifecycle: &life, Audits: []kernel.AuditPlan{{EventType: op.OperationID, SchemaVersion: 1, BindingDigest: digest, RetentionClass: "protected", RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}}
 			plan, err := coordinator.PrepareCommandPlan(binding, command, declaration)
 			if err != nil {
-				t.Fatal("prepare exact revoke-one", err)
+				t.Fatal("prepare exact session transition", err)
 			}
 			reservation, _, err := coordinator.ReserveCommand(ctx, binding, command, plan)
 			if err != nil {
@@ -190,7 +226,7 @@ func TestRequireSSOOIDCSessionFactorsPostgres(t *testing.T) {
 			} else {
 				result, err = coordinator.Commit(work, result)
 			}
-			success := mode == "current-target" || mode == "current-caller"
+			success := mode == "current-target" || mode == "current-caller" && !logout
 			if success && (err != nil || result.Outcome != identity.CommitOutcomeCommitted || !owner.applied || !owner.final || !owner.locked) {
 				t.Fatal("original enterprise factor fence failed", result.Outcome, applyErr, err)
 			}
@@ -200,7 +236,7 @@ func TestRequireSSOOIDCSessionFactorsPostgres(t *testing.T) {
 			if mode == "late-enrolled" && !owner.applied {
 				t.Fatal("late-enrollment control never reached final check", applyErr)
 			}
-			if err := RequireSSOOIDCSessionFactors(ctx, owner.retained, owner, record); err == nil {
+			if err := owner.checkSSO(ctx, owner.retained); err == nil {
 				t.Fatal("returned Work retained enterprise factor authority")
 			}
 			var count int
@@ -213,6 +249,16 @@ func TestRequireSSOOIDCSessionFactorsPostgres(t *testing.T) {
 			}
 			if count != want {
 				t.Fatal("denied enterprise factor effects survived", count, want)
+			}
+			if mode == "late-enrolled" {
+				var version uint64
+				var active int
+				if err := pool.Raw().QueryRow(ctx, `SELECT version,active_factors FROM identity_mfa.factor_authorities WHERE tenant_id='tenant-a' AND user_id='user-a'`).Scan(&version, &active); err != nil {
+					t.Fatal(err)
+				}
+				if version != 1 || active != 0 {
+					t.Fatal("denied late enrollment survived rollback", version, active)
+				}
 			}
 		})
 	}

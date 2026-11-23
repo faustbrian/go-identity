@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence the original known-empty MFA generation during exact native enterprise
+  OIDC logout-start Apply and final checks. Require the original session ID and
+  version under the canonical logout owner; missing, enrolled or changed factor
+  authority denies without accepting revoke-one's sibling-session admission.
+
 - Add separate enterprise OAuth 2.0 known-empty factor guards for the exact
   existing-account callback, session reads and same-user revocation. Preserve
   the original generation and coordinator locks; missing, enrolled or stale

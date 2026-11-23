@@ -105,6 +105,9 @@ func TestSSOOIDCFactorsRejectUnownedInvocation(t *testing.T) {
 		if err := RequireSSOOIDCSessionFactors(ctx, kernel.Work{}, nil, record); err == nil {
 			t.Fatal("unowned revoke-one supplied session factor authority")
 		}
+		if err := RequireSSOOIDCLogoutFactors(ctx, kernel.Work{}, nil, record); err == nil {
+			t.Fatal("unowned logout-start supplied session factor authority")
+		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -113,5 +116,16 @@ func TestSSOOIDCFactorsRejectUnownedInvocation(t *testing.T) {
 	}
 	if err := RequireSSOOIDCSessionFactors(ctx, kernel.Work{}, nil, record); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled revoke-one lost cancellation", err)
+	}
+	if err := RequireSSOOIDCLogoutFactors(ctx, kernel.Work{}, nil, record); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancelled logout-start lost cancellation", err)
+	}
+}
+
+func TestSSOOIDCLogoutFactorsRejectInvalidSession(t *testing.T) {
+	for _, record := range []session.Session{{}, passkeyFactorSession(t)} {
+		if err := RequireSSOOIDCLogoutFactors(t.Context(), kernel.Work{}, nil, record); err == nil {
+			t.Fatal("invalid enterprise session supplied logout factor authority")
+		}
 	}
 }
