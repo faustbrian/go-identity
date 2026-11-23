@@ -50,7 +50,7 @@ func (RefreshResult) MarshalJSON() ([]byte, error) { return nil, failure(Invalid
 // MarshalText refuses accidental provider-token persistence.
 func (RefreshResult) MarshalText() ([]byte, error) { return nil, failure(InvalidInput, nil) }
 
-// OAuth2RefreshProvider explicitly selects the ordinary token-endpoint refresh
+// OAuth2RefreshProvider explicitly selects the token-endpoint refresh
 // capability without extending Provider or enabling existing provider defaults.
 // It borrows the immutable provider and its lifetime; keep that provider open
 // until admitted calls finish. Distinct admitted custody may be used concurrently.
@@ -73,6 +73,28 @@ func NewOAuth2RefreshProvider(provider *OAuth2UserInfoProvider) (*OAuth2RefreshP
 		return nil, failure(InvalidInput, nil)
 	}
 	return &OAuth2RefreshProvider{provider: provider}, nil
+}
+
+// NewSharedOAuth2RefreshProvider selects the same scoped refresh capability for
+// an existing shared-redirect issuer-bound OAuth2 provider, including its string-
+// subject profile. It preserves that provider's exact original profile and
+// borrows its credentials, transport and lifetime without I/O or a secret copy.
+// Native grant admission, storage and recovery remain the caller's responsibility.
+func NewSharedOAuth2RefreshProvider(provider *SharedOAuth2UserInfoProvider) (*OAuth2RefreshProvider, error) {
+	if provider == nil || provider.provider == nil {
+		return nil, failure(InvalidInput, nil)
+	}
+	borrowed := provider.provider
+	if borrowed.client == nil || borrowed.policy != "" || !sharedOAuth2UserInfoProfileValid(borrowed.profile) {
+		return nil, failure(InvalidInput, nil)
+	}
+	borrowed.mu.Lock()
+	closed := borrowed.closed
+	borrowed.mu.Unlock()
+	if closed {
+		return nil, failure(InvalidInput, nil)
+	}
+	return &OAuth2RefreshProvider{provider: borrowed}, nil
 }
 
 // Format redacts the borrowed provider and configuration.

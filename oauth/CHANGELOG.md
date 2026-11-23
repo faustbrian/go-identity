@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicitly selected shared-issuer OAuth2 refresh adapter, including
+  string-subject profiles, using the existing scoped refresh engine and exact
+  original profile/token custody. Preserve original grant scopes and explicit
+  rotation evidence without UserInfo, identity, storage or retry authority;
+  ordinary refresh selection and provider policies remain unchanged.
+
 - Add explicitly configured RFC7009 refresh-token revocation for ordinary and
   shared-issuer OAuth2 profiles. Borrow existing original-token custody and
   provider credentials for one bounded same-origin HTTPS POST; distinguish
