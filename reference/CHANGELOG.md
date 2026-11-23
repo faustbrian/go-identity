@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in OAuth device authorization to the PostgreSQL Reference password
+  graph. Install the native device history, then select the canonical HTTP
+  authorization, browser consent, and device token routes. Workload-only and
+  unselected password graphs retain their original routes and storage history.
+
 - Compose opt-in enterprise OIDC provider logout and cookie-free one-use
   return. Apply additive provider and session histories before exposure;
   ordinary session signout and previously installed histories stay unchanged.

@@ -100,7 +100,11 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if err != nil {
 		return nil, err
 	}
-	return s.enterpriseOAuth2MigrationCatalog(ctx, catalog)
+	catalog, err = s.enterpriseOAuth2MigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	return s.oauthDeviceMigrationCatalog(ctx, catalog)
 }
 
 func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory, error) {
@@ -144,7 +148,7 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 		}
 		catalog = append(catalog, migrationHistory{namespace: "identity_durable_admission", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/risk/postgres"}, guards: []migrationGuard{{version: 1, schema: s.state.config.Schema, tables: []string{"durable_counter_scopes", "durable_counter_keys", "durable_counter_windows", "durable_counter_aliases", "durable_counter_attempts"}}}})
 	}
-	if s.state.httpRate != nil {
+	if s.state.httpRate != nil || s.state.features != nil && s.state.features.oauthDevice != nil {
 		// Keep the native owner's version/SQL and an independent ledger. Enabling
 		// admission later must not rewrite an already-applied identity prefix.
 		native := ratepg.SchemaMigration()

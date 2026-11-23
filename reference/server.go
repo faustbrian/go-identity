@@ -178,6 +178,11 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if oauthFeature != nil {
 		contributions = append(contributions, *oauthFeature)
 	}
+	deviceFeatures, err := server.oauthDeviceFeatures(c.HTTP.Network)
+	if err != nil {
+		return nil, err
+	}
+	contributions = append(contributions, deviceFeatures...)
 	apiKeyFeature, err := server.apiKeyFeature(c.HTTP.Network)
 	if err != nil {
 		return nil, err

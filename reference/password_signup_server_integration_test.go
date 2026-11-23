@@ -282,6 +282,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 
 type signupGraphExtensions struct {
 	sessionCache                *referenceSessionCacheProof
+	oauthDevice                 bool
+	oauthDeviceBaseInstalled    bool
 	enterpriseOIDC              bool
 	enterpriseOIDCRoles         bool
 	enterpriseOIDCJIT           bool
@@ -537,6 +539,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	if extensions.oauthDevice {
+		selectedAuthorization = referenceDevicePolicy{}
+	}
 	var socialPolicy *referenceSocialOIDCPolicy
 	if extensions.socialOIDC || extensions.socialProviderRefresh != "" {
 		socialPolicy = &referenceSocialOIDCPolicy{}
@@ -715,6 +720,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Error("unexpected shared rate degradation")
 		return nil
 	}}
+	if extensions.oauthDevice {
+		configureReferenceDevice(t, &c, origin)
+	}
 	var enterpriseIssuer *referenceEnterpriseIssuer
 	var enterpriseLogoutRequests *atomic.Int32
 	if extensions.enterpriseOIDC {
@@ -1379,6 +1387,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.SocialOAuth != nil {
 		modules = append(modules, "identity/oauth/postgres")
 	}
+	if c.OAuthDevice != nil {
+		modules = append(modules, "oauth-server/postgres")
+	}
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
@@ -1416,7 +1427,13 @@ END $$`); err != nil {
 	if extensions.phoneRemoval == "independent-http" {
 		proveIndependentRemovalRateMigrations(t, ctx, f, c, deps, workerConfigs, modules)
 	}
+	if extensions.oauthDeviceBaseInstalled {
+		installReferenceDeviceBase(t, ctx, f.pool)
+	}
 	migrationRequest := applyRequest(t, ctx, stores, modules)
+	if extensions.oauthDeviceBaseInstalled {
+		assertReferenceDeviceSuffixPlan(t, migrationRequest.Plan)
+	}
 	if extensions.socialOIDCUnlink == "migration-resume" {
 		failUnlinkMigrationValidation(t, ctx, deps)
 	}
@@ -1474,6 +1491,9 @@ END $$`); err != nil {
 			t.Fatal("registration HTTP server", invalid.Field)
 		}
 		t.Fatal("registration HTTP server", err)
+	}
+	if extensions.oauthDevice {
+		proveReferenceDeviceWithoutHTTP(t, ctx, c, deps, config, workerConfigs)
 	}
 	seen := map[string]bool{}
 	for _, op := range server.OpenAPI().Operations() {
@@ -1778,6 +1798,11 @@ END $$`); err != nil {
 		{"identity.sso.oidc-logout", c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ProviderLogout},
 		{"identity.sso.oidc-logout-complete", c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ProviderLogout},
 		{"identity.sso.oauth-callback", c.HTTPEnterpriseOAuth2 != nil},
+		{"identity.oauth-server.device-authorize", c.HTTPOAuthDevice != nil},
+		{"identity.oauth-server.device-inspect", c.HTTPOAuthDevice != nil},
+		{"identity.oauth-server.device-approve", c.HTTPOAuthDevice != nil},
+		{"identity.oauth-server.device-deny", c.HTTPOAuthDevice != nil},
+		{"identity.oauth-server.token", c.HTTPOAuthDevice != nil},
 	} {
 		if selected.enabled {
 			wantOperations++
@@ -1967,6 +1992,9 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 	}
 	if r := server.Readiness(ctx); !r.Ready {
 		t.Fatal("selected native readiness", r.Failures)
+	}
+	if extensions.oauthDevice {
+		proveReferenceDeviceReadiness(t, ctx, server, f.pool)
 	}
 	if extensions.phoneOTP != "" {
 		const rename = `ALTER TABLE session_store.session_issuances RENAME CONSTRAINT session_issuances_purpose_phone_otp_v1 TO phone_otp_fixture_missing`
@@ -2566,6 +2594,14 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 	if proof := extensions.sessionCache; proof != nil {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
 			proof.prove(t, ctx, c, deps, stores, features, client, network.URL, origin, user, cookies, csrf, fresh)
+		}
+	}
+	if extensions.oauthDevice {
+		f.afterEmailSignin = func(ctx context.Context, _ identity.UserID, cookies []*http.Cookie, csrf string, _ func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
+			if !readSession(cookies) {
+				t.Fatal("device browser lacks a genuine active password session")
+			}
+			proveReferenceDeviceHTTP(t, ctx, client, network.URL, origin, cookies, csrf)
 		}
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)

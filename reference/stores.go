@@ -57,6 +57,10 @@ type StoreConfiguration struct {
 	OAuthWorkload *OAuthWorkloadConfiguration
 	// HTTPOAuthWorkload opts into only the selected workload protocol routes.
 	HTTPOAuthWorkload *HTTPOAuthWorkloadConfiguration
+	// OAuthDevice selects the native device profile over the password-session graph.
+	OAuthDevice *OAuthDeviceConfiguration
+	// HTTPOAuthDevice opts into the device and token routes independently of storage.
+	HTTPOAuthDevice *HTTPOAuthDeviceConfiguration
 	// APIKey selects native modern issuance and optional legacy human-owned keys.
 	APIKey *APIKeyConfiguration
 	// HTTPAPIKey independently selects strict-bearer management routes.
@@ -253,6 +257,9 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
+	if c.HTTPOAuthDevice != nil && c.OAuthDevice == nil {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_device"}
+	}
 	if c.APIKey != nil && (c.OTP == nil || c.Session == nil || c.PasswordSignin == nil) || c.HTTPAPIKey != nil && (c.APIKey == nil || c.HTTPRate == nil) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_api_key"}
 	}

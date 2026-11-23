@@ -306,6 +306,13 @@ current-authority checks and shutdown; consumers do not implement domain stores
 or handlers. No human login, OTP, delivery or device bootstrap is selected.
 See the [selected profile and operator walkthrough](OAUTH_WORKLOAD.md).
 
+## Optional OAuth device authorization
+
+The [device walkthrough](OAUTH_DEVICE.md) shows how to enable the native
+PostgreSQL profile and independently expose approval and token routes over the
+existing password-session backend. Reference supplies the handlers and stores;
+the application supplies the verification page, if needed.
+
 ## Optional API-key backend
 
 `HTTPAPIKey.Update` independently selects keyed name/permission replacement

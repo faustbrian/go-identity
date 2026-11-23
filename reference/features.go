@@ -90,6 +90,7 @@ type featureState struct {
 	enterpriseOIDC               *enterpriseOIDCState
 	enterpriseOAuth2             *enterpriseOAuth2State
 	oauthWorkload                *oauthWorkloadState
+	oauthDevice                  *oauthDeviceState
 	apiKey                       *apiKeyState
 	httpAPIKey                   *apiKeyHTTPState
 	organization                 *organizationState
@@ -173,6 +174,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.OAuthDevice != nil && (c.OAuthWorkload != nil || c.HTTPOAuthWorkload != nil || c.OTP == nil || c.Delivery == nil || c.Session == nil || c.PasswordSignin == nil || c.DurableAdmission == nil) {
+		return identity.InvalidInputError{Field: "reference_oauth_device"}
+	}
 	if err := validateEnterpriseOIDCSelection(c); err != nil {
 		return err
 	}
@@ -920,6 +924,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
+	oauthDevice, err := s.composeOAuthDevice(c, d, sessionOwner)
+	if err != nil {
+		return err
+	}
 	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	s.features.passwordSignup = passwordSignupOwner
 	s.features.username = usernameOwner
@@ -945,6 +953,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		s.features.verificationSessionLineage = c.PasswordSignup.VerificationSessionLineage
 	}
 	s.features.session = sessionOwner
+	s.features.oauthDevice = oauthDevice
 	s.features.socialOAuth = socialOAuthOwner
 	s.features.enterpriseOIDC = enterpriseOIDCOwner
 	s.features.enterpriseOAuth2 = enterpriseOAuth2Owner
@@ -1138,6 +1147,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); s.features.initializing = false; s.mu.Unlock() }()
 	if owner := s.features.oauthWorkload; owner != nil {
+		if err := owner.initialize(w); err != nil {
+			return err
+		}
+	}
+	if owner := s.features.oauthDevice; owner != nil {
 		if err := owner.initialize(w); err != nil {
 			return err
 		}

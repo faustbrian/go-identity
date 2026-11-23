@@ -21,14 +21,14 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
-	github.com/faustbrian/go-identity/http v0.0.0-20261123012807-3b0532c87636
+	github.com/faustbrian/go-identity/http v0.0.0-20261123075224-813192c47fcb
 	github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93
 	github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029135707-3291fee4a90f
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231
 	github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261025150519-83149c8dcdf6
 	github.com/faustbrian/go-identity/http/oauth v0.0.0-20261113042301-405ecb7dd9b1
-	github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261101041037-9379ea5895ca
+	github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1
 	github.com/faustbrian/go-identity/http/organization v0.0.0-20261027002442-b1f1fed03d25
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f
 	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261025150519-83149c8dcdf6
@@ -57,8 +57,9 @@ require (
 	github.com/faustbrian/go-identity/session/valkey v0.0.0-20261113101712-a0f7aabc4f38
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
-	github.com/faustbrian/go-oauth-server v0.0.0-20261101021712-d442ceeccf14
-	github.com/faustbrian/go-oauth-server/postgres v0.0.0-20261101073444-0a520d6e4aa7
+	github.com/faustbrian/go-oauth-server v0.0.0-20261109223900-44cb057fd13e
+	github.com/faustbrian/go-oauth-server/device v0.0.0-20261109235233-d58912788557
+	github.com/faustbrian/go-oauth-server/postgres v0.0.0-20261109235233-d58912788557
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
 	github.com/faustbrian/go-organization v0.0.0-20261122135635-30af6abd1547
 	github.com/faustbrian/go-organization/postgres v0.0.0-20261122154603-bcb59fce9eed

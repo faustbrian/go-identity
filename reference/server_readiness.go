@@ -105,6 +105,11 @@ func (s *Server) readiness(ctx context.Context) Readiness {
 			return deny("native_unavailable")
 		}
 	}
+	if owner := state.features.oauthDevice; owner != nil {
+		if err := owner.check(bounded); err != nil {
+			return deny("native_unavailable")
+		}
+	}
 	for _, tenant := range selected {
 		if err := tenant.health.check(bounded); err != nil {
 			return deny("native_unavailable")
