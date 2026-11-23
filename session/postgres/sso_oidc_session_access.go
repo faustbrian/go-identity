@@ -27,6 +27,10 @@ func validSSOSessionAdmission(profile IdentifierAdmissionConfig, authority Organ
 	return profile.valid() && profile.AuthenticationMethod == method && profile.CredentialKind == identity.CredentialProvider && profile.CredentialOwner == "sso" && !nilIssueDependency(authority)
 }
 
+func isEnterpriseSessionMethod(method string) bool {
+	return method == "sso-oidc" || method == "sso-oauth2" || method == "sso-saml"
+}
+
 // Format redacts deployment and borrowed authority details.
 func (SSOOIDCSessionAdmission) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("postgres.SSOOIDCSessionAdmission(redacted)"))

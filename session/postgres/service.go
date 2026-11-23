@@ -123,6 +123,7 @@ type primarySessionReader struct {
 	ssoOrganization            OrganizationSessionAuthority
 	ssoOIDCReader              *primarySessionReader
 	ssoOAuth2Reader            *primarySessionReader
+	ssoSAMLReader              *primarySessionReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -182,6 +183,12 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 			return session.SessionObservation{}, session.ErrUnauthenticated
 		}
 		return r.ssoOAuth2Reader.observeCredential(bounded, stored, start)
+	}
+	if spec.Authentication.Kind == session.AuthenticationVerified && spec.Authentication.Proof.Method == "sso-saml" {
+		if r.ssoSAMLReader == nil {
+			return session.SessionObservation{}, session.ErrUnauthenticated
+		}
+		return r.ssoSAMLReader.observeCredential(bounded, stored, start)
 	}
 	if r.organizationPasswordReader != nil && spec.Authentication.Kind == session.AuthenticationVerified && spec.Authentication.Proof.Method == "password" && stored.Session.MFAAuthentication() == (session.MFAAuthentication{}) {
 		return r.organizationPasswordReader.observeCredential(bounded, stored, start)
@@ -279,14 +286,21 @@ func (r *primarySessionReader) observeCredential(bounded context.Context, stored
 		}
 	}
 	if r.ssoOrganization != nil {
-		// Both selected protocol profiles share the SSO-owned account
+		// The selected protocol profiles share the SSO-owned account
 		// association. The stored method and factor fence remain distinct.
 		if err := r.domain.CheckLinkedSSOOIDCProviderCredential(bounded, credential); err != nil {
 			return session.SessionObservation{}, observationError(err)
 		}
-		readFactors := mfapg.ReadSSOOIDCSessionFactors
-		if r.profile.AuthenticationMethod == "sso-oauth2" {
+		var readFactors func(context.Context, *database.Pool, session.Session, time.Duration) error
+		switch r.profile.AuthenticationMethod {
+		case "sso-oidc":
+			readFactors = mfapg.ReadSSOOIDCSessionFactors
+		case "sso-oauth2":
 			readFactors = mfapg.ReadSSOOAuth2SessionFactors
+		case "sso-saml":
+			readFactors = mfapg.ReadSSOSAMLSessionFactors
+		default:
+			return session.SessionObservation{}, session.ErrUnauthenticated
 		}
 		if err := readFactors(bounded, r.native.pool, stored.Session, r.native.maximumDuration); err != nil {
 			return session.SessionObservation{}, observationError(err)

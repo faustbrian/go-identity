@@ -35,6 +35,7 @@ type ssoSessionAccessFixture struct {
 	profile      IdentifierAdmissionConfig
 	selection    SSOOIDCSessionAdmission
 	oauth2       SSOOAuth2SessionAdmission
+	saml         SSOSAMLSessionAdmission
 	repository   Config
 	validation   session.ServiceConfig
 	reader       *session.SessionService
@@ -47,7 +48,7 @@ type ssoSessionAccessFixture struct {
 
 func newSSOSessionAccessFixture(t *testing.T, method string) ssoSessionAccessFixture {
 	t.Helper()
-	if method != "sso-oidc" && method != "sso-oauth2" {
+	if method != "sso-oidc" && method != "sso-oauth2" && method != "sso-saml" {
 		t.Fatal("fixture requires an explicit enterprise authentication method")
 	}
 	ctx, pool, _ := anonymousSessionDatabase(t)
@@ -92,6 +93,13 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 CREATE TABLE public.sso_session_membership(tenant_id text NOT NULL,user_id text NOT NULL,organization_id text NOT NULL,authority_key text NOT NULL,version bigint NOT NULL CHECK(version>0),active boolean NOT NULL,PRIMARY KEY(tenant_id,user_id,organization_id));
 INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user','selected-org','organization:guest-tenant:selected-org',7,true)`); err != nil {
 		t.Fatal("real identity/factor/link and controlled membership rows", err)
+	}
+	if method == "sso-saml" {
+		if _, err := pool.Raw().Exec(ctx, `UPDATE identity.accounts SET provider=$1::text,issuer=$2::text,
+subject_key=sha256(convert_to(octet_length($1::text)::text||':'||$1::text||octet_length($2::text)::text||':'||$2::text||octet_length(subject)::text||':'||subject,'UTF8'))
+WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixtureProvider, samlFixtureIssuer); err != nil {
+			t.Fatal("install the distinct selected SAML account identity", err)
+		}
 	}
 	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "guest-deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: method, CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
 	scope := policy.AuthorityScope{TenantID: "guest-tenant", PolicyNamespace: "users", SubjectID: "enterprise-user"}
@@ -176,19 +184,23 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 		t.Fatal("actual opaque session persistence", err)
 	}
 	organization := &ssoOIDCSessionOrganizationFixture{pool: pool}
-	oidcProfile, oauth2Profile := profile, profile
-	oidcProfile.AuthenticationMethod, oauth2Profile.AuthenticationMethod = "sso-oidc", "sso-oauth2"
+	oidcProfile, oauth2Profile, samlProfile := profile, profile, profile
+	oidcProfile.AuthenticationMethod, oauth2Profile.AuthenticationMethod, samlProfile.AuthenticationMethod = "sso-oidc", "sso-oauth2", "sso-saml"
 	selection := SSOOIDCSessionAdmission{Profile: oidcProfile, Authority: organization}
 	oauth2 := SSOOAuth2SessionAdmission{Profile: oauth2Profile, Authority: organization}
+	saml := SSOSAMLSessionAdmission{Profile: samlProfile, Authority: organization}
 	config := Config{Schema: "session_store", MaximumDuration: time.Second}
 	validation := session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: profile.Audience, Clock: clock.System{}, MaximumDuration: time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{key}}
 	readerConfig := SelectedSessionServiceConfig{Repository: config, Validation: validation}
 	var reader *session.SessionService
-	if method == "sso-oidc" {
+	switch method {
+	case "sso-oidc":
 		readerConfig.Admission.SSOOIDC = &selection
 		reader, err = NewSelectedSessionService(pool, readerConfig)
-	} else {
+	case "sso-oauth2":
 		reader, err = NewSelectedSessionServiceWithSSOOAuth2(pool, readerConfig, oauth2)
+	case "sso-saml":
+		reader, err = NewSelectedSessionServiceWithSSOSAML(pool, readerConfig, saml, nil)
 	}
 	if err != nil {
 		t.Fatal("explicit enterprise session reader", err)
@@ -197,7 +209,7 @@ INSERT INTO public.sso_session_membership VALUES('guest-tenant','enterprise-user
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ssoSessionAccessFixture{ctx: ctx, pool: pool, profile: profile, selection: selection, oauth2: oauth2, repository: config, validation: validation, reader: reader, csrfKey: csrfKey, request: session.GetRequest{TenantID: spec.TenantID, Credential: credential}, csrf: csrf, record: record}
+	return ssoSessionAccessFixture{ctx: ctx, pool: pool, profile: profile, selection: selection, oauth2: oauth2, saml: saml, repository: config, validation: validation, reader: reader, csrfKey: csrfKey, request: session.GetRequest{TenantID: spec.TenantID, Credential: credential}, csrf: csrf, record: record}
 }
 
 func installSSOOIDCSessionAccessEffects(t *testing.T, ctx context.Context, pool *database.Pool) {
@@ -268,10 +280,17 @@ func assertSSOSessionAccessAndStrictCookieLogout(t *testing.T, f ssoSessionAcces
 		executorConfig.SSOOIDC = &f.selection
 	}
 	var executor *CookieRevokeOneExecutor
-	if f.profile.AuthenticationMethod == "sso-oidc" && !f.bothSelected {
+	switch {
+	case f.profile.AuthenticationMethod == "sso-saml":
+		var sibling *SSOOAuth2SessionAdmission
+		if f.bothSelected {
+			sibling = &f.oauth2
+		}
+		executor, err = NewCookieRevokeOneExecutorWithSSOSAML(f.pool, executorConfig, []session.CSRFKey{f.csrfKey}, f.saml, sibling)
+	case f.profile.AuthenticationMethod == "sso-oidc" && !f.bothSelected:
 		executorConfig.SSOOIDC = &f.selection
 		executor, err = NewCookieRevokeOneExecutor(f.pool, executorConfig, []session.CSRFKey{f.csrfKey})
-	} else {
+	default:
 		executor, err = NewCookieRevokeOneExecutorWithSSOOAuth2(f.pool, executorConfig, []session.CSRFKey{f.csrfKey}, f.oauth2)
 	}
 	if err != nil {
@@ -399,10 +418,14 @@ func assertSSOSessionAccessRequiresExplicitSelectionAndCurrentAuthority(t *testi
 	}
 	enterpriseConfig := SelectedSessionServiceConfig{Repository: f.repository, Validation: f.validation}
 	var otherEnterprise *session.SessionService
-	if f.profile.AuthenticationMethod == "sso-oauth2" {
+	switch f.profile.AuthenticationMethod {
+	case "sso-oauth2":
 		enterpriseConfig.Admission.SSOOIDC = &f.selection
 		otherEnterprise, err = NewSelectedSessionService(f.pool, enterpriseConfig)
-	} else {
+	case "sso-saml":
+		enterpriseConfig.Admission.SSOOIDC = &f.selection
+		otherEnterprise, err = NewSelectedSessionServiceWithSSOOAuth2(f.pool, enterpriseConfig, f.oauth2)
+	default:
 		otherEnterprise, err = NewSelectedSessionServiceWithSSOOAuth2(f.pool, enterpriseConfig, f.oauth2)
 	}
 	if err != nil {
@@ -417,7 +440,12 @@ func assertSSOSessionAccessRequiresExplicitSelectionAndCurrentAuthority(t *testi
 	}
 	enterpriseConfig.Admission.SingleFactor = SingleFactorSessionAdmissionConfig{Verified: &password, OAuth: &social}
 	enterpriseConfig.Admission.SSOOIDC = &f.selection
-	bothEnterprise, err := NewSelectedSessionServiceWithSSOOAuth2(f.pool, enterpriseConfig, f.oauth2)
+	var bothEnterprise *session.SessionService
+	if f.profile.AuthenticationMethod == "sso-saml" {
+		bothEnterprise, err = NewSelectedSessionServiceWithSSOSAML(f.pool, enterpriseConfig, f.saml, &f.oauth2)
+	} else {
+		bothEnterprise, err = NewSelectedSessionServiceWithSSOOAuth2(f.pool, enterpriseConfig, f.oauth2)
+	}
 	if err != nil {
 		t.Fatal("explicit independent OIDC and OAuth2 selection", err)
 	}

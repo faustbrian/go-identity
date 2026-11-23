@@ -38,6 +38,9 @@ func (r *Repository) ssoRevokeProfile(method, operationID string) (IdentifierAdm
 		if method == "sso-oauth2" && r.revokeSSOOAuth2 != nil {
 			return r.revokeSSOOAuth2.Profile, r.revokeSSOOAuth2.Authority
 		}
+		if method == "sso-saml" && r.revokeSSOSAML != nil {
+			return r.revokeSSOSAML.Profile, r.revokeSSOSAML.Authority
+		}
 	}
 	return IdentifierAdmissionConfig{}, nil
 }
@@ -74,7 +77,7 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 	if s.Authentication.Kind == session.AuthenticationVerified {
 		vector, _ := s.Authority.Bindings()
 		method := s.Authentication.Proof.Method
-		if method == "sso-oidc" || method == "sso-oauth2" {
+		if isEnterpriseSessionMethod(method) {
 			profile, organization := r.ssoRevokeProfile(method, b.OperationID)
 			if organization == nil {
 				return deny()
@@ -223,7 +226,7 @@ func (r *Repository) requireRevokeOrganization(ctx context.Context, w kernel.Wor
 		return nil
 	}
 	method := s.Authentication.Proof.Method
-	if s.Authentication.Kind == session.AuthenticationVerified && (method == "sso-oidc" || method == "sso-oauth2") {
+	if s.Authentication.Kind == session.AuthenticationVerified && isEnterpriseSessionMethod(method) {
 		_, organization := r.ssoRevokeProfile(method, b.OperationID)
 		if organization == nil {
 			return identity.ForbiddenError{}
@@ -276,6 +279,9 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	}
 	if a.ssoMethod == "sso-oidc" {
 		return mfapg.RequireSSOOIDCSessionFactors(ctx, w, owner, record)
+	}
+	if a.ssoMethod == "sso-saml" {
+		return mfapg.RequireSSOSAMLSessionFactors(ctx, w, owner, record)
 	}
 	if a.oauth {
 		if a.credential == nil {

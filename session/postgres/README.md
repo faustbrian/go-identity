@@ -75,6 +75,14 @@ issuance record. Supply the real `OrganizationSessionAuthority`. Call
 This effect does not select a provider, install a route, or enable reads or
 local logout for SAML sessions on its own.
 
+Select `NewSelectedSessionServiceWithSSOSAML` for the resulting cookies, and
+pass the same `SSOSAMLSessionAdmission` and owner to
+`NewCookieRevokeOneExecutorWithSSOSAML`. Give the latter the retained session
+synchronizer keys. Selection can coexist with explicit OIDC and OAuth2 profiles
+on the same deployment, policy namespace, and audience. Missing membership,
+linked credential, or original known-empty factor authority denies use. This
+revokes the local session; it does not send a SAML logout request to the IdP.
+
 ## Combined password and OAuth admission
 
 `SingleFactorSessionAdmissionConfig.OAuth` independently selects the exact

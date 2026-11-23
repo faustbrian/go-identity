@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in primary reads and strict local cookie logout for linked-member
+  SAML sessions. Reuse the original credential, organization, policy and
+  factor epochs. OIDC, OAuth2 and IdP Single Logout remain separate selections.
+
 - Add opt-in PostgreSQL issuance for the exact native SAML callback. The
   original browser flow, session, family and issuance record share one Work
   with the caller's replay reservation. Install both

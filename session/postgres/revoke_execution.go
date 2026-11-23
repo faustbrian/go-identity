@@ -66,10 +66,10 @@ type RevokeOneExecutor struct {
 // be the exact configured reader that prepared each request, not a request-
 // supplied substitute. It grants no permission to a structural mapped command.
 func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*RevokeOneExecutor, error) {
-	return newRevokeOneExecutor(pool, c, nil)
+	return newRevokeOneExecutor(pool, c, enterpriseCookiePeers{})
 }
 
-func newRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, oauth2 *SSOOAuth2SessionAdmission) (*RevokeOneExecutor, error) {
+func newRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, peers enterpriseCookiePeers) (*RevokeOneExecutor, error) {
 	if c.Sessions == nil {
 		return nil, session.ErrInvalidInput
 	}
@@ -152,13 +152,21 @@ func newRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, oauth2
 		copied := *p
 		owned.native.revokeSSOOIDC = &copied
 	}
-	if p := oauth2; p != nil {
+	if p := peers.oauth2; p != nil {
 		base := c.Execution.Profile
 		if !p.valid() || p.Profile.GlobalAuthorityID != base.GlobalAuthorityID || p.Profile.PolicyNamespace != base.PolicyNamespace || p.Profile.Audience != base.Audience {
 			return nil, session.ErrInvalidInput
 		}
 		copied := *p
 		owned.native.revokeSSOOAuth2 = &copied
+	}
+	if p := peers.saml; p != nil {
+		base := c.Execution.Profile
+		if !p.valid() || p.Profile.GlobalAuthorityID != base.GlobalAuthorityID || p.Profile.PolicyNamespace != base.PolicyNamespace || p.Profile.Audience != base.Audience {
+			return nil, session.ErrInvalidInput
+		}
+		copied := *p
+		owned.native.revokeSSOSAML = &copied
 	}
 	return &RevokeOneExecutor{owned, c.Sessions}, nil
 }

@@ -96,10 +96,10 @@ func NewSingleFactorSessionService(pool *database.Pool, c SingleFactorSessionSer
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, c, nil, nil, nil, nil, nil, nil, nil, methods, profile)
+	return newSelectedNativeSessionService(pool, c, nil, nil, nil, nil, nil, nil, enterpriseCookiePeers{}, methods, profile)
 }
 
-func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, passkey *PasskeySessionAdmission, mfaPasskey *MFAPasskeySessionAdmission, organization *OrganizationPasswordSessionAdmission, ssoOIDC *SSOOIDCSessionAdmission, ssoOAuth2 *SSOOAuth2SessionAdmission, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
+func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, passkey *PasskeySessionAdmission, mfaPasskey *MFAPasskeySessionAdmission, organization *OrganizationPasswordSessionAdmission, ssoOIDC *SSOOIDCSessionAdmission, peers enterpriseCookiePeers, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
 	if c.Repository.MaximumDuration > c.Validation.MaximumDuration {
 		return nil, session.ErrInvalidInput
 	}
@@ -134,7 +134,10 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	if p := ssoOIDC; p != nil {
 		audience = p.Profile.Audience
 	}
-	if p := ssoOAuth2; p != nil {
+	if p := peers.oauth2; p != nil {
+		audience = p.Profile.Audience
+	}
+	if p := peers.saml; p != nil {
 		audience = p.Profile.Audience
 	}
 	if audience != c.Validation.Audience {
@@ -204,11 +207,16 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	if p := ssoOIDC; p != nil {
 		r.ssoOIDCReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: p.Profile, ssoOrganization: p.Authority}
 	}
-	if p := ssoOAuth2; p != nil {
+	if p := peers.oauth2; p != nil {
 		r.ssoOAuth2Reader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: p.Profile, ssoOrganization: p.Authority}
 	}
-	if ssoOIDC != nil || ssoOAuth2 != nil {
-		return session.NewEnterpriseCookieProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile), session.EnterpriseCookieSelection{OIDC: ssoOIDC != nil, OAuth2: ssoOAuth2 != nil})
+	siblings := session.EnterpriseCookieSelection{OIDC: ssoOIDC != nil, OAuth2: peers.oauth2 != nil}
+	if p := peers.saml; p != nil {
+		r.ssoSAMLReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: p.Profile, ssoOrganization: p.Authority}
+		return session.NewSSOSAMLCookieProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile), siblings)
+	}
+	if siblings.OIDC || siblings.OAuth2 {
+		return session.NewEnterpriseCookieProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile), siblings)
 	}
 	if organization != nil {
 		return session.NewOrganizationBearerProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))

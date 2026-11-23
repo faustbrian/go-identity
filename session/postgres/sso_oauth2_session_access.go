@@ -46,7 +46,7 @@ func NewSelectedSessionServiceWithSSOOAuth2(pool *database.Pool, c SelectedSessi
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedSessionService(pool, c, &selection, methods, profile)
+	return newSelectedSessionService(pool, c, enterpriseCookiePeers{oauth2: &selection}, methods, profile)
 }
 
 // NewCookieRevokeOneExecutorWithSSOOAuth2 opts the existing strict cookie
@@ -54,5 +54,5 @@ func NewSelectedSessionServiceWithSSOOAuth2(pool *database.Pool, c SelectedSessi
 // the identical profile in c.Sessions. Existing OIDC may also be selected
 // separately, but neither provider session is admitted on bearer transport.
 func NewCookieRevokeOneExecutorWithSSOOAuth2(pool *database.Pool, c RevokeOneExecutorConfig, keys []session.CSRFKey, selection SSOOAuth2SessionAdmission) (*CookieRevokeOneExecutor, error) {
-	return newCookieRevokeOneExecutor(pool, c, keys, &selection)
+	return newCookieRevokeOneExecutor(pool, c, keys, enterpriseCookiePeers{oauth2: &selection})
 }
