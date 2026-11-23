@@ -21,6 +21,8 @@ func validProviderPaths(op OperationDescriptor) bool {
 		selected = op.Route.Method == http.MethodGet && op.Route.Path == "/saml2/{provider_id}/metadata"
 	case "identity.sso.saml-acs":
 		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/acs"
+	case "identity.sso.saml-idp-init":
+		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/idp-init"
 	}
 	if !selected {
 		return len(op.ProviderPathIDs) == 0
@@ -43,11 +45,15 @@ func validProviderPathID(id string) bool {
 }
 
 func validSAMLACSPath(path string) bool {
+	return validSAMLProviderEndpoint(path, "/acs")
+}
+
+func validSAMLProviderEndpoint(path, endpoint string) bool {
 	providerAndEndpoint, ok := strings.CutPrefix(path, "/saml2/")
 	if !ok {
 		return false
 	}
-	provider, ok := strings.CutSuffix(providerAndEndpoint, "/acs")
+	provider, ok := strings.CutSuffix(providerAndEndpoint, endpoint)
 	return ok && validProviderPathID(provider)
 }
 

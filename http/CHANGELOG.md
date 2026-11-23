@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit navigation-only transport for an installed SAML IdP-init
+  route. Admit only its configured service-provider and IdP origins; never
+  grant CORS script access or preflight. No route is enabled by default.
+
 - Bind the SAML SP metadata GET to exact selected provider IDs. No metadata
   route is installed implicitly.
 

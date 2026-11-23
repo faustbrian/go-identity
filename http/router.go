@@ -99,10 +99,23 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 			selected[op.Route.Method+" "+path] = op.Record.OperationID
 		}
 	}
+	idpNavigation := make(map[string]struct{})
 	for _, route := range policy.CORS {
-		operationID, exists := selected[route.Method+" "+route.Path]
-		if !exists || (operationID == "identity.sso.saml-acs") != (route.Credentials == CORSSAMLPostNavigation) {
+		key := route.Method + " " + route.Path
+		operationID, exists := selected[key]
+		if !exists || (operationID == "identity.sso.saml-acs") != (route.Credentials == CORSSAMLPostNavigation) ||
+			(operationID == "identity.sso.saml-idp-init") != (route.Credentials == CORSSAMLIDPPostNavigation) {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
+		}
+		if route.Credentials == CORSSAMLIDPPostNavigation {
+			idpNavigation[key] = struct{}{}
+		}
+	}
+	for key, operationID := range selected {
+		if operationID == "identity.sso.saml-idp-init" {
+			if _, ok := idpNavigation[key]; !ok {
+				return nil, OpenAPIDocument{}, ErrInvalidInput
+			}
 		}
 	}
 	ops := cloneOperations(operations)

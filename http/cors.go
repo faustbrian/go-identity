@@ -29,6 +29,11 @@ const (
 	// IdP Origin. It never grants script access or handles preflight. Cookie
 	// correlation and assertion verification belong to the ACS handler.
 	CORSSAMLPostNavigation
+	// CORSSAMLIDPPostNavigation admits only the exact IdP origin for an
+	// unsolicited arrival and the exact effective SP origin for confirmation.
+	// It grants neither script access nor preflight; the handler distinguishes
+	// the two form profiles and owns the browser confirmation checks.
+	CORSSAMLIDPPostNavigation
 )
 
 // CORSRoutePolicy binds one exact method/path to copied CORS policy. Methods
@@ -39,8 +44,10 @@ const (
 // Header lists contain <=64 distinct case-insensitive HTTP tokens, each <=128
 // bytes, with no wildcard; exposed Set-Cookie/Set-Cookie2 are forbidden. MaxAge
 // is whole seconds in [0,24h]. No implicit header, method or credential grant.
-// SAML navigation requires one Origin, a concrete POST ACS path, and empty
-// header/exposure and MaxAge settings.
+// SP SAML navigation requires one Origin and a concrete POST ACS path.
+// Unsolicited SAML navigation requires the SP origin followed by the IdP
+// origin and a concrete POST IdP-init path. Both require empty header/exposure
+// and MaxAge settings.
 type CORSRoutePolicy struct {
 	Method, Path   string
 	Credentials    CORSCredentialMode
@@ -60,11 +67,13 @@ type CORSConfig struct {
 }
 
 type corsRoute struct {
-	origins    map[Origin]struct{}
-	headers    map[string]struct{}
-	bearer     bool
-	navigation bool
-	wrap       func(http.Handler) http.Handler
+	origins       map[Origin]struct{}
+	headers       map[string]struct{}
+	bearer        bool
+	navigation    bool
+	idpNavigation bool
+	idpSPOrigin   Origin
+	wrap          func(http.Handler) http.Handler
 }
 
 type corsHandler struct {
@@ -99,17 +108,24 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 	}
 	h := &corsHandler{network: config.Network, next: next, routes: make(map[string]corsRoute, len(config.Routes))}
 	for _, policy := range config.Routes {
-		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSSAMLPostNavigation || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
+		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSSAMLIDPPostNavigation || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
 			return nil, ErrInvalidInput
 		}
 		key := policy.Method + " " + policy.Path
 		if _, duplicate := h.routes[key]; duplicate {
 			return nil, ErrInvalidInput
 		}
-		route := corsRoute{bearer: policy.Credentials == CORSBearerCredentials, navigation: policy.Credentials == CORSSAMLPostNavigation}
-		if route.navigation && (policy.Method != http.MethodPost || !validSAMLACSPath(policy.Path) || len(policy.Origins) != 1 ||
-			len(policy.AllowedHeaders) != 0 || len(policy.ExposedHeaders) != 0 || policy.MaxAge != 0) {
-			return nil, ErrInvalidInput
+		route := corsRoute{bearer: policy.Credentials == CORSBearerCredentials,
+			navigation:    policy.Credentials == CORSSAMLPostNavigation || policy.Credentials == CORSSAMLIDPPostNavigation,
+			idpNavigation: policy.Credentials == CORSSAMLIDPPostNavigation}
+		if route.navigation {
+			validPathAndOrigins := validSAMLACSPath(policy.Path) && len(policy.Origins) == 1
+			if route.idpNavigation {
+				validPathAndOrigins = validSAMLProviderEndpoint(policy.Path, "/idp-init") && len(policy.Origins) == 2
+			}
+			if policy.Method != http.MethodPost || !validPathAndOrigins || len(policy.AllowedHeaders) != 0 || len(policy.ExposedHeaders) != 0 || policy.MaxAge != 0 {
+				return nil, ErrInvalidInput
+			}
 		}
 		if len(policy.Origins) == 0 {
 			if len(policy.AllowedHeaders) != 0 || len(policy.ExposedHeaders) != 0 || policy.MaxAge != 0 {
@@ -124,6 +140,9 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 		}
 		route.origins = guard.origins
 		if route.navigation {
+			if route.idpNavigation {
+				route.idpSPOrigin = policy.Origins[0]
+			}
 			h.routes[key] = route
 			continue
 		}
@@ -217,7 +236,7 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, selected := h.routes[selectedMethod+" "+r.URL.Path]
 	_, allowed := route.origins[Origin(origin)]
 	if route.navigation {
-		if preflight || !originPresent || !allowed {
+		if preflight || !originPresent || !allowed || route.idpNavigation && string(route.idpSPOrigin) != facts.Origin() {
 			deny(http.StatusForbidden)
 			return
 		}

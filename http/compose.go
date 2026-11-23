@@ -39,7 +39,8 @@ type CanonicalOperationConfig struct {
 	CSRF                   CSRFPolicy
 	MaximumSerializedBytes uint64
 	// ProviderPathIDs binds the finite installed provider segments for the
-	// selected canonical OIDC logout and SAML metadata, login and ACS routes.
+	// selected canonical OIDC logout and SAML metadata, login, SP ACS and
+	// IdP-initiated ACS routes.
 	// It is invalid on all other operations.
 	ProviderPathIDs []string
 }
