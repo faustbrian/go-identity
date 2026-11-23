@@ -57,6 +57,15 @@ pre-authentication admission and preparation erasure apply. Neither the OIDC
 nor social OAuth profile can attach this grant, and it does not establish a
 user, callback result or session.
 
+`SSOSAMLSigninStartOperation` selects the separate SP-initiated
+`identity.sso.saml-start` command. Only the native `sso.saml-login-start`
+contributor may attach one non-bearer `identity.sso.saml-acs` grant for the
+original browser flow, tenant, transaction, and correlation. Its original
+lifetime is at most five minutes. Before selecting the writer, append
+`SSOSAMLStartPreparationErasureMigrationSource` after the corresponding
+SAML callback erasure migration; pending starts retain their sealed output,
+and definitive results erase it without permitting regeneration.
+
 Install `SSOOIDCPreparationErasureMigrationSource` after
 `OAuthProviderRefreshErasureMigrationSource` before enabling this native writer.
 The forward migration replaces the existing guard, with no row rewrite or

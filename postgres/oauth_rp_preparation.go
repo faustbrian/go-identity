@@ -38,7 +38,7 @@ func oauthProviderRefreshPreparationClaim(q claimRequest) bool {
 const oauthRPMaximumStateLifetime = 10 * time.Minute
 
 func oauthRPInitiationGrantSubject(b identity.CommandBinding, p CommandPlan, payload capability.Payload) (string, error) {
-	enterprise := b.OperationID == "identity.sso.signin-start"
+	enterprise := enterpriseSigninStartOperationID(b.OperationID)
 	if p.CapabilityIssuance == nil || (enterprise && !validSSOEnterpriseStart(b, p)) || (!enterprise && !validOAuthRPInitiation(b, p)) {
 		return "", invalidWork()
 	}
@@ -49,15 +49,19 @@ func oauthRPInitiationGrantSubject(b identity.CommandBinding, p CommandPlan, pay
 		subject = b.AnonymousFlowID
 	}
 	purpose := "identity.oauth.callback"
+	maximumLifetime := oauthRPMaximumStateLifetime
 	if enterprise {
 		_, selected := ssoEnterpriseStartProfile(p.Feature.Operation)
 		purpose = string(selected)
 		if payload.CorrelationID != b.CorrelationID {
 			return "", invalidWork()
 		}
+		if p.Feature.Operation == SSOSAMLSigninStartOperation() {
+			maximumLifetime = 5 * time.Minute
+		}
 	}
 	meta := p.CapabilityIssuance.Grants[0]
-	if payload.Subject != subject || payload.Tenant != string(b.TenantID) || payload.Resource != b.RecordID || payload.ID != meta.CapabilityID || payload.Operation != purpose || payload.Bearer || payload.MaxUses != 1 || !payload.ExpiresAt.Equal(meta.ExpiresAt) || payload.IssuedAt.Location() != time.UTC || payload.IssuedAt.Nanosecond() != 0 || payload.IssuedAt.Unix() <= 0 || !payload.NotBefore.Equal(payload.IssuedAt) || !payload.ExpiresAt.After(payload.IssuedAt) || payload.ExpiresAt.Sub(payload.IssuedAt) > oauthRPMaximumStateLifetime {
+	if payload.Subject != subject || payload.Tenant != string(b.TenantID) || payload.Resource != b.RecordID || payload.ID != meta.CapabilityID || payload.Operation != purpose || payload.Bearer || payload.MaxUses != 1 || !payload.ExpiresAt.Equal(meta.ExpiresAt) || payload.IssuedAt.Location() != time.UTC || payload.IssuedAt.Nanosecond() != 0 || payload.IssuedAt.Unix() <= 0 || !payload.NotBefore.Equal(payload.IssuedAt) || !payload.ExpiresAt.After(payload.IssuedAt) || payload.ExpiresAt.Sub(payload.IssuedAt) > maximumLifetime {
 		return "", invalidWork()
 	}
 	return subject, nil

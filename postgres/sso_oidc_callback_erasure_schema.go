@@ -64,12 +64,32 @@ func (s SSOSAMLCallbackPreparationErasureMigrationSource) Load(ctx context.Conte
 	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_saml_callback_preparation_erasure", ssoSAMLCallbackPreparationErasureSQL)
 }
 
+// SSOSAMLStartPreparationErasureMigrationSource extends the existing terminal
+// profile-four guard to the distinct SP-initiated SAML start. Append after
+// SSOSAMLCallbackPreparationErasureMigrationSource before admitting SAML
+// starts. No existing row or predecessor migration is rewritten.
+type SSOSAMLStartPreparationErasureMigrationSource struct {
+	Base    migrations.Source
+	Version migrations.Version
+}
+
+// Load appends only the forward trigger change without performing I/O.
+func (s SSOSAMLStartPreparationErasureMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
+	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_saml_start_preparation_erasure", ssoSAMLStartPreparationErasureSQL)
+}
+
 const ssoOIDCCallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose='identity.sso.oidc-callback'` + ssoCallbackPreparationErasureSuffix
 const ssoOAuth2CallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback')` + ssoCallbackPreparationErasureSuffix
 const ssoEnterpriseGrantRefreshPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh')` + ssoCallbackPreparationErasureSuffix
 const ssoSAMLCallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh','identity.sso.saml-acs')` + ssoCallbackPreparationErasureSuffix
 
-const ssoCallbackPreparationErasurePrefix = `SET LOCAL lock_timeout = '5s';
+const ssoSAMLStartPreparationErasureSQL = ssoEnterprisePreparationErasurePrefix + `OLD.purpose IN('identity.sso.signin-start','identity.sso.saml-start') AND OLD.preparation_profile=4;
+ enterprise_callback boolean := OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh','identity.sso.saml-acs')` + ssoCallbackPreparationErasureSuffix
+
+const ssoCallbackPreparationErasurePrefix = ssoEnterprisePreparationErasurePrefix + `OLD.purpose='identity.sso.signin-start' AND OLD.preparation_profile=4;
+ enterprise_callback boolean := `
+
+const ssoEnterprisePreparationErasurePrefix = `SET LOCAL lock_timeout = '5s';
 CREATE OR REPLACE FUNCTION identity.guard_command_preparation() RETURNS trigger
  LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog AS $$
 DECLARE
@@ -77,8 +97,7 @@ DECLARE
  account_preparation boolean := (OLD.purpose='identity.account.link-token' AND OLD.preparation_profile=5)
   OR (OLD.purpose='identity.account.unlink' AND OLD.preparation_profile=6);
  provider_refresh boolean := OLD.purpose='identity.account.refresh-token' AND OLD.preparation_profile IN(2,4);
- enterprise_start boolean := OLD.purpose='identity.sso.signin-start' AND OLD.preparation_profile=4;
- enterprise_callback boolean := `
+ enterprise_start boolean := `
 const ssoCallbackPreparationErasureSuffix = ` AND OLD.preparation_profile=4;
  erasing boolean := ((rp_start AND OLD.preparation_profile IN(1,2,3,4)) OR account_preparation OR provider_refresh OR enterprise_start OR enterprise_callback)
   AND OLD.state='pending' AND NEW.state IN('committed','aborted')
