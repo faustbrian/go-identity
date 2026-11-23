@@ -1667,6 +1667,14 @@ END $$`); err != nil {
 			t.Fatal("selected SAML routes missing")
 		}
 	}
+	if c.HTTPEnterpriseSAML != nil && c.HTTPEnterpriseSAML.Metadata {
+		wantOperations++
+		if !seen["identity.sso.saml-metadata"] {
+			t.Fatal("selected SAML metadata route missing")
+		}
+	} else if seen["identity.sso.saml-metadata"] {
+		t.Fatal("unselected SAML metadata route advertised")
+	}
 	if c.HTTPMFAList != nil {
 		wantOperations++
 		if !seen["identity.mfa.list"] {
@@ -1884,19 +1892,21 @@ END $$`); err != nil {
 		c.HTTPEnterpriseSAML = nil
 		nativeOnly, _ := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		for _, operation := range nativeOnly.OpenAPI().Operations() {
-			if operation.Record.OperationID == "identity.sso.saml-start" || operation.Record.OperationID == "identity.sso.saml-acs" {
+			if operation.Record.OperationID == "identity.sso.saml-start" || operation.Record.OperationID == "identity.sso.saml-acs" || operation.Record.OperationID == "identity.sso.saml-metadata" {
 				t.Fatal("native-only SAML advertised browser routes")
 			}
 		}
 		handler = nativeOnly.Handler()
 		organizationHandler.Store(&handler)
-		response, err := client.Get(origin + "/saml2/" + string(selected.provider) + "/login")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer response.Body.Close()
-		if response.StatusCode != http.StatusNotFound || len(response.Cookies()) != 0 {
-			t.Fatal("native-only SAML exposed a browser start", response.StatusCode)
+		for _, suffix := range []string{"/login", "/metadata"} {
+			response, err := client.Get(origin + "/saml2/" + string(selected.provider) + suffix)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != http.StatusNotFound || len(response.Cookies()) != 0 {
+				t.Fatal("native-only SAML exposed an HTTP route", suffix, response.StatusCode)
+			}
 		}
 		return
 	}

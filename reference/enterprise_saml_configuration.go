@@ -57,11 +57,14 @@ type HTTPEnterpriseSAMLConfiguration struct {
 	SuccessCallback, ErrorCallback string
 	CSRFCookie                     session.CSRFCookiePolicy
 	Lifetime                       session.LifetimeConfig
+	// Metadata opts into an anonymous read of the installed public SP metadata.
+	Metadata bool
 }
 
 type enterpriseSAMLState struct {
 	start            *ssopg.ProviderLoginService
 	completion       *ssopg.ProviderSAMLLoginCompletionService
+	metadata         *ssopg.ProviderSAMLMetadataService
 	profile          ssopg.StaticSAMLLoginProfile
 	preauth          *session.PreAuthIssuer
 	http             *HTTPEnterpriseSAMLConfiguration
@@ -188,6 +191,12 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 	state.preauth, err = session.NewSAMLFrontchannelIssuer(executor, issuer)
 	if err != nil {
 		return nil, err
+	}
+	if h.Metadata {
+		state.metadata, err = ssopg.NewProviderSAMLMetadataService(start, saml.SPSigningCertificate)
+		if err != nil {
+			return nil, err
+		}
 	}
 	state.http = &h
 	return state, nil

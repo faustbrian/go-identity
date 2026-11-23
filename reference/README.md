@@ -279,8 +279,13 @@ Reference adds the exact navigation admission; do not configure a duplicate
 CORS entry. The start is a same-origin document navigation. The IdP posts the
 signed response and original RelayState to the exact ACS; the ACS delivers a
 normal session and CSRF cookie once and deletes only the dedicated correlation
-cookie. The existing session-read and strict local signout routes apply. This
-selection does not expose metadata, IdP-initiated login, JIT, or SLO.
+cookie. The existing session-read and strict local signout routes apply.
+
+Set `HTTPEnterpriseSAML.Metadata` to expose `GET /saml2/{provider_id}/metadata`
+for this installed profile. The anonymous HTTPS response is uncached, uses the
+shared safe-read quota and includes the exact SP entity, default POST ACS and
+current public SP signing certificate. Login and ACS still work with metadata
+turned off. This profile does not expose IdP-initiated login, JIT or SLO.
 
 ## Optional enterprise OIDC provider logout
 

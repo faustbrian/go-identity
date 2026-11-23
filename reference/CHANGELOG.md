@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt into public SP metadata for an installed SAML sign-in profile. Serve the
+  exact ACS and active public signing certificate with the shared safe-read quota.
+
 - Compose opt-in SP-initiated SAML sign-in for a linked organization member.
   Use the installed signing credential and IdP certificates through signed
   Redirect and POST, native replay/session settlement, and strict local logout.

@@ -6,6 +6,10 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -72,7 +76,7 @@ func configureReferenceEnterpriseSAML(t *testing.T, c *reference.StoreConfigurat
 			Issuer: issuer, CSRFKey: c.PasswordSignin.Native.CSRFKey},
 	}
 	c.HTTPEnterpriseSAML = &reference.HTTPEnterpriseSAMLConfiguration{FlowSignalKey: signal, IdentityProviderOrigin: identityhttp.Origin("https://idp.example"),
-		AuthorizationEndpoint: "https://idp.example/login", SuccessCallback: success, ErrorCallback: failure, CSRFCookie: csrf, Lifetime: c.HTTPPreAuth.Lifetime}
+		AuthorizationEndpoint: "https://idp.example/login", SuccessCallback: success, ErrorCallback: failure, CSRFCookie: csrf, Lifetime: c.HTTPPreAuth.Lifetime, Metadata: true}
 	return newReferenceSAMLIdPFixture(t, time.Now().UTC())
 }
 
@@ -103,6 +107,9 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 		t.Cleanup(func() { _ = response.Body.Close() })
 		return response
 	}
+	metadataPath := "/saml2/" + string(selected.provider) + "/metadata"
+	publicMetadata := do(http.MethodGet, metadataPath, nil, nil)
+	certificate := referenceSAMLMetadataCertificate(t, publicMetadata, origin+metadataPath, origin+acsPath, idp.certificateDER)
 	start := do(http.MethodGet, startPath, nil, func(r *http.Request) {
 		r.Header.Set("Sec-Fetch-Site", "same-origin")
 		r.Header.Set("Sec-Fetch-Mode", "navigate")
@@ -124,6 +131,10 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 	}
 	correlation := cookies[0]
 	requestID, spEntity, relay := originalReferenceSAMLRequest(t, location, origin+acsPath)
+	if spEntity != origin+metadataPath {
+		t.Fatal("AuthnRequest issuer differs from the published metadata entity")
+	}
+	verifyReferenceSAMLRedirectSignature(t, certificate, location)
 	encoded := idp.signedPOSTResponse(t, referenceSAMLResponseInput{RequestID: requestID, Issuer: referenceSAMLIdPEntity, Audience: spEntity, ACS: origin + acsPath,
 		NameID: enterpriseProviderSubject, ResponseID: "_reference_response", AssertionID: "_reference_assertion", Now: time.Now().UTC()})
 	form := url.Values{"SAMLResponse": {encoded}, "RelayState": {relay}}.Encode()
@@ -209,6 +220,75 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 	}
 	jar.SetCookies(appURL, []*http.Cookie{credential})
 	read(false)
+}
+
+func referenceSAMLMetadataCertificate(t *testing.T, response *http.Response, entity, acs string, idpDER []byte) *rsa.PublicKey {
+	t.Helper()
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "application/samlmetadata+xml" ||
+		response.Header.Get("Cache-Control") != "no-store" || len(response.Cookies()) != 0 {
+		t.Fatal("signed profile did not expose uncached, cookie-free SP metadata", response.StatusCode)
+	}
+	var document struct {
+		XMLName xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:metadata EntityDescriptor"`
+		Entity  string   `xml:"entityID,attr"`
+		SP      []struct {
+			SignsRequests  bool `xml:"AuthnRequestsSigned,attr"`
+			WantsSignature bool `xml:"WantAssertionsSigned,attr"`
+			Keys           []struct {
+				Use string `xml:"use,attr"`
+				DER string `xml:"KeyInfo>X509Data>X509Certificate"`
+			} `xml:"KeyDescriptor"`
+			ACS []struct {
+				Binding  string `xml:"Binding,attr"`
+				Location string `xml:"Location,attr"`
+				Index    string `xml:"index,attr"`
+				Default  bool   `xml:"isDefault,attr"`
+			} `xml:"AssertionConsumerService"`
+			Logout []struct{} `xml:"SingleLogoutService"`
+		} `xml:"urn:oasis:names:tc:SAML:2.0:metadata SPSSODescriptor"`
+	}
+	if err := xml.NewDecoder(io.LimitReader(response.Body, 96<<10)).Decode(&document); err != nil || document.Entity != entity || len(document.SP) != 1 {
+		t.Fatal("invalid or foreign SP metadata", err)
+	}
+	p := document.SP[0]
+	if !p.SignsRequests || !p.WantsSignature || len(p.Keys) != 1 || p.Keys[0].Use != "signing" || len(p.ACS) != 1 || len(p.Logout) != 0 {
+		t.Fatal("SP metadata advertised the wrong signed profile")
+	}
+	endpoint := p.ACS[0]
+	if endpoint.Binding != "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" || endpoint.Location != acs || endpoint.Index != "0" || !endpoint.Default {
+		t.Fatal("SP metadata did not advertise the exact default ACS")
+	}
+	der, err := base64.StdEncoding.DecodeString(p.Keys[0].DER)
+	if err != nil || bytes.Equal(der, idpDER) {
+		t.Fatal("SP metadata exposed missing or foreign signing material")
+	}
+	certificate, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal("invalid published SP certificate", err)
+	}
+	key, ok := certificate.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		t.Fatal("published certificate does not match the selected RSA profile")
+	}
+	return key
+}
+
+func verifyReferenceSAMLRedirectSignature(t *testing.T, key *rsa.PublicKey, location string) {
+	t.Helper()
+	u, err := url.Parse(location)
+	if err != nil {
+		t.Fatal("invalid signed redirect", err)
+	}
+	signed, _, hasSignature := strings.Cut(u.RawQuery, "&Signature=")
+	signature, err := base64.StdEncoding.DecodeString(u.Query().Get("Signature"))
+	if !hasSignature || err != nil {
+		t.Fatal("the actual redirect omitted its signed binding", err)
+	}
+	digest := sha256.Sum256([]byte(signed))
+	if err := rsa.VerifyPSS(key, crypto.SHA256, digest[:], signature, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256}); err != nil {
+		t.Fatal("published SP certificate cannot verify the actual AuthnRequest", err)
+	}
 }
 
 func originalReferenceSAMLRequest(t *testing.T, location, acs string) (requestID, issuer, relay string) {

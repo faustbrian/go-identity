@@ -9,6 +9,7 @@ import (
 	ssohttp "github.com/faustbrian/go-identity/http/sso"
 	"github.com/faustbrian/go-sso"
 	ssopg "github.com/faustbrian/go-sso/postgres"
+	"github.com/faustbrian/go-sso/saml"
 )
 
 func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*identityhttp.Feature, identityhttp.CORSRoutePolicy, error) {
@@ -27,7 +28,16 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 		CallbackAllowlist: n.callbacks, Audience: n.audience, Cookie: f.session.config.Cookie, CSRFCookie: h.CSRFCookie,
 		Frontchannel: n.preauth, FlowSignalKey: h.FlowSignalKey, Lifetime: h.Lifetime,
 		Rate: s.state.httpRate.limiter, Now: time.Now, MaximumDuration: n.duration, Start: owner, Callback: owner}
-	feature, err := ssohttp.NewSAMLSigninFeature(c)
+	var feature identityhttp.Feature
+	var err error
+	if h.Metadata {
+		if n.metadata == nil || f.httpSession == nil || !f.httpSession.rate.Configured() {
+			return nil, identityhttp.CORSRoutePolicy{}, identity.InvalidInputError{Field: "reference_http_enterprise_saml_metadata"}
+		}
+		feature, err = ssohttp.NewSAMLSigninFeatureWithMetadata(c, f.httpSession.rate, owner)
+	} else {
+		feature, err = ssohttp.NewSAMLSigninFeature(c)
+	}
 	if err != nil {
 		return nil, identityhttp.CORSRoutePolicy{}, err
 	}
@@ -39,6 +49,22 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 }
 
 type enterpriseSAMLHTTP struct{ native *enterpriseSAMLState }
+
+func (a enterpriseSAMLHTTP) ReadSAMLMetadata(ctx context.Context, tenant identity.TenantID, provider string) (ssohttp.SAMLMetadataDocument, error) {
+	if a.native == nil || a.native.metadata == nil || tenant != a.native.tenant || provider != string(a.native.profile.ProviderID) {
+		return ssohttp.SAMLMetadataDocument{}, sso.ErrForbidden
+	}
+	installed, err := a.native.metadata.Read(ctx, tenant, sso.ProviderID(provider))
+	if err != nil {
+		return ssohttp.SAMLMetadataDocument{}, err
+	}
+	document, err := saml.ExportSPMetadata(saml.SPMetadataConfig{EntityID: installed.EntityID,
+		AssertionConsumerURL: installed.AssertionConsumerURL, SigningCertificates: [][]byte{installed.SigningCertificate}})
+	if err != nil || ctx.Err() != nil {
+		return ssohttp.SAMLMetadataDocument{}, sso.ErrUnavailable
+	}
+	return ssohttp.SAMLMetadataDocument{XML: document, ValidUntil: installed.ValidUntil}, nil
+}
 
 func (a enterpriseSAMLHTTP) StartSSOSAML(ctx context.Context, request ssohttp.SAMLSigninStartRequest) (sso.SigninStartResult, error) {
 	provider := sso.ProviderID(request.ProviderID)
