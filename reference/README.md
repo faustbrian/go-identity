@@ -272,6 +272,12 @@ migrations before serving. They retain OAuth/OIDC storage predecessors without
 enabling their routes. Give the SAML start its own `Login.RequestKeys`
 namespace, separate from provider administration and other sign-in flows.
 
+To register from an offline IdP document, call `saml.ImportIDPMetadata` with
+the independently approved entity ID and document SHA-256 digest. Use the
+returned entity, Redirect endpoint and certificates in `sso.NewSAMLConfiguration`
+before calling the native provider registration operation. Import does not
+fetch a URL, activate the provider or replace domain verification.
+
 Select `HTTPEnterpriseSAML` separately for the default SP login and ACS.
 Configure the registered IdP Redirect endpoint and exact HTTPS Origin, the
 allowed application returns, and the normal Lax session and CSRF settings.

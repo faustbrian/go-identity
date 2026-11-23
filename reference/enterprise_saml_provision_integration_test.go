@@ -7,7 +7,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -89,9 +91,15 @@ func provisionReferenceEnterpriseSAML(t *testing.T, ctx context.Context, c refer
 	if err != nil {
 		t.Fatal("select native SAML registration", err)
 	}
+	// The controlled IdP fixture supplies the exact document and independently
+	// approved binding that the operator would configure for real imports.
+	document, approvedSHA256 := referenceSAMLApprovedIDPMetadata(idp.certificateDER)
+	imported, err := saml.ImportIDPMetadata(ctx, document, referenceSAMLIdPEntity, approvedSHA256, execution.Clock.Now())
+	if err != nil || imported.RedirectEndpoint != c.HTTPEnterpriseSAML.AuthorizationEndpoint {
+		t.Fatal("approved IdP metadata did not select the installed SAML Redirect binding", err)
+	}
 	configuration, err := sso.NewSAMLConfiguration(sso.SAMLConfigurationSpec{
-		EntityID: referenceSAMLIdPEntity, RedirectEndpoint: c.HTTPEnterpriseSAML.AuthorizationEndpoint,
-		SigningCertificates: [][]byte{idp.certificateDER},
+		EntityID: imported.EntityID, RedirectEndpoint: imported.RedirectEndpoint, SigningCertificates: imported.SigningCertificates,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +200,15 @@ VALUES($1,$2,$3,$4,1,1,'dns-txt',$5,$6,false,$7)`, otpTenant, string(domain.Orga
 	selected := enterpriseProvisioned{user: user, organization: created.OrganizationID, provider: sso.ProviderID(providerID), bearer: bearer}
 	seedReferenceSAMLLink(t, ctx, pool, selected, referenceSAMLIdPEntity)
 	return selected
+}
+
+func referenceSAMLApprovedIDPMetadata(certificate []byte) ([]byte, [32]byte) {
+	document := []byte(`<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="` + referenceSAMLIdPEntity + `">
+<md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+<md:KeyDescriptor use="signing"><ds:KeyInfo><ds:X509Data><ds:X509Certificate>` + base64.StdEncoding.EncodeToString(certificate) + `</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor>
+<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example/login"/>
+</md:IDPSSODescriptor></md:EntityDescriptor>`)
+	return document, sha256.Sum256(document)
 }
 
 func referenceSAMLSPCredential(t *testing.T, ctx context.Context, now time.Time) []byte {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Verify native SAML provider registration from approved offline IdP metadata.
+
 - Opt into public SP metadata for an installed SAML sign-in profile. Serve the
   exact ACS and active public signing certificate with the shared safe-read quota.
 

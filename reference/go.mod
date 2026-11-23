@@ -73,7 +73,7 @@ require (
 	github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db
 	github.com/faustbrian/go-sso/oidc v0.0.0-20261123000546-023dd34bb0c7
 	github.com/faustbrian/go-sso/postgres v0.0.0-20261123102447-2049d60f48a2
-	github.com/faustbrian/go-sso/saml v0.0.0-20261123102447-2049d60f48a2
+	github.com/faustbrian/go-sso/saml v0.0.0-20261123103901-e26599c93796
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b
 	github.com/faustbrian/go-transactional-outbox/v2 v2.1.1-0.20261022172917-6ed5e0861542
 	github.com/faustbrian/go-webauthn v0.0.0-20261020074004-ed89b240ab20
