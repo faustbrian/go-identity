@@ -52,6 +52,10 @@ type StoreConfiguration struct {
 	// HTTPEnterpriseOAuth2 independently opts into that browser workflow.
 	EnterpriseOAuth2     *EnterpriseOAuth2Configuration
 	HTTPEnterpriseOAuth2 *HTTPEnterpriseOAuth2Configuration
+	// EnterpriseSAML selects native managed linked-member SAML sign-in.
+	// HTTPEnterpriseSAML independently opts into its exact browser routes.
+	EnterpriseSAML     *EnterpriseSAMLConfiguration
+	HTTPEnterpriseSAML *HTTPEnterpriseSAMLConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

@@ -102,6 +102,10 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 			policy := enterprise.csrfCookie
 			c.CSRFCookie = &policy
 		}
+		if enterprise := s.state.features.enterpriseSAML; enterprise != nil && enterprise.http != nil {
+			policy := enterprise.http.CSRFCookie
+			c.CSRFCookie = &policy
+		}
 	} else {
 		c.BearerSignOut = owner.bearer
 	}

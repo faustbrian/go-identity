@@ -47,8 +47,13 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 		start := kernel.SSOOIDCPreparationErasureMigrationSource{Base: refresh, Version: 2408}
 		accountHistory = kernel.SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 2409}
 	}
-	if f.enterpriseOAuth2 != nil {
+	if f.enterpriseOAuth2 != nil || f.enterpriseSAML != nil {
 		accountHistory = kernel.SSOOAuth2CallbackPreparationErasureMigrationSource{Base: accountHistory, Version: 2410}
+	}
+	if f.enterpriseSAML != nil {
+		refresh := kernel.SSOEnterpriseGrantRefreshPreparationErasureMigrationSource{Base: accountHistory, Version: 2411}
+		callback := kernel.SSOSAMLCallbackPreparationErasureMigrationSource{Base: refresh, Version: 2412}
+		accountHistory = kernel.SSOSAMLStartPreparationErasureMigrationSource{Base: callback, Version: 2413}
 	}
 	full, err := accountHistory.Load(ctx)
 	if err != nil {

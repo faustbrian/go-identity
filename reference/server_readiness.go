@@ -432,7 +432,9 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 	}
 	issuanceSchema, issuanceConstraint := "", ""
 	if f := state.features; f != nil {
-		if f.enterpriseOAuth2 != nil {
+		if f.enterpriseSAML != nil {
+			issuanceSchema, issuanceConstraint = f.enterpriseSAML.sessionSchema, "session_issuances.session_issuances_purpose_sso_saml_v1"
+		} else if f.enterpriseOAuth2 != nil {
 			issuanceSchema, issuanceConstraint = f.enterpriseOAuth2.sessionSchema, "session_issuances.session_issuances_purpose_sso_oauth2_v1"
 		} else if f.enterpriseOIDC != nil {
 			issuanceSchema, issuanceConstraint = f.enterpriseOIDC.sessionSchema, "session_issuances.session_issuances_purpose_sso_oidc_v1"

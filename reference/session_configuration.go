@@ -149,7 +149,8 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 	}
 	var enterprise *sessionpg.SSOOIDCSessionAdmission
 	var enterpriseOAuth2 *sessionpg.SSOOAuth2SessionAdmission
-	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil {
+	var enterpriseSAML *sessionpg.SSOSAMLSessionAdmission
+	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil {
 		if c.Organization == nil {
 			return nil, invalid
 		}
@@ -167,13 +168,20 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 			profile.AuthenticationMethod = "sso-oauth2"
 			enterpriseOAuth2 = &sessionpg.SSOOAuth2SessionAdmission{Profile: profile, Authority: authority}
 		}
+		if c.EnterpriseSAML != nil {
+			profile.AuthenticationMethod = "sso-saml"
+			enterpriseSAML = &sessionpg.SSOSAMLSessionAdmission{Profile: profile, Authority: authority}
+		}
 	}
 	readerConfig := sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection,
 		MFAMagicLink: mfa, MFAPassword: passwordMFA, Passkey: passkey, MFAPasskey: mfaPasskey, SSOOIDC: enterprise}, Validation: validation}
 	var reader *session.SessionService
-	if enterpriseOAuth2 != nil {
+	switch {
+	case enterpriseSAML != nil:
+		reader, err = sessionpg.NewSelectedSessionServiceWithSSOSAML(d.PostgreSQL, readerConfig, *enterpriseSAML, enterpriseOAuth2)
+	case enterpriseOAuth2 != nil:
 		reader, err = sessionpg.NewSelectedSessionServiceWithSSOOAuth2(d.PostgreSQL, readerConfig, *enterpriseOAuth2)
-	} else {
+	default:
 		reader, err = sessionpg.NewSelectedSessionService(d.PostgreSQL, readerConfig)
 	}
 	if err != nil {
@@ -195,9 +203,12 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies, passkeyAuthor
 	state := &sessionState{reader: reader, bearer: bearer, revoke: revoke, config: n, readerAudience: n.Validation.Audience}
 	if len(c.Session.CSRFKeys) > 0 {
 		var executor *sessionpg.CookieRevokeOneExecutor
-		if enterpriseOAuth2 != nil {
+		switch {
+		case enterpriseSAML != nil:
+			executor, err = sessionpg.NewCookieRevokeOneExecutorWithSSOSAML(d.PostgreSQL, execution, c.Session.CSRFKeys, *enterpriseSAML, enterpriseOAuth2)
+		case enterpriseOAuth2 != nil:
 			executor, err = sessionpg.NewCookieRevokeOneExecutorWithSSOOAuth2(d.PostgreSQL, execution, c.Session.CSRFKeys, *enterpriseOAuth2)
-		} else {
+		default:
 			executor, err = sessionpg.NewCookieRevokeOneExecutor(d.PostgreSQL, execution, c.Session.CSRFKeys)
 		}
 		if err != nil {

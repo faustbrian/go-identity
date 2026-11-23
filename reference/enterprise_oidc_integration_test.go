@@ -39,7 +39,7 @@ func TestReferencePostgresEnterpriseOIDCJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseOIDC: true})
 }
 
-type referenceEnterpriseOIDCPolicy struct{ allowLink, allowOAuth2 bool }
+type referenceEnterpriseOIDCPolicy struct{ allowLink, allowOAuth2, allowSAML bool }
 
 func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
@@ -53,6 +53,10 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 			if p.allowOAuth2 {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
+		case "identity.sso.saml-start", "identity.sso.saml-start.recover", "identity.sso.saml-acs", "identity.sso.saml-acs.recover":
+			if p.allowSAML {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		}
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
@@ -63,6 +67,10 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 			}
 		}
 		switch c.Request.Action {
+		case "identity.sso.provider.register-saml", "identity.sso.provider.register-saml.recover":
+			if p.allowSAML {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		case "identity.sso.provider.register-oauth", "identity.sso.provider.register-oauth.recover":
 			if p.allowOAuth2 {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil

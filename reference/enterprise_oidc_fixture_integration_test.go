@@ -322,7 +322,21 @@ func seedEnterpriseLink(t *testing.T, ctx context.Context, pool *database.Pool, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := string(selected.user)
+	seedEnterpriseLinkedAccount(t, ctx, pool, selected.user, provider, issuer)
+}
+
+func seedReferenceSAMLLink(t *testing.T, ctx context.Context, pool *database.Pool, selected enterpriseProvisioned, issuer string) {
+	t.Helper()
+	provider, err := ssopg.SSOSAMLAccountProviderNamespace(selected.organization, selected.provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedEnterpriseLinkedAccount(t, ctx, pool, selected.user, provider, issuer)
+}
+
+func seedEnterpriseLinkedAccount(t *testing.T, ctx context.Context, pool *database.Pool, linked identity.UserID, provider, issuer string) {
+	t.Helper()
+	user := string(linked)
 	execEnterpriseFixture(t, ctx, pool, `INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES($1,$2,'enterprise-fixture-provider',3,'sso',1,true)`, otpTenant, user)
 	execEnterpriseFixture(t, ctx, pool, `WITH a AS (SELECT $3::text AS provider,$4::text AS issuer,$5::text AS subject)
 INSERT INTO identity.accounts(tenant_id,user_id,account_id,provider,issuer,subject,subject_key,version,social_link_version,linked)

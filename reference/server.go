@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -171,6 +172,14 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 		return nil, err
 	}
 	contributions = append(contributions, enterpriseFeatures...)
+	samlFeature, samlNavigation, err := server.enterpriseSAMLFeature(c.HTTP.Network)
+	if err != nil {
+		return nil, err
+	}
+	if samlFeature != nil {
+		contributions = append(contributions, *samlFeature)
+		c.HTTP.CORS = append(slices.Clone(c.HTTP.CORS), samlNavigation)
+	}
 	oauthFeature, err := server.oauthWorkloadFeature(c.HTTP.Network)
 	if err != nil {
 		return nil, err

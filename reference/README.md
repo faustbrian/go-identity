@@ -261,6 +261,27 @@ The [baseline](enterprise_oidc_integration_test.go),
 [explicit-link](enterprise_oidc_link_integration_test.go) journeys use a
 disposable PostgreSQL primary and controlled TLS provider.
 
+## Optional linked-member SAML sign-in
+
+Select `EnterpriseSAML` with the exact installed provider, organization,
+verified domain, provider version, signer generation, mapping version and
+tenant HTTPS origin. Reference uses the existing native provider repository,
+command coordinator, and primary session authority. It supplies the SAML
+wire signer and verifier; do not pass an override. Apply the selected forward
+migrations before serving. They retain OAuth/OIDC storage predecessors without
+enabling their routes. Give the SAML start its own `Login.RequestKeys`
+namespace, separate from provider administration and other sign-in flows.
+
+Select `HTTPEnterpriseSAML` separately for the default SP login and ACS.
+Configure the registered IdP Redirect endpoint and exact HTTPS Origin, the
+allowed application returns, and the normal Lax session and CSRF settings.
+Reference adds the exact navigation admission; do not configure a duplicate
+CORS entry. The start is a same-origin document navigation. The IdP posts the
+signed response and original RelayState to the exact ACS; the ACS delivers a
+normal session and CSRF cookie once and deletes only the dedicated correlation
+cookie. The existing session-read and strict local signout routes apply. This
+selection does not expose metadata, IdP-initiated login, JIT, or SLO.
+
 ## Optional enterprise OIDC provider logout
 
 Select `EnterpriseOIDC.Logout` to install the native provider logout service

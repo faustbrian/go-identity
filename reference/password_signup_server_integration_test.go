@@ -291,6 +291,7 @@ type signupGraphExtensions struct {
 	enterpriseOIDCLogout        bool
 	enterpriseOAuth2            bool
 	enterpriseOAuth2Upgrade     bool
+	enterpriseSAML              bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -553,9 +554,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
-	if extensions.enterpriseOIDC || extensions.enterpriseOAuth2 {
+	if extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML {
 		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink,
-			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade}
+			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade, allowSAML: extensions.enterpriseSAML}
 		if extensions.enterpriseOIDCLogout {
 			selectedAuthorization = referenceEnterpriseOIDCLogoutPolicy{referenceEnterpriseOIDCPolicy: referenceEnterpriseOIDCPolicy{}}
 		}
@@ -737,6 +738,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var enterpriseOAuth2Issuer *referenceEnterpriseIssuer
 	if extensions.enterpriseOAuth2 {
 		enterpriseOAuth2Issuer = configureReferenceEnterpriseOAuth2(t, &c, origin)
+	}
+	var enterpriseSAMLIdP referenceSAMLIdPFixture
+	if extensions.enterpriseSAML {
+		enterpriseSAMLIdP = configureReferenceEnterpriseSAML(t, &c, origin)
 	}
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
@@ -1393,7 +1398,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
-	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil {
+	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil {
 		modules = append(modules, "sso/postgres")
 	}
 	if c.APIKey != nil {
@@ -1455,7 +1460,7 @@ END $$`); err != nil {
 		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
 		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
 	}
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -1654,6 +1659,12 @@ END $$`); err != nil {
 		wantOperations -= 2
 		if seen["identity.session.get"] || seen["identity.session.signout"] {
 			t.Fatal("standalone listing selected HTTP session routes")
+		}
+	}
+	if c.HTTPEnterpriseSAML != nil {
+		wantOperations += 2
+		if !seen["identity.sso.saml-start"] || !seen["identity.sso.saml-acs"] {
+			t.Fatal("selected SAML routes missing")
 		}
 	}
 	if c.HTTPMFAList != nil {
@@ -1859,6 +1870,35 @@ END $$`); err != nil {
 	client.Timeout = 5 * time.Second
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if extensions.enterpriseSAML {
+		if readiness := server.Readiness(ctx); !readiness.Ready {
+			t.Fatal("selected SAML graph did not report ready after migrating", readiness.Failures)
+		}
+		selected := provisionReferenceEnterpriseSAML(t, ctx, c, deps, client, origin, enterpriseSAMLIdP)
+		c.EnterpriseSAML.Profile.OrganizationID, c.EnterpriseSAML.Profile.ProviderID = selected.organization, selected.provider
+		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
+		handler := restarted.Handler()
+		organizationHandler.Store(&handler)
+		proveReferenceEnterpriseSAMLJourney(t, ctx, client, origin, features, deps, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP)
+		c.HTTPEnterpriseSAML = nil
+		nativeOnly, _ := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
+		for _, operation := range nativeOnly.OpenAPI().Operations() {
+			if operation.Record.OperationID == "identity.sso.saml-start" || operation.Record.OperationID == "identity.sso.saml-acs" {
+				t.Fatal("native-only SAML advertised browser routes")
+			}
+		}
+		handler = nativeOnly.Handler()
+		organizationHandler.Store(&handler)
+		response, err := client.Get(origin + "/saml2/" + string(selected.provider) + "/login")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNotFound || len(response.Cookies()) != 0 {
+			t.Fatal("native-only SAML exposed a browser start", response.StatusCode)
+		}
+		return
 	}
 	if extensions.enterpriseOAuth2 {
 		if readiness := server.Readiness(ctx); !readiness.Ready {

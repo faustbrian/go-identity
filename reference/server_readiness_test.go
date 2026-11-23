@@ -79,4 +79,9 @@ func TestOAuthReadinessRequiresSelectedSuccessorWithoutChangingHistoricalGuards(
 		got[0].constraints[1] != history.guards[0].constraints[1] || history.guards[0].constraints[0] != "session_issuances.session_issuances_purpose_v3" {
 		t.Fatal("mixed federation must require the OAuth2 session successor without altering installed-prefix guards")
 	}
+	state.features.enterpriseSAML = &enterpriseSAMLState{sessionSchema: "session_store"}
+	if got := readinessCatalogGuards(state, history); got[0].constraints[0] != "session_issuances.session_issuances_purpose_sso_saml_v1" ||
+		got[0].constraints[1] != history.guards[0].constraints[1] || history.guards[0].constraints[0] != "session_issuances.session_issuances_purpose_v3" {
+		t.Fatal("selected SAML must require the native issuance successor without replacing historical guards")
+	}
 }

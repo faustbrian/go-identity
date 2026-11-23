@@ -89,6 +89,7 @@ type featureState struct {
 	socialOAuth                  *socialOAuthState
 	enterpriseOIDC               *enterpriseOIDCState
 	enterpriseOAuth2             *enterpriseOAuth2State
+	enterpriseSAML               *enterpriseSAMLState
 	oauthWorkload                *oauthWorkloadState
 	oauthDevice                  *oauthDeviceState
 	apiKey                       *apiKeyState
@@ -181,6 +182,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	if err := validateEnterpriseOAuth2Selection(c); err != nil {
+		return err
+	}
+	if err := validateEnterpriseSAMLSelection(c); err != nil {
 		return err
 	}
 	if c.OAuthWorkload != nil {
@@ -550,6 +554,13 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	enterpriseOAuth2Owner, err := composeEnterpriseOAuth2(c, d, evaluator, crypto)
 	if err != nil {
 		return err
+	}
+	enterpriseSAMLOwner, err := composeEnterpriseSAML(c, d, evaluator, crypto)
+	if err != nil {
+		return err
+	}
+	if enterpriseSAMLOwner != nil && enterpriseSAMLOwner.preauth != nil {
+		migrationConfig.preauthIssue = true
 	}
 	sessionOwner, err := composeSession(c, d, passkeyAuthority)
 	if err != nil {
@@ -957,6 +968,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.socialOAuth = socialOAuthOwner
 	s.features.enterpriseOIDC = enterpriseOIDCOwner
 	s.features.enterpriseOAuth2 = enterpriseOAuth2Owner
+	s.features.enterpriseSAML = enterpriseSAMLOwner
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

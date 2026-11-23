@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose opt-in SP-initiated SAML sign-in for a linked organization member.
+  Use the installed signing credential and IdP certificates through signed
+  Redirect and POST, native replay/session settlement, and strict local logout.
+
 - Add opt-in OAuth device authorization to the PostgreSQL Reference password
   graph. Install the native device history, then select the canonical HTTP
   authorization, browser consent, and device token routes. Workload-only and

@@ -145,12 +145,15 @@ func (f *featureState) enterpriseSessionSchema() string {
 	if f.enterpriseOAuth2 != nil {
 		return f.enterpriseOAuth2.sessionSchema
 	}
+	if f.enterpriseSAML != nil {
+		return f.enterpriseSAML.sessionSchema
+	}
 	return ""
 }
 
 func (s StoreSet) enterpriseOAuth2MigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
 	f := s.state.features
-	if f == nil || f.enterpriseOAuth2 == nil {
+	if f == nil || f.enterpriseOAuth2 == nil && f.enterpriseSAML == nil {
 		return catalog, nil
 	}
 	// The existing provider history owns optional OIDC role migration 7.
@@ -172,7 +175,7 @@ func (s StoreSet) enterpriseOAuth2MigrationCatalog(ctx context.Context, catalog 
 			return nil, err
 		}
 	}
-	schema := f.enterpriseOAuth2.sessionSchema
+	schema := f.enterpriseSessionSchema()
 	sessions := migrationHistory{namespace: "identity_enterprise_oauth2_session", owners: map[migrations.Version]ModuleID{}}
 	source := sessionpg.SSOOAuth2SigninMigrationSource{Schema: schema, Version: 1, ValidationVersion: 2}
 	if err := appendEnterpriseMigration(ctx, &sessions, "identity/session/postgres", source, migrationGuard{version: 1, schema: schema,
