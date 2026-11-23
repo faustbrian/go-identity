@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an opt-in same-browser confirmation endpoint for unsolicited SAML.
+  The initial IdP POST returns a private confirmation form and scoped
+  browser cookie, never a session. The confirmed native result controls
+  standard credential delivery and clears the pending cookie.
+
 - Add a separately selected, anonymous SAML SP metadata GET for the installed
   sign-in pair. Use the shared safe-read quota and publish only fresh public XML.
 

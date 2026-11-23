@@ -201,10 +201,17 @@ type signinCallbackState struct {
 
 type signinDeliveryKey struct{}
 type signinDelivery struct {
-	parsed   oauth.QueryCallback
-	redirect string
-	cookies  []string
-	current  func() bool
+	parsed       oauth.QueryCallback
+	redirect     string
+	cookies      []string
+	current      func() bool
+	confirmation *signinConfirmationPage
+}
+
+// Only the selected unsolicited SAML handler stages this non-session response.
+type signinConfirmationPage struct {
+	html, cookie string
+	current      func() bool
 }
 
 func (*signinDelivery) Format(s fmt.State, _ rune) {
@@ -356,7 +363,8 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	// Scope cookies and redirects to the actual fresh write, not to mutable
 	// middleware headers or a quoted/native response value.
 	committed := false
-	final := func(status int) int {
+	var page string
+	final := func(status int, explicit bool) int {
 		if committed {
 			return status
 		}
@@ -368,6 +376,21 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			return status
 		}
 		committed = true
+		if status == http.StatusOK && explicit && delivery.confirmation != nil {
+			form := delivery.confirmation
+			if form.current == nil || !form.current() {
+				return http.StatusServiceUnavailable
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Del("Content-Encoding")
+			w.Header().Del("Content-Disposition")
+			w.Header().Del("Content-Length")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Add("Set-Cookie", form.cookie)
+			page = form.html
+			return status
+		}
 		if status != http.StatusSeeOther {
 			return status
 		}
@@ -383,17 +406,24 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	defer func() {
 		if !committed {
 			// net/http may send an implicit 200 when middleware returns without writing.
-			final(http.StatusOK)
+			final(http.StatusOK, false)
 		}
 	}()
 	writer := httpsnoop.Wrap(w, httpsnoop.Hooks{
 		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
-			return func(status int) { next(final(status)) }
+			return func(status int) {
+				next(final(status, true))
+				if page != "" {
+					body := page
+					page = ""
+					_, _ = io.WriteString(w, body)
+				}
+			}
 		},
 		Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
 			return func(p []byte) (int, error) {
 				if !committed {
-					w.WriteHeader(final(http.StatusOK))
+					w.WriteHeader(final(http.StatusOK, false))
 				}
 				return next(p)
 			}
@@ -401,7 +431,7 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc {
 			return func() {
 				if !committed {
-					w.WriteHeader(final(http.StatusOK))
+					w.WriteHeader(final(http.StatusOK, false))
 				}
 				next()
 			}
@@ -409,7 +439,7 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
 			return func(src io.Reader) (int64, error) {
 				if !committed {
-					w.WriteHeader(final(http.StatusOK))
+					w.WriteHeader(final(http.StatusOK, false))
 				}
 				return next(src)
 			}

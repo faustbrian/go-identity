@@ -32,3 +32,14 @@ func samlACSWire() *identityhttp.WireOperation {
   "responses":{"303":{"description":"Original allowlisted success redirect, fresh session and CSRF cookies, and removal of the exact correlation cookie.","headers":{"Location":{"schema":{"type":"string","format":"uri"}},"Set-Cookie":{"schema":{"type":"string"}}}},"400":{"description":"Invalid form."},"403":{"description":"Callback denied."},"409":{"description":"Original callback conflict."},"429":{"description":"Provider quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable or unresolved; no redirect or cookie."}}
 }`)}
 }
+
+func samlIDPInitWire() *identityhttp.WireOperation {
+	return &identityhttp.WireOperation{Definition: []byte(`{
+  "operationId":"identity.sso.saml-idp-init",
+  "summary":"Confirm a selected IdP-initiated SAML sign-in",
+  "description":"An exact IdP-origin form supplies only SAMLResponse. The response contains a same-origin confirmation form and an independent path-scoped browser cookie, not a session. Only that same-origin form and its original cookie can complete the sign-in. No SP transaction or RelayState is selected.",
+  "parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string","minLength":1,"maxLength":128}}],
+  "requestBody":{"required":true,"content":{"application/x-www-form-urlencoded":{"schema":{"oneOf":[{"type":"object","additionalProperties":false,"required":["SAMLResponse"],"properties":{"SAMLResponse":{"type":"string","minLength":1,"maxLength":1048576}}},{"type":"object","additionalProperties":false,"required":["pending","confirmation"],"properties":{"pending":{"type":"string","minLength":22,"maxLength":22},"confirmation":{"type":"string","minLength":43,"maxLength":43}}}]}}}},
+  "responses":{"200":{"description":"Explicit confirmation form, plus the path-scoped browser cookie.","headers":{"Set-Cookie":{"schema":{"type":"string"}}},"content":{"text/html":{"schema":{"type":"string"}}}},"303":{"description":"Fresh normal session and CSRF cookies, clearing the original browser cookie.","headers":{"Location":{"schema":{"type":"string","format":"uri"}},"Set-Cookie":{"schema":{"type":"string"}}}},"400":{"description":"Invalid form."},"403":{"description":"Arrival origin or confirmation denied."},"409":{"description":"A conflicting confirmation was denied."},"429":{"description":"Provider quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable or unresolved, without credential delivery."}}
+}`)}
+}
