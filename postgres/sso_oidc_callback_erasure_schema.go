@@ -35,8 +35,23 @@ func (s SSOOAuth2CallbackPreparationErasureMigrationSource) Load(ctx context.Con
 	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_oauth2_callback_preparation_erasure", ssoOAuth2CallbackPreparationErasureSQL)
 }
 
+// SSOEnterpriseGrantRefreshPreparationErasureMigrationSource allows the selected
+// refresh command to erase its temporary encrypted successor with the terminal
+// result. Append after SSOOAuth2CallbackPreparationErasureMigrationSource before
+// enabling the refresh writer. Pending and historical rows remain unchanged.
+type SSOEnterpriseGrantRefreshPreparationErasureMigrationSource struct {
+	Base    migrations.Source
+	Version migrations.Version
+}
+
+// Load appends a forward trigger-function update; it performs no I/O.
+func (s SSOEnterpriseGrantRefreshPreparationErasureMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
+	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_enterprise_grant_refresh_preparation_erasure", ssoEnterpriseGrantRefreshPreparationErasureSQL)
+}
+
 const ssoOIDCCallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose='identity.sso.oidc-callback'` + ssoCallbackPreparationErasureSuffix
 const ssoOAuth2CallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback')` + ssoCallbackPreparationErasureSuffix
+const ssoEnterpriseGrantRefreshPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh')` + ssoCallbackPreparationErasureSuffix
 
 const ssoCallbackPreparationErasurePrefix = `SET LOCAL lock_timeout = '5s';
 CREATE OR REPLACE FUNCTION identity.guard_command_preparation() RETURNS trigger

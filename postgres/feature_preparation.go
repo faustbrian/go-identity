@@ -228,7 +228,7 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
-	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q)) && !gated {
+	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoEnterpriseGrantRefreshClaim(q)) && !gated {
 		return result, invalidPreparation()
 	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
@@ -442,7 +442,8 @@ func preparationRetainsDeclaration(p CommandPlan) bool {
 	// reserved before exchange, so recovery needs the same frozen declaration.
 	// Enterprise start likewise retains its admission-gated declaration
 	// through terminal state issuance and temporary output erasure.
-	return p.CommandCounters != nil || providerSigninPreparation(p) || ssoEnterpriseStartSelected(p)
+	return p.CommandCounters != nil || providerSigninPreparation(p) || ssoEnterpriseStartSelected(p) ||
+		p.Feature != nil && p.Feature.Operation == SSOEnterpriseGrantRefreshOperation()
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {

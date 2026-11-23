@@ -45,10 +45,9 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 		// token ciphertext just to check a journal flag.
 		e = tx.QueryRow(ctx, oauthProviderRefreshTerminalFenceSQL, id, string(q.tenant), q.purpose,
 			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseRetainedPreparation)
-	} else if ssoEnterpriseCallbackClaim(q) {
-		// Only the selected external-admission profile hands provider tokens
-		// to the native vault. Its temporary deposit must not survive the
-		// same definitive receipt; the old guard still protects other rows.
+	} else if ssoEnterpriseCallbackClaim(q) || ssoEnterpriseGrantRefreshClaim(q) {
+		// Only these selected external-admission profiles hand provider tokens
+		// to the native vault. Temporary custody ends with the definitive receipt.
 		e = tx.QueryRow(ctx, ssoEnterpriseCallbackTerminalFenceSQL, id, string(q.tenant), q.purpose,
 			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseRetainedPreparation)
 	} else {

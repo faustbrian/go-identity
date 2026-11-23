@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Require the original enterprise OAuth2 session's factor generation for
+  the exact native grant refresh operation without changing other profiles.
+
 - Fence the original known-empty MFA generation in the native enterprise
   OAuth2 grant-revocation transaction. Require the exact original OAuth2
   session identity and version without widening session logout admission.

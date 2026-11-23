@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -18,14 +19,19 @@ import (
 // These opaque synthetic bytes isolate the journal's duplicate-custody lifetime
 // under its actual terminal owner, not token encryption or provider behavior.
 func TestSSOOIDCCallbackJournalErasesOnlyTerminalProfileFour(t *testing.T) {
-	testSSOCallbackJournalErasure(t, false, []int16{4, 2})
+	testSSOJournalErasure(t, ssoOIDCSigninOperation(), []int16{4, 2})
 }
 
 func TestSSOOAuth2CallbackJournalErasesOnlyAfterDefinitiveCommit(t *testing.T) {
-	testSSOCallbackJournalErasure(t, true, []int16{4})
+	testSSOJournalErasure(t, SSOOAuth2SigninOperation(), []int16{4})
 }
 
-func testSSOCallbackJournalErasure(t *testing.T, oauth2 bool, profiles []int16) {
+func TestSSOEnterpriseGrantRefreshJournalErasesOnlyAfterDefinitiveCommit(t *testing.T) {
+	op := identity.FeatureOperation{Owner: "sso", OperationID: "identity.sso.provider-token.refresh", SchemaID: "identity.sso.provider-token.refresh.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	testSSOJournalErasure(t, op, []int16{4})
+}
+
+func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles []int16) {
 	t.Helper()
 	for _, committed := range []bool{true, false} {
 		for _, profile := range profiles {
@@ -46,14 +52,17 @@ func testSSOCallbackJournalErasure(t *testing.T, oauth2 bool, profiles []int16) 
 				start := SSOOIDCPreparationErasureMigrationSource{Base: refresh, Version: 23}
 				installUnlinkPreparationHistory(t, ctx, pool, start)
 
-				binding, plan := ssoOIDCSigninPlanFixture(t)
-				op := ssoOIDCSigninOperation()
-				if oauth2 {
-					binding, plan = ssoOAuth2SigninPlanFixture(t)
-					op = SSOOAuth2SigninOperation()
+				binding, _ := ssoOIDCSigninPlanFixture(t)
+				switch op.OperationID {
+				case ssoOAuth2SigninPurpose:
+					binding, _ = ssoOAuth2SigninPlanFixture(t)
+				case "identity.sso.provider-token.refresh":
+					binding.OperationID, binding.SchemaID = op.OperationID, op.SchemaID
+					binding.UserID, binding.ActorID = "refresh-owner", "refresh-owner"
+					binding.ActorKind, binding.AnonymousFlowID = authorization.SubjectUser, ""
 				}
-				if plan.Feature.Operation != op || !validEnterpriseSigninBinding(binding, op) {
-					t.Fatal("fixture lost the exact enterprise callback operation")
+				if binding.ValidateFor(op) != nil {
+					t.Fatal("fixture lost the exact enterprise operation binding")
 				}
 				q := claimRequest{commandID: binding.CommandID, tenant: binding.TenantID, purpose: binding.OperationID, feature: &op, canonical: []byte{0xa0}, safeFields: commandSafeFields(binding, &op)}
 				keys := claimKeys{current: 1, retained: map[uint32][32]byte{1: {1}}}
@@ -137,7 +146,11 @@ func testSSOCallbackJournalErasure(t *testing.T, oauth2 bool, profiles []int16) 
 					result.Outcome, result.AuditEventID = identity.CommitOutcomeCommitted, "callback-audit"
 					result.Feature.BeforeVersion, result.Feature.AfterVersion = 1, 2
 				}
-				if oauth2 {
+				if op.OperationID != ssoOIDCSigninPurpose {
+					oauth := SSOOAuth2CallbackPreparationErasureMigrationSource{Base: oidc, Version: 25}
+					if op.OperationID != ssoOAuth2SigninPurpose {
+						installUnlinkPreparationHistory(t, ctx, pool, oauth)
+					}
 					beforeExpansion, err := pool.Raw().Begin(ctx)
 					if err != nil {
 						t.Fatal(err)
@@ -147,10 +160,14 @@ func testSSOCallbackJournalErasure(t *testing.T, oauth2 bool, profiles []int16) 
 						t.Fatal(rollbackErr)
 					}
 					if err == nil {
-						t.Fatal("prior guard allowed OAuth callback to discard custody before migration")
+						t.Fatal("prior guard allowed OAuth operation to discard custody before migration")
 					}
 					assertPending()
-					installUnlinkPreparationHistory(t, ctx, pool, SSOOAuth2CallbackPreparationErasureMigrationSource{Base: oidc, Version: 25})
+					if op.OperationID == ssoOAuth2SigninPurpose {
+						installUnlinkPreparationHistory(t, ctx, pool, oauth)
+					} else {
+						installUnlinkPreparationHistory(t, ctx, pool, SSOEnterpriseGrantRefreshPreparationErasureMigrationSource{Base: oauth, Version: 26})
+					}
 					assertPending()
 				}
 				rolledBack, err := pool.Raw().Begin(ctx)

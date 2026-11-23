@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reserve the native enterprise OAuth2 grant refresh preparation profile and
+  allow the definitive settlement to erase temporary encrypted token custody.
+
 - Select the separate native enterprise OIDC logout-completion contributor with
   its exact user-targeted, record-required schema. Completion uses the existing
   coordinator lifecycle without widening logout-start or session authority.
