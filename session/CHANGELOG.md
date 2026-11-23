@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add attributes for the separate host-only, five-minute SAML and Apple POST
+  correlation cookie. Normal session-cookie policy is unchanged.
+
 - Select enterprise OAuth2 cookie reads independently of OIDC. Keep both
   methods cookie-only with original CSRF state, and isolate cache profiles
   without extending the original primary authority deadline.
