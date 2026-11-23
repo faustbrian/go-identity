@@ -85,7 +85,7 @@ func ssoEnterpriseSigninAccount(command identity.Command, op identity.FeatureOpe
 	if !ok || !cookie || code || recovery || bearer || f.Operation != op || !validEnterpriseSigninBinding(f.Binding, op) {
 		return ProviderAccountAdmission{}, invalidWork()
 	}
-	return signinAccountFromFields(f, prefix, "sso", oauthSigninAccountPrefix, otherEnterprisePrefix1, otherEnterprisePrefix2)
+	return signinAccountFromFields(f, prefix, "sso", oauthSigninAccountPrefix, otherEnterprisePrefix1, otherEnterprisePrefix2, ssoSAMLIDPConfirmationAccountPrefix)
 }
 
 // RequireSSOOIDCSigninProviderAccount fences only the exact registered native
@@ -140,6 +140,9 @@ func (w Work) requireSSOSigninProviderAccount(ctx context.Context, owner Feature
 	}
 	expected, decodeErr := decode(command)
 	spec, _ := command.Feature()
+	if op == SSOSAMLIDPConfirmationOperation() {
+		spec, _ = command.SAMLIDPConfirmationFeature()
+	}
 	profile, _ := providerSigninProfile(op)
 	if decodeErr != nil || spec.Binding != b || feature.Operation != op || feature.Contributor != profile.Contrib || life != profile.Lifecycle {
 		return time.Time{}, w.fail(ctx, invalidWork())

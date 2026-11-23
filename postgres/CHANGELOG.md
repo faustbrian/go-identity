@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the original linked account and credential epochs in the exact
+  unsolicited SAML confirmation Work. The paired command must name the same
+  user, tenant and pending arrival; SP and other callback profiles stay separate.
+
 - Admit the separate unsolicited SAML confirmation command only through its
   registered gated owner and one-use capability. Fingerprint both original
   inputs, require both unchanged after preparation, and expose provisional
