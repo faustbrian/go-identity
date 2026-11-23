@@ -31,6 +31,12 @@ func (r *Repository) ssoRevokeProfile(method, operationID string) (IdentifierAdm
 		}
 		return IdentifierAdmissionConfig{}, nil
 	}
+	if operationID == kernel.SSOSAMLLogoutStartOperation().OperationID {
+		if method == "sso-saml" && r.revokeSSOSAML != nil {
+			return r.revokeSSOSAML.Profile, r.revokeSSOSAML.Authority
+		}
+		return IdentifierAdmissionConfig{}, nil
+	}
 	if r.cookieRevoke != nil {
 		if method == "sso-oidc" && r.revokeSSOOIDC != nil {
 			return r.revokeSSOOIDC.Profile, r.revokeSSOOIDC.Authority
@@ -244,11 +250,11 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	if err != nil {
 		return err
 	}
-	if b.OperationID == kernel.SSOOIDCLogoutOperation().OperationID {
-		if a.ssoMethod != "sso-oidc" || a.credential == nil {
+	if b.OperationID == kernel.SSOOIDCLogoutOperation().OperationID || b.OperationID == kernel.SSOSAMLLogoutStartOperation().OperationID {
+		if a.credential == nil {
 			return identity.ForbiddenError{}
 		}
-		return requireSSOOIDCLogoutRecordAuthority(ctx, w, owner, record, a)
+		return requireSSOLogoutRecordAuthority(ctx, w, owner, record, a)
 	}
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.directory); err != nil {
 		return err
@@ -314,22 +320,33 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	return nil
 }
 
-func requireSSOOIDCLogoutRecordAuthority(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session, a revokeRecordAuthority) error {
+func requireSSOLogoutRecordAuthority(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session, a revokeRecordAuthority) error {
 	s, err := record.Bindings()
 	if err != nil {
 		return err
 	}
-	if err := w.RequireSSOOIDCLogoutScope(ctx, owner, s.TenantID, s.UserID, s.SessionID, s.Version); err != nil {
+	var scope func(context.Context, kernel.FeatureExecutionContributor, identity.TenantID, identity.UserID, string, uint64) error
+	var credential func(context.Context, kernel.FeatureExecutionContributor, kernel.CredentialAdmission, string, uint64) error
+	var factors func(context.Context, kernel.Work, kernel.FeatureExecutionContributor, session.Session) error
+	switch a.ssoMethod {
+	case "sso-oidc":
+		scope, credential, factors = w.RequireSSOOIDCLogoutScope, w.RequireLinkedSSOOIDCLogoutCredential, mfapg.RequireSSOOIDCLogoutFactors
+	case "sso-saml":
+		scope, credential, factors = w.RequireSSOSAMLLogoutStartScope, w.RequireLinkedSSOSAMLLogoutStartCredential, mfapg.RequireSSOSAMLLogoutStartFactors
+	default:
+		return identity.ForbiddenError{}
+	}
+	if err := scope(ctx, owner, s.TenantID, s.UserID, s.SessionID, s.Version); err != nil {
 		return err
 	}
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.directory); err != nil {
 		return err
 	}
-	if err := w.RequireLinkedSSOOIDCLogoutCredential(ctx, owner, *a.credential, s.SessionID, s.Version); err != nil {
+	if err := credential(ctx, owner, *a.credential, s.SessionID, s.Version); err != nil {
 		return err
 	}
 	if err := w.RequireActiveUserAuthorization(ctx, owner, a.policy); err != nil {
 		return err
 	}
-	return mfapg.RequireSSOOIDCLogoutFactors(ctx, w, owner, record)
+	return factors(ctx, w, owner, record)
 }

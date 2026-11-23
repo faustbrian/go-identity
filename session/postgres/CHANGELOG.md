@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Revoke the original authenticated SAML session inside native logout-start
+  Work without waiting for a provider response. Require the session's CSRF and
+  original authority and leave its family active. Apply the opt-in revocation
+  journal expansion before enabling this writer.
+
 - Stage the linked user's normal SAML session, family and issuance history in
   the exact unsolicited confirmation transaction after provisional one-use
   consumption. No SP pre-auth flow is needed. Install both

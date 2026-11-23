@@ -17,66 +17,121 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
+	migrations "github.com/faustbrian/go-migrations/v3"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 // Exercise the session-owned effect inside the actual coordinator. The
 // separate provider service must still prove original provider pairing, sealed
 // state persistence and the redirect/return journey.
-type ssoOIDCLogoutEffectTestOwner struct {
-	effect      *SSOOIDCLogoutEffect
+type enterpriseLogoutSessionEffect interface {
+	Apply(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command, session.CSRFToken, session.CSRFKey) (identity.FeatureReceipt, error)
+	Check(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command) error
+	Recover(context.Context, kernel.RecoveryWork, kernel.FeatureExecutionContributor, session.Session) (kernel.RecoveryStatus, error)
+}
+
+type enterpriseLogoutEffectTestOwner struct {
+	effect      enterpriseLogoutSessionEffect
+	profile     enterpriseLogoutSessionTestProfile
 	command     identity.Command
 	csrf        session.CSRFToken
 	key         session.CSRFKey
 	source      session.Session
 	dropsMember bool
+	advanceMFA  bool
 	applied     bool
 	recovered   int
 	vote        kernel.RecoveryStatus
 }
 
-func (*ssoOIDCLogoutEffectTestOwner) Descriptor() kernel.ContributorDescriptor {
-	return kernel.SSOOIDCLogoutDescriptor()
+func (p *enterpriseLogoutEffectTestOwner) Descriptor() kernel.ContributorDescriptor {
+	return p.profile.descriptor
 }
 
-func (*ssoOIDCLogoutEffectTestOwner) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{kernel.SSOOIDCLogoutOperation()}
+func (p *enterpriseLogoutEffectTestOwner) FeatureOperations() []identity.FeatureOperation {
+	return []identity.FeatureOperation{p.profile.operation}
 }
 
-func (p *ssoOIDCLogoutEffectTestOwner) ValidateFeatureCommand(command identity.Command, _ kernel.CommandPlan) error {
+func (p *enterpriseLogoutEffectTestOwner) ValidateFeatureCommand(command identity.Command, _ kernel.CommandPlan) error {
 	if command != p.command {
 		return session.ErrInvalidSessionCommand
 	}
 	return nil
 }
 
-func (p *ssoOIDCLogoutEffectTestOwner) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
+func (p *enterpriseLogoutEffectTestOwner) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
 	r, err := p.effect.Apply(ctx, w, p, command, p.csrf, p.key)
 	p.applied = err == nil
 	return r, err
 }
 
-func (p *ssoOIDCLogoutEffectTestOwner) CheckFeatureCommit(ctx context.Context, w kernel.Work, command identity.Command) error {
+func (p *enterpriseLogoutEffectTestOwner) CheckFeatureCommit(ctx context.Context, w kernel.Work, command identity.Command) error {
+	s, _ := p.source.Bindings()
 	if p.dropsMember {
-		s, _ := p.source.Bindings()
 		if n, err := w.Exec(ctx, `UPDATE public.sso_session_membership SET active=false WHERE tenant_id=$1 AND user_id=$2`, string(s.TenantID), string(s.UserID)); err != nil || n != 1 {
+			return identity.UnavailableError{}
+		}
+	}
+	if p.advanceMFA {
+		// A later generation can still be empty. It cannot replace the one
+		// originally authenticated by the session.
+		if n, err := w.Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND active_factors=0`, string(s.TenantID), string(s.UserID)); err != nil || n != 1 {
 			return identity.UnavailableError{}
 		}
 	}
 	return p.effect.Check(ctx, w, p, command)
 }
 
-func (p *ssoOIDCLogoutEffectTestOwner) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+func (p *enterpriseLogoutEffectTestOwner) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
 	p.recovered++
 	vote, err := p.effect.Recover(ctx, w, p, p.source)
 	p.vote = vote
 	return vote, err
 }
 
+type enterpriseLogoutSessionTestProfile struct {
+	method      string
+	auditAction string
+	operation   identity.FeatureOperation
+	descriptor  kernel.ContributorDescriptor
+	fields      func(session.Session, time.Time) ([]identity.FeatureField, error)
+	effect      func(ssoSessionAccessFixture) (enterpriseLogoutSessionEffect, error)
+	history     func(context.Context, string, string) ([]migrations.Migration, error)
+}
+
 func TestSSOOIDCLogoutEffectRevokesOnlyCurrentSessionWithCSRF(t *testing.T) {
-	for _, mode := range []string{"wrong-csrf", "late-membership-loss", "commit", "commit-with-issuer-predecessor", "recover-absent", "recover-matching", "recover-mismatch"} {
+	assertEnterpriseLogoutEffect(t, enterpriseLogoutSessionTestProfile{
+		method: "sso-oidc", auditAction: "identity.sso.logout_oidc", operation: kernel.SSOOIDCLogoutOperation(), descriptor: kernel.SSOOIDCLogoutDescriptor(), fields: SSOOIDCLogoutFields,
+		effect: func(f ssoSessionAccessFixture) (enterpriseLogoutSessionEffect, error) {
+			return NewSSOOIDCLogoutEffect(f.repository, f.selection)
+		},
+		history: func(ctx context.Context, schema, previous string) ([]migrations.Migration, error) {
+			return (SSOOIDCLogoutMigrationSource{Schema: schema, Version: 100, ValidationVersion: 101, PreviousConstraint: previous}).Load(ctx)
+		},
+	})
+}
+
+func TestSSOSAMLLogoutStartEffectRevokesOriginalWithoutProviderReply(t *testing.T) {
+	assertEnterpriseLogoutEffect(t, enterpriseLogoutSessionTestProfile{
+		method: "sso-saml", auditAction: "identity.sso.logout_saml", operation: kernel.SSOSAMLLogoutStartOperation(), descriptor: kernel.SSOSAMLLogoutStartDescriptor(), fields: SSOSAMLLogoutStartFields,
+		effect: func(f ssoSessionAccessFixture) (enterpriseLogoutSessionEffect, error) {
+			return NewSSOSAMLLogoutStartEffect(f.repository, f.saml)
+		},
+		history: func(ctx context.Context, schema, previous string) ([]migrations.Migration, error) {
+			return (SSOSAMLLogoutStartMigrationSource{Schema: schema, Version: 100, ValidationVersion: 101, PreviousConstraint: previous}).Load(ctx)
+		},
+	})
+}
+
+func assertEnterpriseLogoutEffect(t *testing.T, profile enterpriseLogoutSessionTestProfile) {
+	t.Helper()
+	modes := []string{"wrong-csrf", "late-membership-loss", "late-factor-generation", "commit", "commit-with-issuer-predecessor", "recover-absent", "recover-matching", "recover-mismatch"}
+	if profile.method == "sso-saml" {
+		modes = append(modes, "commit-with-enterprise-oidc-predecessor")
+	}
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
-			f := newSSOSessionAccessFixture(t, "sso-oidc")
+			f := newSSOSessionAccessFixture(t, profile.method)
 			predecessor := "session_revocations_purpose_check"
 			if mode == "commit-with-issuer-predecessor" {
 				issuerHistory, err := (OIDCEndSessionMigrationSource{Schema: f.repository.Schema, Version: 99}).Load(f.ctx)
@@ -88,7 +143,29 @@ func TestSSOOIDCLogoutEffectRevokesOnlyCurrentSessionWithCSRF(t *testing.T) {
 				}
 				predecessor = "session_revocations_purpose_oidc_v1"
 			}
-			history, err := (SSOOIDCLogoutMigrationSource{Schema: f.repository.Schema, Version: 100, ValidationVersion: 101, PreviousConstraint: predecessor}).Load(f.ctx)
+			if mode == "commit-with-enterprise-oidc-predecessor" {
+				prior, err := (SSOOIDCLogoutMigrationSource{Schema: f.repository.Schema, Version: 98, ValidationVersion: 99, PreviousConstraint: predecessor}).Load(f.ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, step := range prior {
+					if _, err := f.pool.Raw().Exec(f.ctx, step.UpSQL()); err != nil {
+						t.Fatal("install previous enterprise OIDC logout journal purpose", err)
+					}
+				}
+				predecessor = "session_revocations_purpose_sso_oidc_v1"
+			}
+			var priorJournalPurpose string
+			if profile.method == "sso-saml" && strings.HasPrefix(mode, "commit") {
+				priorJournalPurpose = "identity.session.revoke-one"
+				if mode == "commit-with-issuer-predecessor" {
+					priorJournalPurpose = "identity.oauth-server.end-session"
+				} else if mode == "commit-with-enterprise-oidc-predecessor" {
+					priorJournalPurpose = "identity.sso.oidc-logout"
+				}
+				seedPredecessorLogoutJournal(t, f, priorJournalPurpose)
+			}
+			history, err := profile.history(f.ctx, f.repository.Schema, predecessor)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -97,16 +174,24 @@ func TestSSOOIDCLogoutEffectRevokesOnlyCurrentSessionWithCSRF(t *testing.T) {
 					t.Fatal("install logout-specific journal purpose", err)
 				}
 			}
+			if priorJournalPurpose != "" {
+				var original bool
+				if err := f.pool.Raw().QueryRow(f.ctx, `SELECT purpose=$1 AND before_version=5 AND after_version=6
+				 AND binding_digest=decode(repeat('02',32),'hex') AND record_digest=decode(repeat('03',32),'hex')
+				 FROM session_store.session_revocations WHERE tenant_id='guest-tenant' AND session_id='earlier-session'`, priorJournalPurpose).Scan(&original); err != nil || !original {
+					t.Fatal("upgrading retained history changed the original revocation", err)
+				}
+			}
 			observed, err := f.reader.Get(f.ctx, f.request)
 			if err != nil || !observed.Authenticated {
 				t.Fatal("admit actual original session", err)
 			}
 			s, _ := observed.Session.Bindings()
-			fields, err := SSOOIDCLogoutFields(observed.Session, observed.ValidUntil().Truncate(time.Microsecond))
+			fields, err := profile.fields(observed.Session, observed.ValidUntil().Truncate(time.Microsecond))
 			if err != nil {
 				t.Fatal("freeze original provider session and cutoff", err)
 			}
-			op := kernel.SSOOIDCLogoutOperation()
+			op := profile.operation
 			b := revokeBinding()
 			b.CommandID, err = identity.NewCommandID()
 			if err != nil {
@@ -118,24 +203,25 @@ func TestSSOOIDCLogoutEffectRevokesOnlyCurrentSessionWithCSRF(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			effect, err := NewSSOOIDCLogoutEffect(f.repository, f.selection)
+			effect, err := profile.effect(f)
 			if err != nil {
 				t.Fatal(err)
 			}
-			p := &ssoOIDCLogoutEffectTestOwner{effect: effect, command: command, csrf: f.csrf, key: f.csrfKey, source: observed.Session, dropsMember: mode == "late-membership-loss"}
+			p := &enterpriseLogoutEffectTestOwner{effect: effect, profile: profile, command: command, csrf: f.csrf, key: f.csrfKey, source: observed.Session,
+				dropsMember: mode == "late-membership-loss", advanceMFA: mode == "late-factor-generation"}
 			if mode == "wrong-csrf" {
 				p.csrf, err = session.NewCSRFToken()
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
-			coordinator, plan := prepareSSOOIDCLogoutEffectTest(t, f, p, b, op, s.Version)
+			coordinator, plan := prepareEnterpriseLogoutEffectTest(t, f, p, b, op, s.Version)
 			reservation, _, err := coordinator.ReserveCommand(f.ctx, b, command, plan)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if strings.HasPrefix(mode, "recover-") {
-				assertSSOOIDCLogoutEffectRecovery(t, f, p, coordinator, b, s.Version, mode)
+				assertEnterpriseLogoutEffectRecovery(t, f, p, coordinator, b, s.Version, mode)
 				return
 			}
 			w, err := coordinator.Begin(f.ctx, reservation)
@@ -150,7 +236,7 @@ func TestSSOOIDCLogoutEffectRevokesOnlyCurrentSessionWithCSRF(t *testing.T) {
 			} else {
 				terminal, err = coordinator.Commit(w, candidate)
 			}
-			committed := mode == "commit" || mode == "commit-with-issuer-predecessor"
+			committed := strings.HasPrefix(mode, "commit")
 			if p.applied != (mode != "wrong-csrf") || (terminal.Outcome == identity.CommitOutcomeCommitted) != committed || committed && err != nil {
 				t.Fatal("logout accepted wrong authority or lost the original effect", terminal.Outcome, applyErr, err)
 			}
@@ -179,7 +265,20 @@ func TestSSOOIDCLogoutEffectRevokesOnlyCurrentSessionWithCSRF(t *testing.T) {
 	}
 }
 
-func assertSSOOIDCLogoutEffectRecovery(t *testing.T, f ssoSessionAccessFixture, p *ssoOIDCLogoutEffectTestOwner, coordinator *kernel.Coordinator, b identity.CommandBinding, version uint64, mode string) {
+func seedPredecessorLogoutJournal(t *testing.T, f ssoSessionAccessFixture, purpose string) {
+	t.Helper()
+	for _, query := range []string{
+		`INSERT INTO identity.identity_command_id_claims(command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields) VALUES(decode(repeat('03',16),'hex'),'guest-tenant',$1,decode(repeat('01',32),'hex'),1,decode('01','hex'))`,
+		`INSERT INTO identity.commands(command_id,tenant_id,purpose) VALUES(decode(repeat('03',16),'hex'),'guest-tenant',$1)`,
+		`INSERT INTO session_store.session_revocations(tenant_id,command_id,purpose,user_id,session_id,before_version,after_version,binding_digest,record_digest) VALUES('guest-tenant',decode(repeat('03',16),'hex'),$1,'enterprise-user','earlier-session',5,6,decode(repeat('02',32),'hex'),decode(repeat('03',32),'hex'))`,
+	} {
+		if _, err := f.pool.Raw().Exec(f.ctx, query, purpose); err != nil {
+			t.Fatal("seed a retained native revocation before migration", err)
+		}
+	}
+}
+
+func assertEnterpriseLogoutEffectRecovery(t *testing.T, f ssoSessionAccessFixture, p *enterpriseLogoutEffectTestOwner, coordinator *kernel.Coordinator, b identity.CommandBinding, version uint64, mode string) {
 	t.Helper()
 	if _, err := f.pool.Raw().Exec(f.ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, mustCommandBytes(t, b.CommandID)); err != nil {
 		t.Fatal(err)
@@ -222,7 +321,7 @@ func assertSSOOIDCLogoutEffectRecovery(t *testing.T, f ssoSessionAccessFixture, 
 	}
 }
 
-func prepareSSOOIDCLogoutEffectTest(t *testing.T, f ssoSessionAccessFixture, p *ssoOIDCLogoutEffectTestOwner, b identity.CommandBinding, op identity.FeatureOperation, version uint64) (*kernel.Coordinator, kernel.CommandPlan) {
+func prepareEnterpriseLogoutEffectTest(t *testing.T, f ssoSessionAccessFixture, p *enterpriseLogoutEffectTestOwner, b identity.CommandBinding, op identity.FeatureOperation, version uint64) (*kernel.Coordinator, kernel.CommandPlan) {
 	t.Helper()
 	domain, _ := kernel.NewRepository(f.pool, kernel.Config{MaximumDuration: time.Second})
 	a, _ := auditpg.NewIdentityContributor(auditpg.Config{})
@@ -237,7 +336,7 @@ func prepareSSOOIDCLogoutEffectTest(t *testing.T, f ssoSessionAccessFixture, p *
 		t.Fatal(err)
 	}
 	bldr, _ := audit.NewBuilder(audit.BuilderConfig{})
-	const action = "identity.sso.logout_oidc"
+	action := p.profile.auditAction
 	seed, err := bldr.Build(audit.RecordInput{OccurredAt: time.Now().UTC(), Action: action, Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "session", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(b.CommandID), "aggregate.type": "session", "aggregate.id": b.RecordID, "aggregate.before_version": strconv.FormatUint(version, 10), "aggregate.after_version": strconv.FormatUint(version+1, 10), "retention.class": "protected"}})
 	if err != nil {
 		t.Fatal(err)

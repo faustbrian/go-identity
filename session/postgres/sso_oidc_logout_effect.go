@@ -13,16 +13,26 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const ssoOIDCLogoutSessionUntil = "sso.oidc.logout.session.valid-until"
+// Each profile is selected by a dedicated constructor; command data cannot
+// choose a protocol, contributor, or alternate session proof.
+type enterpriseLogoutProfile struct {
+	method, fieldPrefix string
+	operation           identity.FeatureOperation
+	contributor         kernel.ContributorDescriptor
+}
 
-func ssoOIDCLogoutSessionSpec(source session.Session) (session.SessionSpec, error) {
+func oidcLogoutProfile() enterpriseLogoutProfile {
+	return enterpriseLogoutProfile{"sso-oidc", "sso.oidc.logout.session.", kernel.SSOOIDCLogoutOperation(), kernel.SSOOIDCLogoutDescriptor()}
+}
+
+func (p enterpriseLogoutProfile) originalSpec(source session.Session) (session.SessionSpec, error) {
 	deny := session.ErrInvalidSessionCommand
 	s, err := source.Bindings()
 	if err != nil || s.Version == ^uint64(0) || s.Authentication.Kind != session.AuthenticationVerified || source.MFAAuthentication() != (session.MFAAuthentication{}) {
 		return session.SessionSpec{}, deny
 	}
 	proof := s.Authentication.Proof
-	if proof.Method != "sso-oidc" || proof.Purpose != "session-issue" || proof.Assurance != auth.AssuranceSingleFactor {
+	if proof.Method != p.method || proof.Purpose != "session-issue" || proof.Assurance != auth.AssuranceSingleFactor {
 		return session.SessionSpec{}, deny
 	}
 	if _, continued := source.CredentialContinuation(); continued {
@@ -43,7 +53,11 @@ func ssoOIDCLogoutSessionSpec(source session.Session) (session.SessionSpec, erro
 // its original session admission; floor to microseconds, never round up.
 // The fields grant no authentication, provider authority or lease renewal.
 func SSOOIDCLogoutFields(source session.Session, until time.Time) ([]identity.FeatureField, error) {
-	s, err := ssoOIDCLogoutSessionSpec(source)
+	return oidcLogoutProfile().fields(source, until)
+}
+
+func (p enterpriseLogoutProfile) fields(source session.Session, until time.Time) ([]identity.FeatureField, error) {
+	s, err := p.originalSpec(source)
 	if err != nil || !sessionReadTime(until) || until.Nanosecond()%1000 != 0 || !until.After(s.LastActivityAt) {
 		return nil, session.ErrInvalidSessionCommand
 	}
@@ -55,7 +69,7 @@ func SSOOIDCLogoutFields(source session.Session, until time.Time) ([]identity.Fe
 	if err != nil {
 		return nil, err
 	}
-	return append(fields, identity.FeatureField{Name: ssoOIDCLogoutSessionUntil, Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: until.UTC()}}), nil
+	return append(fields, identity.FeatureField{Name: p.fieldPrefix + "valid-until", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: until.UTC()}}), nil
 }
 
 // SSOOIDCLogoutEffect owns only the local single-session mutation within the
@@ -76,12 +90,12 @@ func NewSSOOIDCLogoutEffect(c Config, admission SSOOIDCSessionAdmission) (*SSOOI
 	return &SSOOIDCLogoutEffect{native: Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), maximumDuration: c.MaximumDuration, revokeSSOOIDC: &admission}}, nil
 }
 
-func ssoOIDCLogoutFieldsFromCommand(c identity.Command, b identity.CommandBinding) (session.Session, time.Time, error) {
+func (p enterpriseLogoutProfile) fieldsFromCommand(c identity.Command, b identity.CommandBinding) (session.Session, time.Time, error) {
 	f, ok := c.Feature()
 	deny := func() (session.Session, time.Time, error) {
 		return session.Session{}, time.Time{}, session.ErrInvalidSessionCommand
 	}
-	if !ok || f.Operation != kernel.SSOOIDCLogoutOperation() || f.Binding != b {
+	if !ok || f.Operation != p.operation || f.Binding != b {
 		return deny()
 	}
 	var original []identity.FeatureField
@@ -90,12 +104,12 @@ func ssoOIDCLogoutFieldsFromCommand(c identity.Command, b identity.CommandBindin
 		switch {
 		case strings.HasPrefix(field.Name, originalSessionPrefix):
 			original = append(original, field)
-		case field.Name == ssoOIDCLogoutSessionUntil:
+		case field.Name == p.fieldPrefix+"valid-until":
 			if !until.IsZero() || field.Value.Kind != identity.FeatureTime {
 				return deny()
 			}
 			until = field.Value.Time
-		case strings.HasPrefix(field.Name, "sso.oidc.logout.session."):
+		case strings.HasPrefix(field.Name, p.fieldPrefix):
 			return deny()
 		}
 	}
@@ -103,25 +117,24 @@ func ssoOIDCLogoutFieldsFromCommand(c identity.Command, b identity.CommandBindin
 	if err != nil {
 		return deny()
 	}
-	if _, err := SSOOIDCLogoutFields(source, until); err != nil {
+	if _, err := p.fields(source, until); err != nil {
 		return deny()
 	}
 	return source, until, nil
 }
 
-func ssoOIDCLogoutScopeMatches(b identity.CommandBinding, f kernel.FeatureRegistration, l kernel.LifecyclePlan, source session.Session) bool {
-	s, err := ssoOIDCLogoutSessionSpec(source)
-	op := kernel.SSOOIDCLogoutOperation()
-	return err == nil && f.Operation == op && f.Contributor == kernel.SSOOIDCLogoutDescriptor() && b.ValidateFor(op) == nil &&
+func (p enterpriseLogoutProfile) scopeMatches(b identity.CommandBinding, f kernel.FeatureRegistration, l kernel.LifecyclePlan, source session.Session) bool {
+	s, err := p.originalSpec(source)
+	return err == nil && f.Operation == p.operation && f.Contributor == p.contributor && b.ValidateFor(p.operation) == nil &&
 		b.ActorKind == authorization.SubjectUser && b.ActorID == identity.ActorID(s.UserID) &&
 		b.TenantID == s.TenantID && b.UserID == s.UserID && b.RecordID == s.SessionID &&
 		l.EventType == "session.revoked.v1" && l.EventIndex == 0 && l.BeforeVersion == s.Version && l.AfterVersion == s.Version+1
 }
 
-func (e *SSOOIDCLogoutEffect) intent(w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command) (identity.CommandBinding, kernel.FeatureRegistration, kernel.LifecyclePlan, session.Session, time.Time, error) {
+func (p enterpriseLogoutProfile) intent(w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command) (identity.CommandBinding, kernel.FeatureRegistration, kernel.LifecyclePlan, session.Session, time.Time, error) {
 	b, f, l, err := w.FeatureScope(owner)
-	source, until, recordErr := ssoOIDCLogoutFieldsFromCommand(c, b)
-	if err != nil || recordErr != nil || !ssoOIDCLogoutScopeMatches(b, f, l, source) {
+	source, until, recordErr := p.fieldsFromCommand(c, b)
+	if err != nil || recordErr != nil || !p.scopeMatches(b, f, l, source) {
 		return identity.CommandBinding{}, kernel.FeatureRegistration{}, kernel.LifecyclePlan{}, session.Session{}, time.Time{}, session.ErrInvalidSessionCommand
 	}
 	return b, f, l, source, until, nil
@@ -134,19 +147,23 @@ func (e *SSOOIDCLogoutEffect) Apply(ctx context.Context, w kernel.Work, owner ke
 	if ctx == nil || e == nil || e.native.revokeSSOOIDC == nil {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
+	return oidcLogoutProfile().apply(ctx, &e.native, w, owner, c, token, key)
+}
+
+func (p enterpriseLogoutProfile) apply(ctx context.Context, native *Repository, w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command, token session.CSRFToken, key session.CSRFKey) (identity.FeatureReceipt, error) {
 	if err := w.RequireFeatureCommand(ctx, owner, c); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	b, f, l, source, until, err := e.intent(w, owner, c)
+	b, f, l, source, until, err := p.intent(w, owner, c)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	bounded, stop := context.WithTimeout(ctx, e.native.maximumDuration)
+	bounded, stop := context.WithTimeout(ctx, native.maximumDuration)
 	defer stop()
 	if err := requireOriginalSessionWindow(bounded, w, source, until); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	return e.native.applySingleSessionRevocationWithCSRF(bounded, w, owner, b, f, l, source, &revokeCSRFInput{token: token, key: key})
+	return native.applySingleSessionRevocationWithCSRF(bounded, w, owner, b, f, l, source, &revokeCSRFInput{token: token, key: key})
 }
 
 // Check fences the exact terminal record, unchanged family, original linked
@@ -156,19 +173,23 @@ func (e *SSOOIDCLogoutEffect) Check(ctx context.Context, w kernel.Work, owner ke
 	if ctx == nil || e == nil || e.native.revokeSSOOIDC == nil {
 		return session.ErrInvalidSessionCommand
 	}
-	b, _, l, source, until, err := e.intent(w, owner, c)
+	return oidcLogoutProfile().check(ctx, &e.native, w, owner, c)
+}
+
+func (p enterpriseLogoutProfile) check(ctx context.Context, native *Repository, w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command) error {
+	b, _, l, source, until, err := p.intent(w, owner, c)
 	if err != nil {
 		return err
 	}
-	bounded, stop := context.WithTimeout(ctx, e.native.maximumDuration)
+	bounded, stop := context.WithTimeout(ctx, native.maximumDuration)
 	defer stop()
-	if err := e.native.requireRevokeRecordAuthorityFor(bounded, w, owner, source, b); err != nil {
+	if err := native.requireRevokeRecordAuthorityFor(bounded, w, owner, source, b); err != nil {
 		return err
 	}
-	if err := e.native.requireCommittedSingleSessionRevocation(bounded, w, b, l, source); err != nil {
+	if err := native.requireCommittedSingleSessionRevocation(bounded, w, b, l, source); err != nil {
 		return err
 	}
-	if err := e.native.requireRevokeOrganization(bounded, w, owner, b, source); err != nil {
+	if err := native.requireRevokeOrganization(bounded, w, owner, b, source); err != nil {
 		return err
 	}
 	return requireOriginalSessionWindow(bounded, w, source, until)
@@ -181,14 +202,18 @@ func (e *SSOOIDCLogoutEffect) Recover(ctx context.Context, w kernel.RecoveryWork
 	if ctx == nil || e == nil || e.native.revokeSSOOIDC == nil {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
+	return oidcLogoutProfile().recover(ctx, &e.native, w, owner, source)
+}
+
+func (p enterpriseLogoutProfile) recover(ctx context.Context, native *Repository, w kernel.RecoveryWork, owner kernel.FeatureExecutionContributor, source session.Session) (kernel.RecoveryStatus, error) {
 	b, f, l, err := w.FeatureScope(owner)
-	if err != nil || !ssoOIDCLogoutScopeMatches(b, f, l, source) {
+	if err != nil || !p.scopeMatches(b, f, l, source) {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
-	bounded, stop := context.WithTimeout(ctx, e.native.maximumDuration)
+	bounded, stop := context.WithTimeout(ctx, native.maximumDuration)
 	defer stop()
 	id, _ := revocationEvidence(b, l)
-	rows, err := w.Query(bounded, oidcEndSessionEvidenceSQL(e.native.schema), string(b.TenantID), id)
+	rows, err := w.Query(bounded, oidcEndSessionEvidenceSQL(native.schema), string(b.TenantID), id)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

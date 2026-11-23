@@ -69,11 +69,12 @@ func (r *Repository) applySingleSessionRevocation(ctx context.Context, w kernel.
 	return r.applySingleSessionRevocationWithCSRF(ctx, w, owner, b, feature, transition, original, nil)
 }
 
-// Local signout and both OIDC effects share the same session mutation and
+// Local signout and federated effects share the same session mutation and
 // journal. Enterprise logout checks its original CSRF after the write lock;
 // the other profiles have independent admission and retain their old checks.
 func (r *Repository) applySingleSessionRevocationWithCSRF(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, b identity.CommandBinding, feature kernel.FeatureRegistration, transition kernel.LifecyclePlan, original session.Session, csrf *revokeCSRFInput) (identity.FeatureReceipt, error) {
-	if (b.OperationID == kernel.SSOOIDCLogoutOperation().OperationID) != (csrf != nil) {
+	enterprise := b.OperationID == kernel.SSOOIDCLogoutOperation().OperationID || b.OperationID == kernel.SSOSAMLLogoutStartOperation().OperationID
+	if enterprise != (csrf != nil) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
 	spec, err := original.Bindings()
