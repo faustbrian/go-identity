@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Select enterprise SAML cookie validation independently of OIDC and OAuth2,
+  preserving session-bound CSRF and the original encrypted-cache expiry.
+
 - Select a prospective SAML session independently of OIDC and OAuth 2.0.
   Keep original callback and remember policy, and disclose only after a new
   acknowledged session commit with the required CSRF synchronizer.

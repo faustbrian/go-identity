@@ -344,6 +344,11 @@ func (c *EncryptedCacheCodec) additionalData(tenant identity.TenantID) (envelope
 	case c.service.ssoOIDCCookieOnly:
 		fields["organization-transport"] = "enterprise-oidc-cookie-else-bearer-v1"
 	}
+	if c.service.ssoSAMLCookieOnly {
+		// A separate field distinguishes every SAML selection without changing
+		// the ciphertext context for existing OIDC/OAuth2-only deployments.
+		fields["enterprise-saml-cookie"] = "v1"
+	}
 	return envelope.NewContext(fields)
 }
 func cacheCryptoError(ctx context.Context, e error) error {

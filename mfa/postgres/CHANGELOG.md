@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Require the original enterprise SAML session's known-empty factor generation
+  for primary session reads and exact same-user revoke-one Work. Missing,
+  enrolled, stale or foreign authority denies without SLO or fallback admission.
+
 - Fence the original known-empty MFA generation in the exact enterprise SAML
   callback transaction. Missing, enrolled or changed state denies without
   widening admission to the OIDC, OAuth2 or logout profiles.

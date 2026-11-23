@@ -25,6 +25,15 @@ func ssoOIDCIssuerFixture(t *testing.T, persistent bool) (*session.SessionIssuer
 
 func ssoIssuerFixture(t *testing.T, persistent, oauth2 bool) (*session.SessionIssuer, session.PreparedIssuance, identity.Command, *issueExecutor, *mutableIssueClock) {
 	t.Helper()
+	method := "sso-oidc"
+	if oauth2 {
+		method = "sso-oauth2"
+	}
+	return ssoIssuerFixtureForMethod(t, persistent, method)
+}
+
+func ssoIssuerFixtureForMethod(t *testing.T, persistent bool, method string) (*session.SessionIssuer, session.PreparedIssuance, identity.Command, *issueExecutor, *mutableIssueClock) {
+	t.Helper()
 	spec := sessionSpec(t)
 	vector, _ := spec.Authority.Bindings()
 	vector.Session.Version, vector.SessionFamily.Version = 1, 1
@@ -47,14 +56,28 @@ func ssoIssuerFixture(t *testing.T, persistent, oauth2 bool) (*session.SessionIs
 	spec.Authentication.Proof.ID = auth.ProofID(b.CommandID)
 	spec.Authentication.Proof.Method = "sso-oidc"
 	opOwner := "sso/oidc"
-	if oauth2 {
+	switch method {
+	case "sso-oauth2":
 		b.OperationID, b.SchemaID = "identity.sso.oauth-callback", "sso-enterprise-oauth2-callback-v1"
 		spec.Authentication.Proof.Method, opOwner = "sso-oauth2", "sso/oauth2"
+	case "sso-saml":
+		b.OperationID, b.SchemaID = "identity.sso.saml-acs", "sso-enterprise-saml-acs-v1"
+		spec.Authentication.Proof.Method, opOwner = "sso-saml", "sso/saml"
 	}
 	spec.Authentication.CredentialID = "enterprise-provider-account"
 	executor := &issueExecutor{}
 	executor.execute = func(_ context.Context, request session.IssueRequest) (session.IssueExecution, error) {
-		return committedSSOIssue(t, request, oauth2), nil
+		if method == "sso-saml" {
+			command, prospective, ok := request.SSOSAMLCommand()
+			if !ok {
+				t.Fatal("original SAML command unavailable")
+			}
+			feature, _ := command.Feature()
+			return session.IssueExecution{Receipt: identity.CommandResult{Binding: b,
+				Outcome: identity.CommitOutcomeCommitted, AuditEventID: "audit", Feature: &identity.FeatureReceipt{
+					Operation: feature.Operation, BeforeVersion: 1, AfterVersion: 2}}, Session: prospective}, nil
+		}
+		return committedSSOIssue(t, request, method == "sso-oauth2"), nil
 	}
 	executor.recover = func(context.Context, session.IssueRequest) (session.IssueExecution, error) {
 		t.Fatal("secret-bearing enterprise recovery was invoked")
@@ -65,8 +88,11 @@ func ssoIssuerFixture(t *testing.T, persistent, oauth2 bool) (*session.SessionIs
 	csrf, _ := session.NewCSRFKey(2, make([]byte, 32))
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-session", SameSite: http.SameSiteLaxMode})
 	newIssuer := session.NewSSOOIDCSessionIssuerWithCSRF
-	if oauth2 {
+	switch method {
+	case "sso-oauth2":
 		newIssuer = session.NewSSOOAuth2SessionIssuerWithCSRF
+	case "sso-saml":
+		newIssuer = session.NewSSOSAMLSessionIssuerWithCSRF
 	}
 	issuer, err := newIssuer(executor, session.IssuerConfig{Clock: clock, MaximumDuration: time.Second, LookupKey: key, TokenSize: 32, Cookie: cookie}, csrf)
 	if err != nil {
@@ -74,9 +100,12 @@ func ssoIssuerFixture(t *testing.T, persistent, oauth2 bool) (*session.SessionIs
 	}
 	credential := identity.CredentialRef{ID: identity.CredentialID(spec.Authentication.CredentialID), TenantID: spec.TenantID, UserID: spec.UserID, Kind: identity.CredentialProvider, Owner: "sso", Version: spec.Authentication.CredentialVersion}
 	var prepared session.PreparedIssuance
-	if oauth2 {
+	switch method {
+	case "sso-oauth2":
 		prepared, err = issuer.PrepareSSOOAuth2(b, session.SSOOAuth2IssuanceSpec{Session: spec, Credential: credential})
-	} else {
+	case "sso-saml":
+		prepared, err = issuer.PrepareSSOSAML(b, session.SSOSAMLIssuanceSpec{Session: spec, Credential: credential})
+	default:
 		prepared, err = issuer.PrepareSSOOIDC(b, session.SSOOIDCIssuanceSpec{Session: spec, Credential: credential})
 	}
 	if err != nil {

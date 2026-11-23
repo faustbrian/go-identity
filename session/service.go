@@ -141,6 +141,7 @@ type SessionService struct {
 	organizationBearerOnly bool
 	ssoOIDCCookieOnly      bool
 	ssoOAuth2CookieOnly    bool
+	ssoSAMLCookieOnly      bool
 }
 
 // NewSelectedProfileSessionService freezes an explicit nonempty subset of
@@ -212,7 +213,20 @@ type EnterpriseCookieSelection struct {
 // bearer-only rule. The reader must separately prove every current authority
 // dimension. Cache custody binds the exact selection without renewing evidence.
 func NewEnterpriseCookieProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string, selected EnterpriseCookieSelection) (*SessionService, error) {
-	if !selected.OIDC && !selected.OAuth2 {
+	return newEnterpriseCookieProfileSessionService(reader, config, methods, cacheProfile, selected, false)
+}
+
+// NewSSOSAMLCookieProfileSessionService selects original enterprise SAML
+// sessions on cookie transport with their issued CSRF state. Select OIDC and
+// OAuth2 independently with siblings; its zero value selects only SAML.
+// The owned reader must prove current authority for each selected protocol.
+// Cached admission is bound to this selection and retains its original expiry.
+func NewSSOSAMLCookieProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string, siblings EnterpriseCookieSelection) (*SessionService, error) {
+	return newEnterpriseCookieProfileSessionService(reader, config, methods, cacheProfile, siblings, true)
+}
+
+func newEnterpriseCookieProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string, selected EnterpriseCookieSelection, saml bool) (*SessionService, error) {
+	if !selected.OIDC && !selected.OAuth2 && !saml {
 		return nil, ErrInvalidInput
 	}
 	s, err := NewOrganizationBearerProfileSessionService(reader, config, methods, cacheProfile)
@@ -223,6 +237,7 @@ func NewEnterpriseCookieProfileSessionService(reader SessionReader, config Servi
 		return nil, ErrInvalidInput
 	}
 	s.ssoOIDCCookieOnly, s.ssoOAuth2CookieOnly = selected.OIDC, selected.OAuth2
+	s.ssoSAMLCookieOnly = saml
 	return s, nil
 }
 
@@ -238,13 +253,15 @@ func (s *SessionService) admitsTransport(record Session, kind CredentialKind) bo
 	if err != nil {
 		return false
 	}
-	if (s.ssoOIDCCookieOnly || s.ssoOAuth2CookieOnly) && spec.Authentication.Kind == AuthenticationVerified {
+	if (s.ssoOIDCCookieOnly || s.ssoOAuth2CookieOnly || s.ssoSAMLCookieOnly) && spec.Authentication.Kind == AuthenticationVerified {
 		selectedCookie := vector.Organization.Present && kind == CredentialCookie && record.CSRFState().state != nil
 		switch spec.Authentication.Proof.Method {
 		case "sso-oidc":
 			return s.ssoOIDCCookieOnly && selectedCookie
 		case "sso-oauth2":
 			return s.ssoOAuth2CookieOnly && selectedCookie
+		case "sso-saml":
+			return s.ssoSAMLCookieOnly && selectedCookie
 		}
 	}
 	return !vector.Organization.Present || kind == CredentialBearer && record.CSRFState().state == nil
