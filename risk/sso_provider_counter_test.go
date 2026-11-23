@@ -61,11 +61,20 @@ func TestOIDCProviderRegistrationRequiresExactProtectedAdmission(t *testing.T) {
 }
 
 func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T) {
+	testEnterpriseProviderRegistrationRequiresOwnProtectedAdmission(t, "identity.sso.provider.register-oauth", "identity.sso.provider.register-saml")
+}
+
+func TestSAMLProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T) {
+	testEnterpriseProviderRegistrationRequiresOwnProtectedAdmission(t, "identity.sso.provider.register-saml", "identity.sso.provider.register-oauth")
+}
+
+func testEnterpriseProviderRegistrationRequiresOwnProtectedAdmission(t *testing.T, selected, sibling Action) {
+	t.Helper()
 	policy := testPolicy(t)
 	scope := testContext()
-	scope.Operation = "identity.sso.provider.register-oauth"
+	scope.Operation = selected
 	scope.IndependentFactor = true
-	subject := Subject{Actor: "organization-admin", Resource: "disabled-oauth-provider", Network: "192.0.2.1"}
+	subject := Subject{Actor: "organization-admin", Resource: "disabled-enterprise-provider", Network: "192.0.2.1"}
 	key, err := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +95,7 @@ func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T)
 		}
 		assessment, err := policy.Assess(context.Background(), scope, []Signal{status, captcha})
 		if err != nil || assessment.Decision.Action != Allow {
-			t.Fatalf("clean OAuth registration cannot reach protected reservation: %v (%v)", assessment.Decision.Action, err)
+			t.Fatalf("clean registration cannot reach protected reservation: %v (%v)", assessment.Decision.Action, err)
 		}
 		for _, change := range []func(*Signal){
 			func(s *Signal) { s.Tenant = "foreign-tenant" },
@@ -98,7 +107,7 @@ func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T)
 			change(&foreign)
 			assessment, err := policy.Assess(context.Background(), scope, []Signal{foreign, captcha})
 			if err == nil && assessment.Decision.Action != Deny {
-				t.Fatal("foreign or expired signal authorized OAuth registration")
+				t.Fatal("foreign or expired signal authorized registration")
 			}
 		}
 	})
@@ -106,16 +115,16 @@ func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T)
 	t.Run("original reservation binds every privileged dimension", func(t *testing.T) {
 		command, err := counters.Prepare(scope, subject, scope.Now)
 		if err != nil {
-			t.Fatalf("OAuth registration cannot prepare protected reservation: %v", err)
+			t.Fatalf("registration cannot prepare protected reservation: %v", err)
 		}
 		binding := command.Bindings()
 		dimensions := []Dimension{TenantDimension, ActorDimension, ResourceDimension, NetworkDimension}
 		if binding.Operation != scope.Operation || binding.Tenant != scope.Tenant || binding.Attempt != scope.Attempt || binding.Phase != ReserveWithCommand || len(binding.Targets) != len(dimensions) || counters.Validate(command, scope, subject, scope.Now) != nil {
-			t.Fatal("OAuth registration lost its original protected command scope")
+			t.Fatal("registration lost its original protected command scope")
 		}
 		for i, dimension := range dimensions {
 			if binding.Targets[i].Dimension != dimension {
-				t.Fatalf("OAuth registration counter %d has dimension %v, want %v", i, binding.Targets[i].Dimension, dimension)
+				t.Fatalf("registration counter %d has dimension %v, want %v", i, binding.Targets[i].Dimension, dimension)
 			}
 		}
 		for _, change := range []func(*Context, *Subject){
@@ -128,7 +137,7 @@ func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T)
 			changed, target := scope, subject
 			change(&changed, &target)
 			if counters.Validate(command, changed, target, scope.Now) == nil {
-				t.Fatal("OAuth reservation transferred its original scope")
+				t.Fatal("registration transferred its original reservation scope")
 			}
 		}
 		for _, change := range []func(*Subject){
@@ -139,13 +148,13 @@ func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T)
 			incomplete := subject
 			change(&incomplete)
 			if _, err := counters.Prepare(scope, incomplete, scope.Now); err == nil {
-				t.Fatal("OAuth registration omitted a required privileged dimension")
+				t.Fatal("registration omitted a required privileged dimension")
 			}
 		}
 		if counters.Validate(command, scope, subject, scope.Now.Add(15*time.Minute)) == nil {
-			t.Fatal("OAuth reservation renewed its original exclusive deadline")
+			t.Fatal("registration renewed its original exclusive reservation deadline")
 		}
-		for _, operation := range []Action{"identity.sso.provider.register-oidc", "identity.sso.provider.update", "identity.sso.provider.enable", "identity.sso.provider.disable", "identity.sso.provider.credentials-rotate", "identity.organization.create"} {
+		for _, operation := range []Action{sibling, "identity.sso.provider.register-oidc", "identity.sso.provider.update", "identity.sso.provider.enable", "identity.sso.provider.disable", "identity.sso.provider.credentials-rotate", "identity.organization.create"} {
 			other := scope
 			other.Operation = operation
 			foreignCommand, err := counters.Prepare(other, subject, scope.Now)
@@ -153,13 +162,13 @@ func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T)
 				t.Fatal(err)
 			}
 			if counters.Validate(command, other, subject, scope.Now) == nil || counters.Validate(foreignCommand, scope, subject, scope.Now) == nil {
-				t.Fatalf("OAuth registration shared reservation authority with %q", operation)
+				t.Fatalf("registration shared reservation authority with %q", operation)
 			}
 		}
 	})
 
 	t.Run("unselected protocols and aliases stay closed", func(t *testing.T) {
-		for _, operation := range []Action{"identity.sso.provider.register-oauth2", "identity.sso.provider.register-oauth.extra", "identity.sso.provider.register-oauth-oidc", "identity.sso.provider.register-saml", "identity.sso.provider.Register-oauth", "identity.sso.provider.register-oauth ", "identity.sso.provider.get", "identity.sso.provider.list"} {
+		for _, operation := range []Action{"identity.sso.provider.register-oauth2", "identity.sso.provider.register-oauth.extra", "identity.sso.provider.register-oauth-oidc", "identity.sso.provider.register-saml.extra", "identity.sso.provider.Register-saml", "identity.sso.provider.register-saml ", "identity.sso.provider.Register-oauth", "identity.sso.provider.register-oauth ", "identity.sso.provider.get", "identity.sso.provider.list"} {
 			other := scope
 			other.Operation = operation
 			assessment, err := policy.Assess(context.Background(), other, []Signal{testSignal(other, "status", SignalClean), testSignal(other, "captcha", SignalClean)})
@@ -167,7 +176,7 @@ func TestOAuthProviderRegistrationRequiresItsOwnProtectedAdmission(t *testing.T)
 				t.Fatalf("unselected operation %q reached risk admission", operation)
 			}
 			if _, err := counters.Prepare(other, subject, scope.Now); err == nil {
-				t.Fatalf("unselected operation %q obtained OAuth registration counters", operation)
+				t.Fatalf("unselected operation %q obtained registration counters", operation)
 			}
 		}
 	})
@@ -301,7 +310,7 @@ func TestOIDCProviderEnableRequiresItsOwnProtectedAdmission(t *testing.T) {
 		if counters.Validate(command, scope, subject, scope.Now.Add(15*time.Minute)) == nil {
 			t.Fatal("enable reservation renewed its original deadline")
 		}
-		for _, operation := range []Action{"identity.sso.provider.register-oidc", "identity.sso.provider.update", "identity.sso.provider.credentials-rotate", "identity.sso.provider.disable"} {
+		for _, operation := range []Action{"identity.sso.provider.register-oidc", "identity.sso.provider.register-saml", "identity.sso.provider.update", "identity.sso.provider.credentials-rotate", "identity.sso.provider.disable"} {
 			other := scope
 			other.Operation = operation
 			foreignCommand, err := counters.Prepare(other, subject, scope.Now)
@@ -314,7 +323,7 @@ func TestOIDCProviderEnableRequiresItsOwnProtectedAdmission(t *testing.T) {
 		}
 	})
 	t.Run("unselected actions and aliases stay closed", func(t *testing.T) {
-		for _, operation := range []Action{"identity.sso.provider.disable ", "identity.sso.provider.delete", "identity.sso.provider.get", "identity.sso.provider.list", "identity.sso.provider.register-oauth2", "identity.sso.provider.register-saml", "identity.sso.provider.Enable", "identity.sso.provider.enable ", "identity.sso.provider.enable-oidc"} {
+		for _, operation := range []Action{"identity.sso.provider.disable ", "identity.sso.provider.delete", "identity.sso.provider.get", "identity.sso.provider.list", "identity.sso.provider.register-oauth2", "identity.sso.provider.Enable", "identity.sso.provider.enable ", "identity.sso.provider.enable-oidc"} {
 			other := scope
 			other.Operation = operation
 			assessment, err := policy.Assess(context.Background(), other, []Signal{testSignal(other, "status", SignalClean), testSignal(other, "captcha", SignalClean)})

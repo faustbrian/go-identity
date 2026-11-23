@@ -2,7 +2,7 @@
 // Owned Golib planning sources (MIT); regenerate and review all classifications.
 // PUBLIC_CONTRACTS.json SHA-256: 3364b210cb3b5753ff7dd85f11763691519c546bdd6b4220e5e544ae2bf01e05
 // REFERENCE_CONFIGURATION.md SHA-256: dc766c02baefab3b9ebd86b897891b9ea505518ea19363e2b1e083183375a514
-// risk/native_operations.json SHA-256: e6d77bc677951a50d1f36b07b3b030fd71d3b444850f94d4718f3f860eeb74e4
+// risk/native_operations.json SHA-256: 190e60b11b695859e5ca8eb9e32042f13661dbd5fd2a16d7fd6ed9c8174de666
 package risk
 
 import "time"
@@ -327,7 +327,7 @@ var canonicalOperations = map[Action]ProfileClass{
 	"identity.sso.provider.list":                        DefaultDeny,
 	"identity.sso.provider.register-oauth":              Privileged,
 	"identity.sso.provider.register-oidc":               Privileged,
-	"identity.sso.provider.register-saml":               DefaultDeny,
+	"identity.sso.provider.register-saml":               Privileged,
 	"identity.sso.provider.update":                      Privileged,
 	"identity.sso.saml-acs":                             Authentication,
 	"identity.sso.saml-idp-init":                        Authentication,

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit only the exact disabled SAML provider registration through its own
+  privileged command counters. Keep current signals, scope and expiry bound
+  to the original intent without granting organization or activation authority.
+
 - Admit exact disabled OAuth provider registration through its own privileged,
   tenant/actor/provider/network-bound counters, retaining required current
   signals, original scope and exclusive expiry. This grants no organization

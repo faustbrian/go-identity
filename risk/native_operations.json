@@ -20,6 +20,7 @@
   "identity.sso.provider.enable": "privileged",
   "identity.sso.provider.register-oauth": "privileged",
   "identity.sso.provider.register-oidc": "privileged",
+  "identity.sso.provider.register-saml": "privileged",
   "identity.sso.provider.update": "privileged",
   "identity.username.available": "state_neutral_read"
 }
