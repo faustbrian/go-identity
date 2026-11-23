@@ -6,11 +6,13 @@ import (
 	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 )
 
 const ssoOIDCSessionPrefix = "sso.oidc.session."
 const ssoOAuth2SessionPrefix = "sso.oauth2.session."
+const ssoSAMLSessionPrefix = "sso.saml.session."
 
 func ssoOIDCSessionOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "sso/oidc", OperationID: "identity.sso.oidc-callback", SchemaID: "sso-enterprise-oidc-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
@@ -33,6 +35,12 @@ func SSOOIDCSigninSessionFields(record session.Session) ([]identity.FeatureField
 // the original transaction must still fence current account and browser use.
 func SSOOAuth2SigninSessionFields(record session.Session) ([]identity.FeatureField, error) {
 	return ssoSigninSessionFields(record, ssoOAuth2SessionPrefix, "sso-oauth2")
+}
+
+// SSOSAMLSigninSessionFields freezes the exact SAML session intent for the
+// existing native coordinator. It does not authenticate a provider or issue.
+func SSOSAMLSigninSessionFields(record session.Session) ([]identity.FeatureField, error) {
+	return ssoSigninSessionFields(record, ssoSAMLSessionPrefix, "sso-saml")
 }
 
 func ssoSigninSessionFields(record session.Session, prefix, method string) ([]identity.FeatureField, error) {
@@ -58,16 +66,22 @@ func ssoSigninSessionFields(record session.Session, prefix, method string) ([]id
 // not a substitute for the command's anonymous flow. Decoding never creates an
 // opaque proof, restores a bearer, refreshes evidence or checks live authority.
 func SSOOIDCSigninSession(command identity.Command) (session.Session, error) {
-	return ssoSigninSession(command, ssoOIDCSessionOperation(), ssoOIDCSessionPrefix, ssoOAuth2SessionPrefix, "sso-oidc")
+	return ssoSigninSession(command, ssoOIDCSessionOperation(), ssoOIDCSessionPrefix, "sso-oidc", ssoOAuth2SessionPrefix, ssoSAMLSessionPrefix)
 }
 
 // SSOOAuth2SigninSession decodes only the exact OAuth callback's original
 // browser-bound intent. It cannot restore a secret or renew current authority.
 func SSOOAuth2SigninSession(command identity.Command) (session.Session, error) {
-	return ssoSigninSession(command, ssoOAuth2SessionOperation(), ssoOAuth2SessionPrefix, ssoOIDCSessionPrefix, "sso-oauth2")
+	return ssoSigninSession(command, ssoOAuth2SessionOperation(), ssoOAuth2SessionPrefix, "sso-oauth2", ssoOIDCSessionPrefix, ssoSAMLSessionPrefix)
 }
 
-func ssoSigninSession(command identity.Command, operation identity.FeatureOperation, prefix, otherEnterprisePrefix, method string) (session.Session, error) {
+// SSOSAMLSigninSession decodes only the original SAML callback's prospective
+// linked session, not browser possession or live authority.
+func SSOSAMLSigninSession(command identity.Command) (session.Session, error) {
+	return ssoSigninSession(command, kernel.SSOSAMLSigninOperation(), ssoSAMLSessionPrefix, "sso-saml", ssoOIDCSessionPrefix, ssoOAuth2SessionPrefix)
+}
+
+func ssoSigninSession(command identity.Command, operation identity.FeatureOperation, prefix, method string, foreignPrefixes ...string) (session.Session, error) {
 	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
 	feature, ok := command.Feature()
 	_, cookie := command.PreAuthCookie()
@@ -86,8 +100,10 @@ func ssoSigninSession(command identity.Command, operation identity.FeatureOperat
 	var user identity.UserID
 	fields := make([]identity.FeatureField, 0, len(feature.Fields))
 	for _, field := range feature.Fields {
-		if strings.HasPrefix(field.Name, otherEnterprisePrefix) {
-			return deny()
+		for _, foreign := range foreignPrefixes {
+			if strings.HasPrefix(field.Name, foreign) {
+				return deny()
+			}
 		}
 		name, selected := strings.CutPrefix(field.Name, prefix)
 		if !selected {

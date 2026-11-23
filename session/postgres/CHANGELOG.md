@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in PostgreSQL issuance for the exact native SAML callback. The
+  original browser flow, session, family and issuance record share one Work
+  with the caller's replay reservation. Install both
+  `SSOSAMLSigninMigrationSource` steps before enabling the writer. This
+  effect alone does not enable a callback route or session read/logout.
+
 - Add the local session effect for explicitly selected enterprise OIDC
   logout. Require the original session's CSRF, live membership and linked
   credential, and retain the revocation in the existing coordinator journal.

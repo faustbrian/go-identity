@@ -31,7 +31,6 @@ type ssoSigninEffect struct {
 	config       Config
 	profile      IdentifierAdmissionConfig
 	organization OrganizationSessionAuthority
-	oauth2       bool
 }
 
 // SSOOIDCOrganizationUpdate applies provider-owned organization changes in the
@@ -57,25 +56,21 @@ func (*SSOOIDCSigninEffect) MarshalText() ([]byte, error) { return nil, session.
 // require the current selected member. Install both SSO issuance migrations
 // before selecting this effect. Construction performs no IO.
 func NewSSOOIDCSigninEffect(c Config, p IdentifierAdmissionConfig, org OrganizationSessionAuthority) (*SSOOIDCSigninEffect, error) {
-	effect, err := newSSOSigninEffect(c, p, org, false)
+	effect, err := newSSOSigninEffect(c, p, org, "sso-oidc")
 	if err != nil {
 		return nil, err
 	}
 	return &SSOOIDCSigninEffect{effect}, nil
 }
 
-func newSSOSigninEffect(c Config, p IdentifierAdmissionConfig, org OrganizationSessionAuthority, oauth2 bool) (*ssoSigninEffect, error) {
-	method := "sso-oidc"
-	if oauth2 {
-		method = "sso-oauth2"
-	}
+func newSSOSigninEffect(c Config, p IdentifierAdmissionConfig, org OrganizationSessionAuthority, method string) (*ssoSigninEffect, error) {
 	if !validSchema(c.Schema) || c.MaximumDuration <= 0 || c.MaximumDuration > time.Minute ||
 		!p.valid() || p.AuthenticationMethod != method || p.CredentialKind != identity.CredentialProvider || p.CredentialOwner != "sso" || nilIssueDependency(org) {
 		return nil, session.ErrInvalidSessionCommand
 	}
 	c.Schema = strings.Clone(c.Schema)
 	p.GlobalAuthorityID, p.PolicyNamespace, p.Audience = strings.Clone(p.GlobalAuthorityID), strings.Clone(p.PolicyNamespace), strings.Clone(p.Audience)
-	return &ssoSigninEffect{native: Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), maximumDuration: c.MaximumDuration}, config: c, profile: p, organization: org, oauth2: oauth2}, nil
+	return &ssoSigninEffect{native: Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), maximumDuration: c.MaximumDuration}, config: c, profile: p, organization: org}, nil
 }
 
 func (e *SSOOIDCSigninEffect) core() *ssoSigninEffect {
@@ -210,8 +205,11 @@ func (e *ssoSigninEffect) recover(ctx context.Context, w kernel.RecoveryWork, ow
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
 	defer stop()
 	digest := ssoOIDCSigninIssuanceDigest
-	if e.oauth2 {
+	switch e.profile.AuthenticationMethod {
+	case "sso-oauth2":
 		digest = ssoOAuth2SigninIssuanceDigest
+	case "sso-saml":
+		digest = ssoSAMLSigninIssuanceDigest
 	}
 	_, status, err := readNativeIssuanceIdentity(bounded, w, e.native.schema, b, transition, digest)
 	return status, err
@@ -223,8 +221,11 @@ func (e *ssoSigninEffect) valid(ctx context.Context) bool {
 
 func (e *ssoSigninEffect) scope(feature kernel.FeatureRegistration, lifecycle kernel.LifecyclePlan) bool {
 	operation, contract := ssoOIDCSessionOperation(), "sso.oidc-login-callback"
-	if e.oauth2 {
+	switch e.profile.AuthenticationMethod {
+	case "sso-oauth2":
 		operation, contract = ssoOAuth2SessionOperation(), "sso.oauth2-login-callback"
+	case "sso-saml":
+		operation, contract = kernel.SSOSAMLSigninOperation(), "sso.saml-login-callback"
 	}
 	return feature.Operation == operation &&
 		feature.Contributor == (kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: contract, Version: 1}) &&
@@ -251,8 +252,15 @@ func ssoOIDCSigninPreAuth(spec session.SessionSpec, preauth session.PreAuthTrans
 
 func (e *ssoSigninEffect) requireAccountAuthority(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session) error {
 	decodeAccount := kernel.SSOOIDCSigninAccount
-	if e.oauth2 {
+	fenceAccount := w.RequireSSOOIDCSigninProviderAccount
+	fenceFactors := mfapg.RequireSSOOIDCSigninFactors
+	switch e.profile.AuthenticationMethod {
+	case "sso-oauth2":
 		decodeAccount = kernel.SSOOAuth2SigninAccount
+		fenceAccount, fenceFactors = w.RequireSSOOAuth2SigninProviderAccount, mfapg.RequireSSOOAuth2SigninFactors
+	case "sso-saml":
+		decodeAccount = kernel.SSOSAMLSigninAccount
+		fenceAccount, fenceFactors = w.RequireSSOSAMLSigninProviderAccount, mfapg.RequireSSOSAMLSigninFactors
 	}
 	account, err := decodeAccount(command)
 	if err != nil {
@@ -273,11 +281,6 @@ func (e *ssoSigninEffect) requireAccountAuthority(ctx context.Context, w kernel.
 	}
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, directory); err != nil {
 		return err
-	}
-	fenceAccount := w.RequireSSOOIDCSigninProviderAccount
-	fenceFactors := mfapg.RequireSSOOIDCSigninFactors
-	if e.oauth2 {
-		fenceAccount, fenceFactors = w.RequireSSOOAuth2SigninProviderAccount, mfapg.RequireSSOOAuth2SigninFactors
 	}
 	if _, err := fenceAccount(ctx, owner, command); err != nil {
 		return err

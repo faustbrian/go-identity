@@ -55,6 +55,26 @@ in both configurations. OAuth2 requires the original linked credential,
 organization membership, known-empty MFA generation and user policy. It
 cannot fall back to another login profile or be used as a bearer credential.
 
+### Selected enterprise SAML issuance
+
+Apply both `SSOSAMLSigninMigrationSource` steps after the validated OAuth2
+issuance expansion. Use two unused permanent versions after that history.
+Disable the SAML writer to roll back adoption; retain both migration steps and
+existing issuance records.
+
+For the original linked SAML user, bind the prospective session using
+`SSOSAMLSigninSessionFields` and select `NewSSOSAMLSigninEffect` with method
+`sso-saml`, credential kind provider and owner `sso`. The native callback owns
+signed assertion validation and reserves both replay IDs in the same Work
+before calling `Apply`. The effect requires original capability custody,
+consumes the dedicated browser flow, and stages the session, family and
+issuance record. Supply the real `OrganizationSessionAuthority`. Call
+`CheckCurrent` after other effects and before commit; any error aborts Work.
+`Recover` votes only on the original retained issuance, never a bearer.
+
+This effect does not select a provider, install a route, or enable reads or
+local logout for SAML sessions on its own.
+
 ## Combined password and OAuth admission
 
 `SingleFactorSessionAdmissionConfig.OAuth` independently selects the exact

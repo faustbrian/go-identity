@@ -69,7 +69,7 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		if err != nil {
 			return err
 		}
-		if created != 1 && (b.OperationID == ssoOIDCSessionOperation().OperationID || b.OperationID == ssoOAuth2SessionOperation().OperationID) {
+		if created != 1 && (b.OperationID == ssoOIDCSessionOperation().OperationID || b.OperationID == ssoOAuth2SessionOperation().OperationID || b.OperationID == kernel.SSOSAMLSigninOperation().OperationID) {
 			return identity.ConflictError{}
 		}
 	}
@@ -115,6 +115,8 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		digest = ssoOIDCSigninIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == ssoOAuth2SessionOperation().OperationID {
 		digest = ssoOAuth2SigninIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
+	} else if b.OperationID == kernel.SSOSAMLSigninOperation().OperationID {
+		digest = ssoSAMLSigninIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	}
 	if b.OperationID == "identity.email.verification-signin" {
 		if _, err := identity.ParseCommandID(b.RecordID); err != nil {

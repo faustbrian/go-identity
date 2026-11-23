@@ -20,6 +20,7 @@ import (
 	"github.com/faustbrian/go-authorization/v3"
 	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -38,6 +39,7 @@ type ssoOIDCSessionOrganizationFixture struct {
 }
 
 var errSSOOIDCSessionOrganizationUpdate = errors.New("organization update denied")
+var errSSOSAMLTestForeignFactorAuthority = errors.New("foreign callback obtained SAML factor authority")
 
 type ssoOIDCSessionOrganizationUpdateFixture struct {
 	organization *ssoOIDCSessionOrganizationFixture
@@ -199,17 +201,25 @@ type ssoSessionEffectFixture interface {
 }
 
 func (p *ssoOIDCSessionInvocation) operation() identity.FeatureOperation {
-	if _, ok := p.effect.(*SSOOAuth2SigninEffect); ok {
+	switch p.effect.(type) {
+	case *SSOOAuth2SigninEffect:
 		return kernel.SSOOAuth2SigninOperation()
+	case *SSOSAMLSigninEffect:
+		return kernel.SSOSAMLSigninOperation()
+	default:
+		return ssoOIDCSessionOperation()
 	}
-	return ssoOIDCSessionOperation()
 }
 
 func (p *ssoOIDCSessionInvocation) Descriptor() kernel.ContributorDescriptor {
-	if p.operation() == kernel.SSOOAuth2SigninOperation() {
+	switch p.operation() {
+	case kernel.SSOOAuth2SigninOperation():
 		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oauth2-login-callback", Version: 1}
+	case kernel.SSOSAMLSigninOperation():
+		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.saml-login-callback", Version: 1}
+	default:
+		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-login-callback", Version: 1}
 	}
-	return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-login-callback", Version: 1}
 }
 func (p *ssoOIDCSessionInvocation) FeatureOperations() []identity.FeatureOperation {
 	return []identity.FeatureOperation{p.operation()}
@@ -220,6 +230,10 @@ func (p *ssoOIDCSessionInvocation) ValidateFeatureCommand(command identity.Comma
 	}
 	if p.operation() == kernel.SSOOAuth2SigninOperation() {
 		_, err := SSOOAuth2SigninSession(command)
+		return err
+	}
+	if p.operation() == kernel.SSOSAMLSigninOperation() {
+		_, err := SSOSAMLSigninSession(command)
 		return err
 	}
 	_, err := SSOOIDCSigninSession(command)
@@ -236,6 +250,12 @@ func (p *ssoOIDCSessionInvocation) ValidateSSOOIDCSigninConsumption(command iden
 }
 func (p *ssoOIDCSessionInvocation) ValidateSSOOAuth2SigninConsumption(command identity.Command, proof kernel.CapabilityPlan) error {
 	if p.operation() != kernel.SSOOAuth2SigninOperation() || command != p.original || p.declaration.Capability == nil || proof != *p.declaration.Capability {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
+func (p *ssoOIDCSessionInvocation) ValidateSSOSAMLSigninConsumption(command identity.Command, proof kernel.CapabilityPlan) error {
+	if p.operation() != kernel.SSOSAMLSigninOperation() || command != p.original || p.declaration.Capability == nil || proof != *p.declaration.Capability {
 		return identity.ForbiddenError{}
 	}
 	return nil
@@ -287,9 +307,12 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 	p.retained = w
 	var consumed kernel.CapabilityReservationBinding
 	var err error
-	if p.operation() == kernel.SSOOAuth2SigninOperation() {
+	switch p.operation() {
+	case kernel.SSOOAuth2SigninOperation():
 		consumed, err = w.SSOOAuth2SigninConsumption(p)
-	} else {
+	case kernel.SSOSAMLSigninOperation():
+		consumed, err = w.SSOSAMLSigninConsumption(p)
+	default:
 		consumed, err = w.SSOOIDCSigninConsumption(p)
 	}
 	spec, ok := command.Feature()
@@ -297,6 +320,14 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
 	p.consumption = consumed
+	if p.mode == "foreign-saml-factor-guard" {
+		state, err := mfapg.RequireSSOSAMLSigninFactors(ctx, w, p, command, 1)
+		if err == nil || state.Version() != 0 {
+			err = errSSOSAMLTestForeignFactorAuthority
+		}
+		p.applyErr = err
+		return identity.FeatureReceipt{}, err
+	}
 	if p.mode == "reconstructed-command" {
 		cookie, _ := command.PreAuthCookie()
 		command, err = identity.NewFeaturePreAuthCommand(spec, cookie)
@@ -327,6 +358,11 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 			return identity.FeatureReceipt{}, err
 		}
 	}
+	if p.mode == "late-factor-enrolled" {
+		if _, err := w.Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=2,active_factors=1 WHERE tenant_id='guest-tenant' AND user_id='enterprise-user'`); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	return receipt, nil
 }
 func (p *ssoOIDCSessionInvocation) CheckFeatureCommit(ctx context.Context, w kernel.Work, command identity.Command) error {
@@ -349,6 +385,13 @@ func TestSSOOAuth2SigninSessionPreparedPostgres(t *testing.T) {
 	testSSOSigninSessionPreparedPostgres(t, "sso-oauth2")
 }
 
+func TestSSOSAMLSigninSessionPreparedPostgres(t *testing.T) {
+	testSSOSigninSessionPreparedPostgres(t, "sso-saml")
+}
+
+const samlFixtureProvider = "sso.saml.v1.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const samlFixtureIssuer = "urn:example:original-saml-idp"
+
 func testSSOSigninSessionPreparedPostgres(t *testing.T, method string) {
 	t.Helper()
 	ctx, pool, repository := anonymousSessionDatabase(t)
@@ -356,7 +399,13 @@ func testSSOSigninSessionPreparedPostgres(t *testing.T, method string) {
 	prepared := kernel.CounterPreparationMigrationSource{Base: kernel.AdmissionPreparationMigrationSource{Base: kernel.PreparationMigrationSource{Base: accounts, Version: 31}, Version: 32}, Version: 33}
 	start := kernel.SSOOIDCPreparationErasureMigrationSource{Base: prepared, Version: 39}
 	oidc := kernel.SSOOIDCCallbackPreparationErasureMigrationSource{Base: start, Version: 40}
-	history, err := (kernel.SSOOAuth2CallbackPreparationErasureMigrationSource{Base: oidc, Version: 41}).Load(ctx)
+	oauth := kernel.SSOOAuth2CallbackPreparationErasureMigrationSource{Base: oidc, Version: 41}
+	var kernelHistory migrations.Source = oauth
+	if method == "sso-saml" {
+		refresh := kernel.SSOEnterpriseGrantRefreshPreparationErasureMigrationSource{Base: oauth, Version: 44}
+		kernelHistory = kernel.SSOSAMLCallbackPreparationErasureMigrationSource{Base: refresh, Version: 45}
+	}
+	history, err := kernelHistory.Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +417,11 @@ func testSSOSigninSessionPreparedPostgres(t *testing.T, method string) {
 			t.Fatal("native account and retained preparation history", err)
 		}
 	}
-	for _, source := range []migrations.Source{mfapg.MigrationSource{Version: 34}, PreAuthMigrationSource{Schema: "session_store", Version: 35}, SSOOIDCSigninMigrationSource{Schema: "session_store", Version: 36, ValidationVersion: 37, PreviousConstraint: "session_issuances_purpose_anonymous_v1"}, CSRFMigrationSource{Schema: "session_store", Version: 38}, SSOOAuth2SigninMigrationSource{Schema: "session_store", Version: 42, ValidationVersion: 43}} {
+	sessionHistory := []migrations.Source{mfapg.MigrationSource{Version: 34}, PreAuthMigrationSource{Schema: "session_store", Version: 35}, SSOOIDCSigninMigrationSource{Schema: "session_store", Version: 36, ValidationVersion: 37, PreviousConstraint: "session_issuances_purpose_anonymous_v1"}, CSRFMigrationSource{Schema: "session_store", Version: 38}, SSOOAuth2SigninMigrationSource{Schema: "session_store", Version: 42, ValidationVersion: 43}}
+	if method == "sso-saml" {
+		sessionHistory = append(sessionHistory, SSOSAMLSigninMigrationSource{Schema: "session_store", Version: 46, ValidationVersion: 47})
+	}
+	for _, source := range sessionHistory {
 		steps, err := source.Load(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -406,6 +459,13 @@ CREATE TABLE public.sso_session_membership(tenant_id text NOT NULL,user_id text 
 INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,authority_key,version,active) VALUES('guest-tenant','enterprise-user','selected-org','organization:guest-tenant:selected-org',7,true)`); err != nil {
 		t.Fatal("actual account/factor and explicit organization fixture rows", err)
 	}
+	if method == "sso-saml" {
+		if _, err := pool.Raw().Exec(ctx, `UPDATE identity.accounts SET provider=$1::text,issuer=$2::text,
+subject_key=sha256(convert_to(octet_length($1::text)::text||':'||$1::text||octet_length($2::text)::text||':'||$2::text||octet_length(subject)::text||':'||subject,'UTF8'))
+WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixtureProvider, samlFixtureIssuer); err != nil {
+			t.Fatal("install exact distinct SAML issuer fixture", err)
+		}
+	}
 	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "guest-deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: method, CredentialKind: identity.CredentialProvider, CredentialOwner: "sso"}
 	policyScope := policy.AuthorityScope{TenantID: "guest-tenant", PolicyNamespace: profile.PolicyNamespace, SubjectID: "enterprise-user"}
 	if _, err := policy.InitializeAuthority(ctx, pool.Raw(), policyScope, time.Second); err != nil {
@@ -414,9 +474,12 @@ INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,auth
 	organization := &ssoOIDCSessionOrganizationFixture{pool: pool}
 	config := Config{Schema: "session_store", MaximumDuration: time.Second}
 	var effect ssoSessionEffectFixture
-	if method == "sso-oauth2" {
+	switch method {
+	case "sso-oauth2":
 		effect, err = NewSSOOAuth2SigninEffect(config, profile, organization)
-	} else {
+	case "sso-saml":
+		effect, err = NewSSOSAMLSigninEffect(config, profile, organization)
+	default:
 		effect, err = NewSSOOIDCSigninEffect(config, profile, organization)
 	}
 	if err != nil {
@@ -426,9 +489,15 @@ INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,auth
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "organization-update", "organization-update-failure", "organization-update-expired", "organization-update-nil", "organization-update-typed-nil", "existing-family", "reconstructed-command", "stale-organization", "late-membership-removed", "rollback", "audit-failure", "audit-fails-success-only", "outbox-failure"} {
-		if method == "sso-oauth2" && strings.HasPrefix(mode, "organization-update") {
-			continue // OAuth deliberately has no synchronous organization-update port.
+	modes := []string{"commit", "organization-update", "organization-update-failure", "organization-update-expired", "organization-update-nil", "organization-update-typed-nil", "existing-family", "reconstructed-command", "stale-organization", "late-membership-removed", "rollback", "audit-failure", "audit-fails-success-only", "outbox-failure"}
+	if method == "sso-saml" {
+		modes = []string{"commit", "existing-family", "reconstructed-command", "late-membership-removed", "late-factor-enrolled", "rollback", "outbox-failure"}
+	} else {
+		modes = append(modes, "foreign-saml-factor-guard")
+	}
+	for _, mode := range modes {
+		if method != "sso-oidc" && strings.HasPrefix(mode, "organization-update") {
+			continue // This separate organization effect belongs only to OIDC.
 		}
 		t.Run(mode, func(t *testing.T) {
 			organization.requireCalls, organization.update = 0, nil
@@ -547,8 +616,11 @@ INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,auth
 			if (mode == "reconstructed-command" || mode == "stale-organization") && (owner.applied || owner.finalEntered) {
 				t.Fatal("Apply denial escaped to final commit check")
 			}
-			if mode == "late-membership-removed" && (!owner.applied || !owner.finalEntered || owner.final) {
-				t.Fatal("late membership removal did not deny exact final admission")
+			if mode == "foreign-saml-factor-guard" && (owner.consumption.Generation == 0 || owner.applyErr == nil || errors.Is(owner.applyErr, errSSOSAMLTestForeignFactorAuthority) || owner.finalEntered) {
+				t.Fatal("SAML factor guard did not deny the live sibling callback before final admission", owner.applyErr)
+			}
+			if (mode == "late-membership-removed" || mode == "late-factor-enrolled") && (!owner.applied || !owner.finalEntered || owner.final) {
+				t.Fatal("late authority change did not deny exact final admission")
 			}
 			if (mode == "rollback" || mode == "audit-failure" || mode == "audit-fails-success-only" || mode == "outbox-failure") && !owner.applied {
 				t.Fatal("failure control never reached staged session", executionErr)
@@ -624,6 +696,9 @@ INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,auth
 				if method == "sso-oauth2" {
 					issuanceDigest, otherDigest = otherDigest, issuanceDigest
 				}
+				if method == "sso-saml" {
+					issuanceDigest = ssoSAMLSigninIssuanceDigest
+				}
 				retained, status, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, binding, transition, issuanceDigest)
 				if err != nil || status != kernel.RecoveryCommitted || retained.UserID != spec.UserID || retained.SessionID != spec.SessionID || retained.FamilyID != spec.FamilyID {
 					t.Fatal("retained issuance lost the selected identity", err)
@@ -653,13 +728,26 @@ INSERT INTO public.sso_session_membership(tenant_id,user_id,organization_id,auth
 					t.Fatal("late membership mutation escaped rollback", err)
 				}
 			}
+			if mode == "late-factor-enrolled" {
+				var version string
+				var count int
+				if err := pool.Raw().QueryRow(ctx, `SELECT version::text,active_factors FROM identity_mfa.factor_authorities WHERE tenant_id='guest-tenant' AND user_id='enterprise-user'`).Scan(&version, &count); err != nil || version != "1" || count != 0 {
+					t.Fatal("late factor change or session escaped original rollback", err)
+				}
+			}
 		})
 	}
 }
 
 func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *database.Pool, repository *kernel.Repository, organization *ssoOIDCSessionOrganizationFixture, profile IdentifierAdmissionConfig, mode string) (identity.Command, session.Session, session.PreAuthTransaction, kernel.CapabilityPlan) {
 	t.Helper()
-	account, err := repository.GetSSOOIDCSigninAccount(ctx, kernel.ProviderSigninAccountQuery{TenantID: "guest-tenant", Provider: "oidc", Issuer: "https://issuer.example", Subject: "enterprise-subject"})
+	query := kernel.ProviderSigninAccountQuery{TenantID: "guest-tenant", Provider: "oidc", Issuer: "https://issuer.example", Subject: "enterprise-subject"}
+	getAccount := repository.GetSSOOIDCSigninAccount
+	if profile.AuthenticationMethod == "sso-saml" {
+		query.Provider, query.Issuer = samlFixtureProvider, samlFixtureIssuer
+		getAccount = repository.GetSSOSAMLSigninAccount
+	}
+	account, err := getAccount(ctx, query)
 	if err != nil {
 		t.Fatal("real SSO-owned selected account", err)
 	}
@@ -670,6 +758,9 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	readFactors := mfapg.ReadSSOOIDCSigninFactors
 	if profile.AuthenticationMethod == "sso-oauth2" {
 		readFactors = mfapg.ReadSSOOAuth2SigninFactors
+	}
+	if profile.AuthenticationMethod == "sso-saml" {
+		readFactors = mfapg.ReadSSOSAMLSigninFactors
 	}
 	factors, err := readFactors(ctx, pool, account.Account.TenantID, account.Account.UserID, time.Second)
 	if err != nil {
@@ -691,6 +782,9 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	op := ssoOIDCSessionOperation()
 	if profile.AuthenticationMethod == "sso-oauth2" {
 		op = kernel.SSOOAuth2SigninOperation()
+	}
+	if profile.AuthenticationMethod == "sso-saml" {
+		op = kernel.SSOSAMLSigninOperation()
 	}
 	binding := identity.CommandBinding{CommandID: id, TenantID: account.Account.TenantID, ActorID: "enterprise-signin-service", ActorKind: authorization.SubjectServiceAccount, AnonymousFlowID: string(flowID), RecordID: string(start), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "enterprise-signin", PolicyVersion: 1, CorrelationID: string(id)}
 	spec, _ := testSession(t).Bindings()
@@ -751,6 +845,11 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	flowSpec.Binding.Intent.TenantID, flowSpec.Binding.Intent.Action = binding.TenantID, binding.OperationID
 	flowSpec.Binding.Intent.PolicyID, flowSpec.Binding.Intent.PolicyVersion, flowSpec.Binding.Intent.Remember = binding.PolicyID, binding.PolicyVersion, spec.Remember
 	flowSpec.Binding.Intent.Purpose = session.PreAuthSessionIssuance
+	if profile.AuthenticationMethod == "sso-saml" {
+		flowSpec.Binding.Intent.Origin = "https://identity.example"
+		flowSpec.Binding.Intent.CallbackURL = "https://identity.example/saml2/enterprise-provider/acs"
+		flowSpec.Binding.ExpiresAt = flowSpec.Binding.IssuedAt.Add(5 * time.Minute)
+	}
 	cookieToken, err := session.NewToken(32)
 	if err != nil {
 		t.Fatal(err)
@@ -788,6 +887,10 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 		sessionFields = SSOOAuth2SigninSessionFields
 		selectedAccountFields = kernel.SSOOAuth2SigninAccountFields
 	}
+	if profile.AuthenticationMethod == "sso-saml" {
+		sessionFields = SSOSAMLSigninSessionFields
+		selectedAccountFields = kernel.SSOSAMLSigninAccountFields
+	}
 	fields, err := sessionFields(record)
 	if err != nil {
 		t.Fatal(err)
@@ -801,10 +904,7 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof := kernel.CapabilityPlan{CapabilityID: string(id), Purpose: "identity.sso.oidc-callback", ReplayKeyVersion: 1, ReplayDigest: sha256.Sum256([]byte(id)), ProofFingerprint: [32]byte{83}, ExpiresAt: now.Add(2 * time.Minute).Truncate(time.Second), MaxUses: 1}
-	if profile.AuthenticationMethod == "sso-oauth2" {
-		proof.Purpose = "identity.sso.oauth-callback"
-	}
+	proof := kernel.CapabilityPlan{CapabilityID: string(id), Purpose: capability.Purpose(op.OperationID), ReplayKeyVersion: 1, ReplayDigest: sha256.Sum256([]byte(id)), ProofFingerprint: [32]byte{83}, ExpiresAt: now.Add(2 * time.Minute).Truncate(time.Second), MaxUses: 1}
 	// Fixture issuance metadata does not claim cryptographic provider verification.
 	// The actual participant owns reservation, rollback release and finalization.
 	if _, err := pool.Raw().Exec(ctx, `INSERT INTO public.capability_identity_one_use(tenant_id,purpose,replay_key_version,replay_digest,capability_id,proof_fingerprint,expires_at,max_uses) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(binding.TenantID), string(proof.Purpose), proof.ReplayKeyVersion, proof.ReplayDigest[:], proof.CapabilityID, proof.ProofFingerprint[:], proof.ExpiresAt, proof.MaxUses); err != nil {

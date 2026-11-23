@@ -21,7 +21,7 @@ type SSOOAuth2SigninEffect struct {
 // owner must fence the original selected membership in the same Work. Install
 // SSOOAuth2SigninMigrationSource before use. Construction performs no I/O.
 func NewSSOOAuth2SigninEffect(c Config, p IdentifierAdmissionConfig, org OrganizationSessionAuthority) (*SSOOAuth2SigninEffect, error) {
-	effect, err := newSSOSigninEffect(c, p, org, true)
+	effect, err := newSSOSigninEffect(c, p, org, "sso-oauth2")
 	if err != nil {
 		return nil, err
 	}
@@ -70,17 +70,25 @@ func (e *SSOOAuth2SigninEffect) Recover(ctx context.Context, w kernel.RecoveryWo
 }
 
 func (e *ssoSigninEffect) consumption(w kernel.Work, owner kernel.FeatureExecutionContributor) (kernel.CapabilityReservationBinding, error) {
-	if e.oauth2 {
+	switch e.profile.AuthenticationMethod {
+	case "sso-oauth2":
 		return w.SSOOAuth2SigninConsumption(owner)
+	case "sso-saml":
+		return w.SSOSAMLSigninConsumption(owner)
+	default:
+		return w.SSOOIDCSigninConsumption(owner)
 	}
-	return w.SSOOIDCSigninConsumption(owner)
 }
 
 func (e *ssoSigninEffect) session(command identity.Command) (session.Session, error) {
-	if e.oauth2 {
+	switch e.profile.AuthenticationMethod {
+	case "sso-oauth2":
 		return SSOOAuth2SigninSession(command)
+	case "sso-saml":
+		return SSOSAMLSigninSession(command)
+	default:
+		return SSOOIDCSigninSession(command)
 	}
-	return SSOOIDCSigninSession(command)
 }
 
 func ssoOAuth2SigninIssuanceDigest(binding [32]byte, user, id, family string, record []byte) [32]byte {
