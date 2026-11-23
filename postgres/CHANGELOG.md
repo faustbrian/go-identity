@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Register an internal unsolicited SAML arrival that creates the linked user's
+  pending confirmation and stages exactly one confirmation grant together.
+  This command is not an SP request, callback or session issuance.
+
 - Fence the original linked account and credential epochs in the exact
   unsolicited SAML confirmation Work. The paired command must name the same
   user, tenant and pending arrival; SP and other callback profiles stay separate.
