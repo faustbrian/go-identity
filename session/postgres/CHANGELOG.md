@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the local session effect for explicitly selected enterprise OIDC
+  logout. Require the original session's CSRF, live membership and linked
+  credential, and retain the revocation in the existing coordinator journal.
+  Install both `SSOOIDCLogoutMigrationSource` steps before enabling a writer.
+
 - Add opt-in reads and strict local cookie logout for enterprise OAuth2
   sessions. Retain original linked-account, member, factor and policy
   authority and deny protocol or transport fallback.

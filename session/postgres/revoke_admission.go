@@ -24,7 +24,13 @@ type revokeRecordAuthority struct {
 	ssoMethod    string
 }
 
-func (r *Repository) ssoRevokeProfile(method string) (IdentifierAdmissionConfig, OrganizationSessionAuthority) {
+func (r *Repository) ssoRevokeProfile(method, operationID string) (IdentifierAdmissionConfig, OrganizationSessionAuthority) {
+	if operationID == kernel.SSOOIDCLogoutOperation().OperationID {
+		if method == "sso-oidc" && r.revokeSSOOIDC != nil {
+			return r.revokeSSOOIDC.Profile, r.revokeSSOOIDC.Authority
+		}
+		return IdentifierAdmissionConfig{}, nil
+	}
 	if r.cookieRevoke != nil {
 		if method == "sso-oidc" && r.revokeSSOOIDC != nil {
 			return r.revokeSSOOIDC.Profile, r.revokeSSOOIDC.Authority
@@ -69,7 +75,7 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 		vector, _ := s.Authority.Bindings()
 		method := s.Authentication.Proof.Method
 		if method == "sso-oidc" || method == "sso-oauth2" {
-			profile, organization := r.ssoRevokeProfile(method)
+			profile, organization := r.ssoRevokeProfile(method, b.OperationID)
 			if organization == nil {
 				return deny()
 			}
@@ -207,7 +213,7 @@ func (r *Repository) requireRevokeRecordAuthority(ctx context.Context, w kernel.
 
 // Called only after the family/session locks, retaining the selection owner's
 // lock order rather than acquiring organization locks during key derivation.
-func (r *Repository) requireRevokeOrganization(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, original session.Session) error {
+func (r *Repository) requireRevokeOrganization(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, b identity.CommandBinding, original session.Session) error {
 	s, err := original.Bindings()
 	if err != nil {
 		return err
@@ -218,7 +224,7 @@ func (r *Repository) requireRevokeOrganization(ctx context.Context, w kernel.Wor
 	}
 	method := s.Authentication.Proof.Method
 	if s.Authentication.Kind == session.AuthenticationVerified && (method == "sso-oidc" || method == "sso-oauth2") {
-		_, organization := r.ssoRevokeProfile(method)
+		_, organization := r.ssoRevokeProfile(method, b.OperationID)
 		if organization == nil {
 			return identity.ForbiddenError{}
 		}
@@ -234,6 +240,12 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 	a, err := r.revokeRecordAdmission(record, b)
 	if err != nil {
 		return err
+	}
+	if b.OperationID == kernel.SSOOIDCLogoutOperation().OperationID {
+		if a.ssoMethod != "sso-oidc" || a.credential == nil {
+			return identity.ForbiddenError{}
+		}
+		return requireSSOOIDCLogoutRecordAuthority(ctx, w, owner, record, a)
 	}
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.directory); err != nil {
 		return err
@@ -294,4 +306,24 @@ func (r *Repository) requireRevokeRecordAuthorityFor(ctx context.Context, w kern
 		return r.revokeMFAPasskey.authority.RequireMFAPasskeySession(ctx, w, owner, r.revokeMFAPasskey.profile.RPNamespace, record)
 	}
 	return nil
+}
+
+func requireSSOOIDCLogoutRecordAuthority(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session, a revokeRecordAuthority) error {
+	s, err := record.Bindings()
+	if err != nil {
+		return err
+	}
+	if err := w.RequireSSOOIDCLogoutScope(ctx, owner, s.TenantID, s.UserID, s.SessionID, s.Version); err != nil {
+		return err
+	}
+	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.directory); err != nil {
+		return err
+	}
+	if err := w.RequireLinkedSSOOIDCLogoutCredential(ctx, owner, *a.credential, s.SessionID, s.Version); err != nil {
+		return err
+	}
+	if err := w.RequireActiveUserAuthorization(ctx, owner, a.policy); err != nil {
+		return err
+	}
+	return mfapg.RequireSSOOIDCLogoutFactors(ctx, w, owner, record)
 }

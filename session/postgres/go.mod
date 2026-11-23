@@ -12,8 +12,8 @@ require (
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-identity v0.0.0-20261122023921-087c28e1764c
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261122204156-7fe274929216
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261122202049-2f0cd2c81555
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261123002718-af2a5ec20390
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261123001721-cdcfa9c1c30f
 	github.com/faustbrian/go-identity/risk v0.0.0-20261113005611-82309c273c6c
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/session v0.0.0-20261122204416-c9eee338b1d2

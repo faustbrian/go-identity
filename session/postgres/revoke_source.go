@@ -222,7 +222,7 @@ func (r *Repository) requireRevokeSource(ctx context.Context, w kernel.Work, b i
 	if err = RequireSession(ctx, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, source.record); err != nil {
 		return err
 	}
-	if err := r.requireRevokeOrganization(ctx, w, r, source.record); err != nil {
+	if err := r.requireRevokeOrganization(ctx, w, r, b, source.record); err != nil {
 		return err
 	}
 	now, err := w.DatabaseTime(ctx)

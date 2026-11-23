@@ -128,7 +128,7 @@ func (e *OIDCEndSessionEffect) intent(w kernel.Work, owner kernel.FeatureExecuti
 	return b, f, l, source, until, nil
 }
 
-func oidcEndSessionWindow(ctx context.Context, w kernel.Work, source session.Session, until time.Time) error {
+func requireOriginalSessionWindow(ctx context.Context, w kernel.Work, source session.Session, until time.Time) error {
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
@@ -156,7 +156,7 @@ func (e *OIDCEndSessionEffect) Apply(ctx context.Context, w kernel.Work, owner k
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
 	defer stop()
-	if err := oidcEndSessionWindow(bounded, w, source, until); err != nil {
+	if err := requireOriginalSessionWindow(bounded, w, source, until); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	return e.native.applySingleSessionRevocation(bounded, w, owner, b, f, l, source)
@@ -178,12 +178,19 @@ func (e *OIDCEndSessionEffect) Check(ctx context.Context, w kernel.Work, owner k
 	if err := e.native.requireRevokeRecordAuthorityFor(bounded, w, owner, source, b); err != nil {
 		return err
 	}
+	if err := e.native.requireCommittedSingleSessionRevocation(bounded, w, b, l, source); err != nil {
+		return err
+	}
+	return requireOriginalSessionWindow(bounded, w, source, until)
+}
+
+func (r *Repository) requireCommittedSingleSessionRevocation(ctx context.Context, w kernel.Work, b identity.CommandBinding, l kernel.LifecyclePlan, source session.Session) error {
 	s, _ := source.Bindings()
 	payload, _, err := encodeRecord(source)
 	if err != nil {
 		return err
 	}
-	rows, err := w.Query(bounded, `SELECT session_id FROM `+e.native.schema+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND version=$4::numeric AND state='revoked' AND record=$5::jsonb FOR SHARE`, string(b.TenantID), string(b.UserID), s.SessionID, strconv.FormatUint(s.Version, 10), string(payload))
+	rows, err := w.Query(ctx, `SELECT session_id FROM `+r.schema+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND version=$4::numeric AND state='revoked' AND record=$5::jsonb FOR SHARE`, string(b.TenantID), string(b.UserID), s.SessionID, strconv.FormatUint(s.Version, 10), string(payload))
 	if err != nil {
 		return err
 	}
@@ -193,11 +200,11 @@ func (e *OIDCEndSessionEffect) Check(ctx context.Context, w kernel.Work, owner k
 	if err != nil || id != s.SessionID {
 		return identity.ForbiddenError{}
 	}
-	if err := e.native.requireIssueFamily(bounded, w, s, true); err != nil {
+	if err := r.requireIssueFamily(ctx, w, s, true); err != nil {
 		return err
 	}
 	commandID, _ := revocationEvidence(b, l)
-	rows, err = w.Query(bounded, oidcEndSessionEvidenceSQL(e.native.schema), string(b.TenantID), commandID)
+	rows, err = w.Query(ctx, oidcEndSessionEvidenceSQL(r.schema), string(b.TenantID), commandID)
 	if err != nil {
 		return err
 	}
@@ -206,7 +213,7 @@ func (e *OIDCEndSessionEffect) Check(ctx context.Context, w kernel.Work, owner k
 	if err != nil || status != kernel.RecoveryCommitted {
 		return identity.ForbiddenError{}
 	}
-	return oidcEndSessionWindow(bounded, w, source, until)
+	return nil
 }
 
 func oidcEndSessionEvidenceSQL(schema string) string {

@@ -65,9 +65,17 @@ func (r *Repository) applyRevokeOne(ctx context.Context, w kernel.Work, one sess
 	return r.applySingleSessionRevocation(ctx, w, r, b, feature, transition, one.Session)
 }
 
-// Both self-signout and the exact selected OIDC effect retain this sole
-// single-session mutation/journal owner; protocol code cannot write sessions.
 func (r *Repository) applySingleSessionRevocation(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, b identity.CommandBinding, feature kernel.FeatureRegistration, transition kernel.LifecyclePlan, original session.Session) (identity.FeatureReceipt, error) {
+	return r.applySingleSessionRevocationWithCSRF(ctx, w, owner, b, feature, transition, original, nil)
+}
+
+// Local signout and both OIDC effects share the same session mutation and
+// journal. Enterprise logout checks its original CSRF after the write lock;
+// the other profiles have independent admission and retain their old checks.
+func (r *Repository) applySingleSessionRevocationWithCSRF(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, b identity.CommandBinding, feature kernel.FeatureRegistration, transition kernel.LifecyclePlan, original session.Session, csrf *revokeCSRFInput) (identity.FeatureReceipt, error) {
+	if (b.OperationID == kernel.SSOOIDCLogoutOperation().OperationID) != (csrf != nil) {
+		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
+	}
 	spec, err := original.Bindings()
 	if err != nil {
 		return identity.FeatureReceipt{}, err
@@ -98,10 +106,16 @@ func (r *Repository) applySingleSessionRevocation(ctx context.Context, w kernel.
 	// This remains the exact original active record, not a refreshed vector.
 	// Family share locks prevent concurrent family revocation from crossing the
 	// transition; no family or sibling version is advanced by this operation.
-	if err = RequireSession(bounded, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, original); err != nil {
+	c := Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}
+	if csrf != nil {
+		err = RequireCSRF(bounded, w, c, original, csrf.token, csrf.key)
+	} else {
+		err = RequireSession(bounded, w, c, original)
+	}
+	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err := r.requireRevokeOrganization(bounded, w, owner, original); err != nil {
+	if err := r.requireRevokeOrganization(bounded, w, owner, b, original); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	payload, _, err := encodeRecord(original)

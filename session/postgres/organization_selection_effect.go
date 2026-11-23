@@ -146,7 +146,7 @@ func (e *OrganizationSelectionEffect) Lock(ctx context.Context, w kernel.Work, o
 	if err := requireOriginalOrganization(bounded, w, owner, e.profile, c.Source); err != nil {
 		return err
 	}
-	return oidcEndSessionWindow(bounded, w, c.Source, until)
+	return requireOriginalSessionWindow(bounded, w, c.Source, until)
 }
 
 // Apply performs the already-locked exact CAS and retains immutable session
@@ -291,7 +291,7 @@ func (e *OrganizationSelectionEffect) Check(ctx context.Context, w kernel.Work, 
 			return session.ErrUnavailable
 		}
 	}
-	return oidcEndSessionWindow(bounded, w, c.Successor, until)
+	return requireOriginalSessionWindow(bounded, w, c.Successor, until)
 }
 
 // Recover votes from retained session-owned original transition evidence in
