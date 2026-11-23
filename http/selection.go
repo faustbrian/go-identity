@@ -145,7 +145,8 @@ type OperationDescriptor struct {
 	// compatibility for undisclosed routes but cannot enter documented composition.
 	Wire *WireOperation
 	// ProviderPathIDs is a finite set of installed provider path segments for
-	// selected OIDC logout routes. The route and wire metadata retain the template.
+	// selected OIDC logout and SAML login/ACS routes. Route and wire metadata
+	// retain the template.
 	ProviderPathIDs []string
 }
 

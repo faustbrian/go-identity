@@ -70,3 +70,55 @@ func TestCanonicalProviderPathDispatchUsesOnlySelectedExactIDs(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectedSAMLProviderRoutesDoNotBecomeWildcards(t *testing.T) {
+	const owner = "sso/saml"
+	var ops []identityhttp.OperationDescriptor
+	for _, id := range []string{"identity.sso.saml-start", "identity.sso.saml-acs"} {
+		config := identityhttp.CanonicalOperationConfig{
+			Owner: owner, OperationID: id, MaximumSerializedBytes: 8192, ProviderPathIDs: []string{"-selected"},
+			CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny},
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}),
+		}
+		op, err := identityhttp.NewCanonicalOperation(config)
+		if err != nil {
+			t.Fatalf("construct selected %s: %v", id, err)
+		}
+		config.ProviderPathIDs = nil
+		if _, err := identityhttp.NewCanonicalOperation(config); err == nil {
+			t.Fatalf("constructed %s without installed provider", id)
+		}
+		ops = append(ops, op)
+	}
+	feature, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: owner, Operations: ops})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := identityhttp.NewSelectedHandler(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		method, path string
+		status       int
+	}{
+		{"GET", "/saml2/-selected/login", 204},
+		{"POST", "/saml2/-selected/acs", 204},
+		{"GET", "/saml2/-selected/acs", 405},
+		{"POST", "/saml2/unknown/acs", 404},
+		{"GET", "/saml2/%2dselected/login", 404},
+		{"POST", "/saml2/{provider_id}/acs", 404},
+		{"POST", "/saml2/-selected/idp-init", 404},
+		{"POST", "/saml2/-selected/slo", 404},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+			if w.Code != tc.status {
+				t.Fatalf("expected %d, got %d", tc.status, w.Code)
+			}
+		})
+	}
+}

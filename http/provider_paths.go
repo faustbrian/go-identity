@@ -7,10 +7,19 @@ import (
 )
 
 func validProviderPaths(op OperationDescriptor) bool {
-	// Bind only the two catalogued OIDC logout operations. Other templates
+	// Bind only the catalogued finite provider profiles. Other templates
 	// are not wildcard dispatch, and extension routes cannot opt into it.
-	selected := op.Record.OperationID == "identity.sso.oidc-logout" && op.Route.Method == http.MethodPost && op.Route.Path == "/sso/oidc/{provider_id}/logout" ||
-		op.Record.OperationID == "identity.sso.oidc-logout-complete" && op.Route.Method == http.MethodGet && op.Route.Path == "/sso/oidc/{provider_id}/logout/callback"
+	var selected bool
+	switch op.Record.OperationID {
+	case "identity.sso.oidc-logout":
+		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/sso/oidc/{provider_id}/logout"
+	case "identity.sso.oidc-logout-complete":
+		selected = op.Route.Method == http.MethodGet && op.Route.Path == "/sso/oidc/{provider_id}/logout/callback"
+	case "identity.sso.saml-start":
+		selected = op.Route.Method == http.MethodGet && op.Route.Path == "/saml2/{provider_id}/login"
+	case "identity.sso.saml-acs":
+		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/acs"
+	}
 	if !selected {
 		return len(op.ProviderPathIDs) == 0
 	}

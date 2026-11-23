@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bind SAML browser login and assertion consumer routes only for explicitly
+  installed provider IDs while keeping canonical OpenAPI path templates.
+
 - Select the original stored session synchronizer for exact device approval
   and denial, without an origin-only fallback or an invented token age.
   Base HTTP still installs no routes.
