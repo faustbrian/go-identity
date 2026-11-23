@@ -55,6 +55,7 @@ const (
 	enterpriseOIDCSession
 	enterpriseOAuth2Session
 	enterpriseSAMLSession
+	enterpriseSAMLIDPConfirmationSession
 )
 
 func (p enterpriseSessionProtocol) selection() (identity.FeatureOperation, string) {
@@ -65,6 +66,8 @@ func (p enterpriseSessionProtocol) selection() (identity.FeatureOperation, strin
 		return identity.FeatureOperation{Owner: "sso/oauth2", OperationID: "identity.sso.oauth-callback", SchemaID: "sso-enterprise-oauth2-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, "sso-oauth2"
 	case enterpriseSAMLSession:
 		return identity.FeatureOperation{Owner: "sso/saml", OperationID: "identity.sso.saml-acs", SchemaID: "sso-enterprise-saml-acs-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, "sso-saml"
+	case enterpriseSAMLIDPConfirmationSession:
+		return identity.FeatureOperation{Owner: "sso/saml", OperationID: "identity.sso.saml-idp-init", SchemaID: "sso-enterprise-saml-idp-init-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectUser}, "sso-saml"
 	default:
 		return identity.FeatureOperation{}, ""
 	}
@@ -165,8 +168,15 @@ func (s *SessionIssuer) prepareEnterpriseSession(binding identity.CommandBinding
 			out, err = PreparedIssuance{}, ErrIssuerUnavailable
 		}
 	}()
-	start, startErr := identity.ParseCommandID(binding.RecordID)
-	if s == nil || s.enterpriseSSO != protocol || startErr != nil || start == binding.CommandID || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || binding.TenantID != spec.TenantID || binding.UserID != "" || binding.AnonymousFlowID == "" || binding.ActorKind != authorization.SubjectServiceAccount || string(spec.Authentication.Proof.ID) != string(binding.CommandID) {
+	original, originalErr := identity.ParseCommandID(binding.RecordID)
+	if s == nil || s.enterpriseSSO != protocol || originalErr != nil || original == binding.CommandID || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || binding.TenantID != spec.TenantID || binding.ActorKind != authorization.SubjectServiceAccount || string(spec.Authentication.Proof.ID) != string(binding.CommandID) {
+		return out, ErrInvalidIssuance
+	}
+	if protocol == enterpriseSAMLIDPConfirmationSession {
+		if binding.UserID != spec.UserID || binding.AnonymousFlowID != "" {
+			return out, ErrInvalidIssuance
+		}
+	} else if binding.UserID != "" || binding.AnonymousFlowID == "" {
 		return out, ErrInvalidIssuance
 	}
 	if credential.Validate(spec.TenantID, spec.UserID) != nil || credential.Kind != identity.CredentialProvider || credential.Owner != "sso" || string(credential.ID) != spec.Authentication.CredentialID || credential.Version != spec.Authentication.CredentialVersion {
@@ -216,13 +226,9 @@ func (s *SessionIssuer) bindEnterpriseSession(prepared PreparedIssuance, command
 	if prepared.state.request.state != nil {
 		return PreparedIssuance{}, ErrIssuanceAlreadyBound
 	}
-	feature, ok := command.Feature()
-	_, cookie := command.PreAuthCookie()
-	_, code := command.OneTimeCode()
-	_, recovery := command.RecoveryCode()
-	_, bearer := command.SessionToken()
+	feature, ok := enterpriseSessionFeature(command, protocol)
 	operation, _ := protocol.selection()
-	if !ok || !cookie || code || recovery || bearer || feature.Binding != prepared.state.enterpriseSSO.binding || feature.Operation != operation {
+	if !ok || feature.Binding != prepared.state.enterpriseSSO.binding || feature.Operation != operation {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if !prepared.state.enterpriseSSO.bound.CompareAndSwap(false, true) {
@@ -230,6 +236,18 @@ func (s *SessionIssuer) bindEnterpriseSession(prepared PreparedIssuance, command
 	}
 	request := IssueRequest{state: &issueRequestState{enterpriseSSO: &enterpriseSSOIssueRequestState{protocol: protocol, command: command, binding: feature.Binding, record: prepared.state.enterpriseSSO.record}}}
 	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: prepared.state.token, csrf: prepared.state.csrf, enterpriseSSO: prepared.state.enterpriseSSO}}, nil
+}
+
+func enterpriseSessionFeature(command identity.Command, protocol enterpriseSessionProtocol) (identity.FeatureCommandSpec, bool) {
+	if protocol == enterpriseSAMLIDPConfirmationSession {
+		return command.SAMLIDPConfirmationFeature()
+	}
+	feature, ok := command.Feature()
+	_, cookie := command.PreAuthCookie()
+	_, code := command.OneTimeCode()
+	_, recovery := command.RecoveryCode()
+	_, bearer := command.SessionToken()
+	return feature, ok && cookie && !code && !recovery && !bearer
 }
 
 // SSOOIDCCommand returns original borrowed browser custody and the tokenless

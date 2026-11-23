@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a separate session issuer for an existing linked user confirming an
+  unsolicited SAML response. Retain the exact pending ID and paired browser
+  custody without SP pre-auth. Only a fresh acknowledged native commit
+  discloses session and CSRF credentials. The session method is unchanged.
+
 - Select an exact, host-only post-arrival correlation cookie for unsolicited
   SAML confirmation without enabling it for SP-initiated sign-in or granting
   any session authority. The original cutoff and five-minute cap are retained.
