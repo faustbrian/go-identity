@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind selected OIDC logout operations to a finite set of installed provider
+  paths while retaining their canonical OpenAPI templates. No route is selected
+  by the base HTTP package.
+
 - Accept the selected enterprise OAuth2 callback's documented 303 response.
   This adds no route or provider dependency to the base HTTP package.
 

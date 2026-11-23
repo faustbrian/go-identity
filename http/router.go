@@ -95,7 +95,9 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	}
 	selected := make(map[string]bool, len(operations))
 	for _, op := range operations {
-		selected[op.Route.Method+" "+op.Route.Path] = true
+		for _, path := range dispatchPaths(op) {
+			selected[op.Route.Method+" "+path] = true
+		}
 	}
 	for _, route := range policy.CORS {
 		if !selected[route.Method+" "+route.Path] {

@@ -38,6 +38,9 @@ type CanonicalOperationConfig struct {
 	Handler                http.Handler
 	CSRF                   CSRFPolicy
 	MaximumSerializedBytes uint64
+	// ProviderPathIDs binds the finite installed provider segments for the
+	// canonical OIDC logout routes. It is invalid on all other operations.
+	ProviderPathIDs []string
 }
 
 // NewCanonicalOperation constructs a detached descriptor from owned catalog
@@ -64,7 +67,7 @@ func NewCanonicalOperation(c CanonicalOperationConfig) (OperationDescriptor, err
 	r.RequestSchema = schemaSummary(row.RequestSchema, row.RequestDigest)
 	r.ResultSchema = schemaSummary(row.ResultSchema, row.ResultDigest)
 	r.ErrorSchema = schemaSummary(row.ErrorSchema, row.ErrorDigest)
-	op := OperationDescriptor{Record: r, Route: Route{Method: r.Method, Path: r.Path, Authorization: r.Authorization, CSRF: r.CSRFOrigin, RatePolicy: r.RatePolicy}, Handler: c.Handler}
+	op := OperationDescriptor{Record: r, Route: Route{Method: r.Method, Path: r.Path, Authorization: r.Authorization, CSRF: r.CSRFOrigin, RatePolicy: r.RatePolicy}, Handler: c.Handler, ProviderPathIDs: slices.Clone(c.ProviderPathIDs)}
 	for i, schema := range []TypedSchema{r.RequestSchema, r.ResultSchema, r.ErrorSchema} {
 		op.Schemas = append(op.Schemas, OpenAPISchema{Name: strings.ReplaceAll(r.OperationID, ".", "_") + []string{"_request", "_result", "_error"}[i], Schema: schema, MaximumSerializedBytes: c.MaximumSerializedBytes})
 	}
@@ -106,12 +109,14 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 	}
 	paths := make(map[string]selectedPath, len(ops))
 	for _, op := range ops {
-		p := paths[op.Route.Path]
-		if p.methods == nil {
-			p.methods = make(map[string]http.Handler)
+		for _, path := range dispatchPaths(op) {
+			p := paths[path]
+			if p.methods == nil {
+				p.methods = make(map[string]http.Handler)
+			}
+			p.methods[op.Route.Method] = op.Handler
+			paths[path] = p
 		}
-		p.methods[op.Route.Method] = op.Handler
-		paths[op.Route.Path] = p
 	}
 	for path, p := range paths {
 		methods := make([]string, 0, len(p.methods))

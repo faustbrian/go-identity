@@ -144,6 +144,9 @@ type OperationDescriptor struct {
 	// Wire is separate from canonical direct-contract summaries. Nil retains
 	// compatibility for undisclosed routes but cannot enter documented composition.
 	Wire *WireOperation
+	// ProviderPathIDs is a finite set of installed provider path segments for
+	// selected OIDC logout routes. The route and wire metadata retain the template.
+	ProviderPathIDs []string
 }
 
 // FeatureConfig supplies one feature-owned integration's actual handlers.
@@ -335,6 +338,7 @@ func cloneOperations(input []OperationDescriptor) []OperationDescriptor {
 	result := make([]OperationDescriptor, len(input))
 	for i, op := range input {
 		op.Record.Owners = slices.Clone(op.Record.Owners)
+		op.ProviderPathIDs = slices.Clone(op.ProviderPathIDs)
 		op.Schemas = slices.Clone(op.Schemas)
 		op.Wire = cloneWire(op.Wire)
 		result[i] = op
@@ -343,13 +347,21 @@ func cloneOperations(input []OperationDescriptor) []OperationDescriptor {
 }
 
 func uniqueOperations(ops []OperationDescriptor) bool {
-	ids, routes, names, schemas := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	ids, routes, templates := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	names, schemas := map[string]bool{}, map[string]bool{}
 	for _, op := range ops {
-		key := op.Route.Method + " " + op.Route.Path
-		if ids[op.Record.OperationID] || routes[key] {
+		template := op.Route.Method + " " + op.Route.Path
+		if ids[op.Record.OperationID] || templates[template] {
 			return false
 		}
-		ids[op.Record.OperationID], routes[key] = true, true
+		ids[op.Record.OperationID], templates[template] = true, true
+		for _, path := range dispatchPaths(op) {
+			key := op.Route.Method + " " + path
+			if routes[key] {
+				return false
+			}
+			routes[key] = true
+		}
 		for _, s := range op.Schemas {
 			if names[s.Name] || schemas[s.Schema.ID] {
 				return false
@@ -375,7 +387,7 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 	if !slices.Contains([]string{"safe", "auth", "secret", "admin", "provider", "protocol"}, r.RiskClass) || !slices.Contains([]string{"read", "repeat", "keyed", "once", "rotate", "protocol-poll", "protocol-command", "none"}, r.Idempotency) {
 		return false
 	}
-	if !validPath(r.Path) || !slices.Contains([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}, r.Method) || op.Route != (Route{Method: r.Method, Path: r.Path, Authorization: r.Authorization, CSRF: r.CSRFOrigin, RatePolicy: r.RatePolicy}) || op.Handler == nil {
+	if !validPath(r.Path) || !validProviderPaths(op) || !slices.Contains([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}, r.Method) || op.Route != (Route{Method: r.Method, Path: r.Path, Authorization: r.Authorization, CSRF: r.CSRFOrigin, RatePolicy: r.RatePolicy}) || op.Handler == nil {
 		return false
 	}
 	if f, ok := op.Handler.(http.HandlerFunc); ok && f == nil {
@@ -476,7 +488,7 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		// Native OAuth initiation checks the original session synchronizer in
 		// its protected Work; a separately aged transport token is not its
 		// authority. This exception does not admit origin-only initiation.
-		if r.OperationID == "identity.account.link-start" && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+		if (r.OperationID == "identity.account.link-start" || r.OperationID == "identity.sso.oidc-logout") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
 		// Native cookie-only MFA enrollment authenticates the synchronizer
