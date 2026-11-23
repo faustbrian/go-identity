@@ -201,3 +201,52 @@ func TestSSOSAMLSigninMigrationPreservesPopulatedOAuth2History(t *testing.T) {
 	requireValidation(true)
 	requireHistory()
 }
+
+func TestSSOSAMLIDPSigninMigrationPreservesPopulatedSPHistory(t *testing.T) {
+	ctx, pool, _ := anonymousSessionDatabase(t)
+	const schema = "sso_saml_idp_migration"
+	const previous = "session_issuances_purpose_sso_saml_v1"
+	const next = "session_issuances_purpose_sso_saml_idp_v1"
+	const sp = "identity.sso.saml-acs"
+	const idp = "identity.sso.saml-idp-init"
+	if _, err := pool.Raw().Exec(ctx, `CREATE SCHEMA `+schema+`; CREATE TABLE `+schema+`.session_issuances(
+ purpose text NOT NULL, marker text PRIMARY KEY, CONSTRAINT `+previous+` CHECK(purpose IN('identity.password.signin','`+sp+`')));
+ INSERT INTO `+schema+`.session_issuances VALUES('identity.password.signin','password-history'),('`+sp+`','sp-history')`); err != nil {
+		t.Fatal(err)
+	}
+	insert := func(purpose, marker string) error {
+		_, err := pool.Raw().Exec(ctx, `INSERT INTO `+schema+`.session_issuances VALUES($1,$2)`, purpose, marker)
+		return err
+	}
+	requireDenied := func(purpose, constraint string) {
+		t.Helper()
+		var pgErr *pgconn.PgError
+		if err := insert(purpose, "denied"); !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != constraint {
+			t.Fatalf("%s was not rejected by %s: %v", purpose, constraint, err)
+		}
+	}
+	requireDenied(idp, previous)
+	steps, err := (SSOSAMLIDPSigninMigrationSource{Schema: schema, Version: 87, ValidationVersion: 88}).Load(ctx)
+	if err != nil || len(steps) != 2 {
+		t.Fatal("need ordered expansion and validation", err)
+	}
+	for phase, step := range steps {
+		if _, err := pool.Raw().Exec(ctx, step.UpSQL()); err != nil {
+			t.Fatal("apply migration phase", phase, err)
+		}
+		var validated bool
+		if err := pool.Raw().QueryRow(ctx, `SELECT convalidated FROM pg_constraint WHERE conrelid=$1::regclass AND conname=$2`, schema+".session_issuances", next).Scan(&validated); err != nil || validated != (phase == 1) {
+			t.Fatal("expansion must be installed before validation", phase, err)
+		}
+		requireDenied("identity.sso.saml-idp-prepare", next)
+		if phase == 0 {
+			if err := insert(idp, "new-idp"); err != nil {
+				t.Fatal("unvalidated successor still must enforce the new profile", err)
+			}
+		}
+	}
+	var retained int
+	if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM `+schema+`.session_issuances WHERE (purpose,marker) IN(('identity.password.signin','password-history'),($1,'sp-history'),($2,'new-idp'))`, sp, idp).Scan(&retained); err != nil || retained != 3 {
+		t.Fatal("old or new issuance was lost", retained, err)
+	}
+}

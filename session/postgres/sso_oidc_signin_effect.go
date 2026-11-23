@@ -261,6 +261,10 @@ func (e *ssoSigninEffect) requireAccountAuthority(ctx context.Context, w kernel.
 	case "sso-saml":
 		decodeAccount = kernel.SSOSAMLSigninAccount
 		fenceAccount, fenceFactors = w.RequireSSOSAMLSigninProviderAccount, mfapg.RequireSSOSAMLSigninFactors
+		if _, paired := command.SAMLIDPConfirmationFeature(); paired {
+			decodeAccount = kernel.SSOSAMLIDPConfirmationAccount
+			fenceAccount, fenceFactors = w.RequireSSOSAMLIDPConfirmationProviderAccount, mfapg.RequireSSOSAMLIDPConfirmationFactors
+		}
 	}
 	account, err := decodeAccount(command)
 	if err != nil {
@@ -273,7 +277,7 @@ func (e *ssoSigninEffect) requireAccountAuthority(ctx context.Context, w kernel.
 		return session.ErrInvalidSessionCommand
 	}
 	// Derive the account's current authority keys without changing the original
-	// callback actor, anonymous flow, aggregate or exact Work command identity.
+	// callback actor, original flow or pending record, or exact Work command.
 	selected := identity.CommandBinding{TenantID: spec.TenantID, UserID: spec.UserID, ActorKind: authorization.SubjectUser, ActorID: identity.ActorID(spec.UserID)}
 	directory, credential, policy, err := credentialSessionAdmissionBindingsWithOrganization(e.profile, record, selected, spec.SessionID, spec.Version, vector.Factor, session.OptionalAuthorityBinding{}, vector.Organization, auth.AssuranceSingleFactor)
 	if err != nil || credential != account.Credential {

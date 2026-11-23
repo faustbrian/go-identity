@@ -96,6 +96,12 @@ func ssoSigninSession(command identity.Command, operation identity.FeatureOperat
 	if err != nil || start == binding.CommandID || binding.ActorKind != authorization.SubjectServiceAccount || binding.UserID != "" || binding.AnonymousFlowID == "" {
 		return deny()
 	}
+	return ssoSigninSessionFromFields(feature, prefix, method, append(foreignPrefixes, ssoSAMLIDPConfirmationSessionPrefix)...)
+}
+
+func ssoSigninSessionFromFields(feature identity.FeatureCommandSpec, prefix, method string, foreignPrefixes ...string) (session.Session, error) {
+	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
+	binding := feature.Binding
 	var tenant identity.TenantID
 	var user identity.UserID
 	fields := make([]identity.FeatureField, 0, len(feature.Fields))
@@ -124,7 +130,7 @@ func ssoSigninSession(command identity.Command, operation identity.FeatureOperat
 			fields = append(fields, field)
 		}
 	}
-	if tenant != binding.TenantID || user == "" {
+	if tenant != binding.TenantID || user == "" || (binding.UserID != "" && user != binding.UserID) {
 		return deny()
 	}
 	record, err := OriginalSessionFromFields(tenant, user, fields)

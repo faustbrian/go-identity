@@ -200,8 +200,16 @@ type ssoSessionEffectFixture interface {
 	Recover(context.Context, kernel.RecoveryWork, kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error)
 }
 
+type samlIDPSessionEffectFixture struct{ *SSOSAMLIDPConfirmationEffect }
+
+func (e samlIDPSessionEffectFixture) Apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command, _ session.PreAuthTransaction) (identity.FeatureReceipt, error) {
+	return e.SSOSAMLIDPConfirmationEffect.Apply(ctx, w, owner, c)
+}
+
 func (p *ssoOIDCSessionInvocation) operation() identity.FeatureOperation {
 	switch p.effect.(type) {
+	case samlIDPSessionEffectFixture:
+		return kernel.SSOSAMLIDPConfirmationOperation()
 	case *SSOOAuth2SigninEffect:
 		return kernel.SSOOAuth2SigninOperation()
 	case *SSOSAMLSigninEffect:
@@ -217,6 +225,8 @@ func (p *ssoOIDCSessionInvocation) Descriptor() kernel.ContributorDescriptor {
 		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oauth2-login-callback", Version: 1}
 	case kernel.SSOSAMLSigninOperation():
 		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.saml-login-callback", Version: 1}
+	case kernel.SSOSAMLIDPConfirmationOperation():
+		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.saml-idp-confirmation", Version: 1}
 	default:
 		return kernel.ContributorDescriptor{Owner: "sso/postgres", ContractID: "sso.oidc-login-callback", Version: 1}
 	}
@@ -234,6 +244,10 @@ func (p *ssoOIDCSessionInvocation) ValidateFeatureCommand(command identity.Comma
 	}
 	if p.operation() == kernel.SSOSAMLSigninOperation() {
 		_, err := SSOSAMLSigninSession(command)
+		return err
+	}
+	if p.operation() == kernel.SSOSAMLIDPConfirmationOperation() {
+		_, err := SSOSAMLIDPConfirmationSession(command)
 		return err
 	}
 	_, err := SSOOIDCSigninSession(command)
@@ -260,8 +274,22 @@ func (p *ssoOIDCSessionInvocation) ValidateSSOSAMLSigninConsumption(command iden
 	}
 	return nil
 }
+func (p *ssoOIDCSessionInvocation) ValidateSSOSAMLIDPConfirmationConsumption(command identity.Command, proof kernel.CapabilityPlan) error {
+	if p.operation() != kernel.SSOSAMLIDPConfirmationOperation() || command != p.original || p.declaration.Capability == nil || proof != *p.declaration.Capability {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
+
+func (p *ssoOIDCSessionInvocation) feature(command identity.Command) (identity.FeatureCommandSpec, bool) {
+	if p.operation() == kernel.SSOSAMLIDPConfirmationOperation() {
+		return command.SAMLIDPConfirmationFeature()
+	}
+	return command.Feature()
+}
+
 func (p *ssoOIDCSessionInvocation) AdmitFeaturePreparation(ctx context.Context, w kernel.Work, command identity.Command) error {
-	spec, ok := command.Feature()
+	spec, ok := p.feature(command)
 	binding, feature, _, err := w.FeatureScope(p)
 	if err != nil || !ok || command != p.original || binding != spec.Binding || feature.Operation != p.operation() {
 		return identity.ForbiddenError{}
@@ -312,10 +340,12 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 		consumed, err = w.SSOOAuth2SigninConsumption(p)
 	case kernel.SSOSAMLSigninOperation():
 		consumed, err = w.SSOSAMLSigninConsumption(p)
+	case kernel.SSOSAMLIDPConfirmationOperation():
+		consumed, err = w.SSOSAMLIDPConfirmationConsumption(p)
 	default:
 		consumed, err = w.SSOOIDCSigninConsumption(p)
 	}
-	spec, ok := command.Feature()
+	spec, ok := p.feature(command)
 	if err != nil || !ok || command != p.original || consumed.Command != spec.Binding || consumed.Plan != *p.declaration.Capability || consumed.Generation == 0 {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
@@ -329,8 +359,13 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 		return identity.FeatureReceipt{}, err
 	}
 	if p.mode == "reconstructed-command" {
-		cookie, _ := command.PreAuthCookie()
-		command, err = identity.NewFeaturePreAuthCommand(spec, cookie)
+		if p.operation() == kernel.SSOSAMLIDPConfirmationOperation() {
+			browser, form, _ := command.SAMLIDPConfirmationCustody()
+			command, err = identity.NewFeatureSAMLIDPConfirmationCommand(spec, browser, form)
+		} else {
+			cookie, _ := command.PreAuthCookie()
+			command, err = identity.NewFeaturePreAuthCommand(spec, cookie)
+		}
 		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
@@ -363,6 +398,11 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 			return identity.FeatureReceipt{}, err
 		}
 	}
+	if p.mode == "late-factor-generation-changed" {
+		if _, err := w.Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=2 WHERE tenant_id='guest-tenant' AND user_id='enterprise-user'`); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	return receipt, nil
 }
 func (p *ssoOIDCSessionInvocation) CheckFeatureCommit(ctx context.Context, w kernel.Work, command identity.Command) error {
@@ -389,11 +429,19 @@ func TestSSOSAMLSigninSessionPreparedPostgres(t *testing.T) {
 	testSSOSigninSessionPreparedPostgres(t, "sso-saml")
 }
 
+func TestSSOSAMLIDPConfirmationSessionPreparedPostgres(t *testing.T) {
+	testSSOSigninSessionPreparedPostgres(t, "sso-saml-idp")
+}
+
 const samlFixtureProvider = "sso.saml.v1.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 const samlFixtureIssuer = "urn:example:original-saml-idp"
 
 func testSSOSigninSessionPreparedPostgres(t *testing.T, method string) {
 	t.Helper()
+	idp := method == "sso-saml-idp"
+	if idp {
+		method = "sso-saml"
+	}
 	ctx, pool, repository := anonymousSessionDatabase(t)
 	accounts := kernel.AccountMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 30}
 	prepared := kernel.CounterPreparationMigrationSource{Base: kernel.AdmissionPreparationMigrationSource{Base: kernel.PreparationMigrationSource{Base: accounts, Version: 31}, Version: 32}, Version: 33}
@@ -404,6 +452,9 @@ func testSSOSigninSessionPreparedPostgres(t *testing.T, method string) {
 	if method == "sso-saml" {
 		refresh := kernel.SSOEnterpriseGrantRefreshPreparationErasureMigrationSource{Base: oauth, Version: 44}
 		kernelHistory = kernel.SSOSAMLCallbackPreparationErasureMigrationSource{Base: refresh, Version: 45}
+	}
+	if idp {
+		kernelHistory = kernel.SSOSAMLIDPConfirmationPreparationErasureMigrationSource{Base: kernelHistory, Version: 48}
 	}
 	history, err := kernelHistory.Load(ctx)
 	if err != nil {
@@ -420,6 +471,9 @@ func testSSOSigninSessionPreparedPostgres(t *testing.T, method string) {
 	sessionHistory := []migrations.Source{mfapg.MigrationSource{Version: 34}, PreAuthMigrationSource{Schema: "session_store", Version: 35}, SSOOIDCSigninMigrationSource{Schema: "session_store", Version: 36, ValidationVersion: 37, PreviousConstraint: "session_issuances_purpose_anonymous_v1"}, CSRFMigrationSource{Schema: "session_store", Version: 38}, SSOOAuth2SigninMigrationSource{Schema: "session_store", Version: 42, ValidationVersion: 43}}
 	if method == "sso-saml" {
 		sessionHistory = append(sessionHistory, SSOSAMLSigninMigrationSource{Schema: "session_store", Version: 46, ValidationVersion: 47})
+	}
+	if idp {
+		sessionHistory = append(sessionHistory, SSOSAMLIDPSigninMigrationSource{Schema: "session_store", Version: 49, ValidationVersion: 50})
 	}
 	for _, source := range sessionHistory {
 		steps, err := source.Load(ctx)
@@ -478,7 +532,16 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 	case "sso-oauth2":
 		effect, err = NewSSOOAuth2SigninEffect(config, profile, organization)
 	case "sso-saml":
-		effect, err = NewSSOSAMLSigninEffect(config, profile, organization)
+		if idp {
+			var selected *SSOSAMLIDPConfirmationEffect
+			selected, err = NewSSOSAMLIDPConfirmationEffect(config, profile, organization)
+			effect = samlIDPSessionEffectFixture{selected}
+			if _, dropErr := pool.Raw().Exec(ctx, `ALTER TABLE session_store.preauth_transactions RENAME TO fixture_unavailable_sp_preauth`); dropErr != nil {
+				t.Fatal("keep the SP pre-auth table outside the IdP fixture", dropErr)
+			}
+		} else {
+			effect, err = NewSSOSAMLSigninEffect(config, profile, organization)
+		}
 	default:
 		effect, err = NewSSOOIDCSigninEffect(config, profile, organization)
 	}
@@ -495,6 +558,9 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 	} else {
 		modes = append(modes, "foreign-saml-factor-guard")
 	}
+	if idp {
+		modes = append(modes, "late-factor-generation-changed")
+	}
 	for _, mode := range modes {
 		if method != "sso-oidc" && strings.HasPrefix(mode, "organization-update") {
 			continue // This separate organization effect belongs only to OIDC.
@@ -504,8 +570,9 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 			if _, err := pool.Raw().Exec(ctx, `UPDATE public.sso_session_membership SET version=7,active=true,provider_updates=0`); err != nil {
 				t.Fatal(err)
 			}
-			command, record, flow, capability := ssoOIDCSessionPreparedFixture(t, ctx, pool, repository, organization, profile, mode)
-			feature, _ := command.Feature()
+			command, record, flow, capability := ssoOIDCSessionPreparedFixture(t, ctx, pool, repository, organization, profile, mode, idp)
+			owner := &ssoOIDCSessionInvocation{effect: effect, original: command, flow: flow, mode: mode}
+			feature, _ := owner.feature(command)
 			binding := feature.Binding
 			spec, _ := record.Bindings()
 			var existingFamily string
@@ -517,7 +584,6 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 					t.Fatal(err)
 				}
 			}
-			owner := &ssoOIDCSessionInvocation{effect: effect, original: command, flow: flow, mode: mode}
 			if mode == "organization-update" || mode == "organization-update-failure" || mode == "organization-update-expired" {
 				organization.update = &ssoOIDCSessionOrganizationUpdateFixture{organization: organization, original: command, flow: flow, fail: mode == "organization-update-failure", expire: mode == "organization-update-expired"}
 				owner.organizationUpdate = organization.update
@@ -540,16 +606,20 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 			if err != nil {
 				t.Fatal(err)
 			}
-			seed, err := builder.Build(audit.RecordInput{OccurredAt: spec.IssuedAt, Action: "identity.sso.login", Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: audit.ActorService, ID: string(binding.ActorID)}, Subject: audit.SubjectInput{Type: "sso_login_transaction", ID: binding.RecordID}, Context: audit.ContextInput{TenantID: string(binding.TenantID), CorrelationID: binding.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: binding.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(binding.CommandID), "aggregate.type": "sso_login_transaction", "aggregate.id": binding.RecordID, "aggregate.before_version": "1", "aggregate.after_version": "2", "retention.class": "protected"}})
+			subjectType := "sso_login_transaction"
+			if idp {
+				subjectType = "sso_saml_confirmation"
+			}
+			seed, err := builder.Build(audit.RecordInput{OccurredAt: spec.IssuedAt, Action: "identity.sso.login", Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: audit.ActorService, ID: string(binding.ActorID)}, Subject: audit.SubjectInput{Type: subjectType, ID: binding.RecordID}, Context: audit.ContextInput{TenantID: string(binding.TenantID), CorrelationID: binding.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: binding.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(binding.CommandID), "aggregate.type": subjectType, "aggregate.id": binding.RecordID, "aggregate.before_version": "1", "aggregate.after_version": "2", "retention.class": "protected"}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			digest, err := kernel.FeatureAuditBindingDigest(binding, feature.Operation, "sso_login_transaction", seed)
+			digest, err := kernel.FeatureAuditBindingDigest(binding, feature.Operation, subjectType, seed)
 			if err != nil {
 				t.Fatal(err)
 			}
 			transition := kernel.LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2}
-			owner.declaration = kernel.CommandPlan{Contributors: registry.Descriptors(), SubjectType: "sso_login_transaction", Feature: &kernel.FeatureRegistration{Contributor: owner.Descriptor(), Operation: feature.Operation}, Capability: &capability, Lifecycle: &transition, Audits: []kernel.AuditPlan{{EventType: "identity.sso.login", SchemaVersion: 1, BindingDigest: digest, RetentionClass: "protected", RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}}
+			owner.declaration = kernel.CommandPlan{Contributors: registry.Descriptors(), SubjectType: subjectType, Feature: &kernel.FeatureRegistration{Contributor: owner.Descriptor(), Operation: feature.Operation}, Capability: &capability, Lifecycle: &transition, Audits: []kernel.AuditPlan{{EventType: "identity.sso.login", SchemaVersion: 1, BindingDigest: digest, RetentionClass: "protected", RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}}
 			plan, err := coordinator.PrepareFeaturePreparationPlan(command, owner.declaration)
 			if err != nil {
 				t.Fatal("prepare original enterprise callback", err)
@@ -619,7 +689,7 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 			if mode == "foreign-saml-factor-guard" && (owner.consumption.Generation == 0 || owner.applyErr == nil || errors.Is(owner.applyErr, errSSOSAMLTestForeignFactorAuthority) || owner.finalEntered) {
 				t.Fatal("SAML factor guard did not deny the live sibling callback before final admission", owner.applyErr)
 			}
-			if (mode == "late-membership-removed" || mode == "late-factor-enrolled") && (!owner.applied || !owner.finalEntered || owner.final) {
+			if (mode == "late-membership-removed" || mode == "late-factor-enrolled" || mode == "late-factor-generation-changed") && (!owner.applied || !owner.finalEntered || owner.final) {
 				t.Fatal("late authority change did not deny exact final admission")
 			}
 			if (mode == "rollback" || mode == "audit-failure" || mode == "audit-fails-success-only" || mode == "outbox-failure") && !owner.applied {
@@ -659,27 +729,29 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 			if audits != wantAudits || successfulAudits != want || events != want {
 				t.Fatal("success audit or lifecycle escaped rollback, or terminal failure audit was omitted", audits, successfulAudits, events)
 			}
-			flowSpec, _ := flow.Bindings()
-			var flowState, flowVersion, flowGeneration string
-			var flowWire, flowCommand, flowFingerprint []byte
-			if err := pool.Raw().QueryRow(ctx, `SELECT state,version::text,record,command_id,fingerprint,COALESCE(generation::text,'') FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2`, string(spec.TenantID), string(flowSpec.Binding.ID)).Scan(&flowState, &flowVersion, &flowWire, &flowCommand, &flowFingerprint, &flowGeneration); err != nil {
-				t.Fatal(err)
-			}
-			originalFlow, _ := encodePreAuth(flow)
-			wantVersion := "1"
-			if success {
-				wantVersion = "3"
-			}
-			if flowState != wantFlow || flowVersion != wantVersion || !bytes.Equal(flowWire, originalFlow) {
-				t.Fatal("original browser was replaced, renewed or terminalized outside commit", flowState, flowVersion)
-			}
-			if success {
-				commandID, err := base64.RawURLEncoding.Strict().DecodeString(string(binding.CommandID))
-				if err != nil || !bytes.Equal(flowCommand, commandID) || !bytes.Equal(flowFingerprint, owner.consumption.Fingerprint[:]) || flowGeneration != strconv.FormatUint(owner.consumption.Generation, 10) {
-					t.Fatal("original browser finalized for different capability custody", err)
+			if !idp {
+				flowSpec, _ := flow.Bindings()
+				var flowState, flowVersion, flowGeneration string
+				var flowWire, flowCommand, flowFingerprint []byte
+				if err := pool.Raw().QueryRow(ctx, `SELECT state,version::text,record,command_id,fingerprint,COALESCE(generation::text,'') FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2`, string(spec.TenantID), string(flowSpec.Binding.ID)).Scan(&flowState, &flowVersion, &flowWire, &flowCommand, &flowFingerprint, &flowGeneration); err != nil {
+					t.Fatal(err)
 				}
-			} else if len(flowCommand) != 0 || len(flowFingerprint) != 0 || flowGeneration != "" {
-				t.Fatal("rolled-back callback retained provisional browser custody")
+				originalFlow, _ := encodePreAuth(flow)
+				wantVersion := "1"
+				if success {
+					wantVersion = "3"
+				}
+				if flowState != wantFlow || flowVersion != wantVersion || !bytes.Equal(flowWire, originalFlow) {
+					t.Fatal("original browser was replaced, renewed or terminalized outside commit", flowState, flowVersion)
+				}
+				if success {
+					commandID, err := base64.RawURLEncoding.Strict().DecodeString(string(binding.CommandID))
+					if err != nil || !bytes.Equal(flowCommand, commandID) || !bytes.Equal(flowFingerprint, owner.consumption.Fingerprint[:]) || flowGeneration != strconv.FormatUint(owner.consumption.Generation, 10) {
+						t.Fatal("original browser finalized for different capability custody", err)
+					}
+				} else if len(flowCommand) != 0 || len(flowFingerprint) != 0 || flowGeneration != "" {
+					t.Fatal("rolled-back callback retained provisional browser custody")
+				}
 			}
 			stored, readErr := native.Get(ctx, spec.TenantID, spec.SessionID)
 			if !success {
@@ -698,6 +770,9 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 				}
 				if method == "sso-saml" {
 					issuanceDigest = ssoSAMLSigninIssuanceDigest
+				}
+				if idp {
+					issuanceDigest, otherDigest = ssoSAMLIDPConfirmationIssuanceDigest, ssoSAMLSigninIssuanceDigest
 				}
 				retained, status, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, binding, transition, issuanceDigest)
 				if err != nil || status != kernel.RecoveryCommitted || retained.UserID != spec.UserID || retained.SessionID != spec.SessionID || retained.FamilyID != spec.FamilyID {
@@ -728,7 +803,7 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 					t.Fatal("late membership mutation escaped rollback", err)
 				}
 			}
-			if mode == "late-factor-enrolled" {
+			if mode == "late-factor-enrolled" || mode == "late-factor-generation-changed" {
 				var version string
 				var count int
 				if err := pool.Raw().QueryRow(ctx, `SELECT version::text,active_factors FROM identity_mfa.factor_authorities WHERE tenant_id='guest-tenant' AND user_id='enterprise-user'`).Scan(&version, &count); err != nil || version != "1" || count != 0 {
@@ -739,7 +814,7 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 	}
 }
 
-func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *database.Pool, repository *kernel.Repository, organization *ssoOIDCSessionOrganizationFixture, profile IdentifierAdmissionConfig, mode string) (identity.Command, session.Session, session.PreAuthTransaction, kernel.CapabilityPlan) {
+func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *database.Pool, repository *kernel.Repository, organization *ssoOIDCSessionOrganizationFixture, profile IdentifierAdmissionConfig, mode string, idp bool) (identity.Command, session.Session, session.PreAuthTransaction, kernel.CapabilityPlan) {
 	t.Helper()
 	query := kernel.ProviderSigninAccountQuery{TenantID: "guest-tenant", Provider: "oidc", Issuer: "https://issuer.example", Subject: "enterprise-subject"}
 	getAccount := repository.GetSSOOIDCSigninAccount
@@ -786,7 +861,13 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 	if profile.AuthenticationMethod == "sso-saml" {
 		op = kernel.SSOSAMLSigninOperation()
 	}
+	if idp {
+		op = kernel.SSOSAMLIDPConfirmationOperation()
+	}
 	binding := identity.CommandBinding{CommandID: id, TenantID: account.Account.TenantID, ActorID: "enterprise-signin-service", ActorKind: authorization.SubjectServiceAccount, AnonymousFlowID: string(flowID), RecordID: string(start), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "enterprise-signin", PolicyVersion: 1, CorrelationID: string(id)}
+	if idp {
+		binding.UserID, binding.AnonymousFlowID = account.Account.UserID, ""
+	}
 	spec, _ := testSession(t).Bindings()
 	spec.SessionID, spec.FamilyID, spec.TenantID, spec.UserID = "enterprise-session-"+mode, "enterprise-family-"+mode, binding.TenantID, account.Account.UserID
 	spec.Version, spec.FamilyVersion, spec.IssuedAt, spec.LastActivityAt = 1, 1, now, now
@@ -840,46 +921,50 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 		t.Fatal("retained organization fixture observation", err)
 	}
 	record = withCSRFState(t, record, 1)
-	flowSpec, _ := testPreAuth(t, now).Bindings()
-	flowSpec.Binding.ID = flowID
-	flowSpec.Binding.Intent.TenantID, flowSpec.Binding.Intent.Action = binding.TenantID, binding.OperationID
-	flowSpec.Binding.Intent.PolicyID, flowSpec.Binding.Intent.PolicyVersion, flowSpec.Binding.Intent.Remember = binding.PolicyID, binding.PolicyVersion, spec.Remember
-	flowSpec.Binding.Intent.Purpose = session.PreAuthSessionIssuance
-	if profile.AuthenticationMethod == "sso-saml" {
-		flowSpec.Binding.Intent.Origin = "https://identity.example"
-		flowSpec.Binding.Intent.CallbackURL = "https://identity.example/saml2/enterprise-provider/acs"
-		flowSpec.Binding.ExpiresAt = flowSpec.Binding.IssuedAt.Add(5 * time.Minute)
-	}
-	cookieToken, err := session.NewToken(32)
-	if err != nil {
-		t.Fatal(err)
-	}
-	flowSpec.Cookie, err = cookieToken.PreAuthDigest(key, flowSpec.Binding)
-	if err != nil {
-		t.Fatal(err)
-	}
-	flow, err := session.NewPreAuthTransaction(flowSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	flowTx, err := pool.Raw().Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		cleanup, stop := context.WithTimeout(context.Background(), time.Second)
-		defer stop()
-		_ = flowTx.Rollback(cleanup)
-	}()
-	if err := InsertPreAuth(ctx, preAuthTestTx{flowTx}, Config{Schema: "session_store", MaximumDuration: time.Second}, flow); err != nil {
-		t.Fatal("original issued browser transaction", err)
-	}
-	if err := flowTx.Commit(ctx); err != nil {
-		t.Fatal(err)
-	}
-	cookieWire, err := cookieToken.Reveal()
-	if err != nil {
-		t.Fatal(err)
+	var flow session.PreAuthTransaction
+	var cookieWire string
+	if !idp {
+		flowSpec, _ := testPreAuth(t, now).Bindings()
+		flowSpec.Binding.ID = flowID
+		flowSpec.Binding.Intent.TenantID, flowSpec.Binding.Intent.Action = binding.TenantID, binding.OperationID
+		flowSpec.Binding.Intent.PolicyID, flowSpec.Binding.Intent.PolicyVersion, flowSpec.Binding.Intent.Remember = binding.PolicyID, binding.PolicyVersion, spec.Remember
+		flowSpec.Binding.Intent.Purpose = session.PreAuthSessionIssuance
+		if profile.AuthenticationMethod == "sso-saml" {
+			flowSpec.Binding.Intent.Origin = "https://identity.example"
+			flowSpec.Binding.Intent.CallbackURL = "https://identity.example/saml2/enterprise-provider/acs"
+			flowSpec.Binding.ExpiresAt = flowSpec.Binding.IssuedAt.Add(5 * time.Minute)
+		}
+		cookieToken, err := session.NewToken(32)
+		if err != nil {
+			t.Fatal(err)
+		}
+		flowSpec.Cookie, err = cookieToken.PreAuthDigest(key, flowSpec.Binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		flow, err = session.NewPreAuthTransaction(flowSpec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		flowTx, err := pool.Raw().Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			cleanup, stop := context.WithTimeout(context.Background(), time.Second)
+			defer stop()
+			_ = flowTx.Rollback(cleanup)
+		}()
+		if err := InsertPreAuth(ctx, preAuthTestTx{flowTx}, Config{Schema: "session_store", MaximumDuration: time.Second}, flow); err != nil {
+			t.Fatal("original issued browser transaction", err)
+		}
+		if err := flowTx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		cookieWire, err = cookieToken.Reveal()
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	sessionFields := SSOOIDCSigninSessionFields
 	selectedAccountFields := kernel.SSOOIDCSigninAccountFields
@@ -891,6 +976,10 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 		sessionFields = SSOSAMLSigninSessionFields
 		selectedAccountFields = kernel.SSOSAMLSigninAccountFields
 	}
+	if idp {
+		sessionFields = SSOSAMLIDPConfirmationSessionFields
+		selectedAccountFields = kernel.SSOSAMLIDPConfirmationAccountFields
+	}
 	fields, err := sessionFields(record)
 	if err != nil {
 		t.Fatal(err)
@@ -900,7 +989,15 @@ func ssoOIDCSessionPreparedFixture(t *testing.T, ctx context.Context, pool *data
 		t.Fatal(err)
 	}
 	fields = append(fields, accountFields...)
-	command, err := identity.NewFeaturePreAuthCommand(identity.FeatureCommandSpec{Binding: binding, Operation: op, Fields: fields}, auth.NewBearerCredential(cookieWire))
+	var command identity.Command
+	feature := identity.FeatureCommandSpec{Binding: binding, Operation: op, Fields: fields}
+	if idp {
+		command, err = identity.NewFeatureSAMLIDPConfirmationCommand(feature,
+			auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))),
+			auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32))))
+	} else {
+		command, err = identity.NewFeaturePreAuthCommand(feature, auth.NewBearerCredential(cookieWire))
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

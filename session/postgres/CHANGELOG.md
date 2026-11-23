@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Stage the linked user's normal SAML session, family and issuance history in
+  the exact unsolicited confirmation transaction after provisional one-use
+  consumption. No SP pre-auth flow is needed. Install both
+  `SSOSAMLIDPSigninMigrationSource` steps after SP issuance history; this does
+  not expose a route or disclose credentials.
+
 - Add opt-in primary reads and strict local cookie logout for linked-member
   SAML sessions. Reuse the original credential, organization, policy and
   factor epochs. OIDC, OAuth2 and IdP Single Logout remain separate selections.
