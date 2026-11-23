@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bind the SAML SP metadata GET to exact selected provider IDs. No metadata
+  route is installed implicitly.
+
 - Admit one configured IdP Origin on each selected SAML POST ACS path, with no
   Fetch CORS grants and no preflight handling.
 

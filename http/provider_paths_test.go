@@ -74,13 +74,16 @@ func TestCanonicalProviderPathDispatchUsesOnlySelectedExactIDs(t *testing.T) {
 func TestSelectedSAMLProviderRoutesDoNotBecomeWildcards(t *testing.T) {
 	const owner = "sso/saml"
 	var ops []identityhttp.OperationDescriptor
-	for _, id := range []string{"identity.sso.saml-start", "identity.sso.saml-acs"} {
+	for _, id := range []string{"identity.sso.saml-start", "identity.sso.saml-acs", "identity.sso.saml-metadata"} {
 		config := identityhttp.CanonicalOperationConfig{
 			Owner: owner, OperationID: id, MaximumSerializedBytes: 8192, ProviderPathIDs: []string{"-selected"},
 			CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny},
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
 			}),
+		}
+		if id == "identity.sso.saml-metadata" {
+			config.CSRF = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}
 		}
 		op, err := identityhttp.NewCanonicalOperation(config)
 		if err != nil {
@@ -106,6 +109,11 @@ func TestSelectedSAMLProviderRoutesDoNotBecomeWildcards(t *testing.T) {
 	}{
 		{"GET", "/saml2/-selected/login", 204},
 		{"POST", "/saml2/-selected/acs", 204},
+		{"GET", "/saml2/-selected/metadata", 204},
+		{"POST", "/saml2/-selected/metadata", 405},
+		{"GET", "/saml2/unknown/metadata", 404},
+		{"GET", "/saml2/{provider_id}/metadata", 404},
+		{"GET", "/saml2/%2dselected/metadata", 404},
 		{"GET", "/saml2/-selected/acs", 405},
 		{"POST", "/saml2/unknown/acs", 404},
 		{"GET", "/saml2/%2dselected/login", 404},
