@@ -57,3 +57,30 @@ func RequireSSOSAMLSessionFactors(ctx context.Context, w kernel.Work, owner kern
 	}
 	return requireSSOSessionFactors(ctx, w, owner, spec, version)
 }
+
+// RequireSSOSAMLLogoutStartFactors locks the original known-empty factor
+// generation in the exact SAML logout start Work. A sibling session cannot
+// supply the factor authority. The caller must separately check the original
+// session and other authority, propagate denials and retain the existing Work
+// through commit or rollback. No factor or time window is created or renewed.
+func RequireSSOSAMLLogoutStartFactors(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, record session.Session) error {
+	if ctx == nil {
+		return invalidAuthority()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	spec, version, err := ssoSAMLSessionFactors(record)
+	if err != nil {
+		return err
+	}
+	if err := w.RequireSSOSAMLLogoutStartScope(ctx, owner, spec.TenantID, spec.UserID, spec.SessionID, spec.Version); err != nil {
+		return err
+	}
+	binding, _, _, err := w.FeatureScope(owner)
+	if err != nil {
+		return err
+	}
+	_, err = readKnownEmptyFactors(ctx, w, binding, spec.UserID, version)
+	return err
+}

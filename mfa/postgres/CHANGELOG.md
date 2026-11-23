@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fence the original known-empty factor generation during native SAML logout
+  start. Another session or a newer generation does not authorize revocation.
+
 - Require the original known-empty factor generation for the exact paired
   unsolicited SAML confirmation, without creating or renewing factor authority.
 
