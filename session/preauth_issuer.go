@@ -61,19 +61,46 @@ type PreAuthPrepareInput struct {
 // Compose the owned durable executor; dependencies remain borrowed and must
 // outlive calls. Preparations retain credentials privately across value copies.
 type PreAuthIssuer struct {
-	executor PreAuthIssuanceExecutor
-	config   PreAuthIssuerConfig
+	executor     PreAuthIssuanceExecutor
+	config       PreAuthIssuerConfig
+	frontchannel FrontchannelCookiePolicy
 }
 
 // NewPreAuthIssuer validates trusted composition without IO or entropy. The
 // durable executor must independently enforce the identical selected profile.
 func NewPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig) (*PreAuthIssuer, error) {
-	if issuerNil(executor) || issuerNil(c.Clock) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.FlowTTL < time.Minute || c.FlowTTL > 10*time.Minute || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 || c.Cookie.name != "__Host-identity_flow" {
+	if c.Cookie.name != "__Host-identity_flow" || c.Action == samlFrontchannelAction {
+		return nil, ErrInvalidIssuer
+	}
+	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{})
+}
+
+// NewSAMLFrontchannelIssuer selects separate pre-authentication correlation for
+// an SP-initiated SAML POST. Use action identity.sso.saml-acs and set CallbackURL
+// to the trusted HTTPS Origin plus the exact registered /saml2/{provider}/acs
+// path, not an application redirect. FlowTTL must be five minutes, Purpose
+// must select session issuance, and Cookie must be zero: this constructor sets
+// the separate host-only frontchannel cookie policy. Use a retained pre-auth
+// lookup key; neither a normal browser token nor its cookie is transferred.
+// The durable executor must enforce the exact action and ACS and commit the
+// original record before delivery. The callback owner still needs to prove
+// possession and consume the original record with its protected effects.
+func NewSAMLFrontchannelIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig) (*PreAuthIssuer, error) {
+	path, selected := samlFrontchannelPath(c.Origin, c.CallbackURL)
+	if !selected ||
+		c.Action != samlFrontchannelAction || c.FlowTTL != frontchannelCookieTTL || c.Purpose != PreAuthSessionIssuance || c.Cookie != (CookiePolicy{}) {
+		return nil, ErrInvalidIssuer
+	}
+	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{path: path})
+}
+
+func newPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, frontchannel FrontchannelCookiePolicy) (*PreAuthIssuer, error) {
+	if issuerNil(executor) || issuerNil(c.Clock) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.FlowTTL < time.Minute || c.FlowTTL > 10*time.Minute || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 {
 		return nil, ErrInvalidIssuer
 	}
 	c.ActorID = identity.ActorID(strings.Clone(string(c.ActorID)))
 	c.Action, c.Origin, c.CallbackURL, c.PolicyID = strings.Clone(c.Action), strings.Clone(c.Origin), strings.Clone(c.CallbackURL), strings.Clone(c.PolicyID)
-	s := &PreAuthIssuer{executor: executor, config: c}
+	s := &PreAuthIssuer{executor: executor, config: c, frontchannel: frontchannel}
 	// A non-issuing structural template validates the selected profile without
 	// calling the clock or generating credential bytes during construction.
 	remember, _ := ResolveRememberPolicy(BrowserSession, LifetimeConfig{Default: BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
@@ -239,18 +266,29 @@ func (s *PreAuthIssuer) Issue(ctx context.Context, p PreparedPreAuthIssuance) (o
 	if err = c.Record.Check(now, spec.Binding, spec.Cookie); err != nil {
 		return out, err
 	}
-	seconds := int(spec.Binding.ExpiresAt.Sub(now) / time.Second)
-	if seconds < 1 {
-		return out, ErrExpired
+	cookie, err := s.preAuthCookie(now, spec.Binding.ExpiresAt)
+	if err != nil {
+		return out, err
 	}
-	cookie := s.config.Cookie.base()
-	cookie.MaxAge = seconds
-	cookie.Expires = now.Add(time.Duration(seconds) * time.Second).UTC()
 	if err = ctx.Err(); err != nil {
 		return out, err
 	}
 	out.Cookie, out.Token = cookie, p.state.token
 	return out, nil
+}
+
+func (s *PreAuthIssuer) preAuthCookie(now, expires time.Time) (http.Cookie, error) {
+	if s.frontchannel.path != "" {
+		return s.frontchannel.Attributes(now, expires)
+	}
+	seconds := int(expires.Sub(now) / time.Second)
+	if seconds < 1 {
+		return http.Cookie{}, ErrExpired
+	}
+	cookie := s.config.Cookie.base()
+	cookie.MaxAge = seconds
+	cookie.Expires = now.Add(time.Duration(seconds) * time.Second).UTC()
+	return cookie, nil
 }
 
 // Recover performs current-policy primary outcome lookup for the exact original

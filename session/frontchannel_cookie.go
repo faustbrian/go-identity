@@ -10,11 +10,17 @@ import (
 const (
 	frontchannelCookieName = "__Secure-identity_frontchannel"
 	frontchannelCookieTTL  = 5 * time.Minute // Reference frontchannel_post_cookie.
+	samlFrontchannelAction = "identity.sso.saml-acs"
 	appleFormPostPath      = "/v1/oauth/callback/form-post"
 	samlCallbackPrefix     = "/saml2/"
 	samlCallbackSuffix     = "/acs"
 	maximumSAMLProviderID  = 128
 )
+
+func samlFrontchannelPath(origin, callback string) (string, bool) {
+	path, sameOrigin := strings.CutPrefix(callback, origin)
+	return path, sameOrigin && strings.HasPrefix(origin, "https://") && validSAMLFrontchannelPath(path)
+}
 
 // FrontchannelCookiePolicy holds attributes for one exact cross-site callback.
 // It owns no correlation state, session authority or response writing. The

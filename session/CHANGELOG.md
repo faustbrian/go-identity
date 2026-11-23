@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a dedicated SAML frontchannel issuer that binds original correlation to
+  the exact HTTPS ACS and delivers its separate cookie only on a new commit.
+
 - Add attributes for the separate host-only, five-minute SAML and Apple POST
   correlation cookie. Normal session-cookie policy is unchanged.
 

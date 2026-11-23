@@ -171,6 +171,10 @@ func validPreAuthBinding(b PreAuthBinding) bool {
 		return false
 	}
 	ttl := b.ExpiresAt.Sub(b.IssuedAt)
+	if i.Action == samlFrontchannelAction {
+		_, exactACS := samlFrontchannelPath(i.Origin, i.CallbackURL)
+		return exactACS && ttl == frontchannelCookieTTL
+	}
 	return ttl >= time.Minute && ttl <= 10*time.Minute
 }
 

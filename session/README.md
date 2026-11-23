@@ -487,6 +487,14 @@ time or delivers a credential, even after original expiry. A reconstructed
 caller projection is not proof of the historical persisted payload.
 This composition does not authenticate a user or complete a browser login.
 
+For an opt-in SP-initiated SAML POST, use `NewSAMLFrontchannelIssuer` with a
+pre-auth executor configured for the exact `identity.sso.saml-acs` action and
+registered HTTPS ACS URL. Set the original lifetime to five minutes and leave
+`Cookie` unset. The issuer generates separate correlation and returns the
+host-only `__Secure-identity_frontchannel` cookie scoped to that ACS. Use the
+original persisted flow and the matching credential at the callback; cookie
+delivery does not authenticate a user or consume the flow.
+
 Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes
 and opaque token/key custody with tenant-bound lookups. Authenticated cookie
