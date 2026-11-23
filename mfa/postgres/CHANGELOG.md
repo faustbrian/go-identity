@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Require the original known-empty factor generation for the exact paired
+  unsolicited SAML confirmation, without creating or renewing factor authority.
+
 - Require the original enterprise SAML session's known-empty factor generation
   for primary session reads and exact same-user revoke-one Work. Missing,
   enrolled, stale or foreign authority denies without SLO or fallback admission.
