@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the original known-empty MFA generation in the exact enterprise SAML
+  callback transaction. Missing, enrolled or changed state denies without
+  widening admission to the OIDC, OAuth2 or logout profiles.
+
 - Require the original enterprise OAuth2 session's factor generation for
   the exact native grant refresh operation without changing other profiles.
 
