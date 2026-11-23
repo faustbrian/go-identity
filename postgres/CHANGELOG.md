@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit the separate unsolicited SAML confirmation command only through its
+  registered gated owner and one-use capability. Fingerprint both original
+  inputs, require both unchanged after preparation, and expose provisional
+  consumption only during exact Apply. Erase temporary prepared custody only
+  with a definitive receipt. No SAML route is enabled by this profile.
+
 - Map the exact SAML browser start GET to one server-owned original command.
   An optional retry key can alias that command but cannot select another;
   existing keyed, canonical POST and canonical DELETE custody are unchanged.

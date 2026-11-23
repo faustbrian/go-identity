@@ -228,7 +228,7 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
-	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoEnterpriseGrantRefreshClaim(q)) && !gated {
+	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q)) && !gated {
 		return result, invalidPreparation()
 	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
@@ -280,6 +280,9 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 	}
 	generated, final, err := phase.RestoreFeaturePreparation(ctx, original, r.outputGeneration, bytes.Clone(wire))
 	if err != nil || ctx.Err() != nil || !preparationFinalDeclaration(b, admitted.snapshot(), final) {
+		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
+	}
+	if ssoSAMLIDPConfirmationClaim(q) && !sameSSOSAMLIDPConfirmationCustody(original, generated) {
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	executionRequest, snapshot, _, err := c.prepareRestoredFeature(b, generated, final)

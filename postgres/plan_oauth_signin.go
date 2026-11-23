@@ -47,6 +47,12 @@ func providerSigninProfile(op identity.FeatureOperation) (providerSigninConsumpt
 			SubjectType: "sso_login_transaction", AuditEvent: "identity.sso.login", AuditRetention: "protected", WireTag: "identity-sso-saml-signin-consumption-v1", ExternalRiskOnly: true,
 			Lifecycle: LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2},
 		}, true
+	case SSOSAMLIDPConfirmationOperation():
+		return providerSigninConsumptionProfile{
+			Contrib: ssoSAMLIDPConfirmationDescriptor(), SubjectType: "sso_saml_confirmation",
+			AuditEvent: "identity.sso.login", AuditRetention: "protected", WireTag: "identity-sso-saml-idp-confirmation-consumption-v1", ExternalRiskOnly: true,
+			Lifecycle: LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2},
+		}, true
 	case SSOOIDCExplicitLinkCallbackOperation():
 		return providerSigninConsumptionProfile{
 			Contrib:     ssoOIDCSigninDescriptor(),
@@ -64,7 +70,7 @@ func providerSigninConsumptionOperation(op identity.FeatureOperation) bool {
 }
 
 func providerSigninBindingOperation(b identity.CommandBinding) (identity.FeatureOperation, bool) {
-	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation(), SSOOAuth2SigninOperation(), SSOSAMLSigninOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
+	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation(), SSOOAuth2SigninOperation(), SSOSAMLSigninOperation(), SSOSAMLIDPConfirmationOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
 		if b.OperationID == op.OperationID && b.SchemaID == op.SchemaID {
 			return op, true
 		}
@@ -134,6 +140,9 @@ func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint 
 func validProviderConsumptionBinding(b identity.CommandBinding, operation identity.FeatureOperation) bool {
 	if operation == SSOOIDCExplicitLinkCallbackOperation() {
 		return validSSOOIDCExplicitLinkBinding(b)
+	}
+	if operation == SSOSAMLIDPConfirmationOperation() {
+		return validSSOSAMLIDPConfirmationBinding(b)
 	}
 	return b.ValidateFor(operation) == nil && b.ActorKind == authorization.SubjectServiceAccount && b.UserID == "" && b.AnonymousFlowID != ""
 }

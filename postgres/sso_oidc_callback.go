@@ -31,7 +31,7 @@ func ssoOAuth2CallbackClaim(q claimRequest) bool {
 }
 
 func ssoEnterpriseCallbackClaim(q claimRequest) bool {
-	return ssoOIDCCallbackClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q)
+	return ssoOIDCCallbackClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q)
 }
 
 func ssoOIDCCallbackClaim(q claimRequest) bool {
@@ -43,7 +43,7 @@ func ssoOIDCConsumptionOperation(op identity.FeatureOperation) bool {
 }
 
 func ssoEnterpriseConsumptionOperation(op identity.FeatureOperation) bool {
-	return ssoOIDCConsumptionOperation(op) || op == SSOOAuth2SigninOperation() || op == SSOSAMLSigninOperation()
+	return ssoOIDCConsumptionOperation(op) || op == SSOOAuth2SigninOperation() || op == SSOSAMLSigninOperation() || op == SSOSAMLIDPConfirmationOperation()
 }
 
 // The signed enterprise state is resource-bound to the original start

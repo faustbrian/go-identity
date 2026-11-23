@@ -333,9 +333,9 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	if ctx == nil {
 		return Reservation{}, identity.CommandResult{}, coordinatorError()
 	}
-	// The native ACS must prove browser and provider admission through its
-	// preparation owner before the command or one-use state can be reserved.
-	if binding.OperationID == ssoSAMLSigninPurpose {
+	// The native SAML paths must prove their respective browser and provider
+	// admission through gated preparation before obtaining ordinary Work.
+	if binding.OperationID == ssoSAMLSigninPurpose || binding.OperationID == ssoSAMLIDPConfirmationPurpose {
 		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
 	if authenticatedOperation(binding) {

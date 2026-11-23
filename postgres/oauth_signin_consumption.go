@@ -53,6 +53,17 @@ type SSOSAMLSigninContributor interface {
 	ValidateSSOSAMLSigninConsumption(identity.Command, CapabilityPlan) error
 }
 
+// SSOSAMLIDPConfirmationContributor owns a pending, unsolicited SAML
+// confirmation. Validate the exact paired browser/form custody and original
+// one-use declaration during admission. Apply and the final check must fence
+// that pending record and current provider, account and member authority. The
+// confirmation, both replay IDs and session effects must share the actual Work.
+type SSOSAMLIDPConfirmationContributor interface {
+	FeatureAdmissionPreparationContributor
+	FeatureCommitContributor
+	ValidateSSOSAMLIDPConfirmationConsumption(identity.Command, CapabilityPlan) error
+}
+
 // SSOOIDCExplicitLinkContributor owns only the authenticated enterprise link
 // variant. Validation must bind the original session and one-use browser
 // transaction to the same user, provider and proof. Its final Work check owns
@@ -72,6 +83,14 @@ const (
 )
 
 func validateProviderSigninConsumption(owner FeatureExecutionContributor, command identity.Command, plan CommandPlan) error {
+	if plan.Feature != nil && plan.Feature.Operation == SSOSAMLIDPConfirmationOperation() {
+		feature, present := command.SAMLIDPConfirmationFeature()
+		native, selected := owner.(SSOSAMLIDPConfirmationContributor)
+		if !present || !selected || feature.Operation != plan.Feature.Operation || !providerSigninPreparation(plan) || !validSSOSAMLIDPConfirmationBinding(feature.Binding) {
+			return invalidPlan()
+		}
+		return native.ValidateSSOSAMLIDPConfirmationConsumption(command, *plan.Capability)
+	}
 	feature, present := command.Feature()
 	_, cookie := command.PreAuthCookie()
 	_, code := command.OneTimeCode()
@@ -140,6 +159,14 @@ func (w Work) SSOOAuth2SigninConsumption(owner FeatureExecutionContributor) (Cap
 // provider or session authority and never renews the capability's lifetime.
 func (w Work) SSOSAMLSigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
 	return w.providerSigninConsumption(owner, SSOSAMLSigninOperation())
+}
+
+// SSOSAMLIDPConfirmationConsumption exposes the specific confirmation
+// capability already consumed provisionally inside its selected native Apply.
+// It confers no browser, replay or session authority. Its lifetime is the
+// original capability cutoff and no other feature's consumption can alias it.
+func (w Work) SSOSAMLIDPConfirmationConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
+	return w.providerSigninConsumption(owner, SSOSAMLIDPConfirmationOperation())
 }
 
 func (w Work) providerSigninConsumption(owner FeatureExecutionContributor, operation identity.FeatureOperation) (CapabilityReservationBinding, error) {

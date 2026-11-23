@@ -156,6 +156,11 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		if err != nil {
 			return claimRequest{}, err
 		}
+		if s.Operation == SSOSAMLIDPConfirmationOperation() {
+			if err := encodeSSOSAMLIDPConfirmationCustody(c, key, payload); err != nil {
+				return claimRequest{}, err
+			}
+		}
 		if code, ok := c.OneTimeCode(); ok {
 			// Opaque custody is separate from scalar metadata. The fixed path
 			// cannot collide with feature.<name>; retained-key replay recomputes
@@ -331,6 +336,9 @@ func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return 
 // The authenticated variant additionally binds every original hash/bearer/proof
 // field; this selection does not replace native policy validation/consumption.
 func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
+	if s, ok := c.SAMLIDPConfirmationFeature(); ok {
+		return s, true
+	}
 	if s, ok := c.PhonePasswordResetInputFeature(); ok {
 		return s, true
 	}
@@ -346,7 +354,7 @@ func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
 	if s, ok := c.Feature(); ok {
 		// Signin's scalar metadata alone cannot stand in for the paired
 		// password/cookie variant, including preparation and restored plans.
-		if passwordSigninOperation(s.Operation) || passwordRegistrationOperation(s.Operation) || passwordResetOperation(s.Operation) || s.Operation.OperationID == "identity.phone.password-reset-complete" {
+		if passwordSigninOperation(s.Operation) || passwordRegistrationOperation(s.Operation) || passwordResetOperation(s.Operation) || s.Operation.OperationID == "identity.phone.password-reset-complete" || s.Operation.OperationID == ssoSAMLIDPConfirmationPurpose {
 			return identity.FeatureCommandSpec{}, false
 		}
 		return s, true

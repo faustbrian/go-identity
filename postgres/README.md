@@ -139,6 +139,21 @@ forward trigger change keeps pending and historical custody and clears the
 temporary sealed output only with a definitive receipt. Leave it installed
 on code rollback.
 
+`SSOSAMLIDPConfirmationOperation` is a separate user-targeted profile for an
+existing pending unsolicited confirmation. It never takes an original SP
+request or flow. Encode the original browser and form values in the closed
+Identity command; the coordinator fingerprints both and refuses to attach
+restored output if either changes. Only the registered
+`SSOSAMLIDPConfirmationContributor` can consume the one-use capability, and
+its Work accessor views provisional consumption from that exact Apply.
+The contributor still owns primary confirmation, replay, session and
+current-authority checks. This descriptor does not expose an HTTP route.
+
+Append `SSOSAMLIDPConfirmationPreparationErasureMigrationSource` after the
+SAML-start erasure migration, before enabling any IdP-initiated contributor.
+It widens only the existing terminal trigger, with a five-second lock timeout,
+no data rewrite and no new query. Keep the widened trigger on code rollback.
+
 ### OIDC refusal and account policy
 
 The exact native callback owner can implement
