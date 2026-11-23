@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose opt-in enterprise OIDC provider logout and cookie-free one-use
+  return. Apply additive provider and session histories before exposure;
+  ordinary session signout and previously installed histories stay unchanged.
+
 - Add independently selected standalone enterprise OIDC callback completion
   from the admitted parsed query, preserving native reservation, token, session,
   explicit linking, first-login provisioning and role synchronization policy.

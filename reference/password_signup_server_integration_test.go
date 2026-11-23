@@ -286,6 +286,7 @@ type signupGraphExtensions struct {
 	enterpriseOIDCRoles         bool
 	enterpriseOIDCJIT           bool
 	enterpriseOIDCLink          bool
+	enterpriseOIDCLogout        bool
 	enterpriseOAuth2            bool
 	enterpriseOAuth2Upgrade     bool
 	socialOIDC                  bool
@@ -550,6 +551,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.enterpriseOIDC || extensions.enterpriseOAuth2 {
 		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink,
 			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade}
+		if extensions.enterpriseOIDCLogout {
+			selectedAuthorization = referenceEnterpriseOIDCLogoutPolicy{referenceEnterpriseOIDCPolicy: referenceEnterpriseOIDCPolicy{}}
+		}
 	}
 	if extensions.organizationKey {
 		selectedAuthorization = referenceOrganizationKeyPolicy{}
@@ -712,8 +716,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		return nil
 	}}
 	var enterpriseIssuer *referenceEnterpriseIssuer
+	var enterpriseLogoutRequests *atomic.Int32
 	if extensions.enterpriseOIDC {
 		enterpriseIssuer = configureReferenceEnterpriseOIDC(t, &c, origin)
+		if extensions.enterpriseOIDCLogout {
+			enterpriseLogoutRequests = configureReferenceEnterpriseOIDCLogout(t, &c, enterpriseIssuer, origin)
+		}
 		if extensions.enterpriseOIDCJIT {
 			prepareReferenceEnterpriseJITMapping(&c, enterpriseIssuer)
 		}
@@ -1412,7 +1420,17 @@ END $$`); err != nil {
 	if extensions.socialOIDCUnlink == "migration-resume" {
 		failUnlinkMigrationValidation(t, ctx, deps)
 	}
+	if extensions.enterpriseOIDCLogout {
+		interruptReferenceLogoutValidation(t, ctx, deps)
+	}
 	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
+	if extensions.enterpriseOIDCLogout {
+		if migrationErr == nil || migrationResult.Result.State() != reference.MigrationApplyPending {
+			t.Fatal("expected interrupted logout validation after committed expansion", migrationErr, migrationResult.Result.State())
+		}
+		verifyReferenceLogoutValidationCanResume(t, ctx, stores, deps)
+		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
+	}
 	if extensions.socialOIDCUnlink == "migration-resume" {
 		if migrationErr == nil || migrationResult.Result.State() != reference.MigrationApplyPending {
 			t.Fatal("expected interrupted unlink validation after committed expansion", migrationErr, migrationResult.Result.State())
@@ -1757,6 +1775,8 @@ END $$`); err != nil {
 		{"identity.oauth.callback", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.Callback},
 		{"identity.sso.signin-start", c.HTTPEnterpriseOIDC != nil || c.HTTPEnterpriseOAuth2 != nil},
 		{"identity.sso.oidc-callback", c.HTTPEnterpriseOIDC != nil},
+		{"identity.sso.oidc-logout", c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ProviderLogout},
+		{"identity.sso.oidc-logout-complete", c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ProviderLogout},
 		{"identity.sso.oauth-callback", c.HTTPEnterpriseOAuth2 != nil},
 	} {
 		if selected.enabled {
@@ -1889,6 +1909,10 @@ END $$`); err != nil {
 		organizationHandler.Store(&handler)
 		if extensions.enterpriseOIDCRoles {
 			proveReferenceEnterpriseRoleSyncJourney(t, ctx, client, origin, enterpriseIssuer, selected, roleEpoch)
+			return
+		}
+		if extensions.enterpriseOIDCLogout {
+			proveReferenceEnterpriseOIDCLogoutJourney(t, ctx, client, origin, features, enterpriseIssuer, selected, enterpriseLogoutRequests)
 			return
 		}
 		proveReferenceEnterpriseOIDCJourney(t, ctx, client, origin, features, enterpriseIssuer, selected)

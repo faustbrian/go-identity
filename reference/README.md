@@ -261,6 +261,27 @@ The [baseline](enterprise_oidc_integration_test.go),
 [explicit-link](enterprise_oidc_link_integration_test.go) journeys use a
 disposable PostgreSQL primary and controlled TLS provider.
 
+## Optional enterprise OIDC provider logout
+
+Select `EnterpriseOIDC.Logout` to install the native provider logout service
+and its two additive migration histories. Use `EndSessionEndpoint` for the
+installed provider's registered HTTPS endpoint, or leave it empty for local
+logout only. `FinalRedirectAllowlist` is separate from sign-in redirects.
+
+Apply the selected migration plan before activating the browser routes. The
+plan adds the provider state table and expands, then validates, the session
+revocation constraint in separate transactions. It preserves the installed
+provider, session, and optional role-sync histories; switching off HTTP
+exposure does not remove these schema changes.
+
+For browser exposure, enable `HTTPEnterpriseOIDC.ProviderLogout`. Authorize
+the exact keyed start for the original user and the one-time completion for
+the configured enterprise service actor. Register
+`/sso/oidc/<provider-id>/logout/callback` at the provider with the exact
+tenant HTTPS origin. See [HTTP inputs and outcomes](../http/sso/README.md#enterprise-oidc-provider-logout)
+and the [PostgreSQL/TLS journey](enterprise_oidc_logout_integration_test.go).
+Ordinary `POST /v1/session/signout` retains its local-only contract.
+
 ## Optional native social account unlink
 
 Select `SocialOAuth.Unlink` with a configured password verification target

@@ -101,6 +101,12 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	if f.enterpriseOIDC == nil {
 		return catalog, nil
 	}
+	if f.enterpriseOIDC.logout != nil {
+		catalog, err = enterpriseOIDCLogoutMigrationCatalog(ctx, catalog, schema)
+		if err != nil {
+			return nil, err
+		}
+	}
 	switch {
 	case f.enterpriseOIDC.jit:
 		return enterpriseOIDCJITMigrationCatalog(ctx, catalog)
@@ -109,6 +115,27 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	default:
 		return catalog, nil
 	}
+}
+
+func enterpriseOIDCLogoutMigrationCatalog(ctx context.Context, catalog []migrationHistory, sessionSchema string) ([]migrationHistory, error) {
+	// Keep logout independent of the installed provider prefix and optional
+	// role-sync version 7, including when roles are selected later.
+	provider := migrationHistory{namespace: "identity_enterprise_oidc_logout_provider", owners: map[migrations.Version]ModuleID{}}
+	if err := appendEnterpriseMigration(ctx, &provider, "sso/postgres", ssopg.ProviderLogoutMigrationSource{Version: 1}, migrationGuard{
+		version: 1, schema: "sso_providers", tables: []string{"logout_transactions"},
+	}); err != nil {
+		return nil, err
+	}
+	revocations := migrationHistory{namespace: "identity_enterprise_oidc_logout_session", owners: map[migrations.Version]ModuleID{}}
+	source := sessionpg.SSOOIDCLogoutMigrationSource{Schema: sessionSchema, Version: 1, ValidationVersion: 2, PreviousConstraint: "session_revocations_purpose_check"}
+	// Expansion owns creation of this constraint. An interrupted validation
+	// must leave a recognized native prefix, not an unmanaged schema collision.
+	if err := appendEnterpriseMigration(ctx, &revocations, "identity/session/postgres", source, migrationGuard{
+		version: 1, schema: sessionSchema, constraints: []string{"session_revocations.session_revocations_purpose_sso_oidc_v1"},
+	}); err != nil {
+		return nil, err
+	}
+	return append(catalog, provider, revocations), nil
 }
 
 func (f *featureState) enterpriseSessionSchema() string {

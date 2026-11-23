@@ -11,6 +11,7 @@ import (
 	"github.com/faustbrian/go-identity/oauth"
 	"github.com/faustbrian/go-identity/session"
 	"github.com/faustbrian/go-sso"
+	"github.com/faustbrian/go-sso/oidc"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
 
@@ -60,6 +61,22 @@ func (s *Server) enterpriseOIDCFeatures(network identityhttp.NetworkConfig) ([]i
 	if err != nil {
 		return nil, err
 	}
+	if n.logout != nil && n.logout.expose {
+		logout, err := ssohttp.NewProviderLogoutFeature(ssohttp.ProviderLogoutConfig{
+			Network: network, TenantID: n.tenant, Origin: browser.Origin, Rate: browser.Rate, MaximumDuration: n.duration,
+			Cookie: callbackConfig.Cookie, CSRFCookie: n.csrfCookie, Owner: owner, FinalRedirectAllowlist: n.logout.final,
+			Providers: []ssohttp.ProviderLogoutRoute{{ProviderID: provider, EndSessionEndpoint: n.logout.endpoint}},
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Both protocol features have the same canonical owner. Merge their
+		// disjoint operations without selecting another copy of that owner.
+		callback, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: callback.ID(), Operations: append(callback.Operations(), logout.Operations()...)})
+		if err != nil {
+			return nil, err
+		}
+	}
 	features := []identityhttp.Feature{start, callback}
 	if oauth2 != nil && oauth2.preauth != nil {
 		plain, err := s.enterpriseOAuth2HTTPCallback(network)
@@ -91,7 +108,48 @@ type enterpriseOIDCHTTP struct{ native *enterpriseOIDCState }
 var (
 	_ ssohttp.ParsedSigninCallbackOwner     = enterpriseOIDCHTTP{}
 	_ ssohttp.ParsedMemberLinkCallbackOwner = enterpriseOIDCHTTP{}
+	_ ssohttp.ProviderLogoutOwner           = enterpriseOIDCHTTP{}
 )
+
+func (a enterpriseOIDCHTTP) selectedLogout(tenant identity.TenantID) (*ssopg.ProviderLogoutService, error) {
+	if a.native == nil || a.native.logout == nil || !a.native.logout.expose || a.native.tenant != tenant {
+		return nil, sso.ErrForbidden
+	}
+	return a.native.logout.service, nil
+}
+
+func (a enterpriseOIDCHTTP) StartSSOOIDCLogout(ctx context.Context, request ssohttp.ProviderLogoutStartRequest) (oidc.LogoutStartResult, error) {
+	native, err := a.selectedLogout(request.TenantID)
+	if err != nil {
+		return oidc.LogoutStartResult{}, err
+	}
+	return native.Start(ctx, ssopg.ProviderLogoutStartRequest{ProviderID: request.ProviderID, IdempotencyKey: request.IdempotencyKey, FinalRedirect: request.FinalRedirect},
+		ssopg.ProviderLogoutBrowser{Session: request.Session, CSRF: request.CSRF, Origin: request.Origin})
+}
+
+func (a enterpriseOIDCHTTP) SSOOIDCLogoutRateSource(ctx context.Context, request ssohttp.ProviderLogoutCompleteRequest) (ssohttp.ProviderLogoutRateContext, error) {
+	native, err := a.selectedLogout(request.TenantID)
+	if err != nil {
+		return ssohttp.ProviderLogoutRateContext{}, err
+	}
+	out, err := native.CompleteRateSource(ctx, request.TenantID, enterpriseLogoutReturn(request))
+	if err != nil {
+		return ssohttp.ProviderLogoutRateContext{}, err
+	}
+	return ssohttp.ProviderLogoutRateContext{ProviderID: string(out.ProviderID), TransactionID: out.TransactionID, Lifetime: out.Lifetime}, nil
+}
+
+func (a enterpriseOIDCHTTP) CompleteSSOOIDCLogout(ctx context.Context, request ssohttp.ProviderLogoutCompleteRequest) (oidc.LogoutCompleteResult, error) {
+	native, err := a.selectedLogout(request.TenantID)
+	if err != nil {
+		return oidc.LogoutCompleteResult{}, err
+	}
+	return native.Complete(ctx, enterpriseLogoutReturn(request))
+}
+
+func enterpriseLogoutReturn(request ssohttp.ProviderLogoutCompleteRequest) ssopg.ProviderLogoutCompleteRequest {
+	return ssopg.ProviderLogoutCompleteRequest{ProviderID: request.ProviderID, CallbackURI: request.CallbackURI, RawQuery: request.RawQuery}
+}
 
 func (a enterpriseOIDCHTTP) StartSSOOIDC(ctx context.Context, tenant identity.TenantID, request sso.SigninStartRequest, browser ssohttp.SigninBrowser) (sso.SigninStartResult, error) {
 	if tenant != a.native.tenant {

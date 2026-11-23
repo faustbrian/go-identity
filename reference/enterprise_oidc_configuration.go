@@ -48,6 +48,9 @@ type EnterpriseOIDCConfiguration struct {
 	// the installed provider's exact verified mailbox claim mapping. Nil is
 	// the linked-member-only profile and installs no JIT migrations.
 	JIT *EnterpriseOIDCJITConfiguration
+	// Logout selects the native provider logout service and its forward-only
+	// histories. The browser routes require separate HTTP selection.
+	Logout *EnterpriseOIDCLogoutConfiguration
 }
 
 // EnterpriseOIDCJITConfiguration selects an explicit first-login policy and
@@ -101,6 +104,9 @@ type HTTPEnterpriseOIDCConfiguration struct {
 	// consent to link one enterprise account. The callback never issues another
 	// session for that link. The existing anonymous start remains available.
 	ExplicitLink bool
+	// ProviderLogout exposes the selected provider's exact logout routes only
+	// when EnterpriseOIDCConfiguration.Logout is configured.
+	ProviderLogout bool
 }
 
 type enterpriseOIDCState struct {
@@ -122,6 +128,7 @@ type enterpriseOIDCState struct {
 	jit                bool
 	memberLink         bool
 	standaloneCallback bool
+	logout             *enterpriseOIDCLogoutState
 }
 
 func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
@@ -136,6 +143,9 @@ func validateEnterpriseOIDCSelection(c StoreConfiguration) error {
 		return invalid
 	}
 	if c.EnterpriseOIDC.RoleSync != nil && c.Organization.Core.DynamicRoles.Version == 0 {
+		return invalid
+	}
+	if c.EnterpriseOIDC.Logout != nil && len(c.Session.CSRFKeys) == 0 || c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ProviderLogout && c.EnterpriseOIDC.Logout == nil {
 		return invalid
 	}
 	if jit := c.EnterpriseOIDC.JIT; jit != nil {
@@ -258,6 +268,10 @@ func composeEnterpriseOIDC(c StoreConfiguration, d ReferenceDependencies, evalua
 		policy: n.Login.PolicyID, version: selectedSession.PolicyVersion, audience: n.Completion.Audience, duration: n.Login.Coordinator.MaximumDuration,
 		sessionSchema: selectedSession.Repository.Schema, callbacks: slices.Clone(n.Login.CallbackAllowlist), roleSync: n.RoleSync != nil, jit: n.JIT != nil, memberLink: memberLink,
 		standaloneCallback: n.StandaloneCallback}
+	state.logout, err = composeEnterpriseOIDCLogout(c, d, state)
+	if err != nil {
+		return nil, err
+	}
 	if c.HTTPEnterpriseOIDC == nil {
 		return state, nil
 	}
