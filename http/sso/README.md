@@ -102,3 +102,24 @@ provider or creates session authority. Only a fresh acknowledged native
 completion sets cookies and redirects. Select strict OAuth2 cookie admission
 for the later read and logout. Omit these features to expose no OAuth2 route
 or OpenAPI operation, and redact all raw callback URLs from access logs.
+
+## Enterprise OIDC provider logout
+
+Select `NewProviderLogoutFeature` with the same tenant network and shared
+rate configuration as `NewRouter`, the existing session and CSRF cookies, and
+an owner bound to the native PostgreSQL logout service. Register the exact
+`https://<tenant-host>/sso/oidc/<provider-id>/logout/callback` at each provider
+with a configured end-session endpoint. A provider with no endpoint supports
+local-only logout and has no callback route.
+
+Send `POST /sso/oidc/<provider-id>/logout` with the original session cookie,
+exact tenant `Origin`, `X-CSRF-Token`, `Idempotency-Key`, and JSON such as
+`{"finalRedirect":"https://app.example/signed-out"}`. The final target must
+exactly match the configured allowlist. A confirmed local revocation deletes
+both cookies and returns either the provider redirect (303) or a local-only
+outcome (200). Keep the original request and retry key on unresolved receipt.
+
+The provider return needs no local cookie. A valid return settles the original
+state once; only committed success may redirect to the allowlisted final
+target. Refusal and timeout leave the local revocation intact. Do not log raw
+callback queries, session inputs, or provider `Location` values.

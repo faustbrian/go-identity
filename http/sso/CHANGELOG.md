@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose explicitly selected enterprise OIDC provider logout routes. Start
+  requires the original cookie, synchronizer and retry key. The one-use
+  return is cookie-free and cannot disclose a redirect on refusal, timeout
+  or unresolved acknowledgement.
+
 - Add optional parsed OIDC sign-in and member-link callback owners. Pass the
   existing bounded callback custody without reparsing, retain legacy owners
   when the extension is absent, and never retry legacy completion on a typed
