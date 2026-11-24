@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Prepare and restore only exact native SSO directory-sync-start with stable
+  organization/source/provider resource counters instead of its unique
+  generation record. The original authenticated admin, tenant, attempt, network,
+  retained keys and exclusive expiry remain bound to coordinator reservation.
+  This reuses existing protected counter migrations and grants no directory
+  ownership, organization permission or reconciliation authority. Publish the
+  updated risk module before adopting this adapter's new resource helper.
+
 - Bind explicit account unlink to the existing protected user/session/network
   counters. Original password preparation and the attached unlink capability
   use the same charge; retry restores its original time and digest-key aliases

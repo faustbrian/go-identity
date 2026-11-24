@@ -15,6 +15,10 @@ import (
 // PrepareCommandCounters adds a closed native counter projection to an existing
 // protected feature command. Subject is trusted server-resolved input, not an
 // HTTP request: subject/actor/resource must equal the command's canonical binding.
+// Exact native SSO directory-sync-start instead derives its stable resource
+// through risk.DirectorySyncStartCounterResource from the command's trusted
+// directory.organization-id, directory.source-id and directory.provider-id text
+// fields, never its per-command generation RecordID. No other schema may opt in.
 // PrimaryTime is supplied primary UTC microsecond time; reservation rechecks it
 // without renewal. Raw network/session values stay only in the opaque command,
 // not persisted columns or the frozen plan. This pure method grants no allowance,
@@ -174,8 +178,14 @@ func (r *Repository) prepareCommandCounterProfile(c identity.Command, subject ri
 		}
 		user = s.Binding.RecordID
 	}
-	if admission.Profile.Class == risk.CredentialMutation && subject.User != user && (resolvedUser == "" || subject.User != string(resolvedUser)) || admission.Profile.Class == risk.Privileged && (subject.Actor != string(s.Binding.ActorID) || subject.Resource != s.Binding.RecordID) {
+	if admission.Profile.Class == risk.CredentialMutation && subject.User != user && (resolvedUser == "" || subject.User != string(resolvedUser)) {
 		return fail()
+	}
+	if admission.Profile.Class == risk.Privileged {
+		resource, err := privilegedCounterResource(s)
+		if err != nil || subject.Actor != string(s.Binding.ActorID) || subject.Resource != resource {
+			return fail()
+		}
 	}
 	boundID := capabilityID
 	if resolvedUser != "" && anonymousMFASendCounter(s) {
@@ -360,7 +370,10 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 		}
 	case risk.Privileged:
 		subject.Actor = string(s.Binding.ActorID)
-		subject.Resource = s.Binding.RecordID
+		subject.Resource, e = privilegedCounterResource(s)
+		if e != nil {
+			return fail()
+		}
 	default:
 		return fail()
 	}
