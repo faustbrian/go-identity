@@ -26,8 +26,16 @@ func TestReferencePostgresEnterpriseSAMLRoleSyncJourney(t *testing.T) {
 	})
 }
 
+func TestReferencePostgresEnterpriseSAMLRoleSyncSPLogoutJourney(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{
+		postgresBaseline: true, organization: true, enterpriseSAML: true, enterpriseSAMLRoles: true,
+		enterpriseSAMLSPLogout: "redirect-relay",
+	})
+}
+
 func proveReferenceEnterpriseSAMLRoleSyncJourney(t *testing.T, ctx context.Context, base *http.Client, origin string,
-	policy *reference.HTTPEnterpriseSAMLConfiguration, selected enterpriseProvisioned, idp referenceSAMLIdPFixture, roleEpoch uint64) {
+	policy *reference.HTTPEnterpriseSAMLConfiguration, selected enterpriseProvisioned, idp referenceSAMLIdPFixture, roleEpoch uint64,
+	logoutStart *reference.EnterpriseSAMLLogoutStartConfiguration) {
 	t.Helper()
 	providerPath := "/saml2/" + string(selected.provider)
 	acsPath, metadataPath := providerPath+"/acs", providerPath+"/metadata"
@@ -56,7 +64,11 @@ func proveReferenceEnterpriseSAMLRoleSyncJourney(t *testing.T, ctx context.Conte
 		return response
 	}
 	metadata := request(base, http.MethodGet, metadataPath, nil)
-	certificate := referenceSAMLMetadataCertificate(t, metadata, origin+metadataPath, origin+acsPath, "", idp.certificateDER)
+	var selectedSLO string
+	if policy.Logout {
+		selectedSLO = origin + providerPath + "/slo"
+	}
+	certificate := referenceSAMLMetadataCertificate(t, metadata, origin+metadataPath, origin+acsPath, selectedSLO, idp.certificateDER)
 	newBrowser := func() *http.Client {
 		t.Helper()
 		jar, err := cookiejar.New(nil)
@@ -109,9 +121,15 @@ func proveReferenceEnterpriseSAMLRoleSyncJourney(t *testing.T, ctx context.Conte
 			t.Fatal("SAML role sign-in selected a foreign SP entity")
 		}
 		verifyReferenceSAMLRedirectSignature(t, certificate, location)
+		assertionID := "_role_assertion_" + key
+		if logoutStart != nil && key == "grant" {
+			// The shared SP logout proof compares SessionIndex with this exact
+			// signed assertion ID, not a subject reconstructed from role claims.
+			assertionID = "_reference_assertion"
+		}
 		encoded := idp.signedPOSTResponse(t, referenceSAMLResponseInput{
 			RequestID: requestID, Issuer: referenceSAMLIdPEntity, Audience: entity, ACS: origin + acsPath,
-			NameID: enterpriseProviderSubject, ResponseID: "_role_response_" + key, AssertionID: "_role_assertion_" + key,
+			NameID: enterpriseProviderSubject, ResponseID: "_role_response_" + key, AssertionID: assertionID,
 			Now: time.Now().UTC().Truncate(time.Microsecond), RoleClaim: claim,
 		})
 		form := url.Values{"SAMLResponse": {encoded}, "RelayState": {relay}}.Encode()
@@ -141,6 +159,23 @@ func proveReferenceEnterpriseSAMLRoleSyncJourney(t *testing.T, ctx context.Conte
 	granted, preserved := login(&grant, "grant")
 	first := readSession(granted, true)
 	permission(roleEpoch+1, authorization.Allow)
+
+	if logoutStart != nil {
+		if !policy.LogoutStart || logoutStart.RelayStateRequestKeys == nil || len(logoutStart.FinalRedirectAllowlist) != 1 {
+			t.Fatal("combined SAML role and logout proof requires the selected redirect-relay profile")
+		}
+		var csrf string
+		for _, cookie := range preserved {
+			if cookie.Name == "__Host-identity_csrf" {
+				csrf = cookie.Value
+			}
+		}
+		proveReferenceSAMLSPLogoutWithRelayState(t, ctx, base, origin, providerPath, string(policy.IdentityProviderOrigin),
+			logoutStart.RedirectEndpoint, logoutStart.FinalRedirectAllowlist[0], csrf, granted, certificate, idp)
+		readSession(granted, false)
+		permission(roleEpoch+1, authorization.Allow)
+		return
+	}
 
 	missing, _ := login(nil, "missing_before_withdrawal")
 	readSession(missing, false)

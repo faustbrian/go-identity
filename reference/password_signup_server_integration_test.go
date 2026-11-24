@@ -1961,7 +1961,7 @@ END $$`); err != nil {
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)
 		if extensions.enterpriseSAMLRoles {
-			proveReferenceEnterpriseSAMLRoleSyncJourney(t, ctx, client, origin, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP, roleEpoch)
+			proveReferenceEnterpriseSAMLRoleSyncJourney(t, ctx, client, origin, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP, roleEpoch, c.EnterpriseSAML.LogoutStart)
 			return
 		}
 		if extensions.enterpriseSAMLIDP {
