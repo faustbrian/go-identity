@@ -46,20 +46,9 @@ func (s StoreSet) enterpriseSAMLMigrationCatalog(ctx context.Context, catalog []
 		}
 	}
 
-	base := catalog[0].history
-	const aliasesVersion migrations.Version = 2451
-	aliases := kernel.CanonicalRequestMigrationSource{Base: fixedMigrationSource(base), Version: aliasesVersion}
-	full, err := (kernel.CanonicalSAMLStartRequestMigrationSource{Base: aliases, Version: aliasesVersion + 1}).Load(ctx)
+	requests, err := canonicalRequestMigrationHistory(ctx, catalog[0].history)
 	if err != nil {
 		return nil, err
-	}
-	requests := migrationHistory{namespace: "identity_enterprise_saml_requests", history: full[len(base):], owners: map[migrations.Version]ModuleID{}, guards: []migrationGuard{
-		{version: aliasesVersion, schema: "identity", tables: []string{"request_key_aliases"}},
-		{version: aliasesVersion + 1, schema: "identity", constraints: []string{"request_key_mappings.request_key_mappings_saml_start_method",
-			"request_key_aliases.request_key_aliases_saml_start_method"}},
-	}}
-	for _, migration := range requests.history {
-		requests.owners[migration.Version()] = "identity/postgres"
 	}
 	catalog = append(catalog, providers, sessions, requests)
 	if f.enterpriseSAML.logout != nil {
@@ -72,6 +61,30 @@ func (s StoreSet) enterpriseSAMLMigrationCatalog(ctx context.Context, catalog []
 		return appendEnterpriseSAMLLogoutStartMigrations(ctx, catalog, schema, start.remote != nil)
 	}
 	return catalog, nil
+}
+
+// SCIM needs the same aliases as SAML. Retain the complete historical schema
+// so either configuration can be added or disabled without an unknown suffix.
+// The SAML constraint extension itself registers no runtime behavior.
+const canonicalRequestHistory = "identity_enterprise_saml_requests"
+
+func canonicalRequestMigrationHistory(ctx context.Context, base []migrations.Migration) (migrationHistory, error) {
+	const aliasesVersion migrations.Version = 2451
+	aliases := kernel.CanonicalRequestMigrationSource{Base: fixedMigrationSource(base), Version: aliasesVersion}
+	full, err := (kernel.CanonicalSAMLStartRequestMigrationSource{Base: aliases, Version: aliasesVersion + 1}).Load(ctx)
+	if err != nil {
+		return migrationHistory{}, err
+	}
+	requests := migrationHistory{namespace: canonicalRequestHistory, owners: map[migrations.Version]ModuleID{}, guards: []migrationGuard{
+		{version: aliasesVersion, schema: "identity", tables: []string{"request_key_aliases"}},
+		{version: aliasesVersion + 1, schema: "identity", constraints: []string{"request_key_mappings.request_key_mappings_saml_start_method",
+			"request_key_aliases.request_key_aliases_saml_start_method"}},
+	}}
+	requests.history = full[len(base):]
+	for _, migration := range requests.history {
+		requests.owners[migration.Version()] = "identity/postgres"
+	}
+	return requests, nil
 }
 
 const enterpriseSAMLLogoutStartConstraint = "session_revocations_purpose_sso_saml_v1"

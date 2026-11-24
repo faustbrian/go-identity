@@ -68,11 +68,14 @@ require (
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
+	github.com/faustbrian/go-scim v0.0.0-20261113195101-e97918aba312
+	github.com/faustbrian/go-scim/organization v0.0.0-20261124142207-32943a04df43
+	github.com/faustbrian/go-scim/postgres v0.0.0-20261124132804-3a7e6a61e856
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 	github.com/faustbrian/go-sso v0.0.0-20261124141854-d9579eed5ba7
 	github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db
 	github.com/faustbrian/go-sso/oidc v0.0.0-20261123000546-023dd34bb0c7
-	github.com/faustbrian/go-sso/postgres v0.0.0-20261124145702-793602cdbfd2
+	github.com/faustbrian/go-sso/postgres v0.0.0-20261124155455-a07919883b2e
 	github.com/faustbrian/go-sso/saml v0.0.0-20261124105739-9ee486c62479
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b
 	github.com/faustbrian/go-transactional-outbox/v2 v2.1.1-0.20261022172917-6ed5e0861542
@@ -93,9 +96,6 @@ require (
 	github.com/faustbrian/go-http-middleware/v2 v2.0.2-0.20261014105810-969bbbf00668 // indirect
 	github.com/faustbrian/go-json-schema/v2 v2.0.0 // indirect
 	github.com/faustbrian/go-migrations/v2 v2.0.0 // indirect
-	github.com/faustbrian/go-scim v0.0.0-20261113195101-e97918aba312 // indirect
-	github.com/faustbrian/go-scim/organization v0.0.0-20261124142207-32943a04df43 // indirect
-	github.com/faustbrian/go-scim/postgres v0.0.0-20261124132804-3a7e6a61e856 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

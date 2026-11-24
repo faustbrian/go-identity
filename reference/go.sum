@@ -245,6 +245,8 @@ github.com/faustbrian/go-sso/postgres v0.0.0-20261124115146-9d76cb6dbb7e h1:BbBa
 github.com/faustbrian/go-sso/postgres v0.0.0-20261124115146-9d76cb6dbb7e/go.mod h1:SpZ640PwCeU4Fm5ms7TWFpwu8KvBPVl5SPV2PosXqVs=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261124145702-793602cdbfd2 h1:0B3aKc6PjGBTIiCgwlfHPQHX09VKxSVRd3YrfUxfdvI=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261124145702-793602cdbfd2/go.mod h1:SY0CXxxIF/1NwsvIxXTuLuqIKY6UHU+in2JcbiYh2Gs=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261124155455-a07919883b2e h1:zJmi8eQxJm6Z4Z/nOyKd7PmcTUgrd23+QZLDvZoG5yw=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261124155455-a07919883b2e/go.mod h1:SY0CXxxIF/1NwsvIxXTuLuqIKY6UHU+in2JcbiYh2Gs=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba h1:3bNMfo0bfFGVX+lIgzMVSVM4RCFXN+ryGLsvywSWpl0=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba/go.mod h1:junxGTiEU39EWU6Nu6hxNb9nTVAO3T7+TRE+51mCTu4=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124105739-9ee486c62479 h1:zookJCVH77qR/YcANYIh8EDwo4J3pRJHktyhh+sBNQU=

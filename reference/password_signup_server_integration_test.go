@@ -284,6 +284,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	directorySync               bool
 	directorySyncStandalone     bool
+	directoryGroupApply         bool
 	sessionCache                *referenceSessionCacheProof
 	oauthDevice                 bool
 	oauthDeviceBaseInstalled    bool
@@ -654,8 +655,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
 	}
+	var directoryGroupSource *referenceDirectorySCIMSource
 	if extensions.directorySync {
 		configureReferenceDirectorySync(t, &c, origin, extensions.directorySyncStandalone)
+		if extensions.directoryGroupApply {
+			source := configureReferenceDirectoryGroupApply(t, &c, deps)
+			directoryGroupSource = &source
+		}
 	}
 	if extensions.organizationKey && !extensions.organizationKeyUpgrade {
 		configureReferenceOrganizationKey(t, &c, origin)
@@ -1469,6 +1475,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
+	}
+	if directoryGroupSource != nil {
+		modules = append(modules, "scim/postgres")
 	}
 	if c.APIKey != nil {
 		modules = append(modules, "identity/apikey/postgres")
@@ -2352,7 +2361,10 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				}
 			}
 			if extensions.directorySync {
-				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone, selectedConfig.OTP.Coordinator)
+				bind := func(ctx context.Context, apply reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService {
+					return bindReferenceDirectoryGroupGraph(t, ctx, selectedConfig, deps, workerConfigs, apply)
+				}
+				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone, selectedConfig.OTP.Coordinator, directoryGroupSource, bind)
 			} else if extensions.organizationRoles {
 				proveReferenceOrganizationRoles(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationTeamCRUD {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Run explicitly mapped SCIM Group Apply on the Reference primary between
+  directory Start, Status and Cancel. Resolve the opaque generation ID in
+  the native worker and retain exact original-child retry custody.
+
 - Select native directory administration and its additive generation migration
   independently of enterprise sign-in. Opt into current-cookie HTTPS Start,
   Status and keyless Cancel using the graph's shared quotas and PostgreSQL.

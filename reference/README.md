@@ -512,6 +512,27 @@ exposes only opt-in directory Start, Status and Cancel. Retain the Start key
 for retry; use the Status generation version and no key for Cancel. Group
 Apply remains a separate service-account operation, never a browser route.
 
+To run Group Apply, select `DirectorySync.GroupSource` for the exact
+installed provider and SCIM connection, and enable native organization team
+lifecycle. Supply the SCIM configuration and the graph's native envelope
+keyring. Before enabling the worker, use the operator migration flow for the
+selected identity, organization, SSO and `scim/postgres` owners. The graph
+reuses the canonical request history already used by SAML and adds the
+owned SCIM projections and team grant tables. Leave the installed schema in
+place when disabling the feature. Startup never installs or initializes it.
+
+Initialize and populate the connection through the SCIM owner. Set
+`DirectorySync.GroupSource.Apply` to an explicit versioned mapping and its
+authorization owners when composing the direct worker graph. This freezes one
+mapping for the graph lifetime. Select the matching installed provider mapping
+version when changing the configuration. Local user and team targets must already exist;
+the Group edge must still identify the same local user as its current source
+projection. Get the worker from `FeatureSet.DirectoryGroupApply`. `Apply` uses
+the opaque Start generation ID, provider, mapping version, the Status
+checkpoint and the original ordered child commands. It needs no human
+credential and exposes no HTTP route. Retry with the same predecessor and
+child IDs; the current Status and Cancel continue to use browser authority.
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

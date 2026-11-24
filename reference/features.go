@@ -599,7 +599,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpOrganization.close()
 		}
 	}()
-	directorySync, err := composeDirectorySync(c, d.PostgreSQL, crypto, sessionOwner, organizationOwner, httpOrganization, s.httpRate)
+	directorySync, err := composeDirectorySync(c, d, crypto, sessionOwner, organizationOwner, httpOrganization, s.httpRate)
 	if err != nil {
 		return err
 	}

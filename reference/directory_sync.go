@@ -30,6 +30,10 @@ type DirectorySyncConfiguration struct {
 	OrganizationID, ConnectionID string
 	PolicyID, KeyReference       string
 	Authorization                ssopg.DirectorySyncAuthorization
+	// GroupSource independently selects the native SCIM source and its migration
+	// history. Add its Apply configuration to bind a direct executor; neither
+	// selection starts a worker or adds routes.
+	GroupSource *DirectoryGroupSourceConfiguration
 }
 
 // HTTPDirectorySyncConfiguration separately enables Start, Status and Cancel.
@@ -72,6 +76,7 @@ type directorySyncState struct {
 	safe     *identityhttp.SafeRateLimiter
 	admin    *organizationhttp.AdminRateLimiter
 	owned    bool
+	groups   *directoryGroupSource
 }
 
 func (s *directorySyncState) close() {
@@ -97,10 +102,11 @@ func validDirectorySelector(s string) bool {
 	return true
 }
 
-func composeDirectorySync(c StoreConfiguration, pool *database.Pool, crypto *envelope.Service, sessions *sessionState, org *organizationState, orgHTTP *organizationHTTPState, rate *httpRateState) (*directorySyncState, error) {
+func composeDirectorySync(c StoreConfiguration, d ReferenceDependencies, crypto *envelope.Service, sessions *sessionState, org *organizationState, orgHTTP *organizationHTTPState, rate *httpRateState) (*directorySyncState, error) {
 	if c.DirectorySync == nil {
 		return nil, nil
 	}
+	pool := d.PostgreSQL
 	invalid := identity.InvalidInputError{Field: "reference_directory_sync"}
 	scope := *c.DirectorySync
 	if pool == nil || crypto == nil || sessions == nil || c.Session == nil || c.OTP == nil || c.PasswordSignin == nil || org == nil || c.Organization == nil ||
@@ -142,6 +148,13 @@ func composeDirectorySync(c StoreConfiguration, pool *database.Pool, crypto *env
 		RequestKeys: c.OTP.RequestKeys, Coordinator: coordinator, Envelope: crypto, KeyReference: scope.KeyReference,
 	}
 	state := &directorySyncState{scope: scope, pool: pool, provider: providers, csrf: slices.Clone(c.Session.CSRFKeys)}
+	if scope.GroupSource != nil {
+		state.groups, err = composeDirectoryGroupSource(d, scope, providers, org.teamLifecycle)
+		if err != nil {
+			return nil, err
+		}
+		state.scope.GroupSource = nil
+	}
 	h := c.HTTPDirectorySync
 	if h == nil {
 		return state, nil

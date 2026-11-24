@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -14,17 +15,24 @@ import (
 
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
+	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	organizationhttp "github.com/faustbrian/go-identity/http/organization"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
 	organization "github.com/faustbrian/go-organization"
+	organizationpg "github.com/faustbrian/go-organization/postgres"
+	scim "github.com/faustbrian/go-scim"
+	scimorganization "github.com/faustbrian/go-scim/organization"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
+	"github.com/faustbrian/go-sso"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
 
 const referenceDirectoryOrganization = "AAAAAAAAAAAAAAAAAAAAMA"
 const referenceDirectoryProvider = "reference-directory-provider"
+const referenceDirectoryConnection = "reference-directory-source"
 
 // Registration, verification delivery and password sign-in supply the real
 // browser session. Only pre-existing provider metadata is fixture-owned.
@@ -40,7 +48,26 @@ func TestReferencePostgresDirectorySyncHTTPS(t *testing.T) {
 	}
 }
 
+func TestReferencePostgresDirectoryGroupApplyHTTPS(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{
+		postgresBaseline: true, organization: true, directorySync: true, directorySyncStandalone: true, directoryGroupApply: true,
+	})
+}
+
 type referenceDirectoryPolicy struct{}
+
+type referenceDirectorySCIMPolicy struct{}
+
+func (referenceDirectorySCIMPolicy) Decide(ctx context.Context, d authorization.DecisionContext) (authorization.Decision, error) {
+	if ctx.Err() != nil || d.Validate() != nil {
+		return authorization.Decision{}, authorization.ErrDecisionUnavailable
+	}
+	outcome := authorization.Deny
+	if d.PolicyRevision == 9 && d.Request.Tenant == otpTenant && d.Request.Subject.Kind == authorization.SubjectServiceAccount && d.Request.Subject.ID == referenceDirectorySCIMActor {
+		outcome = authorization.Allow
+	}
+	return authorization.Decision{Outcome: outcome, Revision: d.PolicyRevision}, nil
+}
 
 func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
@@ -59,12 +86,34 @@ func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.Deci
 			}
 		}
 	}
-	return (referenceOrganizationPolicy{}).Decide(ctx, d)
+	if d.Request.Subject.Kind == authorization.SubjectServiceAccount && d.Request.Subject.ID == referenceDirectorySCIMActor &&
+		d.Request.Tenant == otpTenant && d.PolicyRevision == 9 {
+		switch d.Request.Action {
+		case "identity.sso.directory-sync-apply", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID):
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
+	}
+	return (referenceOrganizationTeamsPolicy{}).Decide(ctx, d)
 }
 
 func (p referenceDirectoryPolicy) ObserveDirectorySyncAuthorization(ctx context.Context, d authorization.DecisionContext, version uint64) (ssopg.ProviderUpdateAuthorizationEvidence, error) {
 	decision, err := p.Decide(ctx, d)
 	return ssopg.ProviderUpdateAuthorizationEvidence{Context: d.Clone(), Decision: decision, ActorAuthorizationVersion: version, ValidUntil: d.Request.Environment.Time.Add(15 * time.Second)}, err
+}
+
+func (p referenceDirectoryPolicy) ObserveDirectoryGroupAuthorization(ctx context.Context, d authorization.DecisionContext, version uint64) (ssopg.ProviderUpdateAuthorizationEvidence, error) {
+	return p.ObserveDirectorySyncAuthorization(ctx, d, version)
+}
+
+func configureReferenceDirectoryGroupApply(t *testing.T, c *reference.StoreConfiguration, deps reference.ReferenceDependencies) referenceDirectorySCIMSource {
+	t.Helper()
+	keys := deps.EnvelopeKeys.(*keyring.Provider)
+	source := newReferenceDirectorySCIMSource(t, deps.PostgreSQL, keys, scim.Scope{
+		TenantID: otpTenant, OrganizationID: referenceDirectoryOrganization, ProviderID: referenceDirectoryProvider, ConnectionID: referenceDirectoryConnection,
+	}, referenceDirectorySCIMPolicy{}, 9, c.OTP.Store.GlobalAuthorityID)
+	c.Organization.Core.Teams = organization.TeamConfig{Version: 1, LifecycleVersion: 1, MaximumTeams: 10, MaximumMembers: 100}
+	c.DirectorySync.GroupSource = &reference.DirectoryGroupSourceConfiguration{SCIM: source.config, MaximumMembers: scim.DefaultGroupMembers}
+	return source
 }
 
 func configureReferenceDirectorySync(t *testing.T, c *reference.StoreConfiguration, origin string, standalone bool) {
@@ -73,7 +122,7 @@ func configureReferenceDirectorySync(t *testing.T, c *reference.StoreConfigurati
 		return referenceDirectoryOrganization, ctx.Err()
 	}
 	c.DirectorySync = &reference.DirectorySyncConfiguration{TenantID: otpTenant, OrganizationID: referenceDirectoryOrganization,
-		ConnectionID: "reference-directory-source", PolicyID: "reference-directory", KeyReference: "issue-envelope", Authorization: referenceDirectoryPolicy{}}
+		ConnectionID: referenceDirectoryConnection, PolicyID: "reference-directory", KeyReference: "issue-envelope", Authorization: referenceDirectoryPolicy{}}
 	c.HTTPDirectorySync = &reference.HTTPDirectorySyncConfiguration{Origins: []identityhttp.Origin{identityhttp.Origin(origin)}}
 	if standalone {
 		rate := c.HTTPOrganization
@@ -104,7 +153,9 @@ type referenceDirectoryProjection struct {
 	} `json:"completion"`
 }
 
-func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig) {
+type referenceDirectoryApplyBinding func(context.Context, reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService
+
+func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, source *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding) {
 	t.Helper()
 	sessions, err := features.Sessions()
 	if err != nil || len(cookies) != 1 || csrf == "" {
@@ -245,8 +296,18 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 		t.Fatal(err)
 	}
 	call(http.MethodGet, "/v1/sso/directory-sync-status?generationID="+string(foreign), "", "", true, 403)
-	call(http.MethodPost, "/v1/sso/directory-sync-cancel", `{"generationID":"`+string(first.GenerationID)+`","expectedVersion":2}`, "", true, 409)
-	cancel := `{"generationID":"` + string(first.GenerationID) + `","expectedVersion":1}`
+	if _, err := features.DirectoryGroupApply(); err == nil {
+		t.Fatal("directory administration or source setup unexpectedly selected direct Apply")
+	}
+	if source != nil {
+		applied := proveReferenceMappedGroupApply(t, ctx, f, features, human, *source, first, [32]byte(checkpoint), bind)
+		running = decode(call(http.MethodGet, statusPath, "", "", true, 200))
+		if running.Checkpoint != base64.RawURLEncoding.EncodeToString(applied[:]) || running.ReadCount != 1 || running.AppliedCount != 1 || running.RejectedCount != 0 || running.Version <= 1 {
+			t.Fatal("browser status did not read the original direct Apply successor")
+		}
+	}
+	call(http.MethodPost, "/v1/sso/directory-sync-cancel", fmt.Sprintf(`{"generationID":%q,"expectedVersion":%d}`, first.GenerationID, running.Version+1), "", true, 409)
+	cancel := fmt.Sprintf(`{"generationID":%q,"expectedVersion":%d}`, first.GenerationID, running.Version)
 	call(http.MethodPost, "/v1/sso/directory-sync-cancel", cancel, "forbidden-cancel-key", true, 400)
 	canceled := decode(call(http.MethodPost, "/v1/sso/directory-sync-cancel", cancel, "", true, 200))
 	if !canceled.Stopped || canceled.State != "canceled" || canceled.ReconciliationRequired || canceled.Checkpoint != running.Checkpoint || canceled.Completion.Outcome != "committed" {
@@ -257,16 +318,115 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 		t.Fatal("keyless cancellation did not replay the original cancellation")
 	}
 	final := decode(call(http.MethodGet, statusPath, "", "", true, 200))
-	if final.State != "canceled" || final.Version != 2 || final.Checkpoint != running.Checkpoint || final.ReadCount != 0 || final.AppliedCount != 0 || final.RejectedCount != 0 || final.ReconciliationRequired {
+	if final.State != "canceled" || final.Version != running.Version+1 || final.Checkpoint != running.Checkpoint || final.ReadCount != running.ReadCount || final.AppliedCount != running.AppliedCount || final.RejectedCount != 0 || final.ReconciliationRequired {
 		t.Fatal("final directory status did not read persisted cancellation")
 	}
 	var generations, starts, cancellations, startEvents, cancellationEvents int
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT
-	(SELECT count(*) FROM sso_providers.directory_sync_generations WHERE tenant_id=$1 AND organization_id=$2 AND provider_id=$3 AND connection_id='reference-directory-source' AND state='canceled' AND version=2),
+	(SELECT count(*) FROM sso_providers.directory_sync_generations WHERE tenant_id=$1 AND organization_id=$2 AND provider_id=$3 AND connection_id=$4 AND state='canceled' AND version=$5),
 	(SELECT count(*) FROM audit.records WHERE action='identity.sso.directory-sync-start' AND outcome=1),
 	(SELECT count(*) FROM audit.records WHERE action='identity.sso.directory-sync-cancel' AND outcome=1),
 	(SELECT count(*) FROM outbox_messages WHERE topic='sso.directory_sync.started.v1'),
-	(SELECT count(*) FROM outbox_messages WHERE topic='sso.directory_sync.cancellation_requested.v1')`, otpTenant, referenceDirectoryOrganization, referenceDirectoryProvider).Scan(&generations, &starts, &cancellations, &startEvents, &cancellationEvents); err != nil || generations != 1 || starts != 1 || cancellations != 1 || startEvents != 1 || cancellationEvents != 1 {
+	(SELECT count(*) FROM outbox_messages WHERE topic='sso.directory_sync.cancellation_requested.v1')`, otpTenant, referenceDirectoryOrganization, referenceDirectoryProvider, referenceDirectoryConnection, final.Version).Scan(&generations, &starts, &cancellations, &startEvents, &cancellationEvents); err != nil || generations != 1 || starts != 1 || cancellations != 1 || startEvents != 1 || cancellationEvents != 1 {
 		t.Fatal("directory retries duplicated or lost real protected effects", generations, starts, cancellations, startEvents, cancellationEvents, err)
 	}
+}
+
+func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, human organizationTestHuman, source referenceDirectorySCIMSource, generation referenceDirectoryProjection, predecessor [32]byte, bind referenceDirectoryApplyBinding) [32]byte {
+	t.Helper()
+	teams, err := features.Organizations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := identity.NewSubjectID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	team := organization.ID(id)
+	created, err := teams.CreateTeam(ctx, organization.CreateTeamOperationRequest{Authentication: human.auth, IdempotencyKey: teamCRUDKey(t, "reference-directory-create-team"),
+		OrganizationID: referenceDirectoryOrganization, OrganizationVersion: 1, TeamID: team, Name: "Provisioned team", CorrelationID: "directory-team"}, "127.0.0.1")
+	if err != nil || created.Receipt.Outcome != identity.CommitOutcomeCommitted {
+		t.Fatal("create genuine local target team", err)
+	}
+	member := source.createGroupEdge(t, ctx)
+	target := identity.UserID(member.userID)
+	admitted, err := teams.AddMember(ctx, organization.AddMemberOperationRequest{Authentication: human.auth, IdempotencyKey: teamCRUDKey(t, "reference-directory-admit-source-user"),
+		OrganizationID: referenceDirectoryOrganization, OrganizationVersion: 2, UserID: target, Role: organization.RoleMember, CorrelationID: "directory-source-admission"}, "127.0.0.1")
+	if err != nil || admitted.Receipt.Outcome != identity.CommitOutcomeCommitted {
+		t.Fatal("admit the actual SCIM-created identity to the organization", err)
+	}
+	mapping := scimorganization.DirectoryMappingConfig{
+		TenantID: member.scope.TenantID, OrganizationID: member.scope.OrganizationID, ProviderID: sso.ProviderID(member.scope.ProviderID),
+		ConnectionID: member.scope.ConnectionID, MappingVersion: generation.MappingVersion,
+		Groups:  []scimorganization.DirectoryGroupTeamMapping{{GroupID: member.groupID, TeamID: team}},
+		Members: []scimorganization.DirectoryMemberUserMapping{{MemberID: member.userID, UserID: target}},
+	}
+	policy := referenceDirectoryPolicy{}
+	worker := bind(ctx, reference.DirectoryGroupApplyConfiguration{Mapping: mapping, Authorization: policy, ApplyAuthorization: policy})
+	mapping.Members[0].UserID = human.user // The graph owns the installed mapping snapshot.
+	command := commandIDForReference(t)
+	delta, err := sso.NewDirectoryGroupMembershipDelta(command, member.groupID, member.userID, sso.DirectoryMembershipAdd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := ssopg.DirectoryGroupApplyRequest{GenerationID: generation.GenerationID, ProviderID: sso.ProviderID(generation.ProviderID),
+		MappingVersion: generation.MappingVersion, PredecessorCheckpoint: predecessor, Deltas: []sso.DirectoryDelta{delta}}
+	result, err := worker.Apply(ctx, request)
+	if err != nil || len(result.ChildOutcomes) != 1 || result.ChildOutcomes[0].Outcome != identity.CommitOutcomeCommitted || result.ChildOutcomes[0].Binding.ActorID != referenceDirectorySCIMActor || result.ChildOutcomes[0].Binding.UserID != target {
+		t.Fatal("direct Apply did not settle the exact service-account child and target", err)
+	}
+	replayed, err := worker.Apply(ctx, request)
+	if err != nil || len(replayed.ChildOutcomes) != 1 || replayed.ChildOutcomes[0].Binding != result.ChildOutcomes[0].Binding || replayed.ChildOutcomes[0].AuditEventID != result.ChildOutcomes[0].AuditEventID || replayed.Checkpoint != result.Checkpoint || result.Checkpoint == predecessor {
+		t.Fatal("direct Apply did not replay the exact original receipt and checkpoint", err)
+	}
+	owner, err := organizationpg.NewRepository(f.pool, organizationpg.Config{MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, err := owner.ObserveDirectoryTeamMembership(ctx, organizationpg.DirectoryTeamGrantScope{TenantID: member.scope.TenantID, OrganizationID: member.scope.OrganizationID,
+		ProviderID: organization.ID(member.scope.ProviderID), ConnectionID: organization.ID(member.scope.ConnectionID), GroupID: organization.ID(member.groupID), TeamID: team, UserID: target})
+	if err != nil || !grant.Source || grant.Version != 1 {
+		t.Fatal("directory Apply did not retain the original scoped team grant", err)
+	}
+	return result.Checkpoint
+}
+
+func bindReferenceDirectoryGroupGraph(t *testing.T, ctx context.Context, selected reference.StoreConfiguration, deps reference.ReferenceDependencies, configs []deliverypg.WorkerConfig, apply reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService {
+	t.Helper()
+	admin, source := *selected.DirectorySync, *selected.DirectorySync.GroupSource
+	source.Apply = &apply
+	admin.GroupSource = &source
+	selected.DirectorySync = &admin
+	selected.HTTPDirectorySync = nil // The direct graph never borrows a browser transport.
+	stores, err := reference.ComposeStores(selected, deps)
+	if err != nil {
+		t.Fatal("compose a fresh direct worker graph on the installed primary", err)
+	}
+	t.Cleanup(func() {
+		bounded, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := stores.Close(bounded); err != nil {
+			t.Error("close the direct worker graph", err)
+		}
+	})
+	providers, err := reference.ComposeProviders(stores)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workers, err := reference.ComposeWorkers(stores, providers, configs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	features, err := reference.ComposeFeatures(stores, providers, workers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := features.Initialize(ctx); err != nil {
+		t.Fatal("initialize the direct graph without starting a migration or requiring a human session", err)
+	}
+	worker, err := features.DirectoryGroupApply()
+	if err != nil {
+		t.Fatal("obtain the direct executor", err)
+	}
+	return worker
 }
