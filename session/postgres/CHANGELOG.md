@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let a native SP SAML callback apply a selected organization update in its
+  original session transaction before the first organization authority fence.
+  Failure rolls back the update, browser consumption and session together.
+
 - Atomically revoke only the sessions selected by a verified IdP-initiated
   SAML logout request. Match each original issuance and current session
   version, leave unrelated sessions and families unchanged, and retain a

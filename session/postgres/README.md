@@ -72,6 +72,13 @@ issuance record. Supply the real `OrganizationSessionAuthority`. Call
 `CheckCurrent` after other effects and before commit; any error aborts Work.
 `Recover` votes only on the original retained issuance, never a bearer.
 
+Use `ApplyWithOrganizationUpdate` only when the SP callback has already
+selected a provider-owned organization update. The typed SAML organization
+owner runs in the same Work after the native session and browser writes and
+before the first organization fence takes its lock. Return any error so the
+coordinator can roll back the update, session and replay effects together.
+The session effect does not select or authorize claims or roles.
+
 This effect does not select a provider, install a route, or enable reads or
 local logout for SAML sessions on its own.
 

@@ -53,11 +53,19 @@ type ssoOIDCSessionOrganizationUpdateFixture struct {
 }
 
 func (p *ssoOIDCSessionOrganizationUpdateFixture) UpdateSSOOIDCOrganization(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session) error {
+	return p.updateOrganization(ctx, w, owner, command, record, SSOOIDCSigninSession)
+}
+
+func (p *ssoOIDCSessionOrganizationUpdateFixture) UpdateSSOSAMLOrganization(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session) error {
+	return p.updateOrganization(ctx, w, owner, command, record, SSOSAMLSigninSession)
+}
+
+func (p *ssoOIDCSessionOrganizationUpdateFixture) updateOrganization(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, record session.Session, originalSession func(identity.Command) (session.Session, error)) error {
 	p.calls++
 	if p.calls != 1 || p.organization.requireCalls != 0 || w != p.wantWork || owner != p.wantOwner || command != p.original {
 		return errors.New("organization update did not precede the first fence in the original Work")
 	}
-	wantRecord, err := SSOOIDCSigninSession(command)
+	wantRecord, err := originalSession(command)
 	if err != nil {
 		return err
 	}
@@ -190,8 +198,11 @@ type ssoOIDCSessionInvocation struct {
 	applied, finalEntered, final bool
 	retained                     kernel.Work
 	consumption                  kernel.CapabilityReservationBinding
-	organizationUpdate           SSOOIDCOrganizationUpdate
-	applyErr                     error
+	organizationUpdate           interface {
+		SSOOIDCOrganizationUpdate
+		SSOSAMLOrganizationUpdate
+	}
+	applyErr error
 }
 
 type ssoSessionEffectFixture interface {
@@ -376,7 +387,14 @@ func (p *ssoOIDCSessionInvocation) ApplyFeature(ctx context.Context, w kernel.Wo
 		if update, ok := p.organizationUpdate.(*ssoOIDCSessionOrganizationUpdateFixture); ok && update != nil {
 			update.wantWork, update.wantOwner = w, p
 		}
-		receipt, err = p.effect.(*SSOOIDCSigninEffect).ApplyWithOrganizationUpdate(ctx, w, p, command, p.flow, p.organizationUpdate)
+		switch effect := p.effect.(type) {
+		case *SSOOIDCSigninEffect:
+			receipt, err = effect.ApplyWithOrganizationUpdate(ctx, w, p, command, p.flow, p.organizationUpdate)
+		case *SSOSAMLSigninEffect:
+			receipt, err = effect.ApplyWithOrganizationUpdate(ctx, w, p, command, p.flow, p.organizationUpdate)
+		default:
+			return identity.FeatureReceipt{}, errors.New("unsupported organization update fixture")
+		}
 	} else {
 		receipt, err = p.effect.Apply(ctx, w, p, command, p.flow)
 	}
@@ -555,6 +573,9 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 	modes := []string{"commit", "organization-update", "organization-update-failure", "organization-update-expired", "organization-update-nil", "organization-update-typed-nil", "existing-family", "reconstructed-command", "stale-organization", "late-membership-removed", "rollback", "audit-failure", "audit-fails-success-only", "outbox-failure"}
 	if method == "sso-saml" {
 		modes = []string{"commit", "existing-family", "reconstructed-command", "late-membership-removed", "late-factor-enrolled", "rollback", "outbox-failure"}
+		if !idp {
+			modes = append(modes, "organization-update", "organization-update-failure", "organization-update-expired", "organization-update-nil", "organization-update-typed-nil")
+		}
 	} else {
 		modes = append(modes, "foreign-saml-factor-guard")
 	}
@@ -562,8 +583,8 @@ WHERE tenant_id='guest-tenant' AND account_id='enterprise-account'`, samlFixture
 		modes = append(modes, "late-factor-generation-changed")
 	}
 	for _, mode := range modes {
-		if method != "sso-oidc" && strings.HasPrefix(mode, "organization-update") {
-			continue // This separate organization effect belongs only to OIDC.
+		if method == "sso-oauth2" && strings.HasPrefix(mode, "organization-update") {
+			continue
 		}
 		t.Run(mode, func(t *testing.T) {
 			organization.requireCalls, organization.update = 0, nil

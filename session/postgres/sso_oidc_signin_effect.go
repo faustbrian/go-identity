@@ -44,6 +44,8 @@ type SSOOIDCOrganizationUpdate interface {
 	UpdateSSOOIDCOrganization(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command, session.Session) error
 }
 
+type signinOrganizationUpdate func(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command, session.Session) error
+
 func (*SSOOIDCSigninEffect) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("postgres.SSOOIDCSigninEffect(redacted)"))
 }
@@ -99,10 +101,10 @@ func (e *SSOOIDCSigninEffect) ApplyWithOrganizationUpdate(ctx context.Context, w
 	if nilIssueDependency(update) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
-	return e.core().apply(ctx, w, owner, command, preauth, update)
+	return e.core().apply(ctx, w, owner, command, preauth, update.UpdateSSOOIDCOrganization)
 }
 
-func (e *ssoSigninEffect) apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction, update SSOOIDCOrganizationUpdate) (identity.FeatureReceipt, error) {
+func (e *ssoSigninEffect) apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preauth session.PreAuthTransaction, update signinOrganizationUpdate) (identity.FeatureReceipt, error) {
 	if !e.valid(ctx) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
@@ -141,7 +143,7 @@ func (e *ssoSigninEffect) apply(ctx context.Context, w kernel.Work, owner kernel
 		return identity.FeatureReceipt{}, err
 	}
 	if update != nil {
-		if err := update.UpdateSSOOIDCOrganization(bounded, w, owner, command, record); err != nil {
+		if err := update(bounded, w, owner, command, record); err != nil {
 			return identity.FeatureReceipt{}, err
 		}
 	}

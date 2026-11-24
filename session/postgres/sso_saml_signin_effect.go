@@ -15,6 +15,14 @@ import (
 // calling Apply. This effect cannot authenticate the provider or expose a token.
 type SSOSAMLSigninEffect struct{ effect *ssoSigninEffect }
 
+// SSOSAMLOrganizationUpdate applies provider-owned organization changes in
+// the original SP callback Work. Implementations must execute synchronously,
+// use only that Work, never retain it, and propagate failure. This port does
+// not grant authority to change the underlying command or session.
+type SSOSAMLOrganizationUpdate interface {
+	UpdateSSOSAMLOrganization(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command, session.Session) error
+}
+
 // NewSSOSAMLSigninEffect opts into the separate SP-initiated SAML issuance
 // intent. The caller must install the SAML issuance migration and use the
 // authoritative organization owner with the same Work. Construction is I/O-free.
@@ -49,6 +57,17 @@ func (e *SSOSAMLSigninEffect) core() *ssoSigninEffect {
 // provisional success never permits disclosure. The replay owner runs first.
 func (e *SSOSAMLSigninEffect) Apply(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preAuth session.PreAuthTransaction) (identity.FeatureReceipt, error) {
 	return e.core().apply(ctx, w, owner, command, preAuth, nil)
+}
+
+// ApplyWithOrganizationUpdate has Apply's contract and invokes the organization
+// owner once after session and browser writes, before any organization fence.
+// This allows the owner to take the mutation lock without upgrading a shared
+// lock. Failure aborts all writes in the same Work; nil updates fail closed.
+func (e *SSOSAMLSigninEffect) ApplyWithOrganizationUpdate(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, preAuth session.PreAuthTransaction, update SSOSAMLOrganizationUpdate) (identity.FeatureReceipt, error) {
+	if nilIssueDependency(update) {
+		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
+	}
+	return e.core().apply(ctx, w, owner, command, preAuth, update.UpdateSSOSAMLOrganization)
 }
 
 // CheckCurrent rechecks the persisted session and exact original authority
