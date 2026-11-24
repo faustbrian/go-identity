@@ -110,11 +110,65 @@ func TestDirectorySyncStartRequiresExactPrivilegedAdmission(t *testing.T) {
 	if counters.Validate(command, scope, subject, scope.Now.Add(15*time.Minute)) == nil {
 		t.Fatal("start renewed original exclusive expiry")
 	}
-	for _, operation := range []Action{"identity.sso.directory-sync-apply", "identity.sso.directory-sync-cancel", "identity.sso.directory-sync-status", "identity.sso.directory-sync-Start", "identity.sso.directory-sync-start ", "identity.sso.directory-sync-start.extra"} {
+	for _, operation := range []Action{"identity.sso.directory-sync-apply", "identity.sso.directory-sync-status", "identity.sso.directory-sync-Start", "identity.sso.directory-sync-start ", "identity.sso.directory-sync-start.extra"} {
 		other := scope
 		other.Operation = operation
 		if _, err := counters.Prepare(other, subject, scope.Now); err == nil {
 			t.Fatal("unselected operation acquired start counters", operation)
+		}
+	}
+}
+
+func TestDirectorySyncCancelRequiresExactPrivilegedAdmission(t *testing.T) {
+	policy := testPolicy(t)
+	scope := testContext()
+	scope.Operation = "identity.sso.directory-sync-cancel"
+	scope.IndependentFactor = true
+	status := testSignal(scope, "status", SignalClean)
+	captcha := testSignal(scope, "captcha", SignalClean)
+
+	assessment, err := policy.Assess(context.Background(), scope, []Signal{status, captcha})
+	if err != nil || assessment.Decision.Action != Allow {
+		t.Fatalf("clean cancellation cannot reach protected reservation: action=%v, err=%v", assessment.Decision.Action, err)
+	}
+	for _, signals := range [][]Signal{nil, {status}, {captcha}, {status, testSignal(scope, "captcha", SignalUnavailable)}} {
+		assessment, err = policy.Assess(context.Background(), scope, signals)
+		if err != nil || assessment.Decision.Action != Deny {
+			t.Fatal("cancellation bypassed required current signals", err)
+		}
+	}
+
+	key, err := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counters, err := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: policy, Keys: []CounterDigestKey{key}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject := Subject{Actor: "directory-admin", Resource: "retained-generation", Network: "192.0.2.1"}
+	command, err := counters.Prepare(scope, subject, scope.Now)
+	if err != nil {
+		t.Fatal("cancellation cannot reserve privileged counters", err)
+	}
+	binding := command.Bindings()
+	if binding.Phase != ReserveWithCommand || binding.Operation != scope.Operation || len(binding.Targets) != 4 {
+		t.Fatal("cancellation did not bind the protected operation and counter dimensions")
+	}
+	other := subject
+	other.Resource = "other-generation"
+	start := scope
+	start.Operation = "identity.sso.directory-sync-start"
+	if counters.Validate(command, start, subject, scope.Now) == nil ||
+		counters.Validate(command, scope, other, scope.Now) == nil ||
+		counters.Validate(command, scope, subject, scope.Now.Add(15*time.Minute)) == nil {
+		t.Fatal("cancellation reused different-operation, different-generation or expired counter authority")
+	}
+	for _, operation := range []Action{"identity.sso.directory-sync-Cancel", "identity.sso.directory-sync-cancel ", "identity.sso.directory-sync-cancel.extra"} {
+		alias := scope
+		alias.Operation = operation
+		if _, err := counters.Prepare(alias, subject, scope.Now); err == nil {
+			t.Fatal("unselected operation acquired cancellation counters", operation)
 		}
 	}
 }

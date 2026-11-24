@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+- Admit exact SSO directory-sync-cancel through the existing privileged
+  profile. Counters bind to the retained generation and original attempt;
+  this grants no organization or directory write authority on its own.
+
 - Admit only exact SSO directory-sync-start through the existing privileged
   protected profile. Its tenant/admin/organization-source-provider/network
   counters preserve original attempt and expiry; generation IDs and distinct
   idempotency keys cannot create fresh resource buckets. The stable resource
-  encoder grants no directory or organization authority. Apply, cancel, status
+  encoder grants no directory or organization authority. Apply, status
   and aliases retain their existing closed defaults.
 
 - Admit only the exact disabled SAML provider registration through its own
