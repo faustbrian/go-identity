@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Echo optional IdP RelayState in the fresh signed SAML logout reply.
+  Changed state cannot reopen the signed request, and settled retries
+  never return the form or the opaque value again.
+
 - Compose opt-in SP-initiated SAML logout, with explicit local-only and
   signed provider Redirect modes. A provider POST can settle only its
   original outstanding request; local revocation does not wait for it.

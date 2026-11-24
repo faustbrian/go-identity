@@ -329,10 +329,13 @@ Register the exact HTTPS `POST /saml2/{provider_id}/slo` endpoint at the
 installed IdP. If SP metadata is selected, it advertises this POST binding
 only while the HTTP option is on. A signed IdP `SAMLRequest` needs no browser
 cookie. It revokes the matched local sessions; only a newly acknowledged
-result returns the signed form for the approved IdP endpoint. Exact retries
-do not repeat revocation or return another form. The HTTP switch does not
-remove native history when turned off. This profile does not start an
-SP-initiated logout or accept RelayState.
+result returns a POST form carrying the signed response for the approved IdP
+endpoint. The request may include one `RelayState` value of up to 80 ASCII
+letters, digits, hyphens or underscores. The reply echoes that handle exactly;
+it never selects a session or destination. Exact retries do not repeat
+revocation or return another form. A changed or missing original handle
+conflicts. The HTTP switch does not remove native history when turned off.
+SP-initiated logout is a separate selection.
 
 ### SP-initiated SAML logout
 

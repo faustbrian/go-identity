@@ -65,10 +65,8 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 		}
 		if n.logoutStart != nil && n.logoutStart.remote != nil {
 			config.Owner, config.FinalRedirectAllowlist = owner, n.logoutStart.final
-		} else {
-			config.RequestOnlyOwner = owner
 		}
-		op, err := ssohttp.NewSAMLLogoutOperation(config)
+		op, err := ssohttp.NewSAMLLogoutOperationWithRequestRelayState(config, owner)
 		if err != nil {
 			return nil, nil, err
 		}

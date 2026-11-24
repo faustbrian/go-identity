@@ -75,8 +75,9 @@ func proveReferenceEnterpriseSAMLIDPLogout(t *testing.T, ctx context.Context, ba
 	metadata := do(http.MethodGet, metadataPath, "", "", nil)
 	spCertificate := referenceSAMLLogoutMetadataCertificate(t, metadata, origin+metadataPath, origin+logoutPath, idp.certificateDER)
 	const requestID = "_reference_idp_logout_request"
+	const relayState = "Opaque-IdP_Handle-9"
 	wire := idp.signedReferenceLogoutRequest(t, origin+logoutPath, requestID, assertionID, time.Now().UTC())
-	body := url.Values{"SAMLRequest": {wire}}.Encode()
+	body := url.Values{"SAMLRequest": {wire}, "RelayState": {relayState}}.Encode()
 	foreign := do(http.MethodPost, logoutPath, body, "https://unconfigured.example", nil)
 	if foreign.StatusCode != http.StatusForbidden || foreign.Header.Get("Location") != "" || len(foreign.Header.Values("Set-Cookie")) != 0 {
 		t.Fatal("unconfigured IdP origin did not deny the signed logout request", foreign.StatusCode)
@@ -90,7 +91,7 @@ func proveReferenceEnterpriseSAMLIDPLogout(t *testing.T, ctx context.Context, ba
 		response.Header.Get("Access-Control-Allow-Origin") != "" || response.Header.Get("Access-Control-Allow-Credentials") != "" {
 		t.Fatal("signed IdP logout did not return only a private POST response document", response.StatusCode)
 	}
-	encodedResponse := readReferenceSAMLLogoutForm(t, response.Body, responseEndpoint)
+	encodedResponse := readReferenceSAMLLogoutForm(t, response.Body, responseEndpoint, relayState)
 	unselectedSettlement := do(http.MethodPost, logoutPath, url.Values{"SAMLResponse": {encodedResponse}}.Encode(), idpOrigin, nil)
 	if unselectedSettlement.StatusCode != http.StatusBadRequest || unselectedSettlement.Header.Get("Location") != "" {
 		t.Fatal("request-only Reference accepted an inbound response form", unselectedSettlement.StatusCode)
@@ -120,6 +121,18 @@ func proveReferenceEnterpriseSAMLIDPLogout(t *testing.T, ctx context.Context, ba
 	replayBody, err := io.ReadAll(io.LimitReader(replay.Body, 1024))
 	if err != nil || replay.StatusCode != http.StatusNoContent || len(replayBody) != 0 || replay.Header.Get("Location") != "" || len(replay.Header.Values("Set-Cookie")) != 0 {
 		t.Fatal("settled IdP logout replay disclosed another response or browser authority", replay.StatusCode, err)
+	}
+	for _, changed := range []url.Values{
+		{"SAMLRequest": {wire}, "RelayState": {"Different-Opaque_Handle"}},
+		{"SAMLRequest": {wire}},
+	} {
+		conflict := do(http.MethodPost, logoutPath, changed.Encode(), idpOrigin, nil)
+		conflictBody, err := io.ReadAll(io.LimitReader(conflict.Body, 1024))
+		_ = conflict.Body.Close()
+		if err != nil || conflict.StatusCode != http.StatusConflict || bytes.Contains(conflictBody, []byte(relayState)) ||
+			bytes.Contains(conflictBody, []byte("SAMLResponse")) || conflict.Header.Get("Location") != "" || len(conflict.Cookies()) != 0 {
+			t.Fatal("changed or omitted RelayState reopened the signed logout", conflict.StatusCode, err)
+		}
 	}
 	readOriginalSession(false)
 }
@@ -183,14 +196,14 @@ func referenceSAMLLogoutMetadataCertificate(t *testing.T, response *http.Respons
 	return der
 }
 
-func readReferenceSAMLLogoutForm(t *testing.T, body io.ReadCloser, destination string) string {
+func readReferenceSAMLLogoutForm(t *testing.T, body io.ReadCloser, destination, wantRelay string) string {
 	t.Helper()
 	defer body.Close()
 	decoder := xml.NewDecoder(io.LimitReader(body, 96<<10))
 	decoder.Strict, decoder.AutoClose, decoder.Entity = false, xml.HTMLAutoClose, xml.HTMLEntity
 	var forms, inputs, buttons int
 	var inForm bool
-	var response string
+	inputsByName := make(map[string]string)
 	for {
 		token, err := decoder.Token()
 		if err == io.EOF {
@@ -225,10 +238,12 @@ func readReferenceSAMLLogoutForm(t *testing.T, body io.ReadCloser, destination s
 			}
 		case "input":
 			inputs++
-			if !inForm || attrs["type"] != "hidden" || attrs["name"] != "SAMLResponse" || attrs["value"] == "" {
-				t.Fatal("logout response document did not contain only its signed response field")
+			name := attrs["name"]
+			if _, duplicate := inputsByName[name]; duplicate || !inForm || attrs["type"] != "hidden" ||
+				name != "SAMLResponse" && name != "RelayState" || attrs["value"] == "" {
+				t.Fatal("logout response document contained an unexpected hidden field")
 			}
-			response = attrs["value"]
+			inputsByName[name] = attrs["value"]
 		case "button":
 			buttons++
 			if !inForm || attrs["type"] != "submit" || attrs["name"] != "" || attrs["formaction"] != "" {
@@ -236,8 +251,8 @@ func readReferenceSAMLLogoutForm(t *testing.T, body io.ReadCloser, destination s
 			}
 		}
 	}
-	if forms != 1 || inputs != 1 || buttons != 1 || response == "" {
-		t.Fatal("logout response did not contain exactly one explicit signed POST form")
+	if forms != 1 || inputs != 2 || buttons != 1 || inputsByName["SAMLResponse"] == "" || inputsByName["RelayState"] != wantRelay {
+		t.Fatal("logout response did not contain exactly the signed POST and original RelayState")
 	}
-	return response
+	return inputsByName["SAMLResponse"]
 }

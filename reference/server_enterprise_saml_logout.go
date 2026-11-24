@@ -9,24 +9,35 @@ import (
 )
 
 var _ ssohttp.SAMLLogoutRequestOwner = enterpriseSAMLHTTP{}
+var _ ssohttp.SAMLLogoutRequestRelayOwner = enterpriseSAMLHTTP{}
 var _ ssohttp.SAMLLogoutStartOwner = enterpriseSAMLHTTP{}
 var _ ssohttp.SAMLLogoutOwner = enterpriseSAMLHTTP{}
 
 func (a enterpriseSAMLHTTP) HandleSAMLLogoutRequest(ctx context.Context, request ssohttp.SAMLLogoutRequest) (ssohttp.SAMLLogoutRequestResult, error) {
-	var out ssohttp.SAMLLogoutRequestResult
+	result, err := a.HandleSAMLLogoutRequestWithRelayState(ctx, request, "")
+	return result.SAMLLogoutRequestResult, err
+}
+
+func (a enterpriseSAMLHTTP) HandleSAMLLogoutRequestWithRelayState(ctx context.Context, request ssohttp.SAMLLogoutRequest, relay string) (ssohttp.SAMLLogoutRequestRelayResult, error) {
+	var out ssohttp.SAMLLogoutRequestRelayResult
 	n := a.native
 	if n == nil || n.http == nil || !n.http.Logout || n.logout == nil ||
 		request.TenantID != n.tenant || request.ProviderID != string(n.profile.ProviderID) {
 		return out, sso.ErrForbidden
 	}
-	result, err := n.logout.requests.HandleRequest(ctx, ssopg.ProviderSAMLIDPLogoutRequest{
+	var values []string
+	if relay != "" {
+		values = []string{relay}
+	}
+	result, err := n.logout.requests.HandleRequestWithRelayState(ctx, ssopg.ProviderSAMLIDPLogoutRequest{
 		ProviderID: n.profile.ProviderID, SAMLRequest: []string{request.SAMLRequest},
-	})
+	}, values)
 	if err != nil {
 		return out, err
 	}
 	if fields, deliver := result.Response(); deliver {
-		out = ssohttp.SAMLLogoutRequestResult{Destination: fields.Destination, SAMLResponse: fields.SAMLResponse}
+		out.SAMLLogoutRequestResult = ssohttp.SAMLLogoutRequestResult{Destination: fields.Destination, SAMLResponse: fields.SAMLResponse}
+		out.RelayState, _ = result.RelayState()
 	}
 	return out, nil
 }
