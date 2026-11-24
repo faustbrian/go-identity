@@ -2,6 +2,7 @@ package ssohttp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -298,7 +299,8 @@ func TestSAMLLogoutStartHTTPCancellationRetainsSelectedLocalProjectionWithoutNav
 func FuzzSAMLLogoutStartProviderRedirect(f *testing.F) {
 	const fixed = "https://idp.example/slo?tenant=managed"
 	valid := samlLogoutStartHTTPSignedRedirect(fixed)
-	for _, seed := range []string{valid, strings.Replace(valid, "idp.example", "other.example", 1), valid + "&Signature=YQ%3D%3D", "", "https://idp.example/slo"} {
+	validWithState := strings.Replace(valid, "&SigAlg=", "&RelayState="+strings.Repeat("A", 43)+"&SigAlg=", 1)
+	for _, seed := range []string{valid, validWithState, strings.Replace(valid, "idp.example", "other.example", 1), valid + "&Signature=YQ%3D%3D", "", "https://idp.example/slo"} {
 		f.Add(seed)
 	}
 	endpoint, err := url.Parse(fixed)
@@ -306,7 +308,14 @@ func FuzzSAMLLogoutStartProviderRedirect(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
-		if !validSAMLLogoutStartRedirect(raw, *endpoint) {
+		plain := samlLogoutStartProfile{endpoint: *endpoint}
+		selected := samlLogoutStartProfile{endpoint: *endpoint, redirectProfile: samlLogoutRedirectWithRelayState}
+		plainOK := plain.validRedirect(raw)
+		stateOK := selected.validRedirect(raw)
+		if plainOK && stateOK {
+			t.Fatal("both profiles accepted the same signed Redirect")
+		}
+		if !plainOK && !stateOK {
 			return
 		}
 		target, err := url.Parse(raw)
@@ -315,7 +324,16 @@ func FuzzSAMLLogoutStartProviderRedirect(f *testing.F) {
 			t.Fatal("accepted redirect escaped the configured destination")
 		}
 		values, err := url.ParseQuery(target.RawQuery)
-		if err != nil || len(values) != 4 || len(values["tenant"]) != 1 || values.Get("tenant") != "managed" ||
+		fieldCount := 4
+		if stateOK {
+			fieldCount++
+			encoded := values.Get("RelayState")
+			decoded, decodeErr := base64.RawURLEncoding.DecodeString(encoded)
+			if len(values["RelayState"]) != 1 || decodeErr != nil || len(decoded) != 32 || base64.RawURLEncoding.EncodeToString(decoded) != encoded {
+				t.Fatal("accepted a noncanonical opaque RelayState")
+			}
+		}
+		if err != nil || len(values) != fieldCount || len(values["tenant"]) != 1 || values.Get("tenant") != "managed" ||
 			len(values["SAMLRequest"]) != 1 || len(values["Signature"]) != 1 ||
 			len(values["SigAlg"]) != 1 || values.Get("SigAlg") != saml.SignatureAlgorithmRSAPSSSHA256 {
 			t.Fatal("accepted redirect escaped the selected binding")

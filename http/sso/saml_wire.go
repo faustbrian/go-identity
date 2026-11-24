@@ -30,9 +30,27 @@ func samlLogoutRequestWire() *identityhttp.WireOperation {
 }`)}
 }
 
-func samlLogoutRelayWire(settlesResponse bool) (*identityhttp.WireOperation, error) {
-	const request = `{"type":"object","additionalProperties":false,"required":["SAMLRequest"],"properties":{"SAMLRequest":{"type":"string","minLength":1,"maxLength":1048576},"RelayState":{"type":"string","minLength":1,"maxLength":80,"pattern":"^[A-Za-z0-9_-]+$"}}}`
-	const response = `{"type":"object","additionalProperties":false,"required":["SAMLResponse"],"properties":{"SAMLResponse":{"type":"string","minLength":1,"maxLength":1048576}}}`
+func samlLogoutRelayWire(settlesResponse bool, selected SAMLLogoutRelaySelection) (*identityhttp.WireOperation, error) {
+	const message = `{"type":"string","minLength":1,"maxLength":1048576}`
+	const requestState = `{"type":"string","minLength":1,"maxLength":80,"pattern":"^[A-Za-z0-9_-]+$"}`
+	// The final character has four data bits in a canonical 32-byte value.
+	const responseState = `{"type":"string","minLength":43,"maxLength":43,"pattern":"^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"}`
+	branch := func(field, relay string) string {
+		properties := `"` + field + `":` + message
+		if relay != "" {
+			properties += `,"RelayState":` + relay
+		}
+		return `{"type":"object","additionalProperties":false,"required":["` + field + `"],"properties":{` + properties + `}}`
+	}
+
+	request := branch("SAMLRequest", "")
+	if selected.Request != nil {
+		request = branch("SAMLRequest", requestState)
+	}
+	response := branch("SAMLResponse", "")
+	if selected.Response != nil {
+		response = branch("SAMLResponse", responseState)
+	}
 	wire := samlLogoutRequestWire()
 	schema := request
 	if settlesResponse {
@@ -46,6 +64,12 @@ func samlLogoutRelayWire(settlesResponse bool) (*identityhttp.WireOperation, err
 	description := `"Accept a signed LogoutRequest from the configured IdP origin, with one optional opaque RelayState. Only a fresh POST form carrying a signed LogoutResponse echoes the exact value. The value is never browser, session or redirect authority."`
 	if settlesResponse {
 		description = `"Accept a signed LogoutRequest with one optional opaque RelayState, or a signed LogoutResponse without RelayState, from the configured IdP origin. Only a fresh POST form carrying a signed request reply echoes the exact value. Only native response settlement may select the original allowlisted SP continuation."`
+	}
+	if selected.Response != nil {
+		description = `"From the configured IdP origin, accept a signed LogoutRequest without RelayState, or a signed LogoutResponse with the original opaque RelayState when the SP issued one. Only native response settlement may select the original allowlisted SP continuation."`
+		if selected.Request != nil {
+			description = `"From the configured IdP origin, accept a signed LogoutRequest with one optional opaque RelayState, or a signed LogoutResponse with the original opaque RelayState when the SP issued one. Only a fresh signed request reply echoes request state. Only native response settlement may select the original allowlisted SP continuation."`
+		}
 	}
 	fields["description"] = json.RawMessage(description)
 	fields["requestBody"] = json.RawMessage(`{"required":true,"content":{"application/x-www-form-urlencoded":{"schema":` + schema + `}}}`)

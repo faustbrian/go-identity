@@ -150,6 +150,10 @@ Set `RequestOnlyOwner` instead of `Owner` if no SP-initiated response
 settlement is selected. Leave the continuation allowlist empty. The router
 then rejects inbound `SAMLResponse` forms and omits them from OpenAPI.
 
+To echo IdP-issued state on a fresh signed request reply, select
+`NewSAMLLogoutOperationWithRequestRelayState` with the matching native owner.
+The request's opaque value does not select the response path or continuation.
+
 For SP-initiated logout, separately select `NewSAMLLogoutStartOperation`.
 Send `POST /saml2/{provider_id}/logout` with the original session cookie,
 exact SP Origin, `X-CSRF-Token`, one `Idempotency-Key`, and an exact
@@ -161,6 +165,17 @@ local outcome even if remote work fails. Cancellation suppresses navigation
 and cookie changes; it does not undo local revocation. Keep the original
 request and key to reconcile an unknown outcome. This start does not mount
 the SLO POST.
+
+For SP-generated RelayState, select `NewSAMLLogoutStartOperationWithRelayState`
+and `NewSAMLLogoutOperationWithRelayState` with a `SAMLLogoutRelaySelection`
+whose `Response` is the matching native owner. The reserved signed Redirect
+contains one canonical, 43-character base64url handle. Only the signed return
+from the configured IdP origin can deliver it to the native owner, which must
+bind it to the original request and settle it once. A reply without RelayState
+uses `Owner` for requests that did not issue state; native must reject it if the
+original request did issue state. An IdP's own request RelayState remains a
+separate opt-in through `SAMLLogoutRelaySelection.Request`. Neither profile
+adds an HTTP route or enables RelayState by default. Do not log the handle.
 
 ## Enterprise OIDC provider logout
 

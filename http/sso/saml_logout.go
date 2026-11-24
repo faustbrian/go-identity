@@ -18,6 +18,7 @@ import (
 const samlLogoutOperation = "identity.sso.saml-slo"
 const samlLogoutMaxWire = 1 << 20
 const samlLogoutMaxRelayBytes = 80 // SAML Bindings §3.5.3.
+const samlLogoutSPRelayBytes = 32
 
 // SAMLLogoutRequest carries only the LogoutRequest form field and trusted
 // route scope. Transport has not verified the XML or selected any session.
@@ -107,6 +108,20 @@ type SAMLLogoutRequestRelayOwner interface {
 	HandleSAMLLogoutRequestWithRelayState(context.Context, SAMLLogoutRequest, string) (SAMLLogoutRequestRelayResult, error)
 }
 
+// SAMLLogoutResponseRelayOwner settles a signed SP-initiated logout response.
+// It must bind the opaque handle to the original request selected by the
+// verified response, and enforce the native one-use and continuation policy.
+type SAMLLogoutResponseRelayOwner interface {
+	SettleSAMLLogoutResponseWithRelayState(context.Context, SAMLLogoutResponseRequest, string) (SAMLLogoutResponseResult, error)
+}
+
+// SAMLLogoutRelaySelection selects request and response state independently.
+// A nil field leaves that branch's existing behavior unchanged.
+type SAMLLogoutRelaySelection struct {
+	Request  SAMLLogoutRequestRelayOwner
+	Response SAMLLogoutResponseRelayOwner
+}
+
 // SAMLLogoutOwner is the selected native signed logout service adapter. It
 // verifies the exact corresponding message, owns replay, and settles the
 // original local effect independently of the remote outcome. It never takes
@@ -149,7 +164,7 @@ func samlLogoutPath(provider string) string { return "/saml2/" + provider + "/sl
 // This profile does not add logout start, RelayState, wildcard routes or
 // session cookie handling. An unavailable owner never discloses a response.
 func NewSAMLLogoutOperation(c SAMLLogoutConfig) (identityhttp.OperationDescriptor, error) {
-	return newSAMLLogoutOperation(c, nil)
+	return newSAMLLogoutOperation(c, SAMLLogoutRelaySelection{})
 }
 
 // NewSAMLLogoutOperationWithRequestRelayState selects optional opaque state
@@ -157,14 +172,31 @@ func NewSAMLLogoutOperation(c SAMLLogoutConfig) (identityhttp.OperationDescripto
 // supply Owner only when also selecting the unchanged SP-response branch.
 // Mount the operation with the same exact NavigationPolicy as the base route.
 func NewSAMLLogoutOperationWithRequestRelayState(c SAMLLogoutConfig, owner SAMLLogoutRequestRelayOwner) (identityhttp.OperationDescriptor, error) {
-	if !configuredOwner(owner) || c.RequestOnlyOwner != nil || c.Owner != nil && !configuredOwner(c.Owner) {
-		return identityhttp.OperationDescriptor{}, identityhttp.ErrInvalidInput
-	}
-	return newSAMLLogoutOperation(c, owner)
+	return NewSAMLLogoutOperationWithRelayState(c, SAMLLogoutRelaySelection{Request: owner})
 }
 
-func newSAMLLogoutOperation(c SAMLLogoutConfig, relayOwner SAMLLogoutRequestRelayOwner) (identityhttp.OperationDescriptor, error) {
-	p, err := newSAMLLogoutProfile(c, relayOwner)
+// NewSAMLLogoutOperationWithRelayState opts into opaque state on the selected
+// SLO POST branches. Leave RequestOnlyOwner unset. Selecting Response requires
+// Owner for state-less replies; that owner must reject missing state on any
+// request that originally carried it. Mount with the base NavigationPolicy.
+func NewSAMLLogoutOperationWithRelayState(c SAMLLogoutConfig, selected SAMLLogoutRelaySelection) (identityhttp.OperationDescriptor, error) {
+	if c.RequestOnlyOwner != nil || (selected.Request == nil && selected.Response == nil) {
+		return identityhttp.OperationDescriptor{}, identityhttp.ErrInvalidInput
+	}
+	if selected.Request != nil && !configuredOwner(selected.Request) {
+		return identityhttp.OperationDescriptor{}, identityhttp.ErrInvalidInput
+	}
+	if selected.Response != nil && (!configuredOwner(selected.Response) || c.Owner == nil) {
+		return identityhttp.OperationDescriptor{}, identityhttp.ErrInvalidInput
+	}
+	if c.Owner != nil && !configuredOwner(c.Owner) {
+		return identityhttp.OperationDescriptor{}, identityhttp.ErrInvalidInput
+	}
+	return newSAMLLogoutOperation(c, selected)
+}
+
+func newSAMLLogoutOperation(c SAMLLogoutConfig, selected SAMLLogoutRelaySelection) (identityhttp.OperationDescriptor, error) {
+	p, err := newSAMLLogoutProfile(c, selected)
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
@@ -189,8 +221,8 @@ func newSAMLLogoutOperation(c SAMLLogoutConfig, relayOwner SAMLLogoutRequestRela
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	if relayOwner != nil {
-		op.Wire, err = samlLogoutRelayWire(c.Owner != nil)
+	if selected.Request != nil || selected.Response != nil {
+		op.Wire, err = samlLogoutRelayWire(c.Owner != nil, selected)
 		if err != nil {
 			return identityhttp.OperationDescriptor{}, err
 		}
@@ -209,11 +241,11 @@ type samlLogoutProfile struct {
 	network        *identityhttp.NetworkResolver
 	idp            *identityhttp.OriginGuard
 	requestOwner   SAMLLogoutRequestOwner
-	relayOwner     SAMLLogoutRequestRelayOwner
+	relayOwners    SAMLLogoutRelaySelection
 	finalRedirects map[string]struct{}
 }
 
-func newSAMLLogoutProfile(c SAMLLogoutConfig, relayOwner SAMLLogoutRequestRelayOwner) (samlLogoutProfile, error) {
+func newSAMLLogoutProfile(c SAMLLogoutConfig, selected SAMLLogoutRelaySelection) (samlLogoutProfile, error) {
 	var empty samlLogoutProfile
 	invalid := identityhttp.ErrInvalidInput
 	var requestOwner SAMLLogoutRequestOwner = c.Owner
@@ -223,10 +255,10 @@ func newSAMLLogoutProfile(c SAMLLogoutConfig, relayOwner SAMLLogoutRequestRelayO
 		}
 		requestOwner = c.RequestOnlyOwner
 	}
-	if relayOwner != nil && c.Owner == nil && len(c.FinalRedirectAllowlist) != 0 {
+	if selected.Request != nil && c.Owner == nil && len(c.FinalRedirectAllowlist) != 0 {
 		return empty, invalid
 	}
-	if relayOwner == nil && !configuredOwner(requestOwner) {
+	if selected.Request == nil && !configuredOwner(requestOwner) {
 		return empty, invalid
 	}
 	if c.TenantID == "" || !validProviderID(c.ProviderID) || c.Origin == c.IdentityProviderOrigin ||
@@ -264,7 +296,7 @@ func newSAMLLogoutProfile(c SAMLLogoutConfig, relayOwner SAMLLogoutRequestRelayO
 		return empty, err
 	}
 	return samlLogoutProfile{c: c, path: path, decoder: decoder, network: network, idp: idp,
-		requestOwner: requestOwner, relayOwner: relayOwner, finalRedirects: redirects}, nil
+		requestOwner: requestOwner, relayOwners: selected, finalRedirects: redirects}, nil
 }
 
 type samlLogoutState struct {
@@ -298,27 +330,35 @@ func (p samlLogoutProfile) decode(r *http.Request) (s samlLogoutState, err error
 	if err != nil {
 		return s, samlDecodeError(err)
 	}
+	_, hasRelay := form["RelayState"]
+	relay := form.Get("RelayState")
+	wantFields := 1
+	if hasRelay {
+		wantFields++
+	}
+	if len(form) != wantFields {
+		return s, invalid
+	}
 	if _, request := form["SAMLRequest"]; request {
-		wantFields := 1
-		if _, hasRelay := form["RelayState"]; hasRelay {
-			state := form.Get("RelayState")
-			if p.relayOwner == nil || !validSAMLLogoutRelayState(state) {
-				return s, invalid
-			}
-			s.relay = state
-			wantFields++
-		}
-		wire := form.Get("SAMLRequest")
-		if len(form) != wantFields || !validSAMLLogoutWire(wire) {
+		if hasRelay && (p.relayOwners.Request == nil || !validSAMLLogoutRelayState(relay)) {
 			return s, invalid
 		}
+		wire := form.Get("SAMLRequest")
+		if !validSAMLLogoutWire(wire) {
+			return s, invalid
+		}
+		s.relay = relay
 		s.request = &SAMLLogoutRequest{TenantID: p.c.TenantID, ProviderID: p.c.ProviderID, SAMLRequest: wire}
 		return s, nil
 	}
-	if p.c.Owner == nil || len(form) != 1 {
+	if p.c.Owner == nil {
+		return s, invalid
+	}
+	if hasRelay && (p.relayOwners.Response == nil || !validSAMLLogoutSPRelayState(relay)) {
 		return s, invalid
 	}
 	if wire := form.Get("SAMLResponse"); validSAMLLogoutWire(wire) {
+		s.relay = relay
 		s.reply = SAMLLogoutResponseRequest{TenantID: p.c.TenantID, ProviderID: p.c.ProviderID, SAMLResponse: wire}
 		return s, nil
 	}
@@ -336,6 +376,15 @@ func validSAMLLogoutRelayState(value string) bool {
 		}
 	}
 	return true
+}
+
+func validSAMLLogoutSPRelayState(value string) bool {
+	if len(value) != base64.RawURLEncoding.EncodedLen(samlLogoutSPRelayBytes) {
+		return false
+	}
+	var decoded [samlLogoutSPRelayBytes]byte
+	n, err := base64.RawURLEncoding.Strict().Decode(decoded[:], []byte(value))
+	return err == nil && n == len(decoded)
 }
 
 func validSAMLLogoutWire(wire string) bool {
@@ -383,7 +432,7 @@ func (p samlLogoutProfile) handle(w http.ResponseWriter, r *http.Request, s saml
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	result, err := p.c.Owner.SettleSAMLLogoutResponse(ctx, s.reply)
+	result, err := p.settleResponse(ctx, s.reply, s.relay)
 	if err != nil {
 		writeSigninError(w, r, err)
 		return
@@ -405,9 +454,16 @@ func (p samlLogoutProfile) handle(w http.ResponseWriter, r *http.Request, s saml
 }
 
 func (p samlLogoutProfile) handleRequest(ctx context.Context, request SAMLLogoutRequest, relay string) (SAMLLogoutRequestRelayResult, error) {
-	if p.relayOwner != nil {
-		return p.relayOwner.HandleSAMLLogoutRequestWithRelayState(ctx, request, relay)
+	if p.relayOwners.Request != nil {
+		return p.relayOwners.Request.HandleSAMLLogoutRequestWithRelayState(ctx, request, relay)
 	}
 	result, err := p.requestOwner.HandleSAMLLogoutRequest(ctx, request)
 	return SAMLLogoutRequestRelayResult{SAMLLogoutRequestResult: result}, err
+}
+
+func (p samlLogoutProfile) settleResponse(ctx context.Context, response SAMLLogoutResponseRequest, relay string) (SAMLLogoutResponseResult, error) {
+	if relay != "" {
+		return p.relayOwners.Response.SettleSAMLLogoutResponseWithRelayState(ctx, response, relay)
+	}
+	return p.c.Owner.SettleSAMLLogoutResponse(ctx, response)
 }

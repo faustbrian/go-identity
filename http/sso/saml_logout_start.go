@@ -70,10 +70,29 @@ type SAMLLogoutStartConfig struct {
 // does not mount the IdP POST return, grant CORS, or authenticate any other
 // credential. The native owner checks the original stored synchronizer.
 func NewSAMLLogoutStartOperation(c SAMLLogoutStartConfig) (identityhttp.OperationDescriptor, error) {
+	return newSAMLLogoutStartOperation(c, samlLogoutRedirectWithoutRelayState)
+}
+
+// NewSAMLLogoutStartOperationWithRelayState selects the SP-generated state
+// profile. The native owner must reserve the opaque handle with the original
+// signed Redirect. Local-only results and browser admission are unchanged.
+func NewSAMLLogoutStartOperationWithRelayState(c SAMLLogoutStartConfig) (identityhttp.OperationDescriptor, error) {
+	return newSAMLLogoutStartOperation(c, samlLogoutRedirectWithRelayState)
+}
+
+type samlLogoutRedirectProfile uint8
+
+const (
+	samlLogoutRedirectWithoutRelayState samlLogoutRedirectProfile = iota
+	samlLogoutRedirectWithRelayState
+)
+
+func newSAMLLogoutStartOperation(c SAMLLogoutStartConfig, redirectProfile samlLogoutRedirectProfile) (identityhttp.OperationDescriptor, error) {
 	p, err := newSAMLLogoutStartProfile(c)
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
+	p.redirectProfile = redirectProfile
 	handler, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[providerLogoutStartState]{
 		MaximumDuration: c.MaximumDuration, Decode: p.decode, Reject: writeSigninError,
 		Authenticate: func(r *http.Request, state providerLogoutStartState) (providerLogoutStartState, error) {
@@ -93,7 +112,7 @@ func NewSAMLLogoutStartOperation(c SAMLLogoutStartConfig) (identityhttp.Operatio
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	op.Wire = samlLogoutStartWire(p.authDelete.Name)
+	op.Wire = samlLogoutStartWire(p.authDelete.Name, redirectProfile)
 	return op, nil
 }
 
@@ -102,6 +121,7 @@ type samlLogoutStartProfile struct {
 	origin                 identityhttp.Origin
 	provider, path         string
 	endpoint               url.URL
+	redirectProfile        samlLogoutRedirectProfile
 	final                  map[string]struct{}
 	network                *identityhttp.NetworkResolver
 	decoder                *identityhttp.RequestDecoder
@@ -237,7 +257,7 @@ func (p samlLogoutStartProfile) start(w http.ResponseWriter, r *http.Request, st
 	case err != nil || canceled || !local.Committed:
 	case out.LocalOnly && out.ProviderRedirect == "":
 		body.Outcome, status = "local-only", http.StatusOK
-	case !out.LocalOnly && validSAMLLogoutStartRedirect(out.ProviderRedirect, p.endpoint):
+	case !out.LocalOnly && p.validRedirect(out.ProviderRedirect):
 		w.Header().Set("Location", out.ProviderRedirect)
 		body.Outcome, status = "redirect", http.StatusSeeOther
 	}
@@ -258,7 +278,8 @@ func samlLogoutStartFixedQuery(query string) bool {
 	return true
 }
 
-func validSAMLLogoutStartRedirect(raw string, endpoint url.URL) bool {
+func (p samlLogoutStartProfile) validRedirect(raw string) bool {
+	endpoint := p.endpoint
 	if endpoint.Host == "" {
 		return false
 	}
@@ -278,12 +299,22 @@ func validSAMLLogoutStartRedirect(raw string, endpoint url.URL) bool {
 			return false
 		}
 	}
-	parts := strings.Split(signed, "&")
-	if len(parts) != 3 || parts[1] != "SigAlg="+url.QueryEscape(saml.SignatureAlgorithmRSAPSSSHA256) {
+	request, fields, ok := strings.Cut(signed, "&")
+	if !ok {
 		return false
 	}
-	return canonicalSAMLLogoutRedirectField(parts[0], "SAMLRequest=") &&
-		canonicalSAMLLogoutRedirectField(parts[2], "Signature=")
+	if p.redirectProfile == samlLogoutRedirectWithRelayState {
+		relayField, remaining, present := strings.Cut(fields, "&")
+		relay, named := strings.CutPrefix(relayField, "RelayState=")
+		if !present || !named || !validSAMLLogoutSPRelayState(relay) {
+			return false
+		}
+		fields = remaining
+	}
+	algorithm, signature, ok := strings.Cut(fields, "&")
+	return ok && algorithm == "SigAlg="+url.QueryEscape(saml.SignatureAlgorithmRSAPSSSHA256) &&
+		canonicalSAMLLogoutRedirectField(request, "SAMLRequest=") &&
+		canonicalSAMLLogoutRedirectField(signature, "Signature=")
 }
 
 func canonicalSAMLLogoutRedirectField(raw, prefix string) bool {
@@ -295,8 +326,12 @@ func canonicalSAMLLogoutRedirectField(raw, prefix string) bool {
 	return err == nil && url.QueryEscape(decoded) == wire && validSAMLLogoutWire(decoded)
 }
 
-func samlLogoutStartWire(cookie string) *identityhttp.WireOperation {
+func samlLogoutStartWire(cookie string, redirectProfile samlLogoutRedirectProfile) *identityhttp.WireOperation {
 	name, _ := json.Marshal(cookie)
+	redirect := "Reserved signed Redirect after confirmed local revocation; both cookies deleted."
+	if redirectProfile == samlLogoutRedirectWithRelayState {
+		redirect = "Reserved signed Redirect with the original opaque RelayState after confirmed local revocation; both cookies deleted."
+	}
 	const projection = `{"type":"object","additionalProperties":false,"required":["sessionId","version","committed","reconciliationRequired"],"properties":{"sessionId":{"type":"string","minLength":1,"maxLength":128},"version":{"type":"integer","minimum":1},"committed":{"type":"boolean"},"reconciliationRequired":{"type":"boolean"}}}`
 	result := func(outcome string) string {
 		return `{"type":"object","additionalProperties":false,"required":["outcome","localRevocation"],"properties":{"outcome":` +
@@ -312,7 +347,7 @@ func samlLogoutStartWire(cookie string) *identityhttp.WireOperation {
   "requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["finalRedirect"],"properties":{"finalRedirect":{"type":"string","format":"uri","maxLength":8192}}}}}},
   "responses":{
     "200":{"description":"Confirmed local-only logout; both cookies deleted.","headers":{"Set-Cookie":{"schema":{"type":"string"}}},"content":{"application/json":{"schema":` + result(`{"const":"local-only"}`) + `}}},
-    "303":{"description":"Reserved signed Redirect after confirmed local revocation; both cookies deleted.","headers":{"Location":{"schema":{"type":"string","format":"uri"}},"Set-Cookie":{"schema":{"type":"string"}}},"content":{"application/json":{"schema":` + result(`{"const":"redirect"}`) + `}}},
+    "303":{"description":"` + redirect + `","headers":{"Location":{"schema":{"type":"string","format":"uri"}},"Set-Cookie":{"schema":{"type":"string"}}},"content":{"application/json":{"schema":` + result(`{"const":"redirect"}`) + `}}},
     "400":{"description":"Invalid request; no selected local session."},
     "403":{"description":"Logout denied; no selected local session."},
     "409":{"description":"Original operation conflict before selection."},

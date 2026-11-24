@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Opt into SP-generated SAML logout RelayState at the start and return
+  operations. Preserve the reserved signed Redirect and route a canonical
+  return handle to the native one-use settlement owner. Existing no-state
+  and independently selected IdP request profiles are unchanged.
+
 - Opt into an exact opaque RelayState echo for IdP-initiated SAML logout.
   Only fresh signed replies contain it, and it never selects a destination
   or authorizes session or response-settlement behavior.
