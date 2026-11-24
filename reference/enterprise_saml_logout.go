@@ -5,6 +5,7 @@ import (
 	"io"
 
 	identity "github.com/faustbrian/go-identity"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
@@ -19,6 +20,9 @@ type EnterpriseSAMLLogoutConfiguration struct {
 	ResponseEndpoint         string
 	CurrentMatchKey          uint32
 	MatchKeys                map[uint32][32]byte
+	// RequestKeys selects a dedicated namespace for signed IdP requests. Use
+	// it for new installations. Nil preserves original replay custody.
+	RequestKeys *kernel.RequestKeyConfig
 }
 
 func (EnterpriseSAMLLogoutConfiguration) Format(s fmt.State, _ rune) {
@@ -73,12 +77,19 @@ func composeEnterpriseSAMLCompletion(start *ssopg.ProviderLoginService, n Enterp
 
 func composeEnterpriseSAMLLogout(start *ssopg.ProviderLoginService, n EnterpriseSAMLConfiguration, custody *ssopg.SAMLLogoutSubjectCustody) (*enterpriseSAMLLogoutState, error) {
 	selected := n.Logout
-	requests, err := ssopg.NewProviderSAMLIDPLogoutService(start, ssopg.ProviderSAMLIDPLogoutConfig{
+	config := ssopg.ProviderSAMLIDPLogoutConfig{
 		Custody: custody,
 		Providers: []ssopg.ProviderSAMLIDPLogoutProfile{{
 			Provider: n.Profile, IdentityProviderEntityID: selected.IdentityProviderEntityID, ResponseEndpoint: selected.ResponseEndpoint,
 		}},
-	})
+	}
+	var requests *ssopg.ProviderSAMLIDPLogoutService
+	var err error
+	if selected.RequestKeys == nil {
+		requests, err = ssopg.NewProviderSAMLIDPLogoutService(start, config)
+	} else {
+		requests, err = ssopg.NewProviderSAMLIDPLogoutServiceWithRequestKeys(start, config, *selected.RequestKeys)
+	}
 	if err != nil {
 		return nil, err
 	}

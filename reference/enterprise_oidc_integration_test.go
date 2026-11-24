@@ -39,7 +39,9 @@ func TestReferencePostgresEnterpriseOIDCJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseOIDC: true})
 }
 
-type referenceEnterpriseOIDCPolicy struct{ allowLink, allowOAuth2, allowSAML, allowSAMLLogout bool }
+type referenceEnterpriseOIDCPolicy struct {
+	allowLink, allowOAuth2, allowSAML, allowSAMLLogout, allowSAMLLogoutStart bool
+}
 
 func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
@@ -66,6 +68,13 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 		}
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
+		if p.allowSAMLLogoutStart && c.Request.Action == "identity.sso.saml-logout-start" {
+			res := c.Request.Resource
+			if res.Type == "identity.user" && res.ID == authorization.ResourceID(c.Request.Subject.ID) ||
+				res.Type == "identity.request-admission" && res.ID == "identity.sso.saml-logout-start" {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
+		}
 		if p.allowLink {
 			switch c.Request.Action {
 			case "identity.sso.oidc-callback", "identity.sso.signin-start", "identity.sso.signin-start.recover", "identity.sso.oidc-callback.recover":

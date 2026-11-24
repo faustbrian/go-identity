@@ -61,7 +61,12 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 		config := ssohttp.SAMLLogoutConfig{
 			Network: network, TenantID: n.tenant, Origin: c.Origin, IdentityProviderOrigin: h.IdentityProviderOrigin,
 			ProviderID: c.ProviderID, ResponseEndpoint: n.logout.responseEndpoint, Rate: c.Rate,
-			MaximumDuration: n.duration, RequestOnlyOwner: owner,
+			MaximumDuration: n.duration,
+		}
+		if n.logoutStart != nil && n.logoutStart.remote != nil {
+			config.Owner, config.FinalRedirectAllowlist = owner, n.logoutStart.final
+		} else {
+			config.RequestOnlyOwner = owner
 		}
 		op, err := ssohttp.NewSAMLLogoutOperation(config)
 		if err != nil {
@@ -70,7 +75,21 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 		operations = append(operations, op)
 		navigation = append(navigation, config.NavigationPolicy())
 	}
-	if h.IDPInitiated || h.Logout {
+	if h.LogoutStart {
+		if n.logoutStart == nil {
+			return nil, nil, identity.InvalidInputError{Field: "reference_http_enterprise_saml_logout_start"}
+		}
+		op, err := ssohttp.NewSAMLLogoutStartOperation(ssohttp.SAMLLogoutStartConfig{
+			Network: network, TenantID: n.tenant, Origin: c.Origin, ProviderID: c.ProviderID,
+			RedirectEndpoint: n.logoutStart.endpoint, FinalRedirectAllowlist: n.logoutStart.final,
+			Rate: c.Rate, MaximumDuration: n.duration, Cookie: c.Cookie, CSRFCookie: h.CSRFCookie, Owner: owner,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		operations = append(operations, op)
+	}
+	if h.IDPInitiated || h.Logout || h.LogoutStart {
 		feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: feature.ID(), Operations: operations})
 		if err != nil {
 			return nil, nil, err

@@ -294,6 +294,7 @@ type signupGraphExtensions struct {
 	enterpriseSAML              bool
 	enterpriseSAMLIDP           bool
 	enterpriseSAMLIDPLogout     bool
+	enterpriseSAMLSPLogout      string
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -559,7 +560,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML {
 		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink,
 			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade, allowSAML: extensions.enterpriseSAML,
-			allowSAMLLogout: extensions.enterpriseSAMLIDPLogout}
+			allowSAMLLogout:      extensions.enterpriseSAMLIDPLogout,
+			allowSAMLLogoutStart: extensions.enterpriseSAMLSPLogout != ""}
 		if extensions.enterpriseOIDCLogout {
 			selectedAuthorization = referenceEnterpriseOIDCLogoutPolicy{referenceEnterpriseOIDCPolicy: referenceEnterpriseOIDCPolicy{}}
 		}
@@ -750,10 +752,27 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 				MaximumAge: time.Minute, CurrentConfirmationKey: 1, ConfirmationKeys: map[uint32][32]byte{1: {0xd4}},
 			}
 		}
-		if extensions.enterpriseSAMLIDPLogout {
+		if extensions.enterpriseSAMLIDPLogout || extensions.enterpriseSAMLSPLogout == "redirect" {
+			logoutKeys, err := kernel.NewRequestKeyConfig("reference-enterprise-saml-inbound-logout", [32]byte{0xdf}, c.EnterpriseSAML.Login.RequestKeys.Policy)
+			if err != nil {
+				t.Fatal(err)
+			}
 			c.EnterpriseSAML.Logout = &reference.EnterpriseSAMLLogoutConfiguration{
 				IdentityProviderEntityID: referenceSAMLIdPEntity, ResponseEndpoint: "https://idp.example/slo/response",
-				CurrentMatchKey: 1, MatchKeys: map[uint32][32]byte{1: {0xdd}},
+				CurrentMatchKey: 1, MatchKeys: map[uint32][32]byte{1: {0xdd}}, RequestKeys: &logoutKeys,
+			}
+		}
+		if extensions.enterpriseSAMLSPLogout != "" {
+			logoutKeys, err := kernel.NewRequestKeyConfig("reference-enterprise-saml-outbound-logout", [32]byte{0xda}, c.EnterpriseSAML.Login.RequestKeys.Policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.EnterpriseSAML.LogoutStart = &reference.EnterpriseSAMLLogoutStartConfiguration{
+				FinalRedirectAllowlist: []string{origin + "/enterprise/signed-out"},
+				RequestKeys:            logoutKeys,
+			}
+			if extensions.enterpriseSAMLSPLogout == "redirect" {
+				c.EnterpriseSAML.LogoutStart.RedirectEndpoint = "https://idp.example/slo/start"
 			}
 		}
 	}
@@ -1906,7 +1925,8 @@ END $$`); err != nil {
 		if extensions.enterpriseSAMLIDP {
 			c.HTTPEnterpriseSAML.IDPInitiated = true
 		}
-		c.HTTPEnterpriseSAML.Logout = extensions.enterpriseSAMLIDPLogout
+		c.HTTPEnterpriseSAML.Logout = extensions.enterpriseSAMLIDPLogout || extensions.enterpriseSAMLSPLogout == "redirect"
+		c.HTTPEnterpriseSAML.LogoutStart = extensions.enterpriseSAMLSPLogout != ""
 		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)
@@ -1946,11 +1966,12 @@ END $$`); err != nil {
 			}
 			return
 		}
-		proveReferenceEnterpriseSAMLJourney(t, ctx, client, origin, features, deps, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP)
+		proveReferenceEnterpriseSAMLJourney(t, ctx, client, origin, features, deps, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP, c.EnterpriseSAML.LogoutStart)
 		c.HTTPEnterpriseSAML = nil
 		nativeOnly, _ := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		for _, operation := range nativeOnly.OpenAPI().Operations() {
-			if operation.Record.OperationID == "identity.sso.saml-start" || operation.Record.OperationID == "identity.sso.saml-acs" || operation.Record.OperationID == "identity.sso.saml-metadata" {
+			switch operation.Record.OperationID {
+			case "identity.sso.saml-start", "identity.sso.saml-acs", "identity.sso.saml-metadata", "identity.sso.saml-logout-start", "identity.sso.saml-slo":
 				t.Fatal("native-only SAML advertised browser routes")
 			}
 		}

@@ -126,16 +126,23 @@ func enterpriseOIDCLogoutMigrationCatalog(ctx context.Context, catalog []migrati
 	}); err != nil {
 		return nil, err
 	}
-	revocations := migrationHistory{namespace: "identity_enterprise_oidc_logout_session", owners: map[migrations.Version]ModuleID{}}
+	return appendEnterpriseOIDCLogoutSessionMigrations(ctx, append(catalog, provider), sessionSchema)
+}
+
+const enterpriseOIDCLogoutSessionHistory = "identity_enterprise_oidc_logout_session"
+const enterpriseOIDCLogoutSessionConstraint = "session_revocations_purpose_sso_oidc_v1"
+
+func appendEnterpriseOIDCLogoutSessionMigrations(ctx context.Context, catalog []migrationHistory, sessionSchema string) ([]migrationHistory, error) {
+	revocations := migrationHistory{namespace: enterpriseOIDCLogoutSessionHistory, owners: map[migrations.Version]ModuleID{}}
 	source := sessionpg.SSOOIDCLogoutMigrationSource{Schema: sessionSchema, Version: 1, ValidationVersion: 2, PreviousConstraint: "session_revocations_purpose_check"}
 	// Expansion owns creation of this constraint. An interrupted validation
 	// must leave a recognized native prefix, not an unmanaged schema collision.
 	if err := appendEnterpriseMigration(ctx, &revocations, "identity/session/postgres", source, migrationGuard{
-		version: 1, schema: sessionSchema, constraints: []string{"session_revocations.session_revocations_purpose_sso_oidc_v1"},
+		version: 1, schema: sessionSchema, constraints: []string{"session_revocations." + enterpriseOIDCLogoutSessionConstraint},
 	}); err != nil {
 		return nil, err
 	}
-	return append(catalog, provider, revocations), nil
+	return append(catalog, revocations), nil
 }
 
 func (f *featureState) enterpriseSessionSchema() string {

@@ -459,5 +459,21 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
+	if f := state.features; f != nil && f.enterpriseSAML != nil && f.enterpriseSAML.logoutStart != nil &&
+		history.namespace == enterpriseOIDCLogoutSessionHistory {
+		for i := range guards {
+			if guards[i].schema != f.enterpriseSAML.sessionSchema {
+				continue
+			}
+			guards[i].constraints = slices.Clone(guards[i].constraints)
+			for j, constraint := range guards[i].constraints {
+				if constraint == "session_revocations."+enterpriseOIDCLogoutSessionConstraint {
+					// The SAML expansion preserves the previous predicate
+					// but deliberately replaces the predecessor's name.
+					guards[i].constraints[j] = "session_revocations." + enterpriseSAMLLogoutStartConstraint
+				}
+			}
+		}
+	}
 	return guards
 }

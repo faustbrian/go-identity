@@ -87,8 +87,8 @@ github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881
 github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907/go.mod h1:2YBtrqktF4lVGs0LyLWmeYZ78ZGdzanYddXxSV+m5R0=
 github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8 h1:N9P4kbAjZa5sfj6xb6OiJZphMvOBdXt00TydmxiIj34=
 github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8/go.mod h1:uCySwd4DeG3xbJ6Ldmlmi7XTgBNSBF1OxPT2aMYmQm0=
-github.com/faustbrian/go-identity/http v0.0.0-20261124064235-91143c24b084 h1:d9tqwbyvi5guyJqHZU9qLiXY1dJzbrtzSijH9cnUvX0=
-github.com/faustbrian/go-identity/http v0.0.0-20261124064235-91143c24b084/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261124071221-dafd67018bd2 h1:LYOK1lERCK4gdQRcI7zpvmWSKpx9yfrhr6G1MQQn2VA=
+github.com/faustbrian/go-identity/http v0.0.0-20261124071221-dafd67018bd2/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93 h1:dpdUKRvijZJuj07LkI9KalMMJ17jfk11i8Rn/mgkS0I=
 github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93/go.mod h1:51jhqgFaUrnr5iU26z1P5JjfufpUXrQyjshXg67QIRk=
 github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029135707-3291fee4a90f h1:alv2l1VkhnJTqTA+7xCv6je9ghl1x6l/we6XQT4LWS8=
@@ -115,8 +115,8 @@ github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806 
 github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806/go.mod h1:EipErj0XDt8PdfOWExIvlvmVafz6A/JsYSx1gMrknMQ=
 github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e h1:LkPmjLE65l6pkLau8HEsS1uped3kCbfTbYVptgVRfp4=
 github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e/go.mod h1:/U8vM3BooW9JV2Y3dowdaURlzjb/txfURULhXSTDBWQ=
-github.com/faustbrian/go-identity/http/sso v0.0.0-20261124065944-1b9a22aa6e3d h1:CnpcdIkt4UCdOBP+8Vpe5B2NIZwcT2eQdTgXEFlHaPc=
-github.com/faustbrian/go-identity/http/sso v0.0.0-20261124065944-1b9a22aa6e3d/go.mod h1:J02pGdGs1KBa4b3+x3NENaVd53pKuuqCeKE+G7Cvk4g=
+github.com/faustbrian/go-identity/http/sso v0.0.0-20261124071846-fe7b7cb4feda h1:rGCxNCF28ftGz1jNQSYzvcYAbvhMbOcrlhddBYQ9cXo=
+github.com/faustbrian/go-identity/http/sso v0.0.0-20261124071846-fe7b7cb4feda/go.mod h1:p8kzQt1XHZKXjEA3pHqCz9HqFne9NvvPKIr8MgdZ3J0=
 github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc h1:EIXO9CBiJ6K2OekBbRxhfDJkPNyyw4GMqTwI18VpumQ=
 github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc/go.mod h1:jn+FI8ngM4okV2sKjzDMGYYXlBui6TVoQ3TCXjabohk=
 github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2 h1:9WtaSshuwIGfSBHxEQpIJ/p/HZRYCaNnYjbA3OX4brI=
@@ -203,8 +203,8 @@ github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db h1:xti7iY
 github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db/go.mod h1:NjsH0PHgTEWNmOy5J8CN3vpV1+tAMxzulMSwDGVxIZY=
 github.com/faustbrian/go-sso/oidc v0.0.0-20261123000546-023dd34bb0c7 h1:uTAK484FW2rqPpGoQcRdJq20C0WgMSEUJLbhG9r9KEo=
 github.com/faustbrian/go-sso/oidc v0.0.0-20261123000546-023dd34bb0c7/go.mod h1:PSGCTBHtunjbbLRHOJ3wgyJZrDnkOqjzIgDg8E/KNO0=
-github.com/faustbrian/go-sso/postgres v0.0.0-20261124063415-ab39e2ccc8d9 h1:+/iaWVXn2z0b3D2z9TcLOFIkB4YC3LorUPyUhpusavY=
-github.com/faustbrian/go-sso/postgres v0.0.0-20261124063415-ab39e2ccc8d9/go.mod h1:ZxJgL+rffSHbC24w5NIwMzKEt/YKtRI1qLel+qGkS+0=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261124073510-3130800d0aec h1:losJ0++AmvTsSwSgFuxzhEQCdKnPvSog/1Eyq/zgIpg=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261124073510-3130800d0aec/go.mod h1:ZxJgL+rffSHbC24w5NIwMzKEt/YKtRI1qLel+qGkS+0=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba h1:3bNMfo0bfFGVX+lIgzMVSVM4RCFXN+ryGLsvywSWpl0=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba/go.mod h1:junxGTiEU39EWU6Nu6hxNb9nTVAO3T7+TRE+51mCTu4=
 github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b h1:CeHhZjRWDLDjhvzCLOTEpwe3ujAxwZWZLvSSUGp1nwU=

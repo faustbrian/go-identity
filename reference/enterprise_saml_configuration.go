@@ -39,6 +39,9 @@ type EnterpriseSAMLConfiguration struct {
 	// Logout selects the installed IdP's signed logout profile and durable
 	// subject custody. Keep it configured after applying its migrations.
 	Logout *EnterpriseSAMLLogoutConfiguration
+	// LogoutStart selects local SP-initiated logout and optional provider
+	// Redirect. Keep it configured after applying its migrations.
+	LogoutStart *EnterpriseSAMLLogoutStartConfiguration
 }
 
 func (EnterpriseSAMLConfiguration) Format(s fmt.State, _ rune) {
@@ -68,9 +71,12 @@ type HTTPEnterpriseSAMLConfiguration struct {
 	// IDPInitiated opts into the linked-user unsolicited POST route. It requires
 	// the corresponding native configuration and applied migrations.
 	IDPInitiated bool
-	// Logout opts into cookie-free IdP-initiated Single Logout POST. It does
-	// not expose an SP-initiated logout start.
+	// Logout opts into cookie-free Single Logout POST. If native Redirect is
+	// configured, it also settles replies to outstanding SP requests.
 	Logout bool
+	// LogoutStart opts into the original-cookie SP start. A configured
+	// Redirect requires Logout so the provider can return to this SP.
+	LogoutStart bool
 }
 
 // EnterpriseSAMLIDPConfiguration selects a signed assertion age limit and a
@@ -99,6 +105,7 @@ type enterpriseSAMLState struct {
 	idp              *enterpriseSAMLIDPState
 	idpStorage       bool
 	logout           *enterpriseSAMLLogoutState
+	logoutStart      *enterpriseSAMLLogoutStartState
 	profile          ssopg.StaticSAMLLoginProfile
 	preauth          *session.PreAuthIssuer
 	http             *HTTPEnterpriseSAMLConfiguration
@@ -121,6 +128,9 @@ func validateEnterpriseSAMLSelection(c StoreConfiguration) error {
 	if c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil || c.Session == nil || c.Organization == nil || c.OTP == nil || len(c.Session.CSRFKeys) == 0 ||
 		n.ClockSkew < 0 || n.ClockSkew > 5*time.Minute {
 		return invalid
+	}
+	if err := validateEnterpriseSAMLLogoutStartSelection(n, h); err != nil {
+		return err
 	}
 	startNamespace := n.Login.RequestKeys.Namespace
 	if startNamespace == "" || startNamespace == c.OTP.RequestKeys.Namespace ||
@@ -176,6 +186,18 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 			return nil, invalid
 		}
 	}
+	if n.LogoutStart != nil {
+		policy := n.LogoutStart.RequestKeys.Policy
+		if policy.PolicyVersion != selected.PolicyVersion || !sameServerAuthorization(policy.Authorization, selected.Authorization) {
+			return nil, invalid
+		}
+	}
+	if n.Logout != nil && n.Logout.RequestKeys != nil {
+		policy := n.Logout.RequestKeys.Policy
+		if policy.PolicyVersion != selected.PolicyVersion || !sameServerAuthorization(policy.Authorization, selected.Authorization) {
+			return nil, invalid
+		}
+	}
 	n.Routing.Clock, n.Routing.Envelope = selected.Clock, crypto
 	n.Login.Session, n.Login.GlobalAuthorityID = selected.Repository, selected.Profile.GlobalAuthorityID
 	n.Login.Envelope, n.Login.AuditRetentionPolicyVersion = crypto, selected.AuditRetentionVersion
@@ -212,6 +234,10 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 		if err != nil {
 			return nil, err
 		}
+	}
+	state.logoutStart, err = composeEnterpriseSAMLLogoutStart(c, d, n, start, custody)
+	if err != nil {
+		return nil, err
 	}
 	if c.HTTPEnterpriseSAML == nil {
 		return state, nil

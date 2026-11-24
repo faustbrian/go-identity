@@ -35,6 +35,16 @@ func TestReferencePostgresEnterpriseSAMLJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseSAML: true})
 }
 
+func TestReferencePostgresEnterpriseSAMLSPLogoutJourney(t *testing.T) {
+	for _, profile := range []string{"local-only", "redirect"} {
+		t.Run(profile, func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{
+				postgresBaseline: true, organization: true, enterpriseSAML: true, enterpriseSAMLSPLogout: profile,
+			})
+		})
+	}
+}
+
 func configureReferenceEnterpriseSAML(t *testing.T, c *reference.StoreConfiguration, origin string) referenceSAMLIdPFixture {
 	t.Helper()
 	previous, err := c.Session.Native.Cookie.DeletionAttributes()
@@ -81,7 +91,7 @@ func configureReferenceEnterpriseSAML(t *testing.T, c *reference.StoreConfigurat
 }
 
 func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base *http.Client, origin string, features reference.FeatureSet, deps reference.ReferenceDependencies,
-	policy *reference.HTTPEnterpriseSAMLConfiguration, selected enterpriseProvisioned, idp referenceSAMLIdPFixture) {
+	policy *reference.HTTPEnterpriseSAMLConfiguration, selected enterpriseProvisioned, idp referenceSAMLIdPFixture, logoutStart *reference.EnterpriseSAMLLogoutStartConfiguration) {
 	t.Helper()
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -90,7 +100,8 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 	client := *base
 	client.Jar = jar
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	startPath, acsPath := "/saml2/"+string(selected.provider)+"/login", "/saml2/"+string(selected.provider)+"/acs"
+	providerPath := "/saml2/" + string(selected.provider)
+	startPath, acsPath := providerPath+"/login", providerPath+"/acs"
 	do := func(method, path string, body io.Reader, decorate func(*http.Request)) *http.Response {
 		t.Helper()
 		request, err := http.NewRequestWithContext(ctx, method, origin+path, body)
@@ -107,9 +118,13 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 		t.Cleanup(func() { _ = response.Body.Close() })
 		return response
 	}
-	metadataPath := "/saml2/" + string(selected.provider) + "/metadata"
+	metadataPath := providerPath + "/metadata"
 	publicMetadata := do(http.MethodGet, metadataPath, nil, nil)
-	certificate := referenceSAMLMetadataCertificate(t, publicMetadata, origin+metadataPath, origin+acsPath, idp.certificateDER)
+	var selectedSLO string
+	if policy.Logout {
+		selectedSLO = origin + providerPath + "/slo"
+	}
+	certificate := referenceSAMLMetadataCertificate(t, publicMetadata, origin+metadataPath, origin+acsPath, selectedSLO, idp.certificateDER)
 	start := do(http.MethodGet, startPath, nil, func(r *http.Request) {
 		r.Header.Set("Sec-Fetch-Site", "same-origin")
 		r.Header.Set("Sec-Fetch-Mode", "navigate")
@@ -198,6 +213,11 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 	if replay.StatusCode != http.StatusForbidden || replay.Header.Get("Location") != "" || len(replay.Cookies()) != 0 {
 		t.Fatal("the original assertion could be delivered again", replay.StatusCode)
 	}
+	if policy.LogoutStart {
+		proveReferenceSAMLSPLogout(t, ctx, base, origin, providerPath, string(policy.IdentityProviderOrigin), logoutStart.RedirectEndpoint,
+			logoutStart.FinalRedirectAllowlist[0], csrf, &client, certificate, idp)
+		return
+	}
 	signout := func(token string) *http.Response {
 		return do(http.MethodPost, "/v1/session/signout", strings.NewReader(`{}`), func(r *http.Request) {
 			r.Header.Set("Origin", origin)
@@ -222,7 +242,7 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 	read(false)
 }
 
-func referenceSAMLMetadataCertificate(t *testing.T, response *http.Response, entity, acs string, idpDER []byte) *rsa.PublicKey {
+func referenceSAMLMetadataCertificate(t *testing.T, response *http.Response, entity, acs, slo string, idpDER []byte) *rsa.PublicKey {
 	t.Helper()
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "application/samlmetadata+xml" ||
@@ -245,15 +265,22 @@ func referenceSAMLMetadataCertificate(t *testing.T, response *http.Response, ent
 				Index    string `xml:"index,attr"`
 				Default  bool   `xml:"isDefault,attr"`
 			} `xml:"AssertionConsumerService"`
-			Logout []struct{} `xml:"SingleLogoutService"`
+			Logout []struct {
+				Binding  string `xml:"Binding,attr"`
+				Location string `xml:"Location,attr"`
+			} `xml:"SingleLogoutService"`
 		} `xml:"urn:oasis:names:tc:SAML:2.0:metadata SPSSODescriptor"`
 	}
 	if err := xml.NewDecoder(io.LimitReader(response.Body, 96<<10)).Decode(&document); err != nil || document.Entity != entity || len(document.SP) != 1 {
 		t.Fatal("invalid or foreign SP metadata", err)
 	}
 	p := document.SP[0]
-	if !p.SignsRequests || !p.WantsSignature || len(p.Keys) != 1 || p.Keys[0].Use != "signing" || len(p.ACS) != 1 || len(p.Logout) != 0 {
+	if !p.SignsRequests || !p.WantsSignature || len(p.Keys) != 1 || p.Keys[0].Use != "signing" || len(p.ACS) != 1 {
 		t.Fatal("SP metadata advertised the wrong signed profile")
+	}
+	if slo == "" && len(p.Logout) != 0 || slo != "" && (len(p.Logout) != 1 ||
+		p.Logout[0].Binding != "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" || p.Logout[0].Location != slo) {
+		t.Fatal("SP metadata advertised the wrong logout binding")
 	}
 	endpoint := p.ACS[0]
 	if endpoint.Binding != "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" || endpoint.Location != acs || endpoint.Index != "0" || !endpoint.Default {

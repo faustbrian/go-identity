@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose opt-in SP-initiated SAML logout, with explicit local-only and
+  signed provider Redirect modes. A provider POST can settle only its
+  original outstanding request; local revocation does not wait for it.
+
 - Compose opt-in IdP-initiated SAML Single Logout for the installed provider.
   Retain the exact signed subject on new sign-ins, revoke its matched local
   sessions through PostgreSQL, and advertise the POST endpoint only when

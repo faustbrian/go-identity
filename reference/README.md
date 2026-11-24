@@ -317,7 +317,9 @@ Configure `EnterpriseSAML.Logout` with the installed IdP's exact entity ID,
 its approved HTTPS POST response endpoint, and a dedicated 32-byte
 `MatchKeys` keyring with `CurrentMatchKey`. Authorize the configured
 enterprise service actor for `identity.sso.saml-slo` request admission and
-the allowed user resource in that tenant. Apply the selected forward
+the allowed user resource in that tenant. For a new installation, configure
+dedicated `Logout.RequestKeys` unrelated to canonical sign-in. Do not change
+the namespace of requests that are still retriable. Apply the selected forward
 subject-custody and session-revocation migrations before setting
 `HTTPEnterpriseSAML.Logout`. Keep native configuration and prior key versions
 while sessions issued under them can still be active. Previously issued
@@ -331,6 +333,30 @@ result returns the signed form for the approved IdP endpoint. Exact retries
 do not repeat revocation or return another form. The HTTP switch does not
 remove native history when turned off. This profile does not start an
 SP-initiated logout or accept RelayState.
+
+### SP-initiated SAML logout
+
+Set `EnterpriseSAML.LogoutStart` with exact SP-origin final destinations and
+dedicated `RequestKeys` separate from the canonical sign-in namespace.
+With no `RedirectEndpoint`, the start revokes the original local session
+without requiring IdP support or mounting a return route. To send a signed
+provider request, set the approved HTTPS IdP Redirect endpoint alongside the
+native `Logout` custody configuration and select `HTTPEnterpriseSAML.Logout`
+for the signed return. The session revocation constraint is expanded and
+validated in separate native migrations. Redirect mode also installs the
+request and response histories. Apply the selected migrations and check
+readiness before turning on `HTTPEnterpriseSAML.LogoutStart`.
+
+Start by POSTing to `/saml2/{provider_id}/logout` with the original session
+cookie, exact SP Origin, original `X-CSRF-Token`, one `Idempotency-Key`, and
+`{"finalRedirect":"https://sp.example/signed-out"}` for an approved target.
+The local result is authoritative before any redirect; only confirmed local
+revocation clears the cookies. A provider reply selects the original request
+by its signed `InResponseTo` and can release only the original destination.
+Clear `LogoutStart` to stop new starts without disabling settlement of
+outstanding requests on `Logout`. Keep the installed migrations and key
+custody. Local revocation never waits for the IdP; this profile does not
+carry RelayState.
 
 ## Optional enterprise OIDC provider logout
 

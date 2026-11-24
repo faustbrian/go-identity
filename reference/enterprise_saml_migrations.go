@@ -2,6 +2,7 @@ package reference
 
 import (
 	"context"
+	"slices"
 
 	kernel "github.com/faustbrian/go-identity/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -62,9 +63,50 @@ func (s StoreSet) enterpriseSAMLMigrationCatalog(ctx context.Context, catalog []
 	}
 	catalog = append(catalog, providers, sessions, requests)
 	if f.enterpriseSAML.logout != nil {
-		return appendEnterpriseSAMLLogoutMigrations(ctx, catalog, schema)
+		catalog, err = appendEnterpriseSAMLLogoutMigrations(ctx, catalog, schema)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if start := f.enterpriseSAML.logoutStart; start != nil {
+		return appendEnterpriseSAMLLogoutStartMigrations(ctx, catalog, schema, start.remote != nil)
 	}
 	return catalog, nil
+}
+
+const enterpriseSAMLLogoutStartConstraint = "session_revocations_purpose_sso_saml_v1"
+
+func appendEnterpriseSAMLLogoutStartMigrations(ctx context.Context, catalog []migrationHistory, sessionSchema string, remote bool) ([]migrationHistory, error) {
+	// Retain one predecessor checksum regardless of which protocol is enabled
+	// first. Selecting the shared session history alone installs no OIDC route
+	// or provider-specific table.
+	if !slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == enterpriseOIDCLogoutSessionHistory }) {
+		var err error
+		catalog, err = appendEnterpriseOIDCLogoutSessionMigrations(ctx, catalog, sessionSchema)
+		if err != nil {
+			return nil, err
+		}
+	}
+	sessions := migrationHistory{namespace: "identity_enterprise_saml_logout_start_session", owners: map[migrations.Version]ModuleID{}}
+	if err := appendEnterpriseMigration(ctx, &sessions, "identity/session/postgres", sessionpg.SSOSAMLLogoutStartMigrationSource{
+		Schema: sessionSchema, Version: 1, ValidationVersion: 2, PreviousConstraint: enterpriseOIDCLogoutSessionConstraint,
+	}, migrationGuard{version: 1, schema: sessionSchema, constraints: []string{"session_revocations." + enterpriseSAMLLogoutStartConstraint}}); err != nil {
+		return nil, err
+	}
+	catalog = append(catalog, sessions)
+	if !remote {
+		return catalog, nil
+	}
+	providers := migrationHistory{namespace: "identity_enterprise_saml_logout_redirect", owners: map[migrations.Version]ModuleID{}}
+	if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", ssopg.SAMLLogoutRequestMigrationSource{Version: 1},
+		migrationGuard{version: 1, schema: "sso_providers", tables: []string{"saml_logout_requests"}}); err != nil {
+		return nil, err
+	}
+	if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", ssopg.SAMLLogoutResponseMigrationSource{Version: 2},
+		migrationGuard{version: 2, schema: "sso_providers", tables: []string{"saml_logout_responses"}}); err != nil {
+		return nil, err
+	}
+	return append(catalog, providers), nil
 }
 
 func appendEnterpriseSAMLLogoutMigrations(ctx context.Context, catalog []migrationHistory, sessionSchema string) ([]migrationHistory, error) {
