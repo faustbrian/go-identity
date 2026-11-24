@@ -60,7 +60,29 @@ func (s StoreSet) enterpriseSAMLMigrationCatalog(ctx context.Context, catalog []
 	for _, migration := range requests.history {
 		requests.owners[migration.Version()] = "identity/postgres"
 	}
-	return append(catalog, providers, sessions, requests), nil
+	catalog = append(catalog, providers, sessions, requests)
+	if f.enterpriseSAML.logout != nil {
+		return appendEnterpriseSAMLLogoutMigrations(ctx, catalog, schema)
+	}
+	return catalog, nil
+}
+
+func appendEnterpriseSAMLLogoutMigrations(ctx context.Context, catalog []migrationHistory, sessionSchema string) ([]migrationHistory, error) {
+	// Separate histories keep logout installable before or after the optional
+	// unsolicited sign-in migrations without changing either installed prefix.
+	providers := migrationHistory{namespace: "identity_enterprise_saml_logout_provider", owners: map[migrations.Version]ModuleID{}}
+	if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", ssopg.SAMLLogoutSubjectMigrationSource{Version: 1}, migrationGuard{
+		version: 1, schema: "sso_providers", tables: []string{"saml_logout_subjects"},
+	}); err != nil {
+		return nil, err
+	}
+	sessions := migrationHistory{namespace: "identity_enterprise_saml_logout_session", owners: map[migrations.Version]ModuleID{}}
+	if err := appendEnterpriseMigration(ctx, &sessions, "identity/session/postgres", sessionpg.SSOSAMLIDPLogoutMigrationSource{
+		Schema: sessionSchema, Version: 1,
+	}, migrationGuard{version: 1, schema: sessionSchema, tables: []string{"saml_idp_logout_revocations"}}); err != nil {
+		return nil, err
+	}
+	return append(catalog, providers, sessions), nil
 }
 
 func appendEnterpriseSAMLIDPMigrations(ctx context.Context, providers, sessions *migrationHistory, sessionSchema string) error {

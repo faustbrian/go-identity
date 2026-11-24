@@ -22,8 +22,14 @@ func TestReferencePostgresEnterpriseSAMLIDPJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseSAML: true, enterpriseSAMLIDP: true})
 }
 
+func TestReferencePostgresEnterpriseSAMLIDPLogoutJourney(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{
+		postgresBaseline: true, organization: true, enterpriseSAML: true, enterpriseSAMLIDP: true, enterpriseSAMLIDPLogout: true,
+	})
+}
+
 func proveReferenceEnterpriseSAMLIDPJourney(t *testing.T, ctx context.Context, base *http.Client, origin string, features reference.FeatureSet,
-	selection *reference.HTTPEnterpriseSAMLConfiguration, selected enterpriseProvisioned, idp referenceSAMLIdPFixture) {
+	selection *reference.HTTPEnterpriseSAMLConfiguration, selected enterpriseProvisioned, idp referenceSAMLIdPFixture, logoutResponseEndpoint string) {
 	t.Helper()
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -130,6 +136,11 @@ func proveReferenceEnterpriseSAMLIDPJourney(t *testing.T, ctx context.Context, b
 		t.Fatal("a new pending browser pair bypassed settled assertion replay protection", denied.StatusCode)
 	}
 	readSession(&replayClient, false)
+	if selection.Logout {
+		proveReferenceEnterpriseSAMLIDPLogout(t, ctx, base, origin, providerPath, string(selection.IdentityProviderOrigin), logoutResponseEndpoint,
+			"_reference_browser_idp_assertion", &client, idp)
+		return
+	}
 	logout := do(&client, http.MethodPost, "/v1/session/signout", `{}`, origin, "application/json", csrf)
 	if logout.StatusCode != http.StatusOK || len(logout.Cookies()) != 2 {
 		t.Fatal("normal session logout failed", logout.StatusCode)
@@ -140,6 +151,33 @@ func proveReferenceEnterpriseSAMLIDPJourney(t *testing.T, ctx context.Context, b
 	}
 	jar.SetCookies(appURL, []*http.Cookie{sessionCookie})
 	readSession(&client, false)
+}
+
+func checkReferenceSAMLLogoutUnselected(t *testing.T, ctx context.Context, client *http.Client, origin, providerPath string) {
+	t.Helper()
+	read := func(method, path string) *http.Response {
+		t.Helper()
+		request, err := http.NewRequestWithContext(ctx, method, origin+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = response.Body.Close() })
+		return response
+	}
+	route := read(http.MethodPost, providerPath+"/slo")
+	if route.StatusCode != http.StatusNotFound {
+		t.Fatal("unselected SAML logout route was dispatched", route.StatusCode)
+	}
+	metadata := read(http.MethodGet, providerPath+"/metadata")
+	defer metadata.Body.Close()
+	document, err := io.ReadAll(io.LimitReader(metadata.Body, 128<<10))
+	if err != nil || metadata.StatusCode != http.StatusOK || strings.Contains(string(document), "SingleLogoutService") {
+		t.Fatal("unselected SAML logout was advertised in metadata", metadata.StatusCode, err)
+	}
 }
 
 func checkReferenceSAMLIDPMetadata(t *testing.T, response *http.Response, entity, sp, idp string) {

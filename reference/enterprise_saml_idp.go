@@ -17,16 +17,23 @@ type enterpriseSAMLIDPState struct {
 	confirmation *ssopg.ProviderSAMLIDPConfirmationService
 }
 
-func composeEnterpriseSAMLIDP(router *ssopg.ProviderRouter, n EnterpriseSAMLConfiguration, h HTTPEnterpriseSAMLConfiguration) (*enterpriseSAMLIDPState, error) {
+func composeEnterpriseSAMLIDP(router *ssopg.ProviderRouter, n EnterpriseSAMLConfiguration, h HTTPEnterpriseSAMLConfiguration, custody *ssopg.SAMLLogoutSubjectCustody) (*enterpriseSAMLIDPState, error) {
 	selected := n.IDPInitiated
 	if !hasSeparateSAMLStateAndConfirmationKeys(n, selected.ConfirmationKeys) {
 		return nil, identity.InvalidInputError{Field: "reference_enterprise_saml_idp"}
 	}
-	admission, err := ssopg.NewProviderSAMLIDPAdmissionService(router, ssopg.ProviderSAMLIDPAdmissionConfig{
+	admissionConfig := ssopg.ProviderSAMLIDPAdmissionConfig{
 		TenantID: n.Login.TenantID,
 		Profiles: []ssopg.StaticSAMLIDPAdmissionProfile{{Provider: n.Profile, MaximumAge: selected.MaximumAge}},
-		Verify:   enterpriseSAMLIDPPOSTVerifier(n.ClockSkew),
-	})
+	}
+	var admission *ssopg.ProviderSAMLIDPAdmissionService
+	var err error
+	if custody == nil {
+		admissionConfig.Verify = enterpriseSAMLIDPPOSTVerifier(n.ClockSkew)
+		admission, err = ssopg.NewProviderSAMLIDPAdmissionService(router, admissionConfig)
+	} else {
+		admission, err = ssopg.NewProviderSAMLIDPAdmissionServiceWithLogoutSubject(router, admissionConfig, enterpriseSAMLIDPPOSTLogoutVerifier(n.ClockSkew))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +60,12 @@ func composeEnterpriseSAMLIDP(router *ssopg.ProviderRouter, n EnterpriseSAMLConf
 	if err != nil {
 		return nil, err
 	}
+	if custody != nil {
+		confirmation, err = confirmation.WithLogoutSubjectCustody(custody)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &enterpriseSAMLIDPState{arrival: arrival, confirmation: confirmation}, nil
 }
 
@@ -74,18 +87,32 @@ func hasSeparateSAMLStateAndConfirmationKeys(n EnterpriseSAMLConfiguration, conf
 
 func enterpriseSAMLIDPPOSTVerifier(skew time.Duration) ssopg.SAMLIDPResponseVerifier {
 	return func(ctx context.Context, input ssopg.SAMLIDPResponseVerificationInput) (ssopg.SAMLVerifiedResponse, error) {
-		profile, err := saml.NewIDPInitiatedPOSTResponseProfile(saml.IDPInitiatedPOSTResponseConfig{
-			SPEntityID: input.SPEntityID, IdentityProviderEntityID: input.IdentityProviderEntityID, ExternalOrigin: input.ExternalOrigin,
-			ProviderID: string(input.ProviderID), SigningCertificates: input.SigningCertificates, MaximumAge: input.MaximumAge, ClockSkew: skew,
-		})
-		if err != nil {
-			return ssopg.SAMLVerifiedResponse{}, err
-		}
-		verified, err := profile.Validate(ctx, saml.IDPInitiatedPOSTResponseInput{SAMLResponse: input.SAMLResponse, Now: input.Now})
+		verified, err := verifyEnterpriseSAMLIDPPOST(ctx, input, skew)
 		if err != nil {
 			return ssopg.SAMLVerifiedResponse{}, err
 		}
 		evidence, err := verified.Evidence()
 		return ssopg.SAMLVerifiedResponse(evidence), err
 	}
+}
+
+func enterpriseSAMLIDPPOSTLogoutVerifier(skew time.Duration) ssopg.SAMLIDPResponseWithLogoutSubjectVerifier {
+	return func(ctx context.Context, input ssopg.SAMLIDPResponseVerificationInput) (ssopg.SAMLVerifiedLoginResponse, error) {
+		verified, err := verifyEnterpriseSAMLIDPPOST(ctx, input, skew)
+		if err != nil {
+			return ssopg.SAMLVerifiedLoginResponse{}, err
+		}
+		return enterpriseSAMLLoginWithLogoutSubject(verified)
+	}
+}
+
+func verifyEnterpriseSAMLIDPPOST(ctx context.Context, input ssopg.SAMLIDPResponseVerificationInput, skew time.Duration) (saml.VerifiedIDPInitiatedPOSTResponse, error) {
+	profile, err := saml.NewIDPInitiatedPOSTResponseProfile(saml.IDPInitiatedPOSTResponseConfig{
+		SPEntityID: input.SPEntityID, IdentityProviderEntityID: input.IdentityProviderEntityID, ExternalOrigin: input.ExternalOrigin,
+		ProviderID: string(input.ProviderID), SigningCertificates: input.SigningCertificates, MaximumAge: input.MaximumAge, ClockSkew: skew,
+	})
+	if err != nil {
+		return saml.VerifiedIDPInitiatedPOSTResponse{}, err
+	}
+	return profile.Validate(ctx, saml.IDPInitiatedPOSTResponseInput{SAMLResponse: input.SAMLResponse, Now: input.Now})
 }

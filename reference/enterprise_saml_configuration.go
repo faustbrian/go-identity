@@ -36,6 +36,9 @@ type EnterpriseSAMLConfiguration struct {
 	// IDPInitiated selects forward storage for unsolicited sign-in. Keep it
 	// selected after applying the migrations, even when HTTP exposure is off.
 	IDPInitiated *EnterpriseSAMLIDPConfiguration
+	// Logout selects the installed IdP's signed logout profile and durable
+	// subject custody. Keep it configured after applying its migrations.
+	Logout *EnterpriseSAMLLogoutConfiguration
 }
 
 func (EnterpriseSAMLConfiguration) Format(s fmt.State, _ rune) {
@@ -65,6 +68,9 @@ type HTTPEnterpriseSAMLConfiguration struct {
 	// IDPInitiated opts into the linked-user unsolicited POST route. It requires
 	// the corresponding native configuration and applied migrations.
 	IDPInitiated bool
+	// Logout opts into cookie-free IdP-initiated Single Logout POST. It does
+	// not expose an SP-initiated logout start.
+	Logout bool
 }
 
 // EnterpriseSAMLIDPConfiguration selects a signed assertion age limit and a
@@ -92,6 +98,7 @@ type enterpriseSAMLState struct {
 	metadata         *ssopg.ProviderSAMLMetadataService
 	idp              *enterpriseSAMLIDPState
 	idpStorage       bool
+	logout           *enterpriseSAMLLogoutState
 	profile          ssopg.StaticSAMLLoginProfile
 	preauth          *session.PreAuthIssuer
 	http             *HTTPEnterpriseSAMLConfiguration
@@ -129,7 +136,7 @@ func validateEnterpriseSAMLSelection(c StoreConfiguration) error {
 		!slices.Contains(c.HTTPSession.TrustedOrigins, identityhttp.Origin(n.Login.Origin)) ||
 		uint64(h.FlowKeyIndex) >= uint64(len(n.Login.FlowKeys)) || h.FlowSignalKey == (session.DigestKey{}) ||
 		!slices.Contains(n.Login.CallbackAllowlist, h.SuccessCallback) || !slices.Contains(n.Login.CallbackAllowlist, h.ErrorCallback) ||
-		h.IDPInitiated && n.IDPInitiated == nil {
+		h.IDPInitiated && n.IDPInitiated == nil || h.Logout && n.Logout == nil {
 		return invalid
 	}
 	csrf, err := h.CSRFCookie.DeletionAttributes()
@@ -189,14 +196,23 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 	if err != nil {
 		return nil, err
 	}
-	n.Completion.Verify = enterpriseSAMLPOSTVerifier(n.ClockSkew)
-	complete, err := ssopg.NewProviderSAMLLoginCompletionService(start, n.Completion)
+	custody, err := newEnterpriseSAMLLogoutCustody(n, n.Login.KeyReference)
+	if err != nil {
+		return nil, err
+	}
+	complete, err := composeEnterpriseSAMLCompletion(start, n, custody)
 	if err != nil {
 		return nil, err
 	}
 	state := &enterpriseSAMLState{start: start, completion: complete, profile: n.Profile, tenant: n.Login.TenantID, idpStorage: n.IDPInitiated != nil,
 		origin: n.Login.Origin, audience: n.Completion.Audience, sessionSchema: selected.Repository.Schema,
 		callbacks: slices.Clone(n.Login.CallbackAllowlist), duration: n.Login.Coordinator.MaximumDuration}
+	if custody != nil {
+		state.logout, err = composeEnterpriseSAMLLogout(start, n, custody)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if c.HTTPEnterpriseSAML == nil {
 		return state, nil
 	}
@@ -227,7 +243,7 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 		}
 	}
 	if h.IDPInitiated {
-		state.idp, err = composeEnterpriseSAMLIDP(router, n, h)
+		state.idp, err = composeEnterpriseSAMLIDP(router, n, h, custody)
 		if err != nil {
 			return nil, err
 		}

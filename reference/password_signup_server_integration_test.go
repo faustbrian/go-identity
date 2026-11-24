@@ -293,6 +293,7 @@ type signupGraphExtensions struct {
 	enterpriseOAuth2Upgrade     bool
 	enterpriseSAML              bool
 	enterpriseSAMLIDP           bool
+	enterpriseSAMLIDPLogout     bool
 	socialOIDC                  bool
 	socialOIDCPersistent        bool
 	socialOIDCLinkOnly          bool
@@ -557,7 +558,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML {
 		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink,
-			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade, allowSAML: extensions.enterpriseSAML}
+			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade, allowSAML: extensions.enterpriseSAML,
+			allowSAMLLogout: extensions.enterpriseSAMLIDPLogout}
 		if extensions.enterpriseOIDCLogout {
 			selectedAuthorization = referenceEnterpriseOIDCLogoutPolicy{referenceEnterpriseOIDCPolicy: referenceEnterpriseOIDCPolicy{}}
 		}
@@ -746,6 +748,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if extensions.enterpriseSAMLIDP {
 			c.EnterpriseSAML.IDPInitiated = &reference.EnterpriseSAMLIDPConfiguration{
 				MaximumAge: time.Minute, CurrentConfirmationKey: 1, ConfirmationKeys: map[uint32][32]byte{1: {0xd4}},
+			}
+		}
+		if extensions.enterpriseSAMLIDPLogout {
+			c.EnterpriseSAML.Logout = &reference.EnterpriseSAMLLogoutConfiguration{
+				IdentityProviderEntityID: referenceSAMLIdPEntity, ResponseEndpoint: "https://idp.example/slo/response",
+				CurrentMatchKey: 1, MatchKeys: map[uint32][32]byte{1: {0xdd}},
 			}
 		}
 	}
@@ -1898,20 +1906,43 @@ END $$`); err != nil {
 		if extensions.enterpriseSAMLIDP {
 			c.HTTPEnterpriseSAML.IDPInitiated = true
 		}
+		c.HTTPEnterpriseSAML.Logout = extensions.enterpriseSAMLIDPLogout
 		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)
 		if extensions.enterpriseSAMLIDP {
-			proveReferenceEnterpriseSAMLIDPJourney(t, ctx, client, origin, features, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP)
+			var logoutResponseEndpoint string
+			if extensions.enterpriseSAMLIDPLogout {
+				logoutResponseEndpoint = c.EnterpriseSAML.Logout.ResponseEndpoint
+				provedLogoutOperation := false
+				for _, operation := range restarted.OpenAPI().Operations() {
+					if operation.Record.OperationID != "identity.sso.saml-slo" {
+						continue
+					}
+					provedLogoutOperation = operation.Wire != nil &&
+						bytes.Contains(operation.Wire.Definition, []byte(`"SAMLRequest"`)) &&
+						!bytes.Contains(operation.Wire.Definition, []byte(`"SAMLResponse"`))
+				}
+				if !provedLogoutOperation {
+					t.Fatal("selected SAML logout did not expose the request-only OpenAPI operation")
+				}
+			}
+			proveReferenceEnterpriseSAMLIDPJourney(t, ctx, client, origin, features, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP, logoutResponseEndpoint)
 			c.HTTPEnterpriseSAML.IDPInitiated = false
+			c.HTTPEnterpriseSAML.Logout = false
 			disabled, _ := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 			if readiness := disabled.Readiness(ctx); !readiness.Ready {
 				t.Fatal("disabling IdP HTTP selection made the installed SP profile unready", readiness.Failures)
 			}
 			for _, operation := range disabled.OpenAPI().Operations() {
-				if operation.Record.OperationID == "identity.sso.saml-idp-init" {
-					t.Fatal("disabling IdP HTTP selection left its route advertised")
+				if operation.Record.OperationID == "identity.sso.saml-idp-init" || operation.Record.OperationID == "identity.sso.saml-slo" {
+					t.Fatal("disabling IdP HTTP selection left a route advertised")
 				}
+			}
+			if extensions.enterpriseSAMLIDPLogout {
+				disabledHandler := disabled.Handler()
+				organizationHandler.Store(&disabledHandler)
+				checkReferenceSAMLLogoutUnselected(t, ctx, client, origin, "/saml2/"+string(selected.provider))
 			}
 			return
 		}

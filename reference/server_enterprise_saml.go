@@ -42,6 +42,7 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 		return nil, nil, err
 	}
 	navigation := []identityhttp.CORSRoutePolicy{c.ACSNavigationPolicy()}
+	operations := feature.Operations()
 	if n.idp != nil {
 		config := ssohttp.SAMLIDPSigninConfig{Network: network, TenantID: n.tenant, Origin: c.Origin, IdentityProviderOrigin: h.IdentityProviderOrigin,
 			ProviderID: c.ProviderID, SuccessCallback: h.SuccessCallback, Audience: n.audience, Cookie: c.Cookie, CSRFCookie: h.CSRFCookie,
@@ -50,11 +51,30 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 		if err != nil {
 			return nil, nil, err
 		}
-		feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: feature.ID(), Operations: append(feature.Operations(), op)})
+		operations = append(operations, op)
+		navigation = append(navigation, config.NavigationPolicy())
+	}
+	if h.Logout {
+		if n.logout == nil {
+			return nil, nil, identity.InvalidInputError{Field: "reference_http_enterprise_saml_logout"}
+		}
+		config := ssohttp.SAMLLogoutConfig{
+			Network: network, TenantID: n.tenant, Origin: c.Origin, IdentityProviderOrigin: h.IdentityProviderOrigin,
+			ProviderID: c.ProviderID, ResponseEndpoint: n.logout.responseEndpoint, Rate: c.Rate,
+			MaximumDuration: n.duration, RequestOnlyOwner: owner,
+		}
+		op, err := ssohttp.NewSAMLLogoutOperation(config)
 		if err != nil {
 			return nil, nil, err
 		}
+		operations = append(operations, op)
 		navigation = append(navigation, config.NavigationPolicy())
+	}
+	if h.IDPInitiated || h.Logout {
+		feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: feature.ID(), Operations: operations})
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	guarded, err := s.guardEnterpriseFeatures([]identityhttp.Feature{feature})
 	if err != nil {
@@ -75,11 +95,9 @@ func (a enterpriseSAMLHTTP) ReadSAMLMetadata(ctx context.Context, tenant identit
 	}
 	config := saml.SPMetadataConfig{EntityID: installed.EntityID, AssertionConsumerURL: installed.AssertionConsumerURL,
 		SigningCertificates: [][]byte{installed.SigningCertificate}}
-	exportMetadata := saml.ExportSPMetadata
-	if a.native.idp != nil {
-		exportMetadata = saml.ExportSPMetadataWithIDPInitiatedACS
-	}
-	document, err := exportMetadata(config)
+	document, err := saml.ExportSPMetadataWithEndpoints(config, saml.SPMetadataEndpoints{
+		IDPInitiatedACS: a.native.idp != nil, SingleLogout: a.native.http != nil && a.native.http.Logout && a.native.logout != nil,
+	})
 	if err != nil || ctx.Err() != nil {
 		return ssohttp.SAMLMetadataDocument{}, sso.ErrUnavailable
 	}

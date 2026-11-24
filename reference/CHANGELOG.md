@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose opt-in IdP-initiated SAML Single Logout for the installed provider.
+  Retain the exact signed subject on new sign-ins, revoke its matched local
+  sessions through PostgreSQL, and advertise the POST endpoint only when
+  selected. Keep active key versions and both additive migration histories
+  when switching off HTTP exposure.
+
 - Compose opt-in IdP-initiated SAML sign-in for a linked member. Keep signed
   arrival and browser confirmation separate, and issue the ordinary session
   only after native confirmation and replay settlement.

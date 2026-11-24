@@ -309,7 +309,28 @@ or RelayState is required. The arrival sets short-lived confirmation custody,
 not a session. The user submits the confirmation page from the same origin
 and browser; only then does Reference atomically settle replay custody and
 issue the ordinary session and CSRF cookies. The selected profile supports
-existing linked members and does not include optional RelayState, JIT, or SLO.
+existing linked members and does not include optional RelayState or JIT.
+
+### IdP-initiated SAML logout
+
+Configure `EnterpriseSAML.Logout` with the installed IdP's exact entity ID,
+its approved HTTPS POST response endpoint, and a dedicated 32-byte
+`MatchKeys` keyring with `CurrentMatchKey`. Authorize the configured
+enterprise service actor for `identity.sso.saml-slo` request admission and
+the allowed user resource in that tenant. Apply the selected forward
+subject-custody and session-revocation migrations before setting
+`HTTPEnterpriseSAML.Logout`. Keep native configuration and prior key versions
+while sessions issued under them can still be active. Previously issued
+sessions are not backfilled; ordinary local signout still applies.
+
+Register the exact HTTPS `POST /saml2/{provider_id}/slo` endpoint at the
+installed IdP. If SP metadata is selected, it advertises this POST binding
+only while the HTTP option is on. A signed IdP `SAMLRequest` needs no browser
+cookie. It revokes the matched local sessions; only a newly acknowledged
+result returns the signed form for the approved IdP endpoint. Exact retries
+do not repeat revocation or return another form. The HTTP switch does not
+remove native history when turned off. This profile does not start an
+SP-initiated logout or accept RelayState.
 
 ## Optional enterprise OIDC provider logout
 

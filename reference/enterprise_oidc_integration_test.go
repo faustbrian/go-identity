@@ -39,7 +39,7 @@ func TestReferencePostgresEnterpriseOIDCJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseOIDC: true})
 }
 
-type referenceEnterpriseOIDCPolicy struct{ allowLink, allowOAuth2, allowSAML bool }
+type referenceEnterpriseOIDCPolicy struct{ allowLink, allowOAuth2, allowSAML, allowSAMLLogout bool }
 
 func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
@@ -55,6 +55,12 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 			}
 		case "identity.sso.saml-start", "identity.sso.saml-start.recover", "identity.sso.saml-acs", "identity.sso.saml-acs.recover":
 			if p.allowSAML {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
+		case "identity.sso.saml-slo":
+			res := c.Request.Resource
+			if p.allowSAMLLogout && (res.Type == "identity.user" && res.ID != "" ||
+				res.Type == "identity.request-admission" && res.ID == "identity.sso.saml-slo") {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
 		}
