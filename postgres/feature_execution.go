@@ -68,6 +68,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if plan.Feature != nil && plan.Feature.Operation == SSOSAMLIDPArrivalOperation() && !plainSSOSAMLIDPArrival(command) {
 		return invalidPlan()
 	}
+	if plan.Feature != nil && plan.Feature.Operation == SSOSAMLIDPLogoutOperation() && !plainSSOSAMLIDPLogout(command) {
+		return invalidPlan()
+	}
 	if plan.Feature != nil && plan.Feature.Operation == SSOOIDCExplicitLinkStartOperation() {
 		_, admission := phase.(FeatureAdmissionPreparationContributor)
 		_, final := phase.(FeatureCommitContributor)
@@ -273,6 +276,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if p.Feature.Operation == SSOSAMLIDPArrivalOperation() {
 		if _, final := feature.contributor.(FeatureCommitContributor); !final || preparation || !validSSOSAMLIDPArrivalPlan(b, p) {
+			return nil, invalidPlan()
+		}
+	}
+	if p.Feature.Operation == SSOSAMLIDPLogoutOperation() {
+		if _, final := feature.contributor.(FeatureCommitContributor); !final || preparation || !validSSOSAMLIDPLogoutPlan(b, p) {
 			return nil, invalidPlan()
 		}
 	}

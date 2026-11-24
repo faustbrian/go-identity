@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the registered service command for IdP-initiated SAML logout. Its
+  original request and complete session set stay bound through Apply and the
+  final check; browser custody cannot select this command.
+
 - Admit the exact SAML logout-start owner to fence the authenticated user's
   original session and linked provider credential. This does not enable a
   logout route or let another protocol select the session transition.
