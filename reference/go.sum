@@ -209,6 +209,8 @@ github.com/faustbrian/go-service/v2 v2.0.0 h1:ZKMUXJJfNUqweyJrGz4dzkP0d2l5A15n+w
 github.com/faustbrian/go-service/v2 v2.0.0/go.mod h1:lYYYHYYYMyi4zr9GQBKb/1aVWWciFS/k35UwfCThbOY=
 github.com/faustbrian/go-sso v0.0.0-20261123063952-429e9c073ff2 h1:l8yS2rhq8n3AhlxWMLTStJVqO8ESwzkQi826CV3DyL8=
 github.com/faustbrian/go-sso v0.0.0-20261123063952-429e9c073ff2/go.mod h1:8t+cOqDVJC60hGJHau0RBT4qE2ujMatsVWgXvkE/Bzk=
+github.com/faustbrian/go-sso v0.0.0-20261124114714-6370e14f728e h1:h2KRxztPGlQsnh3R4rp1QDchuLEp9O+22dFjnQ71SHo=
+github.com/faustbrian/go-sso v0.0.0-20261124114714-6370e14f728e/go.mod h1:8t+cOqDVJC60hGJHau0RBT4qE2ujMatsVWgXvkE/Bzk=
 github.com/faustbrian/go-sso/domain-verification v0.0.0-20261114033730-562e61a62734 h1:wi/Fl8h5KagSJogEvLMKRfY2dkNGRTC1HNcndrUL45o=
 github.com/faustbrian/go-sso/domain-verification v0.0.0-20261114033730-562e61a62734/go.mod h1:WI4BJ4aQ1ki49oDREV0ORq21xMfxr+CvP+fshGTPEkQ=
 github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db h1:xti7iYz/sL5sGxPoNSE/oiBOSheB01sKJq2Hd7HM9+A=
@@ -221,6 +223,8 @@ github.com/faustbrian/go-sso/postgres v0.0.0-20261124092204-f2431b090c4c h1:wFD7
 github.com/faustbrian/go-sso/postgres v0.0.0-20261124092204-f2431b090c4c/go.mod h1:NeanSnmwUP/dNM4GMEq2bDfnjOn4TDokB+pBlJsVNcg=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261124112015-c9c4a3980aa4 h1:/fvkv7A8A1X+bb7eRjhfWukQaj0AfePfq2EgJid5/Uw=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261124112015-c9c4a3980aa4/go.mod h1:MDMRXoGCGiUV2SiB6ksKPE3qsv6M9sx7g9HtEZ6UyA8=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261124115146-9d76cb6dbb7e h1:BbBasXPHvyLTssYUmGUP3jW2ZtA0oVZMtTebyb5oQmk=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261124115146-9d76cb6dbb7e/go.mod h1:SpZ640PwCeU4Fm5ms7TWFpwu8KvBPVl5SPV2PosXqVs=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba h1:3bNMfo0bfFGVX+lIgzMVSVM4RCFXN+ryGLsvywSWpl0=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba/go.mod h1:junxGTiEU39EWU6Nu6hxNb9nTVAO3T7+TRE+51mCTu4=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124105739-9ee486c62479 h1:zookJCVH77qR/YcANYIh8EDwo4J3pRJHktyhh+sBNQU=

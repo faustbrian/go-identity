@@ -34,8 +34,11 @@ const referenceSAMLIdPEntity = "urn:example:reference-saml-idp"
 
 // Provisioning uses the native organization/provider owners and the released
 // go-sso/postgres SAML registration, signing-custody and activation contracts.
-func provisionReferenceEnterpriseSAML(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, browser *http.Client, origin string, idp referenceSAMLIdPFixture) enterpriseProvisioned {
+func provisionReferenceEnterpriseSAML(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, browser *http.Client, origin string, idp referenceSAMLIdPFixture, replacement ...referenceSAMLIdPFixture) enterpriseProvisioned {
 	t.Helper()
+	if len(replacement) > 1 {
+		t.Fatal("SAML provisioning accepts at most one IdP pin replacement")
+	}
 	pool := deps.PostgreSQL
 	user, bearer := seedEnterpriseAdministrator(t, ctx, pool, c)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+"/v1/organization/create", bytes.NewBufferString(`{"name":"Enterprise SAML test","slug":"enterprise-saml-fixture"}`))
@@ -165,6 +168,10 @@ func provisionReferenceEnterpriseSAML(t *testing.T, ctx context.Context, c refer
 	if err != nil || rotated.Completion.Outcome != identity.CommitOutcomeCommitted || rotated.Version != 2 || !rotated.Active {
 		t.Fatal("native SP signing installation did not commit", err)
 	}
+	providerVersion := rotated.Version
+	if len(replacement) == 1 {
+		providerVersion = rotateReferenceSAMLIDPPins(t, ctx, credentials, crypto, binding, replacement[0])
+	}
 	setup, err = setup.WithProviderEnableAuthorization(policy)
 	if err != nil {
 		t.Fatal(err)
@@ -173,12 +180,12 @@ func provisionReferenceEnterpriseSAML(t *testing.T, ctx context.Context, c refer
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkpoint, err := setup.ObserveSAMLProviderCredentialCheckpoint(ctx, providerID, 2)
+	checkpoint, err := setup.ObserveSAMLProviderCredentialCheckpoint(ctx, providerID, providerVersion)
 	if err != nil || checkpoint.Protocol() != "saml" {
 		t.Fatal("native SAML signing credential not observable", err)
 	}
 	checkpointBinding, err := checkpoint.Bindings()
-	if err != nil || checkpointBinding.ProviderID != providerID || checkpointBinding.ProviderVersion != 2 || checkpointBinding.Generation != 1 {
+	if err != nil || checkpointBinding.ProviderID != providerID || checkpointBinding.ProviderVersion != providerVersion || checkpointBinding.Generation != 1 {
 		t.Fatal("native SAML checkpoint lost the installed signer generation", err)
 	}
 	domain := organization.DomainProof{
@@ -190,11 +197,11 @@ func provisionReferenceEnterpriseSAML(t *testing.T, ctx context.Context, c refer
 	execEnterpriseFixture(t, ctx, pool, `INSERT INTO organization.domain_evidence(tenant_id,organization_id,claim_id,canonical_domain,claim_version,proof_version,method,observed_at,expires_at,revoked,command_id)
 VALUES($1,$2,$3,$4,1,1,'dns-txt',$5,$6,false,$7)`, otpTenant, string(domain.OrganizationID), string(domain.ClaimID), domain.Domain, domain.ObservedAt, domain.ExpiresAt, string(enterpriseCommand(t)))
 	enabled, err := setup.ProviderEnable(ctx, sso.ProviderEnableRequest{
-		ProviderID: providerID, ExpectedVersion: 2, CredentialCheckpoint: checkpoint,
+		ProviderID: providerID, ExpectedVersion: providerVersion, CredentialCheckpoint: checkpoint,
 		DomainProofCheckpoint: sso.DomainProofCheckpoint{Key: organization.DomainProofKey(domain), ProofVersion: domain.ProofVersion},
 		IdempotencyKey:        enterpriseKey(t, "enterprise-saml-enable"),
 	})
-	if err != nil || enabled.Completion.Outcome != identity.CommitOutcomeCommitted || !enabled.Provider.Enabled || enabled.Provider.Version != 3 || enabled.Provider.Protocol != "saml" {
+	if err != nil || enabled.Completion.Outcome != identity.CommitOutcomeCommitted || !enabled.Provider.Enabled || enabled.Provider.Version != providerVersion+1 || enabled.Provider.Protocol != "saml" {
 		t.Fatal("native SAML enable did not commit from current domain and signer proof", err)
 	}
 	selected := enterpriseProvisioned{user: user, organization: created.OrganizationID, provider: sso.ProviderID(providerID), bearer: bearer}

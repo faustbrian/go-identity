@@ -293,6 +293,7 @@ type signupGraphExtensions struct {
 	enterpriseOAuth2            bool
 	enterpriseOAuth2Upgrade     bool
 	enterpriseSAML              bool
+	enterpriseSAMLIDPPins       bool
 	enterpriseSAMLRoles         bool
 	enterpriseSAMLIDP           bool
 	enterpriseSAMLIDPLogout     bool
@@ -748,8 +749,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		enterpriseOAuth2Issuer = configureReferenceEnterpriseOAuth2(t, &c, origin)
 	}
 	var enterpriseSAMLIdP referenceSAMLIdPFixture
+	var enterpriseSAMLReplacement referenceSAMLIdPFixture
 	if extensions.enterpriseSAML {
 		enterpriseSAMLIdP = configureReferenceEnterpriseSAML(t, &c, origin)
+		if extensions.enterpriseSAMLIDPPins {
+			enterpriseSAMLReplacement = newReferenceSAMLIdPFixture(t, time.Now().UTC())
+		}
 		if extensions.enterpriseSAMLRoles {
 			roleID, err := identity.NewSubjectID()
 			if err != nil {
@@ -1942,15 +1947,24 @@ END $$`); err != nil {
 		if readiness := server.Readiness(ctx); !readiness.Ready {
 			t.Fatal("selected SAML graph did not report ready after migrating", readiness.Failures)
 		}
-		selected := provisionReferenceEnterpriseSAML(t, ctx, c, deps, client, origin, enterpriseSAMLIdP)
+		var replacements []referenceSAMLIdPFixture
+		if extensions.enterpriseSAMLIDPPins {
+			replacements = append(replacements, enterpriseSAMLReplacement)
+		}
+		selected := provisionReferenceEnterpriseSAML(t, ctx, c, deps, client, origin, enterpriseSAMLIdP, replacements...)
 		c.EnterpriseSAML.Profile.OrganizationID, c.EnterpriseSAML.Profile.ProviderID = selected.organization, selected.provider
+		installedIdP := enterpriseSAMLIdP
+		if extensions.enterpriseSAMLIDPPins {
+			c.EnterpriseSAML.Profile.ProviderVersion = 4
+			installedIdP = enterpriseSAMLReplacement
+		}
 		var roleEpoch uint64
 		if extensions.enterpriseSAMLRoles {
 			mapping := c.EnterpriseSAML.RoleSync
 			mapping.OrganizationID, mapping.ProviderID = selected.organization, selected.provider
 			roleEpoch = createReferenceEnterpriseDocumentRole(t, ctx, client, origin, mapping.Rules[0].RoleID, selected)
 		}
-		proveReferenceSAMLIDPAdmission(t, ctx, c, deps, enterpriseSAMLIdP)
+		proveReferenceSAMLIDPAdmission(t, ctx, c, deps, installedIdP)
 		if extensions.enterpriseSAMLIDP {
 			c.HTTPEnterpriseSAML.IDPInitiated = true
 		}
@@ -1960,6 +1974,10 @@ END $$`); err != nil {
 		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)
+		if extensions.enterpriseSAMLIDPPins {
+			proveReferenceEnterpriseSAMLIDPPinRotation(t, ctx, client, origin, features, deps, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP, enterpriseSAMLReplacement)
+			return
+		}
 		if extensions.enterpriseSAMLRoles {
 			proveReferenceEnterpriseSAMLRoleSyncJourney(t, ctx, client, origin, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP, roleEpoch, c.EnterpriseSAML.LogoutStart)
 			return
