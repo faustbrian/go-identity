@@ -90,6 +90,7 @@ type featureState struct {
 	enterpriseOIDC               *enterpriseOIDCState
 	enterpriseOAuth2             *enterpriseOAuth2State
 	enterpriseSAML               *enterpriseSAMLState
+	directorySync                *directorySyncState
 	oauthWorkload                *oauthWorkloadState
 	oauthDevice                  *oauthDeviceState
 	apiKey                       *apiKeyState
@@ -175,6 +176,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPDirectorySync != nil && c.DirectorySync == nil || c.DirectorySync != nil && (c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil) {
+		return identity.InvalidInputError{Field: "reference_directory_sync"}
+	}
 	if c.OAuthDevice != nil && (c.OAuthWorkload != nil || c.HTTPOAuthWorkload != nil || c.OTP == nil || c.Delivery == nil || c.Session == nil || c.PasswordSignin == nil || c.DurableAdmission == nil) {
 		return identity.InvalidInputError{Field: "reference_oauth_device"}
 	}
@@ -595,6 +599,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpOrganization.close()
 		}
 	}()
+	directorySync, err := composeDirectorySync(c, d.PostgreSQL, crypto, sessionOwner, organizationOwner, httpOrganization, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			directorySync.close()
+		}
+	}()
 	var signupEvaluation risk.Evaluator
 	if c.Passkey != nil && c.Passkey.Signup != nil {
 		protected := c.Passkey.Protected.CommandCounters
@@ -969,6 +982,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.enterpriseOIDC = enterpriseOIDCOwner
 	s.features.enterpriseOAuth2 = enterpriseOAuth2Owner
 	s.features.enterpriseSAML = enterpriseSAMLOwner
+	s.features.directorySync = directorySync
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

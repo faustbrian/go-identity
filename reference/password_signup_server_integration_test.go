@@ -282,6 +282,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	directorySync               bool
+	directorySyncStandalone     bool
 	sessionCache                *referenceSessionCacheProof
 	oauthDevice                 bool
 	oauthDeviceBaseInstalled    bool
@@ -560,6 +562,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		selectedAuthorization = referenceOrganizationPolicy{}
 	}
+	if extensions.directorySync {
+		selectedAuthorization = referenceDirectoryPolicy{}
+	}
 	if extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML {
 		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink,
 			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade, allowSAML: extensions.enterpriseSAML,
@@ -648,6 +653,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
+	}
+	if extensions.directorySync {
+		configureReferenceDirectorySync(t, &c, origin, extensions.directorySyncStandalone)
 	}
 	if extensions.organizationKey && !extensions.organizationKeyUpgrade {
 		configureReferenceOrganizationKey(t, &c, origin)
@@ -1459,7 +1467,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
-	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil {
+	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
 	}
 	if c.APIKey != nil {
@@ -1893,6 +1901,18 @@ END $$`); err != nil {
 		if seen[selected.id] != selected.enabled {
 			t.Fatal("federation route selection diverged", selected.id)
 		}
+	}
+	for _, operation := range []string{"identity.sso.directory-sync-start", "identity.sso.directory-sync-status", "identity.sso.directory-sync-cancel"} {
+		selected := c.HTTPDirectorySync != nil
+		if selected {
+			wantOperations++
+		}
+		if seen[operation] != selected {
+			t.Fatal("directory HTTP selection mismatch", operation)
+		}
+	}
+	if seen["identity.sso.directory-sync-apply"] {
+		t.Fatal("internal directory apply advertised as HTTP")
 	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
@@ -2331,7 +2351,9 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 					installed.prove(t, ctx, selected)
 				}
 			}
-			if extensions.organizationRoles {
+			if extensions.directorySync {
+				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone, selectedConfig.OTP.Coordinator)
+			} else if extensions.organizationRoles {
 				proveReferenceOrganizationRoles(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationTeamCRUD {
 				proveReferenceOrganizationTeamCRUD(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)

@@ -29,13 +29,13 @@ require (
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261025150519-83149c8dcdf6
 	github.com/faustbrian/go-identity/http/oauth v0.0.0-20261113042301-405ecb7dd9b1
 	github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1
-	github.com/faustbrian/go-identity/http/organization v0.0.0-20261027002442-b1f1fed03d25
+	github.com/faustbrian/go-identity/http/organization v0.0.0-20261124151127-a3d59f97169b
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f
 	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261025150519-83149c8dcdf6
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b
 	github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806
 	github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e
-	github.com/faustbrian/go-identity/http/sso v0.0.0-20261124093816-e5e3996c880f
+	github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
@@ -48,9 +48,9 @@ require (
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261122025034-f17a5dc39fa2
 	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261124105449-b80eb17a2361
-	github.com/faustbrian/go-identity/risk v0.0.0-20261123053209-79b6d35cbf8f
+	github.com/faustbrian/go-identity/risk v0.0.0-20261124135856-92af48b3c9fc
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261026030542-4e0bab3755d5
-	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261122024644-105adde9ae64
+	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261124125758-d8bd5f7b074a
 	github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
 	github.com/faustbrian/go-identity/session v0.0.0-20261123125537-8d9afa5e1a45
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261124104504-c56933838be6
@@ -62,17 +62,17 @@ require (
 	github.com/faustbrian/go-oauth-server/postgres v0.0.0-20261109235233-d58912788557
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
 	github.com/faustbrian/go-organization v0.0.0-20261122135635-30af6abd1547
-	github.com/faustbrian/go-organization/postgres v0.0.0-20261124111450-8338ff89928e
+	github.com/faustbrian/go-organization/postgres v0.0.0-20261124122904-1c45d408f2d3
 	github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86
 	github.com/faustbrian/go-passkey/postgres v0.0.0-20261025200953-935ddaffedb1
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
-	github.com/faustbrian/go-sso v0.0.0-20261124114714-6370e14f728e
+	github.com/faustbrian/go-sso v0.0.0-20261124141854-d9579eed5ba7
 	github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db
 	github.com/faustbrian/go-sso/oidc v0.0.0-20261123000546-023dd34bb0c7
-	github.com/faustbrian/go-sso/postgres v0.0.0-20261124115146-9d76cb6dbb7e
+	github.com/faustbrian/go-sso/postgres v0.0.0-20261124145702-793602cdbfd2
 	github.com/faustbrian/go-sso/saml v0.0.0-20261124105739-9ee486c62479
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b
 	github.com/faustbrian/go-transactional-outbox/v2 v2.1.1-0.20261022172917-6ed5e0861542
@@ -93,6 +93,9 @@ require (
 	github.com/faustbrian/go-http-middleware/v2 v2.0.2-0.20261014105810-969bbbf00668 // indirect
 	github.com/faustbrian/go-json-schema/v2 v2.0.0 // indirect
 	github.com/faustbrian/go-migrations/v2 v2.0.0 // indirect
+	github.com/faustbrian/go-scim v0.0.0-20261113195101-e97918aba312 // indirect
+	github.com/faustbrian/go-scim/organization v0.0.0-20261124142207-32943a04df43 // indirect
+	github.com/faustbrian/go-scim/postgres v0.0.0-20261124132804-3a7e6a61e856 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

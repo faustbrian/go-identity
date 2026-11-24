@@ -56,6 +56,10 @@ type StoreConfiguration struct {
 	// HTTPEnterpriseSAML independently opts into its exact browser routes.
 	EnterpriseSAML     *EnterpriseSAMLConfiguration
 	HTTPEnterpriseSAML *HTTPEnterpriseSAMLConfiguration
+	// DirectorySync selects native directory administration and explicit
+	// migration planning. HTTPDirectorySync independently exposes its controls.
+	DirectorySync     *DirectorySyncConfiguration
+	HTTPDirectorySync *HTTPDirectorySyncConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration
@@ -525,6 +529,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil {
 		state.features.httpAPIKey.close()
+		state.features.directorySync.close()
 		state.features.httpOrganization.close()
 	}
 	if state.features != nil && state.features.httpAnonymous != nil {

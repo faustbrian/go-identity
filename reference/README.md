@@ -487,6 +487,31 @@ selection. Stored grants/status are historical metadata, not current authority;
 reads expose no secret or digest and never verify/debit a key. See the
 [metadata walkthrough](APIKEY.md#safe-metadata-reads).
 
+## Optional directory administration
+
+Select `StoreConfiguration.DirectorySync` with the configured tenant,
+organization, source connection, and native write-authorization owner. The
+graph uses its original password cookie sessions, organization repository and
+protected counters. The selected provider must already be enabled for that
+organization, and Start must name its exact provider and mapping versions.
+Directory administration does not require an OIDC, OAuth2 or SAML sign-in
+selection.
+
+First use the existing operator migration plan and apply flow with
+`DirectorySync` selected but `HTTPDirectorySync` unset. The native provider
+registry keeps its installed history and the directory generation table is
+an independent additive migration with a bounded two-second lock wait and no
+backfill. Keep both histories and all generation data when disabling HTTP or
+rolling back the serving code; do not drop the table or reset its versions.
+
+Then select `HTTPDirectorySync` with the allowed mapped HTTPS origins and the
+shared `HTTPRate` backend. When organization HTTP is also selected, omit
+`HTTPDirectorySync.Rate` to reuse the same limiters; otherwise supply its
+standalone rate configuration without enabling organization HTTP. The server
+exposes only opt-in directory Start, Status and Cancel. Retain the Start key
+for retry; use the Status generation version and no key for Cancel. Group
+Apply remains a separate service-account operation, never a browser route.
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

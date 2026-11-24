@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select native directory administration and its additive generation migration
+  independently of enterprise sign-in. Opt into current-cookie HTTPS Start,
+  Status and keyless Cancel using the graph's shared quotas and PostgreSQL.
+
 - Compose opt-in SAML SP role synchronization for a linked organization
   member. The ordinary ACS issues a session only when signed role evidence
   and the provider-owned role update commit together. Local organization

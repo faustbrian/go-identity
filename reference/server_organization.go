@@ -106,13 +106,13 @@ func composeOrganizationHTTP(c StoreConfiguration, owner *organizationState, sha
 			out = nil
 		}
 	}()
-	if h.Get || h.MemberList || h.MemberLeave || h.InvitationGet || h.InvitationListMine || h.InvitationList || h.InvitationReject || h.SlugAvailable || h.List || h.TeamListMine || h.TeamMemberList || h.TeamList || roleRead {
+	if c.HTTPDirectorySync != nil || h.Get || h.MemberList || h.MemberLeave || h.InvitationGet || h.InvitationListMine || h.InvitationList || h.InvitationReject || h.SlugAvailable || h.List || h.TeamListMine || h.TeamMemberList || h.TeamList || roleRead {
 		out.safe, err = identityhttp.NewSafeRateLimiter(identityhttp.SafeRateConfig{Shared: shared.backend, Namespace: h.SafeNamespace, Now: time.Now, Degraded: h.Degraded, MaximumDuration: c.HTTPRate.MaximumDuration, EmergencyMaximumKeys: h.EmergencyMaximumKeys})
 		if err != nil {
 			return out, invalid
 		}
 	}
-	if h.Create || h.Update || h.MemberAdd || h.MemberUpdate || h.MemberRemove || h.InvitationSend || h.InvitationResend || h.InvitationCancel || h.InvitationExpire || h.OwnerTransfer || h.Archive || h.Restore || h.TeamMemberAdd || h.TeamMemberRemove || h.TeamCreate || h.TeamUpdate || h.TeamDelete || roleWrite {
+	if c.HTTPDirectorySync != nil || h.Create || h.Update || h.MemberAdd || h.MemberUpdate || h.MemberRemove || h.InvitationSend || h.InvitationResend || h.InvitationCancel || h.InvitationExpire || h.OwnerTransfer || h.Archive || h.Restore || h.TeamMemberAdd || h.TeamMemberRemove || h.TeamCreate || h.TeamUpdate || h.TeamDelete || roleWrite {
 		out.admin, err = organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{Shared: shared.backend, Namespace: h.AdminNamespace, Key: h.AdminKey, Now: time.Now, Denied: h.Denied, MaximumDuration: c.HTTPRate.MaximumDuration})
 		if err != nil {
 			return out, invalid

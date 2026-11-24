@@ -180,6 +180,10 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 		contributions = append(contributions, *samlFeature)
 		c.HTTP.CORS = append(slices.Clone(c.HTTP.CORS), samlNavigation...)
 	}
+	contributions, err = server.appendDirectorySyncFeature(contributions, c.HTTP.Network)
+	if err != nil {
+		return nil, err
+	}
 	oauthFeature, err := server.oauthWorkloadFeature(c.HTTP.Network)
 	if err != nil {
 		return nil, err

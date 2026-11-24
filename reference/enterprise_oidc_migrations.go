@@ -62,31 +62,9 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 		catalog = append(catalog, roles)
 	}
 
-	providers := migrationHistory{namespace: "identity_enterprise_oidc", owners: map[migrations.Version]ModuleID{}}
-	for _, step := range []struct {
-		source migrations.Source
-		guard  migrationGuard
-	}{
-		{ssopg.ProviderMigrationSource{Version: 1}, migrationGuard{version: 1, tables: []string{"providers"}}},
-		{ssopg.ProviderUpdateMigrationSource{Version: 2}, migrationGuard{version: 2, columns: []string{"providers.metadata_version"}}},
-		{ssopg.ProviderCredentialsMigrationSource{Version: 3}, migrationGuard{version: 3, tables: []string{"credentials", "credential_effects"}}},
-		{ssopg.ProviderEnableMigrationSource{Version: 4}, migrationGuard{version: 4, tables: []string{"enable_receipts"}}},
-		{ssopg.LoginTransactionMigrationSource{Version: 5}, migrationGuard{version: 5, tables: []string{"login_transactions", "provider_login_dispositions"}}},
-		{ssopg.ProviderLoginTokenVaultMigrationSource{Version: 6}, migrationGuard{version: 6, tables: []string{"provider_login_token_sets"}}},
-	} {
-		step.guard.schema = "sso_providers"
-		if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", step.source, step.guard); err != nil {
-			return nil, err
-		}
-	}
-	if roleSync {
-		// Keep the baseline provider prefix: the optional trigger must run only
-		// after the organization's role history and the installed provider schema.
-		if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", ssopg.ProviderRoleSourceMigrationSource{Version: 7}, migrationGuard{
-			version: 7, schema: "sso_providers", functions: []string{"project_provider_role_source_change"},
-		}); err != nil {
-			return nil, err
-		}
+	providers, err := enterpriseProviderMigrationHistory(ctx, true, roleSync)
+	if err != nil {
+		return nil, err
 	}
 	catalog = append(catalog, providers)
 
@@ -115,6 +93,41 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	default:
 		return catalog, nil
 	}
+}
+
+// Keep provider registration and enablement at their installed identities.
+// A directory-only install selects the same 1..4 prefix; later sign-in adds
+// the unchanged 5..6 suffix and the optional role trigger, never another registry.
+func enterpriseProviderMigrationHistory(ctx context.Context, signin, roleSync bool) (migrationHistory, error) {
+	providers := migrationHistory{namespace: "identity_enterprise_oidc", owners: map[migrations.Version]ModuleID{}}
+	type providerStep struct {
+		source migrations.Source
+		guard  migrationGuard
+	}
+	steps := []providerStep{
+		{ssopg.ProviderMigrationSource{Version: 1}, migrationGuard{version: 1, tables: []string{"providers"}}},
+		{ssopg.ProviderUpdateMigrationSource{Version: 2}, migrationGuard{version: 2, columns: []string{"providers.metadata_version"}}},
+		{ssopg.ProviderCredentialsMigrationSource{Version: 3}, migrationGuard{version: 3, tables: []string{"credentials", "credential_effects"}}},
+		{ssopg.ProviderEnableMigrationSource{Version: 4}, migrationGuard{version: 4, tables: []string{"enable_receipts"}}},
+	}
+	if signin {
+		steps = append(steps,
+			providerStep{ssopg.LoginTransactionMigrationSource{Version: 5}, migrationGuard{version: 5, tables: []string{"login_transactions", "provider_login_dispositions"}}},
+			providerStep{ssopg.ProviderLoginTokenVaultMigrationSource{Version: 6}, migrationGuard{version: 6, tables: []string{"provider_login_token_sets"}}},
+		)
+	}
+	if roleSync {
+		steps = append(steps, providerStep{ssopg.ProviderRoleSourceMigrationSource{Version: 7}, migrationGuard{
+			version: 7, functions: []string{"project_provider_role_source_change"},
+		}})
+	}
+	for _, step := range steps {
+		step.guard.schema = "sso_providers"
+		if err := appendEnterpriseMigration(ctx, &providers, "sso/postgres", step.source, step.guard); err != nil {
+			return migrationHistory{}, err
+		}
+	}
+	return providers, nil
 }
 
 func enterpriseOIDCLogoutMigrationCatalog(ctx context.Context, catalog []migrationHistory, sessionSchema string) ([]migrationHistory, error) {
