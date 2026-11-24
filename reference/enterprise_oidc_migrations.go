@@ -46,7 +46,7 @@ func (s StoreSet) enterpriseOIDCMigrationCatalog(ctx context.Context, catalog []
 	}
 	catalog = append(catalog, domains)
 
-	roleSync := f.enterpriseOIDC != nil && f.enterpriseOIDC.roleSync
+	roleSync := f.enterpriseOIDC != nil && f.enterpriseOIDC.roleSync || f.enterpriseSAML != nil && f.enterpriseSAML.roleSync
 	if roleSync {
 		roles := migrationHistory{namespace: "identity_organization_provider_roles", owners: map[migrations.Version]ModuleID{}}
 		if err := appendEnterpriseMigration(ctx, &roles, "organization/postgres", organizationpg.ProviderRoleGrantMigrationSource{Version: 1}, migrationGuard{
@@ -163,7 +163,7 @@ func (s StoreSet) enterpriseOAuth2MigrationCatalog(ctx context.Context, catalog 
 	if f == nil || f.enterpriseOAuth2 == nil && f.enterpriseSAML == nil {
 		return catalog, nil
 	}
-	// The existing provider history owns optional OIDC role migration 7.
+	// The existing provider history owns optional shared role migration 7.
 	// A separate suffix allows selecting it after installing OAuth2.
 	protocol := migrationHistory{namespace: "identity_enterprise_oauth2", owners: map[migrations.Version]ModuleID{}}
 	for _, step := range []struct {

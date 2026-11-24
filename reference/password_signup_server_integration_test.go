@@ -50,6 +50,7 @@ import (
 	organization "github.com/faustbrian/go-organization"
 	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
+	ssopg "github.com/faustbrian/go-sso/postgres"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -292,6 +293,7 @@ type signupGraphExtensions struct {
 	enterpriseOAuth2            bool
 	enterpriseOAuth2Upgrade     bool
 	enterpriseSAML              bool
+	enterpriseSAMLRoles         bool
 	enterpriseSAMLIDP           bool
 	enterpriseSAMLIDPLogout     bool
 	enterpriseSAMLSPLogout      string
@@ -748,6 +750,18 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var enterpriseSAMLIdP referenceSAMLIdPFixture
 	if extensions.enterpriseSAML {
 		enterpriseSAMLIdP = configureReferenceEnterpriseSAML(t, &c, origin)
+		if extensions.enterpriseSAMLRoles {
+			roleID, err := identity.NewSubjectID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Organization.Core.DynamicRoles = organization.DynamicRoleConfig{Version: 1, MaximumRoles: 10,
+				Catalog: []organization.Permission{{ID: "document-read", Action: "document.read", ResourceType: "document"}}}
+			c.HTTPOrganization.RoleCreate, c.HTTPOrganization.PermissionCheck = true, true
+			profile := c.EnterpriseSAML.Profile
+			c.EnterpriseSAML.RoleSync = &ssopg.StaticSAMLRoleMapping{OrganizationID: profile.OrganizationID, ProviderID: profile.ProviderID,
+				MappingVersion: profile.MappingVersion, Rules: []ssopg.StaticSAMLRoleRule{{ClaimName: referenceSAMLRoleClaim, RoleID: organization.ID(roleID)}}}
+		}
 		if extensions.enterpriseSAMLIDP {
 			c.EnterpriseSAML.IDPInitiated = &reference.EnterpriseSAMLIDPConfiguration{
 				MaximumAge: time.Minute, CurrentConfirmationKey: 1, ConfirmationKeys: map[uint32][32]byte{1: {0xd4}},
@@ -1930,6 +1944,12 @@ END $$`); err != nil {
 		}
 		selected := provisionReferenceEnterpriseSAML(t, ctx, c, deps, client, origin, enterpriseSAMLIdP)
 		c.EnterpriseSAML.Profile.OrganizationID, c.EnterpriseSAML.Profile.ProviderID = selected.organization, selected.provider
+		var roleEpoch uint64
+		if extensions.enterpriseSAMLRoles {
+			mapping := c.EnterpriseSAML.RoleSync
+			mapping.OrganizationID, mapping.ProviderID = selected.organization, selected.provider
+			roleEpoch = createReferenceEnterpriseDocumentRole(t, ctx, client, origin, mapping.Rules[0].RoleID, selected)
+		}
 		proveReferenceSAMLIDPAdmission(t, ctx, c, deps, enterpriseSAMLIdP)
 		if extensions.enterpriseSAMLIDP {
 			c.HTTPEnterpriseSAML.IDPInitiated = true
@@ -1940,6 +1960,10 @@ END $$`); err != nil {
 		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		handler := restarted.Handler()
 		organizationHandler.Store(&handler)
+		if extensions.enterpriseSAMLRoles {
+			proveReferenceEnterpriseSAMLRoleSyncJourney(t, ctx, client, origin, c.HTTPEnterpriseSAML, selected, enterpriseSAMLIdP, roleEpoch)
+			return
+		}
 		if extensions.enterpriseSAMLIDP {
 			var logoutResponseEndpoint string
 			if extensions.enterpriseSAMLIDPLogout {

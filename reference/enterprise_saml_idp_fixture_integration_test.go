@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +56,7 @@ type referenceSAMLResponseInput struct {
 	RequestID, Issuer, Audience, ACS string
 	NameID, ResponseID, AssertionID  string
 	Now                              time.Time
+	RoleClaim                        *bool
 }
 
 // signedPOSTResponse follows go-sso/saml's released POST response fixture:
@@ -114,7 +116,13 @@ func (f referenceSAMLIdPFixture) signPOSTResponse(t *testing.T, input referenceS
 	conditions := fmt.Sprintf(`<a:Conditions NotBefore="%s" NotOnOrAfter="%s"><a:AudienceRestriction><a:Audience>%s</a:Audience></a:AudienceRestriction></a:Conditions>`, issued, assertionExpiry, escape(input.Audience))
 	authentication := fmt.Sprintf(`<a:AuthnStatement AuthnInstant="%s" SessionIndex="%s">`, issued, escape(input.AssertionID)) +
 		`<a:AuthnContext><a:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</a:AuthnContextClassRef></a:AuthnContext></a:AuthnStatement>`
-	assertionContent := subject + conditions + authentication + `</a:Assertion>`
+	var attributes string
+	if input.RoleClaim != nil {
+		attributes = `<a:AttributeStatement><a:Attribute Name="` + referenceSAMLRoleClaim + `">` +
+			`<a:AttributeValue xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:boolean">` +
+			strconv.FormatBool(*input.RoleClaim) + `</a:AttributeValue></a:Attribute></a:AttributeStatement>`
+	}
+	assertionContent := subject + conditions + authentication + attributes + `</a:Assertion>`
 	assertionSignature := f.signXML(t, input.AssertionID, assertionOpen+issuer+assertionContent)
 	assertion := assertionOpen + issuer + assertionSignature + assertionContent
 

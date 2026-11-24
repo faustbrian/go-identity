@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose opt-in SAML SP role synchronization for a linked organization
+  member. The ordinary ACS issues a session only when signed role evidence
+  and the provider-owned role update commit together. Local organization
+  grants remain independent.
+
 - Compose opt-in SP-generated RelayState for SAML logout. Preserve signed
   Redirect custody after local revocation and settle the original handle once
   on the unchanged signed POST return path.

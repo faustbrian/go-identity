@@ -33,6 +33,11 @@ type EnterpriseSAMLConfiguration struct {
 	Profile    ssopg.StaticSAMLLoginProfile
 	Completion ssopg.ProviderSAMLLoginCompletionConfig
 	ClockSkew  time.Duration
+	// RoleSync optionally replaces provider-owned custom role grants during
+	// SP-initiated linked-member sign-in. Organization.Core.DynamicRoles is
+	// required; this selects neither JIT, IdP-initiated role sync nor HTTP routes.
+	// Keep it selected after applying its shared provider-role migrations.
+	RoleSync *ssopg.StaticSAMLRoleMapping
 	// IDPInitiated selects forward storage for unsolicited sign-in. Keep it
 	// selected after applying the migrations, even when HTTP exposure is off.
 	IDPInitiated *EnterpriseSAMLIDPConfiguration
@@ -104,6 +109,7 @@ type enterpriseSAMLState struct {
 	metadata         *ssopg.ProviderSAMLMetadataService
 	idp              *enterpriseSAMLIDPState
 	idpStorage       bool
+	roleSync         bool
 	logout           *enterpriseSAMLLogoutState
 	logoutStart      *enterpriseSAMLLogoutStartState
 	profile          ssopg.StaticSAMLLoginProfile
@@ -127,6 +133,9 @@ func validateEnterpriseSAMLSelection(c StoreConfiguration) error {
 	}
 	if c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil || c.Session == nil || c.Organization == nil || c.OTP == nil || len(c.Session.CSRFKeys) == 0 ||
 		n.ClockSkew < 0 || n.ClockSkew > 5*time.Minute {
+		return invalid
+	}
+	if n.RoleSync != nil && c.Organization.Core.DynamicRoles.Version == 0 {
 		return invalid
 	}
 	if err := validateEnterpriseSAMLLogoutStartSelection(n, h); err != nil {
@@ -232,7 +241,7 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 	if err != nil {
 		return nil, err
 	}
-	state := &enterpriseSAMLState{start: start, completion: complete, profile: n.Profile, tenant: n.Login.TenantID, idpStorage: n.IDPInitiated != nil,
+	state := &enterpriseSAMLState{start: start, completion: complete, profile: n.Profile, tenant: n.Login.TenantID, idpStorage: n.IDPInitiated != nil, roleSync: n.RoleSync != nil,
 		origin: n.Login.Origin, audience: n.Completion.Audience, sessionSchema: selected.Repository.Schema,
 		callbacks: slices.Clone(n.Login.CallbackAllowlist), duration: n.Login.Coordinator.MaximumDuration}
 	if custody != nil {

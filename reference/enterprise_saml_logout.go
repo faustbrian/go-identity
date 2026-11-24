@@ -64,15 +64,24 @@ func newEnterpriseSAMLLogoutCustody(n EnterpriseSAMLConfiguration, envelopeKeyRe
 }
 
 func composeEnterpriseSAMLCompletion(start *ssopg.ProviderLoginService, n EnterpriseSAMLConfiguration, custody *ssopg.SAMLLogoutSubjectCustody) (*ssopg.ProviderSAMLLoginCompletionService, error) {
+	var complete *ssopg.ProviderSAMLLoginCompletionService
+	var err error
 	if custody == nil {
 		n.Completion.Verify = enterpriseSAMLPOSTVerifier(n.ClockSkew)
-		return ssopg.NewProviderSAMLLoginCompletionService(start, n.Completion)
+		complete, err = ssopg.NewProviderSAMLLoginCompletionService(start, n.Completion)
+	} else {
+		complete, err = ssopg.NewProviderSAMLLoginCompletionServiceWithLogoutSubject(start, n.Completion, enterpriseSAMLPOSTLogoutVerifier(n.ClockSkew))
+		if err == nil {
+			complete, err = complete.WithLogoutSubjectCustody(custody)
+		}
 	}
-	complete, err := ssopg.NewProviderSAMLLoginCompletionServiceWithLogoutSubject(start, n.Completion, enterpriseSAMLPOSTLogoutVerifier(n.ClockSkew))
 	if err != nil {
 		return nil, err
 	}
-	return complete.WithLogoutSubjectCustody(custody)
+	if n.RoleSync != nil {
+		return complete.WithRoleSync([]ssopg.StaticSAMLRoleMapping{*n.RoleSync}, n.ClockSkew)
+	}
+	return complete, nil
 }
 
 func composeEnterpriseSAMLLogout(start *ssopg.ProviderLoginService, n EnterpriseSAMLConfiguration, custody *ssopg.SAMLLogoutSubjectCustody) (*enterpriseSAMLLogoutState, error) {

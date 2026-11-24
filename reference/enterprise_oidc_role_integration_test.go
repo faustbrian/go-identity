@@ -73,13 +73,18 @@ func enterpriseOrganizationRequest(t *testing.T, ctx context.Context, client *ht
 
 func createReferenceEnterpriseRole(t *testing.T, ctx context.Context, client *http.Client, origin string, c reference.StoreConfiguration, selected enterpriseProvisioned) uint64 {
 	t.Helper()
+	return createReferenceEnterpriseDocumentRole(t, ctx, client, origin, c.EnterpriseOIDC.RoleSync.Rules[0].RoleID, selected)
+}
+
+func createReferenceEnterpriseDocumentRole(t *testing.T, ctx context.Context, client *http.Client, origin string, roleID organization.ID, selected enterpriseProvisioned) uint64 {
+	t.Helper()
 	var current organizationhttp.ReadResponse
 	enterpriseOrganizationRequest(t, ctx, client, origin, selected, http.MethodGet, "/v1/organization/get?organizationID="+string(selected.organization), nil, "", &current)
 	if current.Organization.ID != selected.organization || current.Organization.Version == 0 || current.Membership.UserID != selected.user || current.Membership.Role != organization.RoleOwner {
 		t.Fatal("enterprise role setup did not retain the actual organization owner")
 	}
 	body, err := json.Marshal(map[string]any{"organizationID": selected.organization, "organizationVersion": current.Organization.Version,
-		"roleID": c.EnterpriseOIDC.RoleSync.Rules[0].RoleID, "name": "Enterprise document reader",
+		"roleID": roleID, "name": "Enterprise document reader",
 		"statements": []map[string]string{{"permissionID": "document-read", "resourceID": "one", "effect": "allow"}}})
 	if err != nil {
 		t.Fatal(err)

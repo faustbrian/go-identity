@@ -293,6 +293,16 @@ shared safe-read quota and includes the exact SP entity, default POST ACS and
 current public SP signing certificate. Login and ACS still work with metadata
 turned off.
 
+To synchronize provider-owned custom roles on SP sign-in, also configure
+`EnterpriseSAML.RoleSync` with the exact installed provider, organization,
+mapping version, and signed boolean attribute-to-role rules. Select
+organization dynamic roles and apply the shared provider-role histories before
+enabling the profile. The provider generation must have been projected by the
+native lifecycle. Explicit `true` grants a mapped role and `false` withdraws
+that provider's grant. Missing, null, or ill-typed evidence denies sign-in;
+application-owned roles and membership are unchanged. IdP-initiated sign-in
+does not use this profile. Role sync does not enable any HTTP route by itself.
+
 To prepare unsolicited sign-in for that exact installed provider, configure
 `EnterpriseSAML.IDPInitiated` with a bounded `MaximumAge`, a dedicated 32-byte
 `ConfirmationKeys` keyring and its `CurrentConfirmationKey` version. Supply

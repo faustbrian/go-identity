@@ -231,7 +231,7 @@ func composeOrganization(c StoreConfiguration, d ReferenceDependencies, sessions
 		admission.Lifecycle = n.Core.Lifecycle
 	}
 	var repository *organizationpg.Repository
-	if c.EnterpriseOIDC != nil && c.EnterpriseOIDC.RoleSync != nil {
+	if c.EnterpriseOIDC != nil && c.EnterpriseOIDC.RoleSync != nil || c.EnterpriseSAML != nil && c.EnterpriseSAML.RoleSync != nil {
 		repository, err = organizationpg.NewRepositoryWithProviderRoleGrants(d.PostgreSQL, n.Repository)
 	} else {
 		repository, err = organizationpg.NewRepository(d.PostgreSQL, n.Repository)

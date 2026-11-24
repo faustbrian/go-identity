@@ -35,6 +35,8 @@ func TestReferencePostgresEnterpriseSAMLJourney(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, organization: true, enterpriseSAML: true})
 }
 
+const referenceSAMLRoleClaim = "urn:example:roles:document-reader"
+
 func TestReferencePostgresEnterpriseSAMLSPLogoutJourney(t *testing.T) {
 	for _, profile := range []string{"local-only", "redirect", "redirect-relay"} {
 		t.Run(profile, func(t *testing.T) {
