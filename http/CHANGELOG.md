@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind the opt-in SAML logout start to finite provider IDs. Its native owner
+  checks the original session synchronizer; the route has no origin-only
+  fallback.
+
 - Admit only the configured IdP's browser POST to the exact installed SAML
   logout endpoint and SP origin. The opt-in route grants no CORS access and
   never accepts preflight.

@@ -74,7 +74,7 @@ func TestCanonicalProviderPathDispatchUsesOnlySelectedExactIDs(t *testing.T) {
 func TestSelectedSAMLProviderRoutesDoNotBecomeWildcards(t *testing.T) {
 	const owner = "sso/saml"
 	var ops []identityhttp.OperationDescriptor
-	for _, id := range []string{"identity.sso.saml-start", "identity.sso.saml-acs", "identity.sso.saml-metadata"} {
+	for _, id := range []string{"identity.sso.saml-start", "identity.sso.saml-acs", "identity.sso.saml-metadata", "identity.sso.saml-logout-start"} {
 		config := identityhttp.CanonicalOperationConfig{
 			Owner: owner, OperationID: id, MaximumSerializedBytes: 8192, ProviderPathIDs: []string{"-selected"},
 			CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny},
@@ -84,6 +84,9 @@ func TestSelectedSAMLProviderRoutesDoNotBecomeWildcards(t *testing.T) {
 		}
 		if id == "identity.sso.saml-metadata" {
 			config.CSRF = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}
+		}
+		if id == "identity.sso.saml-logout-start" {
+			config.CSRF = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
 		}
 		op, err := identityhttp.NewCanonicalOperation(config)
 		if err != nil {
@@ -120,6 +123,11 @@ func TestSelectedSAMLProviderRoutesDoNotBecomeWildcards(t *testing.T) {
 		{"POST", "/saml2/{provider_id}/acs", 404},
 		{"POST", "/saml2/-selected/idp-init", 404},
 		{"POST", "/saml2/-selected/slo", 404},
+		{"POST", "/saml2/-selected/logout", 204},
+		{"GET", "/saml2/-selected/logout", 405},
+		{"POST", "/saml2/unknown/logout", 404},
+		{"POST", "/saml2/%2dselected/logout", 404},
+		{"POST", "/saml2/{provider_id}/logout", 404},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			w := httptest.NewRecorder()

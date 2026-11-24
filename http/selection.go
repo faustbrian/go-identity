@@ -486,10 +486,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if r.OperationID == "identity.username.update" && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
-		// Native OAuth initiation checks the original session synchronizer in
+		// Native provider initiation checks the original session synchronizer in
 		// its protected Work; a separately aged transport token is not its
 		// authority. This exception does not admit origin-only initiation.
-		if (r.OperationID == "identity.account.link-start" || r.OperationID == "identity.sso.oidc-logout") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+		if (r.OperationID == "identity.account.link-start" || r.OperationID == "identity.sso.oidc-logout" ||
+			r.OperationID == "identity.sso.saml-logout-start") &&
+			r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
 		// Device decisions authenticate the original stored synchronizer under

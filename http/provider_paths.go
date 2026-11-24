@@ -23,6 +23,8 @@ func validProviderPaths(op OperationDescriptor) bool {
 		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/acs"
 	case "identity.sso.saml-idp-init":
 		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/idp-init"
+	case "identity.sso.saml-logout-start":
+		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/logout"
 	case "identity.sso.saml-slo":
 		selected = op.Route.Method == http.MethodPost && op.Route.Path == "/saml2/{provider_id}/slo"
 	}
