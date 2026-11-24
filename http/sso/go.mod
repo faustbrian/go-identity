@@ -6,7 +6,7 @@ require (
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
-	github.com/faustbrian/go-identity/http v0.0.0-20261123141348-2813401598f2
+	github.com/faustbrian/go-identity/http v0.0.0-20261124064235-91143c24b084
 	github.com/faustbrian/go-identity/oauth v0.0.0-20261122231844-ccde5544845d
 	github.com/faustbrian/go-identity/session v0.0.0-20261123125537-8d9afa5e1a45
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1

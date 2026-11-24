@@ -2,6 +2,18 @@ package ssohttp
 
 import identityhttp "github.com/faustbrian/go-identity/http"
 
+func samlLogoutWire() *identityhttp.WireOperation {
+	return &identityhttp.WireOperation{Definition: []byte(`{
+  "operationId":"identity.sso.saml-slo",
+  "summary":"Process a selected installed provider's signed SAML logout POST",
+  "description":"Accept exactly one LogoutRequest or LogoutResponse at the installed SP destination from the configured IdP origin. No credentials, RelayState or caller redirect are selected. A fresh known revocation may return an explicit signed POST form. Only successful native response settlement can return the original allowlisted SP continuation.",
+  "security":[],
+  "parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string","minLength":1,"maxLength":128}}],
+  "requestBody":{"required":true,"content":{"application/x-www-form-urlencoded":{"schema":{"oneOf":[{"type":"object","additionalProperties":false,"required":["SAMLRequest"],"properties":{"SAMLRequest":{"type":"string","minLength":1,"maxLength":1048576}}},{"type":"object","additionalProperties":false,"required":["SAMLResponse"],"properties":{"SAMLResponse":{"type":"string","minLength":1,"maxLength":1048576}}}]}}}},
+  "responses":{"200":{"description":"Signed POST LogoutResponse form to the installed IdP endpoint.","content":{"text/html":{"schema":{"type":"string"}}}},"204":{"description":"No response form or application continuation."},"303":{"description":"Original allowlisted SP continuation.","headers":{"Location":{"schema":{"type":"string","format":"uri"}}}},"400":{"description":"Invalid signed-message form."},"403":{"description":"Origin or logout denied."},"409":{"description":"Original signed-message conflict."},"429":{"description":"Provider quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable or unresolved; no response form, redirect or cookie."}}
+}`)}
+}
+
 func samlMetadataWire() *identityhttp.WireOperation {
 	return &identityhttp.WireOperation{Definition: []byte(`{
   "operationId":"identity.sso.saml-metadata",

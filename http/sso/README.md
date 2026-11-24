@@ -128,6 +128,25 @@ never returns those credentials. Do not log `Location`, cookies, RelayState
 or the SAML response. Select native SAML session access and local logout
 separately; this feature does not select JIT, IdP-initiated sign-in or SLO.
 
+## SAML Single Logout POST
+
+For each installed provider that supports this profile, include
+`NewSAMLLogoutOperation` in the selected `sso/saml` feature and install its
+`SAMLLogoutConfig.NavigationPolicy()` on the same router. Set the exact SP
+and IdP HTTPS origins, the IdP's exact POST reply URL, a bounded native SAML
+logout owner, and any exact SP-origin continuation URLs. Omit the operation
+and policy when this profile is not selected.
+
+The configured IdP posts exactly one Base64 form field (`SAMLRequest` or
+`SAMLResponse`) to `POST /saml2/{provider_id}/slo`. This navigation grants
+no script CORS access, uses no session cookie, and does not accept
+`RelayState`. Only a fresh acknowledged native request can produce a manual
+signed-response form that submits to the pinned IdP endpoint. A settled IdP
+response can redirect only to an exact configured SP continuation. If the
+native owner returns no delivery, the endpoint returns 204. Do not log
+the XML, encoded form fields, response HTML, or provider URL. This operation
+does not start an SP-initiated logout.
+
 ## Enterprise OIDC provider logout
 
 Select `NewProviderLogoutFeature` with the same tenant network and shared

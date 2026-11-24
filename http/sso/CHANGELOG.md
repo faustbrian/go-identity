@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an opt-in SAML Single Logout POST for an installed provider. The native
+  owner handles signed requests and responses on separate paths through the
+  handler. Cookie-free navigation can deliver a signed POST form only to the
+  pinned IdP endpoint or redirect to an exact approved SP continuation.
+
 - Add an opt-in same-browser confirmation endpoint for unsolicited SAML.
   The initial IdP POST returns a private confirmation form and scoped
   browser cookie, never a session. The confirmed native result controls

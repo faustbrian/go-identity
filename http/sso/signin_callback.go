@@ -208,10 +208,12 @@ type signinDelivery struct {
 	confirmation *signinConfirmationPage
 }
 
-// Only the selected unsolicited SAML handler stages this non-session response.
+// SAML browser forms share the existing protected delivery boundary. Empty
+// formAction selects the same-origin confirmation profile; only the logout
+// constructor supplies a separately validated IdP origin.
 type signinConfirmationPage struct {
-	html, cookie string
-	current      func() bool
+	html, cookie, formAction string
+	current                  func() bool
 }
 
 func (*signinDelivery) Format(s fmt.State, _ rune) {
@@ -385,9 +387,15 @@ func (h *signinCallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			w.Header().Del("Content-Encoding")
 			w.Header().Del("Content-Disposition")
 			w.Header().Del("Content-Length")
-			w.Header().Set("Content-Security-Policy", "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+			action := form.formAction
+			if action == "" {
+				action = "'self'"
+			}
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; form-action "+action+"; frame-ancestors 'none'; base-uri 'none'")
 			w.Header().Set("X-Frame-Options", "DENY")
-			w.Header().Add("Set-Cookie", form.cookie)
+			if form.cookie != "" {
+				w.Header().Add("Set-Cookie", form.cookie)
+			}
 			page = form.html
 			return status
 		}
