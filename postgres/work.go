@@ -53,6 +53,8 @@ type workState struct {
 	ssoOIDCExplicitLink       *ssoOIDCExplicitLinkProgress
 	invitationConsumed        bool
 	invitationFinalized       bool
+	samlLogoutRelayConsumed   bool
+	samlLogoutRelayFinalized  bool
 	anonymousUpgradeConsumed  bool
 	anonymousUpgradeFinalized bool
 	invitationMembership      *OrganizationInvitationMembership

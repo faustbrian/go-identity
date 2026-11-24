@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit the separate signed SAML logout response settlement. Reserve its
+  original one-use capability and finalize it in the same transaction as the
+  native settlement, audit, lifecycle event and receipt. This adds no route.
+
 - Admit a separate SAML logout remote-request issuance command, fenced to its
   local correlation, installed provider, exact request digest, and one
   settlement grant. It carries no browser credential or session effect.

@@ -44,6 +44,9 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && p.Feature != nil && oauthCallbackDenialSelected(p.Feature.Operation) {
 		return encodeOAuthCallbackDenialPlan(binding, fingerprint, p)
 	}
+	if !proofBase && binding.OperationID == ssoSAMLLogoutRelaySettlePurpose {
+		return encodeSSOSAMLLogoutRelaySettlementPlan(binding, fingerprint, p)
+	}
 	if !proofBase && p.Feature != nil && (ssoEnterpriseConsumptionOperation(p.Feature.Operation) || p.Feature.Operation == oauthSigninAccountOperation() && p.Capability != nil) {
 		return encodeProviderSigninConsumptionPlan(binding, fingerprint, p)
 	}

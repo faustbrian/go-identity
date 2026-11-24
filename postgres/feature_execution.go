@@ -180,6 +180,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		if plan.Feature != nil && providerSigninConsumptionOperation(plan.Feature.Operation) {
 			return validateProviderSigninConsumption(phase, command, plan)
 		}
+		if plan.Feature != nil && plan.Feature.Operation == SSOSAMLLogoutRelaySettlementOperation() {
+			return validateSSOSAMLLogoutRelaySettlement(phase, command, plan)
+		}
 		if plan.Feature != nil && oauthCallbackDenialSelected(plan.Feature.Operation) {
 			if _, ok := phase.(FeatureCommitContributor); !ok {
 				return invalidPlan()
@@ -244,6 +247,15 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	return r.admitFeaturePlanMode(b, fingerprint, p, false)
 }
 
+// Feature operations with a fixed one-use profile. MFA selects one-use by its
+// validated plan, rather than by operation alone.
+func featureConsumesSingleCapability(op identity.FeatureOperation) bool {
+	return oauthCallbackDenialSelected(op) || providerSigninConsumptionOperation(op) ||
+		op == SSOSAMLLogoutRelaySettlementOperation() || op == registrationEmailVerificationOperation() ||
+		managedEmailConfirmationOperation(op) || credentialResetSelected(op) || op == magicLinkConsumeOperation() ||
+		op == organizationInvitationAcceptOperation() || op == anonymousUpgradeOperation()
+}
+
 func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan, preparation bool) (*admittedKernelPlan, error) {
 	if p.Feature != nil && p.Feature.Operation == passkeyRegistrationOperation() {
 		if r == nil || r.state == nil || p.PasskeyRegistration == nil {
@@ -256,7 +268,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || !oauthCallbackDenialSelected(p.Feature.Operation) && !providerSigninConsumptionOperation(p.Feature.Operation) && p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && !credentialResetSelected(p.Feature.Operation) && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && p.Feature.Operation != anonymousUpgradeOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || !featureConsumesSingleCapability(p.Feature.Operation) && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -446,6 +458,10 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 				if _, ok := feature.contributor.(FeatureAdmissionPreparationContributor); !ok {
 					return nil, invalidPlan()
 				}
+			}
+		} else if p.Feature.Operation == SSOSAMLLogoutRelaySettlementOperation() {
+			if _, ok := feature.contributor.(SSOSAMLLogoutRelaySettlementContributor); !ok || preparation {
+				return nil, invalidPlan()
 			}
 		} else if oauthCallbackDenialSelected(p.Feature.Operation) {
 			if _, ok := feature.contributor.(FeatureCommitContributor); !ok {
@@ -828,6 +844,10 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if p.capability != nil {
 		if providerSigninConsumptionOperation(p.feature.Operation) {
 			if e := prepareProviderSigninConsumption(ctx, w); e != nil {
+				return result, e
+			}
+		} else if p.feature.Operation == SSOSAMLLogoutRelaySettlementOperation() {
+			if e := c.applySSOSAMLLogoutRelaySettlement(ctx, w); e != nil {
 				return result, e
 			}
 		} else if oauthCallbackDenialSelected(p.feature.Operation) {

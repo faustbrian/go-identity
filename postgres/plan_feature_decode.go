@@ -22,6 +22,9 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && binding.OperationID == oauthCallbackDenialOperation().OperationID && denialSchema {
 		return decodeOAuthCallbackDenialPlan(binding, fingerprint, encoded)
 	}
+	if !proofBase && binding.OperationID == ssoSAMLLogoutRelaySettlePurpose {
+		return decodeSSOSAMLLogoutRelaySettlementPlan(binding, fingerprint, encoded)
+	}
 	if !proofBase {
 		if op, selected := providerSigninBindingOperation(binding); selected && (ssoEnterpriseConsumptionOperation(op) || len(encoded) > 0 && encoded[0] == 0xa5) {
 			return decodeProviderSigninConsumptionPlan(binding, fingerprint, encoded)
