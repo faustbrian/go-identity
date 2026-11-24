@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into an exact opaque RelayState echo for IdP-initiated SAML logout.
+  Only fresh signed replies contain it, and it never selects a destination
+  or authorizes session or response-settlement behavior.
+
 - Add cookie- and synchronizer-bound SP SAML logout start with one original
   retry key. Separate local revocation from remote delivery and expose the
   selected local outcome even when the provider continuation is unavailable.

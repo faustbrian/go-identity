@@ -1,6 +1,10 @@
 package ssohttp
 
-import identityhttp "github.com/faustbrian/go-identity/http"
+import (
+	"encoding/json"
+
+	identityhttp "github.com/faustbrian/go-identity/http"
+)
 
 func samlLogoutWire() *identityhttp.WireOperation {
 	return &identityhttp.WireOperation{Definition: []byte(`{
@@ -24,6 +28,33 @@ func samlLogoutRequestWire() *identityhttp.WireOperation {
   "requestBody":{"required":true,"content":{"application/x-www-form-urlencoded":{"schema":{"type":"object","additionalProperties":false,"required":["SAMLRequest"],"properties":{"SAMLRequest":{"type":"string","minLength":1,"maxLength":1048576}}}}}},
   "responses":{"200":{"description":"Signed POST LogoutResponse form to the installed IdP endpoint.","content":{"text/html":{"schema":{"type":"string"}}}},"204":{"description":"No signed response form."},"400":{"description":"Invalid signed-request form."},"403":{"description":"Origin or logout denied."},"409":{"description":"Original signed-request conflict."},"429":{"description":"Provider quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable or unresolved; no response form or cookie."}}
 }`)}
+}
+
+func samlLogoutRelayWire(settlesResponse bool) (*identityhttp.WireOperation, error) {
+	const request = `{"type":"object","additionalProperties":false,"required":["SAMLRequest"],"properties":{"SAMLRequest":{"type":"string","minLength":1,"maxLength":1048576},"RelayState":{"type":"string","minLength":1,"maxLength":80,"pattern":"^[A-Za-z0-9_-]+$"}}}`
+	const response = `{"type":"object","additionalProperties":false,"required":["SAMLResponse"],"properties":{"SAMLResponse":{"type":"string","minLength":1,"maxLength":1048576}}}`
+	wire := samlLogoutRequestWire()
+	schema := request
+	if settlesResponse {
+		wire = samlLogoutWire()
+		schema = `{"oneOf":[` + request + `,` + response + `]}`
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(wire.Definition, &fields); err != nil {
+		return nil, err
+	}
+	description := `"Accept a signed LogoutRequest from the configured IdP origin, with one optional opaque RelayState. Only a fresh POST form carrying a signed LogoutResponse echoes the exact value. The value is never browser, session or redirect authority."`
+	if settlesResponse {
+		description = `"Accept a signed LogoutRequest with one optional opaque RelayState, or a signed LogoutResponse without RelayState, from the configured IdP origin. Only a fresh POST form carrying a signed request reply echoes the exact value. Only native response settlement may select the original allowlisted SP continuation."`
+	}
+	fields["description"] = json.RawMessage(description)
+	fields["requestBody"] = json.RawMessage(`{"required":true,"content":{"application/x-www-form-urlencoded":{"schema":` + schema + `}}}`)
+	var err error
+	wire.Definition, err = json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	return wire, nil
 }
 
 func samlMetadataWire() *identityhttp.WireOperation {
