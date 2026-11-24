@@ -228,7 +228,7 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
-	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q)) && !gated {
+	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q)) && !gated {
 		return result, invalidPreparation()
 	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
@@ -283,6 +283,9 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	if ssoSAMLIDPConfirmationClaim(q) && !sameSSOSAMLIDPConfirmationCustody(original, generated) {
+		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
+	}
+	if ssoSAMLLogoutRelayIssueClaim(q) && !sameSSOSAMLLogoutRelayIssueOrigin(original, generated) {
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	executionRequest, snapshot, _, err := c.prepareRestoredFeature(b, generated, final)
@@ -369,6 +372,11 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if s.Operation == SSOSAMLSigninStartOperation() && !validSSOSAMLStartCommand(original, p) {
 		return q, nil, nil, invalidPreparation()
 	}
+	if s.Operation == SSOSAMLLogoutRelayIssueOperation() {
+		if _, valid := decodeSSOSAMLLogoutRelayIssueMode(original, true); !valid || !validSSOSAMLLogoutRelayIssuePlanMode(s.Binding, p, true) {
+			return q, nil, nil, invalidPreparation()
+		}
+	}
 	entry, e := c.registry.selectFeatureOperation(*p.Feature)
 	if e != nil {
 		return q, nil, nil, invalidPreparation()
@@ -449,7 +457,7 @@ func preparationRetainsDeclaration(p CommandPlan) bool {
 	// Enterprise start likewise retains its admission-gated declaration
 	// through terminal state issuance and temporary output erasure.
 	return p.CommandCounters != nil || providerSigninPreparation(p) || ssoEnterpriseStartSelected(p) ||
-		p.Feature != nil && p.Feature.Operation == SSOEnterpriseGrantRefreshOperation()
+		p.Feature != nil && (p.Feature.Operation == SSOEnterpriseGrantRefreshOperation() || p.Feature.Operation == SSOSAMLLogoutRelayIssueOperation())
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
@@ -457,6 +465,10 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		return false
 	}
 	if ssoEnterpriseStartSelected(original) && (!validSSOEnterpriseStart(b, original) || !validSSOEnterpriseStart(b, final) || final.CapabilityIssuance == nil) {
+		return false
+	}
+	if original.Feature != nil && original.Feature.Operation == SSOSAMLLogoutRelayIssueOperation() &&
+		(!validSSOSAMLLogoutRelayIssuePlanMode(b, original, true) || !validSSOSAMLLogoutRelayIssuePlan(b, final)) {
 		return false
 	}
 	if (original.APIKeyVerification == nil) != (final.APIKeyVerification == nil) || original.APIKeyVerification != nil && *original.APIKeyVerification != *final.APIKeyVerification {
@@ -493,7 +505,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		}
 		selectedIssuance := final.MFAContinuation != nil || i.RegistrationUserID != "" || i.ResetRecipientUserID != "" || i.MagicLinkRecipientUserID != "" ||
 			validManagedEmailIssuance(b, final) || validOrganizationInvitationIssuance(b, final) || phoneResetRequestPreparation(final) ||
-			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validSSOEnterpriseStart(b, final)
+			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validSSOEnterpriseStart(b, final) || validSSOSAMLLogoutRelayIssuePlan(b, final)
 		if !selectedIssuance || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final) {
 			return false
 		}
@@ -929,11 +941,17 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	if !c.owns(w) || w.state.execution == nil {
 		return invalidWork()
 	}
-	p := w.state.execution.reservation.preparation
-	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && (credentialResetSelected(plan.feature.Operation) || plan.feature.Operation == magicLinkConsumeOperation() || providerSigninConsumptionOperation(plan.feature.Operation) || plan.feature.Operation == SSOOIDCExplicitLinkStartOperation() || plan.feature.Operation == SSOOAuth2SigninStartOperation() || plan.feature.Operation == SSOSAMLSigninStartOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
-		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
-			return invalidPreparation()
+	r := w.state.execution.reservation
+	p, plan := r.preparation, r.plan
+	if plan != nil && plan.feature != nil {
+		op := plan.feature.Operation
+		preparedRelayIssue := op == SSOSAMLLogoutRelayIssueOperation() && (p != nil || r.executionRequest != nil)
+		gated := credentialResetSelected(op) || op == magicLinkConsumeOperation() || providerSigninConsumptionOperation(op) ||
+			op == SSOOIDCExplicitLinkStartOperation() || op == SSOOAuth2SigninStartOperation() || op == SSOSAMLSigninStartOperation() || plan.mfaCompletion != nil
+		if preparedRelayIssue || gated && plan.counters == nil {
+			if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || r.executionRequest == nil {
+				return invalidPreparation()
+			}
 		}
 	}
 	if p == nil || p.admission == nil {

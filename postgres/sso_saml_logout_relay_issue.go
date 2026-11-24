@@ -54,20 +54,35 @@ type SSOSAMLLogoutRelayIssueIntent struct {
 // SSOSAMLLogoutRelayIssueFields encodes the remote request intent. The command's
 // CorrelationID must equal LocalCommandID, distinct from its own CommandID.
 func SSOSAMLLogoutRelayIssueFields(intent SSOSAMLLogoutRelayIssueIntent) ([]identity.FeatureField, error) {
+	return samlLogoutRelayIssueFields(intent, false)
+}
+
+// SSOSAMLLogoutRelayIssuePreparationFields freezes the code-free intent before
+// acknowledged native signing. RequestDigest must be zero because no wire may
+// be signed yet. The final request retains these facts; its expiry may only
+// shorten to an earlier signer cutoff.
+func SSOSAMLLogoutRelayIssuePreparationFields(intent SSOSAMLLogoutRelayIssueIntent) ([]identity.FeatureField, error) {
+	return samlLogoutRelayIssueFields(intent, true)
+}
+
+func samlLogoutRelayIssueFields(intent SSOSAMLLogoutRelayIssueIntent, preparing bool) ([]identity.FeatureField, error) {
 	_, err := identity.ParseCommandID(string(intent.LocalCommandID))
-	if err != nil || !queryScopeText(intent.OrganizationID) || !queryScopeText(intent.ProviderID) || intent.RequestDigest == ([32]byte{}) ||
+	if err != nil || !queryScopeText(intent.OrganizationID) || !queryScopeText(intent.ProviderID) || preparing != (intent.RequestDigest == ([32]byte{})) ||
 		!validSAMLLogoutRelayInstant(intent.IssuedAt) || !validSAMLLogoutRelayInstant(intent.ExpiresAt) || !intent.ExpiresAt.After(intent.IssuedAt) ||
 		intent.ExpiresAt.Sub(intent.IssuedAt) > 5*time.Minute {
 		return nil, invalidPlan()
 	}
-	return []identity.FeatureField{
+	fields := []identity.FeatureField{
 		{Name: samlLogoutRelayExpiresAt, Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: intent.ExpiresAt}},
 		{Name: samlLogoutRelayIssuedAt, Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: intent.IssuedAt}},
 		{Name: samlLogoutRelayLocalCommand, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(intent.LocalCommandID)}},
 		{Name: samlLogoutRelayOrganization, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: intent.OrganizationID}},
 		{Name: samlLogoutRelayProvider, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: intent.ProviderID}},
-		{Name: samlLogoutRelayRequest, Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: intent.RequestDigest[:]}},
-	}, nil
+	}
+	if !preparing {
+		fields = append(fields, identity.FeatureField{Name: samlLogoutRelayRequest, Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: intent.RequestDigest[:]}})
+	}
+	return fields, nil
 }
 
 func validSAMLLogoutRelayInstant(at time.Time) bool {
@@ -81,6 +96,10 @@ func validSSOSAMLLogoutRelayIssueBinding(b identity.CommandBinding) bool {
 }
 
 func validSSOSAMLLogoutRelayIssuePlan(b identity.CommandBinding, p CommandPlan) bool {
+	return validSSOSAMLLogoutRelayIssuePlanMode(b, p, false)
+}
+
+func validSSOSAMLLogoutRelayIssuePlanMode(b identity.CommandBinding, p CommandPlan, preparing bool) bool {
 	if !validSSOSAMLLogoutRelayIssueBinding(b) || p.Feature == nil ||
 		*p.Feature != (FeatureRegistration{Operation: SSOSAMLLogoutRelayIssueOperation(), Contributor: SSOSAMLLogoutRelayIssueDescriptor()}) ||
 		p.SubjectType != ssoSAMLLogoutRequestSubject || p.Lifecycle == nil || *p.Lifecycle != SSOSAMLLogoutRelayIssueLifecycle() ||
@@ -89,18 +108,29 @@ func validSSOSAMLLogoutRelayIssuePlan(b identity.CommandBinding, p CommandPlan) 
 		return false
 	}
 	i := p.CapabilityIssuance
+	if preparing {
+		return i == nil
+	}
 	return validCapabilityIssuancePlan(i) && len(i.Grants) == 1 && i.Grants[0].Purpose == ssoSAMLLogoutRelaySettlePurpose &&
 		i.RegistrationUserID == "" && i.ResetRecipientUserID == "" && i.MagicLinkRecipientUserID == "" && i.MFAContinuationUserID == ""
 }
 
 func decodeSSOSAMLLogoutRelayIssue(command identity.Command) (SSOSAMLLogoutRelayIssueIntent, bool) {
+	return decodeSSOSAMLLogoutRelayIssueMode(command, false)
+}
+
+func decodeSSOSAMLLogoutRelayIssueMode(command identity.Command, preparing bool) (SSOSAMLLogoutRelayIssueIntent, bool) {
 	spec, ok := command.Feature()
 	_, cookie := command.PreAuthCookie()
 	_, bearer := command.SessionToken()
 	_, otp := command.OneTimeCode()
 	_, recovery := command.RecoveryCode()
+	wantFields := 6
+	if preparing {
+		wantFields--
+	}
 	if !ok || spec.Operation != SSOSAMLLogoutRelayIssueOperation() || !validSSOSAMLLogoutRelayIssueBinding(spec.Binding) ||
-		len(spec.Fields) != 6 || cookie || bearer || otp || recovery {
+		len(spec.Fields) != wantFields || cookie || bearer || otp || recovery {
 		return SSOSAMLLogoutRelayIssueIntent{}, false
 	}
 	var intent SSOSAMLLogoutRelayIssueIntent
@@ -124,11 +154,27 @@ func decodeSSOSAMLLogoutRelayIssue(command identity.Command) (SSOSAMLLogoutRelay
 			intent.ExpiresAt = v.Time
 		}
 	}
-	want, err := SSOSAMLLogoutRelayIssueFields(intent)
+	want, err := samlLogoutRelayIssueFields(intent, preparing)
 	if err != nil || string(intent.LocalCommandID) != spec.Binding.CorrelationID || !slices.EqualFunc(spec.Fields, want, equalSAMLIDPLogoutField) {
 		return SSOSAMLLogoutRelayIssueIntent{}, false
 	}
 	return intent, true
+}
+
+func ssoSAMLLogoutRelayIssueClaim(q claimRequest) bool {
+	return q.feature != nil && *q.feature == SSOSAMLLogoutRelayIssueOperation() && q.purpose == ssoSAMLLogoutRelayIssuePurpose
+}
+
+func sameSSOSAMLLogoutRelayIssueOrigin(original, generated identity.Command) bool {
+	a, ok := decodeSSOSAMLLogoutRelayIssueMode(original, true)
+	z, valid := decodeSSOSAMLLogoutRelayIssue(generated)
+	if !ok || !valid || z.ExpiresAt.After(a.ExpiresAt) {
+		return false
+	}
+	x, _ := original.Feature()
+	y, _ := generated.Feature()
+	z.RequestDigest, z.ExpiresAt = a.RequestDigest, a.ExpiresAt
+	return x.Binding == y.Binding && a == z
 }
 
 func validSSOSAMLLogoutRelayIssueCommand(command identity.Command, plan CommandPlan) bool {

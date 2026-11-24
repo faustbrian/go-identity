@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Prepare an SP-generated SAML logout request through the existing gated
+  command journal. The signed request may only narrow the original expiry.
+  Install the matching forward erasure migration before enabling the native
+  issuer; definitive receipts erase temporary signed custody.
+
 - Admit the separate signed SAML logout response settlement. Reserve its
   original one-use capability and finalize it in the same transaction as the
   native settlement, audit, lifecycle event and receipt. This adds no route.

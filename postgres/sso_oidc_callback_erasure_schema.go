@@ -92,6 +92,20 @@ func (s SSOSAMLIDPConfirmationPreparationErasureMigrationSource) Load(ctx contex
 	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_saml_idp_confirmation_preparation_erasure", ssoSAMLIDPConfirmationPreparationErasureSQL)
 }
 
+// SSOSAMLLogoutRelayIssuePreparationErasureMigrationSource allows the exact
+// SP logout request profile to erase temporary signed custody only with its
+// definitive receipt. Append after SSOSAMLIDPConfirmationPreparationErasureMigrationSource
+// before enabling the native relay issuer. Existing rows are not rewritten.
+type SSOSAMLLogoutRelayIssuePreparationErasureMigrationSource struct {
+	Base    migrations.Source
+	Version migrations.Version
+}
+
+// Load appends only the forward trigger change; it performs no database I/O.
+func (s SSOSAMLLogoutRelayIssuePreparationErasureMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
+	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_sso_saml_logout_relay_issue_preparation_erasure", ssoSAMLLogoutRelayIssuePreparationErasureSQL)
+}
+
 const ssoOIDCCallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose='identity.sso.oidc-callback'` + ssoCallbackPreparationErasureSuffix
 const ssoOAuth2CallbackPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback')` + ssoCallbackPreparationErasureSuffix
 const ssoEnterpriseGrantRefreshPreparationErasureSQL = ssoCallbackPreparationErasurePrefix + `OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh')` + ssoCallbackPreparationErasureSuffix
@@ -101,6 +115,9 @@ const ssoSAMLStartPreparationErasureSQL = ssoEnterprisePreparationErasurePrefix 
  enterprise_callback boolean := OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh','identity.sso.saml-acs')` + ssoCallbackPreparationErasureSuffix
 
 const ssoSAMLIDPConfirmationPreparationErasureSQL = ssoEnterprisePreparationErasurePrefix + `OLD.purpose IN('identity.sso.signin-start','identity.sso.saml-start') AND OLD.preparation_profile=4;
+ enterprise_callback boolean := OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh','identity.sso.saml-acs','identity.sso.saml-idp-init')` + ssoCallbackPreparationErasureSuffix
+
+const ssoSAMLLogoutRelayIssuePreparationErasureSQL = ssoEnterprisePreparationErasurePrefix + `OLD.purpose IN('identity.sso.signin-start','identity.sso.saml-start','identity.sso.saml-logout-relay-issue') AND OLD.preparation_profile=4;
  enterprise_callback boolean := OLD.purpose IN('identity.sso.oidc-callback','identity.sso.oauth-callback','identity.sso.provider-token.refresh','identity.sso.saml-acs','identity.sso.saml-idp-init')` + ssoCallbackPreparationErasureSuffix
 
 const ssoCallbackPreparationErasurePrefix = ssoEnterprisePreparationErasurePrefix + `OLD.purpose='identity.sso.signin-start' AND OLD.preparation_profile=4;

@@ -148,15 +148,18 @@ AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL A
 	}
 	refreshPending := observed.state != nil && *observed.state == "pending" &&
 		oauthProviderRefreshPreparationClaim(claimRequest{purpose: observed.purpose, feature: feature})
-	selected := refreshPending || feature == nil && (accountLinkBinding(binding) || accountUnlinkBinding(binding)) || feature != nil && (feature.OperationID == "identity.mfa.otp-verify" || organizationInvitationIssuanceOperation(*feature) || oauthRegistrationPreparationSelected(*feature) || providerSigninConsumptionOperation(*feature))
+	relayIssue := ssoSAMLLogoutRelayIssueClaim(claimRequest{purpose: observed.purpose, feature: feature})
+	selected := refreshPending || relayIssue || feature == nil && (accountLinkBinding(binding) || accountUnlinkBinding(binding)) || feature != nil && (feature.OperationID == "identity.mfa.otp-verify" || organizationInvitationIssuanceOperation(*feature) || oauthRegistrationPreparationSelected(*feature) || providerSigninConsumptionOperation(*feature))
 	if err != nil || observed.plan != nil || !selected || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
 		return nil
 	}
-	return reader.QueryRow(ctx, `SELECT j.preparation_profile,CASE WHEN octet_length(j.preparation_declaration) BETWEEN 1 AND 65536 THEN j.preparation_declaration END
+	return reader.QueryRow(ctx, observedRetainedPreparationSQL, id, observed.tenant, observed.purpose, observed.scope, observed.fingerprint, *observed.state, *observed.until).Scan(&observed.preparationProfile, &observed.declaration)
+}
+
+const observedRetainedPreparationSQL = `SELECT j.preparation_profile,CASE WHEN octet_length(j.preparation_declaration) BETWEEN 1 AND 65536 THEN j.preparation_declaration END
 FROM identity.identity_command_id_claims c JOIN identity.commands j USING(command_id)
 WHERE c.command_id=$1 AND c.tenant_id=$2 AND c.purpose=$3 AND c.safe_fields=$4 AND c.fingerprint=$5
-AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL AND j.state=$6 AND j.lease_until=$7`, id, observed.tenant, observed.purpose, observed.scope, observed.fingerprint, *observed.state, *observed.until).Scan(&observed.preparationProfile, &observed.declaration)
-}
+AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL AND j.state=$6 AND j.lease_until=$7`
 
 // QueryCommand performs one bounded, uncached primary observation and one
 // current authorization decision. Caller is trusted authenticated composition,
@@ -392,6 +395,13 @@ func observedCommandPlan(binding identity.CommandBinding, feature *identity.Feat
 		if providerSigninConsumptionOperation(*feature) {
 			plan, err := decodeFeaturePlan(binding, fp, observed.declaration)
 			if err != nil || !providerSigninPreparation(plan) {
+				return CommandPlan{}, false, identity.UnavailableError{}
+			}
+			return plan, true, nil
+		}
+		if *feature == SSOSAMLLogoutRelayIssueOperation() {
+			plan, err := decodeFeaturePlan(binding, fp, observed.declaration)
+			if err != nil || *observed.preparationProfile != 4 || !validSSOSAMLLogoutRelayIssuePlanMode(binding, plan, true) {
 				return CommandPlan{}, false, identity.UnavailableError{}
 			}
 			return plan, true, nil

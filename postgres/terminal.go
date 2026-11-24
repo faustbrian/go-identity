@@ -51,10 +51,10 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 		e = tx.QueryRow(ctx, ssoEnterpriseCallbackTerminalFenceSQL, id, string(q.tenant), q.purpose,
 			strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &eraseRetainedPreparation)
 	} else {
-		e = tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
-CASE WHEN $6 THEN (j.purpose='identity.account.link-token' AND coalesce(to_jsonb(j)->>'preparation_profile','')='5')
- OR (j.purpose='identity.account.unlink' AND coalesce(to_jsonb(j)->>'preparation_profile','')='6') ELSE false END
-FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:], (q.purpose == "identity.account.link-token" || q.purpose == "identity.account.unlink") && q.feature == nil).Scan(&matched, &eraseRetainedPreparation)
+		// Ordinary relay issuance remains compatible without preparation
+		// columns. Only a stored gated profile can erase retained output.
+		optionalPreparation := (q.purpose == "identity.account.link-token" || q.purpose == "identity.account.unlink") && q.feature == nil || ssoSAMLLogoutRelayIssueClaim(q)
+		e = tx.QueryRow(ctx, optionalCommandPreparationTerminalFenceSQL, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:], optionalPreparation).Scan(&matched, &eraseRetainedPreparation)
 	}
 	if e != nil {
 		return readFailure(ctx, e)
@@ -96,3 +96,9 @@ const oauthProviderRefreshTerminalFenceSQL = `SELECT state='pending' AND generat
 const ssoEnterpriseCallbackTerminalFenceSQL = `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
  coalesce(preparation_profile=4, false)
  FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`
+
+const optionalCommandPreparationTerminalFenceSQL = `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5,
+CASE WHEN $6 THEN (j.purpose='identity.account.link-token' AND coalesce(to_jsonb(j)->>'preparation_profile','')='5')
+ OR (j.purpose='identity.account.unlink' AND coalesce(to_jsonb(j)->>'preparation_profile','')='6')
+ OR (j.purpose='identity.sso.saml-logout-relay-issue' AND coalesce(to_jsonb(j)->>'preparation_profile','')='4') ELSE false END
+FROM identity.commands j WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`

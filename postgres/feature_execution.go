@@ -300,7 +300,9 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		}
 	}
 	if p.Feature.Operation == SSOSAMLLogoutRelayIssueOperation() {
-		if _, final := feature.contributor.(FeatureCommitContributor); !final || preparation || !validSSOSAMLLogoutRelayIssuePlan(b, p) {
+		_, final := feature.contributor.(FeatureCommitContributor)
+		_, gated := feature.contributor.(FeatureAdmissionPreparationContributor)
+		if !final || preparation && !gated || !validSSOSAMLLogoutRelayIssuePlanMode(b, p, preparation) {
 			return nil, invalidPlan()
 		}
 	}
