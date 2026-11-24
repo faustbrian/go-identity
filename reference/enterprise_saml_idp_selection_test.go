@@ -62,6 +62,31 @@ func TestReferenceSAMLSPLogoutRequiresSelectedNativeAndReturn(t *testing.T) {
 	}
 }
 
+func TestReferenceSAMLSPLogoutRelayRequiresIndependentRemoteRequestKey(t *testing.T) {
+	native := EnterpriseSAMLConfiguration{
+		Logout: &EnterpriseSAMLLogoutConfiguration{RequestKeys: &kernel.RequestKeyConfig{Namespace: "idp-logout"}},
+		LogoutStart: &EnterpriseSAMLLogoutStartConfiguration{
+			RequestKeys:           kernel.RequestKeyConfig{Namespace: "sp-local"},
+			RelayStateRequestKeys: &kernel.RequestKeyConfig{Namespace: "sp-relay"},
+		},
+	}
+	native.Login.RequestKeys.Namespace = "signin"
+	if err := validateEnterpriseSAMLLogoutStartSelection(&native, nil); err == nil {
+		t.Fatal("local-only selection accepted a remote relay namespace")
+	}
+	native.LogoutStart.RedirectEndpoint = "https://idp.example/slo"
+	for _, namespace := range []string{"", "signin", "sp-local", "idp-logout"} {
+		native.LogoutStart.RelayStateRequestKeys.Namespace = namespace
+		if err := validateEnterpriseSAMLLogoutStartSelection(&native, nil); err == nil {
+			t.Fatal("remote relay selection accepted missing or shared namespace", namespace)
+		}
+	}
+	native.LogoutStart.RelayStateRequestKeys.Namespace = "sp-relay"
+	if err := validateEnterpriseSAMLLogoutStartSelection(&native, nil); err != nil {
+		t.Fatal("native relay storage must be selectable without HTTP", err)
+	}
+}
+
 func TestReferenceSAMLSPLogoutPreservesAppliedSharedMigrationHistory(t *testing.T) {
 	const schema = "identity_sessions"
 	fromBase, err := appendEnterpriseSAMLLogoutStartMigrations(t.Context(), nil, schema, false)

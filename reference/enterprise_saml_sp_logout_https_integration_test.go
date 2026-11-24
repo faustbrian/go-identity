@@ -26,6 +26,27 @@ func proveReferenceSAMLSPLogout(t *testing.T, ctx context.Context, base *http.Cl
 	origin, providerPath, idpOrigin, redirectEndpoint, finalRedirect, csrf string,
 	browser *http.Client, spKey *rsa.PublicKey, idp referenceSAMLIdPFixture) {
 	t.Helper()
+	const withRelayState = false
+	proveReferenceSAMLSPLogoutJourney(t, ctx, base, origin, providerPath, idpOrigin, redirectEndpoint,
+		finalRedirect, csrf, browser, spKey, idp, withRelayState)
+}
+
+func proveReferenceSAMLSPLogoutWithRelayState(t *testing.T, ctx context.Context, base *http.Client,
+	origin, providerPath, idpOrigin, redirectEndpoint, finalRedirect, csrf string,
+	browser *http.Client, spKey *rsa.PublicKey, idp referenceSAMLIdPFixture) {
+	t.Helper()
+	if redirectEndpoint == "" {
+		t.Fatal("RelayState SP logout requires the installed IdP Redirect endpoint")
+	}
+	const withRelayState = true
+	proveReferenceSAMLSPLogoutJourney(t, ctx, base, origin, providerPath, idpOrigin, redirectEndpoint,
+		finalRedirect, csrf, browser, spKey, idp, withRelayState)
+}
+
+func proveReferenceSAMLSPLogoutJourney(t *testing.T, ctx context.Context, base *http.Client,
+	origin, providerPath, idpOrigin, redirectEndpoint, finalRedirect, csrf string,
+	browser *http.Client, spKey *rsa.PublicKey, idp referenceSAMLIdPFixture, withRelayState bool) {
+	t.Helper()
 	appURL, err := url.Parse(origin)
 	if err != nil || browser.Jar == nil || csrf == "" {
 		t.Fatal("SP logout requires the original authenticated browser and synchronizer")
@@ -165,13 +186,41 @@ func proveReferenceSAMLSPLogout(t *testing.T, ctx context.Context, base *http.Cl
 		}
 		return
 	}
-	requestID := originalReferenceSAMLLogoutRequest(t, location, redirectEndpoint, origin+providerPath+"/metadata", spKey)
+	requestID, relayState := originalReferenceSAMLLogoutRequest(t, location, redirectEndpoint, origin+providerPath+"/metadata", spKey, withRelayState)
 	response := idp.signedReferenceSPLogoutResponse(t, origin+providerPath+"/slo", requestID, time.Now().UTC())
-	responseBody := url.Values{"SAMLResponse": {response}}.Encode()
 	responseHeaders := func(request *http.Request) {
 		request.Header.Set("Origin", idpOrigin)
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
+	responseForm := url.Values{"SAMLResponse": {response}}
+	if withRelayState {
+		differentHandle, err := base64.RawURLEncoding.Strict().DecodeString(relayState)
+		if err != nil {
+			t.Fatal("decode verified SP logout RelayState", err)
+		}
+		differentHandle[0] ^= 1
+		for _, deniedForm := range []struct {
+			name string
+			form url.Values
+		}{
+			{"omitted", url.Values{"SAMLResponse": {response}}},
+			{"duplicate", url.Values{"SAMLResponse": {response}, "RelayState": {relayState, relayState}}},
+			{"mismatched", url.Values{"SAMLResponse": {response}, "RelayState": {base64.RawURLEncoding.EncodeToString(differentHandle)}}},
+		} {
+			denied := do(http.MethodPost, providerPath+"/slo", deniedForm.form.Encode(), nil, responseHeaders)
+			deniedBody, err := io.ReadAll(io.LimitReader(denied.Body, 32<<10))
+			_ = denied.Body.Close()
+			if err != nil || denied.StatusCode != http.StatusBadRequest || denied.Header.Get("Location") != "" ||
+				len(denied.Header.Values("Set-Cookie")) != 0 || denied.Header.Get("Cache-Control") != "no-store" ||
+				bytes.Contains(deniedBody, []byte(finalRedirect)) || bytes.Contains(deniedBody, []byte(relayState)) ||
+				bytes.Contains(deniedBody, []byte(response)) {
+				t.Fatal("SP logout accepted or disclosed a continuation for "+deniedForm.name+" RelayState", denied.StatusCode, err)
+			}
+			readOriginalSession(false)
+		}
+		responseForm.Set("RelayState", relayState)
+	}
+	responseBody := responseForm.Encode()
 	settled := do(http.MethodPost, providerPath+"/slo", responseBody, nil, responseHeaders)
 	defer settled.Body.Close()
 	if settled.StatusCode != http.StatusSeeOther || settled.Header.Get("Location") != finalRedirect ||
@@ -189,7 +238,7 @@ func proveReferenceSAMLSPLogout(t *testing.T, ctx context.Context, base *http.Cl
 	readOriginalSession(false)
 }
 
-func originalReferenceSAMLLogoutRequest(t *testing.T, location, endpoint, entity string, key *rsa.PublicKey) string {
+func originalReferenceSAMLLogoutRequest(t *testing.T, location, endpoint, entity string, key *rsa.PublicKey, withRelayState bool) (string, string) {
 	t.Helper()
 	redirect, err := url.Parse(location)
 	if err != nil {
@@ -205,7 +254,25 @@ func originalReferenceSAMLLogoutRequest(t *testing.T, location, endpoint, entity
 		t.Fatal("SP logout redirected outside the installed IdP endpoint")
 	}
 	query := redirect.Query()
-	if len(query) != 3 || len(query["SAMLRequest"]) != 1 || len(query["SigAlg"]) != 1 || len(query["Signature"]) != 1 ||
+	wantFields := 3
+	if withRelayState {
+		wantFields++
+		handles := query["RelayState"]
+		if len(handles) != 1 || len(handles[0]) != 43 {
+			t.Fatal("SP logout did not contain exactly one opaque RelayState handle")
+		}
+		handle, err := base64.RawURLEncoding.Strict().DecodeString(handles[0])
+		if err != nil || len(handle) != 32 || base64.RawURLEncoding.EncodeToString(handle) != handles[0] {
+			t.Fatal("SP logout RelayState was not a canonical 32-byte raw-url handle")
+		}
+		ordered := strings.Split(redirect.RawQuery, "&")
+		if len(ordered) != wantFields || !strings.HasPrefix(ordered[0], "SAMLRequest=") ||
+			!strings.HasPrefix(ordered[1], "RelayState=") || !strings.HasPrefix(ordered[2], "SigAlg=") ||
+			!strings.HasPrefix(ordered[3], "Signature=") {
+			t.Fatal("SP logout did not sign the exact ordered Redirect fields including RelayState")
+		}
+	}
+	if len(query) != wantFields || len(query["SAMLRequest"]) != 1 || len(query["SigAlg"]) != 1 || len(query["Signature"]) != 1 ||
 		query.Get("SigAlg") != saml.SignatureAlgorithmRSAPSSSHA256 || query.Get("Signature") == "" {
 		t.Fatal("SP logout did not contain exactly one signed Redirect request")
 	}
@@ -240,7 +307,7 @@ func originalReferenceSAMLLogoutRequest(t *testing.T, location, endpoint, entity
 		name.NameQualifier != "" || name.SPNameQualifier != "" {
 		t.Fatal("signed LogoutRequest changed the issued assertion's exact NameID")
 	}
-	return request.ID
+	return request.ID, query.Get("RelayState")
 }
 
 func (f referenceSAMLIdPFixture) signedReferenceSPLogoutResponse(t *testing.T, destination, requestID string, now time.Time) string {

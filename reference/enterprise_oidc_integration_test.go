@@ -28,6 +28,7 @@ import (
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	"github.com/faustbrian/go-identity/oauth"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
@@ -41,6 +42,7 @@ func TestReferencePostgresEnterpriseOIDCJourney(t *testing.T) {
 
 type referenceEnterpriseOIDCPolicy struct {
 	allowLink, allowOAuth2, allowSAML, allowSAMLLogout, allowSAMLLogoutStart bool
+	allowSAMLLogoutRelay                                                     bool
 }
 
 func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
@@ -65,6 +67,10 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 				res.Type == "identity.request-admission" && res.ID == "identity.sso.saml-slo") {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
+		case authorization.Action(kernel.SSOSAMLLogoutRelaySettlementOperation().OperationID):
+			if p.allowSAMLLogoutRelay && c.Request.Resource.Type == "identity.user" && c.Request.Resource.ID != "" {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		}
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser {
@@ -72,6 +78,14 @@ func (p referenceEnterpriseOIDCPolicy) Decide(ctx context.Context, c authorizati
 			res := c.Request.Resource
 			if res.Type == "identity.user" && res.ID == authorization.ResourceID(c.Request.Subject.ID) ||
 				res.Type == "identity.request-admission" && res.ID == "identity.sso.saml-logout-start" {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
+		}
+		relayIssue := kernel.SSOSAMLLogoutRelayIssueOperation().OperationID
+		if p.allowSAMLLogoutRelay && c.Request.Action == authorization.Action(relayIssue) {
+			res := c.Request.Resource
+			if res.Type == "identity.user" && res.ID == authorization.ResourceID(c.Request.Subject.ID) ||
+				res.Type == "identity.request-admission" && res.ID == authorization.ResourceID(relayIssue) {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
 		}

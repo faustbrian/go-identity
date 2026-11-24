@@ -561,7 +561,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectedAuthorization = referenceEnterpriseOIDCPolicy{allowLink: extensions.enterpriseOIDCLink,
 			allowOAuth2: extensions.enterpriseOAuth2 || extensions.enterpriseOAuth2Upgrade, allowSAML: extensions.enterpriseSAML,
 			allowSAMLLogout:      extensions.enterpriseSAMLIDPLogout,
-			allowSAMLLogoutStart: extensions.enterpriseSAMLSPLogout != ""}
+			allowSAMLLogoutStart: extensions.enterpriseSAMLSPLogout != "",
+			allowSAMLLogoutRelay: extensions.enterpriseSAMLSPLogout == "redirect-relay"}
 		if extensions.enterpriseOIDCLogout {
 			selectedAuthorization = referenceEnterpriseOIDCLogoutPolicy{referenceEnterpriseOIDCPolicy: referenceEnterpriseOIDCPolicy{}}
 		}
@@ -752,7 +753,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 				MaximumAge: time.Minute, CurrentConfirmationKey: 1, ConfirmationKeys: map[uint32][32]byte{1: {0xd4}},
 			}
 		}
-		if extensions.enterpriseSAMLIDPLogout || extensions.enterpriseSAMLSPLogout == "redirect" {
+		remoteSAMLLogout := extensions.enterpriseSAMLSPLogout == "redirect" || extensions.enterpriseSAMLSPLogout == "redirect-relay"
+		if extensions.enterpriseSAMLIDPLogout || remoteSAMLLogout {
 			logoutKeys, err := kernel.NewRequestKeyConfig("reference-enterprise-saml-inbound-logout", [32]byte{0xdf}, c.EnterpriseSAML.Login.RequestKeys.Policy)
 			if err != nil {
 				t.Fatal(err)
@@ -771,8 +773,15 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 				FinalRedirectAllowlist: []string{origin + "/enterprise/signed-out"},
 				RequestKeys:            logoutKeys,
 			}
-			if extensions.enterpriseSAMLSPLogout == "redirect" {
+			if remoteSAMLLogout {
 				c.EnterpriseSAML.LogoutStart.RedirectEndpoint = "https://idp.example/slo/start"
+			}
+			if extensions.enterpriseSAMLSPLogout == "redirect-relay" {
+				relayKeys, err := kernel.NewRequestKeyConfig("reference-enterprise-saml-logout-relay", [32]byte{0xd9}, c.EnterpriseSAML.Login.RequestKeys.Policy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				c.EnterpriseSAML.LogoutStart.RelayStateRequestKeys = &relayKeys
 			}
 		}
 	}
@@ -1925,7 +1934,8 @@ END $$`); err != nil {
 		if extensions.enterpriseSAMLIDP {
 			c.HTTPEnterpriseSAML.IDPInitiated = true
 		}
-		c.HTTPEnterpriseSAML.Logout = extensions.enterpriseSAMLIDPLogout || extensions.enterpriseSAMLSPLogout == "redirect"
+		c.HTTPEnterpriseSAML.Logout = extensions.enterpriseSAMLIDPLogout ||
+			c.EnterpriseSAML.LogoutStart != nil && c.EnterpriseSAML.LogoutStart.RedirectEndpoint != ""
 		c.HTTPEnterpriseSAML.LogoutStart = extensions.enterpriseSAMLSPLogout != ""
 		restarted, features := startProvisionedEnterprise(t, ctx, c, deps, config, workerConfigs, nil)
 		handler := restarted.Handler()

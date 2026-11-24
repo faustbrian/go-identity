@@ -63,10 +63,14 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 			ProviderID: c.ProviderID, ResponseEndpoint: n.logout.responseEndpoint, Rate: c.Rate,
 			MaximumDuration: n.duration,
 		}
+		relay := ssohttp.SAMLLogoutRelaySelection{Request: owner}
 		if n.logoutStart != nil && n.logoutStart.remote != nil {
 			config.Owner, config.FinalRedirectAllowlist = owner, n.logoutStart.final
+			if n.logoutStart.relayState {
+				relay.Response = owner
+			}
 		}
-		op, err := ssohttp.NewSAMLLogoutOperationWithRequestRelayState(config, owner)
+		op, err := ssohttp.NewSAMLLogoutOperationWithRelayState(config, relay)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -77,7 +81,11 @@ func (s *Server) enterpriseSAMLFeature(network identityhttp.NetworkConfig) (*ide
 		if n.logoutStart == nil {
 			return nil, nil, identity.InvalidInputError{Field: "reference_http_enterprise_saml_logout_start"}
 		}
-		op, err := ssohttp.NewSAMLLogoutStartOperation(ssohttp.SAMLLogoutStartConfig{
+		newOperation := ssohttp.NewSAMLLogoutStartOperation
+		if n.logoutStart.relayState {
+			newOperation = ssohttp.NewSAMLLogoutStartOperationWithRelayState
+		}
+		op, err := newOperation(ssohttp.SAMLLogoutStartConfig{
 			Network: network, TenantID: n.tenant, Origin: c.Origin, ProviderID: c.ProviderID,
 			RedirectEndpoint: n.logoutStart.endpoint, FinalRedirectAllowlist: n.logoutStart.final,
 			Rate: c.Rate, MaximumDuration: n.duration, Cookie: c.Cookie, CSRFCookie: h.CSRFCookie, Owner: owner,

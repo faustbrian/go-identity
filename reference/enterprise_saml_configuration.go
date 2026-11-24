@@ -191,6 +191,12 @@ func composeEnterpriseSAML(c StoreConfiguration, d ReferenceDependencies, evalua
 		if policy.PolicyVersion != selected.PolicyVersion || !sameServerAuthorization(policy.Authorization, selected.Authorization) {
 			return nil, invalid
 		}
+		if keys := n.LogoutStart.RelayStateRequestKeys; keys != nil {
+			policy := keys.Policy
+			if policy.PolicyVersion != selected.PolicyVersion || !sameServerAuthorization(policy.Authorization, selected.Authorization) {
+				return nil, invalid
+			}
+		}
 	}
 	if n.Logout != nil && n.Logout.RequestKeys != nil {
 		policy := n.Logout.RequestKeys.Policy

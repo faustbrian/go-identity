@@ -36,7 +36,7 @@ func TestReferencePostgresEnterpriseSAMLJourney(t *testing.T) {
 }
 
 func TestReferencePostgresEnterpriseSAMLSPLogoutJourney(t *testing.T) {
-	for _, profile := range []string{"local-only", "redirect"} {
+	for _, profile := range []string{"local-only", "redirect", "redirect-relay"} {
 		t.Run(profile, func(t *testing.T) {
 			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{
 				postgresBaseline: true, organization: true, enterpriseSAML: true, enterpriseSAMLSPLogout: profile,
@@ -214,7 +214,11 @@ func proveReferenceEnterpriseSAMLJourney(t *testing.T, ctx context.Context, base
 		t.Fatal("the original assertion could be delivered again", replay.StatusCode)
 	}
 	if policy.LogoutStart {
-		proveReferenceSAMLSPLogout(t, ctx, base, origin, providerPath, string(policy.IdentityProviderOrigin), logoutStart.RedirectEndpoint,
+		proveLogout := proveReferenceSAMLSPLogout
+		if logoutStart.RelayStateRequestKeys != nil {
+			proveLogout = proveReferenceSAMLSPLogoutWithRelayState
+		}
+		proveLogout(t, ctx, base, origin, providerPath, string(policy.IdentityProviderOrigin), logoutStart.RedirectEndpoint,
 			logoutStart.FinalRedirectAllowlist[0], csrf, &client, certificate, idp)
 		return
 	}

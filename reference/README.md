@@ -358,8 +358,25 @@ revocation clears the cookies. A provider reply selects the original request
 by its signed `InResponseTo` and can release only the original destination.
 Clear `LogoutStart` to stop new starts without disabling settlement of
 outstanding requests on `Logout`. Keep the installed migrations and key
-custody. Local revocation never waits for the IdP; this profile does not
-carry RelayState.
+custody. Local revocation never waits for the IdP. The default Redirect
+profile does not carry RelayState.
+
+To use SP-generated RelayState, also set
+`EnterpriseSAML.LogoutStart.RelayStateRequestKeys` with a request namespace
+separate from sign-in, local logout and IdP-initiated logout. Permit
+`identity.sso.saml-logout-relay-issue` for the original user and its request
+admission scope, and `identity.sso.saml-logout-relay-settle` for the configured
+provider service actor on the original user resource. Keep the native setting
+selected, apply the forward `identity_social_kernel` history and check readiness
+before enabling the two HTTP operations. This history changes the preparation
+trigger without rewriting prior rows. Disabling HTTP preserves installed history.
+
+The signed Redirect includes one 43-character opaque RelayState. Configure
+the IdP to return it unchanged with its signed POST response. A missing,
+changed or duplicate value does not settle the original request. A fresh
+successful settlement can return the original allowlisted destination once;
+an exact repeat returns 204 with no continuation. The handle is not a session
+or a destination and must not be logged.
 
 ## Optional enterprise OIDC provider logout
 

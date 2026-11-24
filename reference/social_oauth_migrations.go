@@ -54,8 +54,15 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 		refresh := kernel.SSOEnterpriseGrantRefreshPreparationErasureMigrationSource{Base: accountHistory, Version: 2411}
 		callback := kernel.SSOSAMLCallbackPreparationErasureMigrationSource{Base: refresh, Version: 2412}
 		accountHistory = kernel.SSOSAMLStartPreparationErasureMigrationSource{Base: callback, Version: 2413}
-		if f.enterpriseSAML.idpStorage {
+		start := f.enterpriseSAML.logoutStart
+		relayState := start != nil && start.relayState
+		if f.enterpriseSAML.idpStorage || relayState {
+			// Relay erasure replaces the same trigger and preserves the IdP
+			// rule. Keep its predecessor even without the IdP sign-in route.
 			accountHistory = kernel.SSOSAMLIDPConfirmationPreparationErasureMigrationSource{Base: accountHistory, Version: 2414}
+		}
+		if relayState {
+			accountHistory = kernel.SSOSAMLLogoutRelayIssuePreparationErasureMigrationSource{Base: accountHistory, Version: 2415}
 		}
 	}
 	full, err := accountHistory.Load(ctx)

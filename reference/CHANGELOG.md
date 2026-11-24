@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose opt-in SP-generated RelayState for SAML logout. Preserve signed
+  Redirect custody after local revocation and settle the original handle once
+  on the unchanged signed POST return path.
+
 - Echo optional IdP RelayState in the fresh signed SAML logout reply.
   Changed state cannot reopen the signed request, and settled retries
   never return the form or the opaque value again.

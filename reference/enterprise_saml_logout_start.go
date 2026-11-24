@@ -20,13 +20,18 @@ type EnterpriseSAMLLogoutStartConfiguration struct {
 	FinalRedirectAllowlist []string
 	// RequestKeys owns the original keyed logout, never the canonical sign-in.
 	RequestKeys kernel.RequestKeyConfig
+	// RelayStateRequestKeys selects SP-generated state for a remote Redirect,
+	// with a separate namespace from sign-in, local logout, and IdP logout.
+	// Keep it configured after applying its migration, even when HTTP is off.
+	RelayStateRequestKeys *kernel.RequestKeyConfig
 }
 
 type enterpriseSAMLLogoutStartState struct {
-	local    *ssopg.ProviderSAMLLogoutService
-	remote   *ssopg.ProviderSAMLLogoutRedirectService
-	endpoint string
-	final    []string
+	local      *ssopg.ProviderSAMLLogoutService
+	remote     *ssopg.ProviderSAMLLogoutRedirectService
+	endpoint   string
+	final      []string
+	relayState bool
 }
 
 func validateEnterpriseSAMLLogoutStartSelection(n *EnterpriseSAMLConfiguration, h *HTTPEnterpriseSAMLConfiguration) error {
@@ -37,14 +42,26 @@ func validateEnterpriseSAMLLogoutStartSelection(n *EnterpriseSAMLConfiguration, 
 		}
 		return nil
 	}
-	if n.LogoutStart.RequestKeys.Namespace == "" || n.LogoutStart.RequestKeys.Namespace == n.Login.RequestKeys.Namespace {
+	start := n.LogoutStart
+	if start.RequestKeys.Namespace == "" || start.RequestKeys.Namespace == n.Login.RequestKeys.Namespace {
 		return invalid
 	}
-	if n.LogoutStart.RedirectEndpoint == "" {
+	if start.RedirectEndpoint == "" {
+		if start.RelayStateRequestKeys != nil {
+			return invalid
+		}
 		return nil
 	}
 	if n.Logout == nil || h != nil && h.LogoutStart && !h.Logout {
 		return invalid
+	}
+	if keys := start.RelayStateRequestKeys; keys != nil {
+		if keys.Namespace == "" || keys.Namespace == start.RequestKeys.Namespace || keys.Namespace == n.Login.RequestKeys.Namespace {
+			return invalid
+		}
+		if n.Logout.RequestKeys != nil && keys.Namespace == n.Logout.RequestKeys.Namespace {
+			return invalid
+		}
 	}
 	return nil
 }
@@ -84,6 +101,13 @@ func composeEnterpriseSAMLLogoutStart(c StoreConfiguration, d ReferenceDependenc
 	}})
 	if err != nil {
 		return nil, err
+	}
+	if keys := selected.RelayStateRequestKeys; keys != nil {
+		out.remote, err = out.remote.WithRelayState(*keys)
+		if err != nil {
+			return nil, err
+		}
+		out.relayState = true
 	}
 	return out, nil
 }

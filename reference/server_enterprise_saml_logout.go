@@ -10,6 +10,7 @@ import (
 
 var _ ssohttp.SAMLLogoutRequestOwner = enterpriseSAMLHTTP{}
 var _ ssohttp.SAMLLogoutRequestRelayOwner = enterpriseSAMLHTTP{}
+var _ ssohttp.SAMLLogoutResponseRelayOwner = enterpriseSAMLHTTP{}
 var _ ssohttp.SAMLLogoutStartOwner = enterpriseSAMLHTTP{}
 var _ ssohttp.SAMLLogoutOwner = enterpriseSAMLHTTP{}
 
@@ -63,15 +64,36 @@ func (a enterpriseSAMLHTTP) StartSSOSAMLLogout(ctx context.Context, request ssoh
 }
 
 func (a enterpriseSAMLHTTP) SettleSAMLLogoutResponse(ctx context.Context, request ssohttp.SAMLLogoutResponseRequest) (ssohttp.SAMLLogoutResponseResult, error) {
+	return a.settleSAMLLogoutResponse(ctx, request, "")
+}
+
+func (a enterpriseSAMLHTTP) SettleSAMLLogoutResponseWithRelayState(ctx context.Context, request ssohttp.SAMLLogoutResponseRequest, relay string) (ssohttp.SAMLLogoutResponseResult, error) {
+	if relay == "" {
+		return ssohttp.SAMLLogoutResponseResult{}, sso.ErrInvalidInput
+	}
+	return a.settleSAMLLogoutResponse(ctx, request, relay)
+}
+
+func (a enterpriseSAMLHTTP) settleSAMLLogoutResponse(ctx context.Context, request ssohttp.SAMLLogoutResponseRequest, relay string) (ssohttp.SAMLLogoutResponseResult, error) {
 	n := a.native
 	var out ssohttp.SAMLLogoutResponseResult
 	if n == nil || n.http == nil || !n.http.Logout || n.logoutStart == nil || n.logoutStart.remote == nil ||
 		request.TenantID != n.tenant || request.ProviderID != string(n.profile.ProviderID) {
 		return out, sso.ErrForbidden
 	}
-	result, err := n.logoutStart.remote.SettleResponse(ctx, ssopg.ProviderSAMLLogoutResponseRequest{
+	input := ssopg.ProviderSAMLLogoutResponseRequest{
 		ProviderID: n.profile.ProviderID, SAMLResponse: []string{request.SAMLResponse},
-	})
+	}
+	var result ssopg.ProviderSAMLLogoutResponseResult
+	var err error
+	if relay != "" {
+		if !n.logoutStart.relayState {
+			return out, sso.ErrForbidden
+		}
+		result, err = n.logoutStart.remote.SettleResponseWithRelayState(ctx, input, []string{relay})
+	} else {
+		result, err = n.logoutStart.remote.SettleResponse(ctx, input)
+	}
 	if err != nil {
 		return out, err
 	}
