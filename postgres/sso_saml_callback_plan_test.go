@@ -137,6 +137,26 @@ func TestSSOSAMLCallbackAccountSnapshotDoesNotAliasOtherProtocols(t *testing.T) 
 	}
 }
 
+func TestSSOSAMLAccountProviderNamespacePreservesPublishedScope(t *testing.T) {
+	const published = "sso.saml.v1.db897049df0fc5ff544ff0d74fcfe8c2c60f8c8cfe2e2daa4ca3999cf33610ce"
+	if got, err := SSOSAMLAccountProviderNamespace("org-a", "provider-a"); err != nil || got != published {
+		t.Fatal("existing SAML account namespace changed", err)
+	}
+	seen := map[string]bool{published: true}
+	for _, pair := range [][2]string{{"org-b", "provider-a"}, {"org-a", "provider-b"}, {"a:b", "c"}, {"a", "b:c"}, {strings.Repeat("a", 128), strings.Repeat("b", 128)}} {
+		got, err := SSOSAMLAccountProviderNamespace(pair[0], pair[1])
+		if err != nil || !validSAMLAccountProvider(got) || seen[got] {
+			t.Fatal("distinct valid scope did not yield its own SAML namespace", err)
+		}
+		seen[got] = true
+	}
+	for _, pair := range [][2]string{{"", "provider-a"}, {"org-a", ""}, {"org a", "provider-a"}, {"org-a", "é"}, {strings.Repeat("a", 129), "provider-a"}} {
+		if got, err := SSOSAMLAccountProviderNamespace(pair[0], pair[1]); err == nil || got != "" {
+			t.Fatal("invalid scope produced an account namespace")
+		}
+	}
+}
+
 func TestSSOSAMLCallbackOrdinaryReservationRejectsBeforeCoordinatorAccess(t *testing.T) {
 	binding, plan := samlSigninPlanFixture(t)
 	var coordinator *Coordinator

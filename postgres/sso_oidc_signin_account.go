@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"strings"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 const ssoOIDCSigninAccountPrefix = "sso.oidc.signin.account."
 const ssoOAuth2SigninAccountPrefix = "sso.oauth2.signin.account."
 const ssoSAMLSigninAccountPrefix = "sso.saml.signin.account."
+const ssoSAMLAccountProviderPrefix = "sso.saml.v1."
 
 // SSOOIDCSigninAccountFields freezes an existing SSO-owned account and every
 // independent identity epoch in the original enterprise callback intent. The
@@ -61,10 +65,36 @@ func SSOSAMLSigninAccount(command identity.Command) (ProviderAccountAdmission, e
 	return account, nil
 }
 
-// The SSO module owns the hash of the trusted organization/provider tuple;
-// identity checks only the versioned SAML namespace, not the tuple itself.
+// SSOSAMLAccountProviderNamespace derives the existing SAML account namespace
+// for one exact installed organization and provider. Account and role owners
+// must obtain these selectors from their admitted callback, not the browser.
+// This preserves existing links; it neither looks up an account nor grants
+// authority. Tenant, exact issuer and signed subject are independent bindings.
+func SSOSAMLAccountProviderNamespace(organizationID, providerID string) (string, error) {
+	// Preserve the published SSO v1 framing and exact case-sensitive IDs.
+	h := sha256.New()
+	_, _ = h.Write([]byte("golib.sso.saml.account-provider.v1\x00"))
+	for _, id := range [...]string{organizationID, providerID} {
+		if len(id) == 0 || len(id) > 128 {
+			return "", identity.InvalidInputError{Field: "saml-provider-scope"}
+		}
+		for i := range len(id) {
+			if id[i] < '!' || id[i] > '~' {
+				return "", identity.InvalidInputError{Field: "saml-provider-scope"}
+			}
+		}
+		var size [2]byte
+		binary.BigEndian.PutUint16(size[:], uint16(len(id)))
+		_, _ = h.Write(size[:])
+		_, _ = h.Write([]byte(id))
+	}
+	return ssoSAMLAccountProviderPrefix + hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// The generic account decoder checks the versioned namespace shape. Callers
+// that own the installed tuple must also compare its exact derived value.
 func validSAMLAccountProvider(provider string) bool {
-	digest, match := strings.CutPrefix(provider, "sso.saml.v1.")
+	digest, match := strings.CutPrefix(provider, ssoSAMLAccountProviderPrefix)
 	if !match || len(digest) != 64 {
 		return false
 	}

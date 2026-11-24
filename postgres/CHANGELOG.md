@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose the existing exact SAML account namespace derivation for owners
+  that must compare the linked account against an installed organization and
+  provider. Existing account identifiers are unchanged.
+
 - Prepare an SP-generated SAML logout request through the existing gated
   command journal. The signed request may only narrow the original expiry.
   Install the matching forward erasure migration before enabling the native
