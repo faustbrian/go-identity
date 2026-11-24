@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit a separate SAML logout remote-request issuance command, fenced to its
+  local correlation, installed provider, exact request digest, and one
+  settlement grant. It carries no browser credential or session effect.
+
 - Fence the registered service command for IdP-initiated SAML logout. Its
   original request and complete session set stay bound through Apply and the
   final check; browser custody cannot select this command.

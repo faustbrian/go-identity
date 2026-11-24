@@ -169,6 +169,15 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 	}
 	v, payload := d.plan.Grants[index], grant.Payload()
 	subject := string(w.state.binding.UserID)
+	if w.state.binding.OperationID == ssoSAMLLogoutRelayIssuePurpose {
+		if w.state.featureApplyCommand == nil {
+			return w.fail(w.state.ctx, invalidWork())
+		}
+		intent, ok := decodeSSOSAMLLogoutRelayIssue(*w.state.featureApplyCommand)
+		if !ok || !validSSOSAMLLogoutRelayIssueGrant(w.state.binding, intent, payload) {
+			return w.fail(w.state.ctx, invalidWork())
+		}
+	}
 	if w.state.binding.OperationID == "identity.account.link-start" || w.state.binding.OperationID == "identity.oauth.signin-start" || enterpriseSigninStartOperationID(w.state.binding.OperationID) {
 		var err error
 		subject, err = oauthRPInitiationGrantSubject(w.state.binding, w.state.execution.reservation.plan.snapshot(), payload)
@@ -248,6 +257,13 @@ func (w RecoveryWork) CapabilityIssuanceBinding(p CapabilityIssuanceContributor)
 func validateIssuanceContributor(b identity.CommandBinding, p *CapabilityIssuancePlan, entries []registeredContributor) (err error) {
 	if p == nil {
 		return nil
+	}
+	// Other command grammars may issue generic grants, but cannot enlist the
+	// remotely settled logout purpose outside its dedicated issue binding.
+	for _, grant := range p.Grants {
+		if grant.Purpose == ssoSAMLLogoutRelaySettlePurpose && !validSSOSAMLLogoutRelayIssueBinding(b) {
+			return invalidPlan()
+		}
 	}
 	defer func() {
 		if recover() != nil {
