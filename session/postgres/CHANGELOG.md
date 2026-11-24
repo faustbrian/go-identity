@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Atomically revoke only the sessions selected by a verified IdP-initiated
+  SAML logout request. Match each original issuance and current session
+  version, leave unrelated sessions and families unchanged, and retain a
+  receipt for recovery without replaying revocation. Install
+  `SSOSAMLIDPLogoutMigrationSource` before enabling the effect.
+
 - Revoke the original authenticated SAML session inside native logout-start
   Work without waiting for a provider response. Require the session's CSRF and
   original authority and leave its family active. Apply the opt-in revocation
