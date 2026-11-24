@@ -150,6 +150,18 @@ Set `RequestOnlyOwner` instead of `Owner` if no SP-initiated response
 settlement is selected. Leave the continuation allowlist empty. The router
 then rejects inbound `SAMLResponse` forms and omits them from OpenAPI.
 
+For SP-initiated logout, separately select `NewSAMLLogoutStartOperation`.
+Send `POST /saml2/{provider_id}/logout` with the original session cookie,
+exact SP Origin, `X-CSRF-Token`, one `Idempotency-Key`, and an exact
+allowlisted SP continuation in the JSON `finalRedirect` field. A confirmed
+local revocation clears the original session and CSRF cookies. A selected
+signed provider redirect returns 303; local-only success returns 200.
+After native session selection, the JSON body reports the authoritative
+local outcome even if remote work fails. Cancellation suppresses navigation
+and cookie changes; it does not undo local revocation. Keep the original
+request and key to reconcile an unknown outcome. This start does not mount
+the SLO POST.
+
 ## Enterprise OIDC provider logout
 
 Select `NewProviderLogoutFeature` with the same tenant network and shared

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add cookie- and synchronizer-bound SP SAML logout start with one original
+  retry key. Separate local revocation from remote delivery and expose the
+  selected local outcome even when the provider continuation is unavailable.
+
 - Let applications select IdP-initiated SAML logout without mounting inbound
   response settlement or advertising it in OpenAPI.
 
