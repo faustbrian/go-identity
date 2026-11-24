@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit only the configured IdP's browser POST to the exact installed SAML
+  logout endpoint and SP origin. The opt-in route grants no CORS access and
+  never accepts preflight.
+
 - Add explicit navigation-only transport for an installed SAML IdP-init
   route. Admit only its configured service-provider and IdP origins; never
   grant CORS script access or preflight. No route is enabled by default.

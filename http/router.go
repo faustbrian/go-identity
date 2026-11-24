@@ -99,21 +99,22 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 			selected[op.Route.Method+" "+path] = op.Record.OperationID
 		}
 	}
-	idpNavigation := make(map[string]struct{})
+	selectedNavigation := make(map[string]struct{})
 	for _, route := range policy.CORS {
 		key := route.Method + " " + route.Path
 		operationID, exists := selected[key]
-		if !exists || (operationID == "identity.sso.saml-acs") != (route.Credentials == CORSSAMLPostNavigation) ||
-			(operationID == "identity.sso.saml-idp-init") != (route.Credentials == CORSSAMLIDPPostNavigation) {
+		want := samlNavigationFor(operationID)
+		if !exists || (want != 0 || isSAMLNavigation(route.Credentials)) && want != route.Credentials {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
 		}
-		if route.Credentials == CORSSAMLIDPPostNavigation {
-			idpNavigation[key] = struct{}{}
+		if want != 0 {
+			selectedNavigation[key] = struct{}{}
 		}
 	}
 	for key, operationID := range selected {
-		if operationID == "identity.sso.saml-idp-init" {
-			if _, ok := idpNavigation[key]; !ok {
+		mode := samlNavigationFor(operationID)
+		if mode == CORSSAMLIDPPostNavigation || mode == CORSSAMLLogoutPostNavigation {
+			if _, ok := selectedNavigation[key]; !ok {
 				return nil, OpenAPIDocument{}, ErrInvalidInput
 			}
 		}
@@ -142,6 +143,19 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	cors.(*corsHandler).next = dispatch
 	document.operations = cloneOperations(ops)
 	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout}, document, nil
+}
+
+func samlNavigationFor(operationID string) CORSCredentialMode {
+	switch operationID {
+	case "identity.sso.saml-acs":
+		return CORSSAMLPostNavigation
+	case "identity.sso.saml-idp-init":
+		return CORSSAMLIDPPostNavigation
+	case "identity.sso.saml-slo":
+		return CORSSAMLLogoutPostNavigation
+	default:
+		return 0
+	}
 }
 
 func validMiddleware(middleware []MiddlewareDescriptor) bool {

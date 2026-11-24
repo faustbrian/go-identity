@@ -34,6 +34,11 @@ const (
 	// It grants neither script access nor preflight; the handler distinguishes
 	// the two form profiles and owns the browser confirmation checks.
 	CORSSAMLIDPPostNavigation
+	// CORSSAMLLogoutPostNavigation admits an installed SAML logout POST only
+	// from the configured IdP Origin to the exact configured SP HTTPS origin.
+	// Neither preflight nor CORS script access is granted. Signed-message
+	// verification and replay custody remain the feature owner's responsibility.
+	CORSSAMLLogoutPostNavigation
 )
 
 // CORSRoutePolicy binds one exact method/path to copied CORS policy. Methods
@@ -46,8 +51,9 @@ const (
 // is whole seconds in [0,24h]. No implicit header, method or credential grant.
 // SP SAML navigation requires one Origin and a concrete POST ACS path.
 // Unsolicited SAML navigation requires the SP origin followed by the IdP
-// origin and a concrete POST IdP-init path. Both require empty header/exposure
-// and MaxAge settings.
+// origin and a concrete POST IdP-init path. SAML logout takes the same origin
+// ordering on a concrete POST SLO path, but only the IdP is a permitted sender.
+// All navigation modes require empty header/exposure and MaxAge settings.
 type CORSRoutePolicy struct {
 	Method, Path   string
 	Credentials    CORSCredentialMode
@@ -67,13 +73,12 @@ type CORSConfig struct {
 }
 
 type corsRoute struct {
-	origins       map[Origin]struct{}
-	headers       map[string]struct{}
-	bearer        bool
-	navigation    bool
-	idpNavigation bool
-	idpSPOrigin   Origin
-	wrap          func(http.Handler) http.Handler
+	origins           map[Origin]struct{}
+	headers           map[string]struct{}
+	bearer            bool
+	navigation        bool
+	destinationOrigin Origin
+	wrap              func(http.Handler) http.Handler
 }
 
 type corsHandler struct {
@@ -108,7 +113,7 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 	}
 	h := &corsHandler{network: config.Network, next: next, routes: make(map[string]corsRoute, len(config.Routes))}
 	for _, policy := range config.Routes {
-		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSSAMLIDPPostNavigation || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
+		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSSAMLLogoutPostNavigation || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
 			return nil, ErrInvalidInput
 		}
 		key := policy.Method + " " + policy.Path
@@ -116,12 +121,14 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 			return nil, ErrInvalidInput
 		}
 		route := corsRoute{bearer: policy.Credentials == CORSBearerCredentials,
-			navigation:    policy.Credentials == CORSSAMLPostNavigation || policy.Credentials == CORSSAMLIDPPostNavigation,
-			idpNavigation: policy.Credentials == CORSSAMLIDPPostNavigation}
+			navigation: isSAMLNavigation(policy.Credentials)}
 		if route.navigation {
 			validPathAndOrigins := validSAMLACSPath(policy.Path) && len(policy.Origins) == 1
-			if route.idpNavigation {
+			switch policy.Credentials {
+			case CORSSAMLIDPPostNavigation:
 				validPathAndOrigins = validSAMLProviderEndpoint(policy.Path, "/idp-init") && len(policy.Origins) == 2
+			case CORSSAMLLogoutPostNavigation:
+				validPathAndOrigins = validSAMLProviderEndpoint(policy.Path, "/slo") && len(policy.Origins) == 2
 			}
 			if policy.Method != http.MethodPost || !validPathAndOrigins || len(policy.AllowedHeaders) != 0 || len(policy.ExposedHeaders) != 0 || policy.MaxAge != 0 {
 				return nil, ErrInvalidInput
@@ -140,8 +147,11 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 		}
 		route.origins = guard.origins
 		if route.navigation {
-			if route.idpNavigation {
-				route.idpSPOrigin = policy.Origins[0]
+			if policy.Credentials != CORSSAMLPostNavigation {
+				route.destinationOrigin = policy.Origins[0]
+			}
+			if policy.Credentials == CORSSAMLLogoutPostNavigation {
+				delete(route.origins, route.destinationOrigin)
 			}
 			h.routes[key] = route
 			continue
@@ -236,7 +246,7 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, selected := h.routes[selectedMethod+" "+r.URL.Path]
 	_, allowed := route.origins[Origin(origin)]
 	if route.navigation {
-		if preflight || !originPresent || !allowed || route.idpNavigation && string(route.idpSPOrigin) != facts.Origin() {
+		if preflight || !originPresent || !allowed || route.destinationOrigin != "" && string(route.destinationOrigin) != facts.Origin() {
 			deny(http.StatusForbidden)
 			return
 		}
@@ -281,6 +291,10 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		serveCORSCustody(h.next, owned, r, grants, required, route.bearer)
 	})
 	route.wrap(next).ServeHTTP(w, engineRequest)
+}
+
+func isSAMLNavigation(mode CORSCredentialMode) bool {
+	return mode == CORSSAMLPostNavigation || mode == CORSSAMLIDPPostNavigation || mode == CORSSAMLLogoutPostNavigation
 }
 
 func requestHeaders(r *http.Request) http.Header {
