@@ -77,13 +77,20 @@ func (SAMLLogoutRequestResult) MarshalText() ([]byte, error) {
 // continuation after fresh successful settlement. Empty means no redirect.
 type SAMLLogoutResponseResult struct{ FinalRedirect string }
 
+// SAMLLogoutRequestOwner handles a signed IdP-initiated request without an
+// SP-initiated response-settlement dependency. It has the same native
+// verification, replay, local revocation and delivery contract.
+type SAMLLogoutRequestOwner interface {
+	HandleSAMLLogoutRequest(context.Context, SAMLLogoutRequest) (SAMLLogoutRequestResult, error)
+}
+
 // SAMLLogoutOwner is the selected native signed logout service adapter. It
 // verifies the exact corresponding message, owns replay, and settles the
 // original local effect independently of the remote outcome. It never takes
 // a browser cookie, redirect target, session selector, or RelayState from this
 // profile, and must be bounded, synchronous and safe for concurrent calls.
 type SAMLLogoutOwner interface {
-	HandleSAMLLogoutRequest(context.Context, SAMLLogoutRequest) (SAMLLogoutRequestResult, error)
+	SAMLLogoutRequestOwner
 	SettleSAMLLogoutResponse(context.Context, SAMLLogoutResponseRequest) (SAMLLogoutResponseResult, error)
 }
 
@@ -100,6 +107,9 @@ type SAMLLogoutConfig struct {
 	Rate                           *identityhttp.AuthRateLimiter
 	MaximumDuration                time.Duration
 	Owner                          SAMLLogoutOwner
+	// RequestOnlyOwner selects an installation with no SP-initiated response
+	// settlement. Leave Owner and FinalRedirectAllowlist unset in this mode.
+	RequestOnlyOwner SAMLLogoutRequestOwner
 }
 
 // NavigationPolicy is the required routing companion for this installed SLO
@@ -142,6 +152,9 @@ func NewSAMLLogoutOperation(c SAMLLogoutConfig) (identityhttp.OperationDescripto
 		return identityhttp.OperationDescriptor{}, err
 	}
 	op.Wire = samlLogoutWire()
+	if c.RequestOnlyOwner != nil {
+		op.Wire = samlLogoutRequestWire()
+	}
 	return op, nil
 }
 
@@ -151,14 +164,22 @@ type samlLogoutProfile struct {
 	decoder        *identityhttp.RequestDecoder
 	network        *identityhttp.NetworkResolver
 	idp            *identityhttp.OriginGuard
+	requestOwner   SAMLLogoutRequestOwner
 	finalRedirects map[string]struct{}
 }
 
 func newSAMLLogoutProfile(c SAMLLogoutConfig) (samlLogoutProfile, error) {
 	var empty samlLogoutProfile
 	invalid := identityhttp.ErrInvalidInput
+	var requestOwner SAMLLogoutRequestOwner = c.Owner
+	if c.RequestOnlyOwner != nil {
+		if c.Owner != nil || len(c.FinalRedirectAllowlist) != 0 {
+			return empty, invalid
+		}
+		requestOwner = c.RequestOnlyOwner
+	}
 	if c.TenantID == "" || !validProviderID(c.ProviderID) || c.Origin == c.IdentityProviderOrigin ||
-		!configuredOwner(c.Owner) || !c.Rate.Configured() || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.FinalRedirectAllowlist) > 64 {
+		!configuredOwner(requestOwner) || !c.Rate.Configured() || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.FinalRedirectAllowlist) > 64 {
 		return empty, invalid
 	}
 	path := samlLogoutPath(c.ProviderID)
@@ -191,7 +212,7 @@ func newSAMLLogoutProfile(c SAMLLogoutConfig) (samlLogoutProfile, error) {
 	if err != nil {
 		return empty, err
 	}
-	return samlLogoutProfile{c: c, path: path, decoder: decoder, network: network, idp: idp, finalRedirects: redirects}, nil
+	return samlLogoutProfile{c: c, path: path, decoder: decoder, network: network, idp: idp, requestOwner: requestOwner, finalRedirects: redirects}, nil
 }
 
 type samlLogoutState struct {
@@ -231,6 +252,9 @@ func (p samlLogoutProfile) decode(r *http.Request) (s samlLogoutState, err error
 		s.request = &SAMLLogoutRequest{TenantID: p.c.TenantID, ProviderID: p.c.ProviderID, SAMLRequest: wire}
 		return s, nil
 	}
+	if p.c.Owner == nil {
+		return s, invalid
+	}
 	if wire := form.Get("SAMLResponse"); validSAMLLogoutWire(wire) {
 		s.reply = SAMLLogoutResponseRequest{TenantID: p.c.TenantID, ProviderID: p.c.ProviderID, SAMLResponse: wire}
 		return s, nil
@@ -252,7 +276,7 @@ func (p samlLogoutProfile) handle(w http.ResponseWriter, r *http.Request, s saml
 	delivery := ctx.Value(signinDeliveryKey{}).(*signinDelivery)
 	current := func() bool { return ctx.Err() == nil }
 	if s.request != nil {
-		result, err := p.c.Owner.HandleSAMLLogoutRequest(ctx, *s.request)
+		result, err := p.requestOwner.HandleSAMLLogoutRequest(ctx, *s.request)
 		if err != nil {
 			writeSigninError(w, r, err)
 			return

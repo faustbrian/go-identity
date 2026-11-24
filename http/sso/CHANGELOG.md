@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let applications select IdP-initiated SAML logout without mounting inbound
+  response settlement or advertising it in OpenAPI.
+
 - Add an opt-in SAML Single Logout POST for an installed provider. The native
   owner handles signed requests and responses on separate paths through the
   handler. Cookie-free navigation can deliver a signed POST form only to the

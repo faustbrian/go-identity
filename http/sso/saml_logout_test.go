@@ -429,6 +429,33 @@ func TestSAMLLogoutHTTPSelectionAndConfigurationFailClosed(t *testing.T) {
 	}
 }
 
+func TestSAMLLogoutHTTPRequestOnlySelection(t *testing.T) {
+	f := newSAMLLogoutHTTPFixture(t)
+	f.config.RequestOnlyOwner = f.owner
+	if _, err := NewSAMLLogoutOperation(f.config); err == nil {
+		t.Fatal("request-only selection accepted a second owner")
+	}
+	f.config.Owner = nil
+	if _, err := NewSAMLLogoutOperation(f.config); err == nil {
+		t.Fatal("request-only selection accepted response continuations")
+	}
+	f.config.FinalRedirectAllowlist = nil
+	f.rebuild(t)
+	document := string(f.document.JSON())
+	if !strings.Contains(document, `"SAMLRequest"`) || strings.Contains(document, `"SAMLResponse"`) ||
+		strings.Contains(document, `"303"`) {
+		t.Fatal("request-only OpenAPI advertises response settlement")
+	}
+	assertSAMLLogoutHTTPDenied(t, f, f.serve(f.request("SAMLResponse")), http.StatusBadRequest)
+	if f.requestCalls != 0 || f.responseCalls != 0 {
+		t.Fatal("unselected response reached an owner")
+	}
+	w := f.serve(f.request("SAMLRequest"))
+	if w.Code != http.StatusOK || f.requestCalls != 1 || f.responseCalls != 0 {
+		t.Fatal("selected request did not reach the exact owner", w.Code)
+	}
+}
+
 func FuzzSAMLLogoutWire(f *testing.F) {
 	for _, wire := range []string{"YQ==", "YR==", "YQ==\r\n", "YWJj", "", "YQ=", "<xml>"} {
 		f.Add(wire)

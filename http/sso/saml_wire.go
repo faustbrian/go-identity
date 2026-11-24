@@ -14,6 +14,18 @@ func samlLogoutWire() *identityhttp.WireOperation {
 }`)}
 }
 
+func samlLogoutRequestWire() *identityhttp.WireOperation {
+	return &identityhttp.WireOperation{Definition: []byte(`{
+  "operationId":"identity.sso.saml-slo",
+  "summary":"Process an installed IdP's signed SAML logout request",
+  "description":"Accept one signed LogoutRequest at the installed SP destination from the configured IdP origin. No browser credentials, RelayState, caller redirect or inbound response settlement are selected.",
+  "security":[],
+  "parameters":[{"name":"provider_id","in":"path","required":true,"schema":{"type":"string","minLength":1,"maxLength":128}}],
+  "requestBody":{"required":true,"content":{"application/x-www-form-urlencoded":{"schema":{"type":"object","additionalProperties":false,"required":["SAMLRequest"],"properties":{"SAMLRequest":{"type":"string","minLength":1,"maxLength":1048576}}}}}},
+  "responses":{"200":{"description":"Signed POST LogoutResponse form to the installed IdP endpoint.","content":{"text/html":{"schema":{"type":"string"}}}},"204":{"description":"No signed response form."},"400":{"description":"Invalid signed-request form."},"403":{"description":"Origin or logout denied."},"409":{"description":"Original signed-request conflict."},"429":{"description":"Provider quota exhausted.","headers":{"Retry-After":{"schema":{"type":"integer","minimum":1}}}},"503":{"description":"Unavailable or unresolved; no response form or cookie."}}
+}`)}
+}
+
 func samlMetadataWire() *identityhttp.WireOperation {
 	return &identityhttp.WireOperation{Definition: []byte(`{
   "operationId":"identity.sso.saml-metadata",

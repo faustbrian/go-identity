@@ -146,6 +146,9 @@ response can redirect only to an exact configured SP continuation. If the
 native owner returns no delivery, the endpoint returns 204. Do not log
 the XML, encoded form fields, response HTML, or provider URL. This operation
 does not start an SP-initiated logout.
+Set `RequestOnlyOwner` instead of `Owner` if no SP-initiated response
+settlement is selected. Leave the continuation allowlist empty. The router
+then rejects inbound `SAMLResponse` forms and omits them from OpenAPI.
 
 ## Enterprise OIDC provider logout
 
