@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded directory-sync start/cancel admission on the existing shared
+  administrative rate owner. Both exact operations consume the same atomic
+  actor, tenant and trusted-IP budgets as organization mutations and retain
+  their true operation IDs in required denial auditing. Existing organization
+  admission accepts no additional operations.
+
 - Add an independently selected current-member permission-check endpoint using
   the native evaluator, exact organization policy epoch and shared safe rates.
   Return explicit allow/deny only for matching native revisions; stale authority,

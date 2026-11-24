@@ -1,5 +1,32 @@
 # Enterprise SSO HTTP features
 
+## Directory administration
+
+`NewDirectorySyncFeature` adds only `/v1/sso/directory-sync-start` (POST),
+`/v1/sso/directory-sync-status` (GET) and `/v1/sso/directory-sync-cancel`
+(POST). Select it explicitly in `FeatureServices`. Supply the native
+directory owner, the uncached primary cookie-session reader, the shared safe
+and admin rate owners, and the exact tenant origins. The transport never
+converts a cookie into bearer authority. Writes use an exact `Origin` and
+`X-CSRF-Token`; both must be checked by their transport and native owners.
+If the router already selects the `sso` owner, combine the directory and
+existing `Operations()` into one `identityhttp.NewFeature` with ID `sso`.
+
+Start with `providerID`, `providerVersion`, `mappingVersion` and `mode`
+(`apply` or `dry-run`) and retain the original `Idempotency-Key`. An optional
+`sourceCursor` is a nonzero 32-byte checkpoint in unpadded base64url, not
+raw directory cursor data or authority; omit it for the source's initial
+position. Inspect `?generationID=…`; its returned `version` becomes
+`expectedVersion` in Cancel alongside `generationID`. Retry Cancel with those
+same inputs and no idempotency header. `canceling` stops new grants while
+original work still needs reconciliation; it is not `canceled`.
+
+Apply remains direct and service-account scoped; this feature never exposes a
+batch body, credential, or directory worker. Omitting the feature omits all
+three routes and their OpenAPI operations.
+
+## Discovery
+
 Select `NewFeature(Config{...})` to compose only `GET /v1/sso/discover` into
 `identityhttp.FeatureServices`. The base HTTP package does not import this
 module or implicitly select the route or its OpenAPI operation.

@@ -19,7 +19,8 @@ import (
 )
 
 // AdminRateEvent is required denial auditing without request secrets, tenant,
-// actor, network address, submitted fields or underlying diagnostics. Reason
+// actor, network address, submitted fields or underlying diagnostics. Operation
+// retains the exact selected organization or directory-sync operation ID. Reason
 // is exactly limited or unavailable. This event is not a protected domain audit.
 type AdminRateEvent struct {
 	Operation organization.Operation
@@ -63,9 +64,9 @@ type adminRateState struct {
 // NewAdminRateLimiter freezes the canonical policy without admission IO. The
 // identity-platform API_OPERATIONS.md rate.admin row owns actor30/minute,
 // tenant100/minute and trusted full-IP60/minute, atomic shared fail-closed
-// admission plus mandatory secret-free denial auditing. Only this finite
-// organization's create/update/member-add/update/remove/invitation-send/resend profile is
-// selected here.
+// admission plus mandatory secret-free denial auditing. Admit selects only its
+// finite organization profile; AdmitDirectorySync selects directory-sync start
+// and cancel without allocating separate budgets.
 func NewAdminRateLimiter(c AdminRateConfig) (out *AdminRateLimiter, err error) {
 	defer func() {
 		if recover() != nil {
@@ -110,6 +111,34 @@ func (l *AdminRateLimiter) Admit(ctx context.Context, facts identityhttp.Network
 	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !selectedMutation(op) || op == organization.InvitationAccept || op == organization.LeaveMember || !boundedID(string(user)) {
 		return AdminRateResult{}, identityhttp.ErrInvalidInput
 	}
+	return l.admitOperation(ctx, facts, op, user)
+}
+
+// AdmitDirectorySync admits only identity.sso.directory-sync-start and
+// identity.sso.directory-sync-cancel using this owner's existing atomic actor,
+// tenant and full-IP budgets. The authenticated user and resolver-owned tenant
+// facts have the same custody requirements as Admit. A nil error means Allowed;
+// audited limit rejection returns bounded ceiling seconds in retryAfter. Other
+// failures return no retry hint and deny admission. Denial auditing records the
+// exact directory operation, never a substitute organization operation.
+func (l *AdminRateLimiter) AdmitDirectorySync(ctx context.Context, facts identityhttp.NetworkFacts, operationID string, user identity.UserID) (retryAfter time.Duration, err error) {
+	if operationID != "identity.sso.directory-sync-start" && operationID != "identity.sso.directory-sync-cancel" {
+		return 0, identityhttp.ErrInvalidInput
+	}
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !boundedID(string(user)) {
+		return 0, identityhttp.ErrInvalidInput
+	}
+	out, err := l.admitOperation(ctx, facts, organization.Operation(operationID), user)
+	if err != nil {
+		return out.RetryAfter, err
+	}
+	if !out.Allowed {
+		return 0, identityhttp.ErrRateUnavailable
+	}
+	return 0, nil
+}
+
+func (l *AdminRateLimiter) admitOperation(ctx context.Context, facts identityhttp.NetworkFacts, op organization.Operation, user identity.UserID) (AdminRateResult, error) {
 	s := l.state()
 	ctx, cancel := context.WithTimeout(ctx, s.config.MaximumDuration)
 	defer cancel()

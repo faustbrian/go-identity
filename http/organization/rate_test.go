@@ -9,11 +9,138 @@ import (
 	"testing"
 	"time"
 
+	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	organizationhttp "github.com/faustbrian/go-identity/http/organization"
 	organization "github.com/faustbrian/go-organization"
 	ratelimit "github.com/faustbrian/go-rate-limit/v2"
 )
+
+type directoryRateAdmitter interface {
+	AdmitDirectorySync(context.Context, identityhttp.NetworkFacts, string, identity.UserID) (time.Duration, error)
+}
+
+// budgetBackend fixes time for a bounded atomic-budget contract test. Production
+// admission still requires the caller's native shared atomic backend.
+type budgetBackend struct {
+	ratelimit.StrictBackend
+	used map[string]uint64
+}
+
+func (*budgetBackend) Name() string { return "test-only-atomic-budget" }
+func (b *budgetBackend) AdmitAtomicStrict(ctx context.Context, r ratelimit.AtomicBatchRequest) (ratelimit.AtomicBatchDecision, error) {
+	if err := ctx.Err(); err != nil {
+		return ratelimit.AtomicBatchDecision{}, err
+	}
+	out := ratelimit.AtomicBatchDecision{CommandID: r.CommandID, Allowed: true, Decisions: make([]ratelimit.Decision, len(r.Requests))}
+	for i, q := range r.Requests {
+		remaining := q.Policy.Capacity() - b.used[q.Policy.ID()+"\x00"+q.Key.String()]
+		d := ratelimit.Decision{Allowed: remaining >= q.Cost, Remaining: remaining, Limit: q.Policy.Capacity(), Reset: q.Now.Add(q.Policy.Period()), Reason: ratelimit.ReasonAllowed}
+		if !d.Allowed {
+			out.Allowed = false
+			d.Reason, d.RetryAfter = ratelimit.ReasonLimited, 1500*time.Millisecond
+		} else {
+			d.Remaining -= q.Cost
+		}
+		out.Decisions[i] = d
+	}
+	if !out.Allowed {
+		for i, q := range r.Requests {
+			if out.Decisions[i].Allowed {
+				out.Decisions[i].Allowed = false
+				out.Decisions[i].Reason = ratelimit.ReasonAtomicRejected
+				out.Decisions[i].Remaining += q.Cost
+			}
+		}
+		return out, ratelimit.ErrRejected
+	}
+	for _, q := range r.Requests {
+		b.used[q.Policy.ID()+"\x00"+q.Key.String()] += q.Cost
+	}
+	return out, nil
+}
+
+func TestDirectorySyncSharesActualAdministrativeBudgetAndAuditsExactOperation(t *testing.T) {
+	for _, operationID := range []string{"identity.sso.directory-sync-start", "identity.sso.directory-sync-cancel"} {
+		t.Run(operationID, func(t *testing.T) {
+			f := newFixture(t)
+			var events []organizationhttp.AdminRateEvent
+			limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{Shared: &budgetBackend{used: make(map[string]uint64)}, Namespace: "organization-test", Key: [32]byte{1}, Now: func() time.Time { return f.now }, MaximumDuration: time.Second, Denied: func(ctx context.Context, event organizationhttp.AdminRateEvent) error {
+				if _, ok := ctx.Deadline(); !ok {
+					t.Fatal("directory denial audit lacks its admission deadline")
+				}
+				events = append(events, event)
+				return nil
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { limiter.Close() })
+			directory, ok := any(limiter).(directoryRateAdmitter)
+			if !ok {
+				t.Fatal("shared administrative owner cannot admit directory sync")
+			}
+			resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+			if err != nil {
+				t.Fatal(err)
+			}
+			facts, err := resolver.Resolve(request(f, "/v1/organization/create", `{}`, true))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for range 29 {
+				if out, err := limiter.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+					t.Fatal("administrative budget exhausted before its actor capacity", err)
+				}
+			}
+			if retry, err := directory.AdmitDirectorySync(t.Context(), facts, operationID, "user-a"); err != nil || retry != 0 {
+				t.Fatal("directory admission did not consume the final shared actor token", retry, err)
+			}
+			if retry, err := directory.AdmitDirectorySync(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || retry != 2*time.Second {
+				t.Fatal("directory admission reset or bypassed the exhausted administrative budget", retry, err)
+			}
+			if len(events) != 1 || string(events[0].Operation) != operationID || events[0].Reason != "limited" {
+				t.Fatal("directory denial did not audit its exact operation", events)
+			}
+			if out, err := limiter.Admit(t.Context(), facts, organization.RemoveMember, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+				t.Fatal("directory attempt did not debit the organization budget", err)
+			}
+		})
+	}
+}
+
+func TestDirectorySyncAdmissionIsFiniteAndFailClosed(t *testing.T) {
+	f := newFixture(t)
+	directory, ok := any(f.c.AdminRate).(directoryRateAdmitter)
+	if !ok {
+		t.Fatal("shared administrative owner cannot admit directory sync")
+	}
+	resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/organization/create", `{}`, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operationID := range []string{"", string(organization.Create), "identity.sso.directory-sync-status", "identity.sso.directory-sync-start-extra"} {
+		if retry, err := directory.AdmitDirectorySync(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != 0 {
+			t.Fatal("unselected operation reached administrative backend", retry, err)
+		}
+	}
+	for _, mode := range []int{2, 3, 4} {
+		f.rate.mode = mode
+		if retry, err := directory.AdmitDirectorySync(t.Context(), facts, "identity.sso.directory-sync-start", "user-a"); !errors.Is(err, identityhttp.ErrRateUnavailable) || retry != 0 {
+			t.Fatal("unavailable directory admission became success", retry, err)
+		}
+	}
+	if f.denials.Load() != 3 {
+		t.Fatal("unavailable directory admissions escaped mandatory denial auditing")
+	}
+	if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Operation("identity.sso.directory-sync-start"), "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 3 {
+		t.Fatal("organization admission was broadened to directory operations")
+	}
+}
 
 func TestAdminRateUsesOneAtomicCanonicalSharedBudget(t *testing.T) {
 	f := newFixture(t)

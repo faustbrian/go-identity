@@ -351,6 +351,15 @@ For the original organization/member operations:
    documented composition), sharing the same network policy. Use the base
    bounded HTTP server for raw IO/write deadlines and body closure.
 
+The same `*AdminRateLimiter` also implements directory-sync administrative
+admission through `AdmitDirectorySync`. Only the exact
+`identity.sso.directory-sync-start` and `identity.sso.directory-sync-cancel`
+operation IDs are accepted. These attempts share the organization actor,
+tenant and trusted-IP budgets, backend and denial auditor; denial events retain
+the exact directory operation ID. A nil error grants admission, while audited
+limit denials return bounded retry-after duration. `Admit` remains limited to
+its existing organization operations.
+
 `organization/postgres.OperationService` implements `Service` directly. No
 application organization store, command journal, transaction adapter or identity
 engine is required. The transport authenticates once for current actor-rate

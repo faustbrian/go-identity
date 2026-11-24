@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into browser directory Start, Status and Cancel with primary session
+  custody and the shared administrative and read budgets. Return the exact
+  generation version without exposing direct batch Apply.
+
 - Opt into SP-generated SAML logout RelayState at the start and return
   operations. Preserve the reserved signed Redirect and route a canonical
   return handle to the native one-use settlement owner. Existing no-state
