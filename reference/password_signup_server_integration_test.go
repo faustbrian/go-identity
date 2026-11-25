@@ -285,6 +285,7 @@ type signupGraphExtensions struct {
 	directorySync               bool
 	directorySyncStandalone     bool
 	directoryGroupApply         bool
+	directoryGroupRoleApply     bool
 	directoryUserApply          bool
 	sessionCache                *referenceSessionCacheProof
 	oauthDevice                 bool
@@ -659,9 +660,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var directoryGroupSource, directoryUserSource *referenceDirectorySCIMSource
 	if extensions.directorySync {
 		configureReferenceDirectorySync(t, &c, origin, extensions.directorySyncStandalone)
-		if extensions.directoryGroupApply {
+		if extensions.directoryGroupApply || extensions.directoryGroupRoleApply {
 			source := configureReferenceDirectoryGroupApply(t, &c, deps)
 			directoryGroupSource = &source
+			if extensions.directoryGroupRoleApply {
+				configureReferenceDirectoryGroupRoles(&c)
+			}
 		}
 		if extensions.directoryUserApply {
 			source := configureReferenceDirectoryUserApply(t, &c, deps)
@@ -2372,8 +2376,15 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				bindUser := func(ctx context.Context, apply reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService {
 					return bindReferenceDirectoryUserGraph(t, ctx, selectedConfig, deps, workerConfigs, apply)
 				}
+				var roleJourney referenceDirectoryRoleJourney
+				if extensions.directoryGroupRoleApply {
+					roleJourney = func(owner organizationTestHuman, generation referenceDirectoryProjection, predecessor [32]byte) [32]byte {
+						member := registerReferenceOrganizationHuman(t, ctx, client, network.URL, origin, selected, workers, messages)
+						return proveReferenceDirectoryGroupRoleJourney(t, ctx, f, config, selectedConfig, deps, workerConfigs, selected, owner, member, *directoryGroupSource, generation, predecessor)
+					}
+				}
 				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone,
-					selectedConfig.OTP.Coordinator, directoryGroupSource, directoryUserSource, bind, bindUser)
+					selectedConfig.OTP.Coordinator, directoryGroupSource, directoryUserSource, bind, bindUser, roleJourney)
 			} else if extensions.organizationRoles {
 				proveReferenceOrganizationRoles(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationTeamCRUD {

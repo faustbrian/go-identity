@@ -25,6 +25,9 @@ type DirectoryGroupSourceConfiguration struct {
 	// Apply binds one immutable mapping to this graph. Leave it nil while
 	// installing or initializing the source. Switch graphs to change mappings.
 	Apply *DirectoryGroupApplyConfiguration
+	// Roles selects the directory role schema and, independently of Apply,
+	// can bind a direct role executor and current permission reader.
+	Roles *DirectoryGroupRoleConfiguration
 }
 
 // DirectoryGroupApplyConfiguration is trusted deployment configuration for
@@ -41,6 +44,7 @@ type DirectoryGroupApplyConfiguration struct {
 type directoryGroupSource struct {
 	source   *scimpg.GroupsService
 	executor *ssopg.DirectoryGroupSyncService
+	roles    *directoryGroupRoleSource
 }
 
 func (DirectoryGroupSourceConfiguration) Format(s fmt.State, _ rune) {
@@ -55,19 +59,26 @@ func (DirectoryGroupSourceConfiguration) MarshalText() ([]byte, error) {
 	return nil, sso.ErrSensitiveSerialization
 }
 
-func composeDirectoryGroupSource(d ReferenceDependencies, scope DirectorySyncConfiguration, p ssopg.ProviderServiceConfig, teamLifecycle bool) (*directoryGroupSource, error) {
+func composeDirectoryGroupSource(d ReferenceDependencies, scope DirectorySyncConfiguration, p ssopg.ProviderServiceConfig, org *organizationState) (*directoryGroupSource, error) {
 	invalid := identity.InvalidInputError{Field: "reference_directory_group_source"}
 	c := *scope.GroupSource
 	selected := c.SCIM.Scope
-	if !teamLifecycle {
+	if !org.teamLifecycle || c.Roles != nil && !org.teamRoleBindings {
 		return nil, invalid
 	}
 	groups, err := composeDirectorySource(d, scope, c.SCIM, c.MaximumMembers)
 	if err != nil {
 		return nil, invalid
 	}
+	source := &directoryGroupSource{source: groups}
+	if c.Roles != nil {
+		source.roles, err = composeDirectoryGroupRoles(d, scope, p, groups)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if c.Apply == nil {
-		return &directoryGroupSource{source: groups}, nil
+		return source, nil
 	}
 	config := *c.Apply
 	mapping := config.Mapping
@@ -89,7 +100,8 @@ func composeDirectoryGroupSource(d ReferenceDependencies, scope DirectorySyncCon
 	if err != nil {
 		return nil, invalid
 	}
-	return &directoryGroupSource{source: groups, executor: executor}, nil
+	source.executor = executor
+	return source, nil
 }
 
 func composeDirectorySource(d ReferenceDependencies, scope DirectorySyncConfiguration, c scimpg.Config, maximum int) (*scimpg.GroupsService, error) {

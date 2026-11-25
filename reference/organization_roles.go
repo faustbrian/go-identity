@@ -83,7 +83,8 @@ func (f *OrganizationService) ListDynamicRoles(ctx context.Context, r organizati
 // CheckPermission evaluates only the authenticated native member's effective
 // custom roles at the exact organization epoch. Static management roles grant
 // no implicit application access; selected team bindings and deny precedence
-// remain native-owned. This selects no HTTP permission endpoint.
+// remain native-owned. When selected, directory-backed roles use the current
+// source rather than cached permission. This selects no HTTP permission endpoint.
 func (f *OrganizationService) CheckPermission(ctx context.Context, r organization.PermissionCheckRequest) (authorization.Decision, error) {
 	if f == nil {
 		return authorization.Decision{}, identity.UnavailableError{}
@@ -93,5 +94,14 @@ func (f *OrganizationService) CheckPermission(ctx context.Context, r organizatio
 		return authorization.Decision{}, err
 	}
 	defer done()
-	return n.operations.CheckPermission(w, r)
+	return n.CheckPermission(w, r)
+}
+
+// CheckPermission keeps the direct and separately selected HTTP consumers on
+// the same authenticated native reader.
+func (n *organizationState) CheckPermission(ctx context.Context, r organization.PermissionCheckRequest) (authorization.Decision, error) {
+	if n.directoryPermission != nil {
+		return n.directoryPermission.CheckPermission(ctx, r)
+	}
+	return n.operations.CheckPermission(ctx, r)
 }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into directory-backed custom team roles. Apply an exact SCIM Group
+  edge to the original generation and check the current source before
+  granting permission, without enabling new HTTP routes.
+
 - Opt into direct directory User Apply on the Reference primary. Grant or
   withdraw exact source-owned organization membership without enabling
   Teams or exposing an Apply HTTP route.

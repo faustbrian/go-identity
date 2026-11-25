@@ -1,11 +1,14 @@
 package reference
 
 import (
+	"maps"
+	"reflect"
 	"slices"
 	"testing"
 
 	kernel "github.com/faustbrian/go-identity/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
+	organizationpg "github.com/faustbrian/go-organization/postgres"
 )
 
 func TestDirectorySyncMigrationCatalogPreservesProviderHistory(t *testing.T) {
@@ -57,7 +60,7 @@ func TestDirectoryGroupMigrationCatalogSharesCanonicalRequests(t *testing.T) {
 		t.Fatal("existing SAML request history changed", err)
 	}
 	for _, before := range [][]migrationHistory{{shared}, {shared, prior}} {
-		after, err := directorySyncSourceMigrationCatalog(ctx, before, true, false)
+		after, err := directorySyncSourceMigrationCatalog(ctx, before, directorySyncSourceMigrations{groups: true})
 		if err != nil || len(after) != 4 || after[1].namespace != canonicalRequestHistory || len(after[1].history) != len(prior.history) ||
 			after[2].namespace != "identity_scim_directory_groups" || after[3].namespace != "identity_organization_directory_grants" {
 			t.Fatal("Group selection did not preserve and reuse the same schema histories", err)
@@ -81,16 +84,16 @@ func TestDirectoryUserMigrationCatalogSharesSCIMWithoutSelectingTeamGrants(t *te
 		t.Fatal(err)
 	}
 	input := []migrationHistory{{history: nativeBase}}
-	groups, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), true, false)
+	groups, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), directorySyncSourceMigrations{groups: true})
 	if err != nil || len(groups) != 4 {
 		t.Fatal("Group baseline missing", err)
 	}
-	users, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), false, true)
+	users, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), directorySyncSourceMigrations{users: true})
 	if err != nil || len(users) != 4 || users[3].namespace != "identity_organization_directory_membership" ||
 		len(users[3].guards) != 1 || !slices.Equal(users[3].guards[0].tables, []string{"directory_membership_grants"}) {
 		t.Fatal("User selection did not choose only the User membership history", err)
 	}
-	both, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), true, true)
+	both, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), directorySyncSourceMigrations{groups: true, users: true})
 	if err != nil || len(both) != 5 || both[3].namespace != groups[3].namespace || both[4].namespace != users[3].namespace {
 		t.Fatal("combined selection duplicated the common history or reordered known steps", err)
 	}
@@ -106,5 +109,95 @@ func TestDirectoryUserMigrationCatalogSharesSCIMWithoutSelectingTeamGrants(t *te
 				}
 			}
 		}
+	}
+}
+
+func TestDirectoryRoleMigrationCatalogSelectsIndependentHistory(t *testing.T) {
+	ctx := t.Context()
+	base, err := migrations.NewMigration(1, "identity_base", migrations.TransactionModeDefault, "SELECT 1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeBase, err := (kernel.RequestKeyMigrationSource{Base: fixedMigrationSource{base}, Version: 1017}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeRoles, err := (organizationpg.DirectoryTeamRoleMigrationSource{Version: 1}).Load(ctx)
+	if err != nil || len(nativeRoles) != 1 {
+		t.Fatal("native directory role history missing", err)
+	}
+	for _, profile := range []struct {
+		name             string
+		withUsers        bool
+		existingRequests bool
+	}{
+		{name: "Group"},
+		{name: "GroupWithExistingRequests", existingRequests: true},
+		{name: "GroupAndUser", withUsers: true},
+		{name: "GroupAndUserWithExistingRequests", withUsers: true, existingRequests: true},
+	} {
+		t.Run(profile.name, func(t *testing.T) {
+			input := []migrationHistory{{history: nativeBase}}
+			if profile.existingRequests {
+				requests, err := canonicalRequestMigrationHistory(ctx, nativeBase)
+				if err != nil {
+					t.Fatal(err)
+				}
+				input = append(input, requests)
+			}
+			groups := &directoryGroupSource{}
+			directory := &directorySyncState{groups: groups}
+			if profile.withUsers {
+				directory.users = &directoryUserSource{}
+			}
+			store := StoreSet{state: &storeState{features: &featureState{directorySync: directory}}}
+			ordinary, err := store.directorySyncMigrationCatalog(ctx, slices.Clone(input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			const roleNamespace = "identity_organization_directory_roles"
+			if slices.ContainsFunc(ordinary, func(h migrationHistory) bool { return h.namespace == roleNamespace }) {
+				t.Fatal("nil role profile selected the role schema")
+			}
+			groups.roles = &directoryGroupRoleSource{}
+			selected, err := store.directorySyncMigrationCatalog(ctx, slices.Clone(input))
+			if err != nil || len(selected) != len(ordinary)+1 {
+				t.Fatal("role profile without an executor did not select exactly one independent history", err)
+			}
+			grantsIndex := slices.IndexFunc(selected, func(h migrationHistory) bool {
+				return h.namespace == "identity_organization_directory_grants"
+			})
+			roleIndex := slices.IndexFunc(selected, func(h migrationHistory) bool { return h.namespace == roleNamespace })
+			if grantsIndex < 0 || roleIndex != grantsIndex+1 {
+				t.Fatal("role history did not follow the existing Group grants history")
+			}
+			roles := selected[roleIndex]
+			if len(roles.history) != 1 || roles.history[0].Version() != 1 || roles.history[0].Checksum() != nativeRoles[0].Checksum() ||
+				!maps.Equal(roles.owners, map[migrations.Version]ModuleID{1: "organization/postgres"}) || roles.preflight != "" {
+				t.Fatal("role history changed native migration bytes or ownership")
+			}
+			guards := []migrationGuard{{version: 1, schema: "organization", tables: []string{"directory_team_role_grants"}}}
+			if !reflect.DeepEqual(roles.guards, guards) {
+				t.Fatal("role history did not guard exactly organization.directory_team_role_grants")
+			}
+			withoutRoles := append(slices.Clone(selected[:roleIndex]), selected[roleIndex+1:]...)
+			seen := make(map[string]bool)
+			for i, before := range ordinary {
+				after := withoutRoles[i]
+				if seen[after.namespace] {
+					t.Fatalf("role selection duplicated history %q", after.namespace)
+				}
+				seen[after.namespace] = true
+				if before.namespace != after.namespace || len(before.history) != len(after.history) ||
+					!maps.Equal(before.owners, after.owners) || !reflect.DeepEqual(before.guards, after.guards) || before.preflight != after.preflight {
+					t.Fatalf("role selection changed existing history %q", before.namespace)
+				}
+				for j, step := range before.history {
+					if step.Version() != after.history[j].Version() || step.Checksum() != after.history[j].Checksum() {
+						t.Fatalf("role selection changed existing migration bytes in %q", before.namespace)
+					}
+				}
+			}
+		})
 	}
 }

@@ -13,6 +13,7 @@ import (
 	ssohttp "github.com/faustbrian/go-identity/http/sso"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
+	organization "github.com/faustbrian/go-organization"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	"github.com/faustbrian/go-sso"
@@ -153,9 +154,20 @@ func composeDirectorySync(c StoreConfiguration, d ReferenceDependencies, crypto 
 	}
 	state := &directorySyncState{scope: scope, pool: pool, provider: providers, csrf: slices.Clone(c.Session.CSRFKeys)}
 	if scope.GroupSource != nil {
-		state.groups, err = composeDirectoryGroupSource(d, scope, providers, org.teamLifecycle)
+		state.groups, err = composeDirectoryGroupSource(d, scope, providers, org)
 		if err != nil {
 			return nil, err
+		}
+		roles := state.groups.roles
+		if roles != nil && roles.executor != nil {
+			repository, err := org.repository.WithDirectoryTeamRoles(roles.executor.CurrentRoleSources)
+			if err != nil {
+				return nil, invalid
+			}
+			org.directoryPermission, err = organization.NewService(sessions.reader, repository, query.Authorization, org.permissionConfig)
+			if err != nil {
+				return nil, invalid
+			}
 		}
 		state.scope.GroupSource = nil
 	}

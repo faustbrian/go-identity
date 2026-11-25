@@ -550,6 +550,26 @@ inactive revision or delete tombstone withdraws only that directory source;
 global identity and independent organization authority remain unchanged.
 No Apply route, worker loop, mixed batch or directory role mapping is enabled.
 
+For directory-backed custom team roles, enable native team-role bindings and
+select `DirectorySync.GroupSource.Roles`. Leave `Roles.Apply` unset on the
+initial graph to select the existing native directory-role migration without
+enabling a worker or changing permission reads. Initialize the shared SCIM
+source and configure the existing teams and custom-role bindings before use.
+
+Set `Roles.Apply` on the worker graph with the explicit source, local member,
+team and role mapping. The SCIM service account needs role-Apply authorization
+for the exact generation, plus independent child admission and receipt-query
+authorization. Use `FeatureSet.DirectoryGroupRoleApply` with the opaque
+generation ID, exact mapping version, predecessor and one original Group
+child. A membership-only receipt cannot satisfy role Apply. Retry the same
+command on an unknown outcome; a historical retry cannot rewind the cursor.
+
+With the role worker selected, native organization permission checks and any
+separately enabled permission-check endpoint use that same live source. A
+removed SCIM edge cannot grant permission, even before its withdrawal is
+applied to the generation. Independent local and other-source grants keep
+their original policy. This adds no route, worker loop or mixed role batch.
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

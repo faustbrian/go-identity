@@ -39,10 +39,14 @@ func (s StoreSet) directorySyncMigrationCatalog(ctx context.Context, catalog []m
 	if profile.groups == nil && profile.users == nil {
 		return catalog, nil
 	}
-	return directorySyncSourceMigrationCatalog(ctx, catalog, profile.groups != nil, profile.users != nil)
+	return directorySyncSourceMigrationCatalog(ctx, catalog, directorySyncSourceMigrations{
+		groups: profile.groups != nil, users: profile.users != nil, roles: profile.groups != nil && profile.groups.roles != nil,
+	})
 }
 
-func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migrationHistory, withGroups, withUsers bool) ([]migrationHistory, error) {
+type directorySyncSourceMigrations struct{ groups, users, roles bool }
+
+func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migrationHistory, selected directorySyncSourceMigrations) ([]migrationHistory, error) {
 	if len(catalog) == 0 || catalog[0].namespace != "" {
 		return nil, identity.InvalidInputError{Field: "reference_catalog"}
 	}
@@ -68,7 +72,7 @@ func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migratio
 		migrationGuard{version: 2, schema: "scim", columns: []string{"users.generation", "users.deleted_at"}},
 		migrationGuard{version: 3, schema: "scim", tables: []string{"groups"}})
 	catalog = append(catalog, scimHistory)
-	if withGroups {
+	if selected.groups {
 		grants := migrationHistory{namespace: "identity_organization_directory_grants", owners: map[migrations.Version]ModuleID{}}
 		err := appendEnterpriseMigration(ctx, &grants, "organization/postgres", organizationpg.DirectoryTeamGrantMigrationSource{Version: 1},
 			migrationGuard{version: 1, schema: "organization", tables: []string{"directory_team_grants"}})
@@ -76,8 +80,17 @@ func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migratio
 			return nil, err
 		}
 		catalog = append(catalog, grants)
+		if selected.roles {
+			roles := migrationHistory{namespace: "identity_organization_directory_roles", owners: map[migrations.Version]ModuleID{}}
+			err := appendEnterpriseMigration(ctx, &roles, "organization/postgres", organizationpg.DirectoryTeamRoleMigrationSource{Version: 1},
+				migrationGuard{version: 1, schema: "organization", tables: []string{"directory_team_role_grants"}})
+			if err != nil {
+				return nil, err
+			}
+			catalog = append(catalog, roles)
+		}
 	}
-	if withUsers {
+	if selected.users {
 		members := migrationHistory{namespace: "identity_organization_directory_membership", owners: map[migrations.Version]ModuleID{}}
 		err := appendEnterpriseMigration(ctx, &members, "organization/postgres", organizationpg.DirectoryMembershipMigrationSource{Version: 1},
 			migrationGuard{version: 1, schema: "organization", tables: []string{"directory_membership_grants"}})

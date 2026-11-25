@@ -89,12 +89,12 @@ func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.Deci
 	if d.Request.Subject.Kind == authorization.SubjectServiceAccount && d.Request.Subject.ID == referenceDirectorySCIMActor &&
 		d.Request.Tenant == otpTenant && d.PolicyRevision == 9 {
 		switch d.Request.Action {
-		case "identity.sso.directory-sync-apply", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID),
+		case "identity.sso.directory-sync-apply", "identity.sso.directory-sync-apply-role", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID),
 			authorization.Action(sso.DirectoryUserAdmissionOperation().OperationID), authorization.Action(sso.DirectoryUserDeprovisionOperation().OperationID):
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
-	return (referenceOrganizationTeamsPolicy{}).Decide(ctx, d)
+	return (referenceOrganizationRolesPolicy{}).Decide(ctx, d)
 }
 
 func (p referenceDirectoryPolicy) ObserveDirectorySyncAuthorization(ctx context.Context, d authorization.DecisionContext, version uint64) (ssopg.ProviderUpdateAuthorizationEvidence, error) {
@@ -160,7 +160,9 @@ type referenceDirectoryProjection struct {
 
 type referenceDirectoryApplyBinding func(context.Context, reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService
 
-func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, groupSource, userSource *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding, bindUser func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService) {
+type referenceDirectoryRoleJourney func(organizationTestHuman, referenceDirectoryProjection, [32]byte) [32]byte
+
+func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, groupSource, userSource *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding, bindUser func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService, roleJourney referenceDirectoryRoleJourney) {
 	t.Helper()
 	sessions, err := features.Sessions()
 	if err != nil || len(cookies) != 1 || csrf == "" {
@@ -310,6 +312,9 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 	var applied [32]byte
 	var wantApplied uint64
 	switch {
+	case roleJourney != nil:
+		applied = roleJourney(human, first, [32]byte(checkpoint))
+		wantApplied = 2
 	case groupSource != nil:
 		applied = proveReferenceMappedGroupApply(t, ctx, f, features, human, *groupSource, first, [32]byte(checkpoint), bind)
 		wantApplied = 1
