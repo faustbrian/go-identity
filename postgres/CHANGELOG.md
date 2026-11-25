@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Allow the native SCIM Bulk failure callback to append protected cutoff
+  audits for the exact skipped children before the failure commits. Each skip
+  uses its own command binding without altering the trigger's frozen audit plan.
+
 - Allow the exact registered native SCIM Bulk child owner to record a finite
   Group denial in the guarded failure-audit and terminal receipt transaction,
   after the original mutation has rolled back. Owners without the optional

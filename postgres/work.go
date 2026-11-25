@@ -110,6 +110,7 @@ type workState struct {
 	privacyAllocation         *privacyAllocation
 	privacyReceipt            *identity.PrivacyExportRequestReceipt
 	privacyAdmission          *privacyAdmissionProgress
+	scimBulkSkip              *scimBulkSkipPhase
 }
 
 // newWork is private: only the sole coordinator may call it after verifying

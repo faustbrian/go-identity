@@ -36,9 +36,11 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 	if !ok {
 		return nil // A previously compiled native adapter retains its original behavior.
 	}
+	w.state.scimBulkSkip = &scimBulkSkipPhase{}
 	w.state.featureInvocation = owner
 	defer func() {
 		w.state.featureInvocation = nil
+		w.state.scimBulkSkip = nil
 		if recover() != nil {
 			err = w.fail(ctx, identity.UnavailableError{})
 		}
@@ -46,6 +48,7 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 	if err := owner.RecordSCIMBulkChildFailure(ctx, w, code); err != nil {
 		return w.fail(ctx, identity.UnavailableError{})
 	}
+	w.state.featureInvocation = nil
 	if w.state.rows != nil {
 		return w.fail(ctx, invalidWork())
 	}
