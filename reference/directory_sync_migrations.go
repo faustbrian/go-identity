@@ -35,13 +35,14 @@ func (s StoreSet) directorySyncMigrationCatalog(ctx context.Context, catalog []m
 		return nil, err
 	}
 	catalog = append(catalog, generation)
-	if s.state.features.directorySync.groups == nil {
+	profile := s.state.features.directorySync
+	if profile.groups == nil && profile.users == nil {
 		return catalog, nil
 	}
-	return directorySyncGroupMigrationCatalog(ctx, catalog)
+	return directorySyncSourceMigrationCatalog(ctx, catalog, profile.groups != nil, profile.users != nil)
 }
 
-func directorySyncGroupMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migrationHistory, withGroups, withUsers bool) ([]migrationHistory, error) {
 	if len(catalog) == 0 || catalog[0].namespace != "" {
 		return nil, identity.InvalidInputError{Field: "reference_catalog"}
 	}
@@ -52,6 +53,8 @@ func directorySyncGroupMigrationCatalog(ctx context.Context, catalog []migration
 		}
 		catalog = append(catalog, requests)
 	}
+	// Keep the complete, already-published SCIM history under one namespace.
+	// Adding or removing a worker profile must not re-own its installed prefix.
 	scimHistory := migrationHistory{namespace: "identity_scim_directory_groups", owners: map[migrations.Version]ModuleID{}}
 	base := scimpg.MigrationSource{Version: 1}
 	users := scimpg.UsersMigrationSource{Base: base, Version: 2}
@@ -64,11 +67,24 @@ func directorySyncGroupMigrationCatalog(ctx context.Context, catalog []migration
 	scimHistory.guards = append(scimHistory.guards,
 		migrationGuard{version: 2, schema: "scim", columns: []string{"users.generation", "users.deleted_at"}},
 		migrationGuard{version: 3, schema: "scim", tables: []string{"groups"}})
-	grants := migrationHistory{namespace: "identity_organization_directory_grants", owners: map[migrations.Version]ModuleID{}}
-	err = appendEnterpriseMigration(ctx, &grants, "organization/postgres", organizationpg.DirectoryTeamGrantMigrationSource{Version: 1},
-		migrationGuard{version: 1, schema: "organization", tables: []string{"directory_team_grants"}})
-	if err != nil {
-		return nil, err
+	catalog = append(catalog, scimHistory)
+	if withGroups {
+		grants := migrationHistory{namespace: "identity_organization_directory_grants", owners: map[migrations.Version]ModuleID{}}
+		err := appendEnterpriseMigration(ctx, &grants, "organization/postgres", organizationpg.DirectoryTeamGrantMigrationSource{Version: 1},
+			migrationGuard{version: 1, schema: "organization", tables: []string{"directory_team_grants"}})
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, grants)
 	}
-	return append(catalog, scimHistory, grants), nil
+	if withUsers {
+		members := migrationHistory{namespace: "identity_organization_directory_membership", owners: map[migrations.Version]ModuleID{}}
+		err := appendEnterpriseMigration(ctx, &members, "organization/postgres", organizationpg.DirectoryMembershipMigrationSource{Version: 1},
+			migrationGuard{version: 1, schema: "organization", tables: []string{"directory_membership_grants"}})
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, members)
+	}
+	return catalog, nil
 }

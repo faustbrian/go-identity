@@ -39,6 +39,7 @@ type DirectoryGroupApplyConfiguration struct {
 }
 
 type directoryGroupSource struct {
+	source   *scimpg.GroupsService
 	executor *ssopg.DirectoryGroupSyncService
 }
 
@@ -58,23 +59,15 @@ func composeDirectoryGroupSource(d ReferenceDependencies, scope DirectorySyncCon
 	invalid := identity.InvalidInputError{Field: "reference_directory_group_source"}
 	c := *scope.GroupSource
 	selected := c.SCIM.Scope
-	if !teamLifecycle || selected.TenantID != scope.TenantID || string(selected.OrganizationID) != scope.OrganizationID || selected.ConnectionID != scope.ConnectionID {
+	if !teamLifecycle {
 		return nil, invalid
 	}
-	keys, ok := d.EnvelopeKeys.(*keyring.Provider)
-	if !ok || keys == nil {
-		return nil, invalid
-	}
-	native, err := scimpg.NewService(d.PostgreSQL, c.SCIM, keys)
-	if err != nil {
-		return nil, invalid
-	}
-	groups, err := scimpg.NewGroupsService(native, c.MaximumMembers)
+	groups, err := composeDirectorySource(d, scope, c.SCIM, c.MaximumMembers)
 	if err != nil {
 		return nil, invalid
 	}
 	if c.Apply == nil {
-		return &directoryGroupSource{}, nil
+		return &directoryGroupSource{source: groups}, nil
 	}
 	config := *c.Apply
 	mapping := config.Mapping
@@ -96,7 +89,20 @@ func composeDirectoryGroupSource(d ReferenceDependencies, scope DirectorySyncCon
 	if err != nil {
 		return nil, invalid
 	}
-	return &directoryGroupSource{executor: executor}, nil
+	return &directoryGroupSource{source: groups, executor: executor}, nil
+}
+
+func composeDirectorySource(d ReferenceDependencies, scope DirectorySyncConfiguration, c scimpg.Config, maximum int) (*scimpg.GroupsService, error) {
+	selected := c.Scope
+	keys, ok := d.EnvelopeKeys.(*keyring.Provider)
+	if !ok || keys == nil || selected.TenantID != scope.TenantID || string(selected.OrganizationID) != scope.OrganizationID || selected.ConnectionID != scope.ConnectionID {
+		return nil, identity.InvalidInputError{Field: "reference_directory_source"}
+	}
+	native, err := scimpg.NewService(d.PostgreSQL, c, keys)
+	if err != nil {
+		return nil, err
+	}
+	return scimpg.NewGroupsService(native, maximum)
 }
 
 // DirectoryGroupApplyService is a direct, versioned worker handle. Copies

@@ -107,9 +107,9 @@ func newReferenceDirectorySCIMSource(t *testing.T, pool *database.Pool, keys *ke
 
 // The operator schema, deployment/tenant authorities, and genuine organization
 // must already exist. These calls use their real owners; no SCIM or identity
-// state is inserted by fixture SQL. Mapping to a local user/team stays explicit
-// in the caller rather than being inferred from the created SCIM identifiers.
-func (f referenceDirectorySCIMSource) createGroupEdge(t *testing.T, ctx context.Context) referenceDirectorySCIMEdge {
+// state is inserted by fixture SQL. The caller explicitly selects source fields
+// and any mapping from the resulting SCIM resource to a local user.
+func (f referenceDirectorySCIMSource) createUser(t *testing.T, ctx context.Context, body string) scim.Response {
 	t.Helper()
 	_, err := authoritypg.InitializeAuthority(ctx, f.pool.Raw(), authoritypg.AuthorityScope{
 		TenantID: authorization.TenantID(f.config.Scope.TenantID), PolicyNamespace: f.config.AuthorityNamespace,
@@ -125,11 +125,17 @@ func (f referenceDirectorySCIMSource) createGroupEdge(t *testing.T, ctx context.
 	user, err := f.native.Execute(ctx, scim.Request{
 		Operation: scim.UserCreate, Credential: f.bearer, ContentType: "application/scim+json",
 		IdempotencyKey: "reference-directory-source-user",
-		Body:           []byte(`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"ReferenceDirectoryMember","displayName":"Reference directory member"}`),
+		Body:           []byte(body),
 	})
 	if err != nil {
 		t.Fatal("create real SCIM source User", err)
 	}
+	return user
+}
+
+func (f referenceDirectorySCIMSource) createGroupEdge(t *testing.T, ctx context.Context) referenceDirectorySCIMEdge {
+	t.Helper()
+	user := f.createUser(t, ctx, `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"ReferenceDirectoryMember","displayName":"Reference directory member"}`)
 	userID := referenceDirectorySCIMResourceID(t, user, http.StatusCreated)
 	groupBody, err := json.Marshal(struct {
 		Schemas     []string            `json:"schemas"`

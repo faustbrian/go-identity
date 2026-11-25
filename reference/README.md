@@ -533,6 +533,23 @@ checkpoint and the original ordered child commands. It needs no human
 credential and exposes no HTTP route. Retry with the same predecessor and
 child IDs; the current Status and Cancel continue to use browser authority.
 
+To run User Apply, opt into `DirectorySync.UserSource`. Supply the SCIM
+configuration for a User-only graph; if GroupSource is also selected, leave
+UserSource.SCIM unset to use that exact same source. User-only does not
+require Teams. Run the operator migrations for the same selected owners:
+the graph reuses SCIM history and adds the organization membership grant
+history. Leave Apply unset while installing or initializing the source.
+
+In the worker graph, set UserSource.Apply to your explicit versioned mapping,
+the generation and child authorization owners, and the positive membership
+limits for new grants. Select active admission and withdrawal independently.
+Use `FeatureSet.DirectoryUserApply` for one exact User delta, with the opaque
+Start ID, provider, mapping version, predecessor checkpoint and original child
+command ID. Retry with the same request after an unknown result. An exact
+inactive revision or delete tombstone withdraws only that directory source;
+global identity and independent organization authority remain unchanged.
+No Apply route, worker loop, mixed batch or directory role mapping is enabled.
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

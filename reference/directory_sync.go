@@ -34,6 +34,9 @@ type DirectorySyncConfiguration struct {
 	// history. Add its Apply configuration to bind a direct executor; neither
 	// selection starts a worker or adds routes.
 	GroupSource *DirectoryGroupSourceConfiguration
+	// UserSource selects directory-owned organization membership independently
+	// of Teams. With GroupSource selected it borrows the exact same SCIM source.
+	UserSource *DirectoryUserSourceConfiguration
 }
 
 // HTTPDirectorySyncConfiguration separately enables Start, Status and Cancel.
@@ -77,6 +80,7 @@ type directorySyncState struct {
 	admin    *organizationhttp.AdminRateLimiter
 	owned    bool
 	groups   *directoryGroupSource
+	users    *directoryUserSource
 }
 
 func (s *directorySyncState) close() {
@@ -154,6 +158,13 @@ func composeDirectorySync(c StoreConfiguration, d ReferenceDependencies, crypto 
 			return nil, err
 		}
 		state.scope.GroupSource = nil
+	}
+	if scope.UserSource != nil {
+		state.users, err = composeDirectoryUserSource(d, scope, providers, state.groups)
+		if err != nil {
+			return nil, err
+		}
+		state.scope.UserSource = nil
 	}
 	h := c.HTTPDirectorySync
 	if h == nil {

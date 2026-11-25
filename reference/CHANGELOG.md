@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into direct directory User Apply on the Reference primary. Grant or
+  withdraw exact source-owned organization membership without enabling
+  Teams or exposing an Apply HTTP route.
+
 - Run explicitly mapped SCIM Group Apply on the Reference primary between
   directory Start, Status and Cancel. Resolve the opaque generation ID in
   the native worker and retain exact original-child retry custody.

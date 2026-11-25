@@ -285,6 +285,7 @@ type signupGraphExtensions struct {
 	directorySync               bool
 	directorySyncStandalone     bool
 	directoryGroupApply         bool
+	directoryUserApply          bool
 	sessionCache                *referenceSessionCacheProof
 	oauthDevice                 bool
 	oauthDeviceBaseInstalled    bool
@@ -655,12 +656,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
 	}
-	var directoryGroupSource *referenceDirectorySCIMSource
+	var directoryGroupSource, directoryUserSource *referenceDirectorySCIMSource
 	if extensions.directorySync {
 		configureReferenceDirectorySync(t, &c, origin, extensions.directorySyncStandalone)
 		if extensions.directoryGroupApply {
 			source := configureReferenceDirectoryGroupApply(t, &c, deps)
 			directoryGroupSource = &source
+		}
+		if extensions.directoryUserApply {
+			source := configureReferenceDirectoryUserApply(t, &c, deps)
+			directoryUserSource = &source
 		}
 	}
 	if extensions.organizationKey && !extensions.organizationKeyUpgrade {
@@ -1476,7 +1481,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
 	}
-	if directoryGroupSource != nil {
+	if directoryGroupSource != nil || directoryUserSource != nil {
 		modules = append(modules, "scim/postgres")
 	}
 	if c.APIKey != nil {
@@ -2364,7 +2369,11 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				bind := func(ctx context.Context, apply reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService {
 					return bindReferenceDirectoryGroupGraph(t, ctx, selectedConfig, deps, workerConfigs, apply)
 				}
-				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone, selectedConfig.OTP.Coordinator, directoryGroupSource, bind)
+				bindUser := func(ctx context.Context, apply reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService {
+					return bindReferenceDirectoryUserGraph(t, ctx, selectedConfig, deps, workerConfigs, apply)
+				}
+				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone,
+					selectedConfig.OTP.Coordinator, directoryGroupSource, directoryUserSource, bind, bindUser)
 			} else if extensions.organizationRoles {
 				proveReferenceOrganizationRoles(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationTeamCRUD {

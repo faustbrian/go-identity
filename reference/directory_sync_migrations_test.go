@@ -57,7 +57,7 @@ func TestDirectoryGroupMigrationCatalogSharesCanonicalRequests(t *testing.T) {
 		t.Fatal("existing SAML request history changed", err)
 	}
 	for _, before := range [][]migrationHistory{{shared}, {shared, prior}} {
-		after, err := directorySyncGroupMigrationCatalog(ctx, before)
+		after, err := directorySyncSourceMigrationCatalog(ctx, before, true, false)
 		if err != nil || len(after) != 4 || after[1].namespace != canonicalRequestHistory || len(after[1].history) != len(prior.history) ||
 			after[2].namespace != "identity_scim_directory_groups" || after[3].namespace != "identity_organization_directory_grants" {
 			t.Fatal("Group selection did not preserve and reuse the same schema histories", err)
@@ -65,6 +65,45 @@ func TestDirectoryGroupMigrationCatalogSharesCanonicalRequests(t *testing.T) {
 		for i, step := range after[1].history {
 			if step.Version() != prior.history[i].Version() || step.Checksum() != prior.history[i].Checksum() {
 				t.Fatal("Group selection changed the installed canonical request history")
+			}
+		}
+	}
+}
+
+func TestDirectoryUserMigrationCatalogSharesSCIMWithoutSelectingTeamGrants(t *testing.T) {
+	ctx := t.Context()
+	base, err := migrations.NewMigration(1, "identity_base", migrations.TransactionModeDefault, "SELECT 1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeBase, err := (kernel.RequestKeyMigrationSource{Base: fixedMigrationSource{base}, Version: 1017}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := []migrationHistory{{history: nativeBase}}
+	groups, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), true, false)
+	if err != nil || len(groups) != 4 {
+		t.Fatal("Group baseline missing", err)
+	}
+	users, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), false, true)
+	if err != nil || len(users) != 4 || users[3].namespace != "identity_organization_directory_membership" ||
+		len(users[3].guards) != 1 || !slices.Equal(users[3].guards[0].tables, []string{"directory_membership_grants"}) {
+		t.Fatal("User selection did not choose only the User membership history", err)
+	}
+	both, err := directorySyncSourceMigrationCatalog(ctx, slices.Clone(input), true, true)
+	if err != nil || len(both) != 5 || both[3].namespace != groups[3].namespace || both[4].namespace != users[3].namespace {
+		t.Fatal("combined selection duplicated the common history or reordered known steps", err)
+	}
+	for i := range both[:3] {
+		for _, catalog := range [][]migrationHistory{groups, users} {
+			step, combined := catalog[i], both[i]
+			if step.namespace != combined.namespace || len(step.history) != len(combined.history) {
+				t.Fatal("selection changed an existing migration history")
+			}
+			for j, migration := range step.history {
+				if migration.Version() != combined.history[j].Version() || migration.Checksum() != combined.history[j].Checksum() {
+					t.Fatal("selection changed an existing migration's bytes")
+				}
 			}
 		}
 	}

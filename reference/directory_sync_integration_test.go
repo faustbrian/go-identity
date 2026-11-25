@@ -89,7 +89,8 @@ func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.Deci
 	if d.Request.Subject.Kind == authorization.SubjectServiceAccount && d.Request.Subject.ID == referenceDirectorySCIMActor &&
 		d.Request.Tenant == otpTenant && d.PolicyRevision == 9 {
 		switch d.Request.Action {
-		case "identity.sso.directory-sync-apply", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID):
+		case "identity.sso.directory-sync-apply", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID),
+			authorization.Action(sso.DirectoryUserAdmissionOperation().OperationID), authorization.Action(sso.DirectoryUserDeprovisionOperation().OperationID):
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -102,6 +103,10 @@ func (p referenceDirectoryPolicy) ObserveDirectorySyncAuthorization(ctx context.
 }
 
 func (p referenceDirectoryPolicy) ObserveDirectoryGroupAuthorization(ctx context.Context, d authorization.DecisionContext, version uint64) (ssopg.ProviderUpdateAuthorizationEvidence, error) {
+	return p.ObserveDirectorySyncAuthorization(ctx, d, version)
+}
+
+func (p referenceDirectoryPolicy) ObserveDirectoryUserAuthorization(ctx context.Context, d authorization.DecisionContext, version uint64) (ssopg.ProviderUpdateAuthorizationEvidence, error) {
 	return p.ObserveDirectorySyncAuthorization(ctx, d, version)
 }
 
@@ -155,7 +160,7 @@ type referenceDirectoryProjection struct {
 
 type referenceDirectoryApplyBinding func(context.Context, reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService
 
-func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, source *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding) {
+func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, groupSource, userSource *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding, bindUser func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService) {
 	t.Helper()
 	sessions, err := features.Sessions()
 	if err != nil || len(cookies) != 1 || csrf == "" {
@@ -297,12 +302,24 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 	}
 	call(http.MethodGet, "/v1/sso/directory-sync-status?generationID="+string(foreign), "", "", true, 403)
 	if _, err := features.DirectoryGroupApply(); err == nil {
-		t.Fatal("directory administration or source setup unexpectedly selected direct Apply")
+		t.Fatal("directory administration or source setup unexpectedly selected direct Group Apply")
 	}
-	if source != nil {
-		applied := proveReferenceMappedGroupApply(t, ctx, f, features, human, *source, first, [32]byte(checkpoint), bind)
+	if _, err := features.DirectoryUserApply(); err == nil {
+		t.Fatal("directory administration or source setup unexpectedly selected direct User Apply")
+	}
+	var applied [32]byte
+	var wantApplied uint64
+	switch {
+	case groupSource != nil:
+		applied = proveReferenceMappedGroupApply(t, ctx, f, features, human, *groupSource, first, [32]byte(checkpoint), bind)
+		wantApplied = 1
+	case userSource != nil:
+		applied = proveReferenceMappedUserApply(t, ctx, f, *userSource, first, [32]byte(checkpoint), bindUser)
+		wantApplied = 2
+	}
+	if wantApplied != 0 {
 		running = decode(call(http.MethodGet, statusPath, "", "", true, 200))
-		if running.Checkpoint != base64.RawURLEncoding.EncodeToString(applied[:]) || running.ReadCount != 1 || running.AppliedCount != 1 || running.RejectedCount != 0 || running.Version <= 1 {
+		if running.Checkpoint != base64.RawURLEncoding.EncodeToString(applied[:]) || running.ReadCount != wantApplied || running.AppliedCount != wantApplied || running.RejectedCount != 0 || running.Version <= 1 {
 			t.Fatal("browser status did not read the original direct Apply successor")
 		}
 	}
