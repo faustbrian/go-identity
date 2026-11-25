@@ -112,6 +112,63 @@ func TestDirectoryUserMigrationCatalogSharesSCIMWithoutSelectingTeamGrants(t *te
 	}
 }
 
+func TestDirectoryMixedMigrationCatalogAppendsNativeSuccessorHistory(t *testing.T) {
+	ctx := t.Context()
+	base, err := migrations.NewMigration(1, "identity_base", migrations.TransactionModeDefault, "SELECT 1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeBase, err := (kernel.RequestKeyMigrationSource{Base: fixedMigrationSource{base}, Version: 1017}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := &directoryGroupSource{roles: &directoryGroupRoleSource{}}
+	directory := &directorySyncState{groups: groups, users: &directoryUserSource{}}
+	store := StoreSet{state: &storeState{features: &featureState{directorySync: directory}}}
+	input := []migrationHistory{{history: nativeBase}}
+	prior, err := store.directorySyncMigrationCatalog(ctx, slices.Clone(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups.mixed = &directoryMixedSource{}
+	directory.users = nil
+	selected, err := store.directorySyncMigrationCatalog(ctx, slices.Clone(input))
+	if err != nil || len(selected) != len(prior)+2 {
+		t.Fatal("mixed role selection did not preserve the existing histories and append both owner successors", err)
+	}
+	for i, before := range prior {
+		after := selected[i]
+		if before.namespace != after.namespace || len(before.history) != len(after.history) ||
+			!maps.Equal(before.owners, after.owners) || !reflect.DeepEqual(before.guards, after.guards) {
+			t.Fatalf("mixed selection changed existing history %q", before.namespace)
+		}
+		for j, step := range before.history {
+			if step.Version() != after.history[j].Version() || step.Checksum() != after.history[j].Checksum() {
+				t.Fatalf("mixed selection changed existing migration bytes in %q", before.namespace)
+			}
+		}
+	}
+	successor := selected[len(prior)]
+	want := []migrationGuard{{version: 1, schema: "organization", columns: []string{
+		"command_effects.directory_org_before", "command_effects.directory_org_after", "command_effects.directory_credential_version",
+	}}}
+	if successor.namespace != "identity_organization_directory_successor" || len(successor.history) != 1 ||
+		!maps.Equal(successor.owners, map[migrations.Version]ModuleID{1: "organization/postgres"}) || !reflect.DeepEqual(successor.guards, want) {
+		t.Fatal("mixed migration did not preserve the native successor owner and exact column guard")
+	}
+	role := selected[len(prior)+1]
+	roleSteps, err := (organizationpg.DirectoryTeamRoleSuccessorMigrationSource{Version: 1}).Load(ctx)
+	if err != nil || len(roleSteps) != 1 || role.namespace != "identity_organization_directory_role_successor" || len(role.history) != 1 ||
+		role.history[0].Checksum() != roleSteps[0].Checksum() || !slices.Equal(role.guards[0].constraints, []string{"command_effects.organization_directory_successor_scope"}) {
+		t.Fatal("mixed role selection did not append the exact constraint expansion after the User successor", err)
+	}
+	groups.roles = nil
+	withoutRoles, err := store.directorySyncMigrationCatalog(ctx, slices.Clone(input))
+	if err != nil || slices.ContainsFunc(withoutRoles, func(h migrationHistory) bool { return h.namespace == role.namespace }) {
+		t.Fatal("mixed User and Group selection unexpectedly installed the role successor", err)
+	}
+}
+
 func TestDirectoryRoleMigrationCatalogSelectsIndependentHistory(t *testing.T) {
 	ctx := t.Context()
 	base, err := migrations.NewMigration(1, "identity_base", migrations.TransactionModeDefault, "SELECT 1", "")

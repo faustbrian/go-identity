@@ -575,7 +575,29 @@ With the role worker selected, native organization permission checks and any
 separately enabled permission-check endpoint use that same live source. A
 removed SCIM edge cannot grant permission, even before its withdrawal is
 applied to the generation. Independent local and other-source grants keep
-their original policy. This adds no route, worker loop or mixed role batch.
+their original policy. This role profile adds no route or worker loop.
+
+For a mixed generation, also select `DirectorySync.GroupSource.Mixed`. Leave
+`Mixed.Apply` unset while running the operator migrations. This reuses the
+SCIM and Group histories and selects the native User membership and successor
+histories, even if `DirectorySync.UserSource` is not selected.
+If a role profile is also selected, install the separate role successor
+history before enabling worker graphs that carry roles into later children.
+
+On the worker graph, set `Mixed.Apply` with an explicit User mapping and a
+Group mapping, a role mapping, or both. Each mapping must select the same
+provider, connection and version, and the Group and role mappings cannot
+claim the same source Group. A role mapping requires `GroupSource.Roles`.
+For current permission reads, separately configure `Roles.Apply` with the
+matching role mapping; mixed selection alone does not change permission reads.
+
+The configured service account needs `identity.sso.directory-sync-apply-mixed`
+for the exact generation as well as original-child admission and recovery
+permissions. Call `FeatureSet.DirectoryMixedApply` and pass the opaque Start
+generation ID, current predecessor and original ordered children to `Apply`.
+After an unknown outcome, retry the same request; the worker verifies the
+committed prefix before admitting new children and does not extend its original
+source deadline. There is no mixed Apply HTTP route or background worker.
 
 ## Optional organization backend
 

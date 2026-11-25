@@ -28,6 +28,9 @@ type DirectoryGroupSourceConfiguration struct {
 	// Roles selects the directory role schema and, independently of Apply,
 	// can bind a direct role executor and current permission reader.
 	Roles *DirectoryGroupRoleConfiguration
+	// Mixed selects the remaining organization histories and can bind an
+	// independent Go-only executor on this same source.
+	Mixed *DirectoryMixedConfiguration
 }
 
 // DirectoryGroupApplyConfiguration is trusted deployment configuration for
@@ -46,6 +49,7 @@ type directoryGroupSource struct {
 	source   *scimpg.GroupsService
 	executor *ssopg.DirectoryGroupSyncService
 	roles    *directoryGroupRoleSource
+	mixed    *directoryMixedSource
 }
 
 func (DirectoryGroupSourceConfiguration) Format(s fmt.State, _ rune) {
@@ -74,6 +78,12 @@ func composeDirectoryGroupSource(d ReferenceDependencies, scope DirectorySyncCon
 	source := &directoryGroupSource{source: groups}
 	if c.Roles != nil {
 		source.roles, err = composeDirectoryGroupRoles(d, scope, p, groups)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if c.Mixed != nil {
+		source.mixed, err = composeDirectoryMixedSource(d, scope, p, source.source)
 		if err != nil {
 			return nil, err
 		}

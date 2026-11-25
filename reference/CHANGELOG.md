@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt into ordered mixed SCIM User, Group and role reconciliation through the
+  direct Reference worker, with exact restart recovery and no new HTTP route.
+
 - Inspect a mapped SCIM Group grant through the direct Reference worker with
   separate read authorization and no mutation or HTTP route.
 

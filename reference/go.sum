@@ -205,6 +205,10 @@ github.com/faustbrian/go-organization/postgres v0.0.0-20261125022625-41b03bbed73
 github.com/faustbrian/go-organization/postgres v0.0.0-20261125022625-41b03bbed738/go.mod h1:fMhktg16MlVnzA9RrJKeEY4DI7sCuDp6pPDFwBlFrKQ=
 github.com/faustbrian/go-organization/postgres v0.0.0-20261125034143-79882160c2d2 h1:jppc5jFut1TW3cgPfbSnjq1EGyH5IXj1rnnyqQ3rdiA=
 github.com/faustbrian/go-organization/postgres v0.0.0-20261125034143-79882160c2d2/go.mod h1:fMhktg16MlVnzA9RrJKeEY4DI7sCuDp6pPDFwBlFrKQ=
+github.com/faustbrian/go-organization/postgres v0.0.0-20261125055949-70e7357e7a18 h1:iqJbI7OGCpZPpE11g6Ry3Ka3tWCrPCsj8Hm/LOcvKDo=
+github.com/faustbrian/go-organization/postgres v0.0.0-20261125055949-70e7357e7a18/go.mod h1:fMhktg16MlVnzA9RrJKeEY4DI7sCuDp6pPDFwBlFrKQ=
+github.com/faustbrian/go-organization/postgres v0.0.0-20261125064514-0db635e0981d h1:UtaUgD1wLtlTgbCJN2VXhBNX3mBwyoftQXewBu4q//4=
+github.com/faustbrian/go-organization/postgres v0.0.0-20261125064514-0db635e0981d/go.mod h1:fMhktg16MlVnzA9RrJKeEY4DI7sCuDp6pPDFwBlFrKQ=
 github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86 h1:lo/Aaj1zwOKvkbdE3TnwLo3ceaehtqphu35GySqHW68=
 github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86/go.mod h1:xo+sxfPGP2ieP7k8RDdziBimaw4ImeeVZYEQ/s99ICY=
 github.com/faustbrian/go-passkey/postgres v0.0.0-20261025200953-935ddaffedb1 h1:UUIClP6lyYWTuq7jxAPTXurE/K7jHY7T8rA3Sr0lNQY=
@@ -225,6 +229,8 @@ github.com/faustbrian/go-scim/organization v0.0.0-20261125031448-70a5f63d344c h1
 github.com/faustbrian/go-scim/organization v0.0.0-20261125031448-70a5f63d344c/go.mod h1:EPvdGlNzPsqsk/QTYfowu4Gy9jzXylsElZGqj9XlaSE=
 github.com/faustbrian/go-scim/organization v0.0.0-20261125041629-f083d5b1acfc h1:PLGVDSagSOf2VMmbUjau2hfjXx79D3IgtxZ2G7cyTHQ=
 github.com/faustbrian/go-scim/organization v0.0.0-20261125041629-f083d5b1acfc/go.mod h1:EPvdGlNzPsqsk/QTYfowu4Gy9jzXylsElZGqj9XlaSE=
+github.com/faustbrian/go-scim/organization v0.0.0-20261125045503-4dffc1be962c h1:LFDWFUf1X14meeFqc5pzrr9Gl9Z0oVjfZY0OdtpydGU=
+github.com/faustbrian/go-scim/organization v0.0.0-20261125045503-4dffc1be962c/go.mod h1:EPvdGlNzPsqsk/QTYfowu4Gy9jzXylsElZGqj9XlaSE=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261124132804-3a7e6a61e856 h1:33jht1N/TrbIqiI5bOlVgJ3Ht+FGgVCKtiNpz5zRkhY=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261124132804-3a7e6a61e856/go.mod h1:fmS8i5F2AwljYb5MuBdn90vtMT/RxcR1Mdqhmh4rB/A=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261125021123-8ced90f23034 h1:D/GekRhk0xOtv5y2r9VU8QinrQb4YMSxoTo1Khsqo1s=
@@ -233,6 +239,10 @@ github.com/faustbrian/go-scim/postgres v0.0.0-20261125032130-31649a4f2bf8 h1:bL2
 github.com/faustbrian/go-scim/postgres v0.0.0-20261125032130-31649a4f2bf8/go.mod h1:yKxgSLNaED5+wPI777DHN1MjFE7CvNvTS+oxytcLLoM=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261125041629-f083d5b1acfc h1:d93rUo2TSFR6bOWOnGRgrc7k+g1MIYgkSgMsOZD+dOo=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261125041629-f083d5b1acfc/go.mod h1:yKxgSLNaED5+wPI777DHN1MjFE7CvNvTS+oxytcLLoM=
+github.com/faustbrian/go-scim/postgres v0.0.0-20261125055248-0ff3c3218186 h1:1iffB7ZL/QFnzeLmdMbBGOQJEeWEBygjLcp0MVorEo0=
+github.com/faustbrian/go-scim/postgres v0.0.0-20261125055248-0ff3c3218186/go.mod h1:34Nf2tExlmGcP5KamP8yq/3FMuyGGiSKDEbU+JghW54=
+github.com/faustbrian/go-scim/postgres v0.0.0-20261125065233-742b005c1b00 h1:xz4HaCkVE1kcqp6GxkJdiB5FhdjcBnv7cyyvkevFe8E=
+github.com/faustbrian/go-scim/postgres v0.0.0-20261125065233-742b005c1b00/go.mod h1:KvxguaLq5hz6G9W7bR0oE4NrNDWwfgkaVUsMV481+bU=
 github.com/faustbrian/go-secret-envelope/v2 v2.0.1 h1:1GHj2WZhKZihdhlbsU12o7T5kaA9z7IOy/1RQGu3RhA=
 github.com/faustbrian/go-secret-envelope/v2 v2.0.1/go.mod h1:X8VgGx/HsaHif3pNbS6A35sYg3SzF1+8A1YIZMd6Lnw=
 github.com/faustbrian/go-service v1.1.2 h1:8gKlxhILZzn1gQg5edVzRomlqLLaa07e2nC9dZ2rxIM=
@@ -271,6 +281,10 @@ github.com/faustbrian/go-sso/postgres v0.0.0-20261125034901-5d4e42d6a7cc h1:ooHn
 github.com/faustbrian/go-sso/postgres v0.0.0-20261125034901-5d4e42d6a7cc/go.mod h1:DGxbnoi8cWZyAa71gCDbH//WWb0EN79pKj3rIXSjLsU=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261125042915-28ab092d9e54 h1:lbQh0Bq2PT0p+auhHs3SzZ5U0tg8oje+NN95wlaAFVU=
 github.com/faustbrian/go-sso/postgres v0.0.0-20261125042915-28ab092d9e54/go.mod h1:bq5OaUFD/1g24LVLZzorgAU3vkBg81T+T8U6wyj9UAI=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261125061842-9624b855418a h1:7Lc4Je6nNozFzoqfluLONUa9+KcNy1w8TANdAr1ihpg=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261125061842-9624b855418a/go.mod h1:Nba5Sm/S+MjKlZRCnsLcLpCq+BSWxcIlN2LQI4rvHXE=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261125070052-417a285c1146 h1:ZTRT0aFDpfo8/E8+Jpw1i0w/SI5x3iaDyraN+vUrXjc=
+github.com/faustbrian/go-sso/postgres v0.0.0-20261125070052-417a285c1146/go.mod h1:YQlDla7rjdrfn4OczHeSOUCDZStrrEJbE9p8i+SeDxM=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba h1:3bNMfo0bfFGVX+lIgzMVSVM4RCFXN+ryGLsvywSWpl0=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124050240-ba56864140ba/go.mod h1:junxGTiEU39EWU6Nu6hxNb9nTVAO3T7+TRE+51mCTu4=
 github.com/faustbrian/go-sso/saml v0.0.0-20261124105739-9ee486c62479 h1:zookJCVH77qR/YcANYIh8EDwo4J3pRJHktyhh+sBNQU=

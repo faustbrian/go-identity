@@ -39,12 +39,14 @@ func (s StoreSet) directorySyncMigrationCatalog(ctx context.Context, catalog []m
 	if profile.groups == nil && profile.users == nil {
 		return catalog, nil
 	}
-	return directorySyncSourceMigrationCatalog(ctx, catalog, directorySyncSourceMigrations{
-		groups: profile.groups != nil, users: profile.users != nil, roles: profile.groups != nil && profile.groups.roles != nil,
-	})
+	selected := directorySyncSourceMigrations{users: profile.users != nil}
+	if groups := profile.groups; groups != nil {
+		selected.groups, selected.roles, selected.mixed = true, groups.roles != nil, groups.mixed != nil
+	}
+	return directorySyncSourceMigrationCatalog(ctx, catalog, selected)
 }
 
-type directorySyncSourceMigrations struct{ groups, users, roles bool }
+type directorySyncSourceMigrations struct{ groups, users, roles, mixed bool }
 
 func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migrationHistory, selected directorySyncSourceMigrations) ([]migrationHistory, error) {
 	if len(catalog) == 0 || catalog[0].namespace != "" {
@@ -90,7 +92,7 @@ func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migratio
 			catalog = append(catalog, roles)
 		}
 	}
-	if selected.users {
+	if selected.users || selected.mixed {
 		members := migrationHistory{namespace: "identity_organization_directory_membership", owners: map[migrations.Version]ModuleID{}}
 		err := appendEnterpriseMigration(ctx, &members, "organization/postgres", organizationpg.DirectoryMembershipMigrationSource{Version: 1},
 			migrationGuard{version: 1, schema: "organization", tables: []string{"directory_membership_grants"}})
@@ -98,6 +100,26 @@ func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migratio
 			return nil, err
 		}
 		catalog = append(catalog, members)
+	}
+	if selected.mixed {
+		successor := migrationHistory{namespace: "identity_organization_directory_successor", owners: map[migrations.Version]ModuleID{}}
+		err := appendEnterpriseMigration(ctx, &successor, "organization/postgres", organizationpg.DirectoryMembershipSuccessorMigrationSource{Version: 1},
+			migrationGuard{version: 1, schema: "organization", columns: []string{
+				"command_effects.directory_org_before", "command_effects.directory_org_after", "command_effects.directory_credential_version",
+			}})
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, successor)
+	}
+	if selected.mixed && selected.roles {
+		roleSuccessor := migrationHistory{namespace: "identity_organization_directory_role_successor", owners: map[migrations.Version]ModuleID{}}
+		err := appendEnterpriseMigration(ctx, &roleSuccessor, "organization/postgres", organizationpg.DirectoryTeamRoleSuccessorMigrationSource{Version: 1},
+			migrationGuard{version: 1, schema: "organization", constraints: []string{"command_effects.organization_directory_successor_scope"}})
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, roleSuccessor)
 	}
 	return catalog, nil
 }

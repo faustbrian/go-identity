@@ -90,7 +90,7 @@ func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.Deci
 	if d.Request.Subject.Kind == authorization.SubjectServiceAccount && d.Request.Subject.ID == referenceDirectorySCIMActor &&
 		d.Request.Tenant == otpTenant && d.PolicyRevision == 9 {
 		switch d.Request.Action {
-		case "identity.sso.directory-sync-apply", "identity.sso.directory-sync-apply-role", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID),
+		case "identity.sso.directory-sync-apply", "identity.sso.directory-sync-apply-role", "identity.sso.directory-sync-apply-mixed", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID),
 			authorization.Action(sso.DirectoryUserAdmissionOperation().OperationID), authorization.Action(sso.DirectoryUserDeprovisionOperation().OperationID):
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		case "identity.sso.directory-sync-inspect-drift":
@@ -167,7 +167,7 @@ type referenceDirectoryApplyBinding func(context.Context, reference.DirectoryGro
 
 type referenceDirectoryRoleJourney func(organizationTestHuman, referenceDirectoryProjection, [32]byte) [32]byte
 
-func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, groupSource, userSource *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding, bindUser func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService, roleJourney referenceDirectoryRoleJourney) {
+func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, groupSource, userSource *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding, bindUser func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService, roleJourney, mixedJourney referenceDirectoryRoleJourney) {
 	t.Helper()
 	sessions, err := features.Sessions()
 	if err != nil || len(cookies) != 1 || csrf == "" {
@@ -316,7 +316,11 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 	}
 	var applied [32]byte
 	var wantApplied uint64
+	startingVersion := running.Version
 	switch {
+	case mixedJourney != nil:
+		applied = mixedJourney(human, first, [32]byte(checkpoint))
+		wantApplied = 4
 	case roleJourney != nil:
 		applied = roleJourney(human, first, [32]byte(checkpoint))
 		wantApplied = 2
@@ -331,6 +335,9 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 		running = decode(call(http.MethodGet, statusPath, "", "", true, 200))
 		if running.Checkpoint != base64.RawURLEncoding.EncodeToString(applied[:]) || running.ReadCount != wantApplied || running.AppliedCount != wantApplied || running.RejectedCount != 0 || running.Version <= 1 {
 			t.Fatal("browser status did not read the original direct Apply successor")
+		}
+		if mixedJourney != nil && running.Version != startingVersion+2 {
+			t.Fatal("mixed replay advanced the HTTP generation beyond its single attachment and settlement", startingVersion, running.Version)
 		}
 	}
 	call(http.MethodPost, "/v1/sso/directory-sync-cancel", fmt.Sprintf(`{"generationID":%q,"expectedVersion":%d}`, first.GenerationID, running.Version+1), "", true, 409)

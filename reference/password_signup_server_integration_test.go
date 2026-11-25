@@ -287,6 +287,7 @@ type signupGraphExtensions struct {
 	directoryGroupApply         bool
 	directoryGroupRoleApply     bool
 	directoryUserApply          bool
+	directoryMixedApply         bool
 	sessionCache                *referenceSessionCacheProof
 	oauthDevice                 bool
 	oauthDeviceBaseInstalled    bool
@@ -660,11 +661,14 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var directoryGroupSource, directoryUserSource *referenceDirectorySCIMSource
 	if extensions.directorySync {
 		configureReferenceDirectorySync(t, &c, origin, extensions.directorySyncStandalone)
-		if extensions.directoryGroupApply || extensions.directoryGroupRoleApply {
+		if extensions.directoryGroupApply || extensions.directoryGroupRoleApply || extensions.directoryMixedApply {
 			source := configureReferenceDirectoryGroupApply(t, &c, deps)
 			directoryGroupSource = &source
-			if extensions.directoryGroupRoleApply {
+			if extensions.directoryGroupRoleApply || extensions.directoryMixedApply {
 				configureReferenceDirectoryGroupRoles(&c)
+			}
+			if extensions.directoryMixedApply {
+				c.DirectorySync.GroupSource.Mixed = &reference.DirectoryMixedConfiguration{}
 			}
 		}
 		if extensions.directoryUserApply {
@@ -2383,8 +2387,15 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 						return proveReferenceDirectoryGroupRoleJourney(t, ctx, f, config, selectedConfig, deps, workerConfigs, selected, owner, member, *directoryGroupSource, generation, predecessor)
 					}
 				}
+				var mixedJourney referenceDirectoryRoleJourney
+				if extensions.directoryMixedApply {
+					mixedJourney = func(owner organizationTestHuman, generation referenceDirectoryProjection, predecessor [32]byte) [32]byte {
+						member := registerReferenceOrganizationHuman(t, ctx, client, network.URL, origin, selected, workers, messages)
+						return proveReferenceDirectoryMixedJourney(t, ctx, f, selectedConfig, deps, workerConfigs, selected, owner, member, *directoryGroupSource, generation, predecessor)
+					}
+				}
 				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone,
-					selectedConfig.OTP.Coordinator, directoryGroupSource, directoryUserSource, bind, bindUser, roleJourney)
+					selectedConfig.OTP.Coordinator, directoryGroupSource, directoryUserSource, bind, bindUser, roleJourney, mixedJourney)
 			} else if extensions.organizationRoles {
 				proveReferenceOrganizationRoles(t, ctx, f, selectedConfig, deps, selected, workers, workerConfigs, client, network.URL, origin, messages, cookies, csrf, fresh)
 			} else if extensions.organizationTeamCRUD {
