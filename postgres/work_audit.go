@@ -84,8 +84,28 @@ func FeatureAuditBindingDigest(binding identity.CommandBinding, operation identi
 	if binding.ValidateFor(operation) != nil || !auditName(subjectType) {
 		return [32]byte{}, invalidAudit()
 	}
-	target := featureAuditTargetID(binding, operation)
-	return securityAuditBindingDigest(binding, &operation, subjectType, target, record)
+	kind, target, err := featureAuditRecordScope(binding, operation, subjectType, record.Action())
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return securityAuditBindingDigest(binding, &operation, kind, target, record)
+}
+
+const scimBulkApplyChildAudit = "identity.scim.bulk_apply_child"
+
+// A Bulk audit describes the retained child command, not its projected Group.
+// The parent is the original correlation ID. Keep lifecycle and ordinary Group
+// audit subjects unchanged, and never allow an arbitrary feature to opt in.
+func featureAuditRecordScope(binding identity.CommandBinding, operation identity.FeatureOperation, subjectType, action string) (string, string, error) {
+	if action != scimBulkApplyChildAudit {
+		return subjectType, featureAuditTargetID(binding, operation), nil
+	}
+	expected := identity.FeatureOperation{Owner: "scim", OperationID: "identity.scim.group-create", SchemaID: "identity.scim.group-create.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	parent, err := identity.ParseCommandID(binding.CorrelationID)
+	if err != nil || parent == binding.CommandID || operation != expected || subjectType != "scim_group" || binding.ActorKind != authorization.SubjectServiceAccount {
+		return "", "", invalidAudit()
+	}
+	return "scim_bulk_child", string(binding.CommandID), nil
 }
 
 func featureAuditTargetID(binding identity.CommandBinding, operation identity.FeatureOperation) string {
@@ -243,7 +263,15 @@ func (w Work) StageAudit(index uint16, record audit.Record) error {
 	if _, exists := a.ids[record.ID()]; exists {
 		return deny()
 	}
-	if record.Action() != p.EventType || !validSecurityAuditRecord(record, w.state.subjectType) {
+	boundSubject := w.state.subjectType
+	if w.state.feature != nil {
+		var err error
+		boundSubject, _, err = featureAuditRecordScope(w.state.binding, w.state.feature.Operation, boundSubject, p.EventType)
+		if err != nil {
+			return deny()
+		}
+	}
+	if record.Action() != p.EventType || !validSecurityAuditRecord(record, boundSubject) {
 		return deny()
 	}
 	digest, err := AuditBindingDigest(w.state.binding, record)

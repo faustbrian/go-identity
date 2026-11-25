@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind the protected native SCIM Bulk child security event to its own command
+  and original parent correlation. Keep the separate Group lifecycle target
+  and ordinary Group audit bindings unchanged.
+
 - Select canonical request correlation with optional retry-key aliases only
   for the exact native SCIM Bulk POST. Existing POST, DELETE and SAML start
   modes retain their original namespaces and rules. Install the additive alias

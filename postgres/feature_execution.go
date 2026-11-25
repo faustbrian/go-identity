@@ -519,15 +519,22 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 			return nil, invalidPlan()
 		}
 	}
-	target, actorKind := featureAuditTargetID(b, p.Feature.Operation), audit.ActorService
+	actorKind := audit.ActorService
 	if b.ActorKind == authorization.SubjectUser {
 		actorKind = audit.ActorHuman
 	}
-	if !auditSafeID(target) {
+	if !auditSafeID(featureAuditTargetID(b, p.Feature.Operation)) {
 		return nil, invalidPlan()
 	}
-	expected := securityAuditScopeDigest(b, &p.Feature.Operation, p.SubjectType, target, actorKind, "identity-feature-audit-binding-v1")
 	for _, a := range p.Audits {
+		kind, target, err := featureAuditRecordScope(b, p.Feature.Operation, p.SubjectType, a.EventType)
+		if err != nil || !auditSafeID(target) {
+			return nil, invalidPlan()
+		}
+		if a.EventType == scimBulkApplyChildAudit && (p.Feature.Contributor != scimUserCreationDescriptor() || a.RetentionClass != "protected" || len(p.Audits) != 1) {
+			return nil, invalidPlan()
+		}
+		expected := securityAuditScopeDigest(b, &p.Feature.Operation, kind, target, actorKind, "identity-feature-audit-binding-v1")
 		if a.BindingDigest != expected {
 			return nil, invalidPlan()
 		}
@@ -1106,9 +1113,19 @@ func featureMutationAudits(ctx context.Context, p *admittedKernelPlan, now time.
 		return []audit.Record{authentication}, nil
 	}
 	records := make([]audit.Record, len(p.audits))
-	target := featureTargetID(p.binding)
 	for i, a := range p.audits {
-		record, err := securityMutationAudit(ctx, p.binding, p.lifecycle.BeforeVersion, p.lifecycle.AfterVersion, now, class, a.EventType, p.subjectType, target, a.RetentionClass, true)
+		kind, target := p.subjectType, featureTargetID(p.binding)
+		if a.EventType == scimBulkApplyChildAudit {
+			if p.feature == nil {
+				return nil, invalidAudit()
+			}
+			var err error
+			kind, target, err = featureAuditRecordScope(p.binding, p.feature.Operation, kind, a.EventType)
+			if err != nil {
+				return nil, err
+			}
+		}
+		record, err := securityMutationAudit(ctx, p.binding, p.lifecycle.BeforeVersion, p.lifecycle.AfterVersion, now, class, a.EventType, kind, target, a.RetentionClass, true)
 		if err != nil {
 			return nil, err
 		}
