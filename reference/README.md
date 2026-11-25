@@ -533,6 +533,13 @@ checkpoint and the original ordered child commands. It needs no human
 credential and exposes no HTTP route. Retry with the same predecessor and
 child IDs; the current Status and Cancel continue to use browser authority.
 
+The same direct worker exposes `ObserveDrift` for one proposed Group child on
+a running Apply or dry-run generation. Its service account must be allowed
+`identity.sso.directory-sync-inspect-drift` independently of Apply. Use the
+current Status checkpoint. The report distinguishes missing or unexpected
+source grants from independent local access and from unresolved evidence.
+Inspection does not apply the child, advance the checkpoint, or expose a route.
+
 To run User Apply, opt into `DirectorySync.UserSource`. Supply the SCIM
 configuration for a User-only graph; if GroupSource is also selected, leave
 UserSource.SCIM unset to use that exact same source. User-only does not

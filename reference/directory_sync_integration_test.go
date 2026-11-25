@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -92,6 +93,10 @@ func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.Deci
 		case "identity.sso.directory-sync-apply", "identity.sso.directory-sync-apply-role", authorization.Action(sso.DirectoryTeamMembershipOperation().OperationID),
 			authorization.Action(sso.DirectoryUserAdmissionOperation().OperationID), authorization.Action(sso.DirectoryUserDeprovisionOperation().OperationID):
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		case "identity.sso.directory-sync-inspect-drift":
+			if d.Request.Resource.Type == "sso.directory-generation" {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		}
 	}
 	return (referenceOrganizationRolesPolicy{}).Decide(ctx, d)
@@ -393,6 +398,9 @@ func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveSto
 	}
 	request := ssopg.DirectoryGroupApplyRequest{GenerationID: generation.GenerationID, ProviderID: sso.ProviderID(generation.ProviderID),
 		MappingVersion: generation.MappingVersion, PredecessorCheckpoint: predecessor, Deltas: []sso.DirectoryDelta{delta}}
+	if missing, err := worker.ObserveDrift(ctx, request); err != nil || missing.Kind != scimorganization.DirectoryMembershipDriftMissingSourceGrant || missing.LocalGrant {
+		t.Fatal("direct drift inspection did not identify the missing attributed grant", missing.Kind, err)
+	}
 	result, err := worker.Apply(ctx, request)
 	if err != nil || len(result.ChildOutcomes) != 1 || result.ChildOutcomes[0].Outcome != identity.CommitOutcomeCommitted || result.ChildOutcomes[0].Binding.ActorID != referenceDirectorySCIMActor || result.ChildOutcomes[0].Binding.UserID != target {
 		t.Fatal("direct Apply did not settle the exact service-account child and target", err)
@@ -400,6 +408,14 @@ func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveSto
 	replayed, err := worker.Apply(ctx, request)
 	if err != nil || len(replayed.ChildOutcomes) != 1 || replayed.ChildOutcomes[0].Binding != result.ChildOutcomes[0].Binding || replayed.ChildOutcomes[0].AuditEventID != result.ChildOutcomes[0].AuditEventID || replayed.Checkpoint != result.Checkpoint || result.Checkpoint == predecessor {
 		t.Fatal("direct Apply did not replay the exact original receipt and checkpoint", err)
+	}
+	if stale, err := worker.ObserveDrift(ctx, request); !errors.Is(err, sso.ErrDirectoryReconciliation) || stale != (scimorganization.DirectoryMembershipDrift{}) {
+		t.Fatal("stale Reference predecessor yielded a drift report", stale.Kind, err)
+	}
+	current := request
+	current.PredecessorCheckpoint = result.Checkpoint
+	if aligned, err := worker.ObserveDrift(ctx, current); err != nil || aligned.Kind != scimorganization.DirectoryMembershipDriftInSync || aligned.LocalGrant {
+		t.Fatal("direct drift inspection did not see the committed source grant", aligned.Kind, err)
 	}
 	owner, err := organizationpg.NewRepository(f.pool, organizationpg.Config{MaximumDuration: time.Second})
 	if err != nil {

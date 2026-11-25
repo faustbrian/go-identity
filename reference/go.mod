@@ -69,13 +69,13 @@ require (
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/faustbrian/go-scim v0.0.0-20261113195101-e97918aba312
-	github.com/faustbrian/go-scim/organization v0.0.0-20261125031448-70a5f63d344c
-	github.com/faustbrian/go-scim/postgres v0.0.0-20261125032130-31649a4f2bf8
+	github.com/faustbrian/go-scim/organization v0.0.0-20261125041629-f083d5b1acfc
+	github.com/faustbrian/go-scim/postgres v0.0.0-20261125041629-f083d5b1acfc
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 	github.com/faustbrian/go-sso v0.0.0-20261125020955-e0d8d216cf33
 	github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db
 	github.com/faustbrian/go-sso/oidc v0.0.0-20261123000546-023dd34bb0c7
-	github.com/faustbrian/go-sso/postgres v0.0.0-20261125034901-5d4e42d6a7cc
+	github.com/faustbrian/go-sso/postgres v0.0.0-20261125042915-28ab092d9e54
 	github.com/faustbrian/go-sso/saml v0.0.0-20261124105739-9ee486c62479
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261026011803-e03d6969b19b
 	github.com/faustbrian/go-transactional-outbox/v2 v2.1.1-0.20261022172917-6ed5e0861542

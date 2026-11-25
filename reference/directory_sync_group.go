@@ -34,7 +34,8 @@ type DirectoryGroupSourceConfiguration struct {
 // one versioned source-to-team mapper. A caller presenting a directory delta
 // cannot choose these mappings or either authorization owner. Authorization
 // separately controls original-child admission/receipt observation. Supply a
-// current absolute decision deadline through ApplyAuthorization.
+// current absolute decision deadline through ApplyAuthorization; the drift
+// inspection action requires a separate decision.
 type DirectoryGroupApplyConfiguration struct {
 	Mapping            scimorganization.DirectoryMappingConfig
 	Authorization      authorization.Service
@@ -157,6 +158,22 @@ func (s *DirectoryGroupApplyService) Apply(ctx context.Context, request ssopg.Di
 	}
 	defer done()
 	return s.executor.ApplyGeneration(bounded, request)
+}
+
+// ObserveDrift compares one mapped Group edge with its exact organization
+// grant at the current running Apply or dry-run checkpoint. It requires the
+// configured service account's independent drift inspection authorization.
+// It writes nothing and does not grant permission to repair the reported drift.
+func (s *DirectoryGroupApplyService) ObserveDrift(ctx context.Context, request ssopg.DirectoryGroupApplyRequest) (scimorganization.DirectoryMembershipDrift, error) {
+	if s == nil || s.executor == nil {
+		return scimorganization.DirectoryMembershipDrift{}, identity.InvalidInputError{Field: "reference_directory_group_drift"}
+	}
+	bounded, done, err := (composedPasswordReset{state: s.state}).enter(ctx, s.tenant)
+	if err != nil {
+		return scimorganization.DirectoryMembershipDrift{}, err
+	}
+	defer done()
+	return s.executor.ObserveDrift(bounded, request)
 }
 
 func (DirectoryGroupApplyService) Format(s fmt.State, _ rune) {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Inspect a mapped SCIM Group grant through the direct Reference worker with
+  separate read authorization and no mutation or HTTP route.
+
 - Opt into directory-backed custom team roles. Apply an exact SCIM Group
   edge to the original generation and check the current source before
   granting permission, without enabling new HTTP routes.
