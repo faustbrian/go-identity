@@ -639,6 +639,9 @@ func TestRequestKeyIntegration(t *testing.T) {
 		t.Run("SAML start expands populated custody", func(t *testing.T) {
 			testCanonicalSAMLStartRequests(t, ctx, db, pool, conf, policy, requestKeys)
 		})
+		t.Run("SCIM Bulk adds only its POST alias", func(t *testing.T) {
+			testCanonicalSCIMBulkRequests(t, ctx, db, pool, conf, policy, requestKeys)
+		})
 	})
 }
 

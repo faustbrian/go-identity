@@ -114,7 +114,7 @@ func (c *Coordinator) resolveRequestKey(ctx context.Context, scope RequestKeySco
 	var lookup [32]byte
 	var err error
 	canonical := preparation != nil && preparation.canonicalLookup != nil
-	if !c.acceptsRequestKeyMethod(scope.Method, canonical) {
+	if !c.acceptsRequestKeyScope(scope, canonical) {
 		return RequestKeyAdmission{}, invalidRequestKey()
 	}
 	if canonical {

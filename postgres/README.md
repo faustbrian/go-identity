@@ -1765,6 +1765,15 @@ A client retry key, if supplied, aliases the same command; it does not select
 another command or replace browser possession. The migration reserves two
 versions and preserves all existing request mappings and aliases.
 
+For the exact native SCIM Bulk POST, select
+`NewCoordinatorWithCanonicalSCIMBulkRequestKeys` with a trusted namespace
+distinct from other modes and other connections. Install
+`CanonicalSCIMBulkRequestMigrationSource` after the SAML alias schema; no SAML
+runtime is required. Bind the selector to the configured connection and exact
+canonical Bulk intent. An optional retry key aliases the original command and
+conflicts if reused for different intent. This selects request correlation only:
+the native SCIM owner must admit the complete graph and execute the children.
+
 Compose `RequestKeyMigrationSource{Base, Version}` after kernel history and use
 `NewCoordinatorWithRequestKeys` with a separate `RequestKeyConfig`. Existing
 `CoordinatorConfig` and `NewCoordinator` remain unchanged; the ordinary

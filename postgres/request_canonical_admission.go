@@ -44,6 +44,21 @@ func NewCoordinatorWithCanonicalSSOSAMLStartRequestKeys(pool *database.Pool, reg
 	return newCoordinatorWithCanonicalRequestMethod(pool, registry, config, requestKeys, "GET")
 }
 
+// NewCoordinatorWithCanonicalSCIMBulkRequestKeys selects correlation for the
+// exact native SCIM Bulk POST and service account. A supplied retry key aliases
+// the original canonical request; it never replaces the server selector. Use a
+// distinct trusted namespace per configured connection and install
+// CanonicalSCIMBulkRequestMigrationSource before enabling this profile.
+// Correlation does not admit or execute children.
+func NewCoordinatorWithCanonicalSCIMBulkRequestKeys(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig) (*Coordinator, error) {
+	c, err := newCoordinatorWithCanonicalRequestMethod(pool, registry, config, requestKeys, "POST")
+	if err != nil {
+		return nil, err
+	}
+	c.canonicalSCIMBulk = true
+	return c, nil
+}
+
 func newCoordinatorWithCanonicalRequestMethod(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig, method string) (*Coordinator, error) {
 	c, err := NewCoordinatorWithRequestKeys(pool, registry, config, requestKeys)
 	if err != nil {
@@ -59,7 +74,11 @@ func (c *Coordinator) requestNamespaceIdentity() [32]byte {
 	case "DELETE":
 		namespace = "canonical-delete-v1\x00" + namespace
 	case "POST":
-		namespace = "canonical-post-v1\x00" + namespace
+		if c.canonicalSCIMBulk {
+			namespace = "canonical-scim-bulk-v1\x00" + namespace
+		} else {
+			namespace = "canonical-post-v1\x00" + namespace
+		}
 	case "GET":
 		namespace = "canonical-sso-saml-start-v1\x00" + namespace
 	}
@@ -73,11 +92,22 @@ func (c *Coordinator) acceptsRequestKeyMethod(method string, canonical bool) boo
 	return canonical && c.canonicalRequestMethod == method
 }
 
+const scimBulkRequestRoute = "identity.scim.bulk"
+
+func (c *Coordinator) acceptsRequestKeyScope(scope RequestKeyScope, canonical bool) bool {
+	if c.canonicalSCIMBulk || scope.RouteID == scimBulkRequestRoute {
+		return c.canonicalSCIMBulk && canonical && scope.Method == "POST" &&
+			scope.RouteID == scimBulkRequestRoute && scope.ActorKind == authorization.SubjectServiceAccount
+	}
+	return c.acceptsRequestKeyMethod(scope.Method, canonical)
+}
+
 // ResolvePreparedCanonicalRequest retains one original random command and
-// authenticated native input for the stable protocol selector. DELETE and the
-// exact SAML start GET support an optional retry key; POST requires nil. A
-// supplied key aliases the original mapping in its acknowledgement transaction; it never
-// selects another command. An alias already bound elsewhere conflicts and rolls
+// authenticated native input for the stable protocol selector. DELETE, the
+// exact SAML start GET and the exact SCIM Bulk POST support an optional retry
+// key. Other canonical POST selections require nil. A supplied key aliases the
+// original mapping in its acknowledgement transaction; it never selects
+// another command. An alias already bound elsewhere conflicts and rolls
 // back any candidate mapping. Changed full intent conflicts, including after
 // fingerprint rotation unless its original key remains retained.
 // Preparation runs outside SQL, may run for discarded candidates, and must not
@@ -128,10 +158,10 @@ func (c *Coordinator) ReadPreparedCanonicalRequest(ctx context.Context, scope Re
 }
 
 func (c *Coordinator) canonicalRequestLookups(scope RequestKeyScope, selector CanonicalRequestKey, optional *identity.IdempotencyKey) ([32]byte, *[32]byte, error) {
-	if c == nil || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || !validRequestKeyScope(scope) || !c.acceptsRequestKeyMethod(scope.Method, true) {
+	if c == nil || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || !validRequestKeyScope(scope) || !c.acceptsRequestKeyScope(scope, true) {
 		return [32]byte{}, nil, invalidRequestKey()
 	}
-	if optional != nil && scope.Method != "DELETE" && scope.Method != "GET" {
+	if optional != nil && scope.Method != "DELETE" && scope.Method != "GET" && !c.canonicalSCIMBulk {
 		return [32]byte{}, nil, invalidRequestKey()
 	}
 	key := c.requestKeys.lookupKey()

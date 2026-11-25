@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select canonical request correlation with optional retry-key aliases only
+  for the exact native SCIM Bulk POST. Existing POST, DELETE and SAML start
+  modes retain their original namespaces and rules. Install the additive alias
+  migration before enabling this correlation mode.
+
 - Expose the existing exact SAML account namespace derivation for owners
   that must compare the linked account against an installed organization and
   provider. Existing account identifiers are unchanged.

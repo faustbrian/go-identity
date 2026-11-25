@@ -93,6 +93,13 @@ func (c *Coordinator) validateRequestPreparation(scope RequestKeyScope, feature 
 	if c == nil || c.registry == nil || scope.RouteID != feature.Operation.OperationID {
 		return invalidRequestKey()
 	}
+	if c.canonicalSCIMBulk || scope.RouteID == scimBulkRequestRoute {
+		operation := identity.FeatureOperation{Owner: "scim", OperationID: scimBulkRequestRoute, SchemaID: scimBulkRequestRoute + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+		descriptor := ContributorDescriptor{Owner: "scim/postgres", ContractID: "identity.scim", Version: 1}
+		if !c.acceptsRequestKeyScope(scope, true) || feature.Operation != operation || feature.Contributor != descriptor {
+			return invalidRequestKey()
+		}
+	}
 	if scope.Method == "GET" {
 		operation := SSOSAMLSigninStartOperation()
 		descriptor, _ := ssoEnterpriseStartProfile(operation)

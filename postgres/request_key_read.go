@@ -45,7 +45,7 @@ func (c *Coordinator) readPreparedRequestKey(ctx context.Context, scope RequestK
 	}
 	lookupKey := c.requestKeys.lookupKey()
 	defer clear(lookupKey[:])
-	if !c.acceptsRequestKeyMethod(scope.Method, canonicalLookup != nil) {
+	if !c.acceptsRequestKeyScope(scope, canonicalLookup != nil) {
 		return binding, nil, false, invalidRequestKey()
 	}
 	var lookup [32]byte

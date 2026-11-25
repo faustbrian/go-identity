@@ -70,6 +70,7 @@ type Coordinator struct {
 	finalAuthentication            *FinalAuthenticationConfig
 	requestKeys                    *RequestKeyConfig
 	canonicalRequestMethod         string
+	canonicalSCIMBulk              bool
 	requestKeyBegin                func(context.Context) (pgx.Tx, error)
 	preparationCommit              func(context.Context, pgx.Tx) error
 }
