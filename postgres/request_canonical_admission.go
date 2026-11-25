@@ -94,6 +94,10 @@ func (c *Coordinator) acceptsRequestKeyMethod(method string, canonical bool) boo
 
 const scimBulkRequestRoute = "identity.scim.bulk"
 
+func scimBulkFeatureOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "scim", OperationID: scimBulkRequestRoute, SchemaID: scimBulkRequestRoute + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
 func (c *Coordinator) acceptsRequestKeyScope(scope RequestKeyScope, canonical bool) bool {
 	if c.canonicalSCIMBulk || scope.RouteID == scimBulkRequestRoute {
 		return c.canonicalSCIMBulk && canonical && scope.Method == "POST" &&

@@ -91,15 +91,24 @@ func FeatureAuditBindingDigest(binding identity.CommandBinding, operation identi
 	return securityAuditBindingDigest(binding, &operation, kind, target, record)
 }
 
-const scimBulkApplyChildAudit = "identity.scim.bulk_apply_child"
+const (
+	scimBulkAdmitAudit      = "identity.scim.bulk_admit"
+	scimBulkApplyChildAudit = "identity.scim.bulk_apply_child"
+)
 
-// A Bulk audit describes the retained child command, not its projected Group.
-// The parent is the original correlation ID. Keep lifecycle and ordinary Group
-// audit subjects unchanged, and never allow an arbitrary feature to opt in.
 func featureAuditRecordScope(binding identity.CommandBinding, operation identity.FeatureOperation, subjectType, action string) (string, string, error) {
+	if action == scimBulkAdmitAudit {
+		parent := string(binding.CommandID)
+		if operation != scimBulkFeatureOperation() || subjectType != "scim_bulk" || binding.ActorKind != authorization.SubjectServiceAccount || binding.RecordID != parent || binding.CorrelationID != parent {
+			return "", "", invalidAudit()
+		}
+		return subjectType, parent, nil
+	}
 	if action != scimBulkApplyChildAudit {
 		return subjectType, featureAuditTargetID(binding, operation), nil
 	}
+	// A child audit identifies the retained command, not its projected Group;
+	// the parent remains in correlation and the lifecycle still names the Group.
 	expected := identity.FeatureOperation{Owner: "scim", OperationID: "identity.scim.group-create", SchemaID: "identity.scim.group-create.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	parent, err := identity.ParseCommandID(binding.CorrelationID)
 	if err != nil || parent == binding.CommandID || operation != expected || subjectType != "scim_group" || binding.ActorKind != authorization.SubjectServiceAccount {

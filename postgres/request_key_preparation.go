@@ -94,9 +94,7 @@ func (c *Coordinator) validateRequestPreparation(scope RequestKeyScope, feature 
 		return invalidRequestKey()
 	}
 	if c.canonicalSCIMBulk || scope.RouteID == scimBulkRequestRoute {
-		operation := identity.FeatureOperation{Owner: "scim", OperationID: scimBulkRequestRoute, SchemaID: scimBulkRequestRoute + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
-		descriptor := ContributorDescriptor{Owner: "scim/postgres", ContractID: "identity.scim", Version: 1}
-		if !c.acceptsRequestKeyScope(scope, true) || feature.Operation != operation || feature.Contributor != descriptor {
+		if !c.acceptsRequestKeyScope(scope, true) || feature.Operation != scimBulkFeatureOperation() || feature.Contributor != scimUserCreationDescriptor() {
 			return invalidRequestKey()
 		}
 	}

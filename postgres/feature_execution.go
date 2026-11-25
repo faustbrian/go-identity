@@ -531,8 +531,13 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		if err != nil || !auditSafeID(target) {
 			return nil, invalidPlan()
 		}
-		if a.EventType == scimBulkApplyChildAudit && (p.Feature.Contributor != scimUserCreationDescriptor() || a.RetentionClass != "protected" || len(p.Audits) != 1) {
-			return nil, invalidPlan()
+		if a.EventType == scimBulkAdmitAudit || a.EventType == scimBulkApplyChildAudit {
+			if p.Feature.Contributor != scimUserCreationDescriptor() || a.RetentionClass != "protected" || len(p.Audits) != 1 {
+				return nil, invalidPlan()
+			}
+			if a.EventType == scimBulkAdmitAudit && (p.Lifecycle.EventType != "identity.scim.bulk_admitted.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != 1) {
+				return nil, invalidPlan()
+			}
 		}
 		expected := securityAuditScopeDigest(b, &p.Feature.Operation, kind, target, actorKind, "identity-feature-audit-binding-v1")
 		if a.BindingDigest != expected {

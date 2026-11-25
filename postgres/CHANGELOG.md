@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reserve the protected `identity.scim.bulk_admit` audit action for the exact
+  registered native SCIM Bulk parent. Historical parent audit plans retain
+  their original action and replay unchanged.
+
 - Bind the protected native SCIM Bulk child security event to its own command
   and original parent correlation. Keep the separate Group lifecycle target
   and ordinary Group audit bindings unchanged.
