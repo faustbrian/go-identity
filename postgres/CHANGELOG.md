@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow the exact registered native SCIM Bulk child owner to record a finite
+  Group denial in the guarded failure-audit and terminal receipt transaction,
+  after the original mutation has rolled back. Owners without the optional
+  contribution retain their existing behavior.
+
 - Reserve the protected `identity.scim.bulk_admit` audit action for the exact
   registered native SCIM Bulk parent. Historical parent audit plans retain
   their original action and replay unchanged.

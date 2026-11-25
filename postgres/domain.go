@@ -621,6 +621,9 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := c.persistAuditPhase(terminal); err != nil {
 		return fail(identity.UnavailableError{})
 	}
+	if err := c.recordSCIMBulkChildFailure(terminal.state.ctx, terminal, failureCode); err != nil {
+		return fail(identity.UnavailableError{})
+	}
 	if err := c.cleanupPreparedAccountLink(cleanup, terminal); err != nil {
 		return fail(identity.UnavailableError{})
 	}
