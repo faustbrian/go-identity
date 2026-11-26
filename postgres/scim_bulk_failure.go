@@ -30,7 +30,7 @@ func validSCIMBulkDenialPlan(b identity.CommandBinding, p CommandPlan) bool {
 		!p.SignupAcceptance && !p.MagicLinkRequestAcceptance
 }
 
-// SCIMBulkChildFailureContributor records a definitive native Group Bulk denial
+// SCIMBulkChildFailureContributor records a definitive native Bulk child denial
 // in the same transaction as its original failure audit and terminal receipt.
 // It is only invoked for the exact registered Bulk child after proven rollback.
 // Work authorizes the checkpoint, not another projection attempt. The owner
@@ -42,7 +42,7 @@ type SCIMBulkChildFailureContributor interface {
 }
 
 func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, code FeatureFailureCode) (err error) {
-	if code != FeatureFailureInvalidGroupMember && code != FeatureFailureConflict && code != FeatureFailurePrecondition && !scimBulkDenialCode(code) {
+	if code != FeatureFailureUniqueness && code != FeatureFailureInvalidGroupMember && code != FeatureFailureConflict && code != FeatureFailurePrecondition && !scimBulkDenialCode(code) {
 		return nil
 	}
 	if !c.owns(w) || w.usable() != nil {
@@ -51,6 +51,18 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 	plan := w.state.execution.reservation.plan
 	if plan.feature == nil || len(plan.audits) != 1 || plan.audits[0].EventType != scimBulkApplyChildAudit {
 		return nil
+	}
+	// Only the original protected native User-create child may retain its
+	// uniqueness denial; ordinary User commands and Group conflicts do not
+	// acquire this checkpoint or its failOnErrors cutoff authority.
+	if code == FeatureFailureUniqueness {
+		if plan.feature.Operation != scimUserCreationOperation() || plan.feature.Contributor != scimUserCreationDescriptor() ||
+			plan.subjectType != "scim_user" || plan.audits[0].RetentionClass != "protected" {
+			return nil
+		}
+		if _, _, err := featureAuditRecordScope(plan.binding, plan.feature.Operation, plan.subjectType, scimBulkApplyChildAudit); err != nil {
+			return nil
+		}
 	}
 	// A Group create has no version precondition. Only the precise registered
 	// mutation tuples may turn 412 into a terminal Bulk child checkpoint.

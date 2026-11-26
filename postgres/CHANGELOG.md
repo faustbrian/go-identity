@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit protected Bulk child audits and ordinary User lifecycle effects for
+  the exact native SCIM User-create operation. Settle its retained uniqueness
+  denial through the same fenced Bulk child callback used for Group results.
+
 - Allow the exact committed SCIM Bulk parent to checkpoint a blocked child or
   resolve its audited cutoff skip. A confirmed failed dependency retains a
   no-effect denial under the original child, not the parent.

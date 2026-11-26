@@ -107,10 +107,12 @@ func featureAuditRecordScope(binding identity.CommandBinding, operation identity
 	if action != scimBulkApplyChildAudit {
 		return subjectType, featureAuditTargetID(binding, operation), nil
 	}
-	// A child audit identifies the retained command, not its projected Group;
-	// the parent remains in correlation and the lifecycle still names the Group.
+	// A child audit identifies the retained command, not its projected resource;
+	// the parent remains in correlation and the lifecycle names that projection.
 	parent, err := identity.ParseCommandID(binding.CorrelationID)
-	if err != nil || parent == binding.CommandID || featureFailureSubject(operation) != "scim_group" || subjectType != "scim_group" || binding.ActorKind != authorization.SubjectServiceAccount {
+	group := featureFailureSubject(operation) == "scim_group" && subjectType == "scim_group"
+	userCreation := operation == scimUserCreationOperation() && subjectType == "scim_user"
+	if err != nil || parent == binding.CommandID || !group && !userCreation || binding.ActorKind != authorization.SubjectServiceAccount {
 		return "", "", invalidAudit()
 	}
 	return "scim_bulk_child", string(binding.CommandID), nil

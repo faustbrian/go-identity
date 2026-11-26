@@ -148,7 +148,7 @@ func (w Work) StageLifecycle(index uint16, occurredAt time.Time) error {
 // StagedLifecycle returns one owned record only after the declared event was
 // staged and its required audit outcome agrees on the exact aggregate and versions.
 // A native SCIM Bulk child audit identifies the originating command while the
-// corresponding lifecycle identifies the Group projection.
+// corresponding lifecycle identifies the User or Group projection.
 // Conflicting audit evidence poisons Work. An authentication denial in the
 // closed API-key verification profile may accompany its independent successful
 // permission-reduction audit; only that actual update produces its lifecycle.
@@ -207,6 +207,8 @@ func lifecycleAuditSubjectMatches(w Work, event *StagedLifecycle, record audit.R
 	}
 	var expectedEvent string
 	switch feature.Operation.OperationID {
+	case "identity.scim.user-create":
+		expectedEvent = "identity.scim.user_created.v1"
 	case "identity.scim.group-create":
 		expectedEvent = "identity.scim.group_created.v1"
 	case "identity.scim.group-replace":
