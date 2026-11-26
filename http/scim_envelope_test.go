@@ -95,3 +95,55 @@ func TestSCIMCredentialBoundaryKeepsOrdinaryJSONStrict(t *testing.T) {
 		t.Fatal("ordinary JSON decoder did not retain its content encoding check")
 	}
 }
+
+func TestRouterDelegatesOnlySelectedSCIMUserListRepresentation(t *testing.T) {
+	var entered int
+	list := scimUserOperation(t, "identity.scim.user-list", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered++
+		if r.Header.Get("Content-Encoding") != "gzip" {
+			t.Fatal("router changed the feature-owned representation header")
+		}
+		w.Header().Set("Content-Type", "application/scim+json")
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+	}))
+	ordinary := routerOperation(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	selected, _, err := identityhttp.NewRouter(routerPolicy(), []identityhttp.OperationDescriptor{list, ordinary}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unselected, _, err := identityhttp.NewRouter(routerPolicy(), []identityhttp.OperationDescriptor{ordinary}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, method, path string
+		handler            http.Handler
+		duplicate          bool
+		want               int
+	}{
+		{"exact selected list", http.MethodGet, scimUserCollection, selected, false, http.StatusUnsupportedMediaType},
+		{"duplicate header stays malformed", http.MethodGet, scimUserCollection, selected, true, http.StatusBadRequest},
+		{"ordinary stays strict", http.MethodGet, ordinary.Route.Path, selected, false, http.StatusBadRequest},
+		{"disabled list stays strict", http.MethodGet, scimUserCollection, unselected, false, http.StatusBadRequest},
+		{"wrong method stays strict", http.MethodPost, scimUserCollection, selected, false, http.StatusBadRequest},
+		{"encoded alias stays strict", http.MethodGet, "/scim/v2/%55sers", selected, false, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := corsRequest(tc.method, tc.path, "")
+			r.Header.Set("Content-Encoding", "gzip")
+			if tc.duplicate {
+				r.Header.Add("Content-Encoding", "identity")
+			}
+			w := httptest.NewRecorder()
+			tc.handler.ServeHTTP(w, r)
+			if w.Code != tc.want || (w.Header().Get("Content-Type") == "application/scim+json") != (tc.want == http.StatusUnsupportedMediaType) {
+				t.Fatalf("got status %d and media type %q; want status %d with route-appropriate media type", w.Code, w.Header().Get("Content-Type"), tc.want)
+			}
+		})
+	}
+	if entered != 1 {
+		t.Fatalf("List handler received %d requests, want 1", entered)
+	}
+}

@@ -94,13 +94,13 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 		return nil, OpenAPIDocument{}, ErrInvalidInput
 	}
 	selected := make(map[string]string, len(operations))
-	scimRoutes := make(map[string]bool, 2)
+	scimRoutes := make(map[string]bool, 3)
 	for _, op := range operations {
 		for _, path := range dispatchPaths(op) {
 			key := op.Route.Method + " " + path
 			selected[key] = op.Record.OperationID
 			switch op.Record.OperationID {
-			case "identity.scim.bulk", "identity.scim.service-provider-config":
+			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list":
 				scimRoutes[key] = true
 			}
 		}

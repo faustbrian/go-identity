@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let the selected SCIM User List handler return protocol representation
+  errors while retaining shared network and framing checks.
+
 - Dispatch explicitly selected canonical SCIM User GET requests with one
   unescaped resource segment and `Request.PathValue("resource_id")`.
   No general pattern routes or cross-origin grants are added.
