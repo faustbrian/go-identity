@@ -66,9 +66,11 @@ feature factories. Those factories must enforce their advertised controls;
 metadata cannot certify an arbitrary supplied handler. CORS policy for an
 unselected method/path is rejected. Preflight does no owner or hook work.
 
-Selected SCIM User Get, Delete and Patch independently dispatch `GET`, `DELETE`
-and `PATCH` on `/scim/v2/Users/{resource_id}` to their owners with
-`Request.PathValue("resource_id")`. They accept one unescaped resource segment
+Selected SCIM User Get, Delete, Patch and Replace independently dispatch
+on `/scim/v2/Users/{resource_id}`. Group Get on
+`/scim/v2/Groups/{resource_id}` and Group List on `/scim/v2/Groups` are also
+independent. Resource routes provide `Request.PathValue("resource_id")`
+and accept one unescaped resource segment
 of 1–128 ASCII letters, digits or `-._~`, excluding dot segments and the reserved
 `.search` endpoint. Exact routes win. No operation is installed by default;
 template CORS, bearer authorization and conditional writes remain outside

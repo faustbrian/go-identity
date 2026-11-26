@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Dispatch explicitly selected SCIM Group Get and List independently. Group
+  Get binds one canonical resource ID; neither read extends the body budget
+  or gives another route the SCIM representation envelope.
+
 - Route opted-in SCIM User Replace (PUT) to the canonical bounded resource
   path; keep the ordinary stream cap and use the SCIM 413 overflow envelope.
 - Route opted-in SCIM User PATCH to the canonical bounded resource path.

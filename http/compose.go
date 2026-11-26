@@ -82,10 +82,10 @@ func NewCanonicalOperation(c CanonicalOperationConfig) (OperationDescriptor, err
 // NewSelectedHandler freezes exact dispatch for validated explicitly selected
 // feature contributions. Empty selects nothing and returns 404 for all paths.
 // Construction validates dependencies/collisions and invokes no handler or IO.
-// Routes are root-mounted and case-sensitive. Only the canonical SCIM User
-// Get, Delete, Patch and Replace match a single resource segment and provide
-// resource_id as a request PathValue. There is no general prefix match, cleaning, escaped
-// alias, redirect, implicit HEAD or automatic OPTIONS. Query/body,
+// Routes are root-mounted and case-sensitive. Only canonical SCIM User Get,
+// Delete, Patch and Replace, and Group Get match a single resource segment and
+// provide resource_id as a request PathValue. There is no general prefix match,
+// cleaning, escaped alias, redirect, implicit HEAD or automatic OPTIONS. Query/body,
 // authentication, authorization, CSRF, rate and domain outcomes remain owned by
 // the selected real feature handlers; no second read, authentication or debit
 // is performed. Callers must use owned feature factories or trusted extension
@@ -112,10 +112,15 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 		allow   string
 	}
 	paths := make(map[string]selectedPath, len(ops))
-	users := selectedPath{methods: make(map[string]http.Handler, 2)}
+	resources := make(map[string]selectedPath, 2)
 	for _, op := range ops {
-		if scimUserResourceOperation(op) {
-			users.methods[op.Route.Method] = op.Handler
+		if prefix := scimResourceOperationPrefix(op); prefix != "" {
+			p := resources[prefix]
+			if p.methods == nil {
+				p.methods = make(map[string]http.Handler)
+			}
+			p.methods[op.Route.Method] = op.Handler
+			resources[prefix] = p
 			continue
 		}
 		for _, path := range dispatchPaths(op) {
@@ -135,7 +140,10 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 		slices.Sort(methods)
 		return strings.Join(methods, ", ")
 	}
-	users.allow = allowedMethods(users.methods)
+	for prefix, p := range resources {
+		p.allow = allowedMethods(p.methods)
+		resources[prefix] = p
+	}
 	for path, p := range paths {
 		p.allow = allowedMethods(p.methods)
 		paths[path] = p
@@ -160,10 +168,10 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 		}
 		p, ok := paths[r.URL.Path]
 		resourceID := ""
-		if !ok && len(users.methods) != 0 {
-			resourceID = scimUserPathID(r.URL.Path)
-			if resourceID != "" {
-				p, ok = users, true
+		if !ok && len(resources) != 0 {
+			prefix, id := scimResourcePath(r.URL.Path)
+			if p, ok = resources[prefix]; ok {
+				resourceID = id
 			}
 		}
 		if !ok {

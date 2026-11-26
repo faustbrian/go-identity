@@ -95,23 +95,26 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	}
 	selected := make(map[string]string, len(operations))
 	scimRoutes := make(map[string]bool, 4)
-	scimUserResourceMethods := make(map[string]bool, 2)
-	var exactSCIMUserPaths map[string]struct{}
+	scimResourceMethods := make(map[string]map[string]bool, 2)
+	var exactSCIMResourcePaths map[string]struct{}
 	for _, op := range operations {
-		if scimUserResourceOperation(op) {
-			scimUserResourceMethods[op.Route.Method] = true
+		if prefix := scimResourceOperationPrefix(op); prefix != "" {
+			if scimResourceMethods[prefix] == nil {
+				scimResourceMethods[prefix] = make(map[string]bool)
+			}
+			scimResourceMethods[prefix][op.Route.Method] = true
 		}
 		for _, path := range dispatchPaths(op) {
-			if scimUserPathID(path) != "" {
-				if exactSCIMUserPaths == nil {
-					exactSCIMUserPaths = make(map[string]struct{})
+			if _, id := scimResourcePath(path); id != "" {
+				if exactSCIMResourcePaths == nil {
+					exactSCIMResourcePaths = make(map[string]struct{})
 				}
-				exactSCIMUserPaths[path] = struct{}{}
+				exactSCIMResourcePaths[path] = struct{}{}
 			}
 			key := op.Route.Method + " " + path
 			selected[key] = op.Record.OperationID
 			switch op.Record.OperationID {
-			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list", "identity.scim.user-create":
+			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list", "identity.scim.user-create", "identity.scim.group-list":
 				scimRoutes[key] = true
 			}
 		}
@@ -160,7 +163,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	cors.(*corsHandler).next = dispatch
 	document.operations = cloneOperations(ops)
 	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout, scimRoutes: scimRoutes,
-		scimUserResourceMethods: scimUserResourceMethods, exactSCIMUserPaths: exactSCIMUserPaths}, document, nil
+		scimResourceMethods: scimResourceMethods, exactSCIMResourcePaths: exactSCIMResourcePaths}, document, nil
 }
 
 func samlNavigationFor(operationID string) CORSCredentialMode {
@@ -193,12 +196,12 @@ func validMiddleware(middleware []MiddlewareDescriptor) bool {
 }
 
 type routerHandler struct {
-	network                 *NetworkResolver
-	next                    http.Handler
-	timeout                 time.Duration
-	scimRoutes              map[string]bool
-	scimUserResourceMethods map[string]bool
-	exactSCIMUserPaths      map[string]struct{}
+	network                *NetworkResolver
+	next                   http.Handler
+	timeout                time.Duration
+	scimRoutes             map[string]bool
+	scimResourceMethods    map[string]map[string]bool
+	exactSCIMResourcePaths map[string]struct{}
 }
 
 func (h *routerHandler) hasSCIMEnvelope(r *http.Request) bool {
@@ -209,10 +212,13 @@ func (h *routerHandler) hasSCIMEnvelope(r *http.Request) bool {
 	if h.scimRoutes[r.Method+" "+path] {
 		return true
 	}
-	// Exact paths take precedence over the one permitted SCIM template, as
+	// Exact paths take precedence over the permitted SCIM templates, as
 	// they do at dispatch. Static routes cannot inherit its wider envelope.
-	_, exact := h.exactSCIMUserPaths[path]
-	return !exact && h.scimUserResourceMethods[r.Method] && scimUserPathID(path) != ""
+	if _, exact := h.exactSCIMResourcePaths[path]; exact {
+		return false
+	}
+	prefix, _ := scimResourcePath(path)
+	return h.scimResourceMethods[prefix][r.Method]
 }
 
 func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

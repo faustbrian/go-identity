@@ -1,0 +1,86 @@
+package identityhttp_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	identityhttp "github.com/faustbrian/go-identity/http"
+)
+
+func TestRouterSelectsOnlyCanonicalSCIMGroupReads(t *testing.T) {
+	const collection = "/scim/v2/Groups"
+	const id = "Group_1-a.~"
+	protocol := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/scim+json")
+		if r.URL.Path != collection {
+			w.Header().Set("X-Test-Resource", r.PathValue("resource_id"))
+		}
+		if r.Header.Get("Content-Encoding") != "" {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+		}
+	})
+	get := scimUserOperation(t, "identity.scim.group-get", protocol)
+	get.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.scim.group-get","parameters":[{"name":"resource_id","in":"path","required":true,"schema":{"type":"string"}}],"security":[],"responses":{"200":{"description":"Test fixture"}}}`)}
+	list := scimUserOperation(t, "identity.scim.group-list", protocol)
+	ordinary := routerOperation(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	const shadowed = collection + "/reserved"
+	ordinary.Route.Path, ordinary.Record.Path = shadowed, shadowed
+	build := func(ops ...identityhttp.OperationDescriptor) http.Handler {
+		t.Helper()
+		h, _, err := identityhttp.NewRouter(routerPolicy(), ops, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	both := build(ordinary, get, list)
+	listOnly := build(list)
+	getOnly := build(get)
+	for _, test := range []struct {
+		name, method, path, id string
+		router                 http.Handler
+		encoded                bool
+		status                 int
+	}{
+		{"get", "GET", collection + "/" + id + "?attributes=displayName", id, both, false, 200},
+		{"get envelope", "GET", collection + "/" + id, id, both, true, 415},
+		{"list envelope", "GET", collection, "", both, true, 415},
+		{"list does not select get", "GET", collection + "/" + id, "", listOnly, false, 404},
+		{"get does not select list", "GET", collection, "", getOnly, false, 404},
+		{"static shadow wins", "GET", shadowed, "", both, false, 202},
+		{"static shadow is not SCIM", "GET", shadowed, "", both, true, 400},
+		{"encoded alias", "GET", collection + "/%47roup", "", both, true, 400},
+		{"reserved search", "GET", collection + "/.search", "", both, false, 404},
+		{"nested resource", "GET", collection + "/" + id + "/child", "", both, false, 404},
+		{"no implicit head", "HEAD", collection + "/" + id, "", both, false, 405},
+		{"no write envelope", "PATCH", collection + "/" + id, "", both, true, 400},
+		{"no User route", "GET", "/scim/v2/Users/" + id, "", both, false, 404},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r := corsRequest(test.method, test.path, "")
+			r.SetPathValue("resource_id", "ignored")
+			if test.encoded {
+				r.Header.Set("Content-Encoding", "gzip")
+			}
+			w := httptest.NewRecorder()
+			test.router.ServeHTTP(w, r)
+			if w.Code != test.status || w.Header().Get("X-Test-Resource") != test.id || r.PathValue("resource_id") != "ignored" {
+				t.Fatalf("status=%d resource=%q caller value=%q; want %d and resource=%q", w.Code, w.Header().Get("X-Test-Resource"), r.PathValue("resource_id"), test.status, test.id)
+			}
+			if test.status == http.StatusUnsupportedMediaType && w.Header().Get("Content-Type") != "application/scim+json" {
+				t.Fatal("selected route lost its protocol response")
+			}
+		})
+	}
+	policy := routerPolicy()
+	policy.CORS = []identityhttp.CORSRoutePolicy{{
+		Method: http.MethodGet, Path: get.Route.Path, Credentials: identityhttp.CORSBearerCredentials,
+		Origins: []identityhttp.Origin{"https://client.example"}, AllowedHeaders: []string{"Authorization"},
+	}}
+	if handler, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{get}, nil); handler != nil || err == nil {
+		t.Fatal("Group resource template was accepted as an exact CORS route")
+	}
+}
