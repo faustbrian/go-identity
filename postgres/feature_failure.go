@@ -104,8 +104,11 @@ func featureFailureSubject(op identity.FeatureOperation) string {
 }
 
 func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailureCode) bool {
-	if op.OperationID == scimBulkInvalidChildID || code == FeatureFailureBulkChildInvalid {
-		return op == SCIMBulkInvalidChildOperation() && code == FeatureFailureBulkChildInvalid
+	if op.OperationID == scimBulkInvalidChildID {
+		return op == SCIMBulkInvalidChildOperation() && scimBulkInvalidChildDenialCode(code)
+	}
+	if code == FeatureFailureBulkChildInvalid {
+		return false
 	}
 	subject := featureFailureSubject(op)
 	if subject == "" || !code.valid() {
@@ -145,8 +148,9 @@ func validFeatureFailureResult(q claimRequest, r identity.CommandResult, code Fe
 
 // DenyFeature captures a finite denial only during this exact registered SCIM
 // participant's synchronous Apply with its original command. It accepts the
-// closed SCIM User/Group create/replace/PATCH/delete v1 schemas, service actor
-// and matching scim_user/scim_group target. InvalidGroupMember is additionally
+// closed SCIM User/Group create/replace/PATCH/delete v1 schemas with matching
+// resource targets, or the denial-only malformed child bound to its own
+// command record. A service actor is required. InvalidGroupMember is additionally
 // limited to Group member-writing operations. Copies retain original command
 // custody; reconstructed commands deny.
 // The same active invocation may refine an already-poisoned ordinary core CAS

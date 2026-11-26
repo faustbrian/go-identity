@@ -8,10 +8,15 @@ import (
 )
 
 func TestSCIMBulkInvalidChildUsesOnlyItsOwnProtectedAudit(t *testing.T) {
-	const code = FeatureFailureBulkChildInvalid
-	if code != 12 {
-		t.Fatal("append the invalid child journal code without renumbering")
+	if FeatureFailureBulkChildInvalid != 12 || FeatureFailureSCIMBulkDependency != 7 {
+		t.Fatal("preserve the original invalid-child and dependency codes")
 	}
+	t.Run("invalid declaration", func(t *testing.T) { requireSCIMBulkInvalidChildDenial(t, FeatureFailureBulkChildInvalid) })
+	t.Run("failed dependency", func(t *testing.T) { requireSCIMBulkInvalidChildDenial(t, FeatureFailureSCIMBulkDependency) })
+}
+
+func requireSCIMBulkInvalidChildDenial(t *testing.T, code FeatureFailureCode) {
+	t.Helper()
 	seed := scimBulkGroupMutationAuditPlan(t, scimBulkGroupMutationCase{operation: "identity.scim.group-create"})
 	seed.feature.Operation = SCIMBulkInvalidChildOperation()
 	b := seed.binding
@@ -33,18 +38,24 @@ func TestSCIMBulkInvalidChildUsesOnlyItsOwnProtectedAudit(t *testing.T) {
 	if kind, target, err := featureAuditRecordScope(b, p.Feature.Operation, p.SubjectType, scimBulkApplyChildAudit); err != nil || kind != "scim_bulk_child" || target != string(b.CommandID) {
 		t.Fatal("invalid child must use its own protected audit identity", kind, target, err)
 	}
-	for _, field := range []string{"record", "actor", "subject", "effect"} {
+	for _, field := range []string{"record", "user", "actor", "parent", "subject", "effect", "other code"} {
 		t.Run(field, func(t *testing.T) {
 			binding, candidate := b, p
 			switch field {
 			case "record":
 				binding.RecordID = "foreign-resource"
+			case "user":
+				binding.UserID = "foreign-user"
 			case "actor":
 				binding.ActorKind = authorization.SubjectUser
+			case "parent":
+				binding.CorrelationID = string(binding.CommandID)
 			case "subject":
 				candidate.SubjectType = "scim_group"
 			case "effect":
 				candidate.SCIMBulkDenial, candidate.Lifecycle = 0, seed.lifecycle
+			case "other code":
+				candidate.SCIMBulkDenial = FeatureFailureGroupMissing
 			}
 			if _, err := encodeFeaturePlan(binding, fingerprint, candidate); err == nil {
 				t.Fatal("accepted authority beyond the original invalid child")

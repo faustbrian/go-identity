@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Retain a failed dependency for an original malformed Bulk child without
+  granting resource authority or any mutation effect.
+
 - Retain the original snapshot-derived SCIM Bulk PATCH `noTarget` denial
   without a resource update or lifecycle effect.
 

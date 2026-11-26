@@ -12,13 +12,18 @@ const scimBulkDenialProfile = "identity-scim-bulk-denial-v1"
 const scimBulkInvalidChildID = "identity.scim.bulk-child-invalid"
 
 // SCIMBulkInvalidChildOperation identifies an original malformed Bulk child
-// with no resource target. Its only allowed outcome is a protected denial.
+// with no usable resource operation. It permits only protected denials for the
+// declaration itself or its original failed dependency.
 func SCIMBulkInvalidChildOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "scim", OperationID: scimBulkInvalidChildID, SchemaID: scimBulkInvalidChildID + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
 func scimBulkInvalidChildBinding(b identity.CommandBinding) bool {
 	return b.RecordID == string(b.CommandID) && b.UserID == identity.UserID(b.ActorID)
+}
+
+func scimBulkInvalidChildDenialCode(code FeatureFailureCode) bool {
+	return code == FeatureFailureBulkChildInvalid || code == FeatureFailureSCIMBulkDependency
 }
 
 func scimBulkDenialCode(code FeatureFailureCode) bool {
@@ -40,7 +45,7 @@ func scimBulkUserMutation(op identity.FeatureOperation) bool {
 
 func validSCIMBulkDenialPlan(b identity.CommandBinding, p CommandPlan) bool {
 	parent, err := identity.ParseCommandID(b.CorrelationID)
-	if p.SCIMBulkDenial == FeatureFailureBulkChildInvalid && !scimBulkInvalidChildBinding(b) {
+	if p.Feature != nil && p.Feature.Operation.OperationID == scimBulkInvalidChildID && !scimBulkInvalidChildBinding(b) {
 		return false
 	}
 	return scimBulkDenialCode(p.SCIMBulkDenial) && p.Feature != nil && featureFailureCodeAllowed(p.Feature.Operation, p.SCIMBulkDenial) &&
