@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in managed-bearer User List at the exact SCIM collection route.
+  Preserve bounded RFC query scalars for the native snapshot owner and charge
+  the existing shared atomic protocol quota only after current native authority.
+  No dynamic Get, writes, search, Groups or discovery is selected.
+
 - Add opt-in managed connection creation with explicit verified bearer sessions,
   original native request-key custody and shared atomic administrator admission.
   Newly confirmed native creation may present its one-time bearer; retries return

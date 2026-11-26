@@ -1,5 +1,52 @@
 # SCIM HTTP
 
+## Managed bearer User List
+
+`NewManagedUsersListFeature` selects exactly `GET /scim/v2/Users` using an
+issued managed SCIM bearer, not an administrator session. Supply the public
+`scimpostgres.ManagedConnectionService` as `Executor`, its matching native
+`Limits`, the same HTTPS tenant-host policy as the outer router, and the same
+strict atomic protocol backend/namespace/digest key as other SCIM routes:
+
+```go
+feature, err := scimhttp.NewManagedUsersListFeature(scimhttp.ManagedUsersListConfig{
+    Network: network, Executor: nativeManagedConnections, Limits: nativeLimits,
+    Rate: sharedProtocolRate, MaximumDuration: 5 * time.Second,
+})
+```
+
+The native owner authenticates the issued bearer, resolves its persisted
+connection and current organization/policy authority, then supplies only its
+configured client and tenant to the single shared `rate.protocol` charge.
+The trusted host tenant must match before any debit. Missing, repeated, failed
+or ambiguous admission cannot disclose a success; client, full IP and tenant
+budgets are atomic, with no local fallback. Every new HTTP read is a fresh
+quota attempt. Original native authority/deadlines remain in force afterward.
+
+Supported query parameters are exactly `filter`, `sortBy`, `sortOrder`,
+`startIndex`, `count`, `attributes`, and `excludedAttributes`. Scalars decode
+once under configured URL/decoded/field bounds; duplicate/case-alias names,
+unknown parameters and malformed escapes/UTF-8 or overflowing integers deny
+before native work. Signed decimal pagination within Go's native integer range
+is forwarded without inventing defaults: the root owner applies RFC 7644
+normalization, zero-count behavior, default/maximum page size, filter/sort/
+projection semantics and snapshot bounds. This transport does not implement
+another filter, pagination engine or response allocator.
+
+Send one explicit `Authorization: Bearer <issued SCIM bearer>` header. Cookies
+never supply fallback authority. Bodies, trailers, `If-Match`, content encoding
+and every idempotency-key channel are forbidden. Success is the complete bounded
+native `application/scim+json` ListResponse, unchanged and no-store/nosniff;
+SCIM errors retain their redacted status/type and known rate retry hint.
+Errors and invalid/oversized native output disclose no partial page.
+
+No User Get-by-ID, writes, search, Groups or discovery is selected or advertised
+by this factory. It retains canonical owner ID `scim`; explicitly combine its
+disjoint Operations with other selected SCIM factories under one `NewFeature`
+as below. Separate generic authentication middleware is not supported on this
+native-owned handler; configure the same network policy and server IO deadlines
+on the outer router.
+
 ## Managed administrative reads
 
 `NewManagedReadFeature` independently selects exactly
