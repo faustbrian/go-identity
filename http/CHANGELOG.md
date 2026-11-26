@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit the explicit strict-bearer variant of managed SCIM connection Create.
+  It retains the original keyed admission and administrative rate requirements;
+  the existing cookie variant still requires CSRF protection.
+
 - Let selected SCIM Bulk and discovery handlers own protocol representation
   errors within bounded router custody, without widening ordinary routes.
 

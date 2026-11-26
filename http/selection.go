@@ -431,6 +431,13 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 			csrfMatches = true
 			idempotencyMatches = r.Idempotency == "keyed"
 		}
+		// Managed SCIM Create can select the native explicit bearer session.
+		// Its HTTP owner must reject ambient cookie authority; this exact
+		// alternative does not change the catalogued cookie synchronizer,
+		// keyed request custody, or administrative rate policy.
+		if r.OperationID == "identity.scim.connection-create" && r.CSRFOrigin.Mode == CSRFNone {
+			csrfMatches = true
+		}
 		// These selected organization mutations also admit strict bearer-only
 		// handlers (identity/http's bearer profile), which must ignore ambient
 		// cookies. Only their explicit None profile is admitted; cookie handlers
