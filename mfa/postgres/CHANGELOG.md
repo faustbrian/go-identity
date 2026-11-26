@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Lock the selected Google One Tap callback's exact linked account and
+  known-empty factor generation through its original transaction. Missing,
+  enrolled or changed factor authority denies without creating a factor row.
+
 - Fence the original known-empty factor generation during native SAML logout
   start. Another session or a newer generation does not authorize revocation.
 
