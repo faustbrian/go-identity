@@ -33,6 +33,7 @@ use (
 	./mfa
 	./mfa/postgres
 	./oauth
+	./oauth/onetap
 	./oauth/postgres
 	./oauth/providers
 	./otp
