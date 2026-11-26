@@ -246,7 +246,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if _, _, ok := command.AccountUnlinkCounterCommand(); ok {
 		return c.prepareAccountUnlink(binding, command, plan)
 	}
-	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation {
+	if plan.Feature != nil || plan.SCIMBulkDenial != 0 || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	// No proof/cascade declaration is inferred from a contributor name. Those
@@ -401,6 +401,9 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 			result = *journal.result
 		}
 		if journal.disposition == journalTerminal {
+			if (admitted.scimBulkDenial != 0 || scimBulkDenialCode(journal.failureCode)) && admitted.scimBulkDenial != journal.failureCode {
+				return c.failedReservation(tx, binding, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnavailableError{})
+			}
 			changed, err := c.reconcileSCIMBulkChildFailure(bounded, tx, admitted, result, journal.failureCode)
 			if err != nil {
 				return c.failedReservation(tx, binding, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), err)

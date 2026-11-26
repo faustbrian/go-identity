@@ -171,6 +171,7 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	captchaProfile := false
 	captchaUseProfile := false
 	otpProfile := false
+	denialOnly := false
 	if fields >= 9 {
 		profile := r.string(64)
 		counterProfile = profile == "identity-feature-command-counters-v1"
@@ -181,22 +182,31 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 			return fail()
 		}
 	} else if fields == 8 {
-		r.consume(cborText("identity-feature-plan-v2"))
+		profile := r.string(64)
+		denialOnly = profile == scimBulkDenialProfile
+		if !denialOnly && profile != "identity-feature-plan-v2" {
+			return fail()
+		}
 	} else {
 		r.consume(cborText("identity-feature-plan-v1"))
 	}
-	r.key("lifecycle")
-	r.expect(5, 4)
-	l := &LifecyclePlan{}
-	r.key("event_type")
-	l.EventType = r.string(128)
-	r.key("event_index")
-	l.EventIndex = uint16(r.number(math.MaxUint16))
-	r.key("after_version")
-	l.AfterVersion = r.number(math.MaxUint64)
-	r.key("before_version")
-	l.BeforeVersion = r.number(math.MaxUint64)
-	p.Lifecycle = l
+	if denialOnly {
+		r.key("denial_code")
+		p.SCIMBulkDenial = FeatureFailureCode(r.number(math.MaxUint8))
+	} else {
+		r.key("lifecycle")
+		r.expect(5, 4)
+		l := &LifecyclePlan{}
+		r.key("event_type")
+		l.EventType = r.string(128)
+		r.key("event_index")
+		l.EventIndex = uint16(r.number(math.MaxUint16))
+		r.key("after_version")
+		l.AfterVersion = r.number(math.MaxUint64)
+		r.key("before_version")
+		l.BeforeVersion = r.number(math.MaxUint64)
+		p.Lifecycle = l
+	}
 	r.key("fingerprint")
 	r.consume(cborBytes(fingerprint[:]))
 	if otpProfile {
@@ -205,6 +215,9 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	}
 	r.key("contributors")
 	contributors := 4
+	if denialOnly {
+		contributors = 3
+	}
 	if otpProfile {
 		if p.Feature.Contributor != otpDescriptor() {
 			contributors++

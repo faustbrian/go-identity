@@ -23,10 +23,14 @@ const (
 	// wrong-type member denial for Group create/replace/PATCH. It is never a
 	// User denial or a Group DELETE result; it establishes no member authority.
 	FeatureFailureInvalidGroupMember
+	// FeatureFailureGroupMissing is the original no-effect Bulk Group 404.
+	FeatureFailureGroupMissing
+	// FeatureFailureGroupVersionRequired is the original no-effect Bulk Group 428.
+	FeatureFailureGroupVersionRequired
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureInvalidGroupMember
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureGroupVersionRequired
 }
 
 // TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
@@ -71,6 +75,9 @@ func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailure
 	if code == FeatureFailureInvalidGroupMember {
 		// DELETE affects only the Group projection, never its member resources.
 		return subject == "scim_group" && op.OperationID != "identity.scim.group-delete"
+	}
+	if scimBulkDenialCode(code) {
+		return scimBulkGroupMutation(op)
 	}
 	return true
 }
@@ -128,6 +135,9 @@ func (w Work) DenyFeature(ctx context.Context, p FeatureExecutionContributor, co
 	spec, ok := command.Feature()
 	r := s.execution.reservation
 	if !ok || spec.Binding != s.binding || spec.Operation != s.feature.Operation || r.plan == nil || r.plan.binding != s.binding || r.plan.feature == nil || *r.plan.feature != *s.feature || r.plan.fingerprint == ([32]byte{}) || r.journal.generation != s.generation {
+		return reject(invalidWork())
+	}
+	if (scimBulkDenialCode(code) || r.plan.scimBulkDenial != 0) && r.plan.scimBulkDenial != code {
 		return reject(invalidWork())
 	}
 	entry, err := s.execution.coordinator.registry.selectFeatureOperation(*s.feature)

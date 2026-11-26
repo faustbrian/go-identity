@@ -150,6 +150,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest, CaptchaReplayReservation: p.captchaReplay, SignupAcceptance: p.signupAcceptance}
 	result.APIKeyVerification = cloneAPIKeyVerificationPlan(p.apiKeyVerification)
 	result.SCIMUserUpdate = cloneSCIMUserUpdatePlan(p.scimUserUpdate)
+	result.SCIMBulkDenial = p.scimBulkDenial
 	result.MagicLinkRequestAcceptance = p.magicLinkRequestAcceptance
 	result.OrganizationInvitationOrigin = cloneOrganizationInvitationOrigin(p.invitationOrigin)
 	result.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.magicLinkRegistration)
@@ -303,7 +304,7 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if err := w.usable(); err != nil {
 		return c.Abort(w, err)
 	}
-	if w.state.rows != nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding != w.state.binding || !matchesDomainResult(w, result) {
+	if w.state.execution.reservation.plan.scimBulkDenial != 0 || w.state.rows != nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding != w.state.binding || !matchesDomainResult(w, result) {
 		return c.Abort(w, identity.InvalidInputError{Field: "command_result"})
 	}
 	if err := completeAudits(w); err != nil {
@@ -553,8 +554,16 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 		abortPlans = abortPlans[:1]
 	}
 	complete = complete && len(records) == len(abortPlans)
+	if r.plan.scimBulkDenial != 0 && failureCode != r.plan.scimBulkDenial {
+		complete = false // No generic failure can close a declared 404/428.
+	}
 	if complete {
-		before := strconv.FormatUint(r.plan.lifecycle.BeforeVersion, 10)
+		before := "0"
+		if r.plan.lifecycle != nil {
+			before = strconv.FormatUint(r.plan.lifecycle.BeforeVersion, 10)
+		} else if r.plan.scimBulkDenial == 0 {
+			complete = false
+		}
 		for _, record := range records {
 			attrs := record.Attributes()
 			complete = complete && record.Outcome() == outcome && record.ReasonCode() == reason && record.Changes().NoChange() && attrs["aggregate.before_version"] == before && attrs["aggregate.after_version"] == before

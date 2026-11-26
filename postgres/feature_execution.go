@@ -289,6 +289,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
 	}
+	if p.SCIMBulkDenial != 0 {
+		if _, ok := feature.contributor.(SCIMBulkChildFailureContributor); !ok || preparation {
+			return nil, invalidPlan()
+		}
+	}
 	if p.Feature.Operation == SSOSAMLIDPArrivalOperation() {
 		if _, final := feature.contributor.(FeatureCommitContributor); !final || preparation || !validSSOSAMLIDPArrivalPlan(b, p) {
 			return nil, invalidPlan()
@@ -685,7 +690,12 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 			}
 		}
 	}
-	f, l := *p.Feature, *p.Lifecycle
+	f := *p.Feature
+	var lifecycle *LifecyclePlan
+	if p.Lifecycle != nil {
+		copy := *p.Lifecycle
+		lifecycle = &copy
+	}
 	var risk *RiskEvidencePlan
 	if p.RiskEvidence != nil {
 		copy := *p.RiskEvidence
@@ -701,7 +711,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{scimUserUpdate: cloneSCIMUserUpdatePlan(p.SCIMUserUpdate), apiKeyVerification: cloneAPIKeyVerificationPlan(p.APIKeyVerification), invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), passkeyRegistration: clonePasskeyRegistrationPlan(p.PasskeyRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{scimBulkDenial: p.SCIMBulkDenial, scimUserUpdate: cloneSCIMUserUpdatePlan(p.SCIMUserUpdate), apiKeyVerification: cloneAPIKeyVerificationPlan(p.APIKeyVerification), invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), passkeyRegistration: clonePasskeyRegistrationPlan(p.PasskeyRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
@@ -906,6 +916,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if e = w.usable(); e != nil {
 		return result, e
+	}
+	if p.scimBulkDenial != 0 {
+		// This profile can only reach a terminal result through the typed
+		// failure callback. A successful native receipt is never admissible.
+		return result, w.fail(ctx, invalidPlan())
 	}
 	if w.state.rows != nil || receipt.Operation != p.feature.Operation || receipt.BeforeVersion != p.lifecycle.BeforeVersion || receipt.AfterVersion != p.lifecycle.AfterVersion {
 		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})
@@ -1130,7 +1145,13 @@ func featureMutationAudits(ctx context.Context, p *admittedKernelPlan, now time.
 				return nil, err
 			}
 		}
-		record, err := securityMutationAudit(ctx, p.binding, p.lifecycle.BeforeVersion, p.lifecycle.AfterVersion, now, class, a.EventType, kind, target, a.RetentionClass, true)
+		var before, after uint64
+		if p.lifecycle != nil {
+			before, after = p.lifecycle.BeforeVersion, p.lifecycle.AfterVersion
+		} else if p.scimBulkDenial == 0 || class == "committed" {
+			return nil, invalidPlan()
+		}
+		record, err := securityMutationAudit(ctx, p.binding, before, after, now, class, a.EventType, kind, target, a.RetentionClass, true)
 		if err != nil {
 			return nil, err
 		}

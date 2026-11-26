@@ -37,7 +37,13 @@ func (w Work) RequireFeatureCommand(ctx context.Context, p FeatureExecutionContr
 // This guard does not authorize raw SQL, closure or retaining Work; trusted
 // adapters remain responsible for their owned schema and complete validation.
 func (w Work) FeatureScope(p FeatureExecutionContributor) (identity.CommandBinding, FeatureRegistration, LifecyclePlan, error) {
-	if w.usable() != nil || w.state.feature == nil || w.state.lifecycle == nil || !sameParticipant(w.state.featureInvocation, p) {
+	if w.usable() != nil || w.state.feature == nil || !sameParticipant(w.state.featureInvocation, p) {
+		return identity.CommandBinding{}, FeatureRegistration{}, LifecyclePlan{}, invalidWork()
+	}
+	if w.state.lifecycle == nil {
+		if w.state.execution != nil && w.state.execution.reservation != nil && w.state.execution.reservation.plan != nil && w.state.execution.reservation.plan.scimBulkDenial != 0 {
+			return w.state.binding, *w.state.feature, LifecyclePlan{}, nil
+		}
 		return identity.CommandBinding{}, FeatureRegistration{}, LifecyclePlan{}, invalidWork()
 	}
 	return w.state.binding, *w.state.feature, w.state.lifecycle.plan, nil

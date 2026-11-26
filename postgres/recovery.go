@@ -216,6 +216,11 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
+	if admitted.scimBulkDenial != 0 {
+		// The native participant must prove the exact denial under its
+		// original authority; generic missing-effect evidence cannot do it.
+		return result, nil
+	}
 	if q.OperationID == "identity.account.link-token" && admitted.accountLink == nil {
 		return result, identity.UnavailableError{}
 	}

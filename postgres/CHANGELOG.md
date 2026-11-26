@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Retain the exact protected no-effect 404 or 428 for Group Bulk mutations
+  without a successful lifecycle or outbox participant.
+
 - Retain a Group Bulk replace, patch, or delete precondition failure with the original denial audit and terminal receipt.
 
 - Allow the original SCIM Bulk child to own its protected audit when a native

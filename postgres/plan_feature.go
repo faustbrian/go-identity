@@ -35,6 +35,10 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 // proofBase is private to fixed-depth, closed consumption envelopes. Public
 // preparation never admits their proof-free base as a standalone declaration.
 func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, proofBase bool) ([]byte, error) {
+	denialOnly := p.SCIMBulkDenial != 0
+	if denialOnly && (proofBase || !validSCIMBulkDenialPlan(binding, p)) {
+		return nil, invalidPlan()
+	}
 	if !proofBase && (p.SCIMUserUpdate != nil || p.Feature != nil && scimUserUpdateSelected(p.Feature.Operation)) {
 		return encodeSCIMUserUpdatePlan(binding, fingerprint, p)
 	}
@@ -116,7 +120,10 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.Feature != nil && (p.Feature.Operation.OperationID == "identity.phone.password-reset-complete" && (!proofBase || p.Feature.Operation != phonePasswordResetOperation()) || p.Feature.Operation.OperationID == "identity.phone.password-reset-request" && (!riskInitiationOperation(p.Feature.Operation) || p.RiskEvidence == nil)) {
 		return nil, invalidPlan()
 	}
-	count := 4
+	count, requiredOutboxes := 4, 1
+	if denialOnly {
+		count, requiredOutboxes = 3, 0
+	}
 	if p.OTP != nil && p.Feature.Contributor != otpDescriptor() {
 		count++
 	}
@@ -126,14 +133,14 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.CommandCounters != nil && (p.SubjectType == "" || p.RiskEvidence != nil || p.CommandCounters.PolicyVersion == 0 || p.CommandCounters.Fingerprint == ([32]byte{})) {
 		return nil, invalidPlan()
 	}
-	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || !featureContributorOwns(p.Feature.Contributor, p.Feature.Operation) || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != count || len(p.Audits) == 0 || len(p.Audits) > 64 || p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType) || validateRiskPlan(binding, p) != nil {
+	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || !featureContributorOwns(p.Feature.Contributor, p.Feature.Operation) || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != count || len(p.Audits) == 0 || len(p.Audits) > 64 || !denialOnly && (p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType)) || validateRiskPlan(binding, p) != nil {
 		return nil, invalidPlan()
 	}
 	if p.SubjectType != "" && !auditName(p.SubjectType) {
 		return nil, invalidPlan()
 	}
 	l := p.Lifecycle
-	if p.Feature.Operation.ValidateRecordVersions(l.BeforeVersion, l.AfterVersion) != nil {
+	if !denialOnly && p.Feature.Operation.ValidateRecordVersions(l.BeforeVersion, l.AfterVersion) != nil {
 		return nil, invalidPlan()
 	}
 	entries := make([][]byte, len(p.Contributors))
@@ -165,7 +172,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 		}
 		entries[i] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
 	}
-	if domains != 1 || audits != 1 || outboxes != 1 || features != 1 || p.OTP != nil && otps != 1 || (p.RiskEvidence != nil || p.CommandCounters != nil || p.CaptchaEvidence != nil) && risks != 1 {
+	if domains != 1 || audits != 1 || outboxes != requiredOutboxes || features != 1 || p.OTP != nil && otps != 1 || (p.RiskEvidence != nil || p.CommandCounters != nil || p.CaptchaEvidence != nil) && risks != 1 {
 		return nil, invalidPlan()
 	}
 	events := make([][]byte, len(p.Audits))
@@ -190,7 +197,14 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 		featureFields["version_policy"] = cborUint(uint64(d.VersionPolicy))
 	}
 	feature := cborMap(featureFields)
-	fields := map[string][]byte{"profile": cborText("identity-feature-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(entries), "audits": cborArray(events), "feature": feature, "lifecycle": cborMap(map[string][]byte{"event_type": cborText(l.EventType), "event_index": cborUint(uint64(l.EventIndex)), "before_version": cborUint(l.BeforeVersion), "after_version": cborUint(l.AfterVersion)})}
+	fields := map[string][]byte{"profile": cborText("identity-feature-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(entries), "audits": cborArray(events), "feature": feature}
+	if denialOnly {
+		fields["profile"] = cborText(scimBulkDenialProfile)
+		fields["subject_type"] = cborText(p.SubjectType)
+		fields["denial_code"] = cborUint(uint64(p.SCIMBulkDenial))
+		return cborMap(fields), nil
+	}
+	fields["lifecycle"] = cborMap(map[string][]byte{"event_type": cborText(l.EventType), "event_index": cborUint(uint64(l.EventIndex)), "before_version": cborUint(l.BeforeVersion), "after_version": cborUint(l.AfterVersion)})
 	if p.SubjectType != "" {
 		fields["profile"] = cborText("identity-feature-plan-v2")
 		fields["subject_type"] = cborText(p.SubjectType)
@@ -263,6 +277,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation, SignupAcceptance: p.SignupAcceptance}
 	snapshot.APIKeyVerification = cloneAPIKeyVerificationPlan(p.APIKeyVerification)
 	snapshot.SCIMUserUpdate = cloneSCIMUserUpdatePlan(p.SCIMUserUpdate)
+	snapshot.SCIMBulkDenial = p.SCIMBulkDenial
 	snapshot.MagicLinkRequestAcceptance = p.MagicLinkRequestAcceptance
 	snapshot.OrganizationInvitationOrigin = cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin)
 	if p.Capability != nil {
