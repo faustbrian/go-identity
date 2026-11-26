@@ -41,3 +41,35 @@ func TestManagedSCIMSelectionKeepsExistingProjectionHistory(t *testing.T) {
 		t.Fatal("create alone must not select Bulk migrations", err)
 	}
 }
+
+func TestManagedSCIMDeleteSelectsOneSharedMembershipHistory(t *testing.T) {
+	ctx := t.Context()
+	stores := StoreSet{state: &storeState{features: &featureState{httpManagedSCIMUsers: &managedSCIMUsersState{deleteUser: true}}}}
+	projection, err := ensureSCIMProjectionHistory(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, err := ensureDirectoryMembershipHistory(ctx, slices.Clone(projection))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prior := range [][]migrationHistory{projection, installed} {
+		selected, err := stores.managedSCIMReadMigrationCatalog(ctx, slices.Clone(prior))
+		if err != nil || len(selected) != 4 {
+			t.Fatal("Delete did not select the existing membership, credential and SCIM histories exactly once", err)
+		}
+		owners := 0
+		for _, h := range selected {
+			if h.namespace != directoryMembershipHistory {
+				continue
+			}
+			owners++
+			if len(h.history) != 1 || h.owners[1] != "organization/postgres" || h.history[0].Checksum() != installed[1].history[0].Checksum() {
+				t.Fatal("Delete changed the organization's existing membership migration")
+			}
+		}
+		if owners != 1 {
+			t.Fatal("Delete selected duplicate or missing membership histories", owners)
+		}
+	}
+}

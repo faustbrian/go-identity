@@ -64,8 +64,11 @@ func proveReferenceSCIMUsersGetRejectsCompetingOwners(t *testing.T, c reference.
 	selected := *c.HTTPManagedSCIMUsersGet
 	if c.HTTPManagedSCIMUsersList != nil {
 		competingNative := selected
-		profile := referenceManagedSCIMNativeConfiguration(c.HTTPManagedSCIMCreate)
-		competingNative.Native = &profile
+		competingNative.Native = c.HTTPManagedSCIMUsersList.Native
+		if c.HTTPManagedSCIMCreate != nil {
+			profile := referenceManagedSCIMNativeConfiguration(c.HTTPManagedSCIMCreate)
+			competingNative.Native = &profile
+		}
 		invalid(competingNative)
 		competingRate := selected
 		competingRate.RateNamespace, competingRate.RateKey = "separate-get-budget", [32]byte{1}

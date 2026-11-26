@@ -10,6 +10,8 @@ import (
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
 
+const directoryMembershipHistory = "identity_organization_directory_membership"
+
 func (s StoreSet) directorySyncMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
 	if s.state.features == nil || s.state.features.directorySync == nil {
 		return catalog, nil
@@ -81,13 +83,10 @@ func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migratio
 		}
 	}
 	if selected.users || selected.mixed {
-		members := migrationHistory{namespace: "identity_organization_directory_membership", owners: map[migrations.Version]ModuleID{}}
-		err := appendEnterpriseMigration(ctx, &members, "organization/postgres", organizationpg.DirectoryMembershipMigrationSource{Version: 1},
-			migrationGuard{version: 1, schema: "organization", tables: []string{"directory_membership_grants"}})
+		catalog, err = ensureDirectoryMembershipHistory(ctx, catalog)
 		if err != nil {
 			return nil, err
 		}
-		catalog = append(catalog, members)
 	}
 	if selected.mixed {
 		successor := migrationHistory{namespace: "identity_organization_directory_successor", owners: map[migrations.Version]ModuleID{}}
@@ -110,4 +109,19 @@ func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migratio
 		catalog = append(catalog, roleSuccessor)
 	}
 	return catalog, nil
+}
+
+// Directory synchronization and managed SCIM User deletion share the same
+// organization-owned migration and readiness guard.
+func ensureDirectoryMembershipHistory(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	if slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == directoryMembershipHistory }) {
+		return catalog, nil
+	}
+	history := migrationHistory{namespace: directoryMembershipHistory, owners: map[migrations.Version]ModuleID{}}
+	err := appendEnterpriseMigration(ctx, &history, "organization/postgres", organizationpg.DirectoryMembershipMigrationSource{Version: 1},
+		migrationGuard{version: 1, schema: "organization", tables: []string{"directory_membership_grants"}})
+	if err != nil {
+		return nil, err
+	}
+	return append(catalog, history), nil
 }

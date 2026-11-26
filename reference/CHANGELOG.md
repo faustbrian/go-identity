@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into conditional managed User DELETE over HTTPS with the existing
+  native owner and protocol quota. Preserve stale or missing If-Match errors
+  and headerless replay of the empty acknowledgement.
+
 - Opt into managed User Create over HTTPS with the issued managed bearer and
   authoritative native User, ETag and Location. Reuse the existing managed
   credential owner and any selected User/Bulk protocol quota.

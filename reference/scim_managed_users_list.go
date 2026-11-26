@@ -19,6 +19,7 @@ const (
 	managedSCIMUsersListField   = "reference_http_managed_scim_users_list"
 	managedSCIMUsersGetField    = "reference_http_managed_scim_users_get"
 	managedSCIMUsersCreateField = "reference_http_managed_scim_users_create"
+	managedSCIMUsersDeleteField = "reference_http_managed_scim_users_delete"
 )
 
 // HTTPManagedSCIMUsersListConfiguration selects GET /scim/v2/Users using
@@ -43,6 +44,12 @@ type HTTPManagedSCIMUsersGetConfiguration HTTPManagedSCIMUsersListConfiguration
 // be zero to adopt their exact native owner and protocol quota. Otherwise
 // native and rate settings follow the List configuration rules.
 type HTTPManagedSCIMUsersCreateConfiguration HTTPManagedSCIMUsersListConfiguration
+
+// HTTPManagedSCIMUsersDeleteConfiguration selects only conditional
+// DELETE /scim/v2/Users/{resource_id} with an issued managed bearer. With List,
+// Get or Create selected, leave all fields zero to use their native owner and
+// protocol quota. Otherwise follow the List configuration rules.
+type HTTPManagedSCIMUsersDeleteConfiguration HTTPManagedSCIMUsersListConfiguration
 
 // ManagedSCIMConnectionConfiguration selects the primary owner and retained
 // credential/profile keys for an existing managed SCIM connection. Provisioning
@@ -90,6 +97,18 @@ func (c HTTPManagedSCIMUsersCreateConfiguration) MarshalText() ([]byte, error) {
 	return c.MarshalJSON()
 }
 
+func (HTTPManagedSCIMUsersDeleteConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMUsersDeleteConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMUsersDeleteConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMUsersDeleteField}
+}
+
+func (c HTTPManagedSCIMUsersDeleteConfiguration) MarshalText() ([]byte, error) {
+	return c.MarshalJSON()
+}
+
 func (ManagedSCIMConnectionConfiguration) Format(w fmt.State, _ rune) {
 	_, _ = io.WriteString(w, "reference.ManagedSCIMConnectionConfiguration(redacted)")
 }
@@ -108,6 +127,7 @@ type managedSCIMUsersState struct {
 	get        bool
 	list       bool
 	createUser bool
+	deleteUser bool
 }
 
 func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListConfiguration, string, error) {
@@ -122,6 +142,7 @@ func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListCon
 		{c.HTTPManagedSCIMUsersList, managedSCIMUsersListField},
 		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersGet), managedSCIMUsersGetField},
 		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersCreate), managedSCIMUsersCreateField},
+		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersDelete), managedSCIMUsersDeleteField},
 	} {
 		if option.profile == nil {
 			continue
@@ -196,6 +217,7 @@ func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDe
 		get:        c.HTTPManagedSCIMUsersGet != nil,
 		list:       c.HTTPManagedSCIMUsersList != nil,
 		createUser: c.HTTPManagedSCIMUsersCreate != nil,
+		deleteUser: c.HTTPManagedSCIMUsersDelete != nil,
 	}
 	if bulk != nil {
 		selected.rate = bulk.rate
@@ -239,6 +261,15 @@ func (s referenceManagedUsersExecutor) ExecuteManagedAdmittedCreate(ctx context.
 	return s.native.ExecuteManagedAdmittedCreate(bounded, tenant, request, admit)
 }
 
+func (s referenceManagedUsersExecutor) ExecuteManagedAdmittedDelete(ctx context.Context, tenant identity.TenantID, request scim.Request, admit scim.ProtocolAdmission) (scim.Response, error) {
+	bounded, done, err := s.state.enterFeature(ctx, true)
+	if err != nil {
+		return scim.Response{}, scim.NewError(503, "")
+	}
+	defer done()
+	return s.native.ExecuteManagedAdmittedDelete(bounded, tenant, request, admit)
+}
+
 func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) ([]identityhttp.OperationDescriptor, error) {
 	selected := s.state.features.httpManagedSCIMUsers
 	executor := referenceManagedUsersExecutor{state: s.state, native: selected.native}
@@ -267,6 +298,15 @@ func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) 
 		})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: managedSCIMUsersCreateField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.deleteUser {
+		feature, err := scimhttp.NewManagedUsersDeleteFeature(scimhttp.ManagedUsersDeleteConfig{
+			Network: network, Executor: executor, Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMUsersDeleteField}
 		}
 		operations = append(operations, feature.Operations()...)
 	}

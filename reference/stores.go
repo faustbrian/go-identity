@@ -83,6 +83,10 @@ type StoreConfiguration struct {
 	// If List or Get is selected, a zero Create configuration adopts the same
 	// owner and protocol quota. Nil leaves User creation disabled.
 	HTTPManagedSCIMUsersCreate *HTTPManagedSCIMUsersCreateConfiguration
+	// HTTPManagedSCIMUsersDelete selects canonical managed-bearer User DELETE.
+	// If List, Get or Create is selected, a zero Delete configuration adopts
+	// the same owner and protocol quota. Nil leaves User deletion disabled.
+	HTTPManagedSCIMUsersDelete *HTTPManagedSCIMUsersDeleteConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

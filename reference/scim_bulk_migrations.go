@@ -35,6 +35,13 @@ func (s StoreSet) managedSCIMReadMigrationCatalog(ctx context.Context, catalog [
 			return nil, err
 		}
 	}
+	if f.httpManagedSCIMUsers != nil && f.httpManagedSCIMUsers.deleteUser {
+		var err error
+		catalog, err = ensureDirectoryMembershipHistory(ctx, catalog)
+		if err != nil {
+			return nil, err
+		}
+	}
 	catalog, err := ensureSCIMProjectionHistory(ctx, catalog)
 	if err != nil {
 		return nil, err

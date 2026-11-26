@@ -630,6 +630,11 @@ accepts `attributes` or `excludedAttributes` projection. Select
 `POST /scim/v2/Users` with a bounded `application/scim+json` User body. Create
 does not accept a caller request key or conditional headers. A committed
 creation returns `201` with the native User, ETag and canonical Location.
+Select `StoreConfiguration.HTTPManagedSCIMUsersDelete` independently for
+`DELETE /scim/v2/Users/{resource_id}`. Supply one strong native `If-Match`
+and no caller request key or body. A matching request withdraws the source
+contribution rather than deleting the global identity, returns an empty `204`,
+and can repeat with the same original precondition without another withdrawal.
 Send the managed connection's issued bearer, not a session cookie or a
 configured Bulk bearer. List supports the SCIM filter, sort,
 pagination and attribute-selection parameters accepted by its native owner.
@@ -643,13 +648,15 @@ its exact managed credential owner. Otherwise supply the matching `Native`
 deployment profile; an existing native owner can issue connections
 independently of HTTP.
 Reference applies the existing managed connection and atomic quota histories.
+Delete also selects the organization-owned directory membership history used
+for source withdrawal; apply the selected migration plan before serving it.
 When Bulk is also enabled, leave the User rate settings empty to share Bulk's
 protocol quota; otherwise configure a stable rate namespace and key across
 instances. Native authorization and quota admission must succeed before any
-Users are returned or created. When more than one User route is selected, set
-native and rate options only on the first selected of List, Get, and Create,
-in that order. Leave the other selected option structs empty to share the same
-owner and quota.
+Users are returned, created, or withdrawn. When more than one User route is
+selected, set native and rate options only on the first selected of List, Get,
+Create, and Delete, in that order. Leave the other selected option structs
+empty to share the same owner and quota.
 
 ## Optional directory administration
 
