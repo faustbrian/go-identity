@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Dispatch opted-in SCIM User DELETE on the canonical bounded resource path
+  independently of Get. Exact routes keep precedence and unsupported methods
+  report only the methods actually selected.
+
 - Return SCIM 413 for chunked User Create overflow at the same hard stream cap.
   Discard uncommitted feature output and leave ordinary routes unchanged.
 

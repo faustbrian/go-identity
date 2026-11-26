@@ -66,12 +66,13 @@ feature factories. Those factories must enforce their advertised controls;
 metadata cannot certify an arbitrary supplied handler. CORS policy for an
 unselected method/path is rejected. Preflight does no owner or hook work.
 
-The selected SCIM User Get operation dispatches `GET /scim/v2/Users/{resource_id}`
-to its owner with `Request.PathValue("resource_id")`. It accepts one unescaped
-resource segment of 1–128 ASCII letters, digits or `-._~`, excluding dot segments
-and the reserved `.search` endpoint. The router does not install this operation
-by default, grant cross-origin access to its template, or run the SCIM owner's
-bearer or resource authorization checks.
+Selected SCIM User Get and Delete independently dispatch `GET` and `DELETE`
+on `/scim/v2/Users/{resource_id}` to their owners with
+`Request.PathValue("resource_id")`. Both accept one unescaped resource segment
+of 1–128 ASCII letters, digits or `-._~`, excluding dot segments and the reserved
+`.search` endpoint. Exact routes win. Neither operation is installed by default;
+template CORS, bearer authorization and conditional deletion remain outside
+this routing boundary.
 
 Nonempty middleware requires each selected handler to implement
 `OperationMiddlewareBinder`; opaque handlers are rejected rather than receiving
@@ -502,7 +503,7 @@ transport row uses the optional Idempotency-Key extension specified in
 API_OPERATIONS.md and the SCIM transaction contract, rather than the older
 snapshot's conflicting forbidden-header column. No other catalog row changes.
 Selected SCIM Bulk, ServiceProviderConfig, User List, User Create, and
-canonical User Get keep the common network and framing checks. Their feature
+canonical User Get/Delete keep the common network and framing checks. Their feature
 owns SCIM representation errors; only Bulk receives the protocol stream
 ceiling. Encoded or unselected paths cannot inherit a SCIM envelope. Ordinary
 routes retain their existing bounds. If a selected User Create stream exceeds

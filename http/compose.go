@@ -83,7 +83,7 @@ func NewCanonicalOperation(c CanonicalOperationConfig) (OperationDescriptor, err
 // feature contributions. Empty selects nothing and returns 404 for all paths.
 // Construction validates dependencies/collisions and invokes no handler or IO.
 // Routes are root-mounted and case-sensitive. Only the canonical SCIM User
-// Get matches a single canonical resource segment and provides resource_id as
+// Get and Delete match a single resource segment and provide resource_id as
 // a request PathValue. There is no general prefix match, cleaning, escaped
 // alias, redirect, implicit HEAD or automatic OPTIONS. Query/body,
 // authentication, authorization, CSRF, rate and domain outcomes remain owned by
@@ -112,10 +112,10 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 		allow   string
 	}
 	paths := make(map[string]selectedPath, len(ops))
-	var userGet http.Handler
+	users := selectedPath{methods: make(map[string]http.Handler, 2)}
 	for _, op := range ops {
-		if scimUserGetOperation(op) {
-			userGet = op.Handler
+		if scimUserResourceOperation(op) {
+			users.methods[op.Route.Method] = op.Handler
 			continue
 		}
 		for _, path := range dispatchPaths(op) {
@@ -127,13 +127,17 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 			paths[path] = p
 		}
 	}
-	for path, p := range paths {
-		methods := make([]string, 0, len(p.methods))
-		for method := range p.methods {
+	allowedMethods := func(handlers map[string]http.Handler) string {
+		methods := make([]string, 0, len(handlers))
+		for method := range handlers {
 			methods = append(methods, method)
 		}
 		slices.Sort(methods)
-		p.allow = strings.Join(methods, ", ")
+		return strings.Join(methods, ", ")
+	}
+	users.allow = allowedMethods(users.methods)
+	for path, p := range paths {
+		p.allow = allowedMethods(p.methods)
 		paths[path] = p
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -156,18 +160,17 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 		}
 		p, ok := paths[r.URL.Path]
 		resourceID := ""
-		if !ok && userGet != nil {
+		if !ok && len(users.methods) != 0 {
 			resourceID = scimUserPathID(r.URL.Path)
+			if resourceID != "" {
+				p, ok = users, true
+			}
 		}
-		if !ok && resourceID == "" {
+		if !ok {
 			deny(404, "not_found")
 			return
 		}
 		handler, ok := p.methods[r.Method]
-		if resourceID != "" {
-			handler, ok = userGet, r.Method == http.MethodGet
-			p.allow = http.MethodGet
-		}
 		if !ok {
 			w.Header().Set("Allow", p.allow)
 			deny(405, "method_not_allowed")

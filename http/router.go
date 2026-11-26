@@ -95,10 +95,12 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	}
 	selected := make(map[string]string, len(operations))
 	scimRoutes := make(map[string]bool, 4)
-	var scimUserGetSelected bool
+	scimUserResourceMethods := make(map[string]bool, 2)
 	var exactSCIMUserPaths map[string]struct{}
 	for _, op := range operations {
-		scimUserGetSelected = scimUserGetSelected || scimUserGetOperation(op)
+		if scimUserResourceOperation(op) {
+			scimUserResourceMethods[op.Route.Method] = true
+		}
 		for _, path := range dispatchPaths(op) {
 			if scimUserPathID(path) != "" {
 				if exactSCIMUserPaths == nil {
@@ -158,7 +160,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	cors.(*corsHandler).next = dispatch
 	document.operations = cloneOperations(ops)
 	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout, scimRoutes: scimRoutes,
-		scimUserGetSelected: scimUserGetSelected, exactSCIMUserPaths: exactSCIMUserPaths}, document, nil
+		scimUserResourceMethods: scimUserResourceMethods, exactSCIMUserPaths: exactSCIMUserPaths}, document, nil
 }
 
 func samlNavigationFor(operationID string) CORSCredentialMode {
@@ -191,12 +193,12 @@ func validMiddleware(middleware []MiddlewareDescriptor) bool {
 }
 
 type routerHandler struct {
-	network             *NetworkResolver
-	next                http.Handler
-	timeout             time.Duration
-	scimRoutes          map[string]bool
-	scimUserGetSelected bool
-	exactSCIMUserPaths  map[string]struct{}
+	network                 *NetworkResolver
+	next                    http.Handler
+	timeout                 time.Duration
+	scimRoutes              map[string]bool
+	scimUserResourceMethods map[string]bool
+	exactSCIMUserPaths      map[string]struct{}
 }
 
 func (h *routerHandler) hasSCIMEnvelope(r *http.Request) bool {
@@ -210,7 +212,7 @@ func (h *routerHandler) hasSCIMEnvelope(r *http.Request) bool {
 	// Exact paths take precedence over the one permitted SCIM template, as
 	// they do at dispatch. Static routes cannot inherit its wider envelope.
 	_, exact := h.exactSCIMUserPaths[path]
-	return !exact && h.scimUserGetSelected && r.Method == http.MethodGet && scimUserPathID(path) != ""
+	return !exact && h.scimUserResourceMethods[r.Method] && scimUserPathID(path) != ""
 }
 
 func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

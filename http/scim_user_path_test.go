@@ -23,10 +23,14 @@ func scimUserOperation(t testing.TB, id string, handler http.Handler) identityht
 		t.Fatal(err)
 	}
 	params := `[]`
-	if id == "identity.scim.user-get" {
+	if id == "identity.scim.user-get" || id == "identity.scim.user-delete" {
 		params = `[{"name":"resource_id","in":"path","required":true,"schema":{"type":"string"}}]`
 	}
-	op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"` + id + `","parameters":` + params + `,"security":[],"responses":{"200":{"description":"Test fixture"}}}`)}
+	status := "200"
+	if id == "identity.scim.user-delete" {
+		status = "204"
+	}
+	op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"` + id + `","parameters":` + params + `,"security":[],"responses":{"` + status + `":{"description":"Test fixture"}}}`)}
 	return op
 }
 
@@ -115,6 +119,68 @@ func TestSCIMUserGetDispatchIsCanonicalAndOptIn(t *testing.T) {
 				if w.Code != 503 {
 					t.Fatal("cancelled read reached the handler", w.Code)
 				}
+			}
+		})
+	}
+}
+
+func TestSCIMUserDeleteDispatchIsCanonicalAndIndependentlySelected(t *testing.T) {
+	const id = "User_19-A.z~"
+	const resource = scimUserCollection + "/" + id
+	remove := scimUserOperation(t, "identity.scim.user-delete", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Fixture-User", r.PathValue("resource_id"))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	get := scimUserOperation(t, "identity.scim.user-get", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.PathValue("resource_id")))
+	}))
+
+	for _, transport := range []string{"selected", "router"} {
+		t.Run(transport, func(t *testing.T) {
+			build := func(operations ...identityhttp.OperationDescriptor) http.Handler {
+				t.Helper()
+				if transport == "selected" {
+					f := feature(t, "scim", nil, operations...)
+					h, err := identityhttp.NewSelectedHandler(identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					return h
+				}
+				h, _, err := identityhttp.NewRouter(routerPolicy(), operations, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return h
+			}
+			onlyDelete, onlyGet, both := build(remove), build(get), build(remove, get)
+			for _, tc := range []struct {
+				name, method, path, allow, bound string
+				handler                          http.Handler
+				status                           int
+			}{
+				{"delete-only", "DELETE", resource, "", id, onlyDelete, 204},
+				{"delete-with-get", "DELETE", resource, "", id, both, 204},
+				{"get-with-delete", "GET", resource, "", "", both, 200},
+				{"unselected-delete", "DELETE", resource, "GET", "", onlyGet, 405},
+				{"unselected-get", "GET", resource, "DELETE", "", onlyDelete, 405},
+				{"stable-allow", "PATCH", resource, "DELETE, GET", "", both, 405},
+				{"collection", "DELETE", scimUserCollection, "", "", both, 404},
+				{"reserved-search", "DELETE", scimUserCollection + "/.search", "", "", both, 404},
+				{"encoded-alias", "DELETE", scimUserCollection + "/%55ser", "", "", both, 404},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					r := corsRequest(tc.method, tc.path, "")
+					r.SetPathValue("resource_id", "unrelated")
+					w := httptest.NewRecorder()
+					tc.handler.ServeHTTP(w, r)
+					if w.Code != tc.status || w.Header().Get("Allow") != tc.allow || w.Header().Get("X-Fixture-User") != tc.bound || r.PathValue("resource_id") != "unrelated" {
+						t.Fatalf("status=%d allow=%q bound=%q caller_path=%q", w.Code, w.Header().Get("Allow"), w.Header().Get("X-Fixture-User"), r.PathValue("resource_id"))
+					}
+					if tc.status == 204 && w.Body.Len() != 0 || tc.status == 200 && w.Body.String() != id {
+						t.Fatal("unexpected selected response body", w.Body.String())
+					}
+				})
 			}
 		})
 	}
