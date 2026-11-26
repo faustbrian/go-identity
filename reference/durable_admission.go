@@ -56,12 +56,14 @@ func composeDurableAdmission(c StoreConfiguration, d ReferenceDependencies, migr
 	drained := make(chan struct{})
 	close(drained)
 	state := &storeState{pool: d.PostgreSQL, lifetime: lifetime, cancel: cancel, drained: drained, tenants: tenants, policy: n.Policy, keys: append([]risk.CounterDigestKey(nil), n.Keys...), config: VelocityStoreConfiguration{Schema: n.Schema, PrimaryTimeout: n.Timeout}, migrations: migrationPolicy, httpRate: httpRate, durable: true}
-	// Feature builders compare native counter policy/key allocations as well as
-	// schema. The selected durable owner supplies all three; these private inputs
-	// do not select a second runtime velocity owner (emptyVelocity was checked).
-	c.Velocity.Schema = n.Schema
-	c.Velocity.Native.Policy = n.Policy
-	c.Velocity.Native.Keys = append([]risk.CounterDigestKey(nil), n.Keys...)
+	if c.ProviderDiscovery == nil {
+		// Workflow builders still take their native policy and allocation inputs
+		// through the private Velocity fields. The standalone provider catalog
+		// validates the original selection and takes no workflow counter inputs.
+		c.Velocity.Schema = n.Schema
+		c.Velocity.Native.Policy = n.Policy
+		c.Velocity.Native.Keys = append([]risk.CounterDigestKey(nil), n.Keys...)
+	}
 	if err := state.composeFeatureStores(c, d); err != nil {
 		cancel()
 		return StoreSet{}, err

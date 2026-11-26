@@ -38,6 +38,9 @@ type ReferenceDependencies struct {
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
+	// ProviderDiscovery selects only the public configured-provider list over
+	// PostgreSQL DurableAdmission and HTTPRate. It cannot select sign-in.
+	ProviderDiscovery *ProviderDiscoveryConfiguration
 	// SocialOAuth selects native OIDC linking and optional existing-account
 	// signin; HTTPSocialOAuth exposes only
 	// explicitly selected routes and metadata over those actual native owners.
@@ -536,6 +539,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 		sessionCache = state.features.session.cache
 	}
 	if state.features != nil {
+		state.features.providerDiscovery.close()
 		state.features.httpAPIKey.close()
 		state.features.directorySync.close()
 		state.features.httpOrganization.close()

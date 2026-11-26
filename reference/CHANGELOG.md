@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select standalone public configured-provider discovery over the existing
+  PostgreSQL admission and HTTP-rate base, without an authentication feature
+  graph. Preserve native opaque pagination, safe output and shared quota policy;
+  public request lifetime joins shutdown without relaxing other tenant guards.
+
 - Preview an ordered mixed directory batch through the direct Reference
   worker, with separate inspection authorization and no Apply effects.
 

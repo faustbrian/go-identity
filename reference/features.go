@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"slices"
 	"time"
 
@@ -86,6 +87,7 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	providerDiscovery            *providerDiscoveryState
 	socialOAuth                  *socialOAuthState
 	enterpriseOIDC               *enterpriseOIDCState
 	enterpriseOAuth2             *enterpriseOAuth2State
@@ -177,6 +179,14 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.ProviderDiscovery != nil {
+		owner, err := composeProviderDiscovery(c, s.httpRate)
+		if err != nil {
+			return err
+		}
+		s.features = &featureState{providerDiscovery: owner, timeout: owner.duration, authorize: owner.authorize}
+		return nil
+	}
 	if c.HTTPDirectorySync != nil && c.DirectorySync == nil || c.DirectorySync != nil && (c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil) {
 		return identity.InvalidInputError{Field: "reference_directory_sync"}
 	}
@@ -1027,6 +1037,19 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpEmailOTPChange = httpEmailOTPChange
 	retainedResetHTTP = true
 	return nil
+}
+
+func providerDiscoveryOnly(c StoreConfiguration) bool {
+	if c.ProviderDiscovery == nil || c.DurableAdmission == nil || c.HTTPRate == nil {
+		return false
+	}
+	// Only the base PostgreSQL owners and migration policy may accompany this
+	// profile. Reject future opt-ins too rather than silently dropping them.
+	c.ProviderDiscovery = nil
+	c.DurableAdmission = nil
+	c.HTTPRate = nil
+	c.Migrations = nil
+	return reflect.ValueOf(c).IsZero()
 }
 
 // ProviderSet is the sealed selected deployment-provider owner. Copies share

@@ -1,5 +1,55 @@
 # Identity reference composition
 
+## Standalone public provider discovery
+
+`StoreConfiguration.ProviderDiscovery` explicitly selects public
+`GET /v1/oauth/provider-list` on the existing PostgreSQL `DurableAdmission` and
+`HTTPRate` base. This standalone feature needs no password, OTP, delivery,
+session or social-signin graph; mixed authentication selections are rejected.
+Supply `ProviderDiscoveryConfiguration.Catalog` with the actual selected
+built-in provider owners and a stable 32-byte cursor key. Composition constructs
+the real immutable `providers.NewCatalog` snapshot without protocol IO; callers
+retain their provider lifetimes and clear source key bytes after construction.
+
+Set a dedicated `RateNamespace`, positive `EmergencyMaximumKeys`, bounded
+`Degraded` recorder and explicit `MaximumDuration` from 1ms through 30s.
+`Authorize` must be the same comparable service handle as
+`ReferenceConfig.Policies.Authorize`; it binds the sealed graph and is never
+called to authorize an anonymous catalog read. The complete server policy set
+and tenant resolver remain required deployment configuration, but the public
+route does not invoke them or reinterpret public hosts as tenants.
+
+Use the normal `ComposeStores`, `ComposeProviders`, zero-delivery
+`ComposeWorkers`, `ComposeFeatures` and `NewServer` sequence. Apply the existing
+selected identity, risk and `rate-limit/postgres` migration plan, then call
+`FeatureSet.Initialize`. No provider-discovery schema or authentication
+migration is added. Configure an exact HTTPS `PublicHosts` binding in the
+server's network policy. Other operations retain their tenant-only guard.
+Omitting `ProviderDiscovery` advertises and serves no provider-list operation.
+
+Call `/v1/oauth/provider-list?limit=1` without Authorization, session, Origin,
+CSRF token or Idempotency-Key. The required canonical limit is 1..100; an
+optional nonempty cursor continues the same snapshot and limit:
+
+```json
+{"page":[{"id":"github","displayName":"GitHub","supportedModes":["authorization_code"]}],"nextCursor":"opaque-continuation"}
+```
+
+The last page omits `nextCursor`; an empty catalog returns `{"page":[]}`.
+Only configured safe IDs, labels and actual modes are returned, never client
+IDs, secrets, endpoints, scopes or raw profiles. Responses are bounded and
+no-store, with no cookie issuance, redirects, implicit HEAD/OPTIONS or CORS.
+The existing PostgreSQL safe-rate owner supplies anonymous IP admission and
+its bounded emergency policy; only known rate denial emits `Retry-After`.
+`StoreSet.Close` cancels and drains public catalog calls and closes its owned
+limiter without closing the borrowed PostgreSQL pool or provider owners.
+
+`TestReferencePostgresProviderDiscoveryHTTPS` in
+[provider_discovery_integration_test.go](provider_discovery_integration_test.go)
+exercises this public composition through a real local TLS listener and the
+owned PostgreSQL rate backend. This discovery profile does not complete social
+signin, reference-wide qualification or application deployment.
+
 ## Optional session cache
 
 Set `Session.Cache` to `SessionCacheConfiguration{Codec: ..., Valkey: ...}` to

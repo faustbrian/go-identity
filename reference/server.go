@@ -160,6 +160,11 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 		return nil, invalid
 	}
 	contributions := []identityhttp.Feature{probe}
+	if discovery, err := server.providerDiscoveryFeature(c.HTTP.Network); err != nil {
+		return nil, err
+	} else if discovery != nil {
+		contributions = append(contributions, *discovery)
+	}
 	socialFeature, err := server.socialOAuthFeature(c.HTTP.Network)
 	if err != nil {
 		return nil, err
@@ -404,6 +409,8 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	for i := range operations {
 		if operations[i].Route.Path != "/healthz" && operations[i].Route.Path != "/readyz" {
 			switch operations[i].Record.OperationID {
+			case "identity.oauth.provider-list":
+				operations[i].Handler = server.guardProviderDiscoveryLifetime(operations[i].Handler)
 			case "identity.scim.bulk", "identity.scim.service-provider-config":
 				operations[i].Handler = server.guardTenantResponse(network, operations[i].Handler, writeSCIMBulkGuardError)
 			default:

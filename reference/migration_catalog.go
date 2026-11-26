@@ -182,7 +182,7 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 		}
 		catalog = append(catalog, owned)
 	}
-	if s.state.features == nil {
+	if s.state.features == nil || s.state.features.providerDiscovery != nil {
 		return catalog, nil
 	}
 	if s.state.features.oauthWorkload != nil {
