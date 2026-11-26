@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in managed conditional User Delete on the exact resource route.
+  Forward singleton If-Match to native authority, forbid client retry keys and
+  alternate input channels, and reuse shared atomic protocol admission. Return
+  only bodyless 204 or bounded redacted errors; native source withdrawal and
+  headerless replay remain unchanged, without selecting another operation.
+
 - Add opt-in managed-bearer User Create at the exact SCIM collection POST.
   Delegate bounded raw schema input and native command custody, forbid client
   idempotency keys, and charge shared atomic protocol quota after current native

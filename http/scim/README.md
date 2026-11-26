@@ -1,5 +1,45 @@
 # SCIM HTTP
 
+## Managed bearer conditional User Delete
+
+`NewManagedUsersDeleteFeature` selects only canonical
+`DELETE /scim/v2/Users/{resource_id}` with an issued managed SCIM bearer.
+Supply the public native `ExecuteManagedAdmittedDelete` owner, its effective
+SCIM limits, explicit HTTPS tenant policy, and the same strict atomic protocol
+backend, namespace and digest key as the other selected SCIM routes:
+
+```go
+feature, err := scimhttp.NewManagedUsersDeleteFeature(scimhttp.ManagedUsersDeleteConfig{
+    Network: network, Executor: nativeManagedConnections, Limits: nativeLimits,
+    Rate: sharedProtocolRate, MaximumDuration: 5 * time.Second,
+})
+```
+
+The router supplies the exact unescaped resource segment. One `If-Match` value
+is forwarded unchanged; the native owner retains required/strong-version
+validation (428/400), current comparison (412), deprovision policy and atomic
+membership-source withdrawal. Native current bearer/connection/organization/
+operation authority and request preflight precede one shared `rate.protocol`
+attempt, before command or protected effects. Headerless retries enter the same
+native authority and admission window and recover the original tombstone-backed
+204 without another mutation. No caller key, command journal or cache is added.
+
+No query, body, trailer, content encoding, other conditional/range header or
+Idempotency-Key channel is accepted. Ambient cookies never supply authority;
+this bearer-only route needs no CSRF token. Success is exactly empty 204, with
+no Content-Type, ETag, Location or cookie. Failures retain bounded redacted SCIM
+Errors and existing outer transport envelopes; quota denial includes the bounded
+positive Retry-After. No partial output is disclosed, and failure alone does not
+prove a native effect rolled back. Original request/native deadlines control.
+
+Importing or omitting this feature exposes no route or metadata. Combine its
+disjoint Operations with other selected features under the canonical `scim`
+feature ID; it selects no read, other write, search, Groups, discovery or
+connection lifecycle. Owners must support concurrent requests. The synchronous
+gate borrows its context only for the native call; no invocation is retained,
+goroutine started, automatic retry made or local quota fallback selected. The
+outer server retains body closure and raw-IO/write deadlines.
+
 ## Managed bearer User Create
 
 `NewManagedUsersCreateFeature` selects only `POST /scim/v2/Users` with an

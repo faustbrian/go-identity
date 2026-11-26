@@ -75,6 +75,8 @@ github.com/faustbrian/go-identity/http v0.0.0-20261126174637-633de5e8e532 h1:s6R
 github.com/faustbrian/go-identity/http v0.0.0-20261126174637-633de5e8e532/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/http v0.0.0-20261126175259-b32c2d7300c0 h1:dJsxdsF6HHT2l5G5nl1ALvXH/I6mlYMAqYqOeKe9x40=
 github.com/faustbrian/go-identity/http v0.0.0-20261126175259-b32c2d7300c0/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261126184156-a73a497cb76d h1:fMycgYE3g79NtN+SCbeTMaohW/Z1LeCHEoX6OGNtUpY=
+github.com/faustbrian/go-identity/http v0.0.0-20261126184156-a73a497cb76d/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231 h1:4mrjcDbA+2yU7/5L68/5SULzOQNGq6ODaekGuZFbmlg=
 github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231/go.mod h1:Mwy5+yOnZCNesOzRF1WRxFO//rA7k+dJ3a9tAPhq0/k=
 github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc h1:BDf9OWPtRlXQsS3TAG5MT59MY39ySk6mpbF2RKnj+m4=
@@ -151,6 +153,8 @@ github.com/faustbrian/go-scim v0.0.0-20261126153416-d131d4161402 h1:SQAWAcnkYj7/
 github.com/faustbrian/go-scim v0.0.0-20261126153416-d131d4161402/go.mod h1:sPv2T27E2Yk2QwTDGyd07ng+71CvmqaPxMPaYmAps9s=
 github.com/faustbrian/go-scim v0.0.0-20261126172705-b6fb8ba62fef h1:Mimfad9DbBuqL0X9TQjDK9BOvvaE2zw0NV8ysBln1MU=
 github.com/faustbrian/go-scim v0.0.0-20261126172705-b6fb8ba62fef/go.mod h1:sPv2T27E2Yk2QwTDGyd07ng+71CvmqaPxMPaYmAps9s=
+github.com/faustbrian/go-scim v0.0.0-20261126182349-0aa76e9d610c h1:o6EBvNHMpGMx6ezi8FeuCta2yLSfrwSS43kmtOWbxgQ=
+github.com/faustbrian/go-scim v0.0.0-20261126182349-0aa76e9d610c/go.mod h1:sPv2T27E2Yk2QwTDGyd07ng+71CvmqaPxMPaYmAps9s=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261126140920-a1c263ceebac h1:eal/5iO7CDVnWkiijHfUskvZP/l8z76sJ5Rm+jHY/o8=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261126140920-a1c263ceebac/go.mod h1:ntKwlQmhEHLniFJSVh+BQJdToU/8WCrWtKZq+yQPpQw=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261126154454-e6ed164682a2 h1:81KZ5ARswlDk1HbP4bVDSdM4Op9HbwuX+KuoOCZuzE8=
