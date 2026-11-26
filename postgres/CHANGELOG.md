@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit the exact protected no-effect Bulk Group-create schema denial without
+  a resource write, lifecycle entry or successful command result.
+
 - Retain protected SCIM Bulk User replace, PATCH, and delete audits against
   the original child command. Permit exact no-effect User denials without a
   core update intent or lifecycle effect, while preserving ordinary updates.

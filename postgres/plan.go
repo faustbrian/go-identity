@@ -22,8 +22,8 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
-	// SCIMBulkDenial freezes an authorized no-effect SCIM Bulk denial (missing
-	// target or required version). It has no lifecycle or successful result.
+	// SCIMBulkDenial freezes a supported no-effect SCIM Bulk denial. It has
+	// no lifecycle or successful result.
 	SCIMBulkDenial FeatureFailureCode
 	// SCIMUserUpdate retains only the closed native update's required core CAS
 	// and original core version for participant recovery, not SCIM generation.

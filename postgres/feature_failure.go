@@ -36,10 +36,13 @@ const (
 	FeatureFailureUserVersionRequired
 	// FeatureFailureUserVersionMismatch is a Bulk User 412 detected before an update intent exists.
 	FeatureFailureUserVersionMismatch
+	// FeatureFailureGroupCreateInvalidValue is the original no-effect Bulk
+	// Group-create schema denial, not an invalid member returned during Apply.
+	FeatureFailureGroupCreateInvalidValue
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureUserVersionMismatch
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureGroupCreateInvalidValue
 }
 
 // TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
@@ -91,6 +94,8 @@ func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailure
 			return subject == "scim_group" || scimBulkUserMutation(op)
 		case FeatureFailureUserMissing, FeatureFailureUserVersionRequired, FeatureFailureUserVersionMismatch:
 			return scimBulkUserMutation(op)
+		case FeatureFailureGroupCreateInvalidValue:
+			return subject == "scim_group" && op.OperationID == "identity.scim.group-create"
 		default:
 			return scimBulkGroupMutation(op)
 		}

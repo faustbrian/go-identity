@@ -87,6 +87,37 @@ func TestSCIMBulkDependencyDenialPlanAcceptsOnlyExactGroupCreate(t *testing.T) {
 	}
 }
 
+func TestSCIMBulkGroupCreateValidationDenialHasNoEffects(t *testing.T) {
+	const code = FeatureFailureGroupCreateInvalidValue
+	if code != 11 {
+		t.Fatal("the new journal code must append without renumbering existing codes")
+	}
+	seed := scimBulkGroupMutationAuditPlan(t, scimBulkGroupMutationCase{operation: "identity.scim.group-create"})
+	seed.audits[0].BindingDigest[0] = 1
+	plan := CommandPlan{Feature: seed.feature, SubjectType: seed.subjectType, SCIMBulkDenial: code,
+		Audits: seed.audits, Contributors: []ContributorDescriptor{seed.feature.Contributor,
+			{Owner: "identity/postgres", ContractID: "identity.domain", Version: 1},
+			{Owner: "audit/postgres", ContractID: "identity.audit", Version: 1}}}
+	fingerprint := [32]byte{1}
+	wire, err := encodeFeaturePlan(seed.binding, fingerprint, plan)
+	if err != nil {
+		t.Fatal("the exact Group-create validation denial must be journaled without a lifecycle", err)
+	}
+	got, err := decodeFeaturePlan(seed.binding, fingerprint, wire)
+	if err != nil || got.SCIMBulkDenial != code || got.Lifecycle != nil {
+		t.Fatal("recover the exact validation denial without a successful mutation plan", err)
+	}
+	mutation := scimBulkGroupMutationAuditPlan(t, scimBulkGroupMutationCases()[0])
+	if featureFailureCodeAllowed(mutation.feature.Operation, code) || featureFailureCodeAllowed(scimUserCreationOperation(), code) {
+		t.Fatal("another feature borrowed the Group-create validation denial")
+	}
+	notBulk := seed.binding
+	notBulk.CorrelationID = string(notBulk.CommandID)
+	if _, err := encodeFeaturePlan(notBulk, fingerprint, plan); err == nil {
+		t.Fatal("an ordinary Group create borrowed a protected Bulk denial")
+	}
+}
+
 func TestSCIMBulkUserMutationDenialsHaveNoUpdateOrLifecycle(t *testing.T) {
 	for _, operation := range []string{"identity.scim.user-replace", "identity.scim.user-patch", "identity.scim.user-delete"} {
 		t.Run(operation, func(t *testing.T) {

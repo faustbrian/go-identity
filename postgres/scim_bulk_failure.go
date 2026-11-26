@@ -11,7 +11,8 @@ const scimBulkDenialProfile = "identity-scim-bulk-denial-v1"
 
 func scimBulkDenialCode(code FeatureFailureCode) bool {
 	return code == FeatureFailureGroupMissing || code == FeatureFailureGroupVersionRequired || code == FeatureFailureSCIMBulkDependency ||
-		code == FeatureFailureUserMissing || code == FeatureFailureUserVersionRequired || code == FeatureFailureUserVersionMismatch
+		code == FeatureFailureUserMissing || code == FeatureFailureUserVersionRequired || code == FeatureFailureUserVersionMismatch ||
+		code == FeatureFailureGroupCreateInvalidValue
 }
 
 func scimBulkGroupMutation(op identity.FeatureOperation) bool {
