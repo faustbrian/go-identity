@@ -8,12 +8,6 @@ import (
 )
 
 func managedUsersPatchWire(limits scim.Limits, bodyMaximum int) *identityhttp.WireOperation {
-	version := fields{"type": "string", "minLength": 3, "maxLength": 256}
-	location := fields{"type": "string", "format": "uri"}
-	parameters := []fields{
-		{"name": "resource_id", "in": "path", "required": true, "schema": fields{"type": "string", "minLength": 1, "maxLength": min(128, limits.StringBytes), "pattern": "^[A-Za-z0-9._~-]+$"}, "description": "One exact unescaped User segment, excluding dot, dot-dot and .search."},
-		{"name": "If-Match", "in": "header", "required": true, "schema": version, "description": "One strong native version forwarded unchanged. Missing, malformed and stale return 428, 400 and 412 respectively."},
-	}
 	patch := wireObject([]string{"schemas", "Operations"}, fields{
 		"schemas": schemaURN("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
 		"Operations": fields{"type": "array", "minItems": 1, "maxItems": limits.PatchOperations, "items": wireObject([]string{"op"}, fields{
@@ -23,6 +17,27 @@ func managedUsersPatchWire(limits scim.Limits, bodyMaximum int) *identityhttp.Wi
 		})},
 	})
 	patch["description"] = "Forward raw UTF-8 SCIM PatchOp up to " + strconv.Itoa(bodyMaximum) + " bytes. Native policy validates operation shapes, exact path byte and resource limits, mutability and supported attributes. Password writes are unselected."
+	return managedUsersConditionalWire(limits, managedUsersPatchOperation, "SCIMManagedUserPatchBearer", patch,
+		"Opt-in conditional User PATCH. The native owner authenticates the bearer and validates the scoped request before one shared atomic quota charge and the original durable command. No query, caller Idempotency-Key, cookies, trailers, automatic retry, or separate replay authority. Other routes are not selected.")
+}
+
+func managedUsersReplaceWire(limits scim.Limits, bodyMaximum int) *identityhttp.WireOperation {
+	replacement := fields{"type": "object", "required": []string{"schemas", "userName"}, "properties": fields{
+		"schemas":    fields{"type": "array", "minItems": 1, "maxItems": limits.ResourceAttributes, "items": fields{"type": "string", "maxLength": limits.StringBytes}},
+		"userName":   fields{"type": "string", "minLength": 1, "maxLength": limits.StringBytes},
+		"externalId": fields{"type": "string", "maxLength": limits.StringBytes},
+	}, "additionalProperties": true, "description": "Forward the raw UTF-8 SCIM User up to " + strconv.Itoa(bodyMaximum) + " bytes. The selected native schema owns mutability, supported extensions and complete replacement, including omission of optional writable attributes."}
+	return managedUsersConditionalWire(limits, managedUsersReplaceOperation, "SCIMManagedUserReplaceBearer", replacement,
+		"Opt-in conditional User PUT. The native owner authenticates the issued bearer and validates the complete replacement before one shared atomic quota charge and the original durable command. No query, caller Idempotency-Key, cookies, trailers, automatic retry, or separate replay authority. Other routes are not selected.")
+}
+
+func managedUsersConditionalWire(limits scim.Limits, operationID, bearerScheme string, request fields, description string) *identityhttp.WireOperation {
+	version := fields{"type": "string", "minLength": 3, "maxLength": 256}
+	location := fields{"type": "string", "format": "uri"}
+	parameters := []fields{
+		{"name": "resource_id", "in": "path", "required": true, "schema": fields{"type": "string", "minLength": 1, "maxLength": min(128, limits.StringBytes), "pattern": "^[A-Za-z0-9._~-]+$"}, "description": "One exact unescaped User segment, excluding dot, dot-dot and .search."},
+		{"name": "If-Match", "in": "header", "required": true, "schema": version, "description": "One strong native version forwarded unchanged. Missing, malformed and stale return 428, 400 and 412 respectively."},
+	}
 	resource := fields{"type": "object", "required": []string{"schemas", "id", "meta"}, "properties": fields{
 		"schemas": fields{"type": "array", "minItems": 1, "maxItems": limits.ResourceAttributes, "items": fields{"type": "string", "maxLength": limits.StringBytes}},
 		"id":      fields{"type": "string", "minLength": 22, "maxLength": 22},
@@ -55,10 +70,10 @@ func managedUsersPatchWire(limits scim.Limits, bodyMaximum int) *identityhttp.Wi
 	responses["405"].(fields)["headers"] = fields{"Allow": fields{"schema": fields{"type": "string"}, "description": "Only selected resource methods."}}
 	responses["429"].(fields)["headers"] = fields{"Retry-After": fields{"schema": fields{"type": "integer", "minimum": 1, "maximum": 3600}}}
 	return &identityhttp.WireOperation{
-		SecuritySchemes: []identityhttp.WireComponent{{Name: "SCIMManagedUserPatchBearer", Definition: []byte(`{"type":"http","scheme":"bearer","description":"Exactly one issued scoped managed SCIM bearer. Cookies never supply authority."}`)}},
-		Definition: wireJSON(fields{"operationId": managedUsersPatchOperation, "parameters": parameters, "responses": responses,
-			"security":    []fields{{"SCIMManagedUserPatchBearer": []string{}}},
-			"requestBody": fields{"required": true, "content": fields{scimMedia: fields{"schema": patch}}},
-			"description": "Opt-in conditional User PATCH. The native owner authenticates the bearer and validates the scoped request before one shared atomic quota charge and the original durable command. No query, caller Idempotency-Key, cookies, trailers, automatic retry, or separate replay authority. Other routes are not selected."}),
+		SecuritySchemes: []identityhttp.WireComponent{{Name: bearerScheme, Definition: []byte(`{"type":"http","scheme":"bearer","description":"Exactly one issued scoped managed SCIM bearer. Cookies never supply authority."}`)}},
+		Definition: wireJSON(fields{"operationId": operationID, "parameters": parameters, "responses": responses,
+			"security":    []fields{{bearerScheme: []string{}}},
+			"requestBody": fields{"required": true, "content": fields{scimMedia: fields{"schema": request}}},
+			"description": description}),
 	}
 }

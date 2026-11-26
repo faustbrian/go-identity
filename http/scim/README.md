@@ -1,5 +1,21 @@
 # SCIM HTTP
 
+## Managed bearer conditional User Replace
+
+`NewManagedUsersReplaceFeature` separately selects only
+`PUT /scim/v2/Users/{resource_id}`. Supply the native
+`ExecuteManagedAdmittedReplace` owner, its matching limits, the HTTPS tenant
+policy, and the same atomic rate backend, namespace and key as the other SCIM
+routes. Send an issued SCIM bearer, one original strong `If-Match`, and the
+complete `application/scim+json` User within the smallest configured body limit.
+
+Native authority owns writable-attribute omission, exact precondition
+comparison, protected mutation and original-command replay. Success returns the
+native 200 User, ETag and Location. A request with the same original input may
+recover that result without a second mutation; failure alone does not prove
+rollback. No browser-cookie authority, client retry key, query, trailer,
+automatic retry, or neighboring method is selected.
+
 ## Managed bearer conditional User PATCH
 
 `NewManagedUsersPatchFeature` selects only

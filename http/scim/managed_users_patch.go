@@ -59,44 +59,60 @@ func (ManagedUsersPatchConfig) MarshalText() ([]byte, error) {
 // Native preconditions and recovery are authoritative and no automatic retry
 // or response cache is installed. Construction performs no owner I/O.
 func NewManagedUsersPatchFeature(c ManagedUsersPatchConfig) (identityhttp.Feature, error) {
-	if missingManagedOwner(c.Executor) || len(c.Network.TenantHosts) == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
+	if missingManagedOwner(c.Executor) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	if _, err := scim.ParseMappingPath("userName", nil, c.Limits); err != nil {
+	return newManagedUsersConditionalFeature(c.Network, c.Rate, c.Limits, c.MaximumDuration, http.MethodPatch,
+		scim.UserPatch, managedUsersPatchOperation, c.Executor.ExecuteManagedAdmittedPatch, managedUsersPatchWire)
+}
+
+type managedUsersConditionalExecutor func(context.Context, identity.TenantID, scim.Request, scim.ProtocolAdmission) (scim.Response, error)
+
+func newManagedUsersConditionalFeature(networkConfig identityhttp.NetworkConfig, rateConfig ProtocolRateConfig, limits scim.Limits, duration time.Duration,
+	method string, operation scim.Operation, operationID string, executor managedUsersConditionalExecutor,
+	wire func(scim.Limits, int) *identityhttp.WireOperation,
+) (identityhttp.Feature, error) {
+	if len(networkConfig.TenantHosts) == 0 || duration < time.Millisecond || duration > 30*time.Second {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	network, decoder, err := identityhttp.NewSCIMRequestBoundary(c.Network)
+	if _, err := scim.ParseMappingPath("userName", nil, limits); err != nil {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	network, decoder, err := identityhttp.NewSCIMRequestBoundary(networkConfig)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	rate, err := newProtocolRate(c.Rate)
+	rate, err := newProtocolRate(rateConfig)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	maximumBody := min(c.Limits.BodyBytes, int(c.Network.Limits.MaximumBodyBytes), int(c.Network.Limits.MaximumDecodedBytes))
-	h := managedUsersPatchHTTP{network: network, decoder: decoder, executor: c.Executor, rate: rate, limits: c.Limits, bodyMaximum: maximumBody, duration: c.MaximumDuration}
+	maximumBody := min(limits.BodyBytes, int(networkConfig.Limits.MaximumBodyBytes), int(networkConfig.Limits.MaximumDecodedBytes))
+	h := managedUsersConditionalHTTP{network: network, decoder: decoder, executor: executor, rate: rate, limits: limits,
+		bodyMaximum: maximumBody, duration: duration, method: method, operation: operation}
 	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
-		Owner: "scim", OperationID: managedUsersPatchOperation, Handler: http.HandlerFunc(h.serve),
-		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: uint64(c.Limits.ResponseBytes),
+		Owner: "scim", OperationID: operationID, Handler: http.HandlerFunc(h.serve),
+		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: uint64(limits.ResponseBytes),
 	})
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op.Wire = managedUsersPatchWire(c.Limits, maximumBody)
+	op.Wire = wire(limits, maximumBody)
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "scim", Operations: []identityhttp.OperationDescriptor{op}})
 }
 
-type managedUsersPatchHTTP struct {
+type managedUsersConditionalHTTP struct {
 	network     *identityhttp.NetworkResolver
 	decoder     *identityhttp.RequestDecoder
-	executor    ManagedUsersPatchExecutor
+	executor    managedUsersConditionalExecutor
 	rate        *protocolRate
 	limits      scim.Limits
 	bodyMaximum int
 	duration    time.Duration
+	method      string
+	operation   scim.Operation
 }
 
-func (h *managedUsersPatchHTTP) serve(w http.ResponseWriter, r *http.Request) {
+func (h *managedUsersConditionalHTTP) serve(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.duration)
 	defer cancel()
 	response, denial := h.execute(r.WithContext(ctx))
@@ -110,7 +126,7 @@ func (h *managedUsersPatchHTTP) serve(w http.ResponseWriter, r *http.Request) {
 	writeProtocolResponse(w, response.Body, denial)
 }
 
-func (h *managedUsersPatchHTTP) execute(r *http.Request) (response scim.Response, denial *scim.Error) {
+func (h *managedUsersConditionalHTTP) execute(r *http.Request) (response scim.Response, denial *scim.Error) {
 	defer func() {
 		if recover() != nil {
 			response, denial = scim.Response{}, scim.NewError(503, "")
@@ -120,7 +136,7 @@ func (h *managedUsersPatchHTTP) execute(r *http.Request) (response scim.Response
 	if resourceID == "" || r.URL.Path != "/scim/v2/Users/"+resourceID || r.URL.RawPath != "" || r.URL.EscapedPath() != r.URL.Path {
 		return scim.Response{}, scim.NewError(404, "")
 	}
-	if r.Method != http.MethodPatch {
+	if r.Method != h.method {
 		return scim.Response{}, scim.NewError(405, "")
 	}
 	if len(resourceID) > h.limits.StringBytes {
@@ -164,7 +180,7 @@ func (h *managedUsersPatchHTTP) execute(r *http.Request) (response scim.Response
 	ifMatch, _ := protocolHeader(r, "If-Match")
 	contentType, _ := protocolHeader(r, "Content-Type")
 	encoding, _ := protocolHeader(r, "Content-Encoding")
-	request := scim.Request{Operation: scim.UserPatch, Credential: credential, ResourceID: resourceID, IfMatch: scim.Version(ifMatch), Body: body, ContentType: contentType, ContentEncoding: encoding}
+	request := scim.Request{Operation: h.operation, Credential: credential, ResourceID: resourceID, IfMatch: scim.Version(ifMatch), Body: body, ContentType: contentType, ContentEncoding: encoding}
 	calls, admitted := 0, false
 	gate := func(ctx context.Context, client scim.ProtocolClient) *scim.Error {
 		calls++
@@ -178,7 +194,7 @@ func (h *managedUsersPatchHTTP) execute(r *http.Request) (response scim.Response
 		admitted = denial == nil
 		return denial
 	}
-	response, err = h.executor.ExecuteManagedAdmittedPatch(r.Context(), facts.TenantID(), request, gate)
+	response, err = h.executor(r.Context(), facts.TenantID(), request, gate)
 	if err != nil {
 		var protocol *scim.Error
 		if errors.As(err, &protocol) && protocol != nil {

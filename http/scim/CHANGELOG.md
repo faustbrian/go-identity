@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add opt-in conditional User PUT with full native replacement, exact original
+  If-Match and replay, shared protocol quota, and validated User/ETag/Location.
+
 - Add opt-in issued-bearer User PATCH. Preserve native If-Match, canonical
   replay, and User/ETag/Location under the shared protocol quota.
 
