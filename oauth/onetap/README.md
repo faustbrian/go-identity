@@ -18,6 +18,61 @@ performing discovery. Verification may call the provider's configured key set,
 which must authenticate signatures and honor its context. There are no owned
 goroutines or hidden services.
 
+### Provider-bound callback composition
+
+For provider-selected initiation, use `NewProviderBoundValidator` with
+`ProviderBoundConfig`. It freezes the same exact Google profile, tenant,
+origin and policy as the legacy validator, and derives the provider ID, version,
+client ID and callback mode privately from the configured provider. The adapter
+cannot select a different provider through the callback command.
+
+Initiation must use the existing session provider-bound issuance/persistence
+path. At callback, pass `ProviderBoundAdapterBinding` with the original
+`session.PreAuthTransaction`, its exact `Expected` binding and the flow-cookie
+digest independently derived with `Token.ProviderPreAuthDigest` from the cookie
+actually presented. Legacy or unbound transactions and legacy cookie digests
+are not provider-bound authority. The validator calls `CheckProvider` before
+credential verification and again afterwards, so an initiation that expires
+during verification returns no identity evidence. These checks do not replace
+the durable owner's current-state admission.
+
+An optional `HostedDomain` string is trusted startup configuration. It is
+validated with `oauth.NewGoogleHostedDomain` without normalizing or fetching
+anything, then enforced only by
+`VerifyGoogleCredentialForHostedDomain` against the signed exact `hd` claim.
+Missing or mismatching `hd` denies even when a verified email has that suffix;
+email, browser hints, suffix matching and organization membership never grant
+access. An empty setting leaves the signed domain unrestricted. Bind changes to
+this restriction to the initiating policy ID/version, not callback fields.
+
+```go
+validator, err := onetap.NewProviderBoundValidator(onetap.ProviderBoundConfig{
+    Provider: googleProvider,
+    TenantID: tenantID,
+    Origin: authorizedOrigin,
+    PolicyID: policyID,
+    PolicyVersion: policyVersion,
+    Clock: clock,
+    HostedDomain: "workspace.example", // Optional trusted exact-domain policy.
+})
+// Handle err before accepting callbacks.
+result, err := validator.Validate(ctx, onetap.ProviderBoundAdapterBinding{
+    Transaction: originalTransaction,
+    Expected: originalBinding,
+    Cookie: independentlyComputedProviderFlowDigest,
+}, callback)
+// On success result.Original() returns the unchanged complete
+// session.ProviderPreAuthTransactionSpec, including provider/client/mode.
+```
+
+`ProviderBoundResult.Identity()` is the same generic verified OAuth evidence.
+The result is read-only and redacted, and neither consumes the callback nor
+issues a session, links an account, stores a flow or renders browser options.
+The legacy `NewValidator`, `AdapterBinding` and `Result` remain unchanged and
+do not accept provider-bound records or gain hosted-domain enforcement.
+
+### Legacy callback composition
+
 At initiation, the trusted owner must persist the purpose-specific
 `identity.oauth.onetap-start` pre-auth intent with the exact tenant, origin,
 policy/version, original nonce, resolved RememberPolicy and empty CallbackURL
@@ -73,7 +128,7 @@ Never treat this result as active-state or local authentication authority.
 
 Redirect mode (including any nonempty inbound Redirect or stored CallbackURL),
 prompt/button initialization, login hints, prompt dismissal/cancellation signals,
-hosted-domain restrictions, email verification/linking policy, HTTP parsing and
+email verification/linking policy, HTTP parsing and
 live browser/FedCM interoperability are not implemented. No raw claim API or
 email/domain assertion is fabricated to cover those gaps. The selected origin
 profile accepts lowercase canonical HTTPS DNS/IPv4 origins, optional non-default

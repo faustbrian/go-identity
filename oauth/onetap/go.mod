@@ -5,8 +5,8 @@ go 1.27.0
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261126151644-634a671af5d2
-	github.com/faustbrian/go-identity/session v0.0.0-20261123125537-8d9afa5e1a45
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57
+	github.com/faustbrian/go-identity/session v0.0.0-20261126164520-77d5e9e2c065
 )
 
 require (

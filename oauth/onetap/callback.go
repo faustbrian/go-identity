@@ -151,32 +151,18 @@ func (v *Validator) Validate(ctx context.Context, b AdapterBinding, c Callback) 
 	// developers.google.com/identity/gsi/web/guides/verify-google-id-token.
 	// Hashes have fixed length, so mismatch comparison has no value-dependent
 	// early acceptance, including differently sized canonical token values.
-	if !validCSRF(c.CSRFCookies, c.CSRFBody) || c.Origin != v.config.Origin || c.Redirect != "" {
+	if !v.matchesBrowserContext(c) {
 		return Result{}, failure(Denied, ctx)
 	}
-	i := b.Expected.Intent
 	if !v.matchesOriginalContext(b) {
 		return Result{}, failure(Denied, ctx)
 	}
 	if err := b.Transaction.Check(v.config.Clock.Now(), b.Expected, b.Cookie); err != nil {
 		return Result{}, failure(Denied, ctx)
 	}
-	if len(c.Credential.IDToken) == 0 || len(c.Credential.IDToken) > v.profile.MaxTokenBytes {
-		return Result{}, failure(InvalidInput, ctx)
-	}
-	verified, err := v.config.Provider.VerifyGoogleCredential(ctx, c.Credential, oauth.GoogleCredentialNonce{OriginalNonce: base64.RawURLEncoding.EncodeToString(i.Nonce[:])})
+	verified, err := v.verifyCredential(ctx, c.Credential, b.Expected.Intent.Nonce, nil)
 	if err != nil {
-		if ctx.Err() != nil {
-			return Result{}, failure(Unavailable, ctx)
-		}
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return Result{}, &Error{kind: Unavailable, cause: contextCause(err)}
-		}
-		var rejected *oauth.Error
-		if errors.As(err, &rejected) && rejected.Kind() == oauth.InvalidInput {
-			return Result{}, failure(InvalidInput, ctx)
-		}
-		return Result{}, failure(InvalidProof, ctx)
+		return Result{}, err
 	}
 	original, err := b.Transaction.Bindings()
 	if err != nil {
@@ -186,17 +172,49 @@ func (v *Validator) Validate(ctx context.Context, b AdapterBinding, c Callback) 
 }
 
 func (v *Validator) matchesOriginalContext(b AdapterBinding) bool {
-	i := b.Expected.Intent
+	return v.matchesOriginalIntent(b.Expected.Intent) && b.ProviderID == v.profile.ID && b.ProviderVersion == v.profile.Version && b.ClientID == v.profile.ClientID
+}
+
+func (v *Validator) matchesBrowserContext(c Callback) bool {
+	return validCSRF(c.CSRFCookies, c.CSRFBody) && c.Origin == v.config.Origin && c.Redirect == ""
+}
+
+func (v *Validator) matchesOriginalIntent(i session.PreAuthIntent) bool {
 	if i.TenantID != v.config.TenantID || i.Origin != v.config.Origin {
 		return false
 	}
 	if i.PolicyID != v.config.PolicyID || i.PolicyVersion != v.config.PolicyVersion {
 		return false
 	}
-	if i.Action != "identity.oauth.onetap-start" || i.Purpose != session.PreAuthSessionIssuance || i.CallbackURL != "" {
-		return false
+	return i.Action == "identity.oauth.onetap-start" && i.Purpose == session.PreAuthSessionIssuance && i.CallbackURL == ""
+}
+
+func (v *Validator) verifyCredential(ctx context.Context, credential oauth.GoogleCredential, nonce [32]byte, domain *oauth.GoogleHostedDomain) (oauth.ProviderIdentity, error) {
+	if len(credential.IDToken) == 0 || len(credential.IDToken) > v.profile.MaxTokenBytes {
+		return oauth.ProviderIdentity{}, failure(InvalidInput, ctx)
 	}
-	return b.ProviderID == v.profile.ID && b.ProviderVersion == v.profile.Version && b.ClientID == v.profile.ClientID
+	originalNonce := oauth.GoogleCredentialNonce{OriginalNonce: base64.RawURLEncoding.EncodeToString(nonce[:])}
+	var verified oauth.ProviderIdentity
+	var err error
+	if domain == nil {
+		verified, err = v.config.Provider.VerifyGoogleCredential(ctx, credential, originalNonce)
+	} else {
+		verified, err = v.config.Provider.VerifyGoogleCredentialForHostedDomain(ctx, credential, originalNonce, *domain)
+	}
+	if err == nil {
+		return verified, nil
+	}
+	if ctx.Err() != nil {
+		return oauth.ProviderIdentity{}, failure(Unavailable, ctx)
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return oauth.ProviderIdentity{}, &Error{kind: Unavailable, cause: contextCause(err)}
+	}
+	var rejected *oauth.Error
+	if errors.As(err, &rejected) && rejected.Kind() == oauth.InvalidInput {
+		return oauth.ProviderIdentity{}, failure(InvalidInput, ctx)
+	}
+	return oauth.ProviderIdentity{}, failure(InvalidProof, ctx)
 }
 
 func contextCause(err error) error {
