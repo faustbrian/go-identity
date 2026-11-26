@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Route explicitly selected SCIM Group Replace to one canonical resource ID
+  and return SCIM overflow errors at the existing body cap.
+
 - Preserve SCIM unsupported-encoding and body-overflow responses on an
   explicitly selected Group Create route without widening the request cap.
 

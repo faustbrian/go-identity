@@ -83,7 +83,7 @@ func NewCanonicalOperation(c CanonicalOperationConfig) (OperationDescriptor, err
 // feature contributions. Empty selects nothing and returns 404 for all paths.
 // Construction validates dependencies/collisions and invokes no handler or IO.
 // Routes are root-mounted and case-sensitive. Only canonical SCIM User Get,
-// Delete, Patch and Replace, and Group Get match a single resource segment and
+// Delete, Patch and Replace, and Group Get and Replace match a resource segment and
 // provide resource_id as a request PathValue. There is no general prefix match,
 // cleaning, escaped alias, redirect, implicit HEAD or automatic OPTIONS. Query/body,
 // authentication, authorization, CSRF, rate and domain outcomes remain owned by

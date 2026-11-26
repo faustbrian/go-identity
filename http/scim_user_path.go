@@ -14,8 +14,17 @@ func scimResourceOperationPrefix(op OperationDescriptor) string {
 	if scimUserResourceOperation(op) {
 		return scimUserPathPrefix
 	}
-	if op.Record.OperationID == "identity.scim.group-get" && op.Route.Method == http.MethodGet && op.Route.Path == scimGroupPathPrefix+"{resource_id}" {
-		return scimGroupPathPrefix
+	if op.Route.Path == scimGroupPathPrefix+"{resource_id}" {
+		switch op.Record.OperationID {
+		case "identity.scim.group-get":
+			if op.Route.Method == http.MethodGet {
+				return scimGroupPathPrefix
+			}
+		case "identity.scim.group-replace":
+			if op.Route.Method == http.MethodPut {
+				return scimGroupPathPrefix
+			}
+		}
 	}
 	return ""
 }

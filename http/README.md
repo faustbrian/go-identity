@@ -67,7 +67,7 @@ metadata cannot certify an arbitrary supplied handler. CORS policy for an
 unselected method/path is rejected. Preflight does no owner or hook work.
 
 Selected SCIM User Get, Delete, Patch and Replace independently dispatch
-on `/scim/v2/Users/{resource_id}`. Group Get on
+on `/scim/v2/Users/{resource_id}`. Group Get and Replace on
 `/scim/v2/Groups/{resource_id}` and Group List on `/scim/v2/Groups` are also
 independent. Resource routes provide `Request.PathValue("resource_id")`
 and accept one unescaped resource segment

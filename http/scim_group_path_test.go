@@ -149,3 +149,79 @@ func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupCreate(t *testing.T) {
 		})
 	}
 }
+
+func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupReplace(t *testing.T) {
+	const path = "/scim/v2/Groups/Group_1-a.~"
+	policy := routerPolicy()
+	maximum := int64(policy.Network.Limits.MaximumBodyBytes)
+	replace := scimUserOperation(t, "identity.scim.group-replace", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/scim+json")
+		w.Header().Set("X-Test-Resource", r.PathValue("resource_id"))
+		if r.Header.Get("Content-Encoding") != "" {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+		if r.ContentLength > maximum {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	replace.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.scim.group-replace","parameters":[{"name":"resource_id","in":"path","required":true,"schema":{"type":"string"}}],"security":[],"responses":{"200":{"description":"Test fixture"}}}`)}
+	get := scimUserOperation(t, "identity.scim.group-get", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	get.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.scim.group-get","parameters":[{"name":"resource_id","in":"path","required":true,"schema":{"type":"string"}}],"security":[],"responses":{"204":{"description":"Test fixture"}}}`)}
+	build := func(ops ...identityhttp.OperationDescriptor) http.Handler {
+		t.Helper()
+		h, _, err := identityhttp.NewRouter(policy, ops, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	selected, replaceOnly, getOnly := build(get, replace), build(replace), build(get)
+	for _, row := range []struct {
+		name, method, path, wantID string
+		router                     http.Handler
+		encoding                   bool
+		length                     int64
+		status                     int
+	}{
+		{"selected", "PUT", path, "Group_1-a.~", selected, false, 1, 200},
+		{"encoding", "PUT", path, "Group_1-a.~", selected, true, 1, 415},
+		{"known overflow", "PUT", path, "Group_1-a.~", selected, false, maximum + 1, 413},
+		{"streamed overflow", "PUT", path, "Group_1-a.~", selected, false, -1, 413},
+		{"get still selected", "GET", path, "", selected, false, 1, 204},
+		{"get not implied", "GET", path, "", replaceOnly, false, 1, 405},
+		{"put not implied", "PUT", path, "", getOnly, true, 1, 400},
+		{"encoded alias", "PUT", "/scim/v2/Groups/%47roup", "", selected, true, 1, 400},
+		{"reserved search", "PUT", "/scim/v2/Groups/.search", "", selected, true, 1, 400},
+		{"wrong collection", "PUT", "/scim/v2/Users/Group_1-a.~", "", selected, true, 1, 400},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			r := corsRequest(row.method, row.path, "")
+			r.ContentLength = row.length
+			size := row.length
+			if size < 0 {
+				size = maximum + 1
+			}
+			r.Body = io.NopCloser(strings.NewReader(strings.Repeat("x", int(size))))
+			if row.encoding {
+				r.Header.Set("Content-Encoding", "gzip")
+			}
+			w := httptest.NewRecorder()
+			row.router.ServeHTTP(w, r)
+			if w.Code != row.status || w.Header().Get("X-Test-Resource") != row.wantID {
+				t.Fatalf("status=%d resource=%q; want %d and %q", w.Code, w.Header().Get("X-Test-Resource"), row.status, row.wantID)
+			}
+			if row.method == "PUT" && row.status != 400 && w.Header().Get("Content-Type") != "application/scim+json" {
+				t.Fatal("selected Group Replace lost its SCIM media type")
+			}
+		})
+	}
+}
