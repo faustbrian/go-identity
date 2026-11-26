@@ -4,9 +4,12 @@ package reference_test
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	organizationpg "github.com/faustbrian/go-organization/postgres"
 	scim "github.com/faustbrian/go-scim"
 	scimorganization "github.com/faustbrian/go-scim/organization"
+	scimpostgres "github.com/faustbrian/go-scim/postgres"
 	"github.com/faustbrian/go-sso"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
@@ -32,7 +36,7 @@ func TestReferencePostgresDirectoryMixedApplyHTTPS(t *testing.T) {
 func proveReferenceDirectoryMixedJourney(t *testing.T, ctx context.Context, f liveStores,
 	selected reference.StoreConfiguration, deps reference.ReferenceDependencies, configs []deliverypg.WorkerConfig,
 	features reference.FeatureSet, owner, member organizationTestHuman, source referenceDirectorySCIMSource,
-	generation referenceDirectoryProjection, predecessor [32]byte) [32]byte {
+	generation referenceDirectoryProjection, predecessor [32]byte, status func() referenceDirectoryProjection) [32]byte {
 	t.Helper()
 	if _, err := features.DirectoryMixedApply(); err == nil {
 		t.Fatal("schema-only mixed selection exposed a worker without an explicit mapping")
@@ -112,6 +116,19 @@ func proveReferenceDirectoryMixedJourney(t *testing.T, ctx context.Context, f li
 	roleGroupID := referenceDirectorySCIMResourceID(t, roleGroup, http.StatusCreated)
 	var users [2]string
 	var revisions [2]scim.Version
+	observeUser := func(user string) scimpostgres.DirectoryUserObservation {
+		t.Helper()
+		response, err := source.native.Execute(ctx, scim.Request{
+			Operation: scim.UserGet, Credential: source.bearer, ResourceID: user,
+		})
+		if err != nil {
+			t.Fatal("read the exact current SCIM User revision for mixed inspection", err)
+		}
+		if got := referenceDirectorySCIMResourceID(t, response, http.StatusOK); got != user {
+			t.Fatal("current SCIM User read replaced the exact source identity")
+		}
+		return scimpostgres.DirectoryUserObservation{State: scimpostgres.DirectoryMembershipUserActive, Revision: response.ETag}
+	}
 	members := []scimorganization.DirectoryMemberUserMapping{{MemberID: edge.userID, UserID: member.user}}
 	for i := range users {
 		response, err := source.native.Execute(ctx, scim.Request{
@@ -122,7 +139,8 @@ func proveReferenceDirectoryMixedJourney(t *testing.T, ctx context.Context, f li
 		if err != nil {
 			t.Fatal("create actual active SCIM User before mixed admission", err)
 		}
-		users[i], revisions[i] = referenceDirectorySCIMResourceID(t, response, http.StatusCreated), response.ETag
+		users[i] = referenceDirectorySCIMResourceID(t, response, http.StatusCreated)
+		revisions[i] = observeUser(users[i]).Revision
 		members = append(members, scimorganization.DirectoryMemberUserMapping{MemberID: users[i], UserID: identity.UserID(users[i])})
 		if _, err := repository.ObserveCredentialAuthority(ctx, organization.CredentialAuthorityQuery{
 			TenantID: otpTenant, OrganizationID: referenceDirectoryOrganization, ActorID: identity.UserID(users[i]),
@@ -193,6 +211,64 @@ func proveReferenceDirectoryMixedJourney(t *testing.T, ctx context.Context, f li
 		MappingVersion: generation.MappingVersion, PredecessorCheckpoint: predecessor,
 		Deltas: []sso.DirectoryDelta{first, group, roleDelta, second},
 	}
+	type previewState struct {
+		generation referenceDirectoryProjection
+		durable    string
+	}
+	observeState := func() previewState {
+		t.Helper()
+		state := previewState{generation: status()}
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT jsonb_build_object(
+ 'identity_users',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM identity.users r),
+ 'organizations',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.organizations r),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.memberships r),
+ 'user_grants',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.directory_membership_grants r),
+ 'teams',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.teams r),
+ 'team_memberships',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.team_memberships r),
+ 'group_grants',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.directory_team_grants r),
+ 'roles',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.custom_roles r),
+ 'bindings',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.team_role_bindings r),
+ 'role_grants',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.directory_team_role_grants r),
+ 'audits',(SELECT count(*) FROM audit.records),
+ 'events',(SELECT count(*) FROM outbox_messages),
+ 'commands',(SELECT count(*) FROM identity.commands),
+ 'claims',(SELECT count(*) FROM identity.identity_command_id_claims)
+ )::text`).Scan(&state.durable); err != nil {
+			t.Fatal("observe organization state and protected effects around Reference mixed inspection", err)
+		}
+		return state
+	}
+	assertUnchanged := func(before previewState) {
+		t.Helper()
+		if after := observeState(); after != before {
+			t.Fatal("Reference mixed inspection changed HTTPS Status, organization state, source contributions, or protected effects")
+		}
+	}
+	wantDrift := []ssopg.DirectoryMixedDrift{
+		{Kind: ssopg.DirectoryMixedDriftUser, User: ssopg.DirectoryUserDrift{
+			Kind:   scimorganization.DirectoryMembershipDriftMissingSourceGrant,
+			Source: scimpostgres.DirectoryUserObservation{State: scimpostgres.DirectoryMembershipUserActive, Revision: revisions[0]},
+		}},
+		{Kind: ssopg.DirectoryMixedDriftGroup, Group: scimorganization.DirectoryMembershipDrift{Kind: scimorganization.DirectoryMembershipDriftMissingSourceGrant}},
+		{Kind: ssopg.DirectoryMixedDriftRole, Role: ssopg.DirectoryGroupRoleDrift{Kind: ssopg.DirectoryGroupRoleDriftMissing, Source: scimpostgres.DirectoryGroupEdgePresent}},
+		{Kind: ssopg.DirectoryMixedDriftUser, User: ssopg.DirectoryUserDrift{
+			Kind:   scimorganization.DirectoryMembershipDriftMissingSourceGrant,
+			Source: scimpostgres.DirectoryUserObservation{State: scimpostgres.DirectoryMembershipUserActive, Revision: revisions[1]},
+		}},
+	}
+	beforePreview := observeState()
+	if reports, err := worker.ObserveBatchDrift(ctx, request); err != nil || !slices.Equal(reports, wantDrift) {
+		t.Fatal("Reference mixed inspection did not preserve exact missing User, Group, role and User classifications", err)
+	}
+	assertUnchanged(beforePreview)
+	permission(boundPort, authorization.Deny)
+	for _, user := range users {
+		if _, err := repository.ObserveCredentialAuthority(ctx, organization.CredentialAuthorityQuery{
+			TenantID: otpTenant, OrganizationID: referenceDirectoryOrganization, ActorID: identity.UserID(user),
+		}); !errors.Is(err, organization.ErrForbidden) {
+			t.Fatal("mixed inspection admitted a source User or changed its unavailable organization authority", err)
+		}
+	}
 	before := current("").Version
 	result, err := worker.Apply(ctx, request)
 	if err != nil || len(result.ChildOutcomes) != len(childIDs) || result.Checkpoint == predecessor || result.Checkpoint == ([32]byte{}) {
@@ -258,6 +334,33 @@ func proveReferenceDirectoryMixedJourney(t *testing.T, ctx context.Context, f li
 	if err != nil {
 		t.Fatal(err)
 	}
+	permission(restartedPort, authorization.Allow)
+	assertEffects()
+	afterApply := observeState()
+	if afterApply.generation.Checkpoint != base64.RawURLEncoding.EncodeToString(result.Checkpoint[:]) ||
+		afterApply.generation.ReadCount != 4 || afterApply.generation.AppliedCount != 4 || afterApply.generation.RejectedCount != 0 {
+		t.Fatal("ordinary mixed Apply did not advance the HTTPS checkpoint for exactly its four children")
+	}
+	if stale, err := worker.ObserveBatchDrift(ctx, request); !errors.Is(err, sso.ErrDirectoryReconciliation) || stale != nil {
+		t.Fatal("superseded Reference mixed checkpoint disclosed a complete or partial report", err)
+	}
+	assertUnchanged(afterApply)
+	inspection := request
+	inspection.PredecessorCheckpoint, inspection.Deltas = result.Checkpoint, slices.Clone(request.Deltas)
+	for i, index := range []int{0, 3} {
+		observed := observeUser(users[i])
+		inspection.Deltas[index], err = sso.NewDirectoryUserAdmissionDelta(childIDs[index], users[i], string(observed.Revision))
+		if err != nil {
+			t.Fatal("bind settled mixed inspection to the current exact User revision", err)
+		}
+		wantDrift[index].User.Kind, wantDrift[index].User.Source = scimorganization.DirectoryMembershipDriftInSync, observed
+	}
+	wantDrift[1].Group.Kind = scimorganization.DirectoryMembershipDriftInSync
+	wantDrift[2].Role.Kind = ssopg.DirectoryGroupRoleDriftInSync
+	if reports, err := restarted.ObserveBatchDrift(ctx, inspection); err != nil || !slices.Equal(reports, wantDrift) {
+		t.Fatal("Reference mixed inspection did not converge all typed children at the exact successor and current User revisions", err)
+	}
+	assertUnchanged(afterApply)
 	permission(restartedPort, authorization.Allow)
 	assertEffects()
 	return result.Checkpoint

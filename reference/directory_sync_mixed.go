@@ -139,6 +139,22 @@ func (s *DirectoryMixedApplyService) Apply(ctx context.Context, request ssopg.Di
 	return s.executor.ApplyGeneration(bounded, request)
 }
 
+// ObserveBatchDrift previews the current state of the mapped children at the
+// running checkpoint in request order. It requires separate inspection
+// authorization, does not apply changes or advance the generation, and
+// returns no report on failure. Do not mutate request.Deltas concurrently.
+func (s *DirectoryMixedApplyService) ObserveBatchDrift(ctx context.Context, request ssopg.DirectoryMixedApplyRequest) ([]ssopg.DirectoryMixedDrift, error) {
+	if s == nil || s.executor == nil {
+		return nil, identity.InvalidInputError{Field: "reference_directory_mixed_drift"}
+	}
+	bounded, done, err := (composedPasswordReset{state: s.state}).enter(ctx, s.tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	return s.executor.ObserveBatchDrift(bounded, request)
+}
+
 func (DirectoryMixedConfiguration) Format(s fmt.State, _ rune) {
 	_, _ = fmt.Fprint(s, "reference.DirectoryMixedConfiguration(redacted)")
 }

@@ -31,4 +31,22 @@ func TestDirectoryMixedApplyRequiresExplicitLiveSelection(t *testing.T) {
 	if _, err := worker.Apply(t.Context(), ssopg.DirectoryMixedApplyRequest{}); !errors.As(err, new(identity.UnavailableError)) {
 		t.Fatal("previously obtained handle must respect graph shutdown", err)
 	}
+	if reports, err := worker.ObserveBatchDrift(t.Context(), ssopg.DirectoryMixedApplyRequest{}); reports != nil || !errors.As(err, new(identity.UnavailableError)) {
+		t.Fatal("closed mixed graph must not disclose any drift reports", err)
+	}
+}
+
+func TestDirectoryMixedDriftRequiresLiveSelection(t *testing.T) {
+	t.Parallel()
+	for _, worker := range []*DirectoryMixedApplyService{nil, {}} {
+		if reports, err := worker.ObserveBatchDrift(t.Context(), ssopg.DirectoryMixedApplyRequest{}); reports != nil || !errors.As(err, new(identity.InvalidInputError)) {
+			t.Fatal("missing mixed worker must not disclose any drift reports", err)
+		}
+	}
+	worker := &DirectoryMixedApplyService{
+		state: &storeState{features: &featureState{composed: true}}, executor: new(ssopg.DirectoryMixedSyncService),
+	}
+	if reports, err := worker.ObserveBatchDrift(t.Context(), ssopg.DirectoryMixedApplyRequest{}); reports != nil || !errors.As(err, new(identity.UnavailableError)) {
+		t.Fatal("uninitialized mixed graph must not disclose any drift reports", err)
+	}
 }

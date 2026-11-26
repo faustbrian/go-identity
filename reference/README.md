@@ -646,6 +646,13 @@ After an unknown outcome, retry the same request; the worker verifies the
 committed prefix before admitting new children and does not extend its original
 source deadline. There is no mixed Apply HTTP route or background worker.
 
+Call `ObserveBatchDrift` on the same Go worker to inspect 1–128 mapped User,
+Group and role children at the current running checkpoint. Grant the source
+account `identity.sso.directory-sync-inspect-mixed-drift` separately from
+Apply. The report is ordered and reflects current state, without predicting
+earlier candidates' effects. It never changes access or the checkpoint, and
+returns no partial report if the checkpoint or authoritative evidence changes.
+
 ## Optional organization backend
 
 `Organization.TeamRoleBindings` additionally selects guarded

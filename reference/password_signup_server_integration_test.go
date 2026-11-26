@@ -2406,9 +2406,9 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				}
 				var mixedJourney referenceDirectoryMixedJourney
 				if extensions.directoryMixedApply {
-					mixedJourney = func(owner organizationTestHuman, generation referenceDirectoryProjection, predecessor [32]byte) [32]byte {
+					mixedJourney = func(owner organizationTestHuman, generation referenceDirectoryProjection, predecessor [32]byte, status func() referenceDirectoryProjection) [32]byte {
 						member := registerReferenceOrganizationHuman(t, ctx, client, network.URL, origin, selected, workers, messages)
-						return proveReferenceDirectoryMixedJourney(t, ctx, f, selectedConfig, deps, workerConfigs, selected, owner, member, *directoryGroupSource, generation, predecessor)
+						return proveReferenceDirectoryMixedJourney(t, ctx, f, selectedConfig, deps, workerConfigs, selected, owner, member, *directoryGroupSource, generation, predecessor, status)
 					}
 				}
 				proveReferenceDirectorySyncHTTPS(t, ctx, f, selected, client, network.URL, origin, cookies, csrf, extensions.directorySyncStandalone,

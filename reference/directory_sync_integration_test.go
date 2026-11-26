@@ -106,6 +106,10 @@ func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.Deci
 			if d.Request.Resource.Type == "sso.directory-generation" {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
+		case "identity.sso.directory-sync-inspect-mixed-drift":
+			if d.Request.Resource.Type == "sso.directory-generation" {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		}
 	}
 	return (referenceOrganizationRolesPolicy{}).Decide(ctx, d)
@@ -176,7 +180,7 @@ type referenceDirectoryApplyBinding func(context.Context, reference.DirectoryGro
 
 type referenceDirectoryRoleJourney func(organizationTestHuman, referenceDirectoryProjection, [32]byte, func() referenceDirectoryProjection) [32]byte
 
-type referenceDirectoryMixedJourney func(organizationTestHuman, referenceDirectoryProjection, [32]byte) [32]byte
+type referenceDirectoryMixedJourney func(organizationTestHuman, referenceDirectoryProjection, [32]byte, func() referenceDirectoryProjection) [32]byte
 
 func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrf string, standalone bool, callerConfig kernel.CoordinatorConfig, groupSource, userSource *referenceDirectorySCIMSource, bind referenceDirectoryApplyBinding, bindUser func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService, roleJourney referenceDirectoryRoleJourney, mixedJourney referenceDirectoryMixedJourney) {
 	t.Helper()
@@ -330,7 +334,9 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 	startingVersion := running.Version
 	switch {
 	case mixedJourney != nil:
-		applied = mixedJourney(human, first, [32]byte(checkpoint))
+		applied = mixedJourney(human, first, [32]byte(checkpoint), func() referenceDirectoryProjection {
+			return decode(call(http.MethodGet, statusPath, "", "", true, 200))
+		})
 		wantApplied = 4
 	case roleJourney != nil:
 		applied = roleJourney(human, first, [32]byte(checkpoint), func() referenceDirectoryProjection {

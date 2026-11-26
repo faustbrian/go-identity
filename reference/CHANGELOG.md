@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preview an ordered mixed directory batch through the direct Reference
+  worker, with separate inspection authorization and no Apply effects.
+
 - Preview the exact mapped directory role at its running checkpoint through
   the direct Reference worker, with separate authorization and no writes.
 
