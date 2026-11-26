@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Route opted-in SCIM User Replace (PUT) to the canonical bounded resource
+  path; keep the ordinary stream cap and use the SCIM 413 overflow envelope.
 - Route opted-in SCIM User PATCH to the canonical bounded resource path.
   Preserve independent method selection and return a SCIM 413 at the existing
   stream cap without releasing discarded feature headers or output.
