@@ -31,4 +31,13 @@ func TestManagedSCIMSelectionKeepsExistingProjectionHistory(t *testing.T) {
 			t.Fatal("managed reads selected more than their native migration")
 		}
 	}
+	stores.state.features.httpManagedSCIMRead = nil
+	stores.state.features.httpManagedSCIMCreate = &managedSCIMCreateState{}
+	create, err := stores.managedSCIMReadMigrationCatalog(t.Context(), base)
+	if err != nil || len(create) != 3 || create[1].namespace != "identity_organization_credential_authority" || create[2].namespace != scimManagedHistory || len(create[2].history) != 1 || create[2].history[0].Version() != scimManagedVersion {
+		t.Fatal("create alone did not select managed schema and its credential epoch dependency", err)
+	}
+	if bulk, err := stores.scimBulkMigrationCatalog(t.Context(), create); err != nil || len(bulk) != len(create) {
+		t.Fatal("create alone must not select Bulk migrations", err)
+	}
 }

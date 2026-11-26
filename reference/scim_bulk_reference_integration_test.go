@@ -50,7 +50,7 @@ func configureReferenceSCIMBulk(t *testing.T, c *reference.StoreConfiguration, d
 	return source
 }
 
-func proveReferenceSCIMBulkHTTPS(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, features reference.FeatureSet, client *http.Client, base string, cookies []*http.Cookie, csrf string, source referenceDirectorySCIMSource) {
+func createReferenceSCIMOrganization(t *testing.T, ctx context.Context, features reference.FeatureSet, cookies []*http.Cookie, csrf string, source referenceDirectorySCIMSource) {
 	t.Helper()
 	sessions, err := features.Sessions()
 	if err != nil {
@@ -71,7 +71,12 @@ func proveReferenceSCIMBulkHTTPS(t *testing.T, ctx context.Context, f liveStores
 	if err != nil || created.Receipt.Outcome != identity.CommitOutcomeCommitted || created.OrganizationID != source.config.Scope.OrganizationID {
 		t.Fatal("SCIM organization must be created by its real owner", err)
 	}
-	_, err = authoritypg.InitializeAuthority(ctx, f.pool.Raw(), authoritypg.AuthorityScope{
+}
+
+func proveReferenceSCIMBulkHTTPS(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, features reference.FeatureSet, client *http.Client, base string, cookies []*http.Cookie, csrf string, source referenceDirectorySCIMSource) {
+	t.Helper()
+	createReferenceSCIMOrganization(t, ctx, features, cookies, csrf, source)
+	_, err := authoritypg.InitializeAuthority(ctx, f.pool.Raw(), authoritypg.AuthorityScope{
 		TenantID: authorization.TenantID(source.config.Scope.TenantID), PolicyNamespace: source.config.AuthorityNamespace,
 		SubjectID: authorization.SubjectID(source.config.ActorID),
 	}, time.Second)

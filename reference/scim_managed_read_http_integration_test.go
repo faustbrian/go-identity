@@ -42,6 +42,7 @@ type referenceManagedReadPolicy struct {
 	actor        identity.UserID
 	organization organization.ID
 	denyRead     atomic.Bool
+	denyWrite    atomic.Bool
 }
 
 func (p *referenceManagedReadPolicy) Decide(ctx context.Context, d authorization.DecisionContext) (authorization.Decision, error) {
@@ -57,7 +58,7 @@ func (p *referenceManagedReadPolicy) Decide(ctx context.Context, d authorization
 		case "org:scim-read":
 			allowed = !p.denyRead.Load() && d.Request.Resource.Type == "organization" && d.Request.Resource.ID == authorization.ResourceID(p.organization)
 		case "org:scim-write":
-			allowed = d.Request.Resource.Type == "organization" && d.Request.Resource.ID == authorization.ResourceID(p.organization)
+			allowed = !p.denyWrite.Load() && d.Request.Resource.Type == "organization" && d.Request.Resource.ID == authorization.ResourceID(p.organization)
 		case "identity.scim.connection-create", "identity.scim.connection-create.recover":
 			allowed = d.Request.Resource.Type == "identity.user" && d.Request.Resource.ID == authorization.ResourceID(actor) ||
 				d.Request.Resource.Type == "identity.request-admission" && d.Request.Resource.ID == "identity.scim.connection-create"

@@ -22,8 +22,17 @@ const (
 )
 
 func (s StoreSet) managedSCIMReadMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
-	if s.state.features == nil || s.state.features.httpManagedSCIMRead == nil {
+	if s.state.features == nil || s.state.features.httpManagedSCIMRead == nil && s.state.features.httpManagedSCIMCreate == nil {
 		return catalog, nil
+	}
+	if s.state.features.httpManagedSCIMCreate != nil {
+		// Native Create snapshots the organization's credential epoch even
+		// when neither Bulk nor another credential owner is selected.
+		var err error
+		catalog, err = organizationCredentialAuthorityMigrationCatalog(ctx, catalog)
+		if err != nil {
+			return nil, err
+		}
 	}
 	catalog, err := ensureSCIMProjectionHistory(ctx, catalog)
 	if err != nil {

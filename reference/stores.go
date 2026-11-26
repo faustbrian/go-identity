@@ -69,6 +69,9 @@ type StoreConfiguration struct {
 	// HTTPManagedSCIMRead opts into authenticated managed connection Get and/or
 	// List. Nil does not select the managed migration or any managed routes.
 	HTTPManagedSCIMRead *HTTPManagedSCIMReadConfiguration
+	// HTTPManagedSCIMCreate explicitly selects bearer-only managed connection
+	// creation over the existing primary graph. It does not select reads or Bulk.
+	HTTPManagedSCIMCreate *HTTPManagedSCIMCreateConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration
@@ -281,6 +284,9 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	}
 	if c.HTTPManagedSCIMRead != nil && (c.HTTPRate == nil || c.Organization == nil || c.Session == nil) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_http_managed_scim_read"}
+	}
+	if c.HTTPManagedSCIMCreate != nil && (c.HTTPRate == nil || c.Organization == nil || c.Session == nil || c.OTP == nil) {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_http_managed_scim_create"}
 	}
 	if c.HTTPOAuthDevice != nil && c.OAuthDevice == nil {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_device"}
@@ -550,6 +556,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 		state.features.directorySync.close()
 		state.features.httpOrganization.close()
 		state.features.httpManagedSCIMRead.close()
+		state.features.httpManagedSCIMCreate.close()
 	}
 	if state.features != nil && state.features.httpAnonymous != nil {
 		state.features.httpAnonymous.close()

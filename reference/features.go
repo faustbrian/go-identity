@@ -95,6 +95,7 @@ type featureState struct {
 	directorySync                *directorySyncState
 	scimBulk                     *scimBulkState
 	httpManagedSCIMRead          *managedSCIMReadState
+	httpManagedSCIMCreate        *managedSCIMCreateState
 	oauthWorkload                *oauthWorkloadState
 	oauthDevice                  *oauthDeviceState
 	apiKey                       *apiKeyState
@@ -633,6 +634,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			managedSCIMRead.close()
 		}
 	}()
+	managedSCIMCreate, err := s.composeManagedSCIMCreate(c, d, sessionOwner, organizationOwner, httpOrganization)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			managedSCIMCreate.close()
+		}
+	}()
 	var signupEvaluation risk.Evaluator
 	if c.Passkey != nil && c.Passkey.Signup != nil {
 		protected := c.Passkey.Protected.CommandCounters
@@ -1010,6 +1020,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.directorySync = directorySync
 	s.features.scimBulk = scimBulk
 	s.features.httpManagedSCIMRead = managedSCIMRead
+	s.features.httpManagedSCIMCreate = managedSCIMCreate
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

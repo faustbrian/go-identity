@@ -59,6 +59,28 @@ exercises this public composition through a real local TLS listener and the
 owned PostgreSQL rate backend. This discovery profile does not complete social
 signin, reference-wide qualification or application deployment.
 
+## Managed SCIM connection creation
+
+`StoreConfiguration.HTTPManagedSCIMCreate` independently enables
+`POST /v1/scim/connection-create`. Supply the native provisioning field policy,
+an existing service principal in the configured graph, authorization at the
+selected revision, and stable dedicated credential and cursor keys. Reference
+uses the graph's primary session, organization, PostgreSQL and envelope owners.
+Install the selected managed `scim/postgres` and atomic `rate-limit/postgres`
+histories with the existing migration plan and apply workflow before serving.
+
+If organization HTTP already has an administrative limiter, leave `AdminRate`
+nil to reuse it. Otherwise supply its deployment namespace, key and required
+denial auditor. `HTTPManagedSCIMCreate` does not select Get/List, SCIM Bulk,
+provisioning HTTP, or connection deletion.
+
+Present a current verified administrator's bearer session and an
+`Idempotency-Key`, with the organization, provider and native core User
+mappings in the JSON body. Ambient session cookies do not authorize this
+call. Save the returned provisioning bearer from the first confirmed Create;
+the same authenticated request with the same key returns only its original
+connection metadata, and a different request using that key conflicts.
+
 ## Optional session cache
 
 Set `Session.Cache` to `SessionCacheConfiguration{Codec: ..., Valkey: ...}` to

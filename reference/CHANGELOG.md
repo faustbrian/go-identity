@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt into bearer-only managed SCIM connection creation with native keyed
+  replay, reveal-once custody, and shared administrative rate admission.
+
 - Opt into bounded localized errors on Reference's standalone public provider
   listing without changing default responses or enabling authentication.
 

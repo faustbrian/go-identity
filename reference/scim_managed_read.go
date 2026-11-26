@@ -88,26 +88,40 @@ func (s *Server) scimFeature(network identityhttp.NetworkConfig) (*identityhttp.
 	}
 	f := s.state.features
 	selected := f.httpManagedSCIMRead
-	if selected == nil {
+	if selected == nil && f.httpManagedSCIMCreate == nil {
 		return bulk, nil
 	}
-	c := scimhttp.ManagedReadConfig{Network: network, Sessions: f.session.reader, SafeRate: selected.rate, Now: time.Now, MaximumDuration: selected.maximum}
-	if selected.get {
-		c.Getter = selected.native
-	}
-	if selected.list {
-		c.Lister = selected.native
-	}
-	read, err := scimhttp.NewManagedReadFeature(c)
-	if err != nil {
-		return nil, identity.InvalidInputError{Field: "reference_http_managed_scim_read"}
-	}
-	ops := read.Operations()
-	for i := range ops {
-		ops[i].Handler = &passkeyLifetimeHandler{state: s.state, next: ops[i].Handler}
-	}
+	var ops []identityhttp.OperationDescriptor
 	if bulk != nil {
-		ops = append(bulk.Operations(), ops...)
+		ops = bulk.Operations()
+	}
+	appendManaged := func(feature identityhttp.Feature) {
+		managed := feature.Operations()
+		for i := range managed {
+			managed[i].Handler = &passkeyLifetimeHandler{state: s.state, next: managed[i].Handler}
+		}
+		ops = append(ops, managed...)
+	}
+	if selected != nil {
+		c := scimhttp.ManagedReadConfig{Network: network, Sessions: f.session.reader, SafeRate: selected.rate, Now: time.Now, MaximumDuration: selected.maximum}
+		if selected.get {
+			c.Getter = selected.native
+		}
+		if selected.list {
+			c.Lister = selected.native
+		}
+		read, err := scimhttp.NewManagedReadFeature(c)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_http_managed_scim_read"}
+		}
+		appendManaged(read)
+	}
+	if f.httpManagedSCIMCreate != nil {
+		create, err := s.managedSCIMCreateFeature(network)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: "reference_http_managed_scim_create"}
+		}
+		appendManaged(create)
 	}
 	feature, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "scim", Operations: ops})
 	return &feature, err

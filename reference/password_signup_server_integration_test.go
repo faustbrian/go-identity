@@ -284,6 +284,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	scimBulk                    bool
 	scimManagedRead             bool
+	scimManagedCreate           bool
 	directorySync               bool
 	directorySyncStandalone     bool
 	directoryGroupApply         bool
@@ -661,10 +662,14 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferenceOrganization(t, &c, origin)
 	}
 	var scimBulkSource *referenceDirectorySCIMSource
-	if extensions.scimBulk {
+	if extensions.scimBulk || extensions.scimManagedCreate {
 		source := configureReferenceSCIMBulk(t, &c, deps, origin)
 		scimBulkSource = &source
-		if extensions.scimManagedRead {
+		if !extensions.scimBulk {
+			c.SCIMBulk = nil
+			c.HTTPOrganization = nil
+		}
+		if extensions.scimManagedRead || extensions.scimBulk && extensions.scimManagedCreate {
 			configureReferenceSCIMManagedRead(t, &c, source)
 		}
 	}
@@ -1411,6 +1416,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.sessionCache != nil {
 		extensions.sessionCache.configure(t, &c)
 	}
+	if extensions.scimManagedCreate {
+		configureReferenceSCIMManagedCreate(t, &c, *scimBulkSource)
+	}
 	stores, err := reference.ComposeStores(c, deps)
 	if extensions.socialOIDCHTTPForeignOrigin {
 		var invalid identity.InvalidInputError
@@ -1499,7 +1507,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
 	}
-	if directoryGroupSource != nil || directoryUserSource != nil || c.SCIMBulk != nil {
+	if directoryGroupSource != nil || directoryUserSource != nil || c.SCIMBulk != nil || c.HTTPManagedSCIMCreate != nil {
 		modules = append(modules, "scim/postgres")
 	}
 	if c.APIKey != nil {
@@ -1961,6 +1969,7 @@ END $$`); err != nil {
 	}{
 		{"identity.scim.connection-get", c.HTTPManagedSCIMRead != nil && c.HTTPManagedSCIMRead.Get},
 		{"identity.scim.connection-list", c.HTTPManagedSCIMRead != nil && c.HTTPManagedSCIMRead.List},
+		{"identity.scim.connection-create", extensions.scimManagedCreate},
 	} {
 		if operation.selected {
 			wantOperations++
@@ -2411,6 +2420,12 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				if extensions.scimManagedRead {
 					proveReferenceSCIMManagedReadHTTPS(t, ctx, f, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource, server.OpenAPI().JSON())
 				}
+				if extensions.scimManagedCreate {
+					proveReferenceSCIMManagedCreateHTTPS(t, ctx, f, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource, server.OpenAPI().JSON())
+				}
+			} else if extensions.scimManagedCreate {
+				createReferenceSCIMOrganization(t, ctx, selected, cookies, csrf, *scimBulkSource)
+				proveReferenceSCIMManagedCreateHTTPS(t, ctx, f, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource, server.OpenAPI().JSON())
 			} else if extensions.directorySync {
 				bind := func(ctx context.Context, apply reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService {
 					return bindReferenceDirectoryGroupGraph(t, ctx, selectedConfig, deps, workerConfigs, apply)
