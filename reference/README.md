@@ -635,6 +635,14 @@ Select `StoreConfiguration.HTTPManagedSCIMUsersDelete` independently for
 and no caller request key or body. A matching request withdraws the source
 contribution rather than deleting the global identity, returns an empty `204`,
 and can repeat with the same original precondition without another withdrawal.
+Select `StoreConfiguration.HTTPManagedSCIMUsersPatch` independently for
+`PATCH /scim/v2/Users/{resource_id}`. Send a bounded `application/scim+json`
+PatchOp, one strong native `If-Match`, and no caller request key. Missing and
+stale preconditions return `428` and `412` respectively. A successful mutation
+returns `200` with the updated native User, ETag and canonical Location. Repeating
+the same original precondition and equivalent PatchOp returns the same result
+without a second mutation. Like Create, configure the native `BaseURL` as the
+effective HTTPS service origin followed by `/scim/v2`.
 Send the managed connection's issued bearer, not a session cookie or a
 configured Bulk bearer. List supports the SCIM filter, sort,
 pagination and attribute-selection parameters accepted by its native owner.
@@ -653,9 +661,9 @@ for source withdrawal; apply the selected migration plan before serving it.
 When Bulk is also enabled, leave the User rate settings empty to share Bulk's
 protocol quota; otherwise configure a stable rate namespace and key across
 instances. Native authorization and quota admission must succeed before any
-Users are returned, created, or withdrawn. When more than one User route is
+Users are returned, created, updated, or withdrawn. When more than one User route is
 selected, set native and rate options only on the first selected of List, Get,
-Create, and Delete, in that order. Leave the other selected option structs
+Create, Delete and Patch, in that order. Leave the other selected option structs
 empty to share the same owner and quota.
 
 ## Optional directory administration

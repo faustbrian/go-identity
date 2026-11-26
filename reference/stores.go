@@ -87,6 +87,10 @@ type StoreConfiguration struct {
 	// If List, Get or Create is selected, a zero Delete configuration adopts
 	// the same owner and protocol quota. Nil leaves User deletion disabled.
 	HTTPManagedSCIMUsersDelete *HTTPManagedSCIMUsersDeleteConfiguration
+	// HTTPManagedSCIMUsersPatch selects conditional managed-bearer User PATCH.
+	// If another User route is selected, a zero Patch configuration adopts its
+	// exact native owner and quota. Nil leaves User PATCH disabled.
+	HTTPManagedSCIMUsersPatch *HTTPManagedSCIMUsersPatchConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

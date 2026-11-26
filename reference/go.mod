@@ -21,7 +21,7 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
-	github.com/faustbrian/go-identity/http v0.0.0-20261126184156-a73a497cb76d
+	github.com/faustbrian/go-identity/http v0.0.0-20261126193636-0c7ab7885521
 	github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93
 	github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029135707-3291fee4a90f
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231
@@ -34,7 +34,7 @@ require (
 	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261025150519-83149c8dcdf6
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b
 	github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806
-	github.com/faustbrian/go-identity/http/scim v0.0.0-20261126185637-c73a73b3b466
+	github.com/faustbrian/go-identity/http/scim v0.0.0-20261126194809-2596a12a3b59
 	github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e
 	github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b
 	github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e
@@ -71,9 +71,9 @@ require (
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
-	github.com/faustbrian/go-scim v0.0.0-20261126182349-0aa76e9d610c
+	github.com/faustbrian/go-scim v0.0.0-20261126192324-58b4c020b73f
 	github.com/faustbrian/go-scim/organization v0.0.0-20261125045503-4dffc1be962c
-	github.com/faustbrian/go-scim/postgres v0.0.0-20261126183445-a8b2c199b422
+	github.com/faustbrian/go-scim/postgres v0.0.0-20261126193357-5d7577044f73
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 	github.com/faustbrian/go-sso v0.0.0-20261125020955-e0d8d216cf33
 	github.com/faustbrian/go-sso/oauth2 v0.0.0-20261122223739-e37b8cc451db

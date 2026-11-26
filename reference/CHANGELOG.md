@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into conditional managed User PATCH over HTTPS using the existing
+  native owner and protocol quota. Return the persisted User, ETag and
+  Location; an equivalent original retry does not mutate it again.
+
 - Opt into conditional managed User DELETE over HTTPS with the existing
   native owner and protocol quota. Preserve stale or missing If-Match errors
   and headerless replay of the empty acknowledgement.
