@@ -7,6 +7,52 @@ import (
 	"github.com/faustbrian/go-authorization/v3"
 )
 
+func TestSCIMBulkInvalidChildUsesOnlyItsOwnProtectedAudit(t *testing.T) {
+	const code = FeatureFailureBulkChildInvalid
+	if code != 12 {
+		t.Fatal("append the invalid child journal code without renumbering")
+	}
+	seed := scimBulkGroupMutationAuditPlan(t, scimBulkGroupMutationCase{operation: "identity.scim.group-create"})
+	seed.feature.Operation = SCIMBulkInvalidChildOperation()
+	b := seed.binding
+	b.OperationID, b.SchemaID, b.RecordID = seed.feature.Operation.OperationID, seed.feature.Operation.SchemaID, string(b.CommandID)
+	seed.audits[0].BindingDigest[0] = 1
+	p := CommandPlan{Feature: seed.feature, SubjectType: "scim_bulk_child", SCIMBulkDenial: code, Audits: seed.audits,
+		Contributors: []ContributorDescriptor{seed.feature.Contributor,
+			{Owner: "identity/postgres", ContractID: "identity.domain", Version: 1},
+			{Owner: "audit/postgres", ContractID: "identity.audit", Version: 1}}}
+	fingerprint := [32]byte{1}
+	wire, err := encodeFeaturePlan(b, fingerprint, p)
+	if err != nil {
+		t.Fatal("encode the original resource-free denial", err)
+	}
+	decoded, err := decodeFeaturePlan(b, fingerprint, wire)
+	if err != nil || decoded.SCIMBulkDenial != code || decoded.Lifecycle != nil {
+		t.Fatal("decode the same no-effect plan", err)
+	}
+	if kind, target, err := featureAuditRecordScope(b, p.Feature.Operation, p.SubjectType, scimBulkApplyChildAudit); err != nil || kind != "scim_bulk_child" || target != string(b.CommandID) {
+		t.Fatal("invalid child must use its own protected audit identity", kind, target, err)
+	}
+	for _, field := range []string{"record", "actor", "subject", "effect"} {
+		t.Run(field, func(t *testing.T) {
+			binding, candidate := b, p
+			switch field {
+			case "record":
+				binding.RecordID = "foreign-resource"
+			case "actor":
+				binding.ActorKind = authorization.SubjectUser
+			case "subject":
+				candidate.SubjectType = "scim_group"
+			case "effect":
+				candidate.SCIMBulkDenial, candidate.Lifecycle = 0, seed.lifecycle
+			}
+			if _, err := encodeFeaturePlan(binding, fingerprint, candidate); err == nil {
+				t.Fatal("accepted authority beyond the original invalid child")
+			}
+		})
+	}
+}
+
 func TestSCIMBulkDenialPlanHasNoLifecycle(t *testing.T) {
 	seed := scimBulkGroupMutationAuditPlan(t, scimBulkGroupMutationCases()[0])
 	for _, code := range []FeatureFailureCode{FeatureFailureGroupMissing, FeatureFailureGroupVersionRequired, FeatureFailureSCIMBulkDependency} {

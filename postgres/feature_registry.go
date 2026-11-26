@@ -102,6 +102,9 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	if op.OperationID == scimBulkInvalidChildID {
+		return op == SCIMBulkInvalidChildOperation() && d == scimUserCreationDescriptor()
+	}
 	// OIDC owns protocol validation; SSO PostgreSQL owns this exact native
 	// callback transition in the identity coordinator's Work.
 	if op.OperationID == ssoOIDCSigninPurpose {

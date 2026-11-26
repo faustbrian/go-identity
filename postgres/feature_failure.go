@@ -39,10 +39,13 @@ const (
 	// FeatureFailureGroupCreateInvalidValue is the original no-effect Bulk
 	// Group-create schema denial, not an invalid member returned during Apply.
 	FeatureFailureGroupCreateInvalidValue
+	// FeatureFailureBulkChildInvalid retains a malformed child without a
+	// resource operation or allocation. It cannot represent a write failure.
+	FeatureFailureBulkChildInvalid
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureGroupCreateInvalidValue
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureBulkChildInvalid
 }
 
 // TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
@@ -63,6 +66,9 @@ func featureFailureError(code FeatureFailureCode) error {
 }
 
 func featureFailureSubject(op identity.FeatureOperation) string {
+	if op == SCIMBulkInvalidChildOperation() {
+		return "scim_bulk_child"
+	}
 	if op == scimUserCreationOperation() || scimUserUpdateSelected(op) || op == scimUserUpdateOperation("identity.scim.user-delete") {
 		return "scim_user"
 	}
@@ -80,6 +86,9 @@ func featureFailureSubject(op identity.FeatureOperation) string {
 }
 
 func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailureCode) bool {
+	if op.OperationID == scimBulkInvalidChildID || code == FeatureFailureBulkChildInvalid {
+		return op == SCIMBulkInvalidChildOperation() && code == FeatureFailureBulkChildInvalid
+	}
 	subject := featureFailureSubject(op)
 	if subject == "" || !code.valid() {
 		return false

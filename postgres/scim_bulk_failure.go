@@ -9,10 +9,22 @@ import (
 
 const scimBulkDenialProfile = "identity-scim-bulk-denial-v1"
 
+const scimBulkInvalidChildID = "identity.scim.bulk-child-invalid"
+
+// SCIMBulkInvalidChildOperation identifies an original malformed Bulk child
+// with no resource target. Its only allowed outcome is a protected denial.
+func SCIMBulkInvalidChildOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "scim", OperationID: scimBulkInvalidChildID, SchemaID: scimBulkInvalidChildID + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+func scimBulkInvalidChildBinding(b identity.CommandBinding) bool {
+	return b.RecordID == string(b.CommandID) && b.UserID == identity.UserID(b.ActorID)
+}
+
 func scimBulkDenialCode(code FeatureFailureCode) bool {
 	return code == FeatureFailureGroupMissing || code == FeatureFailureGroupVersionRequired || code == FeatureFailureSCIMBulkDependency ||
 		code == FeatureFailureUserMissing || code == FeatureFailureUserVersionRequired || code == FeatureFailureUserVersionMismatch ||
-		code == FeatureFailureGroupCreateInvalidValue
+		code == FeatureFailureGroupCreateInvalidValue || code == FeatureFailureBulkChildInvalid
 }
 
 func scimBulkGroupMutation(op identity.FeatureOperation) bool {
@@ -25,6 +37,9 @@ func scimBulkUserMutation(op identity.FeatureOperation) bool {
 
 func validSCIMBulkDenialPlan(b identity.CommandBinding, p CommandPlan) bool {
 	parent, err := identity.ParseCommandID(b.CorrelationID)
+	if p.SCIMBulkDenial == FeatureFailureBulkChildInvalid && !scimBulkInvalidChildBinding(b) {
+		return false
+	}
 	return scimBulkDenialCode(p.SCIMBulkDenial) && p.Feature != nil && featureFailureCodeAllowed(p.Feature.Operation, p.SCIMBulkDenial) &&
 		p.Feature.Contributor == scimUserCreationDescriptor() && p.SubjectType == featureFailureSubject(p.Feature.Operation) &&
 		b.ActorKind == authorization.SubjectServiceAccount && err == nil && parent != b.CommandID &&

@@ -36,6 +36,9 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 // preparation never admits their proof-free base as a standalone declaration.
 func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, proofBase bool) ([]byte, error) {
 	denialOnly := p.SCIMBulkDenial != 0
+	if p.Feature != nil && p.Feature.Operation.OperationID == scimBulkInvalidChildID && p.SCIMBulkDenial != FeatureFailureBulkChildInvalid {
+		return nil, invalidPlan()
+	}
 	if denialOnly && (proofBase || !validSCIMBulkDenialPlan(binding, p)) {
 		return nil, invalidPlan()
 	}

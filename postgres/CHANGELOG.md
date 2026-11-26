@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bind a resource-free malformed Bulk child to its own protected terminal
+  denial, without granting a resource or lifecycle effect.
+
 - Admit the exact protected no-effect Bulk Group-create schema denial without
   a resource write, lifecycle entry or successful command result.
 
