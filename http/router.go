@@ -95,8 +95,17 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	}
 	selected := make(map[string]string, len(operations))
 	scimRoutes := make(map[string]bool, 3)
+	var scimUserGetSelected bool
+	var exactSCIMUserPaths map[string]struct{}
 	for _, op := range operations {
+		scimUserGetSelected = scimUserGetSelected || scimUserGetOperation(op)
 		for _, path := range dispatchPaths(op) {
+			if scimUserPathID(path) != "" {
+				if exactSCIMUserPaths == nil {
+					exactSCIMUserPaths = make(map[string]struct{})
+				}
+				exactSCIMUserPaths[path] = struct{}{}
+			}
 			key := op.Route.Method + " " + path
 			selected[key] = op.Record.OperationID
 			switch op.Record.OperationID {
@@ -148,7 +157,8 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	}
 	cors.(*corsHandler).next = dispatch
 	document.operations = cloneOperations(ops)
-	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout, scimRoutes: scimRoutes}, document, nil
+	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout, scimRoutes: scimRoutes,
+		scimUserGetSelected: scimUserGetSelected, exactSCIMUserPaths: exactSCIMUserPaths}, document, nil
 }
 
 func samlNavigationFor(operationID string) CORSCredentialMode {
@@ -181,10 +191,26 @@ func validMiddleware(middleware []MiddlewareDescriptor) bool {
 }
 
 type routerHandler struct {
-	network    *NetworkResolver
-	next       http.Handler
-	timeout    time.Duration
-	scimRoutes map[string]bool
+	network             *NetworkResolver
+	next                http.Handler
+	timeout             time.Duration
+	scimRoutes          map[string]bool
+	scimUserGetSelected bool
+	exactSCIMUserPaths  map[string]struct{}
+}
+
+func (h *routerHandler) hasSCIMEnvelope(r *http.Request) bool {
+	if r.URL.RawPath != "" {
+		return false
+	}
+	path := r.URL.Path
+	if h.scimRoutes[r.Method+" "+path] {
+		return true
+	}
+	// Exact paths take precedence over the one permitted SCIM template, as
+	// they do at dispatch. Static routes cannot inherit its wider envelope.
+	_, exact := h.exactSCIMUserPaths[path]
+	return !exact && h.scimUserGetSelected && r.Method == http.MethodGet && scimUserPathID(path) != ""
 }
 
 func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -195,7 +221,7 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
 	defer cancel()
-	selectedSCIM := r.URL.RawPath == "" && h.scimRoutes[r.Method+" "+r.URL.Path]
+	selectedSCIM := h.hasSCIMEnvelope(r)
 	if selectedSCIM {
 		ctx = context.WithValue(ctx, scimEnvelopeKey{}, true)
 	}

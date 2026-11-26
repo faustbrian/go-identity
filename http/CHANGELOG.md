@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let the explicitly selected, canonical SCIM User Get handler own protocol
+  representation errors after the common network and framing checks.
+
 - Let the selected SCIM User List handler return protocol representation
   errors while retaining shared network and framing checks.
 

@@ -501,10 +501,11 @@ SCIM Bulk retains its canonical protocol-command classification. The affected
 transport row uses the optional Idempotency-Key extension specified in
 API_OPERATIONS.md and the SCIM transaction contract, rather than the older
 snapshot's conflicting forbidden-header column. No other catalog row changes.
-Selected SCIM Bulk, ServiceProviderConfig, and User List keep the common
-router's network and framing checks. Their feature owns SCIM representation
-errors; only Bulk receives the protocol stream ceiling. Ordinary routes retain
-their existing bounds.
+Selected SCIM Bulk, ServiceProviderConfig, User List, and canonical User Get
+keep the common router's network and framing checks. Their feature owns SCIM
+representation errors; only Bulk receives the protocol stream ceiling. An
+encoded or unselected path cannot inherit the User Get envelope. Ordinary
+routes retain their existing bounds.
 
 Phone verification recovery's native definitions are owned by
 `phone/verification_contracts.json`. The embedded catalog retains all earlier

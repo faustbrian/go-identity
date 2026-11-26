@@ -147,3 +147,57 @@ func TestRouterDelegatesOnlySelectedSCIMUserListRepresentation(t *testing.T) {
 		t.Fatalf("List handler received %d requests, want 1", entered)
 	}
 }
+
+func TestRouterDelegatesOnlyCanonicalSelectedSCIMUserGetRepresentation(t *testing.T) {
+	const id = "canonical-user-1"
+	var entered int
+	get := scimUserOperation(t, "identity.scim.user-get", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered++
+		if r.Header.Get("Content-Encoding") != "gzip" || r.PathValue("resource_id") != id {
+			t.Fatal("router lost the original header or its matched path value")
+		}
+		w.Header().Set("Content-Type", "application/scim+json")
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+	}))
+	ordinary := routerOperation(t, http.NotFoundHandler())
+	selected, _, err := identityhttp.NewRouter(routerPolicy(), []identityhttp.OperationDescriptor{ordinary, get}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unselected, _, err := identityhttp.NewRouter(routerPolicy(), []identityhttp.OperationDescriptor{ordinary}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, method, path string
+		handler            http.Handler
+		duplicate          bool
+		want               int
+	}{
+		{"exact Get", http.MethodGet, scimUserCollection + "/" + id, selected, false, http.StatusUnsupportedMediaType},
+		{"disabled Get", http.MethodGet, scimUserCollection + "/" + id, unselected, false, http.StatusBadRequest},
+		{"wrong method", http.MethodPatch, scimUserCollection + "/" + id, selected, false, http.StatusBadRequest},
+		{"collection", http.MethodGet, scimUserCollection, selected, false, http.StatusBadRequest},
+		{"encoded alias", http.MethodGet, scimUserCollection + "/%63anonical-user-1", selected, false, http.StatusBadRequest},
+		{"reserved search", http.MethodGet, scimUserCollection + "/.search", selected, false, http.StatusBadRequest},
+		{"nested path", http.MethodGet, scimUserCollection + "/" + id + "/child", selected, false, http.StatusBadRequest},
+		{"duplicate header", http.MethodGet, scimUserCollection + "/" + id, selected, true, http.StatusBadRequest},
+		{"ordinary", http.MethodGet, ordinary.Route.Path, selected, false, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := corsRequest(tc.method, tc.path, "")
+			r.Header.Set("Content-Encoding", "gzip")
+			if tc.duplicate {
+				r.Header.Add("Content-Encoding", "identity")
+			}
+			w := httptest.NewRecorder()
+			tc.handler.ServeHTTP(w, r)
+			if w.Code != tc.want || (w.Header().Get("Content-Type") == "application/scim+json") != (tc.want == http.StatusUnsupportedMediaType) {
+				t.Fatalf("got status %d and media type %q, want %d with route-appropriate media", w.Code, w.Header().Get("Content-Type"), tc.want)
+			}
+		})
+	}
+	if entered != 1 {
+		t.Fatalf("Get handler ran %d times, want 1", entered)
+	}
+}
