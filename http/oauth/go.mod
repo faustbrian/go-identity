@@ -7,18 +7,21 @@ require (
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
 	github.com/faustbrian/go-identity v0.0.0-20261109180909-8901e7f09812
 	github.com/faustbrian/go-identity/http v0.0.0-20261109202903-8112f3df2617
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261113005611-82309c273c6c
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261122013004-c5e094dcd9a9
+	github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d
 	github.com/faustbrian/go-identity/session v0.0.0-20261113041908-c370ef9887da
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/felixge/httpsnoop v1.1.0
 )
 
 require (
-	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
+	github.com/coreos/go-oidc/v3 v3.21.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.8.2 // indirect
 	github.com/faustbrian/go-audit v1.0.0 // indirect
 	github.com/faustbrian/go-authentication v1.0.0 // indirect
 	github.com/faustbrian/go-authentication/oidc v1.0.1 // indirect
+	github.com/faustbrian/go-authentication/oidc/v2 v2.0.1-0.20261113095502-c3c7b7cba8f4 // indirect
+	github.com/faustbrian/go-authentication/v3 v3.0.0 // indirect
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec // indirect
 	github.com/faustbrian/go-clock v1.2.0 // indirect
 	github.com/faustbrian/go-http-middleware/v2 v2.0.2-0.20261014105810-969bbbf00668 // indirect

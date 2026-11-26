@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add independently opt-in public `GET /v1/oauth/provider-list` backed by the
+  native immutable configured-provider catalog. Required bounded pagination
+  returns only safe IDs, display names and selected modes, with shared safe-rate
+  admission and no session, CSRF, retry key, cookie issuance or protocol work.
+  Unselected discovery exposes neither a route nor capability metadata.
+
 - Select existing-account signin-start independently and route shared query
   callbacks by native stored intent rather than ambient cookies. Original
   preauth/device custody and provider budgets remain mandatory. Only new committed
