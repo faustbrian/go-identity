@@ -27,10 +27,13 @@ const (
 	FeatureFailureGroupMissing
 	// FeatureFailureGroupVersionRequired is the original no-effect Bulk Group 428.
 	FeatureFailureGroupVersionRequired
+	// FeatureFailureSCIMBulkDependency is the original no-effect Group Bulk
+	// result for a durably failed dependency. It is scoped to a denial plan.
+	FeatureFailureSCIMBulkDependency
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureGroupVersionRequired
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureSCIMBulkDependency
 }
 
 // TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
@@ -77,6 +80,9 @@ func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailure
 		return subject == "scim_group" && op.OperationID != "identity.scim.group-delete"
 	}
 	if scimBulkDenialCode(code) {
+		if code == FeatureFailureSCIMBulkDependency {
+			return subject == "scim_group"
+		}
 		return scimBulkGroupMutation(op)
 	}
 	return true

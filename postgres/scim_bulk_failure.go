@@ -10,7 +10,7 @@ import (
 const scimBulkDenialProfile = "identity-scim-bulk-denial-v1"
 
 func scimBulkDenialCode(code FeatureFailureCode) bool {
-	return code == FeatureFailureGroupMissing || code == FeatureFailureGroupVersionRequired
+	return code == FeatureFailureGroupMissing || code == FeatureFailureGroupVersionRequired || code == FeatureFailureSCIMBulkDependency
 }
 
 func scimBulkGroupMutation(op identity.FeatureOperation) bool {
@@ -19,7 +19,7 @@ func scimBulkGroupMutation(op identity.FeatureOperation) bool {
 
 func validSCIMBulkDenialPlan(b identity.CommandBinding, p CommandPlan) bool {
 	parent, err := identity.ParseCommandID(b.CorrelationID)
-	return scimBulkDenialCode(p.SCIMBulkDenial) && p.Feature != nil && scimBulkGroupMutation(p.Feature.Operation) &&
+	return scimBulkDenialCode(p.SCIMBulkDenial) && p.Feature != nil && featureFailureCodeAllowed(p.Feature.Operation, p.SCIMBulkDenial) &&
 		p.Feature.Contributor == scimUserCreationDescriptor() && p.SubjectType == "scim_group" &&
 		b.ActorKind == authorization.SubjectServiceAccount && err == nil && parent != b.CommandID &&
 		p.Lifecycle == nil && len(p.Audits) == 1 && p.Audits[0].EventType == scimBulkApplyChildAudit && p.Audits[0].RetentionClass == "protected" &&

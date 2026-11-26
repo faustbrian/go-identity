@@ -9,7 +9,7 @@ import (
 
 func TestSCIMBulkDenialPlanHasNoLifecycle(t *testing.T) {
 	seed := scimBulkGroupMutationAuditPlan(t, scimBulkGroupMutationCases()[0])
-	for _, code := range []FeatureFailureCode{FeatureFailureGroupMissing, FeatureFailureGroupVersionRequired} {
+	for _, code := range []FeatureFailureCode{FeatureFailureGroupMissing, FeatureFailureGroupVersionRequired, FeatureFailureSCIMBulkDependency} {
 		p := CommandPlan{Feature: seed.feature, SubjectType: seed.subjectType,
 			SCIMBulkDenial: code, Audits: append([]AuditPlan(nil), seed.audits...), Contributors: []ContributorDescriptor{
 				seed.feature.Contributor,
@@ -59,5 +59,30 @@ func TestSCIMBulkDenialPlanHasNoLifecycle(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSCIMBulkDependencyDenialPlanAcceptsOnlyExactGroupCreate(t *testing.T) {
+	seed := scimBulkGroupMutationAuditPlan(t, scimBulkGroupMutationCase{operation: "identity.scim.group-create"})
+	seed.audits[0].BindingDigest[0] = 1
+	plan := CommandPlan{Feature: seed.feature, SubjectType: seed.subjectType, SCIMBulkDenial: FeatureFailureSCIMBulkDependency,
+		Audits: seed.audits, Contributors: []ContributorDescriptor{seed.feature.Contributor,
+			{Owner: "identity/postgres", ContractID: "identity.domain", Version: 1},
+			{Owner: "audit/postgres", ContractID: "identity.audit", Version: 1}}}
+	fingerprint := [32]byte{1}
+	wire, err := encodeFeaturePlan(seed.binding, fingerprint, plan)
+	if err != nil {
+		t.Fatal("a dependency can prevent the original Group create without a lifecycle", err)
+	}
+	got, err := decodeFeaturePlan(seed.binding, fingerprint, wire)
+	if err != nil || got.SCIMBulkDenial != FeatureFailureSCIMBulkDependency || got.Lifecycle != nil {
+		t.Fatal("recover the no-effect Group create dependency denial", err)
+	}
+	if featureFailureCodeAllowed(scimUserCreationOperation(), FeatureFailureSCIMBulkDependency) {
+		t.Fatal("used Group dependency authority for a User")
+	}
+	plan.SCIMBulkDenial = FeatureFailureGroupMissing
+	if _, err := encodeFeaturePlan(seed.binding, fingerprint, plan); err == nil {
+		t.Fatal("a Group create cannot borrow the missing-projection mutation profile")
 	}
 }

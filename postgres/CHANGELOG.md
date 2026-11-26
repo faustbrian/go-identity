@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Allow the exact committed SCIM Bulk parent to checkpoint a blocked child or
+  resolve its audited cutoff skip. A confirmed failed dependency retains a
+  no-effect denial under the original child, not the parent.
+
 - Execute an exact native SCIM Group-create component in one root transaction.
   Each child retains its original command, audit and lifecycle. A confirmed
   Group denial rolls back all provisional changes before recording the

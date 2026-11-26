@@ -408,6 +408,12 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 			if err != nil {
 				return c.failedReservation(tx, binding, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), err)
 			}
+			if !changed {
+				changed, err = c.reconcileSCIMBulkDependency(bounded, tx, admitted, result)
+				if err != nil {
+					return c.failedReservation(tx, binding, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), err)
+				}
+			}
 			if changed {
 				if err := tx.Commit(bounded); err != nil {
 					return Reservation{}, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), readFailure(bounded, err)
