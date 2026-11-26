@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	managedSCIMUsersListField   = "reference_http_managed_scim_users_list"
-	managedSCIMUsersGetField    = "reference_http_managed_scim_users_get"
-	managedSCIMUsersCreateField = "reference_http_managed_scim_users_create"
-	managedSCIMUsersDeleteField = "reference_http_managed_scim_users_delete"
-	managedSCIMUsersPatchField  = "reference_http_managed_scim_users_patch"
+	managedSCIMUsersListField    = "reference_http_managed_scim_users_list"
+	managedSCIMUsersGetField     = "reference_http_managed_scim_users_get"
+	managedSCIMUsersCreateField  = "reference_http_managed_scim_users_create"
+	managedSCIMUsersDeleteField  = "reference_http_managed_scim_users_delete"
+	managedSCIMUsersPatchField   = "reference_http_managed_scim_users_patch"
+	managedSCIMUsersReplaceField = "reference_http_managed_scim_users_replace"
 )
 
 // HTTPManagedSCIMUsersListConfiguration selects GET /scim/v2/Users using
@@ -57,6 +58,12 @@ type HTTPManagedSCIMUsersDeleteConfiguration HTTPManagedSCIMUsersListConfigurati
 // Get, Create or Delete selected, leave all fields zero to use that route's
 // native owner and protocol quota. Otherwise follow the List rules.
 type HTTPManagedSCIMUsersPatchConfiguration HTTPManagedSCIMUsersListConfiguration
+
+// HTTPManagedSCIMUsersReplaceConfiguration selects only conditional
+// PUT /scim/v2/Users/{resource_id} with an issued managed bearer. If another
+// User route is selected, leave all fields zero to use its native owner and
+// quota. For standalone use, follow the List configuration rules.
+type HTTPManagedSCIMUsersReplaceConfiguration HTTPManagedSCIMUsersListConfiguration
 
 // ManagedSCIMConnectionConfiguration selects the primary owner and retained
 // credential/profile keys for an existing managed SCIM connection. Provisioning
@@ -128,6 +135,18 @@ func (c HTTPManagedSCIMUsersPatchConfiguration) MarshalText() ([]byte, error) {
 	return c.MarshalJSON()
 }
 
+func (HTTPManagedSCIMUsersReplaceConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMUsersReplaceConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMUsersReplaceConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMUsersReplaceField}
+}
+
+func (c HTTPManagedSCIMUsersReplaceConfiguration) MarshalText() ([]byte, error) {
+	return c.MarshalJSON()
+}
+
 func (ManagedSCIMConnectionConfiguration) Format(w fmt.State, _ rune) {
 	_, _ = io.WriteString(w, "reference.ManagedSCIMConnectionConfiguration(redacted)")
 }
@@ -139,15 +158,16 @@ func (ManagedSCIMConnectionConfiguration) MarshalJSON() ([]byte, error) {
 func (c ManagedSCIMConnectionConfiguration) MarshalText() ([]byte, error) { return c.MarshalJSON() }
 
 type managedSCIMUsersState struct {
-	native     *scimpg.ManagedConnectionService
-	rate       scimhttp.ProtocolRateConfig
-	limits     scim.Limits
-	maximum    time.Duration
-	get        bool
-	list       bool
-	createUser bool
-	deleteUser bool
-	patchUser  bool
+	native      *scimpg.ManagedConnectionService
+	rate        scimhttp.ProtocolRateConfig
+	limits      scim.Limits
+	maximum     time.Duration
+	get         bool
+	list        bool
+	createUser  bool
+	deleteUser  bool
+	patchUser   bool
+	replaceUser bool
 }
 
 func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListConfiguration, string, error) {
@@ -164,6 +184,7 @@ func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListCon
 		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersCreate), managedSCIMUsersCreateField},
 		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersDelete), managedSCIMUsersDeleteField},
 		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersPatch), managedSCIMUsersPatchField},
+		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersReplace), managedSCIMUsersReplaceField},
 	} {
 		if option.profile == nil {
 			continue
@@ -235,11 +256,12 @@ func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDe
 		return nil, identity.InvalidInputError{Field: field}
 	}
 	selected := managedSCIMUsersState{
-		get:        c.HTTPManagedSCIMUsersGet != nil,
-		list:       c.HTTPManagedSCIMUsersList != nil,
-		createUser: c.HTTPManagedSCIMUsersCreate != nil,
-		deleteUser: c.HTTPManagedSCIMUsersDelete != nil,
-		patchUser:  c.HTTPManagedSCIMUsersPatch != nil,
+		get:         c.HTTPManagedSCIMUsersGet != nil,
+		list:        c.HTTPManagedSCIMUsersList != nil,
+		createUser:  c.HTTPManagedSCIMUsersCreate != nil,
+		deleteUser:  c.HTTPManagedSCIMUsersDelete != nil,
+		patchUser:   c.HTTPManagedSCIMUsersPatch != nil,
+		replaceUser: c.HTTPManagedSCIMUsersReplace != nil,
 	}
 	if bulk != nil {
 		selected.rate = bulk.rate
@@ -301,6 +323,15 @@ func (s referenceManagedUsersExecutor) ExecuteManagedAdmittedPatch(ctx context.C
 	return s.native.ExecuteManagedAdmittedPatch(bounded, tenant, request, admit)
 }
 
+func (s referenceManagedUsersExecutor) ExecuteManagedAdmittedReplace(ctx context.Context, tenant identity.TenantID, request scim.Request, admit scim.ProtocolAdmission) (scim.Response, error) {
+	bounded, done, err := s.state.enterFeature(ctx, true)
+	if err != nil {
+		return scim.Response{}, scim.NewError(503, "")
+	}
+	defer done()
+	return s.native.ExecuteManagedAdmittedReplace(bounded, tenant, request, admit)
+}
+
 func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) ([]identityhttp.OperationDescriptor, error) {
 	selected := s.state.features.httpManagedSCIMUsers
 	executor := referenceManagedUsersExecutor{state: s.state, native: selected.native}
@@ -347,6 +378,15 @@ func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) 
 		})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: managedSCIMUsersPatchField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.replaceUser {
+		feature, err := scimhttp.NewManagedUsersReplaceFeature(scimhttp.ManagedUsersReplaceConfig{
+			Network: network, Executor: executor, Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMUsersReplaceField}
 		}
 		operations = append(operations, feature.Operations()...)
 	}

@@ -91,6 +91,10 @@ type StoreConfiguration struct {
 	// If another User route is selected, a zero Patch configuration adopts its
 	// exact native owner and quota. Nil leaves User PATCH disabled.
 	HTTPManagedSCIMUsersPatch *HTTPManagedSCIMUsersPatchConfiguration
+	// HTTPManagedSCIMUsersReplace selects conditional managed-bearer User PUT.
+	// An existing User route supplies the same native owner and quota. Nil
+	// leaves User replacement disabled.
+	HTTPManagedSCIMUsersReplace *HTTPManagedSCIMUsersReplaceConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

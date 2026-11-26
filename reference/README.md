@@ -643,6 +643,16 @@ returns `200` with the updated native User, ETag and canonical Location. Repeati
 the same original precondition and equivalent PatchOp returns the same result
 without a second mutation. Like Create, configure the native `BaseURL` as the
 effective HTTPS service origin followed by `/scim/v2`.
+
+Select `StoreConfiguration.HTTPManagedSCIMUsersReplace` independently for
+`PUT /scim/v2/Users/{resource_id}`. Send the issued bearer, the original strong
+`If-Match`, and the complete writable SCIM User as `application/scim+json`.
+Omitted optional writable attributes are removed; this is not a PATCH merge.
+Success returns the native `200` User, ETag and Location. Missing and stale
+preconditions return `428` and `412`. Resubmit equivalent input with the original
+precondition to recover the original result without a second mutation. No
+caller retry key, cookie authority or new migration is required.
+
 Send the managed connection's issued bearer, not a session cookie or a
 configured Bulk bearer. List supports the SCIM filter, sort,
 pagination and attribute-selection parameters accepted by its native owner.
@@ -663,8 +673,8 @@ protocol quota; otherwise configure a stable rate namespace and key across
 instances. Native authorization and quota admission must succeed before any
 Users are returned, created, updated, or withdrawn. When more than one User route is
 selected, set native and rate options only on the first selected of List, Get,
-Create, Delete and Patch, in that order. Leave the other selected option structs
-empty to share the same owner and quota.
+Create, Delete, Patch and Replace, in that order. Leave the other selected option
+structs empty to share the same owner and quota.
 
 ## Optional directory administration
 

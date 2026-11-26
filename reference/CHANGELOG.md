@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into conditional managed User PUT over HTTPS with the existing native
+  owner and protocol quota. Replace the complete writable resource and replay
+  an equivalent original request without a second mutation.
+
 - Opt into conditional managed User PATCH over HTTPS using the existing
   native owner and protocol quota. Return the persisted User, ETag and
   Location; an equivalent original retry does not mutate it again.
