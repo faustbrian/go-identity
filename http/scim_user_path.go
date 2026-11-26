@@ -16,6 +16,8 @@ func scimUserResourceOperation(op OperationDescriptor) bool {
 		return op.Route.Method == http.MethodGet
 	case "identity.scim.user-delete":
 		return op.Route.Method == http.MethodDelete
+	case "identity.scim.user-patch":
+		return op.Route.Method == http.MethodPatch
 	default:
 		return false
 	}

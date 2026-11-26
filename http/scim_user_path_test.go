@@ -23,7 +23,7 @@ func scimUserOperation(t testing.TB, id string, handler http.Handler) identityht
 		t.Fatal(err)
 	}
 	params := `[]`
-	if id == "identity.scim.user-get" || id == "identity.scim.user-delete" {
+	if id == "identity.scim.user-get" || id == "identity.scim.user-delete" || id == "identity.scim.user-patch" {
 		params = `[{"name":"resource_id","in":"path","required":true,"schema":{"type":"string"}}]`
 	}
 	status := "200"
@@ -214,6 +214,67 @@ func TestSCIMUserGetDoesNotBindTemplateCORSOrInterceptSearch(t *testing.T) {
 	c.CORS = []identityhttp.CORSRoutePolicy{{Method: "GET", Path: get.Route.Path, Credentials: identityhttp.CORSBearerCredentials, Origins: []identityhttp.Origin{"https://client.example"}, AllowedHeaders: []string{"Authorization"}}}
 	if h, _, err := identityhttp.NewRouter(c, ops, nil); h != nil || err == nil {
 		t.Fatal("dynamic template was accepted as an exact CORS route")
+	}
+}
+
+func TestSCIMUserPatchDispatchIsCanonicalAndIndependentlySelected(t *testing.T) {
+	const id = "User_19-A.z~"
+	const resource = scimUserCollection + "/" + id
+	patch := scimUserOperation(t, "identity.scim.user-patch", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.PathValue("resource_id")))
+	}))
+	read := scimUserOperation(t, "identity.scim.user-get", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	remove := scimUserOperation(t, "identity.scim.user-delete", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for _, transport := range []string{"selected", "router"} {
+		t.Run(transport, func(t *testing.T) {
+			build := func(operations ...identityhttp.OperationDescriptor) http.Handler {
+				t.Helper()
+				if transport == "selected" {
+					f := feature(t, "scim", nil, operations...)
+					h, err := identityhttp.NewSelectedHandler(identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					return h
+				}
+				h, _, err := identityhttp.NewRouter(routerPolicy(), operations, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return h
+			}
+			patchOnly, readDelete, combined := build(patch), build(read, remove), build(patch, read, remove)
+			for _, tc := range []struct {
+				handler             http.Handler
+				method, path, allow string
+				status              int
+			}{
+				{patchOnly, "PATCH", resource, "", 200},
+				{combined, "PATCH", resource, "", 200},
+				{combined, "DELETE", resource, "", 204},
+				{combined, "PUT", resource, "DELETE, GET, PATCH", 405},
+				{readDelete, "PATCH", resource, "DELETE, GET", 405},
+				{patchOnly, "GET", resource, "PATCH", 405},
+				{patchOnly, "PATCH", scimUserCollection, "", 404},
+				{patchOnly, "PATCH", scimUserCollection + "/.search", "", 404},
+				{patchOnly, "PATCH", scimUserCollection + "/%55ser", "", 404},
+			} {
+				r := corsRequest(tc.method, tc.path, "")
+				r.SetPathValue("resource_id", "caller")
+				w := httptest.NewRecorder()
+				tc.handler.ServeHTTP(w, r)
+				if w.Code != tc.status || w.Header().Get("Allow") != tc.allow || r.PathValue("resource_id") != "caller" {
+					t.Errorf("%s %s: status=%d allow=%q caller_path=%q", tc.method, tc.path, w.Code, w.Header().Get("Allow"), r.PathValue("resource_id"))
+				}
+				if tc.status == 200 && w.Body.String() != id {
+					t.Error("Patch did not receive the canonical resource ID")
+				}
+			}
+		})
 	}
 }
 

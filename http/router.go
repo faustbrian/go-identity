@@ -265,8 +265,10 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	canceledBytes := 0
 	canceledOverflow := false
 	denyBodyOverflow := func() {
-		if selectedSCIM && ctx.Err() == nil && owned.Method == http.MethodPost && owned.URL.Path == "/scim/v2/Users" {
-			routerSCIMCreateTooLarge(w)
+		create := owned.Method == http.MethodPost && owned.URL.Path == "/scim/v2/Users"
+		patch := owned.Method == http.MethodPatch && scimUserPathID(owned.URL.Path) != ""
+		if selectedSCIM && ctx.Err() == nil && (create || patch) {
+			routerSCIMUserBodyTooLarge(w)
 			return
 		}
 		routerDeny(w, r, http.StatusBadRequest, "invalid_request")
@@ -445,7 +447,7 @@ func routerErrorHeaders(header http.Header) {
 
 // The hard cap prevents the feature from writing its own response at overflow.
 // Emit the fixed SCIM error without allowing feature output or widening the cap.
-func routerSCIMCreateTooLarge(w http.ResponseWriter) {
+func routerSCIMUserBodyTooLarge(w http.ResponseWriter) {
 	header := w.Header()
 	routerErrorHeaders(header)
 	for name := range header {

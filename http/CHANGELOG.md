@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Route opted-in SCIM User PATCH to the canonical bounded resource path.
+  Preserve independent method selection and return a SCIM 413 at the existing
+  stream cap without releasing discarded feature headers or output.
+
 - Dispatch opted-in SCIM User DELETE on the canonical bounded resource path
   independently of Get. Exact routes keep precedence and unsupported methods
   report only the methods actually selected.

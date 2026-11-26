@@ -159,9 +159,18 @@ func assertRouterDelegatesSCIMCollectionRepresentation(t *testing.T, operation, 
 }
 
 func TestRouterSCIMUserCreateRetainsOrdinaryStreamLimit(t *testing.T) {
+	assertRouterSCIMUserWriteStreamLimit(t, "identity.scim.user-create", http.MethodPost, scimUserCollection)
+}
+
+func TestRouterSCIMUserPatchRetainsOrdinaryStreamLimit(t *testing.T) {
+	assertRouterSCIMUserWriteStreamLimit(t, "identity.scim.user-patch", http.MethodPatch, scimUserCollection+"/canonical-user-1")
+}
+
+func assertRouterSCIMUserWriteStreamLimit(t *testing.T, operation, method, path string) {
+	t.Helper()
 	policy := routerPolicy()
 	policy.Network.Limits.MaximumBodyBytes = 1 << 20
-	create := scimUserOperation(t, "identity.scim.user-create", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	write := scimUserOperation(t, operation, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.Copy(io.Discard, r.Body); err != nil {
 			w.Header().Set("Set-Cookie", "fixture=discard")
 			w.Header().Set("Location", "/discard")
@@ -171,13 +180,13 @@ func TestRouterSCIMUserCreateRetainsOrdinaryStreamLimit(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	h, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{create}, nil)
+	h, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{write}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	serve := func(size int) *httptest.ResponseRecorder {
 		t.Helper()
-		r := corsRequest(http.MethodPost, scimUserCollection, "")
+		r := corsRequest(method, path, "")
 		r.Body = io.NopCloser(strings.NewReader(strings.Repeat(" ", size)))
 		r.ContentLength = -1
 		r.TransferEncoding = []string{"chunked"}
@@ -191,11 +200,11 @@ func TestRouterSCIMUserCreateRetainsOrdinaryStreamLimit(t *testing.T) {
 	w := serve((1 << 20) + 1)
 	const tooLarge = `{"schemas":["urn:ietf:params:scim:api:messages:2.0:Error"],"status":"413"}` + "\n"
 	if w.Code != http.StatusRequestEntityTooLarge || w.Header().Get("Content-Type") != "application/scim+json" || w.Body.String() != tooLarge {
-		t.Fatalf("oversized Create must return a SCIM 413, got %d %q %q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+		t.Fatalf("oversized %s must return a SCIM 413, got %d %q %q", method, w.Code, w.Header().Get("Content-Type"), w.Body.String())
 	}
 	for _, name := range []string{"Set-Cookie", "Location", "ETag"} {
 		if w.Header().Get(name) != "" {
-			t.Fatalf("oversized Create returned a discarded %s", name)
+			t.Fatalf("oversized %s returned a discarded %s", method, name)
 		}
 	}
 }
