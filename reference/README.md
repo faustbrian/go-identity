@@ -487,6 +487,35 @@ selection. Stored grants/status are historical metadata, not current authority;
 reads expose no secret or digest and never verify/debit a key. See the
 [metadata walkthrough](APIKEY.md#safe-metadata-reads).
 
+## Optional SCIM Bulk HTTPS
+
+On the existing organization graph, set `StoreConfiguration.SCIMBulk` with
+one configured native `scim/postgres` connection, explicit Group and Bulk
+limits, and the stable protocol quota namespace/key. Select `HTTPRate` and
+use this graph's PostgreSQL pool and envelope keyring. Configure the server's
+HTTPS tenant host for the same tenant as the native connection. No other
+SCIM routes, sign-in providers or directory workers are installed.
+
+Use the Reference operator migration plan/apply flow for the selected
+identity, organization, audit/outbox, SCIM and rate owners. The existing
+installed SCIM projection and canonical request histories are reused; Bulk
+retains its own forward-only suffixes. After provisioning the actual
+organization and its service-account authority, call
+`StoreSet.InitializeSCIMBulkConnection` with the same selected runtime.
+This explicit call binds only the configured native connection and cannot
+create, reset or reactivate authority. Repeat the identical call to recover an
+uncertain bootstrap; do not generate a new bearer or connection to retry it.
+
+Once initialized, send the existing bearer to
+`GET /scim/v2/ServiceProviderConfig` for the effective limits and
+`POST /scim/v2/Bulk` with `Content-Type: application/scim+json` for execution.
+If used, retain the original `Idempotency-Key` with the exact request for
+replay. Disabled selection defaults to no Bulk or discovery route.
+To turn it off after installation, clear `SCIMBulk`, retain the database
+history, and keep `HTTPRate.AtomicAdmission` set if no other selected feature
+requires the installed atomic quota schema. Do not roll back its DDL or clear
+retained results.
+
 ## Optional directory administration
 
 Select `StoreConfiguration.DirectorySync` with the configured tenant,

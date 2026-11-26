@@ -184,6 +184,11 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if err != nil {
 		return nil, err
 	}
+	if bulk, err := server.scimBulkFeature(c.HTTP.Network); err != nil {
+		return nil, err
+	} else if bulk != nil {
+		contributions = append(contributions, *bulk)
+	}
 	oauthFeature, err := server.oauthWorkloadFeature(c.HTTP.Network)
 	if err != nil {
 		return nil, err
@@ -398,7 +403,12 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	}
 	for i := range operations {
 		if operations[i].Route.Path != "/healthz" && operations[i].Route.Path != "/readyz" {
-			operations[i].Handler = server.guardTenant(network, operations[i].Handler)
+			switch operations[i].Record.OperationID {
+			case "identity.scim.bulk", "identity.scim.service-provider-config":
+				operations[i].Handler = server.guardTenantResponse(network, operations[i].Handler, writeSCIMBulkGuardError)
+			default:
+				operations[i].Handler = server.guardTenant(network, operations[i].Handler)
+			}
 		}
 	}
 	handler, document, err := identityhttp.NewRouter(c.HTTP, operations, nil)
@@ -438,28 +448,39 @@ func sameServerAuthorization(a, b any) bool {
 // Re-resolving the same request with the same frozen policy avoids accepting
 // caller-supplied context facts. The callback cannot override host ownership.
 func (s *Server) guardTenant(network *identityhttp.NetworkResolver, next http.Handler) http.Handler {
+	return s.guardTenantResponse(network, next, func(w http.ResponseWriter, _ int) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, "{\"error\":\"unavailable\"}\n")
+	})
+}
+
+func (s *Server) guardTenantResponse(network *identityhttp.NetworkResolver, next http.Handler, deny func(http.ResponseWriter, int)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		deny := func() {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Cache-Control", "no-store")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = io.WriteString(w, "{\"error\":\"unavailable\"}\n")
-		}
 		if r == nil || network == nil || s.lifecycle() == identityhttp.ServerStopped {
-			deny()
+			deny(w, http.StatusServiceUnavailable)
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), s.budget)
 		defer cancel()
 		owned := r.Clone(ctx)
 		facts, err := network.Resolve(owned)
-		if err != nil || !facts.Valid() || facts.Scheme() != "https" || facts.Realm() != identityhttp.RealmTenant || ctx.Err() != nil {
-			deny()
+		if err != nil || !facts.Valid() || ctx.Err() != nil {
+			deny(w, http.StatusServiceUnavailable)
+			return
+		}
+		if facts.Scheme() != "https" || facts.Realm() != identityhttp.RealmTenant {
+			deny(w, http.StatusForbidden)
 			return
 		}
 		tenant, err := resolveServerTenant(ctx, s.tenant)
-		if err != nil || ctx.Err() != nil || tenant == "" || tenant != facts.TenantID() || s.lifecycle() == identityhttp.ServerStopped {
-			deny()
+		if err != nil || ctx.Err() != nil || tenant == "" || s.lifecycle() == identityhttp.ServerStopped {
+			deny(w, http.StatusServiceUnavailable)
+			return
+		}
+		if tenant != facts.TenantID() {
+			deny(w, http.StatusForbidden)
 			return
 		}
 		// The callback budget bounds admission only. The native router already

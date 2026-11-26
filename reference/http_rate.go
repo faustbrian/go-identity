@@ -26,11 +26,15 @@ type HTTPRateConfiguration struct {
 	Timeout         time.Duration
 	LockTimeout     time.Duration
 	RollbackTimeout time.Duration
+	// AtomicAdmission retains the shared native atomic admission history even
+	// when all features that need it are disabled. It selects no HTTP routes.
+	AtomicAdmission bool
 }
 
 type httpRateState struct {
-	backend *ratepg.Store
-	limiter *identityhttp.AuthRateLimiter
+	backend         *ratepg.Store
+	limiter         *identityhttp.AuthRateLimiter
+	atomicAdmission bool
 }
 
 func composeHTTPRate(c *HTTPRateConfiguration, pool *database.Pool) (*httpRateState, error) {
@@ -57,7 +61,7 @@ func composeHTTPRate(c *HTTPRateConfiguration, pool *database.Pool) (*httpRateSt
 	if err != nil {
 		return nil, invalid
 	}
-	return &httpRateState{backend: backend, limiter: limiter}, nil
+	return &httpRateState{backend: backend, limiter: limiter, atomicAdmission: c.AtomicAdmission}, nil
 }
 
 // Format redacts deployment key material for all formatting verbs.

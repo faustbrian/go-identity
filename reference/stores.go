@@ -60,6 +60,9 @@ type StoreConfiguration struct {
 	// migration planning. HTTPDirectorySync independently exposes its controls.
 	DirectorySync     *DirectorySyncConfiguration
 	HTTPDirectorySync *HTTPDirectorySyncConfiguration
+	// SCIMBulk selects the configured native SCIM executor and its two HTTPS
+	// routes. Nil selects neither routes nor Bulk migration extensions.
+	SCIMBulk *SCIMBulkConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration
@@ -265,6 +268,11 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
+	if c.SCIMBulk != nil && (c.HTTPRate == nil || c.Organization == nil || c.OTP == nil ||
+		c.SCIMBulk.Native.GlobalAuthorityID != c.OTP.Store.GlobalAuthorityID ||
+		c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil) {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_scim_bulk"}
+	}
 	if c.HTTPOAuthDevice != nil && c.OAuthDevice == nil {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_device"}
 	}

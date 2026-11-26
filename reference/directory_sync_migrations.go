@@ -7,7 +7,6 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	organizationpg "github.com/faustbrian/go-organization/postgres"
-	scimpg "github.com/faustbrian/go-scim/postgres"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
 
@@ -59,21 +58,10 @@ func directorySyncSourceMigrationCatalog(ctx context.Context, catalog []migratio
 		}
 		catalog = append(catalog, requests)
 	}
-	// Keep the complete, already-published SCIM history under one namespace.
-	// Adding or removing a worker profile must not re-own its installed prefix.
-	scimHistory := migrationHistory{namespace: "identity_scim_directory_groups", owners: map[migrations.Version]ModuleID{}}
-	base := scimpg.MigrationSource{Version: 1}
-	users := scimpg.UsersMigrationSource{Base: base, Version: 2}
-	groups := scimpg.GroupsMigrationSource{Base: users, Version: 3}
-	err := appendEnterpriseMigration(ctx, &scimHistory, "scim/postgres", groups,
-		migrationGuard{version: 1, schema: "scim", tables: []string{"connections", "users"}})
+	catalog, err := ensureSCIMProjectionHistory(ctx, catalog)
 	if err != nil {
 		return nil, err
 	}
-	scimHistory.guards = append(scimHistory.guards,
-		migrationGuard{version: 2, schema: "scim", columns: []string{"users.generation", "users.deleted_at"}},
-		migrationGuard{version: 3, schema: "scim", tables: []string{"groups"}})
-	catalog = append(catalog, scimHistory)
 	if selected.groups {
 		grants := migrationHistory{namespace: "identity_organization_directory_grants", owners: map[migrations.Version]ModuleID{}}
 		err := appendEnterpriseMigration(ctx, &grants, "organization/postgres", organizationpg.DirectoryTeamGrantMigrationSource{Version: 1},

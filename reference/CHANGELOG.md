@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into authenticated SCIM Bulk and matching discovery through the
+  Reference HTTPS server and its shared PostgreSQL protocol quota. Add
+  native migration suffixes without changing the installed SCIM prefix.
+
 - Opt into ordered mixed SCIM User, Group and role reconciliation through the
   direct Reference worker, with exact restart recovery and no new HTTP route.
 

@@ -91,6 +91,7 @@ type featureState struct {
 	enterpriseOAuth2             *enterpriseOAuth2State
 	enterpriseSAML               *enterpriseSAMLState
 	directorySync                *directorySyncState
+	scimBulk                     *scimBulkState
 	oauthWorkload                *oauthWorkloadState
 	oauthDevice                  *oauthDeviceState
 	apiKey                       *apiKeyState
@@ -608,6 +609,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			directorySync.close()
 		}
 	}()
+	scimBulk, err := s.composeSCIMBulk(c, d)
+	if err != nil {
+		return err
+	}
 	var signupEvaluation risk.Evaluator
 	if c.Passkey != nil && c.Passkey.Signup != nil {
 		protected := c.Passkey.Protected.CommandCounters
@@ -983,6 +988,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.enterpriseOAuth2 = enterpriseOAuth2Owner
 	s.features.enterpriseSAML = enterpriseSAMLOwner
 	s.features.directorySync = directorySync
+	s.features.scimBulk = scimBulk
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

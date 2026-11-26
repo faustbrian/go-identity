@@ -282,6 +282,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	scimBulk                    bool
 	directorySync               bool
 	directorySyncStandalone     bool
 	directoryGroupApply         bool
@@ -657,6 +658,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.organization {
 		configureReferenceOrganization(t, &c, origin)
+	}
+	var scimBulkSource *referenceDirectorySCIMSource
+	if extensions.scimBulk {
+		source := configureReferenceSCIMBulk(t, &c, deps, origin)
+		scimBulkSource = &source
 	}
 	var directoryGroupSource, directoryUserSource *referenceDirectorySCIMSource
 	if extensions.directorySync {
@@ -1489,7 +1495,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
 	}
-	if directoryGroupSource != nil || directoryUserSource != nil {
+	if directoryGroupSource != nil || directoryUserSource != nil || c.SCIMBulk != nil {
 		modules = append(modules, "scim/postgres")
 	}
 	if c.APIKey != nil {
@@ -1936,6 +1942,15 @@ END $$`); err != nil {
 	if seen["identity.sso.directory-sync-apply"] {
 		t.Fatal("internal directory apply advertised as HTTP")
 	}
+	for _, operation := range []string{"identity.scim.bulk", "identity.scim.service-provider-config"} {
+		selected := c.SCIMBulk != nil
+		if selected {
+			wantOperations++
+		}
+		if seen[operation] != selected {
+			t.Fatal("SCIM Bulk HTTP selection mismatch", operation)
+		}
+	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
 	}
@@ -2373,7 +2388,9 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 					installed.prove(t, ctx, selected)
 				}
 			}
-			if extensions.directorySync {
+			if extensions.scimBulk {
+				proveReferenceSCIMBulkHTTPS(t, ctx, f, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
+			} else if extensions.directorySync {
 				bind := func(ctx context.Context, apply reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService {
 					return bindReferenceDirectoryGroupGraph(t, ctx, selectedConfig, deps, workerConfigs, apply)
 				}

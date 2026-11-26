@@ -130,6 +130,18 @@ func (s *Server) readiness(ctx context.Context) Readiness {
 
 func readinessSchemaPresent(ctx context.Context, state *storeState, catalog []migrationHistory) (bool, error) {
 	schemas, tables, roles, columns, functions, constraints := []string{}, []string{}, []string{}, []string{}, []string{}, []string{}
+	// A previously applied Bulk suffix keeps the alias CHECK's monotonic
+	// replacement even after the HTTP feature is disabled. Never require the
+	// removed predecessor or a schema rollback to disable routes.
+	bulkAlias := slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == scimBulkAliasHistory })
+	if !bulkAlias && slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == canonicalRequestHistory }) {
+		successor := migrationGuard{schema: "identity", constraints: []string{scimBulkAliasGuard}, constraintValue: "identity.scim.bulk"}
+		var err error
+		bulkAlias, err = successor.exists(ctx, state)
+		if err != nil {
+			return false, err
+		}
+	}
 	for _, history := range catalog {
 		for _, guard := range readinessCatalogGuards(state, history) {
 			if _, selected := history.owners[guard.version]; !selected {
@@ -147,6 +159,9 @@ func readinessSchemaPresent(ctx context.Context, state *storeState, catalog []mi
 				functions = append(functions, guard.schema+"."+function)
 			}
 			for _, constraint := range guard.constraints {
+				if bulkAlias && history.namespace == canonicalRequestHistory && constraint == scimSAMLPredecessor {
+					constraint = scimBulkAliasGuard
+				}
 				constraints = append(constraints, guard.schema+"."+constraint)
 			}
 		}
