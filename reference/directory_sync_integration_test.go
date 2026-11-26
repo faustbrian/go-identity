@@ -98,6 +98,10 @@ func (referenceDirectoryPolicy) Decide(ctx context.Context, d authorization.Deci
 			if d.Request.Resource.Type == "sso.directory-generation" {
 				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 			}
+		case "identity.sso.directory-sync-inspect-user-drift":
+			if d.Request.Resource.Type == "sso.directory-generation" {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			}
 		}
 	}
 	return (referenceOrganizationRolesPolicy{}).Decide(ctx, d)
@@ -331,7 +335,9 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 		})
 		wantApplied = 1
 	case userSource != nil:
-		applied = proveReferenceMappedUserApply(t, ctx, f, *userSource, first, [32]byte(checkpoint), bindUser)
+		applied = proveReferenceMappedUserApply(t, ctx, f, *userSource, first, [32]byte(checkpoint), bindUser, func() referenceDirectoryProjection {
+			return decode(call(http.MethodGet, statusPath, "", "", true, 200))
+		})
 		wantApplied = 2
 	}
 	if wantApplied != 0 {

@@ -126,6 +126,21 @@ func (s *DirectoryUserApplyService) Apply(ctx context.Context, request ssopg.Dir
 	return s.executor.ApplyGeneration(bounded, request)
 }
 
+// ObserveDrift inspects the exact mapped User at the current directory
+// checkpoint under separate read authorization. It does not change access,
+// apply a repair, or advance the generation. Failure returns no report.
+func (s *DirectoryUserApplyService) ObserveDrift(ctx context.Context, request ssopg.DirectoryUserApplyRequest) (ssopg.DirectoryUserDrift, error) {
+	if s == nil || s.executor == nil {
+		return ssopg.DirectoryUserDrift{}, identity.InvalidInputError{Field: "reference_directory_user_drift"}
+	}
+	bounded, done, err := (composedPasswordReset{state: s.state}).enter(ctx, s.tenant)
+	if err != nil {
+		return ssopg.DirectoryUserDrift{}, err
+	}
+	defer done()
+	return s.executor.ObserveDrift(bounded, request)
+}
+
 func (DirectoryUserSourceConfiguration) Format(s fmt.State, _ rune) {
 	_, _ = fmt.Fprint(s, "reference.DirectoryUserSourceConfiguration(redacted)")
 }

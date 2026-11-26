@@ -591,6 +591,12 @@ inactive revision or delete tombstone withdraws only that directory source;
 global identity and independent organization authority remain unchanged.
 No Apply route, worker loop, mixed batch or directory role mapping is enabled.
 
+The same worker exposes Go-only `ObserveDrift` at the current running User
+checkpoint. Authorize `identity.sso.directory-sync-inspect-user-drift`
+separately from Apply. A report compares the exact source revision with the
+organization contribution; it does not grant repair authority, modify
+membership, or advance the checkpoint.
+
 For directory-backed custom team roles, enable native team-role bindings and
 select `DirectorySync.GroupSource.Roles`. Leave `Roles.Apply` unset on the
 initial graph to select the existing native directory-role migration without

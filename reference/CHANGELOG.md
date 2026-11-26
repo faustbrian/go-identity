@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Inspect exact SCIM User drift through the Reference directory worker with
+  separate read authorization and no writes or HTTP route.
+
 - Preview an ordered SCIM Group batch at the current directory checkpoint
   through the direct Reference worker. Reuse existing read authorization
   without writing grants or exposing an HTTP route.

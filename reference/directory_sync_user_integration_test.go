@@ -4,6 +4,8 @@ package reference_test
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"net/http"
 	"reflect"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	organizationpg "github.com/faustbrian/go-organization/postgres"
 	scim "github.com/faustbrian/go-scim"
 	scimorganization "github.com/faustbrian/go-scim/organization"
+	scimpostgres "github.com/faustbrian/go-scim/postgres"
 	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 	"github.com/faustbrian/go-sso"
 	ssopg "github.com/faustbrian/go-sso/postgres"
@@ -38,7 +41,7 @@ func configureReferenceDirectoryUserApply(t *testing.T, c *reference.StoreConfig
 	return source
 }
 
-func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStores, source referenceDirectorySCIMSource, generation referenceDirectoryProjection, predecessor [32]byte, bind func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService) [32]byte {
+func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStores, source referenceDirectorySCIMSource, generation referenceDirectoryProjection, predecessor [32]byte, bind func(context.Context, reference.DirectoryUserApplyConfiguration) *reference.DirectoryUserApplyService, status func() referenceDirectoryProjection) [32]byte {
 	t.Helper()
 	user := source.createUser(t, ctx, `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"ReferenceDirectoryMember","displayName":"Reference directory member","active":true}`)
 	resourceID := referenceDirectorySCIMResourceID(t, user, http.StatusCreated)
@@ -60,10 +63,11 @@ func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStor
 		AllowAdmission: true, AllowWithdrawal: true,
 	}
 	policy := referenceDirectoryPolicy{}
-	recordID, err := (organizationpg.DirectoryMembershipSource{
+	membershipSource := organizationpg.DirectoryMembershipSource{
 		TenantID: source.config.Scope.TenantID, OrganizationID: source.config.Scope.OrganizationID, UserID: target,
 		ProviderID: organization.ID(source.config.Scope.ProviderID), ConnectionID: organization.ID(source.config.Scope.ConnectionID), ResourceID: organization.ID(resourceID),
-	}).RecordID()
+	}
+	recordID, err := membershipSource.RecordID()
 	if err != nil {
 		t.Fatal("identify the exact source-owned organization contribution", err)
 	}
@@ -80,6 +84,52 @@ func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStor
 		GenerationID: generation.GenerationID, ProviderID: sso.ProviderID(generation.ProviderID), MappingVersion: generation.MappingVersion,
 		PredecessorCheckpoint: predecessor, Delta: admission,
 	}
+	type previewState struct {
+		generation                     referenceDirectoryProjection
+		attribution                    organizationpg.DirectoryMembershipAttribution
+		actor                          organization.Member
+		authorized                     bool
+		grants, active, audits, events int
+		commands, claims               int
+	}
+	observeState := func() previewState {
+		t.Helper()
+		state := previewState{generation: status()}
+		attribution, err := owner.ObserveDirectoryMembershipAttribution(ctx, membershipSource)
+		if err != nil {
+			t.Fatal("observe the exact source-owned organization contribution", err)
+		}
+		state.attribution = attribution
+		authority, authorityErr := owner.ObserveCredentialAuthority(ctx, query)
+		if authorityErr != nil && !errors.Is(authorityErr, organization.ErrForbidden) {
+			t.Fatal("observe effective organization authority around User inspection", authorityErr)
+		}
+		state.actor, state.authorized = authority.Actor, authorityErr == nil
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM organization.directory_membership_grants),
+		(SELECT count(*) FROM organization.directory_membership_grants WHERE active),
+		(SELECT count(*) FROM audit.records),
+		(SELECT count(*) FROM outbox_messages),
+		(SELECT count(*) FROM identity.commands),
+		(SELECT count(*) FROM identity.identity_command_id_claims)`).Scan(&state.grants, &state.active, &state.audits, &state.events, &state.commands, &state.claims); err != nil {
+			t.Fatal("observe protected effects around direct User inspection", err)
+		}
+		return state
+	}
+	assertUnchanged := func(before previewState) {
+		t.Helper()
+		if after := observeState(); after != before {
+			t.Fatal("User inspection changed browser Status, organization authority, source attribution, or protected effects")
+		}
+	}
+	beforeAdmission := observeState()
+	if missing, err := worker.ObserveDrift(ctx, request); err != nil || missing != (ssopg.DirectoryUserDrift{
+		Kind:   scimorganization.DirectoryMembershipDriftMissingSourceGrant,
+		Source: scimpostgres.DirectoryUserObservation{State: scimpostgres.DirectoryMembershipUserActive, Revision: user.ETag},
+	}) {
+		t.Fatal("direct User inspection did not report the active source's missing grant", err)
+	}
+	assertUnchanged(beforeAdmission)
 	granted, err := worker.Apply(ctx, request)
 	if err != nil || len(granted.ChildOutcomes) != 1 || granted.Checkpoint == predecessor || granted.Checkpoint == ([32]byte{}) {
 		t.Fatal("direct User Apply did not settle the original admission and successor", err)
@@ -100,6 +150,24 @@ func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStor
 	if err != nil || member.Actor.UserID != target || member.Actor.Role != organization.RoleMember || !member.Actor.Active {
 		t.Fatal("User admission did not grant actual ordinary organization authority", err)
 	}
+	afterAdmission := observeState()
+	if afterAdmission.generation.Checkpoint != base64.RawURLEncoding.EncodeToString(granted.Checkpoint[:]) ||
+		afterAdmission.generation.ReadCount != 1 || afterAdmission.generation.AppliedCount != 1 || afterAdmission.generation.RejectedCount != 0 ||
+		!afterAdmission.authorized || !afterAdmission.attribution.Membership.ContributionActive {
+		t.Fatal("ordinary admission did not settle the source grant and browser checkpoint exactly once")
+	}
+	if stale, err := worker.ObserveDrift(ctx, request); !errors.Is(err, sso.ErrDirectoryReconciliation) || stale != (ssopg.DirectoryUserDrift{}) {
+		t.Fatal("stale User checkpoint disclosed a drift report", err)
+	}
+	assertUnchanged(afterAdmission)
+	request.PredecessorCheckpoint = granted.Checkpoint
+	if aligned, err := worker.ObserveDrift(ctx, request); err != nil || aligned != (ssopg.DirectoryUserDrift{
+		Kind:   scimorganization.DirectoryMembershipDriftInSync,
+		Source: scimpostgres.DirectoryUserObservation{State: scimpostgres.DirectoryMembershipUserActive, Revision: user.ETag},
+	}) {
+		t.Fatal("ordinary User admission did not converge the exact active source", err)
+	}
+	assertUnchanged(afterAdmission)
 
 	inactive, err := source.native.Execute(ctx, scim.Request{
 		Operation: scim.UserPatch, Credential: source.bearer, ResourceID: resourceID, IfMatch: user.ETag,
@@ -117,6 +185,11 @@ func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStor
 		t.Fatal("construct the stale source withdrawal", err)
 	}
 	request.PredecessorCheckpoint, request.Delta = granted.Checkpoint, stale
+	beforeWithdrawal := observeState()
+	if report, err := worker.ObserveDrift(ctx, request); !errors.Is(err, sso.ErrDirectoryReconciliation) || report != (ssopg.DirectoryUserDrift{}) {
+		t.Fatal("stale User revision disclosed a drift report", err)
+	}
+	assertUnchanged(beforeWithdrawal)
 	if denied, err := worker.Apply(ctx, request); err == nil || denied.Checkpoint != ([32]byte{}) {
 		t.Fatal("a stale source revision settled User withdrawal", err)
 	}
@@ -130,6 +203,17 @@ func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStor
 		t.Fatal("bind withdrawal to the exact inactive source revision", err)
 	}
 	request.Delta = withdrawal
+	beforeWithdrawal = observeState()
+	if unexpected, err := worker.ObserveDrift(ctx, request); err != nil || unexpected != (ssopg.DirectoryUserDrift{
+		Kind:   scimorganization.DirectoryMembershipDriftUnexpectedSourceGrant,
+		Source: scimpostgres.DirectoryUserObservation{State: scimpostgres.DirectoryMembershipUserInactive, Revision: inactive.ETag},
+	}) {
+		t.Fatal("explicit inactive User did not report its still-live exact source grant", err)
+	}
+	assertUnchanged(beforeWithdrawal)
+	if !beforeWithdrawal.authorized || beforeWithdrawal.actor != member.Actor || !beforeWithdrawal.attribution.Membership.ContributionActive {
+		t.Fatal("User inspection withdrew the effective organization authority before ordinary Apply")
+	}
 	withdrawn, err := worker.Apply(ctx, request)
 	if err != nil || len(withdrawn.ChildOutcomes) != 1 || withdrawn.Checkpoint == granted.Checkpoint || withdrawn.Checkpoint == ([32]byte{}) {
 		t.Fatal("fresh User withdrawal did not settle its original child and successor", err)
@@ -145,11 +229,26 @@ func proveReferenceMappedUserApply(t *testing.T, ctx context.Context, f liveStor
 	if _, err := owner.ObserveCredentialAuthority(ctx, query); err == nil {
 		t.Fatal("fresh User withdrawal retained scoped organization authority")
 	}
+	request.PredecessorCheckpoint = withdrawn.Checkpoint
+	afterWithdrawal := observeState()
+	if afterWithdrawal.generation.Checkpoint != base64.RawURLEncoding.EncodeToString(withdrawn.Checkpoint[:]) ||
+		afterWithdrawal.generation.ReadCount != 2 || afterWithdrawal.generation.AppliedCount != 2 || afterWithdrawal.generation.RejectedCount != 0 ||
+		afterWithdrawal.authorized || afterWithdrawal.attribution.Membership.ContributionActive {
+		t.Fatal("ordinary withdrawal did not settle the inactive source and browser checkpoint exactly once")
+	}
+	if aligned, err := worker.ObserveDrift(ctx, request); err != nil || aligned != (ssopg.DirectoryUserDrift{
+		Kind:   scimorganization.DirectoryMembershipDriftInSync,
+		Source: scimpostgres.DirectoryUserObservation{State: scimpostgres.DirectoryMembershipUserInactive, Revision: inactive.ETag},
+	}) {
+		t.Fatal("ordinary User withdrawal did not converge the exact inactive source", err)
+	}
+	assertUnchanged(afterWithdrawal)
 	var global string
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT status FROM identity.users WHERE tenant_id=$1 AND user_id=$2`, string(source.config.Scope.TenantID), resourceID).Scan(&global); err != nil || global != "active" {
 		t.Fatal("source withdrawal changed the global identity", err)
 	}
 	reconstructed := bind(ctx, apply)
+	request.PredecessorCheckpoint = granted.Checkpoint
 	if replay, err := reconstructed.Apply(ctx, request); err != nil || !reflect.DeepEqual(withdrawn, replay) {
 		t.Fatal("reconstructed User worker did not replay the identical withdrawn receipt and checkpoint", err)
 	}
