@@ -47,6 +47,10 @@ func TestOneTapStartJournalErasesOnlyAfterDefinitiveCommit(t *testing.T) {
 	testSSOJournalErasure(t, OneTapStartOperation(), []int16{4})
 }
 
+func TestOneTapCallbackJournalErasesOnlyAfterDefinitiveCommit(t *testing.T) {
+	testSSOJournalErasure(t, OneTapCallbackOperation(), []int16{4})
+}
+
 func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles []int16) {
 	t.Helper()
 	for _, committed := range []bool{true, false} {
@@ -81,6 +85,8 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					binding, _, _ = samlStartPlans(t)
 				case oneTapStartPurpose:
 					binding, _, _ = oneTapStartPreparationFixture(t)
+				case oneTapCallbackPurpose:
+					binding, _ = oneTapCallbackPlanFixture(t)
 				case "identity.sso.provider-token.refresh":
 					binding.OperationID, binding.SchemaID = op.OperationID, op.SchemaID
 					binding.UserID, binding.ActorID = "refresh-owner", "refresh-owner"
@@ -144,25 +150,28 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 						t.Fatal("pending or uncertain callback lost original recovery custody")
 					}
 				}
-				assertPending()
-				if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET preparation_ciphertext=NULL,preparation_ciphertext_generation=NULL WHERE command_id=$1`, raw); err == nil {
-					t.Fatal("arbitrary pre-terminal callback erasure was accepted")
+				assertUncertainCustody := func() {
+					t.Helper()
+					assertPending()
+					if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET preparation_ciphertext=NULL,preparation_ciphertext_generation=NULL WHERE command_id=$1`, raw); err == nil {
+						t.Fatal("arbitrary pre-terminal callback erasure was accepted")
+					}
+					assertPending()
+					unknown, err := pool.Raw().Begin(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer unknown.Rollback(ctx)
+					unknownResult := featureOutcome(binding, &op, identity.CommitOutcomeUnknown, 0)
+					if err := terminalizeJournal(ctx, unknown, q, reservation.journal, owner, unknownResult, "dependency-failure"); err == nil {
+						t.Fatal("an unknown observation terminalized and erased callback custody")
+					}
+					if err := unknown.Rollback(ctx); err != nil {
+						t.Fatal(err)
+					}
+					assertPending()
 				}
-				assertPending()
-
-				unknown, err := pool.Raw().Begin(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer unknown.Rollback(ctx)
-				unknownResult := featureOutcome(binding, &op, identity.CommitOutcomeUnknown, 0)
-				if err := terminalizeJournal(ctx, unknown, q, reservation.journal, owner, unknownResult, "dependency-failure"); err == nil {
-					t.Fatal("an unknown observation terminalized and erased callback custody")
-				}
-				if err := unknown.Rollback(ctx); err != nil {
-					t.Fatal(err)
-				}
-				assertPending()
+				assertUncertainCustody()
 
 				result := featureOutcome(binding, &op, identity.CommitOutcomeNotCommitted, 0)
 				class, state := "denied", "aborted"
@@ -181,6 +190,7 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					samlStart := SSOSAMLStartPreparationErasureMigrationSource{Base: samlCallback, Version: 28}
 					samlConfirmation := SSOSAMLIDPConfirmationPreparationErasureMigrationSource{Base: samlStart, Version: 29}
 					samlRelay := SSOSAMLLogoutRelayIssuePreparationErasureMigrationSource{Base: samlConfirmation, Version: 30}
+					oneTapStart := OneTapStartPreparationErasureMigrationSource{Base: samlRelay, Version: 31}
 					if op.OperationID != ssoOAuth2SigninPurpose {
 						installUnlinkPreparationHistory(t, ctx, pool, oauth)
 					}
@@ -193,8 +203,11 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					if op.OperationID == "identity.sso.saml-idp-init" {
 						installUnlinkPreparationHistory(t, ctx, pool, samlStart)
 					}
-					if op.OperationID == oneTapStartPurpose {
+					if op.OperationID == oneTapStartPurpose || op.OperationID == oneTapCallbackPurpose {
 						installUnlinkPreparationHistory(t, ctx, pool, samlRelay)
+					}
+					if op.OperationID == oneTapCallbackPurpose {
+						installUnlinkPreparationHistory(t, ctx, pool, oneTapStart)
 					}
 					beforeExpansion, err := pool.Raw().Begin(ctx)
 					if err != nil {
@@ -218,11 +231,16 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					case "identity.sso.saml-idp-init":
 						installUnlinkPreparationHistory(t, ctx, pool, samlConfirmation)
 					case oneTapStartPurpose:
-						installUnlinkPreparationHistory(t, ctx, pool, OneTapStartPreparationErasureMigrationSource{Base: samlRelay, Version: 31})
+						installUnlinkPreparationHistory(t, ctx, pool, oneTapStart)
+					case oneTapCallbackPurpose:
+						installUnlinkPreparationHistory(t, ctx, pool, OneTapCallbackPreparationErasureMigrationSource{Base: oneTapStart, Version: 32})
 					default:
 						installUnlinkPreparationHistory(t, ctx, pool, refresh)
 					}
 					assertPending()
+					if op == OneTapCallbackOperation() {
+						assertUncertainCustody()
+					}
 				}
 				rolledBack, err := pool.Raw().Begin(ctx)
 				if err != nil {

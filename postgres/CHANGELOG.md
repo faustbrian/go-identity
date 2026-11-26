@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Erase One Tap callback preparation only when its original receipt becomes
+  terminal. Retain pending and uncertain custody, and keep replay tokenless.
+
 - Fence the original linked Google account and provider credential during
   One Tap callback Apply and final commit using the existing primary owner.
 

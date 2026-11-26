@@ -228,7 +228,7 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
-	if (oneTapStartClaim(q) || ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q)) && !gated {
+	if (oneTapStartClaim(q) || oneTapCallbackClaim(q) || ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q)) && !gated {
 		return result, invalidPreparation()
 	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)

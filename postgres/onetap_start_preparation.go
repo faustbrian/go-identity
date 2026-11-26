@@ -45,6 +45,10 @@ func oneTapStartClaim(q claimRequest) bool {
 	return q.feature != nil && q.purpose == oneTapStartPurpose && *q.feature == OneTapStartOperation()
 }
 
+func oneTapCallbackClaim(q claimRequest) bool {
+	return q.feature != nil && q.purpose == oneTapCallbackPurpose && *q.feature == OneTapCallbackOperation()
+}
+
 func oneTapStartSelected(p CommandPlan) bool {
 	return p.Feature != nil && p.Feature.Operation.OperationID == oneTapStartPurpose
 }
