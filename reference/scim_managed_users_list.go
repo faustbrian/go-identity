@@ -170,6 +170,7 @@ type managedSCIMUsersState struct {
 	replaceUser     bool
 	getGroup        bool
 	listGroups      bool
+	createGroup     bool
 	maxGroupMembers int
 }
 
@@ -210,10 +211,22 @@ func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListCon
 			Native: groups.Native, RateNamespace: groups.RateNamespace, RateKey: groups.RateKey,
 		}
 		if owner == nil {
-			return &profile, managedSCIMGroupsReadField, nil
-		}
-		if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
+			owner, field = &profile, managedSCIMGroupsReadField
+		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
 			return nil, managedSCIMGroupsReadField, invalid
+		}
+	}
+	if groups := c.HTTPManagedSCIMGroupsCreate; groups != nil {
+		invalid := identity.InvalidInputError{Field: managedSCIMGroupsCreateField}
+		if groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers ||
+			c.HTTPManagedSCIMGroupsRead != nil && c.HTTPManagedSCIMGroupsRead.MaximumMembers != groups.MaximumMembers {
+			return nil, managedSCIMGroupsCreateField, invalid
+		}
+		profile := HTTPManagedSCIMUsersListConfiguration{Native: groups.Native, RateNamespace: groups.RateNamespace, RateKey: groups.RateKey}
+		if owner == nil {
+			owner, field = &profile, managedSCIMGroupsCreateField
+		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
+			return nil, managedSCIMGroupsCreateField, invalid
 		}
 	}
 	return owner, field, nil
@@ -284,6 +297,9 @@ func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDe
 	if groups := c.HTTPManagedSCIMGroupsRead; groups != nil {
 		selected.getGroup, selected.listGroups = groups.EnableGet, groups.EnableList
 		selected.maxGroupMembers = groups.MaximumMembers
+	}
+	if groups := c.HTTPManagedSCIMGroupsCreate; groups != nil {
+		selected.createGroup, selected.maxGroupMembers = true, groups.MaximumMembers
 	}
 	if bulk != nil {
 		selected.rate = bulk.rate
@@ -420,6 +436,16 @@ func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) 
 		})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: managedSCIMGroupsReadField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.createGroup {
+		feature, err := scimhttp.NewManagedGroupsCreateFeature(scimhttp.ManagedGroupsCreateConfig{
+			Network: network, Executor: referenceManagedGroupsExecutor{state: s.state, native: selected.native},
+			Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum, MaximumMembers: selected.maxGroupMembers,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMGroupsCreateField}
 		}
 		operations = append(operations, feature.Operations()...)
 	}

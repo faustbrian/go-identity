@@ -690,6 +690,13 @@ native profile when managed connection creation is not selected and a stable
 rate namespace and key when Bulk is not selected. Apply the existing managed
 connection and Group projection histories before serving.
 
+Independently select `StoreConfiguration.HTTPManagedSCIMGroupsCreate` to
+enable `POST /scim/v2/Groups` using an issued managed bearer. Supply the same
+explicit member ceiling as selected Group reads, and do not configure a second
+native owner or quota. On success the route returns `201`, the committed Group,
+its ETag and canonical HTTPS Location. It accepts no client idempotency key;
+Group Replace, Patch and Delete remain unselected.
+
 ## Optional directory administration
 
 Select `StoreConfiguration.DirectorySync` with the configured tenant,

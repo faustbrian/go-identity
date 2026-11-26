@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt independently into managed SCIM Group Create over HTTPS, sharing the
+  selected native connection and protocol quota with co-selected Group reads.
+
 - Opt independently into managed SCIM Group Get and List over HTTPS, using
   the existing native connection and protocol quota.
 

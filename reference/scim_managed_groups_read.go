@@ -11,6 +11,7 @@ import (
 )
 
 const managedSCIMGroupsReadField = "reference_http_managed_scim_groups_read"
+const managedSCIMGroupsCreateField = "reference_http_managed_scim_groups_create"
 
 // HTTPManagedSCIMGroupsReadConfiguration opts independently into managed
 // Group Get and List, without selecting Group writes or connection lifecycle.
@@ -40,6 +41,29 @@ func (c HTTPManagedSCIMGroupsReadConfiguration) MarshalText() ([]byte, error) {
 	return c.MarshalJSON()
 }
 
+// HTTPManagedSCIMGroupsCreateConfiguration selects only managed Group Create.
+// With Group reads or a User route, leave Native and rate fields zero to
+// reuse its owner and quota. Co-selected Group reads must use the same
+// explicit MaximumMembers; zero permits only empty Groups.
+type HTTPManagedSCIMGroupsCreateConfiguration struct {
+	Native         *ManagedSCIMConnectionConfiguration
+	RateNamespace  string
+	RateKey        [32]byte
+	MaximumMembers int
+}
+
+func (HTTPManagedSCIMGroupsCreateConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMGroupsCreateConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMGroupsCreateConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMGroupsCreateField}
+}
+
+func (c HTTPManagedSCIMGroupsCreateConfiguration) MarshalText() ([]byte, error) {
+	return c.MarshalJSON()
+}
+
 type referenceManagedGroupsExecutor struct {
 	state  *storeState
 	native *scimpg.ManagedConnectionService
@@ -52,4 +76,13 @@ func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupRead(ctx cont
 	}
 	defer done()
 	return s.native.ExecuteManagedAdmittedGroupRead(bounded, tenant, request, maximumMembers, admit)
+}
+
+func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupCreate(ctx context.Context, tenant identity.TenantID, request scim.Request, maximumMembers int, admit scim.ProtocolAdmission) (scim.Response, error) {
+	bounded, done, err := s.state.enterFeature(ctx, true)
+	if err != nil {
+		return scim.Response{}, scim.NewError(503, "")
+	}
+	defer done()
+	return s.native.ExecuteManagedAdmittedGroupCreate(bounded, tenant, request, maximumMembers, admit)
 }
