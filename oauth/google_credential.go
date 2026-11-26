@@ -63,6 +63,10 @@ func (GoogleCredentialNonce) MarshalText() ([]byte, error) { return nil, failure
 // accounts, validates hosted-domain/email policy or grants local signin/session
 // authority. A successful ProviderIdentity is only verified provider evidence.
 func (p *OIDCProvider) VerifyGoogleCredential(ctx context.Context, credential GoogleCredential, nonce GoogleCredentialNonce) (ProviderIdentity, error) {
+	return p.verifyGoogleCredential(ctx, credential, nonce, nil)
+}
+
+func (p *OIDCProvider) verifyGoogleCredential(ctx context.Context, credential GoogleCredential, nonce GoogleCredentialNonce, domain *GoogleHostedDomain) (ProviderIdentity, error) {
 	if ctx == nil || !p.ready() || !p.googleAccounts || len(credential.IDToken) == 0 || len(credential.IDToken) > p.config.MaxTokenBytes || !canonical32(nonce.OriginalNonce) {
 		return ProviderIdentity{}, failure(InvalidInput, ctx)
 	}
@@ -100,6 +104,9 @@ func (p *OIDCProvider) VerifyGoogleCredential(ctx context.Context, credential Go
 	// OIDC Core 3.1.3.6 binds a present hash to its original companion bytes.
 	// Direct credential mode has neither companion; null is present, not absent.
 	if !ok || len(metadata.AccessHash) > 0 || len(metadata.CodeHash) > 0 {
+		return ProviderIdentity{}, failure(InvalidProof, ctx)
+	}
+	if domain != nil && !domain.matchesValidatedToken(token) {
 		return ProviderIdentity{}, failure(InvalidProof, ctx)
 	}
 	verified, ok := p.projectValidatedIdentity(token, principal, metadata)

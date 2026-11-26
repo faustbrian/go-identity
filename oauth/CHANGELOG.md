@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an opt-in exact canonical Google hosted-domain constraint for direct
+  credentials. Require the signed `hd` string after existing strict Google
+  validation, reuse bounded selected-claim projection and reject missing,
+  malformed or mismatching claims without inferring authority from email.
+  Default direct verification, code flow and identity shape stay unchanged.
+
 - Add direct bounded Google ID-token credential verification on explicitly
   selected Google providers, reusing strict signature/issuer/client/nonce/time
   validation and opaque identity evidence without token exchange or custody.

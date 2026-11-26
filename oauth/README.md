@@ -134,8 +134,38 @@ This is not a complete One Tap callback. Its future browser owner must first
 validate cookie/body CSRF and authorized-origin bindings; the durable initiation
 owner must bind and atomically consume nonce/state, provider/client, tenant and
 mode/redirect policy. Generic OAuth owners retain account/link/session authority.
-No browser, replay, hosted-domain/email-policy, prompt/button/redirect or live
+No browser, replay, email-policy, prompt/button/redirect or live
 Google interoperability qualification is claimed here.
+
+### Opt-in signed Google hosted-domain restriction
+
+Create `NewGoogleHostedDomain("example.com")` from trusted startup configuration,
+then call `VerifyGoogleCredentialForHostedDomain(ctx, credential, originalNonce,
+domain)` instead of the unconstrained method. A zero constraint is invalid,
+not a permissive default. Keep the exact constraint bound to the initiating
+configuration; do not construct it from callback data or an email suffix.
+
+This finite profile accepts an already-canonical lowercase ASCII domain with
+at least two LDH labels, each 1..63 bytes, at most 253 bytes total and an ASCII
+letter in the final label. It does not trim, fold case, remove a root dot, convert
+Unicode/IDNA, resolve DNS, match subdomains, or accept wildcards/IP literals.
+Supplied ASCII A-labels are compared as supplied; no IDNA conformance is claimed.
+Invalid configuration returns redacted `InvalidInput` without credential work.
+
+After one genuine strict Google verification, the existing bounded selected
+scalar projection must find one string `hd` matching that exact domain. Missing,
+null, wrong-kind, malformed and mismatching values return `InvalidProof` without
+provider evidence. The strict validator rejects duplicate decoded claim names,
+including escaped `hd` aliases. This constraint returns no hosted-domain, email
+or raw-claims observation and does not add those values to the returned identity.
+
+Google's [server verification guidance](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
+requires checking signed `hd` for restricted hosted-domain access; an email
+suffix is insufficient. Its [OpenID Connect contract](https://developers.google.com/identity/openid-connect/openid-connect)
+also distinguishes the signed claim from the browser's untrusted `hd` hint.
+This constraint neither infers email verification nor grants account, tenant,
+organization, link or local session authority. Existing unconstrained direct
+verification, code exchange and browser behavior are unchanged.
 
 ```go
 result, err := provider.Exchange(ctx, originalCallback, decryptedVerifier, boundNonce)
