@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in managed-bearer User Get at the canonical single-resource route,
+  retaining the native bounded projection and exact ETag after current native
+  authority and one shared atomic protocol admission. No implicit method,
+  conditional-read, write, collection, search or discovery variant is selected.
+
 - Add opt-in managed-bearer User List at the exact SCIM collection route.
   Preserve bounded RFC query scalars for the native snapshot owner and charge
   the existing shared atomic protocol quota only after current native authority.

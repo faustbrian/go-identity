@@ -1,5 +1,39 @@
 # SCIM HTTP
 
+## Managed bearer User Get
+
+`NewManagedUsersGetFeature` selects only canonical
+`GET /scim/v2/Users/{resource_id}`. Importing this package or omitting the
+feature exposes no route. Supply the same public managed native owner, effective
+limits, HTTPS host policy and shared atomic protocol quota as User List:
+
+```go
+feature, err := scimhttp.NewManagedUsersGetFeature(scimhttp.ManagedUsersGetConfig{
+    Network: network, Executor: nativeManagedConnections, Limits: nativeLimits,
+    Rate: sharedProtocolRate, MaximumDuration: 5 * time.Second,
+})
+```
+
+The canonical router supplies the real `resource_id` path value: one unescaped,
+case-sensitive resource segment, never a query-selected ID, alias or broad
+prefix. Only `attributes` and `excludedAttributes` query scalars are accepted;
+each decodes once under the transport limits. Native schema/projection rules,
+current bearer/connection/organization/policy authority and the final disclosure
+fence remain native-owned. One shared atomic `rate.protocol` attempt occurs
+after native authorization and before the resource read. Missing, denied,
+repeated or ambiguous admission cannot disclose a resource or version.
+
+Success preserves the complete bounded native `application/scim+json` resource
+and exact strong `ETag`; the version can be used unchanged by a later supported
+mutation. The native document retains its own `meta.location`; GET does not
+add a redundant `Location` header. Errors disclose no partial resource or ETag.
+No-store/nosniff applies throughout. Send exactly one explicit issued SCIM
+bearer; cookies never supply fallback authority. Bodies, trailers, content
+encoding, idempotency keys, conditional reads, ranges and `If-Match` are not
+supported by this leaf. It does not retry requests or select a collection read,
+write, search, Groups or discovery. Combine disjoint operations under the
+canonical `scim` feature ID as below; retain server raw-IO/write deadlines.
+
 ## Managed bearer User List
 
 `NewManagedUsersListFeature` selects exactly `GET /scim/v2/Users` using an
