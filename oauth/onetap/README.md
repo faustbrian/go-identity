@@ -42,6 +42,14 @@ callback. Popup-button selection does not select redirect mode or a `login_uri`.
 There is no durable start operation, credential release or browser execution
 here, and the existing credential callback API remains unchanged.
 
+Use `NewBrowserStartRequest` to hand the native owner one bounded, immutable
+original. Supply the tenant, exact canonical HTTPS origin, canonical peer IP
+and bounded device from trusted transport, the opaque client retry key, the
+selected prompt or button, and a session Remember policy resolved exactly once.
+Do not decode this type directly from HTTP. Validation makes no authorization
+or risk decision and releases no credential; the provider, actor, login flow,
+nonce and cookie belong to native execution.
+
 ### Browser deployment prerequisites, not interoperability proof
 
 Load Google's client from `https://accounts.google.com/gsi/client`; do not

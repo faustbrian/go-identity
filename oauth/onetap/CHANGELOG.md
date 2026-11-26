@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an immutable, redacted browser-start request that retains the exact
+  bounded transport context, retry key, prompt/button and resolved Remember
+  policy for native execution without selecting provider or flow authority.
 - Add immutable constructor-validated prompt or popup-button options with an
   explicit exclusive start choice and detached typed non-secret projection.
   Preserve closed GIS values, explicit cancellation and bounded optional width.
