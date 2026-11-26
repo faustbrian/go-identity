@@ -377,6 +377,16 @@ provider, flow and cookie commitment without carrying the raw cookie.
 transaction's recovery participant. The live flow may already be retired.
 These boundaries do not issue a browser response or create a session.
 
+An explicitly selected `PreAuthProviderRedirect` record uses that same keyed
+start, canonical bytea storage and five-minute lifetime. Its exact original
+same-origin HTTPS endpoint remains in the record and start commitment.
+`ReadProviderPreAuth`, `RequireProviderPreAuth`, `ReserveProviderPreAuth` and
+`FinalizeProviderPreAuth` must receive the same selected mode and provider.
+They do not substitute a popup or another endpoint; ordinary reads remain
+excluded. Existing callback-only issuer/executor constructors do not select
+redirects. No additional schema, backfill or recovery authority is required;
+the original transaction owns browser consumption and its protected effects.
+
 ## Explicit sessionless recovery pre-authentication
 
 `PreAuthIssueExecutorConfig.Purpose` must match the core issuer's explicit

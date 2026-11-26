@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain an explicitly selected One Tap redirect's exact endpoint and mode in
+  canonical browser storage, keyed start commitments and same-transaction
+  consumption. Keep the original five-minute lifetime and ordinary/popup cuts,
+  with no new schema or state authority.
+
 - Stage a new existing-account One Tap session in the original browser and
   capability consumption transaction. Fence current linked account, authority
   and factor generations. Retain only historical issuance evidence on replay.

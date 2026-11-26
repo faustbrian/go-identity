@@ -26,11 +26,11 @@ func ReadPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Conf
 }
 
 // ReadProviderPreAuth loads the exact original bytes for the trusted selected
-// One Tap callback provider from primary custody. Wrong profiles deny without
-// returning a flow. This is not cookie possession, a live state check, or
+// One Tap browser provider and mode from primary custody. Wrong profiles deny
+// without returning a flow. This is not cookie possession, a live state check, or
 // permission to consume the record; no original authority is renewed.
 func ReadProviderPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, tenant identity.TenantID, id identity.PreAuthTransactionID, selected session.PreAuthProviderBinding) (session.PreAuthTransaction, error) {
-	if selected.Mode != session.PreAuthProviderCallback {
+	if selected.Mode != session.PreAuthProviderCallback && selected.Mode != session.PreAuthProviderRedirect {
 		return session.PreAuthTransaction{}, identity.InvalidInputError{Field: "session_preauth_provider"}
 	}
 	return readSelectedPreAuth(ctx, q, c, tenant, id, selected)

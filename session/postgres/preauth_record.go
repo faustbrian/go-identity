@@ -110,7 +110,8 @@ func decodePreAuth(payload []byte) (session.PreAuthTransaction, error) {
 	var selected session.PreAuthProviderBinding
 	switch {
 	case stored.Schema == 1 && stored.Provider == nil:
-	case stored.Schema == 2 && stored.Provider != nil && stored.Provider.Mode == session.PreAuthProviderCallback:
+	case stored.Schema == 2 && stored.Provider != nil &&
+		(stored.Provider.Mode == session.PreAuthProviderCallback || stored.Provider.Mode == session.PreAuthProviderRedirect):
 		selected = session.PreAuthProviderBinding{ProviderID: stored.Provider.ID, ClientID: stored.Provider.ClientID,
 			ProviderVersion: stored.Provider.Version, Mode: stored.Provider.Mode}
 	default:

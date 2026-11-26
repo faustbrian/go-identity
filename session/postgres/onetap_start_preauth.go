@@ -19,7 +19,7 @@ const oneTapStartPreAuthField = "preauth.commitment"
 // owner supplies this field on its prepared command, never browser input.
 func OneTapStartPreAuthField(record session.PreAuthTransaction) (identity.FeatureField, error) {
 	bound, err := record.ProviderBindings()
-	if err != nil || !oneTapPreAuthProvider(bound.Provider) || !validOneTapStartRecord(bound.Transaction) {
+	if err != nil || !oneTapPreAuthProvider(bound.Provider) || !validOneTapStartRecord(bound.Transaction, bound.Provider.Mode) {
 		return identity.FeatureField{}, session.ErrInvalidPreAuthTransaction
 	}
 	digest, err := preAuthIssueRecordDigest(record)
@@ -64,10 +64,14 @@ func isOneTapStartPreAuthScope(b identity.CommandBinding, feature kernel.Feature
 		lifecycle == (kernel.LifecyclePlan{EventType: "session.preauth-issued.v1", AfterVersion: 1})
 }
 
-func validOneTapStartRecord(p session.PreAuthTransactionSpec) bool {
+func validOneTapStartRecord(p session.PreAuthTransactionSpec, mode session.PreAuthProviderMode) bool {
 	i := p.Binding.Intent
+	// ProviderBindings retains the core's validated same-origin redirect target.
+	// Keep the installed popup cut separate; a mode switch cannot drop its URL.
+	callbackMatchesMode := mode == session.PreAuthProviderCallback && i.CallbackURL == "" ||
+		mode == session.PreAuthProviderRedirect && i.CallbackURL != ""
 	return p.Version == 1 && i.Action == kernel.OneTapStartOperation().OperationID && i.Purpose == session.PreAuthSessionIssuance &&
-		i.CallbackURL == "" && strings.HasPrefix(i.Origin, "https://") && p.Binding.ExpiresAt.Sub(p.Binding.IssuedAt) == 5*time.Minute
+		callbackMatchesMode && strings.HasPrefix(i.Origin, "https://") && p.Binding.ExpiresAt.Sub(p.Binding.IssuedAt) == 5*time.Minute
 }
 
 func validateOneTapStartPreAuth(b identity.CommandBinding, command identity.Command, record session.PreAuthTransaction, selected session.PreAuthProviderBinding) error {

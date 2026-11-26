@@ -8,7 +8,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// RequireProviderPreAuth locks the exact issued Google One Tap callback flow
+// RequireProviderPreAuth locks the exact issued Google One Tap browser flow
 // against the selected provider, client, mode and original database deadline.
 // This is current-row admission, not proof of browser possession, verified
 // Google identity or one-use capability admission. Use the original owner's
@@ -45,7 +45,8 @@ func transitionOneTapPreAuth[R SessionRows](ctx context.Context, q PreAuthWriter
 }
 
 func oneTapPreAuthProvider(selected session.PreAuthProviderBinding) bool {
-	return selected.Mode == session.PreAuthProviderCallback && selected.ProviderID == "google"
+	return selected.ProviderID == "google" &&
+		(selected.Mode == session.PreAuthProviderCallback || selected.Mode == session.PreAuthProviderRedirect)
 }
 
 func validOneTapPreAuthUse(use PreAuthUse, record session.PreAuthTransactionSpec) bool {
