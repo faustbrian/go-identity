@@ -1,4 +1,69 @@
-# SCIM Bulk HTTP
+# SCIM HTTP
+
+## Managed administrative reads
+
+`NewManagedReadFeature` independently selects exactly
+`GET /v1/scim/connection-get?connectionID=<canonical ID>` when `Getter` is
+supplied and `GET /v1/scim/connection-list?organizationID=<canonical ID>&limit=1`
+when `Lister` is supplied. Omission exposes no administrative route or metadata.
+The feature retains canonical owner ID `scim`. To coexist with `NewBulkFeature`,
+explicitly combine both factories' disjoint operations into one `scim` feature:
+
+```go
+combined, err := identityhttp.NewFeature(identityhttp.FeatureConfig{
+    ID: "scim",
+    Operations: append(bulkFeature.Operations(), managedFeature.Operations()...),
+})
+```
+
+Install only `combined` in `FeatureServices`; do not select both original
+features separately, which would correctly reject duplicate owner IDs.
+
+Supply the public `scimpostgres.ManagedConnectionService` for either or both
+ports, configured with the actual session and organization authorization owners
+and its installed `ManagedConnectionsMigrationSource`. No write configuration
+is needed. The native owner retains current administrator, `org:scim-read`,
+primary-read, cursor scope and final authority checks. Supply that same actual
+`SessionService` separately for transport authentication and rate subjects; no
+caller-submitted actor, ambient cookie or anonymous fallback supplies authority.
+
+```go
+feature, err := scimhttp.NewManagedReadFeature(scimhttp.ManagedReadConfig{
+    Network: network,
+    Sessions: sessions,
+    Getter: nativeManagedConnections,
+    Lister: nativeManagedConnections,
+    SafeRate: sharedSafeRate,
+    Now: time.Now,
+    MaximumDuration: 5 * time.Second,
+})
+```
+
+Use the same network configuration for the HTTPS router, and the same shared
+`SafeRateLimiter` as other safe endpoints. Select `WithMiddleware` when real
+decode/authenticate/admit/handle phases are needed. The transport admits trusted
+IP and the currently authenticated tenant-scoped subject under canonical
+`rate.safe`, including its existing bounded, recorded emergency policy only
+when the shared rate backend is unavailable. Session authority failure denies
+before rate admission; it does not downgrade to anonymous admission.
+
+Send exactly one explicit `Authorization: Bearer <native session>` header.
+IDs are exact canonical nonzero 22-character values. List requires canonical
+decimal `limit=1..200`, with optional native opaque `cursor` on subsequent pages.
+Cursors remain bound to the native tenant and organization; pages are live
+primary reads ordered by connection ID, not retained snapshots. Bodies,
+trailers, unknown or duplicate query fields and all idempotency-key channels
+are forbidden. No Origin or CSRF token is required for this bearer-only read.
+
+Get returns a safe connection projection; List returns `connections` (always
+an array) and optional `nextCursor`. Each projection contains `tenantID`,
+`organizationID`, `providerID`, `connectionID`, `mappings` (`source`, `target`,
+`writable`), `deprovisionPolicy` and `version`. No bearer, digest or reusable
+authority is serialized. Failures disclose no partial page. All responses are
+no-store/nosniff JSON; owner failures are redacted. This selection does not
+enable ConnectionCreate, provisioning writes, credential issue or Bulk.
+
+## Bulk protocol
 
 `scimhttp.NewBulkFeature` selects exactly `POST /scim/v2/Bulk` and
 `GET /scim/v2/ServiceProviderConfig`. Nothing is installed by importing the
