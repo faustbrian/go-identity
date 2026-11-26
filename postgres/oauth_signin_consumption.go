@@ -21,6 +21,17 @@ type OAuthSigninContributor interface {
 	ValidateOAuthSigninConsumption(identity.Command, CapabilityPlan) error
 }
 
+// OneTapCallbackContributor owns native Google One Tap completion. It binds the
+// exact original one-use browser grant to the selected anonymous flow before
+// preparation. The native owner performs credential verification outside Work
+// and fences its verified account, original browser, risk and session effects
+// in the single admitted transaction. It does not own capability replay.
+type OneTapCallbackContributor interface {
+	FeatureAdmissionPreparationContributor
+	FeatureCommitContributor
+	ValidateOneTapCallbackConsumption(identity.Command, CapabilityPlan) error
+}
+
 // SSOOIDCSigninContributor owns enterprise callback consumption and its
 // final native effects. Its validation binds the original browser and one-use
 // enterprise grant to the exact start transaction, independently of social
@@ -113,6 +124,10 @@ func validateProviderSigninConsumption(owner FeatureExecutionContributor, comman
 		if native, ok := owner.(OAuthSigninContributor); ok {
 			return native.ValidateOAuthSigninConsumption(command, *plan.Capability)
 		}
+	case OneTapCallbackOperation():
+		if native, ok := owner.(OneTapCallbackContributor); ok && validOneTapCallbackBinding(feature.Binding) {
+			return native.ValidateOneTapCallbackConsumption(command, *plan.Capability)
+		}
 	case ssoOIDCSigninOperation():
 		if native, ok := owner.(SSOOIDCSigninContributor); ok && validSSOOIDCSigninBinding(feature.Binding) {
 			return native.ValidateSSOOIDCSigninConsumption(command, *plan.Capability)
@@ -137,6 +152,14 @@ func validateProviderSigninConsumption(owner FeatureExecutionContributor, comman
 // validity. Session/browser effects and capability finalization may still fail.
 func (w Work) OAuthSigninConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
 	return w.providerSigninConsumption(owner, oauthSigninAccountOperation())
+}
+
+// OneTapCallbackConsumption exposes only the exact provisionally consumed
+// browser grant during the registered native callback's synchronous Apply.
+// It cannot be used from a generic callback, final check or recovery, and
+// grants no browser, current account or session authority.
+func (w Work) OneTapCallbackConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
+	return w.providerSigninConsumption(owner, OneTapCallbackOperation())
 }
 
 // SSOOIDCSigninConsumption exposes the exact enterprise state already consumed

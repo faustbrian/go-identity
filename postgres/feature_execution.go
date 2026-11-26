@@ -443,6 +443,10 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.Capability != nil {
 		if providerSigninConsumptionOperation(p.Feature.Operation) {
 			switch p.Feature.Operation {
+			case OneTapCallbackOperation():
+				if _, ok := feature.contributor.(OneTapCallbackContributor); !ok {
+					return nil, invalidPlan()
+				}
 			case SSOOIDCExplicitLinkCallbackOperation():
 				if _, ok := feature.contributor.(SSOOIDCExplicitLinkContributor); !ok {
 					return nil, invalidPlan()

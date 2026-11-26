@@ -28,7 +28,7 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 		return decodeSSOSAMLLogoutRelaySettlementPlan(binding, fingerprint, encoded)
 	}
 	if !proofBase {
-		if op, selected := providerSigninBindingOperation(binding); selected && (ssoEnterpriseConsumptionOperation(op) || len(encoded) > 0 && encoded[0] == 0xa5) {
+		if op, selected := providerSigninBindingOperation(binding); selected && (op == OneTapCallbackOperation() || ssoEnterpriseConsumptionOperation(op) || len(encoded) > 0 && encoded[0] == 0xa5) {
 			return decodeProviderSigninConsumptionPlan(binding, fingerprint, encoded)
 		}
 	}

@@ -23,6 +23,24 @@ func OneTapStartOperation() identity.FeatureOperation {
 	}
 }
 
+// OneTapCallbackOperation selects consumption of the original Google One Tap
+// flow in the native callback. It grants no browser, proof or session authority.
+func OneTapCallbackOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{
+		Owner: "identity/oauth/onetap", OperationID: oneTapCallbackPurpose,
+		SchemaID: "oauth-onetap-callback-v1", SchemaVersion: 1,
+		RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow,
+	}
+}
+
+func validOneTapCallbackBinding(b identity.CommandBinding) bool {
+	return b.ActorKind == authorization.SubjectServiceAccount && b.RecordID == b.AnonymousFlowID && b.ValidateFor(OneTapCallbackOperation()) == nil
+}
+
+func oneTapCallbackDescriptor() ContributorDescriptor {
+	return ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.onetap-completion", Version: 1}
+}
+
 func oneTapStartClaim(q claimRequest) bool {
 	return q.feature != nil && q.purpose == oneTapStartPurpose && *q.feature == OneTapStartOperation()
 }

@@ -105,6 +105,9 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	if op.OperationID == oneTapStartPurpose {
 		return op == OneTapStartOperation() && d == oneTapStartDescriptor()
 	}
+	if op.OperationID == oneTapCallbackPurpose {
+		return op == OneTapCallbackOperation() && d == oneTapCallbackDescriptor()
+	}
 	if op.OperationID == scimBulkInvalidChildID {
 		return op == SCIMBulkInvalidChildOperation() && d == scimUserCreationDescriptor()
 	}

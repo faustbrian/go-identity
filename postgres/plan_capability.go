@@ -55,6 +55,10 @@ func validateCapabilityPlan(binding identity.CommandBinding, plan *CapabilityPla
 		if !validOAuthCallbackDenialBinding(binding) && binding.ValidateFor(oauthSigninAccountOperation()) != nil {
 			return invalidPlan()
 		}
+	case oneTapCallbackPurpose:
+		if !validOneTapCallbackBinding(binding) {
+			return invalidPlan()
+		}
 	case ssoOIDCSigninPurpose:
 		if !validSSOOIDCSigninBinding(binding) && !validSSOOIDCExplicitLinkBinding(binding) {
 			return invalidPlan()

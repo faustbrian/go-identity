@@ -29,6 +29,13 @@ func providerSigninProfile(op identity.FeatureOperation) (providerSigninConsumpt
 			SubjectType: "authentication_attempt", AuditEvent: "identity.oauth.handle_callback", AuditRetention: "protected", WireTag: "identity-oauth-signin-consumption-v1",
 			Lifecycle: LifecyclePlan{EventType: "session.created.v1"},
 		}, true
+	case OneTapCallbackOperation():
+		return providerSigninConsumptionProfile{
+			Contrib: oneTapCallbackDescriptor(), SubjectType: "authentication_attempt",
+			AuditEvent: "identity.oauth.verify_one_tap", AuditRetention: "protected",
+			WireTag: "identity-oauth-onetap-callback-consumption-v1", ExternalRiskOnly: true,
+			Lifecycle: LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2},
+		}, true
 	case ssoOIDCSigninOperation():
 		return providerSigninConsumptionProfile{
 			Contrib:     ssoOIDCSigninDescriptor(),
@@ -70,7 +77,7 @@ func providerSigninConsumptionOperation(op identity.FeatureOperation) bool {
 }
 
 func providerSigninBindingOperation(b identity.CommandBinding) (identity.FeatureOperation, bool) {
-	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), ssoOIDCSigninOperation(), SSOOAuth2SigninOperation(), SSOSAMLSigninOperation(), SSOSAMLIDPConfirmationOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
+	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), OneTapCallbackOperation(), ssoOIDCSigninOperation(), SSOOAuth2SigninOperation(), SSOSAMLSigninOperation(), SSOSAMLIDPConfirmationOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
 		if b.OperationID == op.OperationID && b.SchemaID == op.SchemaID {
 			return op, true
 		}
@@ -138,6 +145,9 @@ func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint 
 }
 
 func validProviderConsumptionBinding(b identity.CommandBinding, operation identity.FeatureOperation) bool {
+	if operation == OneTapCallbackOperation() {
+		return validOneTapCallbackBinding(b)
+	}
 	if operation == SSOOIDCExplicitLinkCallbackOperation() {
 		return validSSOOIDCExplicitLinkBinding(b)
 	}

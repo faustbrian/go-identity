@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select the distinct Google One Tap callback consumption plan inside the
+  existing provider preparation and capability work. Scope its original flow,
+  counted admission, single-use proof, One Tap audit and session lifecycle;
+  generic OAuth and enterprise profiles cannot borrow that grant.
+
 - Select an admission-gated Google One Tap start plan that may stage only the
   original anonymous flow's one-use callback grant through the existing owner.
   Ordinary reservation is denied; terminal outcomes erase temporary ciphertext.
