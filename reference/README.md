@@ -620,6 +620,24 @@ Cookies cannot authorize these calls. Either route can coexist with configured
 `SCIMBulk`. Clear the read selection to remove its routes and OpenAPI entries;
 retain installed migration history.
 
+## Optional managed SCIM User listing
+
+Select `StoreConfiguration.HTTPManagedSCIMUsersList` for `GET /scim/v2/Users`.
+Send the managed connection's issued bearer, not a session cookie or a
+configured Bulk bearer. The endpoint supports the SCIM filter, sort,
+pagination and attribute-selection parameters accepted by its native owner.
+It does not enable User Get, provisioning writes, discovery, or connection
+administration. Omitting the selection removes the route and OpenAPI entry.
+
+When managed HTTP Create is enabled, leave `Native` nil to reuse its exact
+managed credential owner. Otherwise supply the matching `Native` deployment
+profile; an existing native owner can issue connections independently of HTTP.
+Reference applies the existing managed connection and atomic quota histories.
+When Bulk is also enabled, leave the List rate settings empty to share Bulk's
+protocol quota; otherwise configure a stable rate namespace and key across
+instances. Native authorization and quota admission must succeed before any
+Users are returned.
+
 ## Optional directory administration
 
 Select `StoreConfiguration.DirectorySync` with the configured tenant,

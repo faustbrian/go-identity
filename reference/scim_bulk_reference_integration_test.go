@@ -244,8 +244,14 @@ func proveReferenceSCIMBulkHTTPS(t *testing.T, ctx context.Context, f liveStores
 	if !ok || member["type"] != "User" || member["value"] != resourceIDs[1] {
 		t.Fatal("forward Group reference did not resolve to its original committed User")
 	}
-	for _, path := range []string{"Users", "Groups", "Schemas", "ResourceTypes"} {
+	for _, path := range []string{"Groups", "Schemas", "ResourceTypes"} {
 		call(http.MethodGet, "/scim/v2/"+path, "", bearer, "", "", 404)
 	}
-	call(http.MethodPost, "/scim/v2/Users", `{"userName":"unselected"}`, bearer, "", "application/scim+json", 404)
+	if c.HTTPManagedSCIMUsersList != nil {
+		assertError(call(http.MethodGet, "/scim/v2/Users", "", bearer, "", "", 401), 401, "")
+		call(http.MethodPost, "/scim/v2/Users", `{"userName":"unselected"}`, bearer, "", "application/scim+json", 405)
+	} else {
+		call(http.MethodGet, "/scim/v2/Users", "", bearer, "", "", 404)
+		call(http.MethodPost, "/scim/v2/Users", `{"userName":"unselected"}`, bearer, "", "application/scim+json", 404)
+	}
 }

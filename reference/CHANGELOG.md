@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into managed-bearer SCIM User listing over HTTPS without enabling
+  writes or administration. Reuse the existing PostgreSQL managed credential
+  owner and share the protocol quota when Bulk is selected.
+
 - Opt into bearer-only managed SCIM connection creation with native keyed
   replay, reveal-once custody, and shared administrative rate admission.
 

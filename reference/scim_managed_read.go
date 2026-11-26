@@ -88,7 +88,7 @@ func (s *Server) scimFeature(network identityhttp.NetworkConfig) (*identityhttp.
 	}
 	f := s.state.features
 	selected := f.httpManagedSCIMRead
-	if selected == nil && f.httpManagedSCIMCreate == nil {
+	if selected == nil && f.httpManagedSCIMCreate == nil && f.httpManagedSCIMUsersList == nil {
 		return bulk, nil
 	}
 	var ops []identityhttp.OperationDescriptor
@@ -122,6 +122,13 @@ func (s *Server) scimFeature(network identityhttp.NetworkConfig) (*identityhttp.
 			return nil, identity.InvalidInputError{Field: "reference_http_managed_scim_create"}
 		}
 		appendManaged(create)
+	}
+	if f.httpManagedSCIMUsersList != nil {
+		users, err := s.managedSCIMUsersListFeature(network)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMUsersListField}
+		}
+		ops = append(ops, users.Operations()...)
 	}
 	feature, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "scim", Operations: ops})
 	return &feature, err

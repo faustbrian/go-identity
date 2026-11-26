@@ -151,6 +151,11 @@ func proveReferenceSCIMManagedCreateHTTPS(t *testing.T, ctx context.Context, f l
 			t.Fatal("managed read did not observe the committed record", err)
 		}
 	}
+	if c.HTTPManagedSCIMUsersList != nil {
+		n := referenceManagedSCIMNativeConfiguration(c.HTTPManagedSCIMCreate)
+		native := referenceManagedUsersNative(t, c, source, n)
+		proveReferenceSCIMUsersListTLS(t, ctx, client, base, native, first.Bearer, false)
+	}
 	policy.denyWrite.Store(true)
 	defer policy.denyWrite.Store(false)
 	call(http.MethodPost, path, key, encoded, true, 403)

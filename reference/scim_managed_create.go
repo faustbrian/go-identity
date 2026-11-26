@@ -13,7 +13,6 @@ import (
 	scimhttp "github.com/faustbrian/go-identity/http/scim"
 	scim "github.com/faustbrian/go-scim"
 	scimpg "github.com/faustbrian/go-scim/postgres"
-	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // HTTPManagedSCIMCreateConfiguration opts into native managed connection
@@ -82,19 +81,12 @@ func (s *storeState) composeManagedSCIMCreate(c StoreConfiguration, d ReferenceD
 	}
 	n := *c.HTTPManagedSCIMCreate
 	invalid := identity.InvalidInputError{Field: "reference_http_managed_scim_create"}
-	keys, ok := d.EnvelopeKeys.(*keyring.Provider)
-	if !ok || keys == nil || sessions == nil || !sessions.reader.Configured() || org == nil || s.httpRate == nil || nilServerDependency(n.Authorization) {
+	if s.httpRate == nil {
 		return nil, invalid
 	}
-	execution := c.Session.Native.Execution
-	if n.Provisioning.GlobalAuthorityID != c.OTP.Store.GlobalAuthorityID || n.Provisioning.AuthorityNamespace != execution.Profile.PolicyNamespace {
-		return nil, invalid
-	}
-	native, err := scimpg.NewManagedConnectionService(d.PostgreSQL, scimpg.ManagedConnectionServiceConfig{
-		Sessions: sessions.reader, Authorization: n.Authorization, PolicyVersion: n.PolicyVersion,
-		MaximumDuration: n.MaximumDuration, CursorKey: n.CursorKey, Limits: n.Provisioning.Limits,
-		Writes: &scimpg.ManagedConnectionWriteConfig{SessionStorage: execution.Repository, Provisioning: n.Provisioning,
-			Keyring: keys, CredentialKey: n.CredentialKey, CredentialLifetime: n.CredentialLifetime},
+	native, err := composeManagedSCIMConnection(c, d, sessions, org, ManagedSCIMConnectionConfiguration{
+		Authorization: n.Authorization, PolicyVersion: n.PolicyVersion, MaximumDuration: n.MaximumDuration,
+		CursorKey: n.CursorKey, Provisioning: n.Provisioning, CredentialKey: n.CredentialKey, CredentialLifetime: n.CredentialLifetime,
 	})
 	if err != nil {
 		return nil, invalid
