@@ -37,6 +37,7 @@ type SCIMBulkSkipAuditContributor interface {
 }
 
 type scimBulkSkipPhase struct {
+	plan    *admittedKernelPlan
 	written bool
 	owner   SCIMBulkSkipAuditContributor
 	records []SCIMBulkSkipAudit
@@ -95,7 +96,10 @@ func (w Work) StagedSCIMBulkSkipAudits(owner SCIMBulkSkipAuditContributor) ([]SC
 }
 
 func persistSCIMBulkSkips(ctx context.Context, w Work, phase *scimBulkSkipPhase, children []SCIMBulkSkippedChild) error {
-	plan := w.state.execution.reservation.plan
+	plan := phase.plan
+	if plan == nil || len(plan.audits) != 1 {
+		return invalidAudit()
+	}
 	trigger := plan.audits[0]
 	for _, entry := range plan.contributors {
 		if entry.descriptor.Owner == "audit/postgres" {

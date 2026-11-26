@@ -400,6 +400,18 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 		if journal.result != nil {
 			result = *journal.result
 		}
+		if journal.disposition == journalTerminal {
+			changed, err := c.reconcileSCIMBulkChildFailure(bounded, tx, admitted, result, journal.failureCode)
+			if err != nil {
+				return c.failedReservation(tx, binding, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), err)
+			}
+			if changed {
+				if err := tx.Commit(bounded); err != nil {
+					return Reservation{}, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), readFailure(bounded, err)
+				}
+				return Reservation{}, result, featureFailureError(journal.failureCode)
+			}
+		}
 		return c.failedReservation(tx, binding, result, featureFailureError(journal.failureCode))
 	}
 	if authentication != nil {

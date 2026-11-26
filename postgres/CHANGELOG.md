@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Allow exact historical Group Bulk denials to settle a missing native
+  checkpoint with a new protected reconciliation audit. The original
+  command, terminal receipt, audit binding, and execution lease are unchanged.
+
 - Allow the native SCIM Bulk failure callback to append protected cutoff
   audits for the exact skipped children before the failure commits. Each skip
   uses its own command binding without altering the trigger's frozen audit plan.

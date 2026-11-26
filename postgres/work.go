@@ -10,15 +10,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Work is a generation-bound transaction capability for trusted enlisted
+// Work is a transaction capability for trusted enlisted
 // adapters, never an application SQL gateway. Only the coordinator may create
 // it; no public constructor or transaction/connection/closure API exists.
 // Copies share lifetime and failure state. Methods and returned rows must be
 // used serially and must not be retained beyond the contributor invocation.
 // Any SQL, scan, budget or cancellation failure poisons subsequent execution.
 // Zero is invalid. Coordinator.Begin issues Work for creation and field-update
-// mutation; other domain profiles remain under development. Work alone is not
-// complete command authority.
+// mutation. The closed SCIM terminal reconciliation callback has no execution
+// generation or pending lease. Work alone is not complete command authority.
 type Work struct{ state *workState }
 
 type workState struct {
@@ -111,6 +111,7 @@ type workState struct {
 	privacyReceipt            *identity.PrivacyExportRequestReceipt
 	privacyAdmission          *privacyAdmissionProgress
 	scimBulkSkip              *scimBulkSkipPhase
+	scimBulkReconciliation    *scimBulkReconciliationAudit
 }
 
 // newWork is private: only the sole coordinator may call it after verifying

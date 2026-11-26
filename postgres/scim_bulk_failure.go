@@ -36,7 +36,7 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 	if !ok {
 		return nil // A previously compiled native adapter retains its original behavior.
 	}
-	w.state.scimBulkSkip = &scimBulkSkipPhase{}
+	w.state.scimBulkSkip = &scimBulkSkipPhase{plan: plan}
 	w.state.featureInvocation = owner
 	defer func() {
 		w.state.featureInvocation = nil
