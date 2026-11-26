@@ -1,6 +1,6 @@
 // Package oauth owns bounded relying-party OAuth protocol, not identity, state
-// reservation, linking or session authority. Its selected client is HTTPS OIDC
-// authorization-code, query response mode and S256 PKCE only.
+// reservation, linking or session authority. Its selected OIDC client supports
+// HTTPS authorization-code/query/S256 PKCE and explicit Google ID-token input.
 package oauth
 
 import (

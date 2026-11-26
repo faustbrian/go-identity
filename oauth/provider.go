@@ -529,11 +529,7 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	// This private getter projection consumes only successful upstream validation.
 	// V1 and V2 retain distinct principal/proof types; neither is manufactured or
 	// converted into the other's authentication authority.
-	var principal interface {
-		Issuer() string
-		Subject() string
-		AuthenticatedAt() time.Time
-	}
+	var principal validatedOIDCPrincipal
 	var validateBinding func(string, string) error
 	if p.googleAccounts {
 		validator, createErr := googleoidc.NewGoogleAccountsWithKeySet(googleValidatorConfig(p.config, googleoidc.NonceValidatorFunc(nonceCheck)), p.config.KeySet)
@@ -571,11 +567,6 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	if !ok {
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
-	issuedAt, issuedOK := validatedNumericDate(metadata.IssuedAt)
-	expiresAt, expiresOK := validatedNumericDate(metadata.ExpiresAt)
-	if !issuedOK || !expiresOK {
-		return ExchangeResult{}, failure(InvalidProof, ctx)
-	}
 	var accessBinding, codeBinding string
 	if len(metadata.AccessHash) > 0 {
 		accessBinding = string(parsed.access)
@@ -591,18 +582,39 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 			return ExchangeResult{}, failure(InvalidProof, ctx)
 		}
 	}
-	identityTime := time.Time{}
-	hasTime := len(metadata.AuthenticationTime) > 0
-	if hasTime {
-		identityTime = principal.AuthenticatedAt()
-	}
-	claims, ok := projectValidatedOIDCClaims(parsed.id, p.claimNames)
+	verified, ok := p.projectValidatedIdentity(parsed.id, principal, metadata)
 	if !ok {
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
 	owner := &tokenOwner{access: bytes.Clone(parsed.access), refresh: bytes.Clone(parsed.refresh), id: bytes.Clone(parsed.id)}
 	tokens := TokenSet{owner: func() *tokenOwner { return owner }, receivedAt: receivedAt, expiresAt: receivedAt.Add(time.Duration(parsed.expires) * time.Second), requested: slices.Clone(p.config.Scopes), granted: slices.Clone(parsed.scopes), scopeReported: parsed.scopeReported}
-	return ExchangeResult{Identity: ProviderIdentity{provider: p.ID(), issuer: principal.Issuer(), subject: principal.Subject(), authenticatedAt: identityTime, hasAuthenticationTime: hasTime, idTokenIssuedAt: issuedAt, idTokenExpiresAt: expiresAt, oidcClaims: claims}, Tokens: tokens}, nil
+	return ExchangeResult{Identity: verified, Tokens: tokens}, nil
+}
+
+type validatedOIDCPrincipal interface {
+	Issuer() string
+	Subject() string
+	AuthenticatedAt() time.Time
+}
+
+// Both input modes project only after their selected strict validator and all
+// applicable companion bindings have succeeded on these exact original bytes.
+func (p *OIDCProvider) projectValidatedIdentity(token []byte, principal validatedOIDCPrincipal, metadata validatedTokenMetadata) (ProviderIdentity, bool) {
+	issuedAt, issuedOK := validatedNumericDate(metadata.IssuedAt)
+	expiresAt, expiresOK := validatedNumericDate(metadata.ExpiresAt)
+	if !issuedOK || !expiresOK {
+		return ProviderIdentity{}, false
+	}
+	identityTime := time.Time{}
+	hasTime := len(metadata.AuthenticationTime) > 0
+	if hasTime {
+		identityTime = principal.AuthenticatedAt()
+	}
+	claims, ok := projectValidatedOIDCClaims(token, p.claimNames)
+	if !ok {
+		return ProviderIdentity{}, false
+	}
+	return ProviderIdentity{provider: p.ID(), issuer: principal.Issuer(), subject: principal.Subject(), authenticatedAt: identityTime, hasAuthenticationTime: hasTime, idTokenIssuedAt: issuedAt, idTokenExpiresAt: expiresAt, oidcClaims: claims}, true
 }
 
 type validatedTokenMetadata struct {

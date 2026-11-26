@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add direct bounded Google ID-token credential verification on explicitly
+  selected Google providers, reusing strict signature/issuer/client/nonce/time
+  validation and opaque identity evidence without token exchange or custody.
+  Reject companion hashes when their original token/code is unavailable;
+  preserve authentication-time presence and signed evidence lifetime. Browser
+  CSRF/origin, one-use initiation and local account/session authority remain
+  separate; this does not complete One Tap.
+
 - Allow callers to request the exact scopes bound to a stored OAuth2 refresh
   token explicitly. Existing refresh calls still omit scope on the wire.
 

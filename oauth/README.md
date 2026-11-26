@@ -2,7 +2,9 @@
 
 `github.com/faustbrian/go-identity/oauth` implements one explicit HTTPS OIDC
 authorization-code client: query response mode, S256 PKCE, a required nonce,
-and configured ES256/RS256 signing keys. Go 1.27.0 or newer is required.
+and configured ES256/RS256 signing keys. The explicitly selected Google provider
+also verifies a borrowed Google ID-token credential without a code exchange.
+Go 1.27.0 or newer is required.
 
 This is a protocol boundary, **not a complete social signin or linking workflow**.
 Native authenticated transaction/state reservation, encrypted PKCE persistence,
@@ -98,6 +100,42 @@ discovery metadata. This finite configured-key profile is not a built-in catalog
 Google One Tap, automatic signup/email merge or live Google interoperability
 claim. The Google issuer policy is owned by the explicitly selected upstream
 validator, not an application-level JWT rewrite.
+
+### Direct Google credential verification
+
+`OIDCProvider.VerifyGoogleCredential` accepts `GoogleCredential{IDToken: bytes}`
+and `GoogleCredentialNonce{OriginalNonce: nonce}` only on an explicitly configured
+`NewGoogleAccountsProvider`. The credential bytes are borrowed synchronously:
+the caller owns and clears them, must not mutate them during the call, and must
+not log or persist them. The nonce must be the original canonical 32-byte nonce
+from the trusted initiating transaction, never a value taken from the credential
+or its callback. Neither typed input grants admission or transaction authority.
+
+The method reuses the pinned strict Google validator and returns only the same
+opaque `ProviderIdentity` as code exchange. Issuer forms, signature, audience,
+authorized party, subject, time and nonce remain checked. An absent `auth_time`
+remains absent, not replaced by `iat`; the original signed `exp` caps evidence.
+Any present `at_hash` or `c_hash`, including JSON null, fails because this input
+has no original access token or authorization code against which to verify it.
+The method never contacts a token endpoint, exchanges or returns access/refresh
+tokens, stores credentials, selects keys from callback data, or creates a local
+identity, link or session. It uses only the configured caller-owned key set.
+The existing Google constructor and its full configured-provider lifecycle remain
+required; this method does not add a second provider configuration path.
+
+Nil/zero/non-Google/closed providers, invalid borrowed input and a missing or
+noncanonical original nonce return `InvalidInput`. Invalid signed proof returns
+`InvalidProof`; cancellation or the bounded provider deadline returns
+`Unavailable`, preserving `errors.Is` for the context cause. Errors and input
+diagnostics do not disclose the credential or nonce. Verification does not consume
+the nonce or prevent a second verification of the same valid credential.
+
+This is not a complete One Tap callback. Its future browser owner must first
+validate cookie/body CSRF and authorized-origin bindings; the durable initiation
+owner must bind and atomically consume nonce/state, provider/client, tenant and
+mode/redirect policy. Generic OAuth owners retain account/link/session authority.
+No browser, replay, hosted-domain/email-policy, prompt/button/redirect or live
+Google interoperability qualification is claimed here.
 
 ```go
 result, err := provider.Exchange(ctx, originalCallback, decryptedVerifier, boundNonce)
