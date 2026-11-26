@@ -163,6 +163,9 @@ func TestRouterSCIMUserCreateRetainsOrdinaryStreamLimit(t *testing.T) {
 	policy.Network.Limits.MaximumBodyBytes = 1 << 20
 	create := scimUserOperation(t, "identity.scim.user-create", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			w.Header().Set("Set-Cookie", "fixture=discard")
+			w.Header().Set("Location", "/discard")
+			w.Header().Set("ETag", `"discard"`)
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -172,14 +175,28 @@ func TestRouterSCIMUserCreateRetainsOrdinaryStreamLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := corsRequest(http.MethodPost, scimUserCollection, "")
-	r.Body = io.NopCloser(strings.NewReader(strings.Repeat(" ", (1<<20)+1)))
-	r.ContentLength = -1
-	r.TransferEncoding = []string{"chunked"}
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("non-Bulk stream escaped the ordinary router limit: status %d", w.Code)
+	serve := func(size int) *httptest.ResponseRecorder {
+		t.Helper()
+		r := corsRequest(http.MethodPost, scimUserCollection, "")
+		r.Body = io.NopCloser(strings.NewReader(strings.Repeat(" ", size)))
+		r.ContentLength = -1
+		r.TransferEncoding = []string{"chunked"}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := serve(1 << 20); w.Code != http.StatusNoContent {
+		t.Fatalf("at the ordinary stream limit, got %d", w.Code)
+	}
+	w := serve((1 << 20) + 1)
+	const tooLarge = `{"schemas":["urn:ietf:params:scim:api:messages:2.0:Error"],"status":"413"}` + "\n"
+	if w.Code != http.StatusRequestEntityTooLarge || w.Header().Get("Content-Type") != "application/scim+json" || w.Body.String() != tooLarge {
+		t.Fatalf("oversized Create must return a SCIM 413, got %d %q %q", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	for _, name := range []string{"Set-Cookie", "Location", "ETag"} {
+		if w.Header().Get(name) != "" {
+			t.Fatalf("oversized Create returned a discarded %s", name)
+		}
 	}
 }
 

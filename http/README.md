@@ -505,7 +505,9 @@ Selected SCIM Bulk, ServiceProviderConfig, User List, User Create, and
 canonical User Get keep the common network and framing checks. Their feature
 owns SCIM representation errors; only Bulk receives the protocol stream
 ceiling. Encoded or unselected paths cannot inherit a SCIM envelope. Ordinary
-routes retain their existing bounds.
+routes retain their existing bounds. If a selected User Create stream exceeds
+its hard cap before commitment, the router discards uncommitted feature output
+and reports SCIM 413. An already committed response is aborted.
 
 Phone verification recovery's native definitions are owned by
 `phone/verification_contracts.json`. The embedded catalog retains all earlier

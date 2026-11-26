@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Return SCIM 413 for chunked User Create overflow at the same hard stream cap.
+  Discard uncommitted feature output and leave ordinary routes unchanged.
+
 - Let the selected canonical SCIM User Create handler return its protocol
   representation errors without extending the router's ordinary body limit.
 

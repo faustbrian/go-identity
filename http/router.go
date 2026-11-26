@@ -262,6 +262,13 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	canceledFailure := false
 	canceledBytes := 0
 	canceledOverflow := false
+	denyBodyOverflow := func() {
+		if selectedSCIM && ctx.Err() == nil && owned.Method == http.MethodPost && owned.URL.Path == "/scim/v2/Users" {
+			routerSCIMCreateTooLarge(w)
+			return
+		}
+		routerDeny(w, r, http.StatusBadRequest, "invalid_request")
+	}
 	before := func() error {
 		routerHeaders(w.Header())
 		if ctx.Err() != nil {
@@ -269,7 +276,7 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if body != nil && body.exceeded {
 			if !committed {
-				routerDeny(w, r, http.StatusBadRequest, "invalid_request")
+				denyBodyOverflow()
 				committed = true
 				invalidEnvelopeSent = true
 			}
@@ -356,7 +363,7 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if committed {
 			panic(http.ErrAbortHandler)
 		}
-		routerDeny(w, r, http.StatusBadRequest, "invalid_request")
+		denyBodyOverflow()
 		return
 	}
 	if ctx.Err() != nil {
@@ -417,15 +424,34 @@ func routerHeaders(header http.Header) {
 }
 
 func routerDeny(w http.ResponseWriter, r *http.Request, status int, code string) {
-	routerHeaders(w.Header())
-	for name := range w.Header() {
-		if strings.EqualFold(name, "Location") || strings.EqualFold(name, "Content-Length") || strings.EqualFold(name, "Content-Encoding") || strings.EqualFold(name, "Set-Cookie") {
-			delete(w.Header(), name)
-		}
-	}
+	routerErrorHeaders(w.Header())
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if r == nil || r.Method != http.MethodHead {
 		_, _ = io.WriteString(w, "{\"error\":\""+code+"\"}\n")
 	}
+}
+
+func routerErrorHeaders(header http.Header) {
+	routerHeaders(header)
+	for name := range header {
+		if strings.EqualFold(name, "Location") || strings.EqualFold(name, "Content-Length") || strings.EqualFold(name, "Content-Encoding") || strings.EqualFold(name, "Set-Cookie") {
+			delete(header, name)
+		}
+	}
+}
+
+// The hard cap prevents the feature from writing its own response at overflow.
+// Emit the fixed SCIM error without allowing feature output or widening the cap.
+func routerSCIMCreateTooLarge(w http.ResponseWriter) {
+	header := w.Header()
+	routerErrorHeaders(header)
+	for name := range header {
+		if strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "ETag") {
+			delete(header, name)
+		}
+	}
+	header.Set("Content-Type", "application/scim+json")
+	w.WriteHeader(http.StatusRequestEntityTooLarge)
+	_, _ = io.WriteString(w, `{"schemas":["urn:ietf:params:scim:api:messages:2.0:Error"],"status":"413"}`+"\n")
 }
