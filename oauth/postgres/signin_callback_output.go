@@ -200,6 +200,12 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 
 func (p *signinCallbackPhase) authority(account kernel.ProviderAccountAdmission, factor, policy uint64, id, family string) (session.AuthoritySnapshot, error) {
 	q := kernel.DirectoryAuthorityQuery{GlobalAuthorityID: p.service.start.config.GlobalAuthorityID, TenantID: account.Account.TenantID}
+	frozen := p.flow.binding.Input
+	return oauthSigninAuthority(kernel.DirectoryAuthorityAdmission{Query: q, GlobalVersion: frozen.GlobalVersion, TenantVersion: frozen.TenantVersion}, p.service.config.PolicyNamespace, account, factor, policy, id, family)
+}
+
+func oauthSigninAuthority(frozen kernel.DirectoryAuthorityAdmission, namespace string, account kernel.ProviderAccountAdmission, factor, policy uint64, id, family string) (session.AuthoritySnapshot, error) {
+	q := frozen.Query
 	user := account.Account.UserID
 	keys, err := kernel.KernelAuthorityKeys(q, user)
 	if err != nil {
@@ -209,7 +215,7 @@ func (p *signinCallbackPhase) authority(account kernel.ProviderAccountAdmission,
 	if err != nil {
 		return session.AuthoritySnapshot{}, err
 	}
-	scope := authoritypg.AuthorityScope{TenantID: authorization.TenantID(q.TenantID), SubjectID: authorization.SubjectID(user), PolicyNamespace: p.service.config.PolicyNamespace}
+	scope := authoritypg.AuthorityScope{TenantID: authorization.TenantID(q.TenantID), SubjectID: authorization.SubjectID(user), PolicyNamespace: namespace}
 	key, err := scope.Key()
 	if err != nil {
 		return session.AuthoritySnapshot{}, err
@@ -221,7 +227,7 @@ func (p *signinCallbackPhase) authority(account kernel.ProviderAccountAdmission,
 	bind := func(k string, v uint64) session.AuthorityBinding {
 		return session.AuthorityBinding{ScopeKey: k, Version: v}
 	}
-	frozen, credential := p.flow.binding.Input, account.Credential
+	credential := account.Credential
 	return session.NewAuthoritySnapshot(session.AuthoritySnapshotSpec{Global: bind(keys.Global, frozen.GlobalVersion), Tenant: bind(keys.Tenant, frozen.TenantVersion), User: bind(keys.User, credential.UserAuthorityVersion), Identifier: bind(keys.Identifier, credential.IdentifierAuthorityVersion), Credential: bind(keys.Credential, credential.CredentialAuthorityVersion), SessionFamily: bind(skeys.Family, 1), Session: bind(skeys.Session, 1), Authorization: bind(key, policy), Factor: session.OptionalAuthorityBinding{Present: true, Binding: bind(factorKey, factor)}})
 }
 

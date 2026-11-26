@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in native Google One Tap completion for an existing linked account
+  with known-empty MFA. Commit browser and capability consumption, sealed-proof
+  erasure and one opaque cookie session together; recover uncertain results
+  without returning credentials.
+
 - Add opt-in native Google One Tap Start. Commit the original pre-auth flow
   and encrypted callback grant atomically with audit and lifecycle, release
   browser custody only for a new confirmed commit, and keep exact retries

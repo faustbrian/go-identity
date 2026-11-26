@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
@@ -19,8 +20,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// A local incremental-cost experiment for the two callback-custody statements
-// in onetap_start_output.go, not production throughput or callback acceptance.
+// A local incremental-cost experiment for callback-custody statements in
+// onetap_start_output.go and onetap_callback_grant.go, not production throughput
+// or callback acceptance.
 // The owner fixture installs actual DDL; the synthetic 2KiB custody bodies are
 // planner data, not signed grants. Hot/cold means tenant skew, not disk caches.
 func TestOneTapStartCallbackCustodyQueriesStayPointBounded(t *testing.T) {
@@ -187,6 +189,123 @@ func TestOneTapStartCallbackCustodyQueriesStayPointBounded(t *testing.T) {
 		})
 	}
 
+	t.Run("callback-proof-projection", func(t *testing.T) {
+		// This is loadOneTapCallbackGrant's full point projection, not the
+		// narrower recovery boolean. The copied ciphertext incurs row/TOAST
+		// retrieval and client transfer that an EXPLAIN alone does not measure.
+		fullSQL := `SELECT origin_command_id,origin_operation,issued_at,expires_at,proof_ciphertext,erased_at IS NOT NULL
+	 FROM ` + rpQuotedSchema(config.Schema) + `.onetap_callback_grants WHERE tenant_id=$1 AND flow_id=$2`
+		description, err := db.Prepare(ctx, "onetap_callback_proof_select", fullSQL)
+		if err != nil || !reflect.DeepEqual(description.ParamOIDs, []uint32{directoryBaseOID, 17}) {
+			t.Fatal("full callback projection binding/column compatibility", err)
+		}
+		t.Logf("exact callback SQL=%s; Go bindings=string,[]byte(16); server_parameter_oids=%v", fullSQL, description.ParamOIDs)
+		tx, err := db.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+			defer stop()
+			if err := tx.Rollback(cleanup); err != nil {
+				t.Error("rollback erased-row query fixture", err)
+			}
+		}()
+		var seedIssued, seedExpires time.Time
+		var storedBytes, payloadBytes int
+		var toastBytes int64
+		if err := tx.QueryRow(ctx, `SELECT g.issued_at,g.expires_at,pg_column_size(g.proof_ciphertext),octet_length(g.proof_ciphertext),pg_total_relation_size(c.reltoastrelid)
+ FROM `+rpQuotedSchema(config.Schema)+`.onetap_callback_grants g JOIN pg_class c ON c.oid=$3::regclass WHERE g.tenant_id=$1 AND g.flow_id=$2`, string(config.TenantID), flow(1), config.Schema+".onetap_callback_grants").Scan(&seedIssued, &seedExpires, &storedBytes, &payloadBytes, &toastBytes); err != nil || payloadBytes != len(ciphertext) {
+			t.Fatal("full projection storage context", err)
+		}
+		t.Logf("body_payload_bytes=%d stored_body_bytes=%d table_toast_bytes=%d; receipt transfers one boolean, full point read scans command/operation/timestamps/body/erasure; EXPLAIN buffer work and paired client samples are separate observations", payloadBytes, storedBytes, toastBytes)
+		tag, err := tx.Exec(ctx, `UPDATE `+rpQuotedSchema(config.Schema)+`.onetap_callback_grants SET proof_ciphertext=NULL,erased_at=issued_at+interval '1 second' WHERE tenant_id=$1 AND flow_id=$2`, string(config.TenantID), flow(2))
+		if err != nil || tag.RowsAffected() != 1 {
+			t.Fatal("prepare one constraint-valid erased custody row", err)
+		}
+		for _, test := range []struct {
+			name, tenant string
+			n            int
+			wantRows     int
+			erased       bool
+		}{
+			{"hot-original", string(config.TenantID), 1, 1, false},
+			{"cold-original", "cold-onetap-1", 90001, 1, false},
+			{"hot-erased", string(config.TenantID), 2, 1, true},
+			{"foreign-tenant", "cold-onetap-1", 1, 0, false},
+			{"missing-flow", string(config.TenantID), 200001, 0, false},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				flowKey, commandID := flow(test.n), command(test.n)
+				var fullSamples, receiptSamples []time.Duration
+				for iteration := 0; iteration < 31; iteration++ {
+					// Alternate order within every pair; neither projection gets
+					// a systematically colder first read. The first pair warms up.
+					for pass := 0; pass < 2; pass++ {
+						full := (iteration+pass)%2 == 0
+						start := time.Now()
+						if full {
+							var original, body []byte
+							var operation string
+							var issued, expires time.Time
+							var erased bool
+							readErr := tx.QueryRow(ctx, fullSQL, test.tenant, flowKey).Scan(&original, &operation, &issued, &expires, &body, &erased)
+							elapsed := time.Since(start)
+							if test.wantRows == 0 {
+								if !errors.Is(readErr, pgx.ErrNoRows) {
+									t.Fatal("full projection disclosed foreign/missing flow", readErr)
+								}
+							} else {
+								if readErr != nil {
+									t.Fatal("full callback custody projection failed", readErr)
+								}
+								metadataMatches := bytes.Equal(original, commandID) && operation == oneTapStartOperationID && issued.Equal(seedIssued) && expires.Equal(seedExpires)
+								bodyMatches := test.erased && body == nil || !test.erased && bytes.Equal(body, ciphertext)
+								if !metadataMatches || erased != test.erased || !bodyMatches {
+									t.Fatal("full callback custody projection changed")
+								}
+							}
+							clear(body)
+							if iteration > 0 {
+								fullSamples = append(fullSamples, elapsed)
+							}
+						} else {
+							var original bool
+							readErr := tx.QueryRow(ctx, selectSQL, test.tenant, flowKey, commandID).Scan(&original)
+							elapsed := time.Since(start)
+							if test.wantRows == 0 {
+								if !errors.Is(readErr, pgx.ErrNoRows) {
+									t.Fatal("receipt comparison disclosed foreign/missing flow", readErr)
+								}
+							} else if readErr != nil || !original {
+								t.Fatal("receipt projection comparison changed", readErr)
+							}
+							if iteration > 0 {
+								receiptSamples = append(receiptSamples, elapsed)
+							}
+						}
+					}
+				}
+				var raw []byte
+				if err := tx.QueryRow(ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+fullSQL, test.tenant, flowKey).Scan(&raw); err != nil {
+					t.Fatal(err)
+				}
+				var plans []oneTapCustodyQueryPlan
+				if err := json.Unmarshal(raw, &plans); err != nil || len(plans) != 1 {
+					t.Fatal("full callback point plan unavailable", err)
+				}
+				index := oneTapCustodyPointIndex(t, plans[0].Plan)
+				if index == nil || index.IndexName != "onetap_callback_grants_pkey" || index.Rows != float64(test.wantRows) || index.Loops != 1 || !strings.Contains(index.IndexCond, "tenant_id") || !strings.Contains(index.IndexCond, "flow_id") || index.Filtered != 0 && index.Filtered != 1 {
+					t.Fatal("full callback projection lost original scoped primary-key bound")
+				}
+				slices.Sort(fullSamples)
+				slices.Sort(receiptSamples)
+				t.Logf("rows=%d erased=%t paired_warm_n=30 full_median=%s full_min=%s full_max=%s receipt_median=%s receipt_min=%s receipt_max=%s; client roundtrip/scan/body transfer included, setup/acquisition/AEAD excluded; no production latency or speedup claim", test.wantRows, test.erased, fullSamples[15], fullSamples[0], fullSamples[29], receiptSamples[15], receiptSamples[0], receiptSamples[29])
+				t.Logf("full-projection exact-binding plan=%s", raw)
+			})
+		}
+	})
+
 	issued := time.Now().UTC().Truncate(time.Second)
 	for _, test := range []struct {
 		name, tenant  string
@@ -285,6 +404,7 @@ type oneTapCustodyPlanNode struct {
 	NodeType  string                  `json:"Node Type"`
 	Operation string                  `json:"Operation"`
 	IndexCond string                  `json:"Index Cond"`
+	IndexName string                  `json:"Index Name"`
 	Rows      float64                 `json:"Actual Rows"`
 	Loops     float64                 `json:"Actual Loops"`
 	Filtered  float64                 `json:"Rows Removed by Filter"`

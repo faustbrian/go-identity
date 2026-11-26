@@ -51,6 +51,30 @@ unknown results only with the same original key and unchanged input. A
 committed retry returns the original outcome, not another nonce or cookie.
 This API does not install HTTP or authenticate a One Tap callback.
 
+## Google One Tap callback and session
+
+Select `NewOneTapCompletionService` with the same configured start owner, the
+retained versioned flow-cookie keys, the native session issuer and its separate
+CSRF key. Install the One Tap callback session history and its existing
+directory, account, authorization and MFA authority dependencies before enabling
+completion. Keep the optional hosted-domain restriction tied to the selected
+policy version. HTTP routing, request-origin resolution and cookie delivery
+remain application responsibilities.
+
+Submit the original flow ID and cookie plus Google's credential and matching
+double-submit `g_csrf_token` with the trusted transport context. The callback
+resolves an existing linked Google account by verified issuer and subject,
+never by email. It requires known-empty MFA authority; it cannot sign up, link
+an account or fall back to a single factor when MFA is enrolled or unknown.
+
+On a new commit the native callback consumes the original browser flow and
+one-use grant, erases its sealed proof and creates one cookie session. Reveal
+the original bearer and CSRF token only for the admitted response and before
+the returned `DeliveryValidUntil`; do not derive another deadline. A repeated
+browser request cannot disclose either token again. For unknown outcomes use
+the returned command ID with authorized `RecoverCallback` in the exact original
+flow scope. Recovery returns historical receipt metadata, not authentication.
+
 ## Existing-account signin
 
 The original OIDC profile uses query callbacks, S256 PKCE and nonce binding.

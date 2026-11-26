@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,10 +54,10 @@ func (oneTapStartApplicationPolicy) Evaluate(ctx context.Context, r authorizatio
 	if r.Tenant != oneTapStartTenant || r.Subject.Kind != authorization.SubjectServiceAccount || r.Subject.ID != oneTapStartActor {
 		return deny, nil
 	}
-	if r.Action != oneTapStartOperationID {
+	if r.Action != oneTapStartOperationID && r.Action != oneTapCallbackPurpose {
 		return deny, nil
 	}
-	requestAdmission := r.Resource.Type == "identity.request-admission" && r.Resource.ID == "identity.oauth.onetap-start"
+	requestAdmission := r.Resource.Type == "identity.request-admission" && r.Resource.ID == authorization.ResourceID(r.Action)
 	originalFlow := r.Resource.Type == "identity.anonymous-flow" && r.Resource.ID != ""
 	if requestAdmission || originalFlow {
 		return authorization.Decision{Outcome: authorization.Allow}, nil
@@ -223,8 +224,19 @@ func oneTapStartInstallMigration(t *testing.T, ctx context.Context, db *pgx.Conn
 	}
 }
 
+var oneTapParticipantFixture = struct {
+	sync.Mutex
+	installedAuditRoles bool
+}{}
+
 func oneTapStartInstallParticipants(t *testing.T, ctx context.Context, db *pgx.Conn) {
 	t.Helper()
+	// All One Tap fixtures in this test process use the same disposable
+	// loopback cluster, but each owns a separate database. The first real
+	// install must reserve the cluster-wide role names without collisions.
+	// Later fixture databases reuse only those previously committed roles.
+	oneTapParticipantFixture.Lock()
+	defer oneTapParticipantFixture.Unlock()
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -233,8 +245,10 @@ func oneTapStartInstallParticipants(t *testing.T, ctx context.Context, db *pgx.C
 	if _, err := tx.Exec(ctx, `SET LOCAL search_path = public, pg_catalog`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
-		t.Fatal("audit installation preflight", err)
+	if !oneTapParticipantFixture.installedAuditRoles {
+		if _, err := tx.Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
+			t.Fatal("audit installation preflight", err)
+		}
 	}
 	for _, files := range []fs.FS{auditpg.Migrations(), outboxpg.Migrations(), lifecyclepg.Migrations(), capabilitypg.Migrations()} {
 		entries, err := fs.ReadDir(files, ".")
@@ -254,6 +268,7 @@ func oneTapStartInstallParticipants(t *testing.T, ctx context.Context, db *pgx.C
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal("commit participant histories", err)
 	}
+	oneTapParticipantFixture.installedAuditRoles = true
 }
 
 func oneTapStartIntegrationRisk(t *testing.T, pool *database.Pool, counter *oneTapStartCounterBoundary) risk.AuthenticationAdmissionCustodyConfig {
