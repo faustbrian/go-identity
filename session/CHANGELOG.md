@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind an explicitly selected One Tap callback pre-auth transaction to its
+  original provider, client and mode, under a separate cookie-digest domain.
+  Ordinary flow projections and digests stay unchanged.
+
 - Add a separate session issuer for an existing linked user confirming an
   unsolicited SAML response. Retain the exact pending ID and paired browser
   custody without SP pre-auth. Only a fresh acknowledged native commit

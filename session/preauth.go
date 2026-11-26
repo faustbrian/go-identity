@@ -91,7 +91,10 @@ type PreAuthTransactionSpec struct {
 // authentication, an active primary record or one-use proof. Zero is invalid.
 // Copies are safe for concurrent reads; no resource/goroutine is retained.
 type PreAuthTransaction struct{ state *preAuthState }
-type preAuthState struct{ spec PreAuthTransactionSpec }
+type preAuthState struct {
+	spec     PreAuthTransactionSpec
+	provider PreAuthProviderBinding
+}
 
 // NewPreAuthTransaction freezes validated private storage without issuing a
 // cookie or persisting a flow. Invalid input returns a zero value and redacted
@@ -115,9 +118,11 @@ func NewPreAuthTransaction(s PreAuthTransactionSpec) (PreAuthTransaction, error)
 }
 
 // Bindings returns an owned private scalar projection without renewing the
-// timeline or remember choice. Never log it or expose it as a wire credential.
+// timeline or remember choice. Provider-selected flows must use ProviderBindings
+// so a legacy persistence owner cannot silently drop their original authority.
+// Never log the projection or expose it as a wire credential.
 func (p PreAuthTransaction) Bindings() (PreAuthTransactionSpec, error) {
-	if p.state == nil {
+	if p.state == nil || p.state.provider.Mode != 0 {
 		return PreAuthTransactionSpec{}, ErrInvalidPreAuthTransaction
 	}
 	return p.state.spec, nil
@@ -129,12 +134,20 @@ func (p PreAuthTransaction) Bindings() (PreAuthTransactionSpec, error) {
 // flow state is never refreshed. Success is only structural/temporal agreement:
 // it cannot authenticate a subject, check current primary state or consume a
 // flow. The durable owner must fence its exact version/state and finalize with
-// session issuance/linking in the shared transaction. No IO or callbacks run.
+// session issuance/linking in the shared transaction. Provider-selected flows
+// must use CheckProvider. No IO or callbacks run.
 func (p PreAuthTransaction) Check(now time.Time, expected PreAuthBinding, cookie TokenDigest) error {
-	if p.state == nil || !validTime(now) || !validPreAuthBinding(expected) {
+	if p.state == nil || p.state.provider.Mode != 0 {
 		return ErrPreAuthDenied
 	}
-	s := p.state.spec
+	return p.state.check(now, expected, cookie)
+}
+
+func (p *preAuthState) check(now time.Time, expected PreAuthBinding, cookie TokenDigest) error {
+	if !validTime(now) || !validPreAuthBinding(expected) {
+		return ErrPreAuthDenied
+	}
+	s := p.spec
 	if !samePreAuthBinding(s.Binding, expected) || now.Before(s.Binding.IssuedAt) || !now.Before(s.Binding.ExpiresAt) || cookie.KeyVersion != s.Cookie.KeyVersion || !hmac.Equal(cookie.Sum[:], s.Cookie.Sum[:]) {
 		return ErrPreAuthDenied
 	}
@@ -216,6 +229,10 @@ func preAuthURL(raw string, origin bool) bool {
 // validity renewal occurs. Compute only from authenticated original intent;
 // possession of the result is not an alternate credential or one-use proof.
 func (t Token) PreAuthDigest(k DigestKey, b PreAuthBinding) (TokenDigest, error) {
+	return t.preAuthDigest(k, b, PreAuthProviderBinding{})
+}
+
+func (t Token) preAuthDigest(k DigestKey, b PreAuthBinding, provider PreAuthProviderBinding) (TokenDigest, error) {
 	if t.state == nil {
 		return TokenDigest{}, ErrInvalidToken
 	}
@@ -236,6 +253,9 @@ func (t Token) PreAuthDigest(k DigestKey, b PreAuthBinding) (TokenDigest, error)
 		// Recovery has no final session and must not invent login lifetimes to
 		// reuse pre-auth storage. Its distinct domain omits remember entirely.
 		domain = "golib-preauth-cookie-phone-recovery-v1\x00"
+	}
+	if provider.Mode != 0 {
+		domain = "golib-preauth-cookie-provider-v1\x00"
 	}
 	frame := []byte(domain)
 	frame = binary.BigEndian.AppendUint32(frame, k.state.version)
@@ -259,6 +279,14 @@ func (t Token) PreAuthDigest(k DigestKey, b PreAuthBinding) (TokenDigest, error)
 	}
 	if i.IdentifierBinding != ([32]byte{}) {
 		frame = append(frame, i.IdentifierBinding[:]...)
+	}
+	if provider.Mode != 0 {
+		for _, value := range []string{provider.ProviderID, provider.ClientID} {
+			frame = binary.BigEndian.AppendUint16(frame, uint16(len(value)))
+			frame = append(frame, value...)
+		}
+		frame = binary.BigEndian.AppendUint64(frame, provider.ProviderVersion)
+		frame = append(frame, byte(provider.Mode))
 	}
 	frame = append(frame, byte(len(raw)))
 	frame = append(frame, raw...)

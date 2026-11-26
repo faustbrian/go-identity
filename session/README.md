@@ -436,6 +436,13 @@ uses a dedicated named key and a separate complete-binding HMAC domain, never a
 session-cookie lookup digest. Retain the original key while the flow is live;
 copies and retries must not regenerate the binding, nonce, expiry or choice.
 
+For the explicitly selected One Tap callback profile, use
+`NewProviderPreAuthTransaction` and `Token.ProviderPreAuthDigest` to retain the
+original provider ID and version, client ID, and callback mode. Only the
+provider-aware projection and check accept this state; the ordinary cookie
+digest and existing flow profiles remain unchanged. This is structural state,
+not a durable issuer, provider credential check, or sign-in endpoint.
+
 These are private structural values, not authentication or primary active-state
 proof. `Check` requires authoritative time after locks and never consumes the
 flow. Owned `PreAuthIssuer` freezes configured origin/redirect policy and the
