@@ -8,9 +8,10 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
 	github.com/faustbrian/go-identity/http v0.0.0-20261109202903-8112f3df2617
 	github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261122013004-c5e094dcd9a9
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57
+	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d
 	github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d
-	github.com/faustbrian/go-identity/session v0.0.0-20261123125537-8d9afa5e1a45
+	github.com/faustbrian/go-identity/session v0.0.0-20261126220500-cc979c08b313
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/felixge/httpsnoop v1.1.0
 )

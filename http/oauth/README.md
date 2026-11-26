@@ -7,6 +7,31 @@ exact selected `LinkStart`, `SigninStart` and/or `Callback` configuration and
 contribute it to `identity/http` composition. Native owners supply persistence,
 protocol and authentication; these handlers supply transport, not new engines.
 
+## Google One Tap popup transport
+
+`NewOneTapStartFeature` opts into the canonical keyed start POST and
+`NewOneTapCallbackFeature` opts into the separate credential callback POST.
+When exposing both, combine their operations under the single feature ID
+`identity/oauth/onetap`. Configure the exact HTTPS origin, the matching tenant
+and signed device policies, the existing provider rate owner, and native Start
+and Callback adapters. The package does not load Google scripts or own UI.
+
+Start accepts one bounded prompt or popup-button selection and the caller's
+Remember choice, not a provider or redirect override. A fresh native commit
+returns the approved GIS options, client ID, nonce, flow ID and expiry; only
+that response sets the original flow cookie. Retry uncertain Start only with
+the same key and unchanged input. A replay does not issue another cookie.
+A deliberate new Start may replace a previous flow cookie; that cookie never
+selects or authorizes the new request.
+
+Callback takes the returned flow ID, the original flow and device cookies,
+and Google's `credential` and matching `g_csrf_token` cookie/body value.
+See [Google's server-side verification guide](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
+for the double-submit protocol. Only fresh native sign-in returns a session
+cookie and a separate synchronizer cookie. No credentials are returned in
+JSON or on replay; unknown outcomes require native receipt recovery. These
+routes do not select redirect mode, signup, or account linking.
+
 ## Public configured-provider catalog
 
 `NewProviderListFeature(ProviderListConfig{Network: network, Catalog: catalog,

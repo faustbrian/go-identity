@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add independently selected Google One Tap popup Start and credential
+  callback routes. Keep cookie delivery tied to the fresh native outcome,
+  preserve exact origin and browser custody, and expose no UI or redirect.
+
 - Add independently opt-in provider-list public denial localization through the
   typed `identity/i18n` registry/resolver. Bounded public language negotiation
   adds only safe JSON messages and truthful language metadata; machine codes,
