@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select an admission-gated Google One Tap start plan that may stage only the
+  original anonymous flow's one-use callback grant through the existing owner.
+  Ordinary reservation is denied; terminal outcomes erase temporary ciphertext.
+
 - Retain a failed dependency for an original malformed Bulk child without
   granting resource authority or any mutation effect.
 

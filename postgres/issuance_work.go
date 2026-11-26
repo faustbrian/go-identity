@@ -185,6 +185,13 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 			return w.fail(w.state.ctx, err)
 		}
 	}
+	if w.state.binding.OperationID == oneTapStartPurpose {
+		var err error
+		subject, err = oneTapStartGrantSubject(w.state.binding, w.state.execution.reservation.plan.snapshot(), payload)
+		if err != nil {
+			return w.fail(w.state.ctx, err)
+		}
+	}
 	if w.state.binding.OperationID == organizationInvitationSendOperation().OperationID || w.state.binding.OperationID == organizationInvitationResendOperation().OperationID {
 		var err error
 		var selected identity.UserID
@@ -262,6 +269,9 @@ func validateIssuanceContributor(b identity.CommandBinding, p *CapabilityIssuanc
 	// remotely settled logout purpose outside its dedicated issue binding.
 	for _, grant := range p.Grants {
 		if grant.Purpose == ssoSAMLLogoutRelaySettlePurpose && !validSSOSAMLLogoutRelayIssueBinding(b) {
+			return invalidPlan()
+		}
+		if grant.Purpose == oneTapCallbackPurpose && !validOneTapStartBinding(b) {
 			return invalidPlan()
 		}
 	}

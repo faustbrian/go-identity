@@ -289,6 +289,13 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
 	}
+	if oneTapStartSelected(p) {
+		_, gated := feature.contributor.(FeatureAdmissionPreparationContributor)
+		_, final := feature.contributor.(FeatureCommitContributor)
+		if !gated || !final || !validOneTapStartPlan(b, p) || preparation != (p.CapabilityIssuance == nil) {
+			return nil, invalidPlan()
+		}
+	}
 	if p.SCIMBulkDenial != 0 {
 		if _, ok := feature.contributor.(SCIMBulkChildFailureContributor); !ok || preparation {
 			return nil, invalidPlan()

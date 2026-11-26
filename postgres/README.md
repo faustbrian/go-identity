@@ -38,6 +38,20 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
+## Google One Tap start preparation
+
+`OneTapStartOperation` selects only the OAuth PostgreSQL native initiation
+owner. Use `ExecutePreparedFeature` with retained external admission and a
+final current-authority check. One attached callback grant can target only the
+original anonymous flow, tenant, record and correlation, for at most five
+minutes and one use. Ordinary reservation and session authority are excluded.
+
+Apply `OneTapStartPreparationErasureMigrationSource` after the existing
+preparation history before enabling the native writer. Only an acknowledged
+terminal transition clears its temporary ciphertext; pending and unknown
+commands retain original evidence. This kernel selection neither issues a
+browser flow by itself nor enables any HTTP or Google callback.
+
 ## Enterprise sign-in start preparation
 
 The exact native `sso/postgres` contributor `sso.oidc-login-start` version 1

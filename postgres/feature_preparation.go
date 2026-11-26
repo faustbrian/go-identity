@@ -228,7 +228,7 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
-	if (ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q)) && !gated {
+	if (oneTapStartClaim(q) || ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q)) && !gated {
 		return result, invalidPreparation()
 	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
@@ -456,12 +456,15 @@ func preparationRetainsDeclaration(p CommandPlan) bool {
 	// reserved before exchange, so recovery needs the same frozen declaration.
 	// Enterprise start likewise retains its admission-gated declaration
 	// through terminal state issuance and temporary output erasure.
-	return p.CommandCounters != nil || providerSigninPreparation(p) || ssoEnterpriseStartSelected(p) ||
+	return p.CommandCounters != nil || providerSigninPreparation(p) || oneTapStartSelected(p) || ssoEnterpriseStartSelected(p) ||
 		p.Feature != nil && (p.Feature.Operation == SSOEnterpriseGrantRefreshOperation() || p.Feature.Operation == SSOSAMLLogoutRelayIssueOperation())
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
 	if oauthRPInitiationSelected(original) && (!validOAuthRPInitiation(b, original) || !validOAuthRPInitiation(b, final) || final.CapabilityIssuance == nil) {
+		return false
+	}
+	if oneTapStartSelected(original) && (!validOneTapStartPlan(b, original) || !validOneTapStartPlan(b, final) || final.CapabilityIssuance == nil) {
 		return false
 	}
 	if ssoEnterpriseStartSelected(original) && (!validSSOEnterpriseStart(b, original) || !validSSOEnterpriseStart(b, final) || final.CapabilityIssuance == nil) {
@@ -505,7 +508,8 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		}
 		selectedIssuance := final.MFAContinuation != nil || i.RegistrationUserID != "" || i.ResetRecipientUserID != "" || i.MagicLinkRecipientUserID != "" ||
 			validManagedEmailIssuance(b, final) || validOrganizationInvitationIssuance(b, final) || phoneResetRequestPreparation(final) ||
-			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validSSOEnterpriseStart(b, final) || validSSOSAMLLogoutRelayIssuePlan(b, final)
+			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validOneTapStartPlan(b, final) ||
+			validSSOEnterpriseStart(b, final) || validSSOSAMLLogoutRelayIssuePlan(b, final)
 		if !selectedIssuance || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final) {
 			return false
 		}

@@ -72,7 +72,7 @@ func terminalizeJournal(ctx context.Context, tx pgx.Tx, q claimRequest, r journa
 	// detection uses row metadata so ordinary schemas need no optional columns;
 	// scope-only recovery does not require the original request's secret input.
 	preparationErasure := ""
-	if oauthRPInitiationClaim(q) || ssoEnterpriseStartClaim(q) || eraseRetainedPreparation {
+	if oauthRPInitiationClaim(q) || oneTapStartClaim(q) || ssoEnterpriseStartClaim(q) || eraseRetainedPreparation {
 		preparationErasure = ",preparation_ciphertext=NULL,preparation_ciphertext_generation=NULL"
 	}
 	// Ordinary installations need not select the optional preparation schema.

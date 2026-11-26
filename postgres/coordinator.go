@@ -334,9 +334,9 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	if ctx == nil {
 		return Reservation{}, identity.CommandResult{}, coordinatorError()
 	}
-	// The native SAML paths must prove their respective browser and provider
-	// admission through gated preparation before obtaining ordinary Work.
-	if binding.OperationID == ssoSAMLSigninPurpose || binding.OperationID == ssoSAMLIDPConfirmationPurpose {
+	// These native browser paths must pass gated preparation before obtaining
+	// Work. A caller-supplied plan cannot substitute for original admission.
+	if binding.OperationID == ssoSAMLSigninPurpose || binding.OperationID == ssoSAMLIDPConfirmationPurpose || binding.OperationID == oneTapStartPurpose {
 		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
 	if authenticatedOperation(binding) {

@@ -43,6 +43,10 @@ func TestSSOSAMLIDPConfirmationJournalErasesOnlyAfterDefinitiveCommit(t *testing
 	testSSOJournalErasure(t, SSOSAMLIDPConfirmationOperation(), []int16{4})
 }
 
+func TestOneTapStartJournalErasesOnlyAfterDefinitiveCommit(t *testing.T) {
+	testSSOJournalErasure(t, OneTapStartOperation(), []int16{4})
+}
+
 func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles []int16) {
 	t.Helper()
 	for _, committed := range []bool{true, false} {
@@ -75,6 +79,8 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					binding.RecordID, binding.UserID, binding.AnonymousFlowID = "pending-confirmation", "linked-user", ""
 				case SSOSAMLSigninStartOperation().OperationID:
 					binding, _, _ = samlStartPlans(t)
+				case oneTapStartPurpose:
+					binding, _, _ = oneTapStartPreparationFixture(t)
 				case "identity.sso.provider-token.refresh":
 					binding.OperationID, binding.SchemaID = op.OperationID, op.SchemaID
 					binding.UserID, binding.ActorID = "refresh-owner", "refresh-owner"
@@ -164,7 +170,7 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					class, state = "committed", "committed"
 					result.Outcome, result.AuditEventID = identity.CommitOutcomeCommitted, "callback-audit"
 					result.Feature.BeforeVersion, result.Feature.AfterVersion = 1, 2
-					if op == SSOSAMLSigninStartOperation() {
+					if op == SSOSAMLSigninStartOperation() || op == OneTapStartOperation() {
 						result.Feature.BeforeVersion, result.Feature.AfterVersion = 0, 1
 					}
 				}
@@ -173,6 +179,8 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					refresh := SSOEnterpriseGrantRefreshPreparationErasureMigrationSource{Base: oauth, Version: 26}
 					samlCallback := SSOSAMLCallbackPreparationErasureMigrationSource{Base: refresh, Version: 27}
 					samlStart := SSOSAMLStartPreparationErasureMigrationSource{Base: samlCallback, Version: 28}
+					samlConfirmation := SSOSAMLIDPConfirmationPreparationErasureMigrationSource{Base: samlStart, Version: 29}
+					samlRelay := SSOSAMLLogoutRelayIssuePreparationErasureMigrationSource{Base: samlConfirmation, Version: 30}
 					if op.OperationID != ssoOAuth2SigninPurpose {
 						installUnlinkPreparationHistory(t, ctx, pool, oauth)
 					}
@@ -184,6 +192,9 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					}
 					if op.OperationID == "identity.sso.saml-idp-init" {
 						installUnlinkPreparationHistory(t, ctx, pool, samlStart)
+					}
+					if op.OperationID == oneTapStartPurpose {
+						installUnlinkPreparationHistory(t, ctx, pool, samlRelay)
 					}
 					beforeExpansion, err := pool.Raw().Begin(ctx)
 					if err != nil {
@@ -205,7 +216,9 @@ func testSSOJournalErasure(t *testing.T, op identity.FeatureOperation, profiles 
 					case SSOSAMLSigninStartOperation().OperationID:
 						installUnlinkPreparationHistory(t, ctx, pool, samlStart)
 					case "identity.sso.saml-idp-init":
-						installUnlinkPreparationHistory(t, ctx, pool, SSOSAMLIDPConfirmationPreparationErasureMigrationSource{Base: samlStart, Version: 29})
+						installUnlinkPreparationHistory(t, ctx, pool, samlConfirmation)
+					case oneTapStartPurpose:
+						installUnlinkPreparationHistory(t, ctx, pool, OneTapStartPreparationErasureMigrationSource{Base: samlRelay, Version: 31})
 					default:
 						installUnlinkPreparationHistory(t, ctx, pool, refresh)
 					}

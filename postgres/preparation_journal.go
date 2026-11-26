@@ -85,7 +85,7 @@ FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR U
 	preparedUnlink := expectedProfile == 6 && q.purpose == "identity.account.unlink" && q.feature == nil
 	preparedRefresh := (expectedProfile == 2 || expectedProfile == 4) && oauthProviderRefreshPreparationClaim(q)
 	erasureProfile := expectedProfile <= 4 && oauthRPInitiationClaim(q) || preparedLink || preparedUnlink || preparedRefresh ||
-		expectedProfile == 4 && (ssoEnterpriseStartClaim(q) || ssoEnterpriseCallbackClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q))
+		expectedProfile == 4 && (oneTapStartClaim(q) || ssoEnterpriseStartClaim(q) || ssoEnterpriseCallbackClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q))
 	erasedOutput := erasureProfile && (state == "committed" || state == "aborted") && started != nil && output == nil && provenance == nil
 	if profile == nil || *profile != expectedProfile || plan != nil && output == nil && !deniedBeforeGeneration && !erasedOutput || !postgresExactTime(until) {
 		return preparationReservation{}, identity.ConflictError{}
