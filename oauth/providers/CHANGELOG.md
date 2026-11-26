@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add direct `Catalog.ProviderList` safe enumeration of configured Google,
+  GitHub, GitLab and Keycloak browser owners with immutable ID/name/mode-only
+  pages and deterministic deployment-key/snapshot/limit-bound opaque cursors.
+  Advertise only selected `authorization_code` support; add no HTTP/Reference
+  wiring, native-token capability or complete provider-catalog qualification.
+
 - Add `NewGitHub` for ordinary GitHub.com OAuth-app existing-account browser
   linking/signin, closed code/query/S256/POST/scopes and bearer stable REST ID.
   Support absent token expiry honestly; native consumers apply the forward

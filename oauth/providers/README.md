@@ -92,6 +92,58 @@ policy-bound callback parser at a distinct registered route. See
 [adoption, rollout and unsupported operations](docs/github.md) and
 [official source pins and oracle boundary](docs/github-sources.md).
 
+## Safe configured-provider enumeration
+
+`NewCatalog(CatalogConfig{Providers: selectedOwners, CursorKey: deploymentKey})`
+snapshots the same configured `oauth.Provider` owners used by native composition.
+The finite current selection is `NewGoogle`, `NewGitHub`, `NewGitLab` and
+`NewKeycloak`; nil, duplicate, unknown and unsupported variants reject rather
+than inheriting support from the planned 43-provider matrix. Supply only the
+actual enabled built-in owners, not a synthetic provider or a caller-provided
+profile. The catalog neither authenticates providers nor selects native services.
+
+```go
+limit, err := providers.NewPageLimit(2) // 1..100; zero is invalid.
+// Handle err. Catalog construction uses a 32-byte random deployment-secret key.
+catalog, err := providers.NewCatalog(providers.CatalogConfig{
+    Providers: selectedOwners,
+    CursorKey: deploymentKey,
+})
+// Handle err. A zero cursor selects the first page.
+page, err := catalog.ProviderList(ctx, providers.ProviderListRequest{Limit: limit})
+// Handle err before accessing the safe results.
+for _, provider := range page.Page.Providers() {
+    show(provider.ID(), provider.DisplayName(), provider.SupportedModes())
+}
+// Pass page.NextCursor unchanged with the same limit until it is empty.
+```
+
+The direct `Catalog.ProviderList` operation returns only canonical IDs, built-in
+display names and actual selected modes. Currently `authorization_code` means
+the existing browser code/query/S256 variant, not native ID/access-token signin,
+signup, refresh or remote logout. Unselected providers and modes are absent.
+There are no endpoint, client ID, scope, credential, tenant or raw-profile
+fields. Result accessors return independent slices; startup providers, key
+bytes and configuration slices are not borrowed. Provider shutdown remains with
+their original owner; the catalog performs no protocol calls or network IO.
+
+Pages sort by exact provider ID. Cursors are bounded canonical opaque base64url
+values authenticated for this operation, the sorted full configured profile
+snapshot and page size. Keep the same randomly generated 32-byte deployment key
+across equivalent restarted/scaled instances. Changed configuration, page size
+or key rotation rejects old cursors; restart pagination with a zero cursor.
+Configuration `Version` must change for supplier inputs not represented in
+`ProviderProfile`, including trusted signing-key changes. The cursor encodes no
+provider/client/endpoint/credential data and grants no authentication authority.
+Construct a wire cursor with `ParseCursor`; only `ProviderList` authenticates it.
+Keep the deployment key secret, clear its source after construction, and never
+log startup configuration. The catalog retains its copied key for its lifetime.
+
+This adds no HTTP/Reference wiring or live-provider/catalog qualification.
+Malformed requests return `ProviderListInvalidRequestError`, uninitialized
+catalogs return `ProviderListUnavailableError`, and canceled contexts retain
+their standard context error. Every operation failure returns a zero result.
+
 ## Provision and use the Apple signer
 
 The application owns key provisioning, authorizes the operation, and retains
