@@ -63,6 +63,55 @@ authority is serialized. Failures disclose no partial page. All responses are
 no-store/nosniff JSON; owner failures are redacted. This selection does not
 enable ConnectionCreate, provisioning writes, credential issue or Bulk.
 
+## Managed connection creation
+
+`NewManagedCreateFeature` selects only
+`POST /v1/scim/connection-create` through the catalog's explicit bearer-only
+alternative. It does not change the cookie/CSRF default or enable cookie
+authority, reads, Bulk, provisioning, rotation or deletion. Supply the native
+`scimpostgres.ManagedConnectionService` configured with `Writes`, its actual
+session owner, the same shared `organizationhttp.AdminRateLimiter` used by other
+administrator routes, native SCIM mapping limits and matching HTTPS network
+policy. Install the native managed-connection and existing request-key/audit/
+lifecycle histories before selecting the route.
+
+```go
+feature, err := scimhttp.NewManagedCreateFeature(scimhttp.ManagedCreateConfig{
+    Network: network, Sessions: sessions, Creator: nativeManagedConnections,
+    AdminRate: sharedAdminRate, Limits: nativeLimits,
+    Now: time.Now, MaximumDuration: 5 * time.Second,
+})
+```
+
+Send exactly one verified native administrator session bearer and one unchanged
+`Idempotency-Key`. Ambient cookies are ignored, never a fallback. The canonical
+shared atomic admin budget admits the actual authenticated actor, host-mapped
+tenant and trusted full IP on every attempt, including retries. Denials require
+the existing auditor to retain `identity.scim.connection-create`; there is no
+process-local fallback. The native owner independently enforces current
+administrator, organization and `org:scim-write` authority through creation.
+
+The strict `application/json` body contains only `organizationID`, `providerID`
+and `mappings` (1..128 objects containing required `source`, `target`, `writable`).
+Organization IDs are canonical. Provider IDs retain their exact bounded visible
+ASCII spelling without path/query/fragment separators. Mapping paths use the
+selected native core-User profile; native fields and write policy still govern
+which target mappings are supported. Queries, trailers, duplicate/unknown JSON
+fields, caller actor/tenant/command and alternate request-key channels deny.
+The supplied network limits bound body, decoded content, fields and depth.
+
+A successful response contains `connection`, using the safe projection above.
+Only a newly confirmed native invocation also contains sensitive `bearer`;
+retain it securely and never log the response. An exact original-key retry
+returns the stable connection without a bearer. The HTTP layer stores no
+response or credential and does not reconstruct one on retry. After an uncertain
+response, retry the identical intent with the original key, not a new command
+or key. Failure, wrong-scope output or unavailable authority reveals neither a
+credential nor a partial projection. No-store/nosniff headers apply throughout.
+
+This factory also retains owner ID `scim`; combine its disjoint Operations with
+the read/Bulk factories under one explicit `identityhttp.NewFeature` as above.
+
 ## Bulk protocol
 
 `scimhttp.NewBulkFeature` selects exactly `POST /scim/v2/Bulk` and

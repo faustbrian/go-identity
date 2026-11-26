@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in managed connection creation with explicit verified bearer sessions,
+  original native request-key custody and shared atomic administrator admission.
+  Newly confirmed native creation may present its one-time bearer; retries return
+  only the safe original connection. Cookie authority, provisioning, rotation and
+  deletion remain unselected.
+
 - Add independently selected managed connection Get/List over strict-session
   bearer HTTPS, with canonical shared safe-read admission and native current
   administrator authorization. Return only bounded safe scoped projections.
