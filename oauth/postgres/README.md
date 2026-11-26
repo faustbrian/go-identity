@@ -26,6 +26,15 @@ RP verifier AAD schema. No new authority, journal, signup or email merge is adde
 Controlled signed-token/native PostgreSQL consumers do not claim live Google
 interoperability or complete provider-catalog qualification.
 
+## One Tap callback grant storage
+
+Install `OneTapCallbackGrantMigrationSource` after `MigrationSource`, using
+the same native OAuth schema and a new unused migration version. It adds a
+table for encrypted callback proof bound to the tenant, original browser
+flow and exact One Tap start command. It does not change existing RP rows or
+install a One Tap writer, route or callback. There is no backfill or down SQL;
+disabling a future One Tap selection must leave the schema and history intact.
+
 ## Existing-account signin
 
 The original OIDC profile uses query callbacks, S256 PKCE and nonce binding.

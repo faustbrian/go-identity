@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the forward-only native One Tap callback grant schema. It can hold a
+  single encrypted proof per exact original tenant and flow without extending
+  its expiry or mixing it into authorization-code RP storage. No flow writer
+  or callback is enabled by this migration.
+
 - Add opt-in stored-grant refresh for configured confidential OAuth2/UserInfo
   providers using POST client authentication. Keep one provider attempt per
   bound grant generation; rotate or retire encrypted custody transactionally
