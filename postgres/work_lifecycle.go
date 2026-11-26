@@ -148,7 +148,7 @@ func (w Work) StageLifecycle(index uint16, occurredAt time.Time) error {
 // StagedLifecycle returns one owned record only after the declared event was
 // staged and its required audit outcome agrees on the exact aggregate and versions.
 // A native SCIM Bulk child audit identifies the originating command while the
-// corresponding lifecycle identifies the Group projection that command created.
+// corresponding lifecycle identifies the Group projection.
 // Conflicting audit evidence poisons Work. An authentication denial in the
 // closed API-key verification profile may accompany its independent successful
 // permission-reduction audit; only that actual update produces its lifecycle.
@@ -201,8 +201,27 @@ func lifecycleAuditSubjectMatches(w Work, event *StagedLifecycle, record audit.R
 	}
 	feature := w.state.feature
 	binding := w.state.binding
-	if feature == nil || feature.Contributor != scimUserCreationDescriptor() || event.EventType != "identity.scim.group_created.v1" ||
+	if feature == nil || feature.Contributor != scimUserCreationDescriptor() ||
 		event.CommandID != binding.CommandID || event.SubjectType != w.state.subjectType || event.SubjectID != binding.RecordID {
+		return false
+	}
+	var expectedEvent string
+	switch feature.Operation.OperationID {
+	case "identity.scim.group-create":
+		expectedEvent = "identity.scim.group_created.v1"
+	case "identity.scim.group-replace":
+		expectedEvent = "identity.scim.group_replaced.v1"
+	case "identity.scim.group-patch":
+		expectedEvent = "identity.scim.group_patched.v1"
+		if event.BeforeVersion == event.AfterVersion {
+			expectedEvent = "identity.scim.group_patch_noop.v1"
+		}
+	case "identity.scim.group-delete":
+		expectedEvent = "identity.scim.group_deleted.v1"
+	default:
+		return false
+	}
+	if event.EventType != expectedEvent {
 		return false
 	}
 	kind, target, err := featureAuditRecordScope(binding, feature.Operation, event.SubjectType, record.Action())

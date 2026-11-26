@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Allow the original SCIM Bulk child to own its protected audit when a native
+  Group is replaced, patched, or deleted. Keep the ordinary Group lifecycle
+  target and distinguish a changed PATCH from an unchanged PATCH.
+
 - Allow exact historical Group Bulk denials to settle a missing native
   checkpoint with a new protected reconciliation audit. The original
   command, terminal receipt, audit binding, and execution lease are unchanged.

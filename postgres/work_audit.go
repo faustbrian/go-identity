@@ -109,9 +109,8 @@ func featureAuditRecordScope(binding identity.CommandBinding, operation identity
 	}
 	// A child audit identifies the retained command, not its projected Group;
 	// the parent remains in correlation and the lifecycle still names the Group.
-	expected := identity.FeatureOperation{Owner: "scim", OperationID: "identity.scim.group-create", SchemaID: "identity.scim.group-create.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	parent, err := identity.ParseCommandID(binding.CorrelationID)
-	if err != nil || parent == binding.CommandID || operation != expected || subjectType != "scim_group" || binding.ActorKind != authorization.SubjectServiceAccount {
+	if err != nil || parent == binding.CommandID || featureFailureSubject(operation) != "scim_group" || subjectType != "scim_group" || binding.ActorKind != authorization.SubjectServiceAccount {
 		return "", "", invalidAudit()
 	}
 	return "scim_bulk_child", string(binding.CommandID), nil
