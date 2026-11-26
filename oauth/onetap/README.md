@@ -1,10 +1,60 @@
-# One Tap callback validation prerequisite
+# One Tap browser-option and callback-validation prerequisites
 
-This independently versioned module is the **read-only callback-mode validation
-slice**, not a complete One Tap login operation or a qualified M19 browser
-integration. It consumes the published generic OAuth Google credential validator
-and the existing opaque session pre-auth transaction. It adds no session, store,
-nonce generator, transaction reservation or claim parsing authority.
+This independently versioned module provides **typed non-secret browser options
+and read-only callback-mode validation**, not a complete One Tap login operation
+or a qualified M19 browser integration. It consumes the published generic OAuth
+Google credential validator and the existing opaque session pre-auth transaction.
+It adds no session, store, nonce generator, transaction reservation or claim
+parsing authority.
+
+## Closed browser-start option choice
+
+Use `NewOneTapPromptOptions(OneTapPromptConfig{...})` for prompt context and an
+explicit outside-tap cancellation choice, or
+`NewOneTapButtonOptions(OneTapButtonConfig{...})` for button type, theme, size
+and optional minimum width. The constructors reject empty or unknown enums;
+all opaque option zero values are invalid. There are no silent enum defaults.
+For prompt cancellation, explicitly supply `true` to retain GIS's default;
+`false` disables it. Context controls wording, not signup, sign-in or account
+linking authority. Button width zero means omitted; positive width is at most
+400 pixels. The supported closed values come from the
+[GIS JavaScript reference](https://developers.google.com/identity/gsi/web/reference/js-reference).
+
+Pass the constructed prompt and a zero `OneTapButtonOptions`, or a zero
+`OneTapPromptOptions` and the constructed button, to `NewBrowserStartOptions`.
+Neither and both are rejected. `Projection()` returns the explicit `prompt`
+or `popup_button` experience with fresh typed storage for only that selection.
+The immutable options are safe for concurrent reads. Configuration and projection
+copies cannot mutate retained options; JSON cannot construct validated options.
+
+The projection is **only a non-secret option slice**, not a complete GIS request
+or an authenticated/keyed native initiation intent. Its JSON uses stable enum
+spellings; width remains a typed number, not GIS's documented width string.
+For a button, `ux_mode` belongs to initialization, while type/theme/size/width
+belong to rendering. A future browser adapter must map these separately and
+obtain provider, client, authorized origin and nonce from trusted native binding.
+This contract accepts or returns none of those values, hints, identities,
+credentials, arbitrary callback functions or redirects. Mutating or decoding a
+projection grants no authority and cannot replace the constructors.
+
+Both supported JavaScript experiences deliver credentials through a JavaScript
+callback. Popup-button selection does not select redirect mode or a `login_uri`.
+There is no durable start operation, credential release or browser execution
+here, and the existing credential callback API remains unchanged.
+
+### Browser deployment prerequisites, not interoperability proof
+
+Load Google's client from `https://accounts.google.com/gsi/client`; do not
+self-host it. Follow Google's current
+[setup guidance](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid)
+for registered authorized origins, CSP and COOP. Where CSP directives apply,
+allow the GIS client for scripts, `https://accounts.google.com/gsi/` for
+connections/frames and the documented GIS stylesheet URL for styles. Popup
+COOP requirements depend on FedCM: Google documents no adjustment with FedCM
+enabled and popup-compatible policy when it is disabled. These are consumer
+deployment requirements, not headers generated or browser behavior verified by
+this option contract. Embedded parent-origin policy, FedCM qualification and
+cancellation/dismissal signals remain part of the future complete browser seam.
 
 ## Trusted composition
 
@@ -138,10 +188,9 @@ Numeric-ending host labels follow the WHATWG special IPv4 boundary: only exact
 canonical dotted-decimal IPv4 literals are admitted, not abbreviated, integer,
 octal or hexadecimal aliases or DNS-looking hosts browsers reject as IPv4.
 
-The later browser seam must document Google's required script origin
-`https://accounts.google.com/gsi/client`, applicable CSP allowances and popup COOP
-constraints, and qualify supported FedCM modes. This module does not render HTML,
-load scripts or claim those browser requirements are already proven.
+The complete browser seam must qualify supported FedCM modes and the deployment
+requirements above. This module does not render HTML, load scripts or claim
+those browser requirements are already proven.
 
 ## Sources and proof
 
