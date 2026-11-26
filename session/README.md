@@ -440,8 +440,11 @@ For the explicitly selected One Tap callback profile, use
 `NewProviderPreAuthTransaction` and `Token.ProviderPreAuthDigest` to retain the
 original provider ID and version, client ID, and callback mode. Only the
 provider-aware projection and check accept this state; the ordinary cookie
-digest and existing flow profiles remain unchanged. This is structural state,
-not a durable issuer, provider credential check, or sign-in endpoint.
+digest and existing flow profiles remain unchanged. `NewProviderPreAuthIssuer`
+uses that profile for a five-minute host-only flow; it only delivers a cookie
+after a new durable commitment. Recovering the original command returns its
+outcome, not a cookie or flow record. A compatible durable executor is required;
+these APIs do not verify a provider credential or install a sign-in endpoint.
 
 These are private structural values, not authentication or primary active-state
 proof. `Check` requires authoritative time after locks and never consumes the

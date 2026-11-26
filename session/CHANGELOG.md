@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a selected five-minute One Tap callback issuer. It delivers the original
+  host-only cookie only after a new commit; recovery exposes only the outcome.
+
 - Bind an explicitly selected One Tap callback pre-auth transaction to its
   original provider, client and mode, under a separate cookie-digest domain.
   Ordinary flow projections and digests stay unchanged.

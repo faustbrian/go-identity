@@ -64,6 +64,7 @@ type PreAuthIssuer struct {
 	executor     PreAuthIssuanceExecutor
 	config       PreAuthIssuerConfig
 	frontchannel FrontchannelCookiePolicy
+	provider     PreAuthProviderBinding
 }
 
 // NewPreAuthIssuer validates trusted composition without IO or entropy. The
@@ -72,7 +73,7 @@ func NewPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig) (
 	if c.Cookie.name != "__Host-identity_flow" || c.Action == samlFrontchannelAction {
 		return nil, ErrInvalidIssuer
 	}
-	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{})
+	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{}, PreAuthProviderBinding{})
 }
 
 // NewSAMLFrontchannelIssuer selects separate pre-authentication correlation for
@@ -91,16 +92,16 @@ func NewSAMLFrontchannelIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuer
 		c.Action != samlFrontchannelAction || c.FlowTTL != frontchannelCookieTTL || c.Purpose != PreAuthSessionIssuance || c.Cookie != (CookiePolicy{}) {
 		return nil, ErrInvalidIssuer
 	}
-	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{path: path})
+	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{path: path}, PreAuthProviderBinding{})
 }
 
-func newPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, frontchannel FrontchannelCookiePolicy) (*PreAuthIssuer, error) {
+func newPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, frontchannel FrontchannelCookiePolicy, provider PreAuthProviderBinding) (*PreAuthIssuer, error) {
 	if issuerNil(executor) || issuerNil(c.Clock) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.FlowTTL < time.Minute || c.FlowTTL > 10*time.Minute || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 {
 		return nil, ErrInvalidIssuer
 	}
 	c.ActorID = identity.ActorID(strings.Clone(string(c.ActorID)))
 	c.Action, c.Origin, c.CallbackURL, c.PolicyID = strings.Clone(c.Action), strings.Clone(c.Origin), strings.Clone(c.CallbackURL), strings.Clone(c.PolicyID)
-	s := &PreAuthIssuer{executor: executor, config: c, frontchannel: frontchannel}
+	s := &PreAuthIssuer{executor: executor, config: c, frontchannel: frontchannel, provider: provider}
 	// A non-issuing structural template validates the selected profile without
 	// calling the clock or generating credential bytes during construction.
 	remember, _ := ResolveRememberPolicy(BrowserSession, LifetimeConfig{Default: BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
@@ -164,12 +165,19 @@ func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (out PreparedPreAuthI
 	if err != nil {
 		return out, err
 	}
-	spec, _ := command.Record.Bindings()
-	spec.Cookie, err = token.PreAuthDigest(s.config.LookupKey, spec.Binding)
+	spec, err := s.projectPreAuthRecord(command.Record)
 	if err != nil {
 		return out, err
 	}
-	command.Record, err = NewPreAuthTransaction(spec)
+	if s.provider.Mode == 0 {
+		spec.Cookie, err = token.PreAuthDigest(s.config.LookupKey, spec.Binding)
+	} else {
+		spec.Cookie, err = token.ProviderPreAuthDigest(s.config.LookupKey, spec.Binding, s.provider)
+	}
+	if err != nil {
+		return out, err
+	}
+	command.Record, err = s.newPreAuthRecord(spec)
 	if err != nil {
 		return out, err
 	}
@@ -178,19 +186,19 @@ func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (out PreparedPreAuthI
 
 func (s *PreAuthIssuer) original(i PreAuthPrepareInput, id identity.PreAuthTransactionID, nonce [32]byte, now time.Time, digest TokenDigest) (PreAuthIssueCommand, error) {
 	c := s.config
-	record, err := NewPreAuthTransaction(PreAuthTransactionSpec{Binding: PreAuthBinding{ID: id, Intent: PreAuthIntent{TenantID: i.TenantID, Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: nonce, Remember: i.Remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: i.IdentifierBinding, Purpose: c.Purpose}, IssuedAt: now, ExpiresAt: now.Add(c.FlowTTL)}, Cookie: digest, Version: 1})
+	record, err := s.newPreAuthRecord(PreAuthTransactionSpec{Binding: PreAuthBinding{ID: id, Intent: PreAuthIntent{TenantID: i.TenantID, Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: nonce, Remember: i.Remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: i.IdentifierBinding, Purpose: c.Purpose}, IssuedAt: now, ExpiresAt: now.Add(c.FlowTTL)}, Cookie: digest, Version: 1})
 	return PreAuthIssueCommand{CommandID: i.CommandID, CorrelationID: strings.Clone(i.CorrelationID), Record: record}, err
 }
 
 func (s *PreAuthIssuer) binding(c PreAuthIssueCommand) identity.CommandBinding {
-	p, _ := c.Record.Bindings()
+	p, _ := s.projectPreAuthRecord(c.Record)
 	i := p.Binding.Intent
 	op := PreAuthIssueOperation()
 	return identity.CommandBinding{CommandID: c.CommandID, TenantID: i.TenantID, AnonymousFlowID: string(p.Binding.ID), ActorID: s.config.ActorID, ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, RecordID: string(p.Binding.ID), PolicyID: i.PolicyID, PolicyVersion: i.PolicyVersion, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, CorrelationID: c.CorrelationID}
 }
 
 func (s *PreAuthIssuer) originalProfile(c PreAuthIssueCommand) bool {
-	p, err := c.Record.Bindings()
+	p, err := s.projectPreAuthRecord(c.Record)
 	i := p.Binding.Intent
 	return err == nil && p.Version == 1 && i.Purpose == s.config.Purpose && i.Action == s.config.Action && i.Origin == s.config.Origin && i.CallbackURL == s.config.CallbackURL && i.PolicyID == s.config.PolicyID && i.PolicyVersion == s.config.PolicyVersion && s.binding(c).ValidateFor(PreAuthIssueOperation()) == nil
 }
@@ -246,8 +254,8 @@ func (s *PreAuthIssuer) Issue(ctx context.Context, p PreparedPreAuthIssuance) (o
 	if err = ctx.Err(); err != nil {
 		return out, err
 	}
-	spec, _ := c.Record.Bindings()
-	if err = c.Record.Check(s.config.Clock.Now(), spec.Binding, spec.Cookie); err != nil {
+	spec, _ := s.projectPreAuthRecord(c.Record)
+	if err = s.checkPreAuthRecord(c.Record, s.config.Clock.Now(), spec); err != nil {
 		return out, err
 	}
 	if err = ctx.Err(); err != nil {
@@ -263,7 +271,7 @@ func (s *PreAuthIssuer) Issue(ctx context.Context, p PreparedPreAuthIssuance) (o
 		return out, err
 	}
 	now := s.config.Clock.Now()
-	if err = c.Record.Check(now, spec.Binding, spec.Cookie); err != nil {
+	if err = s.checkPreAuthRecord(c.Record, now, spec); err != nil {
 		return out, err
 	}
 	cookie, err := s.preAuthCookie(now, spec.Binding.ExpiresAt)
