@@ -22,6 +22,7 @@ import (
 
 func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Pool, base IssueExecutorConfig) {
 	t.Helper()
+	t.Run("selected provider callback initiation", func(t *testing.T) { testOwnedProviderPreAuthIssue(t, ctx, pool, base) })
 	base.Coordinator.FinalAuthentication = nil
 	config := PreAuthIssueExecutorConfig{Repository: base.Repository, Coordinator: base.Coordinator, Authorization: base.Authorization, Clock: base.Clock, ActorID: "preauth-service", Action: "identity.otp.signin", Origin: "https://identity.test", CallbackURL: "https://app.test/return", PolicyID: "login", PolicyVersion: 1, AuditRetentionVersion: 1}
 	executor, err := NewPreAuthIssueExecutor(pool, config)

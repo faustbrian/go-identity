@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strings"
+	"time"
 
 	authorization "github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
@@ -19,11 +20,18 @@ type preAuthIssueProfile struct {
 	action, origin, callback, policy string
 	version                          uint64
 	purpose                          session.PreAuthPurpose
+	provider                         session.PreAuthProviderBinding
 }
 
 func (p *preAuthIssueProfile) matches(b identity.CommandBinding, record session.PreAuthTransaction) bool {
-	s, err := record.Bindings()
-	if p == nil || err != nil {
+	if p == nil {
+		return false
+	}
+	s, err := selectedPreAuthProjection(record, p.provider)
+	if err != nil {
+		return false
+	}
+	if p.provider.Mode != 0 && s.Binding.ExpiresAt.Sub(s.Binding.IssuedAt) != 5*time.Minute {
 		return false
 	}
 	i := s.Binding.Intent
@@ -52,12 +60,12 @@ func (r *Repository) applyPreAuthIssue(ctx context.Context, w kernel.Work, comma
 		return identity.FeatureReceipt{}, session.ErrInvalidPreAuthTransaction
 	}
 	config := Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}
-	if err = InsertPreAuth(ctx, w, config, record); err != nil {
+	if err = insertSelectedPreAuth(ctx, w, config, record, r.preAuthIssue.provider); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	// Admission uses locked primary time and the exact original commitment. An
 	// expired/changed flow aborts issuance and its retained evidence together.
-	if err = RequirePreAuth(ctx, w, config, record); err != nil {
+	if err = requireSelectedPreAuth(ctx, w, config, record, r.preAuthIssue.provider); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	payload, err := encodePreAuth(record)

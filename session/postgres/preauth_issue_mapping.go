@@ -15,7 +15,7 @@ func preAuthIssueOperation() identity.FeatureOperation {
 }
 
 func mapPreAuthIssue(b identity.CommandBinding, record session.PreAuthTransaction) (identity.Command, error) {
-	s, err := record.Bindings()
+	s, provider, err := preAuthRecordProjection(record)
 	op := preAuthIssueOperation()
 	if err != nil || b.ValidateFor(op) != nil || s.Version != 1 || b.TenantID != s.Binding.Intent.TenantID || b.AnonymousFlowID != string(s.Binding.ID) || b.RecordID != string(s.Binding.ID) || b.PolicyID != s.Binding.Intent.PolicyID || b.PolicyVersion != s.Binding.Intent.PolicyVersion {
 		return identity.Command{}, session.ErrInvalidPreAuthTransaction
@@ -55,6 +55,12 @@ func mapPreAuthIssue(b identity.CommandBinding, record session.PreAuthTransactio
 	}
 	if i.IdentifierBinding != ([32]byte{}) {
 		add("flow.identifier", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: i.IdentifierBinding[:]})
+	}
+	if provider.Mode != 0 {
+		text("flow.provider.id", provider.ProviderID)
+		text("flow.provider.client", provider.ClientID)
+		number("flow.provider.version", provider.ProviderVersion)
+		number("flow.provider.mode", uint64(provider.Mode))
 	}
 	return identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields})
 }
@@ -145,10 +151,18 @@ func nativePreAuthIssue(command identity.Command) (identity.CommandBinding, sess
 			return bad()
 		}
 	}
-	if len(values) != 0 {
+	var provider session.PreAuthProviderBinding
+	if _, present := values["flow.provider.id"]; present {
+		provider = session.PreAuthProviderBinding{ProviderID: text("flow.provider.id"), ClientID: text("flow.provider.client"),
+			ProviderVersion: number("flow.provider.version"), Mode: session.PreAuthProviderCallback}
+		if mode := number("flow.provider.mode"); mode != uint64(provider.Mode) {
+			return bad()
+		}
+	}
+	if !valid || len(values) != 0 {
 		return bad()
 	}
-	record, err := session.NewPreAuthTransaction(s)
+	record, err := buildPreAuthRecord(s, provider)
 	if err != nil {
 		return bad()
 	}

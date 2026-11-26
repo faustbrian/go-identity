@@ -22,6 +22,21 @@ import (
 // Missing scope is Forbidden; corrupt/storage failures are Unavailable;
 // malformed/nil inputs are InvalidInput. All errors are redacted and bounded.
 func ReadPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, tenant identity.TenantID, id identity.PreAuthTransactionID) (session.PreAuthTransaction, error) {
+	return readSelectedPreAuth(ctx, q, c, tenant, id, session.PreAuthProviderBinding{})
+}
+
+// ReadProviderPreAuth loads the exact original bytes for the trusted selected
+// One Tap callback provider from primary custody. Wrong profiles deny without
+// returning a flow. This is not cookie possession, a live state check, or
+// permission to consume the record; no original authority is renewed.
+func ReadProviderPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, tenant identity.TenantID, id identity.PreAuthTransactionID, selected session.PreAuthProviderBinding) (session.PreAuthTransaction, error) {
+	if selected.Mode != session.PreAuthProviderCallback {
+		return session.PreAuthTransaction{}, identity.InvalidInputError{Field: "session_preauth_provider"}
+	}
+	return readSelectedPreAuth(ctx, q, c, tenant, id, selected)
+}
+
+func readSelectedPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, tenant identity.TenantID, id identity.PreAuthTransactionID, selected session.PreAuthProviderBinding) (session.PreAuthTransaction, error) {
 	if ctx == nil || nilSessionHandle(q) || !validSchema(c.Schema) || c.MaximumDuration <= 0 || c.MaximumDuration > time.Minute || !scopeID(string(tenant)) {
 		return session.PreAuthTransaction{}, identity.InvalidInputError{Field: "session_preauth"}
 	}
@@ -63,7 +78,10 @@ func ReadPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Conf
 	if err != nil {
 		return session.PreAuthTransaction{}, identity.UnavailableError{}
 	}
-	s, _ := record.Bindings()
+	s, err := selectedPreAuthProjection(record, selected)
+	if err != nil {
+		return session.PreAuthTransaction{}, identity.ForbiddenError{}
+	}
 	if s.Binding.Intent.TenantID != tenant || s.Binding.ID != id || s.Binding.IssuedAt.Format(storedTimeLayout) != issued || s.Binding.ExpiresAt.Format(storedTimeLayout) != expires || keyVersion != int64(s.Cookie.KeyVersion) || subtle.ConstantTimeCompare(digest, s.Cookie.Sum[:]) != 1 || version != strconv.FormatUint(s.Version, 10) {
 		return session.PreAuthTransaction{}, identity.UnavailableError{}
 	}

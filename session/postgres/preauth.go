@@ -65,13 +65,17 @@ func (u PreAuthUse) valid(s session.PreAuthTransactionSpec) bool {
 }
 
 func preAuthContext(ctx context.Context, q any, c Config, record session.PreAuthTransaction) (context.Context, context.CancelFunc, session.PreAuthTransactionSpec, []byte, error) {
+	return preAuthSelectedContext(ctx, q, c, record, session.PreAuthProviderBinding{})
+}
+
+func preAuthSelectedContext(ctx context.Context, q any, c Config, record session.PreAuthTransaction, provider session.PreAuthProviderBinding) (context.Context, context.CancelFunc, session.PreAuthTransactionSpec, []byte, error) {
 	invalid := func() (context.Context, context.CancelFunc, session.PreAuthTransactionSpec, []byte, error) {
 		return nil, nil, session.PreAuthTransactionSpec{}, nil, identity.InvalidInputError{Field: "session_preauth"}
 	}
 	if ctx == nil || nilSessionHandle(q) || !validSchema(c.Schema) || c.MaximumDuration <= 0 || c.MaximumDuration > time.Minute {
 		return invalid()
 	}
-	s, err := record.Bindings()
+	s, err := selectedPreAuthProjection(record, provider)
 	if err != nil || s.Version > ^uint64(0)-2 {
 		return invalid()
 	}
@@ -95,7 +99,11 @@ func preAuthContext(ctx context.Context, q any, c Config, record session.PreAuth
 // ambiguous insertion by the existing command, not call this to mint another
 // record. Public initiation/receipt recovery wiring is still separate work.
 func InsertPreAuth[R SessionRows](ctx context.Context, q PreAuthWriter[R], c Config, record session.PreAuthTransaction) error {
-	bounded, stop, s, canonical, err := preAuthContext(ctx, q, c, record)
+	return insertSelectedPreAuth(ctx, q, c, record, session.PreAuthProviderBinding{})
+}
+
+func insertSelectedPreAuth[R SessionRows](ctx context.Context, q PreAuthWriter[R], c Config, record session.PreAuthTransaction, provider session.PreAuthProviderBinding) error {
+	bounded, stop, s, canonical, err := preAuthSelectedContext(ctx, q, c, record, provider)
 	if err != nil {
 		return err
 	}
@@ -115,12 +123,16 @@ func InsertPreAuth[R SessionRows](ctx context.Context, q PreAuthWriter[R], c Con
 // Current access policy and credential owners remain the consuming workflow's
 // checks. It retains no handle/cursor and performs no independent IO or write.
 func RequirePreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, record session.PreAuthTransaction) error {
-	bounded, stop, s, canonical, err := preAuthContext(ctx, q, c, record)
+	return requireSelectedPreAuth(ctx, q, c, record, session.PreAuthProviderBinding{})
+}
+
+func requireSelectedPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, record session.PreAuthTransaction, provider session.PreAuthProviderBinding) error {
+	bounded, stop, s, canonical, err := preAuthSelectedContext(ctx, q, c, record, provider)
 	if err != nil {
 		return err
 	}
 	defer stop()
-	return lockPreAuth(bounded, q, c, record, s, canonical, nil, false)
+	return lockSelectedPreAuth(bounded, q, c, record, s, canonical, nil, false, provider)
 }
 
 // ReservePreAuth changes issued to reserved exactly once under an update lock,
@@ -185,6 +197,10 @@ func preAuthWriteResult(ctx context.Context, count int64, err error) error {
 }
 
 func lockPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, record session.PreAuthTransaction, s session.PreAuthTransactionSpec, canonical []byte, use *PreAuthUse, update bool) error {
+	return lockSelectedPreAuth(ctx, q, c, record, s, canonical, use, update, session.PreAuthProviderBinding{})
+}
+
+func lockSelectedPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, record session.PreAuthTransaction, s session.PreAuthTransactionSpec, canonical []byte, use *PreAuthUse, update bool, provider session.PreAuthProviderBinding) error {
 	if err := lockPreAuthRecord(ctx, q, c, s, canonical, use, update); err != nil {
 		return err
 	}
@@ -204,7 +220,12 @@ func lockPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Conf
 	if ctx.Err() != nil {
 		return readError(ctx, ctx.Err())
 	}
-	if record.Check(now, s.Binding, s.Cookie) != nil {
+	if provider == (session.PreAuthProviderBinding{}) {
+		err = record.Check(now, s.Binding, s.Cookie)
+	} else {
+		err = record.CheckProvider(now, s.Binding, provider, s.Cookie)
+	}
+	if err != nil {
 		return identity.ForbiddenError{}
 	}
 	return nil

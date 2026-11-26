@@ -341,6 +341,17 @@ continues rejecting phone recipients. No secondary SMS/recovery fallback or
 HTTP route is implicit. Install the selected password/MFA session histories and
 the phone primary/continuation forward suffixes through their actual owners.
 
+## Provider-bound One Tap callback initiation
+
+Use `NewProviderPreAuthIssueExecutor` with the exact provider/client/mode
+configured in `session.NewProviderPreAuthIssuer`. The callback profile stores
+the original five-minute record atomically with the existing command, audit,
+and outbox effects. `ReadProviderPreAuth` returns that exact record only for
+the selected provider. It does not verify cookie possession, authenticate a
+Google credential, consume the flow, or issue a session. The ordinary read
+and normal session flows do not accept this stored profile; legacy bytes and
+migrations remain unchanged. Recovery still exposes only command outcomes.
+
 ## Explicit sessionless recovery pre-authentication
 
 `PreAuthIssueExecutorConfig.Purpose` must match the core issuer's explicit

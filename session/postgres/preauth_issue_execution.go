@@ -59,6 +59,22 @@ var _ session.PreAuthIssuanceExecutor = (*PreAuthIssueExecutor)(nil)
 // IO. It does not authenticate a user, mint a cookie, apply migrations or grant
 // policy access. Original persisted scope is distinct from verified actors.
 func NewPreAuthIssueExecutor(pool *database.Pool, c PreAuthIssueExecutorConfig) (*PreAuthIssueExecutor, error) {
+	return newPreAuthIssueExecutor(pool, c, session.PreAuthProviderBinding{})
+}
+
+// NewProviderPreAuthIssueExecutor selects the matching native owner for a
+// server-prepared One Tap callback. The trusted HTTPS origin and initial action
+// must match the core issuer. No migrations, provider validation or session
+// issuance run here. Existing command, audit and outbox owners retain custody.
+func NewProviderPreAuthIssueExecutor(pool *database.Pool, c PreAuthIssueExecutorConfig, provider session.PreAuthProviderBinding) (*PreAuthIssueExecutor, error) {
+	if provider.Mode != session.PreAuthProviderCallback || !strings.HasPrefix(c.Origin, "https://") {
+		return nil, session.ErrInvalidInput
+	}
+	provider.ProviderID, provider.ClientID = strings.Clone(provider.ProviderID), strings.Clone(provider.ClientID)
+	return newPreAuthIssueExecutor(pool, c, provider)
+}
+
+func newPreAuthIssueExecutor(pool *database.Pool, c PreAuthIssueExecutorConfig, provider session.PreAuthProviderBinding) (*PreAuthIssueExecutor, error) {
 	if pool == nil || pool.Raw() == nil || nilIssueDependency(c.Authorization) || nilIssueDependency(c.Clock) || !scopeID(string(c.ActorID)) || !scopeID(c.PolicyID) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || c.Coordinator.MaximumDuration < time.Millisecond || c.Coordinator.MaximumDuration > 30*time.Second {
 		return nil, session.ErrInvalidInput
 	}
@@ -74,7 +90,7 @@ func NewPreAuthIssueExecutor(pool *database.Pool, c PreAuthIssueExecutorConfig) 
 		identifier = [32]byte{1}
 	}
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	_, err = session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: [32]byte{1}, Remember: remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: identifier, Purpose: c.Purpose}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})
+	_, err = buildPreAuthRecord(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: [32]byte{1}, Remember: remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: identifier, Purpose: c.Purpose}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1}, provider)
 	if err != nil {
 		return nil, session.ErrInvalidInput
 	}
@@ -82,7 +98,7 @@ func NewPreAuthIssueExecutor(pool *database.Pool, c PreAuthIssueExecutorConfig) 
 	if err != nil {
 		return nil, err
 	}
-	native.preAuthIssue = &preAuthIssueProfile{actor: identity.ActorID(strings.Clone(string(c.ActorID))), action: strings.Clone(c.Action), origin: strings.Clone(c.Origin), callback: strings.Clone(c.CallbackURL), policy: strings.Clone(c.PolicyID), version: c.PolicyVersion, purpose: c.Purpose}
+	native.preAuthIssue = &preAuthIssueProfile{actor: identity.ActorID(strings.Clone(string(c.ActorID))), action: strings.Clone(c.Action), origin: strings.Clone(c.Origin), callback: strings.Clone(c.CallbackURL), policy: strings.Clone(c.PolicyID), version: c.PolicyVersion, purpose: c.Purpose, provider: provider}
 	domain, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: c.Coordinator.MaximumDuration})
 	if err != nil {
 		return nil, err
@@ -112,11 +128,11 @@ func (e *PreAuthIssueExecutor) preparePreAuth(input PreAuthIssueCommand) (identi
 	if e == nil || e.owned == nil || e.owned.native == nil || e.owned.native.preAuthIssue == nil {
 		return identity.CommandBinding{}, identity.Command{}, session.ErrInvalidInput
 	}
-	s, err := input.Record.Bindings()
+	p := e.owned.native.preAuthIssue
+	s, err := selectedPreAuthProjection(input.Record, p.provider)
 	if err != nil {
 		return identity.CommandBinding{}, identity.Command{}, session.ErrInvalidPreAuthTransaction
 	}
-	p := e.owned.native.preAuthIssue
 	op := preAuthIssueOperation()
 	b := identity.CommandBinding{CommandID: input.CommandID, TenantID: s.Binding.Intent.TenantID, AnonymousFlowID: string(s.Binding.ID), ActorID: p.actor, ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, RecordID: string(s.Binding.ID), PolicyID: p.policy, PolicyVersion: p.version, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, CorrelationID: input.CorrelationID}
 	if !p.matches(b, input.Record) {

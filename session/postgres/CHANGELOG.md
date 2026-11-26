@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Persist explicitly selected One Tap callback initiation with its original
+  provider, client and mode and the existing atomic command/audit/outbox
+  custody. Keep legacy record bytes unchanged and use an explicit read path.
+
 - Let a native SP SAML callback apply a selected organization update in its
   original session transaction before the first organization authority fence.
   Failure rolls back the update, browser consumption and session together.
