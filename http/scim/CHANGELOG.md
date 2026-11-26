@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in managed-bearer User Create at the exact SCIM collection POST.
+  Delegate bounded raw schema input and native command custody, forbid client
+  idempotency keys, and charge shared atomic protocol quota after current native
+  authority. Return 201 with validated native Location, exact ETag and body;
+  no other route or write is selected.
+
 - Add opt-in managed-bearer User Get at the canonical single-resource route,
   retaining the native bounded projection and exact ETag after current native
   authority and one shared atomic protocol admission. No implicit method,

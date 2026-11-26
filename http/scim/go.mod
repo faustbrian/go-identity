@@ -5,13 +5,14 @@ go 1.27.0
 require (
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
-	github.com/faustbrian/go-identity/http v0.0.0-20261126170121-b73474ea223b
+	github.com/faustbrian/go-identity/http v0.0.0-20261126175259-b32c2d7300c0
 	github.com/faustbrian/go-identity/http/organization v0.0.0-20261126145644-ca3be759bba8
 	github.com/faustbrian/go-identity/session v0.0.0-20261027053124-3051d2cd42b5
+	github.com/faustbrian/go-json-schema/v2 v2.0.0
 	github.com/faustbrian/go-organization v0.0.0-20261122135635-30af6abd1547
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
-	github.com/faustbrian/go-scim v0.0.0-20261126153416-d131d4161402
-	github.com/faustbrian/go-scim/postgres v0.0.0-20261126154454-e6ed164682a2
+	github.com/faustbrian/go-scim v0.0.0-20261126172705-b6fb8ba62fef
+	github.com/faustbrian/go-scim/postgres v0.0.0-20261126173716-4379149779d1
 )
 
 require (
@@ -39,7 +40,6 @@ require (
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261028092233-945b17fc88c4 // indirect
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261027044816-80f08eb82bb9 // indirect
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94 // indirect
-	github.com/faustbrian/go-json-schema/v2 v2.0.0 // indirect
 	github.com/faustbrian/go-migrations/v2 v2.0.0 // indirect
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc // indirect
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820 // indirect

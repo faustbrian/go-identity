@@ -1,5 +1,52 @@
 # SCIM HTTP
 
+## Managed bearer User Create
+
+`NewManagedUsersCreateFeature` selects only `POST /scim/v2/Users` with an
+explicit issued managed SCIM bearer. Supply the public native managed owner,
+its matching effective limits and HTTPS tenant policy, and the same strict
+atomic protocol backend/namespace/key used by other selected SCIM operations:
+
+```go
+feature, err := scimhttp.NewManagedUsersCreateFeature(scimhttp.ManagedUsersCreateConfig{
+    Network: network, Executor: nativeManagedConnections, Limits: nativeLimits,
+    Rate: sharedProtocolRate, MaximumDuration: 5 * time.Second,
+})
+```
+
+The raw `application/scim+json` body is bounded by the smallest native body,
+transport raw-body and decoded-byte limit before forwarding. UTF-8 charset
+and identity encoding are supported; other media/encodings fail as SCIM 415.
+Native schema decoding owns duplicate/case-collision rejection, writable
+fields, extensions, password policy and resource budgets. No transport request
+key, client identity, mapper, credential store or command authority is added.
+Queries, trailers, conditional/range headers and every Idempotency-Key channel
+are forbidden. Cookies never supply bearer authority; this selection needs no
+CSRF token or browser session.
+
+The native owner authenticates and authorizes the current connection, then
+charges one shared atomic `rate.protocol` attempt before mapping or durable
+effects. Each HTTP attempt re-enters that authority/admission window; native
+canonical command identity, replay and ambiguous-outcome handling remain its
+existing owner's responsibility. No local quota fallback, response cache or
+automatic retry exists.
+
+Success returns the exact bounded native resource as SCIM 201 with its unchanged
+strong `ETag` and authoritative `Location`, without cookies. The native profile
+must use `Provisioning.BaseURL` equal to the canonical effective HTTPS origin
+plus `/scim/v2`. The Location must name its canonical native resource ID at
+that exact origin/path, agree with `id`/`meta.location`, and its ETag must agree
+with `meta.version`; inconsistent or unsafe native output is not disclosed.
+Native failures return redacted SCIM Errors, never partial data, Location or ETag;
+no-store/nosniff applies throughout. A 503 after a native failure does not prove
+that a mutation was rolled back.
+
+Importing or omitting this feature installs no route. Combine its disjoint
+Operations with Get/List/Bulk under the canonical `scim` feature ID as below.
+It selects no collection GET, User Get, other write, search, Groups, discovery
+or managed connection lifecycle route. The server retains raw-IO/write
+deadlines and body closure; the feature starts no goroutine or detached work.
+
 ## Managed bearer User Get
 
 `NewManagedUsersGetFeature` selects only canonical
