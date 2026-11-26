@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preview an ordered SCIM Group batch at the current directory checkpoint
+  through the direct Reference worker. Reuse existing read authorization
+  without writing grants or exposing an HTTP route.
+
 - Opt into authenticated SCIM Bulk and matching discovery through the
   Reference HTTPS server and its shared PostgreSQL protocol quota. Add
   native migration suffixes without changing the installed SCIM prefix.

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -325,7 +326,9 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 		applied = roleJourney(human, first, [32]byte(checkpoint))
 		wantApplied = 2
 	case groupSource != nil:
-		applied = proveReferenceMappedGroupApply(t, ctx, f, features, human, *groupSource, first, [32]byte(checkpoint), bind)
+		applied = proveReferenceMappedGroupApply(t, ctx, f, features, human, *groupSource, first, [32]byte(checkpoint), bind, func() referenceDirectoryProjection {
+			return decode(call(http.MethodGet, statusPath, "", "", true, 200))
+		})
 		wantApplied = 1
 	case userSource != nil:
 		applied = proveReferenceMappedUserApply(t, ctx, f, *userSource, first, [32]byte(checkpoint), bindUser)
@@ -366,7 +369,7 @@ func proveReferenceDirectorySyncHTTPS(t *testing.T, ctx context.Context, f liveS
 	}
 }
 
-func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, human organizationTestHuman, source referenceDirectorySCIMSource, generation referenceDirectoryProjection, predecessor [32]byte, bind referenceDirectoryApplyBinding) [32]byte {
+func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, human organizationTestHuman, source referenceDirectorySCIMSource, generation referenceDirectoryProjection, predecessor [32]byte, bind referenceDirectoryApplyBinding, status func() referenceDirectoryProjection) [32]byte {
 	t.Helper()
 	teams, err := features.Organizations()
 	if err != nil {
@@ -389,10 +392,22 @@ func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveSto
 	if err != nil || admitted.Receipt.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("admit the actual SCIM-created identity to the organization", err)
 	}
+	emptyGroup, err := source.groups.Execute(ctx, scim.Request{
+		Operation: scim.GroupCreate, Credential: source.bearer, ContentType: "application/scim+json",
+		IdempotencyKey: "reference-directory-source-empty-group",
+		Body:           []byte(`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:Group"],"displayName":"Reference empty directory group","members":[]}`),
+	})
+	if err != nil {
+		t.Fatal("create a second real source Group with no membership for the admitted User", err)
+	}
+	emptyGroupID := referenceDirectorySCIMResourceID(t, emptyGroup, http.StatusCreated)
 	mapping := scimorganization.DirectoryMappingConfig{
 		TenantID: member.scope.TenantID, OrganizationID: member.scope.OrganizationID, ProviderID: sso.ProviderID(member.scope.ProviderID),
 		ConnectionID: member.scope.ConnectionID, MappingVersion: generation.MappingVersion,
-		Groups:  []scimorganization.DirectoryGroupTeamMapping{{GroupID: member.groupID, TeamID: team}},
+		Groups: []scimorganization.DirectoryGroupTeamMapping{
+			{GroupID: member.groupID, TeamID: team},
+			{GroupID: emptyGroupID, TeamID: team},
+		},
 		Members: []scimorganization.DirectoryMemberUserMapping{{MemberID: member.userID, UserID: target}},
 	}
 	policy := referenceDirectoryPolicy{}
@@ -408,6 +423,67 @@ func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveSto
 	if missing, err := worker.ObserveDrift(ctx, request); err != nil || missing.Kind != scimorganization.DirectoryMembershipDriftMissingSourceGrant || missing.LocalGrant {
 		t.Fatal("direct drift inspection did not identify the missing attributed grant", missing.Kind, err)
 	}
+	emptyDelta, err := sso.NewDirectoryGroupMembershipDelta(commandIDForReference(t), emptyGroupID, member.userID, sso.DirectoryMembershipAdd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := request
+	batch.Deltas = []sso.DirectoryDelta{delta, emptyDelta}
+	owner, err := organizationpg.NewRepository(f.pool, organizationpg.Config{MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type previewState struct {
+		generation             referenceDirectoryProjection
+		memberships            [2]organizationpg.DirectoryTeamMembershipObservation
+		grants, audits, events int
+		commands, claims       int
+	}
+	observeState := func() previewState {
+		t.Helper()
+		state := previewState{generation: status()}
+		for i, groupID := range []string{member.groupID, emptyGroupID} {
+			membership, err := owner.ObserveDirectoryTeamMembership(ctx, organizationpg.DirectoryTeamGrantScope{
+				TenantID: member.scope.TenantID, OrganizationID: member.scope.OrganizationID,
+				ProviderID: organization.ID(member.scope.ProviderID), ConnectionID: organization.ID(member.scope.ConnectionID),
+				GroupID: organization.ID(groupID), TeamID: team, UserID: target,
+			})
+			if err != nil {
+				t.Fatal("observe both exact source grants around Reference batch inspection", err)
+			}
+			state.memberships[i] = membership
+		}
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT
+ (SELECT count(*) FROM organization.directory_team_grants),
+ (SELECT count(*) FROM audit.records),
+ (SELECT count(*) FROM outbox_messages),
+ (SELECT count(*) FROM identity.commands),
+ (SELECT count(*) FROM identity.identity_command_id_claims)`).Scan(&state.grants, &state.audits, &state.events, &state.commands, &state.claims); err != nil {
+			t.Fatal("observe persisted protected effects around Reference batch inspection", err)
+		}
+		return state
+	}
+	beforePreview := observeState()
+	for _, grant := range beforePreview.memberships {
+		if grant.Source || grant.Local || grant.Version != 0 {
+			t.Fatal("both Group targets must begin without source or local team grants")
+		}
+	}
+	wantDrift := []scimorganization.DirectoryMembershipDrift{
+		{Kind: scimorganization.DirectoryMembershipDriftMissingSourceGrant},
+		{Kind: scimorganization.DirectoryMembershipDriftInSync},
+	}
+	if reports, err := worker.ObserveBatchDrift(ctx, batch); err != nil || !slices.Equal(reports, wantDrift) {
+		t.Fatal("Reference batch drift did not distinguish the two actual source Groups in candidate order", err)
+	}
+	reversed := batch
+	reversed.Deltas = []sso.DirectoryDelta{emptyDelta, delta}
+	if reports, err := worker.ObserveBatchDrift(ctx, reversed); err != nil || !slices.Equal(reports, []scimorganization.DirectoryMembershipDrift{wantDrift[1], wantDrift[0]}) {
+		t.Fatal("Reference batch drift did not retain reversed candidate order", err)
+	}
+	if after := observeState(); after != beforePreview {
+		t.Fatal("Reference batch preview changed browser Status, either exact grant, or protected effects")
+	}
 	result, err := worker.Apply(ctx, request)
 	if err != nil || len(result.ChildOutcomes) != 1 || result.ChildOutcomes[0].Outcome != identity.CommitOutcomeCommitted || result.ChildOutcomes[0].Binding.ActorID != referenceDirectorySCIMActor || result.ChildOutcomes[0].Binding.UserID != target {
 		t.Fatal("direct Apply did not settle the exact service-account child and target", err)
@@ -419,14 +495,26 @@ func proveReferenceMappedGroupApply(t *testing.T, ctx context.Context, f liveSto
 	if stale, err := worker.ObserveDrift(ctx, request); !errors.Is(err, sso.ErrDirectoryReconciliation) || stale != (scimorganization.DirectoryMembershipDrift{}) {
 		t.Fatal("stale Reference predecessor yielded a drift report", stale.Kind, err)
 	}
+	afterApply := observeState()
+	if afterApply.generation.Checkpoint != base64.RawURLEncoding.EncodeToString(result.Checkpoint[:]) ||
+		afterApply.generation.ReadCount != 1 || afterApply.generation.AppliedCount != 1 || afterApply.generation.RejectedCount != 0 ||
+		!afterApply.memberships[0].Source || afterApply.memberships[1].Source {
+		t.Fatal("ordinary first-edge Apply did not settle only its exact grant and persisted browser checkpoint")
+	}
+	if stale, err := worker.ObserveBatchDrift(ctx, batch); !errors.Is(err, sso.ErrDirectoryReconciliation) || stale != nil {
+		t.Fatal("stale Reference batch predecessor disclosed a report or partial prefix", err)
+	}
+	batch.PredecessorCheckpoint = result.Checkpoint
+	if reports, err := worker.ObserveBatchDrift(ctx, batch); err != nil || !slices.Equal(reports, []scimorganization.DirectoryMembershipDrift{wantDrift[1], wantDrift[1]}) {
+		t.Fatal("Reference batch inspection did not observe both settled exact Group attributions", err)
+	}
+	if after := observeState(); after != afterApply {
+		t.Fatal("Reference settled or stale batch inspection changed Status, grants, or protected effects")
+	}
 	current := request
 	current.PredecessorCheckpoint = result.Checkpoint
 	if aligned, err := worker.ObserveDrift(ctx, current); err != nil || aligned.Kind != scimorganization.DirectoryMembershipDriftInSync || aligned.LocalGrant {
 		t.Fatal("direct drift inspection did not see the committed source grant", aligned.Kind, err)
-	}
-	owner, err := organizationpg.NewRepository(f.pool, organizationpg.Config{MaximumDuration: time.Second})
-	if err != nil {
-		t.Fatal(err)
 	}
 	grant, err := owner.ObserveDirectoryTeamMembership(ctx, organizationpg.DirectoryTeamGrantScope{TenantID: member.scope.TenantID, OrganizationID: member.scope.OrganizationID,
 		ProviderID: organization.ID(member.scope.ProviderID), ConnectionID: organization.ID(member.scope.ConnectionID), GroupID: organization.ID(member.groupID), TeamID: team, UserID: target})

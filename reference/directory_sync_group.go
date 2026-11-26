@@ -186,6 +186,23 @@ func (s *DirectoryGroupApplyService) ObserveDrift(ctx context.Context, request s
 	return s.executor.ObserveDrift(bounded, request)
 }
 
+// ObserveBatchDrift reads ordered classifications for up to 128 explicitly
+// mapped Group children at the current running Apply or dry-run checkpoint.
+// It uses the same independent inspection permission as ObserveDrift. Errors
+// return no report. The observation neither modifies grants nor grants repair
+// authority. Do not mutate request.Deltas concurrently with this call.
+func (s *DirectoryGroupApplyService) ObserveBatchDrift(ctx context.Context, request ssopg.DirectoryGroupApplyRequest) ([]scimorganization.DirectoryMembershipDrift, error) {
+	if s == nil || s.executor == nil {
+		return nil, identity.InvalidInputError{Field: "reference_directory_group_drift"}
+	}
+	bounded, done, err := (composedPasswordReset{state: s.state}).enter(ctx, s.tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	return s.executor.ObserveBatchDrift(bounded, request)
+}
+
 func (DirectoryGroupApplyService) Format(s fmt.State, _ rune) {
 	_, _ = fmt.Fprint(s, "reference.DirectoryGroupApplyService(redacted)")
 }

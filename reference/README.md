@@ -569,6 +569,11 @@ current Status checkpoint. The report distinguishes missing or unexpected
 source grants from independent local access and from unresolved evidence.
 Inspection does not apply the child, advance the checkpoint, or expose a route.
 
+Use `ObserveBatchDrift` to inspect up to 128 explicitly mapped Group edges at
+that same checkpoint. Supply the ordered Group children in the same request
+shape as `Apply`. The returned classifications follow the input order. An
+error returns no classifications, and the report does not authorize repairs.
+
 To run User Apply, opt into `DirectorySync.UserSource`. Supply the SCIM
 configuration for a User-only graph; if GroupSource is also selected, leave
 UserSource.SCIM unset to use that exact same source. User-only does not
