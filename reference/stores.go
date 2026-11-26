@@ -75,6 +75,10 @@ type StoreConfiguration struct {
 	// HTTPManagedSCIMUsersList opts into the managed-bearer SCIM User
 	// collection without enabling any write or administrative route.
 	HTTPManagedSCIMUsersList *HTTPManagedSCIMUsersListConfiguration
+	// HTTPManagedSCIMUsersGet selects the canonical managed-bearer User GET
+	// independently of List. If List is selected, a zero Get configuration
+	// adopts that exact owner and protocol quota.
+	HTTPManagedSCIMUsersGet *HTTPManagedSCIMUsersGetConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration
@@ -291,7 +295,7 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	if c.HTTPManagedSCIMCreate != nil && (c.HTTPRate == nil || c.Organization == nil || c.Session == nil || c.OTP == nil) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_http_managed_scim_create"}
 	}
-	if err := validateManagedSCIMUsersList(c); err != nil {
+	if err := validateManagedSCIMUsers(c); err != nil {
 		return StoreSet{}, err
 	}
 	if c.HTTPOAuthDevice != nil && c.OAuthDevice == nil {

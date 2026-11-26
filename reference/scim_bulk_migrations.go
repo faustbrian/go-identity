@@ -23,10 +23,10 @@ const (
 
 func (s StoreSet) managedSCIMReadMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
 	f := s.state.features
-	if f == nil || f.httpManagedSCIMRead == nil && f.httpManagedSCIMCreate == nil && f.httpManagedSCIMUsersList == nil {
+	if f == nil || f.httpManagedSCIMRead == nil && f.httpManagedSCIMCreate == nil && f.httpManagedSCIMUsers == nil {
 		return catalog, nil
 	}
-	if f.httpManagedSCIMCreate != nil || f.httpManagedSCIMUsersList != nil {
+	if f.httpManagedSCIMCreate != nil || f.httpManagedSCIMUsers != nil {
 		// Managed bearer custody checks the organization's credential epoch
 		// even when Bulk or another credential owner is not selected.
 		var err error

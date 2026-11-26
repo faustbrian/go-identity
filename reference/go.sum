@@ -93,6 +93,8 @@ github.com/faustbrian/go-identity/http v0.0.0-20261126145100-e66c199f77fb h1:heS
 github.com/faustbrian/go-identity/http v0.0.0-20261126145100-e66c199f77fb/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/http v0.0.0-20261126161857-a1573c7fd8a1 h1:tIOQotDt6gIZGHkECRygy6rlP56gWI/wpsgnGu7dkAk=
 github.com/faustbrian/go-identity/http v0.0.0-20261126161857-a1573c7fd8a1/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261126170121-b73474ea223b h1:Q+deUswAN05huyX9W6nxGSnA9cZDiyGsZlpAunFz1iw=
+github.com/faustbrian/go-identity/http v0.0.0-20261126170121-b73474ea223b/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93 h1:dpdUKRvijZJuj07LkI9KalMMJ17jfk11i8Rn/mgkS0I=
 github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93/go.mod h1:51jhqgFaUrnr5iU26z1P5JjfufpUXrQyjshXg67QIRk=
 github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029135707-3291fee4a90f h1:alv2l1VkhnJTqTA+7xCv6je9ghl1x6l/we6XQT4LWS8=
@@ -127,6 +129,8 @@ github.com/faustbrian/go-identity/http/scim v0.0.0-20261126151150-6a90ff7cc7ec h
 github.com/faustbrian/go-identity/http/scim v0.0.0-20261126151150-6a90ff7cc7ec/go.mod h1:RcK1L1BQm6aZwUfSuGugmMMz0vbvZloLCXq87pU7lfg=
 github.com/faustbrian/go-identity/http/scim v0.0.0-20261126162803-97df314295c2 h1:SbZFhkA/vc222TaTWuQj8zuJI4c2kEQPq8nQNGeAzyM=
 github.com/faustbrian/go-identity/http/scim v0.0.0-20261126162803-97df314295c2/go.mod h1:38MytvTjd55Cgq26n9PId8vGpMRSP6lAL+93M0SPI0w=
+github.com/faustbrian/go-identity/http/scim v0.0.0-20261126170855-9b9fa2125eb1 h1:JYBM3d4Xc6i/faSv7ODCOBta9kdnCxJPtE2ihmook2I=
+github.com/faustbrian/go-identity/http/scim v0.0.0-20261126170855-9b9fa2125eb1/go.mod h1:43/ZyBF028uFYaF+NVsqG95DmeYclrjRTo2ckVFetYY=
 github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e h1:LkPmjLE65l6pkLau8HEsS1uped3kCbfTbYVptgVRfp4=
 github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e/go.mod h1:/U8vM3BooW9JV2Y3dowdaURlzjb/txfURULhXSTDBWQ=
 github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b h1:WW66OhXrpZQGrz8KsjphEvRYz2KO1GOiZlw9SX1aTuQ=

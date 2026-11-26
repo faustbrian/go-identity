@@ -96,7 +96,7 @@ type featureState struct {
 	scimBulk                     *scimBulkState
 	httpManagedSCIMRead          *managedSCIMReadState
 	httpManagedSCIMCreate        *managedSCIMCreateState
-	httpManagedSCIMUsersList     *managedSCIMUsersListState
+	httpManagedSCIMUsers         *managedSCIMUsersState
 	oauthWorkload                *oauthWorkloadState
 	oauthDevice                  *oauthDeviceState
 	apiKey                       *apiKeyState
@@ -644,7 +644,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			managedSCIMCreate.close()
 		}
 	}()
-	managedUsersList, err := s.composeManagedSCIMUsersList(c, d, sessionOwner, organizationOwner, managedSCIMCreate, scimBulk)
+	managedUsers, err := s.composeManagedSCIMUsers(c, d, sessionOwner, organizationOwner, managedSCIMCreate, scimBulk)
 	if err != nil {
 		return err
 	}
@@ -1026,7 +1026,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.scimBulk = scimBulk
 	s.features.httpManagedSCIMRead = managedSCIMRead
 	s.features.httpManagedSCIMCreate = managedSCIMCreate
-	s.features.httpManagedSCIMUsersList = managedUsersList
+	s.features.httpManagedSCIMUsers = managedUsers
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner

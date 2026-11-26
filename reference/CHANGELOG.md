@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt into managed User Get by a canonical SCIM resource ID, with the exact
+  native ETag and projection. List remains independently selectable.
+
 - Opt into managed-bearer SCIM User listing over HTTPS without enabling
   writes or administration. Reuse the existing PostgreSQL managed credential
   owner and share the protocol quota when Bulk is selected.

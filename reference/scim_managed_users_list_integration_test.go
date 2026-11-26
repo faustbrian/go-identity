@@ -116,6 +116,12 @@ func referenceManagedUsersNative(t *testing.T, c reference.StoreConfiguration, s
 func proveReferenceSCIMStandaloneUsersList(t *testing.T, ctx context.Context, c reference.StoreConfiguration, features reference.FeatureSet, client *http.Client, base string, cookies []*http.Cookie, csrf string, source referenceDirectorySCIMSource) {
 	t.Helper()
 	n := *c.HTTPManagedSCIMUsersList.Native
+	native, bearer := referenceManagedUsersConnection(t, ctx, c, features, cookies, csrf, source, n)
+	proveReferenceSCIMUsersListTLS(t, ctx, client, base, native, bearer, true, c.HTTPManagedSCIMUsersGet != nil)
+}
+
+func referenceManagedUsersConnection(t *testing.T, ctx context.Context, c reference.StoreConfiguration, features reference.FeatureSet, cookies []*http.Cookie, csrf string, source referenceDirectorySCIMSource, n reference.ManagedSCIMConnectionConfiguration) (*scimpg.ManagedConnectionService, string) {
+	t.Helper()
 	sessions, err := features.Sessions()
 	if err != nil {
 		t.Fatal(err)
@@ -148,10 +154,10 @@ func proveReferenceSCIMStandaloneUsersList(t *testing.T, ctx context.Context, c 
 	if err != nil || connection.Bearer.Token() == "" {
 		t.Fatal("issue managed bearer using the native owner without enabling Create HTTP", err)
 	}
-	proveReferenceSCIMUsersListTLS(t, ctx, client, base, native, connection.Bearer.Token(), true)
+	return native, connection.Bearer.Token()
 }
 
-func proveReferenceSCIMUsersListTLS(t *testing.T, ctx context.Context, client *http.Client, base string, native *scimpg.ManagedConnectionService, bearer string, standalone bool) {
+func proveReferenceSCIMUsersListTLS(t *testing.T, ctx context.Context, client *http.Client, base string, native *scimpg.ManagedConnectionService, bearer string, standalone, getSelected bool) {
 	t.Helper()
 	const name = "reference-managed-list-user"
 	created, err := native.ExecuteManagedProvisioning(ctx, otpTenant, scim.Request{Operation: scim.UserCreate,
@@ -215,7 +221,9 @@ func proveReferenceSCIMUsersListTLS(t *testing.T, ctx context.Context, client *h
 	call(http.MethodGet, collection, "not-an-issued-bearer", "", http.StatusUnauthorized, true)
 	call(http.MethodGet, collection, bearer, "", http.StatusForbidden, true, "localhost")
 	call(http.MethodGet, collection, bearer, "gzip", http.StatusUnsupportedMediaType, true)
-	call(http.MethodGet, collection+"/"+original.ID, bearer, "", http.StatusNotFound, false)
+	if !getSelected {
+		call(http.MethodGet, collection+"/"+original.ID, bearer, "", http.StatusNotFound, false)
+	}
 	if standalone {
 		call(http.MethodPost, "/v1/scim/connection-create", "", "", http.StatusNotFound, false)
 		call(http.MethodGet, "/scim/v2/ServiceProviderConfig", "", "", http.StatusNotFound, false)

@@ -15,7 +15,10 @@ import (
 	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
-const managedSCIMUsersListField = "reference_http_managed_scim_users_list"
+const (
+	managedSCIMUsersListField = "reference_http_managed_scim_users_list"
+	managedSCIMUsersGetField  = "reference_http_managed_scim_users_get"
+)
 
 // HTTPManagedSCIMUsersListConfiguration selects GET /scim/v2/Users using
 // existing managed SCIM bearers. Supply Native only when managed HTTP Create
@@ -27,6 +30,12 @@ type HTTPManagedSCIMUsersListConfiguration struct {
 	RateNamespace string
 	RateKey       [32]byte
 }
+
+// HTTPManagedSCIMUsersGetConfiguration selects only
+// GET /scim/v2/Users/{resource_id} with a managed bearer. With List selected,
+// all fields must be zero to adopt the same native owner and protocol quota.
+// Otherwise the native and rate settings follow the List configuration rules.
+type HTTPManagedSCIMUsersGetConfiguration HTTPManagedSCIMUsersListConfiguration
 
 // ManagedSCIMConnectionConfiguration selects the primary owner and retained
 // credential/profile keys for an existing managed SCIM connection. Provisioning
@@ -52,6 +61,16 @@ func (HTTPManagedSCIMUsersListConfiguration) MarshalJSON() ([]byte, error) {
 
 func (c HTTPManagedSCIMUsersListConfiguration) MarshalText() ([]byte, error) { return c.MarshalJSON() }
 
+func (HTTPManagedSCIMUsersGetConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMUsersGetConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMUsersGetConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMUsersGetField}
+}
+
+func (c HTTPManagedSCIMUsersGetConfiguration) MarshalText() ([]byte, error) { return c.MarshalJSON() }
+
 func (ManagedSCIMConnectionConfiguration) Format(w fmt.State, _ rune) {
 	_, _ = io.WriteString(w, "reference.ManagedSCIMConnectionConfiguration(redacted)")
 }
@@ -62,19 +81,39 @@ func (ManagedSCIMConnectionConfiguration) MarshalJSON() ([]byte, error) {
 
 func (c ManagedSCIMConnectionConfiguration) MarshalText() ([]byte, error) { return c.MarshalJSON() }
 
-type managedSCIMUsersListState struct {
+type managedSCIMUsersState struct {
 	native  *scimpg.ManagedConnectionService
 	rate    scimhttp.ProtocolRateConfig
 	limits  scim.Limits
 	maximum time.Duration
+	get     bool
+	list    bool
 }
 
-func validateManagedSCIMUsersList(c StoreConfiguration) error {
-	n := c.HTTPManagedSCIMUsersList
+func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListConfiguration, string, error) {
+	get, list := c.HTTPManagedSCIMUsersGet, c.HTTPManagedSCIMUsersList
+	if get == nil {
+		return list, managedSCIMUsersListField, nil
+	}
+	if list == nil {
+		profile := HTTPManagedSCIMUsersListConfiguration(*get)
+		return &profile, managedSCIMUsersGetField, nil
+	}
+	if *get != (HTTPManagedSCIMUsersGetConfiguration{}) {
+		return nil, managedSCIMUsersGetField, identity.InvalidInputError{Field: managedSCIMUsersGetField}
+	}
+	return list, managedSCIMUsersListField, nil
+}
+
+func validateManagedSCIMUsers(c StoreConfiguration) error {
+	n, field, err := managedSCIMUsersOptions(c)
+	if err != nil {
+		return err
+	}
 	if n == nil {
 		return nil
 	}
-	invalid := identity.InvalidInputError{Field: managedSCIMUsersListField}
+	invalid := identity.InvalidInputError{Field: field}
 	if c.HTTPRate == nil || c.Organization == nil || c.Session == nil || c.OTP == nil ||
 		c.ProviderDiscovery != nil || c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil {
 		return invalid
@@ -109,15 +148,18 @@ func composeManagedSCIMConnection(c StoreConfiguration, d ReferenceDependencies,
 	})
 }
 
-func (s *storeState) composeManagedSCIMUsersList(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, org *organizationState, create *managedSCIMCreateState, bulk *scimBulkState) (*managedSCIMUsersListState, error) {
-	n := c.HTTPManagedSCIMUsersList
+func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDependencies, sessions *sessionState, org *organizationState, create *managedSCIMCreateState, bulk *scimBulkState) (*managedSCIMUsersState, error) {
+	n, field, err := managedSCIMUsersOptions(c)
+	if err != nil {
+		return nil, err
+	}
 	if n == nil {
 		return nil, nil
 	}
 	if s.httpRate == nil {
-		return nil, identity.InvalidInputError{Field: managedSCIMUsersListField}
+		return nil, identity.InvalidInputError{Field: field}
 	}
-	var selected managedSCIMUsersListState
+	selected := managedSCIMUsersState{get: c.HTTPManagedSCIMUsersGet != nil, list: c.HTTPManagedSCIMUsersList != nil}
 	if bulk != nil {
 		selected.rate = bulk.rate
 	} else {
@@ -131,18 +173,18 @@ func (s *storeState) composeManagedSCIMUsersList(c StoreConfiguration, d Referen
 	profile := *n.Native
 	native, err := composeManagedSCIMConnection(c, d, sessions, org, profile)
 	if err != nil {
-		return nil, identity.InvalidInputError{Field: managedSCIMUsersListField}
+		return nil, identity.InvalidInputError{Field: field}
 	}
 	selected.native, selected.limits, selected.maximum = native, profile.Provisioning.Limits, profile.MaximumDuration
 	return &selected, nil
 }
 
-type referenceManagedUsersListExecutor struct {
+type referenceManagedUsersExecutor struct {
 	state  *storeState
 	native *scimpg.ManagedConnectionService
 }
 
-func (s referenceManagedUsersListExecutor) ExecuteManagedAdmittedRead(ctx context.Context, tenant identity.TenantID, request scim.Request, admit scim.ProtocolAdmission) (scim.Response, error) {
+func (s referenceManagedUsersExecutor) ExecuteManagedAdmittedRead(ctx context.Context, tenant identity.TenantID, request scim.Request, admit scim.ProtocolAdmission) (scim.Response, error) {
 	bounded, done, err := s.state.enterFeature(ctx, true)
 	if err != nil {
 		return scim.Response{}, scim.NewError(503, "")
@@ -151,10 +193,27 @@ func (s referenceManagedUsersListExecutor) ExecuteManagedAdmittedRead(ctx contex
 	return s.native.ExecuteManagedAdmittedRead(bounded, tenant, request, admit)
 }
 
-func (s *Server) managedSCIMUsersListFeature(network identityhttp.NetworkConfig) (identityhttp.Feature, error) {
-	selected := s.state.features.httpManagedSCIMUsersList
-	return scimhttp.NewManagedUsersListFeature(scimhttp.ManagedUsersListConfig{
-		Network: network, Executor: referenceManagedUsersListExecutor{state: s.state, native: selected.native},
-		Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum,
-	})
+func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) ([]identityhttp.OperationDescriptor, error) {
+	selected := s.state.features.httpManagedSCIMUsers
+	executor := referenceManagedUsersExecutor{state: s.state, native: selected.native}
+	var operations []identityhttp.OperationDescriptor
+	if selected.list {
+		feature, err := scimhttp.NewManagedUsersListFeature(scimhttp.ManagedUsersListConfig{
+			Network: network, Executor: executor, Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMUsersListField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.get {
+		feature, err := scimhttp.NewManagedUsersGetFeature(scimhttp.ManagedUsersGetConfig{
+			Network: network, Executor: executor, Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMUsersGetField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	return operations, nil
 }
