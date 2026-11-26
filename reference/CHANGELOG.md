@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt independently into managed SCIM Group Get and List over HTTPS, using
+  the existing native connection and protocol quota.
+
 - Opt into conditional managed User PUT over HTTPS with the existing native
   owner and protocol quota. Replace the complete writable resource and replay
   an equivalent original request without a second mutation.

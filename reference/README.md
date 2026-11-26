@@ -676,6 +676,20 @@ selected, set native and rate options only on the first selected of List, Get,
 Create, Delete, Patch and Replace, in that order. Leave the other selected option
 structs empty to share the same owner and quota.
 
+## Optional managed SCIM Groups
+
+Select `StoreConfiguration.HTTPManagedSCIMGroupsRead` with `EnableGet`,
+`EnableList`, or both. Set `MaximumMembers` explicitly; zero permits only
+empty Groups. Send an issued managed bearer. Get returns the original native
+Group and ETag. List returns the native filtered, sorted and paged snapshot.
+The feature enables neither Group writes nor connection administration.
+
+If a managed User route is selected, leave `Native` and the Group rate settings
+empty to share its existing owner and quota. Otherwise, supply the matching
+native profile when managed connection creation is not selected and a stable
+rate namespace and key when Bulk is not selected. Apply the existing managed
+connection and Group projection histories before serving.
+
 ## Optional directory administration
 
 Select `StoreConfiguration.DirectorySync` with the configured tenant,

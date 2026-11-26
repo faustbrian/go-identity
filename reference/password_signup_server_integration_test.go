@@ -291,6 +291,7 @@ type signupGraphExtensions struct {
 	scimManagedUsersDelete      bool
 	scimManagedUsersPatch       bool
 	scimManagedUsersReplace     bool
+	scimManagedGroupsRead       bool
 	directorySync               bool
 	directorySyncStandalone     bool
 	directoryGroupApply         bool
@@ -668,7 +669,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferenceOrganization(t, &c, origin)
 	}
 	var scimBulkSource *referenceDirectorySCIMSource
-	if extensions.scimBulk || extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace {
+	if extensions.scimBulk || extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace || extensions.scimManagedGroupsRead {
 		source := configureReferenceSCIMBulk(t, &c, deps, origin)
 		scimBulkSource = &source
 		if !extensions.scimBulk {
@@ -1422,7 +1423,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.sessionCache != nil {
 		extensions.sessionCache.configure(t, &c)
 	}
-	if extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace {
+	if extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace || extensions.scimManagedGroupsRead {
 		configureReferenceSCIMManagedCreate(t, &c, *scimBulkSource)
 	}
 	if extensions.scimManagedUsersList {
@@ -1445,6 +1446,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.scimManagedUsersReplace {
 		configureReferenceSCIMManagedUsersReplace(&c, extensions.scimManagedCreate)
+	}
+	if extensions.scimManagedGroupsRead {
+		configureReferenceSCIMManagedGroupsRead(&c)
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if extensions.socialOIDCHTTPForeignOrigin {
@@ -1534,7 +1538,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
 	}
-	if directoryGroupSource != nil || directoryUserSource != nil || c.SCIMBulk != nil || c.HTTPManagedSCIMCreate != nil || c.HTTPManagedSCIMUsersList != nil || c.HTTPManagedSCIMUsersGet != nil || c.HTTPManagedSCIMUsersCreate != nil || c.HTTPManagedSCIMUsersDelete != nil || c.HTTPManagedSCIMUsersPatch != nil || c.HTTPManagedSCIMUsersReplace != nil {
+	if directoryGroupSource != nil || directoryUserSource != nil || c.SCIMBulk != nil || c.HTTPManagedSCIMCreate != nil || c.HTTPManagedSCIMUsersList != nil || c.HTTPManagedSCIMUsersGet != nil || c.HTTPManagedSCIMUsersCreate != nil || c.HTTPManagedSCIMUsersDelete != nil || c.HTTPManagedSCIMUsersPatch != nil || c.HTTPManagedSCIMUsersReplace != nil || c.HTTPManagedSCIMGroupsRead != nil {
 		modules = append(modules, "scim/postgres")
 	}
 	if c.APIKey != nil {
@@ -1596,7 +1600,7 @@ END $$`); err != nil {
 		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
 		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
 	}
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace || extensions.scimManagedGroupsRead
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -2003,6 +2007,8 @@ END $$`); err != nil {
 		{"identity.scim.user-delete", extensions.scimManagedUsersDelete},
 		{"identity.scim.user-patch", extensions.scimManagedUsersPatch},
 		{"identity.scim.user-replace", extensions.scimManagedUsersReplace},
+		{"identity.scim.group-get", c.HTTPManagedSCIMGroupsRead != nil && c.HTTPManagedSCIMGroupsRead.EnableGet},
+		{"identity.scim.group-list", c.HTTPManagedSCIMGroupsRead != nil && c.HTTPManagedSCIMGroupsRead.EnableList},
 	} {
 		if operation.selected {
 			wantOperations++
@@ -2448,7 +2454,10 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 					installed.prove(t, ctx, selected)
 				}
 			}
-			if extensions.scimBulk {
+			if extensions.scimManagedGroupsRead {
+				createReferenceSCIMOrganization(t, ctx, selected, cookies, csrf, *scimBulkSource)
+				proveReferenceSCIMManagedGroupsReadTLS(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
+			} else if extensions.scimBulk {
 				proveReferenceSCIMBulkHTTPS(t, ctx, f, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
 				if extensions.scimManagedRead {
 					proveReferenceSCIMManagedReadHTTPS(t, ctx, f, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource, server.OpenAPI().JSON())

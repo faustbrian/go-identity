@@ -95,6 +95,9 @@ type StoreConfiguration struct {
 	// An existing User route supplies the same native owner and quota. Nil
 	// leaves User replacement disabled.
 	HTTPManagedSCIMUsersReplace *HTTPManagedSCIMUsersReplaceConfiguration
+	// HTTPManagedSCIMGroupsRead independently selects managed-bearer Group
+	// Get and List. Nil leaves both disabled without affecting User routes.
+	HTTPManagedSCIMGroupsRead *HTTPManagedSCIMGroupsReadConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

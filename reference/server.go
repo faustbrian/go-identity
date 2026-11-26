@@ -417,7 +417,9 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 			switch operations[i].Record.OperationID {
 			case "identity.oauth.provider-list":
 				operations[i].Handler = server.guardProviderDiscoveryLifetime(operations[i].Handler)
-			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list", "identity.scim.user-get", "identity.scim.user-create", "identity.scim.user-delete", "identity.scim.user-patch":
+			case "identity.scim.bulk", "identity.scim.service-provider-config",
+				"identity.scim.user-list", "identity.scim.user-get", "identity.scim.user-create", "identity.scim.user-delete", "identity.scim.user-patch",
+				"identity.scim.group-get", "identity.scim.group-list":
 				operations[i].Handler = server.guardTenantResponse(network, operations[i].Handler, writeSCIMBulkGuardError)
 			default:
 				operations[i].Handler = server.guardTenant(network, operations[i].Handler)

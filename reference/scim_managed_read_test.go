@@ -73,3 +73,39 @@ func TestManagedSCIMDeleteSelectsOneSharedMembershipHistory(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedSCIMGroupReadSharesTheSelectedNativeAndRateOwner(t *testing.T) {
+	native := &ManagedSCIMConnectionConfiguration{}
+	groups := &HTTPManagedSCIMGroupsReadConfiguration{
+		Native: native, RateNamespace: "directory", RateKey: [32]byte{1},
+		EnableGet: true,
+	}
+	config := StoreConfiguration{HTTPManagedSCIMGroupsRead: groups}
+	owner, field, err := managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || owner.Native != native || owner.RateNamespace != "directory" || owner.RateKey != groups.RateKey || field != "reference_http_managed_scim_groups_read" {
+		t.Fatal("standalone Group Get did not own its exact managed configuration", err)
+	}
+
+	config.HTTPManagedSCIMUsersList = &HTTPManagedSCIMUsersListConfiguration{Native: native, RateNamespace: "directory", RateKey: [32]byte{1}}
+	if _, _, err := managedSCIMUsersOptions(config); err == nil {
+		t.Fatal("same-value competing Group native and quota owners were accepted")
+	}
+	config.HTTPManagedSCIMGroupsRead = &HTTPManagedSCIMGroupsReadConfiguration{EnableList: true}
+	owner, _, err = managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || *owner != *config.HTTPManagedSCIMUsersList {
+		t.Fatal("co-selected Group List did not share the User route's exact owner", err)
+	}
+
+	for _, invalid := range []HTTPManagedSCIMGroupsReadConfiguration{
+		{},
+		{EnableList: true, MaximumMembers: -1},
+		{EnableGet: true, MaximumMembers: 10001},
+		{EnableList: true, RateNamespace: "second-quota"},
+		{EnableGet: true, RateKey: [32]byte{2}},
+	} {
+		config.HTTPManagedSCIMGroupsRead = &invalid
+		if _, _, err := managedSCIMUsersOptions(config); err == nil {
+			t.Fatal("invalid or competing Group configuration was accepted")
+		}
+	}
+}

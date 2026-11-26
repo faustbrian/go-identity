@@ -158,16 +158,19 @@ func (ManagedSCIMConnectionConfiguration) MarshalJSON() ([]byte, error) {
 func (c ManagedSCIMConnectionConfiguration) MarshalText() ([]byte, error) { return c.MarshalJSON() }
 
 type managedSCIMUsersState struct {
-	native      *scimpg.ManagedConnectionService
-	rate        scimhttp.ProtocolRateConfig
-	limits      scim.Limits
-	maximum     time.Duration
-	get         bool
-	list        bool
-	createUser  bool
-	deleteUser  bool
-	patchUser   bool
-	replaceUser bool
+	native          *scimpg.ManagedConnectionService
+	rate            scimhttp.ProtocolRateConfig
+	limits          scim.Limits
+	maximum         time.Duration
+	get             bool
+	list            bool
+	createUser      bool
+	deleteUser      bool
+	patchUser       bool
+	replaceUser     bool
+	getGroup        bool
+	listGroups      bool
+	maxGroupMembers int
 }
 
 func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListConfiguration, string, error) {
@@ -196,6 +199,21 @@ func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListCon
 		}
 		if *option.profile != (HTTPManagedSCIMUsersListConfiguration{}) {
 			return nil, option.field, identity.InvalidInputError{Field: option.field}
+		}
+	}
+	if groups := c.HTTPManagedSCIMGroupsRead; groups != nil {
+		invalid := identity.InvalidInputError{Field: managedSCIMGroupsReadField}
+		if !groups.EnableGet && !groups.EnableList || groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers {
+			return nil, managedSCIMGroupsReadField, invalid
+		}
+		profile := HTTPManagedSCIMUsersListConfiguration{
+			Native: groups.Native, RateNamespace: groups.RateNamespace, RateKey: groups.RateKey,
+		}
+		if owner == nil {
+			return &profile, managedSCIMGroupsReadField, nil
+		}
+		if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
+			return nil, managedSCIMGroupsReadField, invalid
 		}
 	}
 	return owner, field, nil
@@ -262,6 +280,10 @@ func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDe
 		deleteUser:  c.HTTPManagedSCIMUsersDelete != nil,
 		patchUser:   c.HTTPManagedSCIMUsersPatch != nil,
 		replaceUser: c.HTTPManagedSCIMUsersReplace != nil,
+	}
+	if groups := c.HTTPManagedSCIMGroupsRead; groups != nil {
+		selected.getGroup, selected.listGroups = groups.EnableGet, groups.EnableList
+		selected.maxGroupMembers = groups.MaximumMembers
 	}
 	if bulk != nil {
 		selected.rate = bulk.rate
@@ -387,6 +409,17 @@ func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) 
 		})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: managedSCIMUsersReplaceField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.getGroup || selected.listGroups {
+		feature, err := scimhttp.NewManagedGroupsReadFeature(scimhttp.ManagedGroupsReadConfig{
+			Network: network, Executor: referenceManagedGroupsExecutor{state: s.state, native: selected.native},
+			Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum,
+			MaximumMembers: selected.maxGroupMembers, EnableGet: selected.getGroup, EnableList: selected.listGroups,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMGroupsReadField}
 		}
 		operations = append(operations, feature.Operations()...)
 	}
