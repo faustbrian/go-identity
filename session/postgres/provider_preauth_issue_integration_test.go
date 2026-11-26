@@ -245,6 +245,9 @@ func testOwnedProviderPreAuthIssue(t *testing.T, ctx context.Context, pool *data
 				t.Fatal("restart, replay or denied substitution changed original durable flow")
 			}
 			counts(t, command, 1)
+			t.Run("callback uses the original flow once", func(t *testing.T) {
+				testIssuedProviderPreAuthConsumption(t, ctx, pool, config.Repository, loaded, selected, config.ActorID)
+			})
 		})
 	}
 
@@ -274,5 +277,104 @@ func testOwnedProviderPreAuthIssue(t *testing.T, ctx context.Context, pool *data
 	var sessionsAfter, familiesAfter int
 	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.sessions),(SELECT count(*) FROM session_store.families)`).Scan(&sessionsAfter, &familiesAfter); err != nil || sessionsAfter != sessionsBefore || familiesAfter != familiesBefore {
 		t.Fatal("callback initiation created authenticated session or family state", err)
+	}
+}
+
+func testIssuedProviderPreAuthConsumption(t *testing.T, ctx context.Context, pool *database.Pool, config Config, record session.PreAuthTransaction, selected session.PreAuthProviderBinding, actor identity.ActorID) {
+	t.Helper()
+	original, err := record.ProviderBindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := original.Transaction.Binding
+	id, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	use := PreAuthUse{Command: identity.CommandBinding{
+		CommandID: id, TenantID: binding.Intent.TenantID, AnonymousFlowID: string(binding.ID), ActorID: actor,
+		ActorKind: authorization.SubjectServiceAccount, OperationID: "identity.oauth.onetap-callback", RecordID: string(binding.ID),
+		PolicyID: binding.Intent.PolicyID, PolicyVersion: binding.Intent.PolicyVersion, SchemaID: "oauth-onetap-callback-v1",
+		SchemaVersion: 1, CorrelationID: "native-onetap-completion",
+	}, Fingerprint: [32]byte{23}, Generation: 1}
+	begin := func() preAuthTestTx {
+		t.Helper()
+		tx, err := pool.Raw().Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanup, stop := context.WithTimeout(context.Background(), time.Second)
+			defer stop()
+			_ = tx.Rollback(cleanup)
+		})
+		return preAuthTestTx{tx}
+	}
+	reserveAndFinalize := func(q preAuthTestTx) {
+		t.Helper()
+		if err := RequireProviderPreAuth(ctx, q, config, record, selected); err != nil {
+			t.Fatal("exact issued flow was not admitted", err)
+		}
+		if err := ReserveProviderPreAuth(ctx, q, config, record, selected, use); err != nil {
+			t.Fatal("callback could not reserve the exact original", err)
+		}
+		wrongOwner := use
+		wrongOwner.Generation++
+		if err := FinalizeProviderPreAuth(ctx, q, config, record, selected, wrongOwner); err == nil {
+			t.Fatal("another command generation consumed the original")
+		}
+		if err := FinalizeProviderPreAuth(ctx, q, config, record, selected, use); err != nil {
+			t.Fatal("exact callback owner could not consume the reserved flow", err)
+		}
+	}
+
+	q := begin()
+	wrongProvider := selected
+	wrongProvider.ClientID = "another-synthetic-client"
+	if err := RequireProviderPreAuth(ctx, q, config, record, wrongProvider); err == nil {
+		t.Fatal("another configured client admitted the original")
+	}
+	wrongAction := use
+	wrongAction.Command.OperationID = "identity.oauth.callback"
+	if err := ReserveProviderPreAuth(ctx, q, config, record, selected, wrongAction); err == nil {
+		t.Fatal("ordinary OAuth callback borrowed the One Tap flow")
+	}
+	otherFlow := use
+	otherFlow.Command.AnonymousFlowID = "another-flow"
+	if err := ReserveProviderPreAuth(ctx, q, config, record, selected, otherFlow); err == nil {
+		t.Fatal("another anonymous flow borrowed the original")
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := ReserveProviderPreAuth(canceled, q, config, record, selected, use); err == nil {
+		t.Fatal("canceled callback reserved the original")
+	}
+	if err := ReservePreAuth(ctx, q, config, record, use); err == nil {
+		t.Fatal("legacy reservation accepted a provider-bound record")
+	}
+	reserveAndFinalize(q)
+	if err := q.Rollback(ctx); err != nil {
+		t.Fatal("roll back the protected invocation", err)
+	}
+
+	q = begin()
+	reserveAndFinalize(q)
+	if err := q.Commit(ctx); err != nil {
+		t.Fatal("commit the protected invocation", err)
+	}
+
+	q = begin()
+	if err := RequireProviderPreAuth(ctx, q, config, record, selected); err == nil {
+		t.Fatal("consumed flow was admitted again")
+	}
+	if err := ReserveProviderPreAuth(ctx, q, config, record, selected, use); err == nil {
+		t.Fatal("terminal consumption reopened for the same command")
+	}
+	var state, version string
+	if err := q.QueryRow(ctx, `SELECT state,version::text FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2`, string(binding.Intent.TenantID), string(binding.ID)).Scan(&state, &version); err != nil || state != "consumed" || version != "3" {
+		t.Fatal("callback did not preserve the terminal original", state, version, err)
+	}
+	if err := q.Rollback(ctx); err != nil {
+		t.Fatal(err)
 	}
 }

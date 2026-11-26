@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit, reserve and consume the exact Google One Tap browser flow in its
+  owning callback transaction. Legacy pre-auth flows retain their existing
+  restrictions; the One Tap capability and OAuth session remain separate
+  owners in the coordinated callback.
+
 - Persist explicitly selected One Tap callback initiation with its original
   provider, client and mode and the existing atomic command/audit/outbox
   custody. Keep legacy record bytes unchanged and use an explicit read path.

@@ -157,33 +157,50 @@ func transitionPreAuth[R SessionRows](ctx context.Context, q PreAuthWriter[R], c
 }
 
 func transitionPreAuthProfile[R SessionRows](ctx context.Context, q PreAuthWriter[R], c Config, record session.PreAuthTransaction, use PreAuthUse, final, passkeyTOTP bool) error {
-	bounded, stop, s, canonical, err := preAuthContext(ctx, q, c, record)
+	return transitionSelectedPreAuth(ctx, q, c, record, use, preAuthTransitionSelection{final: final, passkeyTOTP: passkeyTOTP})
+}
+
+type preAuthTransitionSelection struct {
+	final       bool
+	passkeyTOTP bool
+	provider    session.PreAuthProviderBinding
+}
+
+func transitionSelectedPreAuth[R SessionRows](ctx context.Context, q PreAuthWriter[R], c Config, record session.PreAuthTransaction, use PreAuthUse, selection preAuthTransitionSelection) error {
+	bounded, stop, s, canonical, err := preAuthSelectedContext(ctx, q, c, record, selection.provider)
 	if err != nil {
 		return err
 	}
 	defer stop()
-	valid := use.valid(s)
-	if passkeyTOTP {
-		valid = validMFAPasskeyPreAuthUse(use, s)
-	}
-	if !valid {
+	if !selection.allows(use, s) {
 		return identity.InvalidInputError{Field: "session_preauth_use"}
 	}
 	var custody *PreAuthUse
-	if final {
+	if selection.final {
 		custody = &use
 	}
-	if err = lockPreAuth(bounded, q, c, record, s, canonical, custody, true); err != nil {
+	if err = lockSelectedPreAuth(bounded, q, c, record, s, canonical, custody, true, selection.provider); err != nil {
 		return err
 	}
 	command, _ := base64.RawURLEncoding.DecodeString(string(use.Command.CommandID))
 	state, successor := "reserved", s.Version+1
-	if final {
+	if selection.final {
 		state, successor = "consumed", s.Version+2
 	}
 	count, err := q.Exec(bounded, `UPDATE `+pgx.Identifier{c.Schema}.Sanitize()+`.preauth_transactions SET state=$3,version=$4::numeric,command_id=$5,fingerprint=$6,generation=$7::numeric
  WHERE tenant_id=$1 AND flow_id=$2`, string(s.Binding.Intent.TenantID), string(s.Binding.ID), state, strconv.FormatUint(successor, 10), command, use.Fingerprint[:], strconv.FormatUint(use.Generation, 10))
 	return preAuthWriteResult(bounded, count, err)
+}
+
+func (s preAuthTransitionSelection) allows(use PreAuthUse, record session.PreAuthTransactionSpec) bool {
+	switch {
+	case s.provider != (session.PreAuthProviderBinding{}):
+		return validOneTapPreAuthUse(use, record)
+	case s.passkeyTOTP:
+		return validMFAPasskeyPreAuthUse(use, record)
+	default:
+		return use.valid(record)
+	}
 }
 
 func preAuthWriteResult(ctx context.Context, count int64, err error) error {
