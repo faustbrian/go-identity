@@ -556,6 +556,9 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if class != "conflict" {
 		failureCode = 0
 	}
+	var unavailable identity.UnavailableError
+	settleBulkUnavailable := class == "dependency-failure" && w.state.scimBulkChildStarted &&
+		w.state.ctx.Err() == nil && errors.As(w.state.failed, &unavailable)
 	var records []audit.Record
 	// Previously validated immutable staging survives a poisoned/cancelled
 	// domain handle; detached terminalization must revalidate it under its fence.
@@ -657,6 +660,11 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	}
 	if err := c.recordSCIMBulkChildFailure(terminal.state.ctx, terminal, failureCode); err != nil {
 		return fail(identity.UnavailableError{})
+	}
+	if settleBulkUnavailable {
+		if err := c.recordSCIMBulkChildUnavailable(terminal.state.ctx, terminal); err != nil {
+			return fail(identity.UnavailableError{})
+		}
 	}
 	if err := c.cleanupPreparedAccountLink(cleanup, terminal); err != nil {
 		return fail(identity.UnavailableError{})

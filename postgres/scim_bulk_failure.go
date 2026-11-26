@@ -41,6 +41,63 @@ type SCIMBulkChildFailureContributor interface {
 	RecordSCIMBulkChildFailure(context.Context, Work, FeatureFailureCode) error
 }
 
+// SCIMBulkChildUnavailableContributor settles a started acyclic child's
+// definitive dependency failure. It runs inside the fenced terminal transaction
+// after proven rollback and must not attempt the original mutation again.
+type SCIMBulkChildUnavailableContributor interface {
+	SCIMBulkChildFailureContributor
+	RecordSCIMBulkChildUnavailable(context.Context, Work) error
+}
+
+// MarkSCIMBulkChildStarted records invocation-local custody after the native
+// adapter's acyclic start CAS succeeds. It grants no mutation authority and
+// cannot settle an unknown outcome, cancelled attempt, or typed denial.
+func (w Work) MarkSCIMBulkChildStarted(ctx context.Context, owner SCIMBulkChildUnavailableContributor, command identity.Command) error {
+	if err := w.RequireFeatureCommand(ctx, owner, command); err != nil {
+		return err
+	}
+	if w.state.execution == nil || w.state.execution.reservation == nil || w.state.execution.component ||
+		!w.state.featureApplying || w.state.scimBulkChildStarted || !scimBulkUnavailablePlan(w.state.execution.reservation.plan) {
+		return w.fail(ctx, invalidWork())
+	}
+	w.state.scimBulkChildStarted = true
+	return nil
+}
+
+func scimBulkUnavailablePlan(plan *admittedKernelPlan) bool {
+	if plan == nil || plan.feature == nil || plan.lifecycle == nil || plan.scimBulkDenial != 0 ||
+		plan.feature.Contributor != scimUserCreationDescriptor() || len(plan.audits) != 1 ||
+		plan.audits[0].EventType != scimBulkApplyChildAudit || plan.audits[0].RetentionClass != "protected" {
+		return false
+	}
+	operation := plan.feature.Operation
+	if plan.binding.OperationID != operation.OperationID || plan.binding.SchemaID != operation.SchemaID ||
+		plan.binding.SchemaVersion != operation.SchemaVersion || plan.binding.RecordID == "" {
+		return false
+	}
+	_, _, err := featureAuditRecordScope(plan.binding, operation, plan.subjectType, scimBulkApplyChildAudit)
+	return err == nil
+}
+
+func (c *Coordinator) recordSCIMBulkChildUnavailable(ctx context.Context, w Work) error {
+	if !c.owns(w) || w.usable() != nil {
+		return invalidWork()
+	}
+	plan := w.state.execution.reservation.plan
+	if !scimBulkUnavailablePlan(plan) {
+		return w.fail(ctx, invalidPlan())
+	}
+	entry, err := c.registry.selectFeatureOperation(*plan.feature)
+	if err != nil || w.state.featureInvocation != nil {
+		return w.fail(ctx, invalidWork())
+	}
+	owner, ok := entry.contributor.(SCIMBulkChildUnavailableContributor)
+	if !ok {
+		return w.fail(ctx, invalidWork())
+	}
+	return w.callSCIMBulkChildFailureOwner(ctx, owner, func() error { return owner.RecordSCIMBulkChildUnavailable(ctx, w) })
+}
+
 func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, code FeatureFailureCode) (err error) {
 	if code != FeatureFailureUniqueness && code != FeatureFailureInvalidGroupMember && code != FeatureFailureConflict && code != FeatureFailurePrecondition && !scimBulkDenialCode(code) {
 		return nil
@@ -83,7 +140,11 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 		}
 		return nil // A previously compiled native adapter retains its original behavior.
 	}
-	w.state.scimBulkSkip = &scimBulkSkipPhase{plan: plan}
+	return w.callSCIMBulkChildFailureOwner(ctx, owner, func() error { return owner.RecordSCIMBulkChildFailure(ctx, w, code) })
+}
+
+func (w Work) callSCIMBulkChildFailureOwner(ctx context.Context, owner SCIMBulkChildFailureContributor, record func() error) (err error) {
+	w.state.scimBulkSkip = &scimBulkSkipPhase{plan: w.state.execution.reservation.plan}
 	w.state.featureInvocation = owner
 	defer func() {
 		w.state.featureInvocation = nil
@@ -92,7 +153,7 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 			err = w.fail(ctx, identity.UnavailableError{})
 		}
 	}()
-	if err := owner.RecordSCIMBulkChildFailure(ctx, w, code); err != nil {
+	if err := record(); err != nil {
 		return w.fail(ctx, identity.UnavailableError{})
 	}
 	w.state.featureInvocation = nil

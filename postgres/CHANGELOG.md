@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settle a started, protected native SCIM Bulk child on confirmed dependency
+  rollback in the original fenced terminal transaction. An unknown outcome
+  still does not record a child failure or advance the parent's error count.
+
 - Admit protected Bulk child audits and ordinary User lifecycle effects for
   the exact native SCIM User-create operation. Settle its retained uniqueness
   denial through the same fenced Bulk child callback used for Group results.

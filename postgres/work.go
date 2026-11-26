@@ -79,6 +79,7 @@ type workState struct {
 	featureInvocation         FeatureExecutionContributor
 	featureApplying           bool
 	featureFailure            FeatureFailureCode
+	scimBulkChildStarted      bool
 	featureApplyCommand       *identity.Command
 	featurePreparationCommand *identity.Command
 	featurePreparationPlan    *admittedKernelPlan
@@ -312,6 +313,7 @@ func invalidateWork(w Work) {
 	}
 	w.state.closed = true
 	w.state.featureFailure = 0
+	w.state.scimBulkChildStarted = false
 	if w.state.issuance != nil {
 		clear(w.state.issuance.grants)
 		w.state.issuance.invocation = nil
