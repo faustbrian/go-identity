@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve SCIM unsupported-encoding and body-overflow responses on an
+  explicitly selected Group Create route without widening the request cap.
+
 - Dispatch explicitly selected SCIM Group Get and List independently. Group
   Get binds one canonical resource ID; neither read extends the body budget
   or gives another route the SCIM representation envelope.

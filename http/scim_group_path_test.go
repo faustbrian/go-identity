@@ -1,8 +1,10 @@
 package identityhttp_test
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	identityhttp "github.com/faustbrian/go-identity/http"
@@ -82,5 +84,68 @@ func TestRouterSelectsOnlyCanonicalSCIMGroupReads(t *testing.T) {
 	}}
 	if handler, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{get}, nil); handler != nil || err == nil {
 		t.Fatal("Group resource template was accepted as an exact CORS route")
+	}
+}
+
+func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupCreate(t *testing.T) {
+	const collection = "/scim/v2/Groups"
+	policy := routerPolicy()
+	maximum := int64(policy.Network.Limits.MaximumBodyBytes)
+	create := scimUserOperation(t, "identity.scim.group-create", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/scim+json")
+		if r.Header.Get("Content-Encoding") != "" {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	list := scimUserOperation(t, "identity.scim.group-list", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	selected, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{list, create}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unselected, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{list}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []struct {
+		name, method, path string
+		router             http.Handler
+		encoding           bool
+		length             int64
+		status             int
+	}{
+		{"plain selected", "POST", collection, selected, false, 1, 201},
+		{"encoded selected", "POST", collection, selected, true, 1, 415},
+		{"known overflow", "POST", collection, selected, false, maximum + 1, 413},
+		{"unknown overflow", "POST", collection, selected, false, -1, 413},
+		{"unselected write", "POST", collection, unselected, true, 1, 400},
+		{"encoded alias", "POST", "/scim/v2/%47roups", selected, true, 1, 400},
+		{"wrong method", "PUT", collection, selected, true, 1, 400},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			r := corsRequest(row.method, row.path, "")
+			r.ContentLength = row.length
+			size := row.length
+			if size < 0 {
+				size = maximum + 1
+			}
+			r.Body = io.NopCloser(strings.NewReader(strings.Repeat("x", int(size))))
+			if row.encoding {
+				r.Header.Set("Content-Encoding", "gzip")
+			}
+			w := httptest.NewRecorder()
+			row.router.ServeHTTP(w, r)
+			if w.Code != row.status {
+				t.Fatalf("status %d, want %d", w.Code, row.status)
+			}
+			if row.status != 400 && w.Header().Get("Content-Type") != "application/scim+json" {
+				t.Fatal("selected Group Create lost its SCIM media type")
+			}
+		})
 	}
 }

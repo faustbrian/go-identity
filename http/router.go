@@ -114,7 +114,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 			key := op.Route.Method + " " + path
 			selected[key] = op.Record.OperationID
 			switch op.Record.OperationID {
-			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list", "identity.scim.user-create", "identity.scim.group-list":
+			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list", "identity.scim.user-create", "identity.scim.group-list", "identity.scim.group-create":
 				scimRoutes[key] = true
 			}
 		}
@@ -271,10 +271,10 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	canceledBytes := 0
 	canceledOverflow := false
 	denyBodyOverflow := func() {
-		create := owned.Method == http.MethodPost && owned.URL.Path == "/scim/v2/Users"
+		create := owned.Method == http.MethodPost && (owned.URL.Path == "/scim/v2/Users" || owned.URL.Path == "/scim/v2/Groups")
 		update := (owned.Method == http.MethodPatch || owned.Method == http.MethodPut) && scimUserPathID(owned.URL.Path) != ""
 		if selectedSCIM && ctx.Err() == nil && (create || update) {
-			routerSCIMUserBodyTooLarge(w)
+			routerSCIMBodyTooLarge(w)
 			return
 		}
 		routerDeny(w, r, http.StatusBadRequest, "invalid_request")
@@ -453,7 +453,7 @@ func routerErrorHeaders(header http.Header) {
 
 // The hard cap prevents the feature from writing its own response at overflow.
 // Emit the fixed SCIM error without allowing feature output or widening the cap.
-func routerSCIMUserBodyTooLarge(w http.ResponseWriter) {
+func routerSCIMBodyTooLarge(w http.ResponseWriter) {
 	header := w.Header()
 	routerErrorHeaders(header)
 	for name := range header {
