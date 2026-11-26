@@ -247,11 +247,20 @@ func proveReferenceSCIMBulkHTTPS(t *testing.T, ctx context.Context, f liveStores
 	for _, path := range []string{"Groups", "Schemas", "ResourceTypes"} {
 		call(http.MethodGet, "/scim/v2/"+path, "", bearer, "", "", 404)
 	}
-	if c.HTTPManagedSCIMUsersList != nil {
+	switch {
+	case c.HTTPManagedSCIMUsersList != nil:
 		assertError(call(http.MethodGet, "/scim/v2/Users", "", bearer, "", "", 401), 401, "")
-		call(http.MethodPost, "/scim/v2/Users", `{"userName":"unselected"}`, bearer, "", "application/scim+json", 405)
-	} else {
+	case c.HTTPManagedSCIMUsersCreate != nil:
+		call(http.MethodGet, "/scim/v2/Users", "", bearer, "", "", 405)
+	default:
 		call(http.MethodGet, "/scim/v2/Users", "", bearer, "", "", 404)
+	}
+	switch {
+	case c.HTTPManagedSCIMUsersCreate != nil:
+		assertError(call(http.MethodPost, "/scim/v2/Users", `{"userName":"configured-bearer-denied"}`, bearer, "", "application/scim+json", 401), 401, "")
+	case c.HTTPManagedSCIMUsersList != nil:
+		call(http.MethodPost, "/scim/v2/Users", `{"userName":"unselected"}`, bearer, "", "application/scim+json", 405)
+	default:
 		call(http.MethodPost, "/scim/v2/Users", `{"userName":"unselected"}`, bearer, "", "application/scim+json", 404)
 	}
 }

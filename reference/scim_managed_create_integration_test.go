@@ -151,9 +151,16 @@ func proveReferenceSCIMManagedCreateHTTPS(t *testing.T, ctx context.Context, f l
 			t.Fatal("managed read did not observe the committed record", err)
 		}
 	}
-	if c.HTTPManagedSCIMUsersList != nil || c.HTTPManagedSCIMUsersGet != nil {
+	if c.HTTPManagedSCIMUsersList != nil || c.HTTPManagedSCIMUsersGet != nil || c.HTTPManagedSCIMUsersCreate != nil {
 		n := referenceManagedSCIMNativeConfiguration(c.HTTPManagedSCIMCreate)
 		native := referenceManagedUsersNative(t, c, source, n)
+		if c.HTTPManagedSCIMUsersCreate != nil {
+			var configuredBearer string
+			if c.SCIMBulk != nil {
+				configuredBearer = source.bearer.Token()
+			}
+			proveReferenceSCIMUsersCreateTLS(t, ctx, client, base, native, first.Bearer, configuredBearer, human.auth.Bearer.Token(), cookies, source, false, c.HTTPManagedSCIMUsersGet != nil)
+		}
 		if c.HTTPManagedSCIMUsersList != nil {
 			proveReferenceSCIMUsersListTLS(t, ctx, client, base, native, first.Bearer, false, c.HTTPManagedSCIMUsersGet != nil)
 		}

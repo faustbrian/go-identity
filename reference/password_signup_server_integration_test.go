@@ -287,6 +287,7 @@ type signupGraphExtensions struct {
 	scimManagedCreate           bool
 	scimManagedUsersList        bool
 	scimManagedUsersGet         bool
+	scimManagedUsersCreate      bool
 	directorySync               bool
 	directorySyncStandalone     bool
 	directoryGroupApply         bool
@@ -664,7 +665,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferenceOrganization(t, &c, origin)
 	}
 	var scimBulkSource *referenceDirectorySCIMSource
-	if extensions.scimBulk || extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet {
+	if extensions.scimBulk || extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate {
 		source := configureReferenceSCIMBulk(t, &c, deps, origin)
 		scimBulkSource = &source
 		if !extensions.scimBulk {
@@ -1418,7 +1419,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.sessionCache != nil {
 		extensions.sessionCache.configure(t, &c)
 	}
-	if extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet {
+	if extensions.scimManagedCreate || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate {
 		configureReferenceSCIMManagedCreate(t, &c, *scimBulkSource)
 	}
 	if extensions.scimManagedUsersList {
@@ -1428,6 +1429,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.scimManagedUsersGet {
 		configureReferenceSCIMManagedUsersGet(&c)
 		proveReferenceSCIMUsersGetRejectsCompetingOwners(t, c, deps)
+	}
+	if extensions.scimManagedUsersCreate {
+		configureReferenceSCIMManagedUsersCreate(&c, extensions.scimManagedCreate)
+		proveReferenceSCIMUsersCreateRejectsCompetingOwners(t, c, deps)
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if extensions.socialOIDCHTTPForeignOrigin {
@@ -1517,7 +1522,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
 	}
-	if directoryGroupSource != nil || directoryUserSource != nil || c.SCIMBulk != nil || c.HTTPManagedSCIMCreate != nil || c.HTTPManagedSCIMUsersList != nil || c.HTTPManagedSCIMUsersGet != nil {
+	if directoryGroupSource != nil || directoryUserSource != nil || c.SCIMBulk != nil || c.HTTPManagedSCIMCreate != nil || c.HTTPManagedSCIMUsersList != nil || c.HTTPManagedSCIMUsersGet != nil || c.HTTPManagedSCIMUsersCreate != nil {
 		modules = append(modules, "scim/postgres")
 	}
 	if c.APIKey != nil {
@@ -1579,7 +1584,7 @@ END $$`); err != nil {
 		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
 		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
 	}
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -1982,6 +1987,7 @@ END $$`); err != nil {
 		{"identity.scim.connection-create", extensions.scimManagedCreate},
 		{"identity.scim.user-list", extensions.scimManagedUsersList},
 		{"identity.scim.user-get", extensions.scimManagedUsersGet},
+		{"identity.scim.user-create", extensions.scimManagedUsersCreate},
 	} {
 		if operation.selected {
 			wantOperations++
@@ -2444,6 +2450,9 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			} else if extensions.scimManagedUsersGet {
 				createReferenceSCIMOrganization(t, ctx, selected, cookies, csrf, *scimBulkSource)
 				proveReferenceSCIMStandaloneUsersGet(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
+			} else if extensions.scimManagedUsersCreate {
+				createReferenceSCIMOrganization(t, ctx, selected, cookies, csrf, *scimBulkSource)
+				proveReferenceSCIMStandaloneUsersCreate(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
 			} else if extensions.directorySync {
 				bind := func(ctx context.Context, apply reference.DirectoryGroupApplyConfiguration) *reference.DirectoryGroupApplyService {
 					return bindReferenceDirectoryGroupGraph(t, ctx, selectedConfig, deps, workerConfigs, apply)

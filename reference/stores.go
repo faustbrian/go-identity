@@ -79,6 +79,10 @@ type StoreConfiguration struct {
 	// independently of List. If List is selected, a zero Get configuration
 	// adopts that exact owner and protocol quota.
 	HTTPManagedSCIMUsersGet *HTTPManagedSCIMUsersGetConfiguration
+	// HTTPManagedSCIMUsersCreate selects canonical managed-bearer User POST.
+	// If List or Get is selected, a zero Create configuration adopts the same
+	// owner and protocol quota. Nil leaves User creation disabled.
+	HTTPManagedSCIMUsersCreate *HTTPManagedSCIMUsersCreateConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

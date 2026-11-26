@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	managedSCIMUsersListField = "reference_http_managed_scim_users_list"
-	managedSCIMUsersGetField  = "reference_http_managed_scim_users_get"
+	managedSCIMUsersListField   = "reference_http_managed_scim_users_list"
+	managedSCIMUsersGetField    = "reference_http_managed_scim_users_get"
+	managedSCIMUsersCreateField = "reference_http_managed_scim_users_create"
 )
 
 // HTTPManagedSCIMUsersListConfiguration selects GET /scim/v2/Users using
@@ -36,6 +37,12 @@ type HTTPManagedSCIMUsersListConfiguration struct {
 // all fields must be zero to adopt the same native owner and protocol quota.
 // Otherwise the native and rate settings follow the List configuration rules.
 type HTTPManagedSCIMUsersGetConfiguration HTTPManagedSCIMUsersListConfiguration
+
+// HTTPManagedSCIMUsersCreateConfiguration selects only POST /scim/v2/Users
+// with an issued managed bearer. With List or Get selected, all fields must
+// be zero to adopt their exact native owner and protocol quota. Otherwise
+// native and rate settings follow the List configuration rules.
+type HTTPManagedSCIMUsersCreateConfiguration HTTPManagedSCIMUsersListConfiguration
 
 // ManagedSCIMConnectionConfiguration selects the primary owner and retained
 // credential/profile keys for an existing managed SCIM connection. Provisioning
@@ -71,6 +78,18 @@ func (HTTPManagedSCIMUsersGetConfiguration) MarshalJSON() ([]byte, error) {
 
 func (c HTTPManagedSCIMUsersGetConfiguration) MarshalText() ([]byte, error) { return c.MarshalJSON() }
 
+func (HTTPManagedSCIMUsersCreateConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMUsersCreateConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMUsersCreateConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMUsersCreateField}
+}
+
+func (c HTTPManagedSCIMUsersCreateConfiguration) MarshalText() ([]byte, error) {
+	return c.MarshalJSON()
+}
+
 func (ManagedSCIMConnectionConfiguration) Format(w fmt.State, _ rune) {
 	_, _ = io.WriteString(w, "reference.ManagedSCIMConnectionConfiguration(redacted)")
 }
@@ -82,27 +101,41 @@ func (ManagedSCIMConnectionConfiguration) MarshalJSON() ([]byte, error) {
 func (c ManagedSCIMConnectionConfiguration) MarshalText() ([]byte, error) { return c.MarshalJSON() }
 
 type managedSCIMUsersState struct {
-	native  *scimpg.ManagedConnectionService
-	rate    scimhttp.ProtocolRateConfig
-	limits  scim.Limits
-	maximum time.Duration
-	get     bool
-	list    bool
+	native     *scimpg.ManagedConnectionService
+	rate       scimhttp.ProtocolRateConfig
+	limits     scim.Limits
+	maximum    time.Duration
+	get        bool
+	list       bool
+	createUser bool
 }
 
 func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListConfiguration, string, error) {
-	get, list := c.HTTPManagedSCIMUsersGet, c.HTTPManagedSCIMUsersList
-	if get == nil {
-		return list, managedSCIMUsersListField, nil
+	// The first enabled route owns the common profile. Additional enabled
+	// routes must adopt that owner, never supply a competing native/rate graph.
+	var owner *HTTPManagedSCIMUsersListConfiguration
+	field := managedSCIMUsersListField
+	for _, option := range [...]struct {
+		profile *HTTPManagedSCIMUsersListConfiguration
+		field   string
+	}{
+		{c.HTTPManagedSCIMUsersList, managedSCIMUsersListField},
+		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersGet), managedSCIMUsersGetField},
+		{(*HTTPManagedSCIMUsersListConfiguration)(c.HTTPManagedSCIMUsersCreate), managedSCIMUsersCreateField},
+	} {
+		if option.profile == nil {
+			continue
+		}
+		if owner == nil {
+			profile := *option.profile
+			owner, field = &profile, option.field
+			continue
+		}
+		if *option.profile != (HTTPManagedSCIMUsersListConfiguration{}) {
+			return nil, option.field, identity.InvalidInputError{Field: option.field}
+		}
 	}
-	if list == nil {
-		profile := HTTPManagedSCIMUsersListConfiguration(*get)
-		return &profile, managedSCIMUsersGetField, nil
-	}
-	if *get != (HTTPManagedSCIMUsersGetConfiguration{}) {
-		return nil, managedSCIMUsersGetField, identity.InvalidInputError{Field: managedSCIMUsersGetField}
-	}
-	return list, managedSCIMUsersListField, nil
+	return owner, field, nil
 }
 
 func validateManagedSCIMUsers(c StoreConfiguration) error {
@@ -159,7 +192,11 @@ func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDe
 	if s.httpRate == nil {
 		return nil, identity.InvalidInputError{Field: field}
 	}
-	selected := managedSCIMUsersState{get: c.HTTPManagedSCIMUsersGet != nil, list: c.HTTPManagedSCIMUsersList != nil}
+	selected := managedSCIMUsersState{
+		get:        c.HTTPManagedSCIMUsersGet != nil,
+		list:       c.HTTPManagedSCIMUsersList != nil,
+		createUser: c.HTTPManagedSCIMUsersCreate != nil,
+	}
 	if bulk != nil {
 		selected.rate = bulk.rate
 	} else {
@@ -193,6 +230,15 @@ func (s referenceManagedUsersExecutor) ExecuteManagedAdmittedRead(ctx context.Co
 	return s.native.ExecuteManagedAdmittedRead(bounded, tenant, request, admit)
 }
 
+func (s referenceManagedUsersExecutor) ExecuteManagedAdmittedCreate(ctx context.Context, tenant identity.TenantID, request scim.Request, admit scim.ProtocolAdmission) (scim.Response, error) {
+	bounded, done, err := s.state.enterFeature(ctx, true)
+	if err != nil {
+		return scim.Response{}, scim.NewError(503, "")
+	}
+	defer done()
+	return s.native.ExecuteManagedAdmittedCreate(bounded, tenant, request, admit)
+}
+
 func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) ([]identityhttp.OperationDescriptor, error) {
 	selected := s.state.features.httpManagedSCIMUsers
 	executor := referenceManagedUsersExecutor{state: s.state, native: selected.native}
@@ -212,6 +258,15 @@ func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) 
 		})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: managedSCIMUsersGetField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.createUser {
+		feature, err := scimhttp.NewManagedUsersCreateFeature(scimhttp.ManagedUsersCreateConfig{
+			Network: network, Executor: executor, Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMUsersCreateField}
 		}
 		operations = append(operations, feature.Operations()...)
 	}

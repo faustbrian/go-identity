@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into managed User Create over HTTPS with the issued managed bearer and
+  authoritative native User, ETag and Location. Reuse the existing managed
+  credential owner and any selected User/Bulk protocol quota.
+
 - Opt into managed User Get by a canonical SCIM resource ID, with the exact
   native ETag and projection. List remains independently selectable.
 

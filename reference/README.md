@@ -620,28 +620,36 @@ Cookies cannot authorize these calls. Either route can coexist with configured
 `SCIMBulk`. Clear the read selection to remove its routes and OpenAPI entries;
 retain installed migration history.
 
-## Optional managed SCIM User reads
+## Optional managed SCIM Users
 
 Select `StoreConfiguration.HTTPManagedSCIMUsersList` for `GET /scim/v2/Users`.
 Select `StoreConfiguration.HTTPManagedSCIMUsersGet` independently for
 `GET /scim/v2/Users/{resource_id}`. User Get returns the native ETag and
-accepts `attributes` or `excludedAttributes` projection.
+accepts `attributes` or `excludedAttributes` projection. Select
+`StoreConfiguration.HTTPManagedSCIMUsersCreate` independently for
+`POST /scim/v2/Users` with a bounded `application/scim+json` User body. Create
+does not accept a caller request key or conditional headers. A committed
+creation returns `201` with the native User, ETag and canonical Location.
 Send the managed connection's issued bearer, not a session cookie or a
 configured Bulk bearer. List supports the SCIM filter, sort,
 pagination and attribute-selection parameters accepted by its native owner.
-Neither selection enables provisioning writes, discovery, or connection
-administration. Omitting either selection removes its route and OpenAPI entry.
+The reads do not enable writes. None of these selections enables discovery or
+connection administration. Omitting a selection removes its route and OpenAPI
+entry. For Create, the native provisioning `BaseURL` must match the effective
+HTTPS service origin followed by `/scim/v2`.
 
-When managed HTTP Create is enabled, leave `Native` nil to reuse its exact
-managed credential owner. Otherwise supply the matching `Native` deployment
-profile; an existing native owner can issue connections independently of HTTP.
+When HTTP managed connection creation is enabled, leave `Native` nil to reuse
+its exact managed credential owner. Otherwise supply the matching `Native`
+deployment profile; an existing native owner can issue connections
+independently of HTTP.
 Reference applies the existing managed connection and atomic quota histories.
-When Bulk is also enabled, leave the List rate settings empty to share Bulk's
+When Bulk is also enabled, leave the User rate settings empty to share Bulk's
 protocol quota; otherwise configure a stable rate namespace and key across
 instances. Native authorization and quota admission must succeed before any
-Users are returned.
-When both reads are selected, use the List configuration as the sole owner
-and leave the Get configuration fields zero so both reads use the same quota.
+Users are returned or created. When more than one User route is selected, set
+native and rate options only on the first selected of List, Get, and Create,
+in that order. Leave the other selected option structs empty to share the same
+owner and quota.
 
 ## Optional directory administration
 
