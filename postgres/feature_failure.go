@@ -27,13 +27,19 @@ const (
 	FeatureFailureGroupMissing
 	// FeatureFailureGroupVersionRequired is the original no-effect Bulk Group 428.
 	FeatureFailureGroupVersionRequired
-	// FeatureFailureSCIMBulkDependency is the original no-effect Group Bulk
+	// FeatureFailureSCIMBulkDependency is the original no-effect SCIM Bulk
 	// result for a durably failed dependency. It is scoped to a denial plan.
 	FeatureFailureSCIMBulkDependency
+	// FeatureFailureUserMissing is the original no-effect Bulk User 404.
+	FeatureFailureUserMissing
+	// FeatureFailureUserVersionRequired is the original no-effect Bulk User 428.
+	FeatureFailureUserVersionRequired
+	// FeatureFailureUserVersionMismatch is a Bulk User 412 detected before an update intent exists.
+	FeatureFailureUserVersionMismatch
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureSCIMBulkDependency
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureUserVersionMismatch
 }
 
 // TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
@@ -80,10 +86,14 @@ func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailure
 		return subject == "scim_group" && op.OperationID != "identity.scim.group-delete"
 	}
 	if scimBulkDenialCode(code) {
-		if code == FeatureFailureSCIMBulkDependency {
-			return subject == "scim_group"
+		switch code {
+		case FeatureFailureSCIMBulkDependency:
+			return subject == "scim_group" || scimBulkUserMutation(op)
+		case FeatureFailureUserMissing, FeatureFailureUserVersionRequired, FeatureFailureUserVersionMismatch:
+			return scimBulkUserMutation(op)
+		default:
+			return scimBulkGroupMutation(op)
 		}
-		return scimBulkGroupMutation(op)
 	}
 	return true
 }

@@ -81,7 +81,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 			return invalidPlan()
 		}
 	}
-	if plan.Feature != nil && scimUserUpdateSelected(plan.Feature.Operation) {
+	if plan.Feature != nil && plan.SCIMBulkDenial == 0 && scimUserUpdateSelected(plan.Feature.Operation) {
 		update, err := scimUserUpdateCommandPlan(command)
 		_, finalCheck := phase.(FeatureCommitContributor)
 		if err != nil || !finalCheck || plan.SubjectType != "scim_user" || plan.SCIMUserUpdate == nil || *plan.SCIMUserUpdate != update {

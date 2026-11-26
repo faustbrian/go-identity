@@ -10,17 +10,22 @@ import (
 const scimBulkDenialProfile = "identity-scim-bulk-denial-v1"
 
 func scimBulkDenialCode(code FeatureFailureCode) bool {
-	return code == FeatureFailureGroupMissing || code == FeatureFailureGroupVersionRequired || code == FeatureFailureSCIMBulkDependency
+	return code == FeatureFailureGroupMissing || code == FeatureFailureGroupVersionRequired || code == FeatureFailureSCIMBulkDependency ||
+		code == FeatureFailureUserMissing || code == FeatureFailureUserVersionRequired || code == FeatureFailureUserVersionMismatch
 }
 
 func scimBulkGroupMutation(op identity.FeatureOperation) bool {
 	return featureFailureSubject(op) == "scim_group" && op.OperationID != "identity.scim.group-create"
 }
 
+func scimBulkUserMutation(op identity.FeatureOperation) bool {
+	return scimUserUpdateSelected(op) || op == scimUserUpdateOperation("identity.scim.user-delete")
+}
+
 func validSCIMBulkDenialPlan(b identity.CommandBinding, p CommandPlan) bool {
 	parent, err := identity.ParseCommandID(b.CorrelationID)
 	return scimBulkDenialCode(p.SCIMBulkDenial) && p.Feature != nil && featureFailureCodeAllowed(p.Feature.Operation, p.SCIMBulkDenial) &&
-		p.Feature.Contributor == scimUserCreationDescriptor() && p.SubjectType == "scim_group" &&
+		p.Feature.Contributor == scimUserCreationDescriptor() && p.SubjectType == featureFailureSubject(p.Feature.Operation) &&
 		b.ActorKind == authorization.SubjectServiceAccount && err == nil && parent != b.CommandID &&
 		p.Lifecycle == nil && len(p.Audits) == 1 && p.Audits[0].EventType == scimBulkApplyChildAudit && p.Audits[0].RetentionClass == "protected" &&
 		p.Capability == nil && p.CapabilityIssuance == nil && p.Delivery == nil && p.OTP == nil && p.RiskEvidence == nil &&
@@ -109,11 +114,11 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 	if plan.feature == nil || len(plan.audits) != 1 || plan.audits[0].EventType != scimBulkApplyChildAudit {
 		return nil
 	}
-	// Only the original protected native User-create child may retain its
+	// Only an original protected native User write may retain its
 	// uniqueness denial; ordinary User commands and Group conflicts do not
 	// acquire this checkpoint or its failOnErrors cutoff authority.
 	if code == FeatureFailureUniqueness {
-		if plan.feature.Operation != scimUserCreationOperation() || plan.feature.Contributor != scimUserCreationDescriptor() ||
+		if (plan.feature.Operation != scimUserCreationOperation() && !scimUserUpdateSelected(plan.feature.Operation)) || plan.feature.Contributor != scimUserCreationDescriptor() ||
 			plan.subjectType != "scim_user" || plan.audits[0].RetentionClass != "protected" {
 			return nil
 		}
@@ -121,9 +126,9 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 			return nil
 		}
 	}
-	// A Group create has no version precondition. Only the precise registered
+	// A create has no version precondition. Only the precise registered
 	// mutation tuples may turn 412 into a terminal Bulk child checkpoint.
-	if code == FeatureFailurePrecondition && !scimBulkGroupMutation(plan.feature.Operation) {
+	if code == FeatureFailurePrecondition && !scimBulkGroupMutation(plan.feature.Operation) && !scimBulkUserMutation(plan.feature.Operation) {
 		return nil
 	}
 	if scimBulkDenialCode(code) && plan.scimBulkDenial != code {

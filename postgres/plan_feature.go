@@ -39,7 +39,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if denialOnly && (proofBase || !validSCIMBulkDenialPlan(binding, p)) {
 		return nil, invalidPlan()
 	}
-	if !proofBase && (p.SCIMUserUpdate != nil || p.Feature != nil && scimUserUpdateSelected(p.Feature.Operation)) {
+	if !proofBase && !denialOnly && (p.SCIMUserUpdate != nil || p.Feature != nil && scimUserUpdateSelected(p.Feature.Operation)) {
 		return encodeSCIMUserUpdatePlan(binding, fingerprint, p)
 	}
 	if p.AccountLinkState != nil {

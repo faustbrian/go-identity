@@ -111,8 +111,8 @@ func featureAuditRecordScope(binding identity.CommandBinding, operation identity
 	// the parent remains in correlation and the lifecycle names that projection.
 	parent, err := identity.ParseCommandID(binding.CorrelationID)
 	group := featureFailureSubject(operation) == "scim_group" && subjectType == "scim_group"
-	userCreation := operation == scimUserCreationOperation() && subjectType == "scim_user"
-	if err != nil || parent == binding.CommandID || !group && !userCreation || binding.ActorKind != authorization.SubjectServiceAccount {
+	user := featureFailureSubject(operation) == "scim_user" && subjectType == "scim_user"
+	if err != nil || parent == binding.CommandID || !group && !user || binding.ActorKind != authorization.SubjectServiceAccount {
 		return "", "", invalidAudit()
 	}
 	return "scim_bulk_child", string(binding.CommandID), nil

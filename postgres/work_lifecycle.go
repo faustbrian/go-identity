@@ -209,6 +209,15 @@ func lifecycleAuditSubjectMatches(w Work, event *StagedLifecycle, record audit.R
 	switch feature.Operation.OperationID {
 	case "identity.scim.user-create":
 		expectedEvent = "identity.scim.user_created.v1"
+	case "identity.scim.user-replace":
+		expectedEvent = "identity.scim.user_replaced.v1"
+	case "identity.scim.user-patch":
+		expectedEvent = "identity.scim.user_patched.v1"
+		if event.BeforeVersion == event.AfterVersion {
+			expectedEvent = "identity.scim.user_patch_noop.v1"
+		}
+	case "identity.scim.user-delete":
+		expectedEvent = "identity.scim.user_deleted.v1"
 	case "identity.scim.group-create":
 		expectedEvent = "identity.scim.group_created.v1"
 	case "identity.scim.group-replace":

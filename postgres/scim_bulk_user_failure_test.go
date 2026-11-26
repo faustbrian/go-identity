@@ -80,8 +80,6 @@ func TestSCIMBulkUserUniquenessRejectsOtherFailureScopes(t *testing.T) {
 		change    func(*admittedKernelPlan)
 	}{
 		{name: "ordinary_user_create", change: func(p *admittedKernelPlan) { p.audits[0].EventType = "identity.scim.user-create" }},
-		{name: "user_replace", operation: scimUserUpdateOperation("identity.scim.user-replace")},
-		{name: "user_patch", operation: scimUserUpdateOperation("identity.scim.user-patch")},
 		{name: "user_delete", operation: scimUserUpdateOperation("identity.scim.user-delete")},
 		{name: "group_create", operation: groupFailureOperation("identity.scim.group-create")},
 		{name: "group_replace", operation: groupFailureOperation("identity.scim.group-replace")},

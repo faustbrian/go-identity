@@ -159,8 +159,9 @@ func TestSCIMBulkUserChildAuditRejectsOtherProjectionScopes(t *testing.T) {
 		{name: "group_projection", change: func(_ *identity.CommandBinding, _ *identity.FeatureOperation, subject *string) {
 			*subject = "scim_group"
 		}},
-		{name: "user_update", change: func(_ *identity.CommandBinding, op *identity.FeatureOperation, _ *string) {
+		{name: "wrong_user_update_version_policy", change: func(_ *identity.CommandBinding, op *identity.FeatureOperation, _ *string) {
 			*op = scimUserUpdateOperation("identity.scim.user-replace")
+			op.VersionPolicy = identity.FeatureVersionSequentialOrUnchanged
 		}},
 		{name: "other_owner", change: func(_ *identity.CommandBinding, op *identity.FeatureOperation, _ *string) { op.Owner = "other" }},
 		{name: "other_schema", change: func(_ *identity.CommandBinding, op *identity.FeatureOperation, _ *string) {

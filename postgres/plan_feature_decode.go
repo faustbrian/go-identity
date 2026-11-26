@@ -15,7 +15,9 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 }
 
 func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
-	if !proofBase && (binding.OperationID == "identity.scim.user-replace" || binding.OperationID == "identity.scim.user-patch") && binding.SchemaID == binding.OperationID+".native-v1" {
+	// No-effect Bulk User denials use the flat eight-field plan. Its canonical
+	// round trip still rejects an ordinary User update without its envelope.
+	if !proofBase && (len(encoded) == 0 || encoded[0] != 0xa8) && (binding.OperationID == "identity.scim.user-replace" || binding.OperationID == "identity.scim.user-patch") && binding.SchemaID == binding.OperationID+".native-v1" {
 		return decodeSCIMUserUpdatePlan(binding, fingerprint, encoded)
 	}
 	denialSchema := binding.SchemaID == oauthCallbackDenialOperation().SchemaID || binding.SchemaID == anonymousOAuthCallbackDenialOperation().SchemaID

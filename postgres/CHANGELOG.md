@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain protected SCIM Bulk User replace, PATCH, and delete audits against
+  the original child command. Permit exact no-effect User denials without a
+  core update intent or lifecycle effect, while preserving ordinary updates.
+
 - Settle a started, protected native SCIM Bulk child on confirmed dependency
   rollback in the original fenced terminal transaction. An unknown outcome
   still does not record a child failure or advance the parent's error count.
