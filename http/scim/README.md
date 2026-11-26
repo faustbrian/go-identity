@@ -1,5 +1,21 @@
 # SCIM HTTP
 
+## Managed bearer conditional Group Replace
+
+`NewManagedGroupsReplaceFeature` selects only
+`PUT /scim/v2/Groups/{resource_id}`. Use `ExecuteManagedAdmittedGroupReplace`
+with the existing HTTPS tenant policy, native SCIM limits, explicit member
+ceiling and shared protocol quota. Supply the issued Group connection bearer,
+the original strong `If-Match`, and the complete `application/scim+json`
+Group. Missing writable fields follow native replacement semantics; member
+types and references must resolve in the selected connection.
+
+Success returns the native `200` Group with its exact ETag and Location. An
+equivalent headerless retry can recover that original result after fresh
+authority and quota admission, without a second mutation. Changed input cannot
+replay the first write. The transport accepts neither a client retry key nor
+cookie authority and enables no other operation.
+
 ## Managed bearer Group Create
 
 Select `NewManagedGroupsCreateFeature` to enable `POST /scim/v2/Groups`.

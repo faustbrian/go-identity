@@ -5,14 +5,14 @@ go 1.27.0
 require (
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
-	github.com/faustbrian/go-identity/http v0.0.0-20261126223737-c8ee319250e7
+	github.com/faustbrian/go-identity/http v0.0.0-20261126232037-2ac3789dbc29
 	github.com/faustbrian/go-identity/http/organization v0.0.0-20261126145644-ca3be759bba8
 	github.com/faustbrian/go-identity/session v0.0.0-20261027053124-3051d2cd42b5
 	github.com/faustbrian/go-json-schema/v2 v2.0.0
 	github.com/faustbrian/go-organization v0.0.0-20261122135635-30af6abd1547
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
-	github.com/faustbrian/go-scim v0.0.0-20261126221223-0f55d5e2445e
-	github.com/faustbrian/go-scim/postgres v0.0.0-20261126222711-ac68b22c6b05
+	github.com/faustbrian/go-scim v0.0.0-20261126230442-4037f60e5cb1
+	github.com/faustbrian/go-scim/postgres v0.0.0-20261126232048-fefdd9ec462e
 )
 
 require (

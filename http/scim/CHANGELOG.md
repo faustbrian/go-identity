@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in conditional Group PUT using the original strong If-Match, shared
+  protocol quota and native replay. Return the validated Group, ETag and
+  Location without enabling another Group operation.
+
 - Add opt-in managed-bearer Group Create over HTTPS. Preserve native Group
   validation and membership authority, shared protocol quota, and the exact
   committed Group, ETag and Location.
