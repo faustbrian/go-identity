@@ -19,7 +19,16 @@ type oauthIssueRequestState struct {
 	command identity.Command
 	binding identity.CommandBinding
 	record  Session
+	profile oauthIssuanceProfile
 }
+
+type oauthIssuanceProfile uint8
+
+const (
+	noOAuthIssuance oauthIssuanceProfile = iota
+	oauthCodeIssuance
+	oneTapIssuance
+)
 
 // NewOAuthSessionIssuer selects prospective existing-account OAuth issuance.
 // Authority must be nil: preparation is not an opaque authenticated proof. The
@@ -29,14 +38,18 @@ type oauthIssueRequestState struct {
 // No exchange, store, transaction or goroutine is owned by this issuer.
 // Configuration and borrowed dependencies retain IssuerConfig's bounds.
 func NewOAuthSessionIssuer(executor IssueExecutor, config IssuerConfig) (*SessionIssuer, error) {
-	if config.Authority != nil {
+	return newOAuthSessionIssuer(executor, config, oauthCodeIssuance)
+}
+
+func newOAuthSessionIssuer(executor IssueExecutor, config IssuerConfig, profile oauthIssuanceProfile) (*SessionIssuer, error) {
+	if _, ok := profile.operation(); !ok || config.Authority != nil {
 		return nil, ErrInvalidIssuer
 	}
 	issuer, err := newSessionIssuer(executor, config, true)
 	if err != nil {
 		return nil, err
 	}
-	issuer.otp, issuer.oauth = false, true
+	issuer.otp, issuer.oauth = false, profile
 	return issuer, nil
 }
 
@@ -59,6 +72,22 @@ func oauthSigninOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/oauth", OperationID: "identity.oauth.callback", SchemaID: "oauth-signin-callback-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 }
 
+func (profile oauthIssuanceProfile) operation() (identity.FeatureOperation, bool) {
+	switch profile {
+	case oauthCodeIssuance:
+		return oauthSigninOperation(), true
+	case oneTapIssuance:
+		return identity.FeatureOperation{
+			Owner: "identity/oauth/onetap", OperationID: "identity.oauth.onetap-callback",
+			SchemaID: "oauth-onetap-callback-v1", SchemaVersion: 1,
+			RecordRequirement:  identity.FeatureRecordRequired,
+			SubjectRequirement: identity.FeatureSubjectAnonymousFlow,
+		}, true
+	default:
+		return identity.FeatureOperation{}, false
+	}
+}
+
 // PrepareOAuth freezes the prospective cookie session before native mapping.
 // Binding retains the anonymous original flow and service actor, never a caller
 // selected user; the exact existing provider credential selects Session.UserID.
@@ -69,16 +98,23 @@ func oauthSigninOperation() identity.FeatureOperation {
 // that emptiness; organization/passkey/MFA profiles are not selected here.
 // Remember is already resolved and is never inferred or renewed. Lookup is zero
 // on input; no IO, exchange, reservation or authority verification occurs.
-func (s *SessionIssuer) PrepareOAuth(binding identity.CommandBinding, spec SessionSpec) (out PreparedIssuance, err error) {
+func (s *SessionIssuer) PrepareOAuth(binding identity.CommandBinding, spec SessionSpec) (PreparedIssuance, error) {
+	return s.prepareOAuth(binding, spec, oauthCodeIssuance)
+}
+
+func (s *SessionIssuer) prepareOAuth(binding identity.CommandBinding, spec SessionSpec, profile oauthIssuanceProfile) (out PreparedIssuance, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = PreparedIssuance{}, ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || !s.oauth || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) || binding.TenantID != spec.TenantID || binding.UserID != "" || binding.AnonymousFlowID == "" || binding.ActorKind != authorization.SubjectServiceAccount || string(spec.Authentication.Proof.ID) != string(binding.CommandID) {
+	operation, selected := profile.operation()
+	if s == nil || !selected || s.oauth != profile || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || spec.FamilyVersion != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) ||
+		binding.TenantID != spec.TenantID || binding.UserID != "" || binding.AnonymousFlowID == "" || binding.ActorKind != authorization.SubjectServiceAccount ||
+		string(spec.Authentication.Proof.ID) != string(binding.CommandID) || profile == oneTapIssuance && binding.RecordID != binding.AnonymousFlowID {
 		return out, ErrInvalidIssuance
 	}
-	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: oauthSigninOperation()})
+	command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: operation})
 	if err != nil {
 		return out, ErrInvalidIssuance
 	}
@@ -104,7 +140,12 @@ func (s *SessionIssuer) PrepareOAuth(binding identity.CommandBinding, spec Sessi
 // syntax alone proves no possession. Password, code-submission, session-bearer
 // and proof routes are disjoint. Never persist this input or recover with it.
 func (s *SessionIssuer) BindOAuth(prepared PreparedIssuance, command identity.Command) (PreparedIssuance, error) {
-	if s == nil || !s.oauth || prepared.state == nil || prepared.state.owner != s || prepared.state.oauth == nil {
+	return s.bindOAuth(prepared, command, oauthCodeIssuance)
+}
+
+func (s *SessionIssuer) bindOAuth(prepared PreparedIssuance, command identity.Command, profile oauthIssuanceProfile) (PreparedIssuance, error) {
+	operation, selected := profile.operation()
+	if s == nil || !selected || s.oauth != profile || prepared.state == nil || prepared.state.owner != s || prepared.state.oauth == nil {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if prepared.state.request.state != nil {
@@ -115,13 +156,13 @@ func (s *SessionIssuer) BindOAuth(prepared PreparedIssuance, command identity.Co
 	_, code := command.OneTimeCode()
 	_, recovery := command.RecoveryCode()
 	_, bearer := command.SessionToken()
-	if !ok || !cookie || code || recovery || bearer || feature.Binding != prepared.state.oauth.binding || feature.Operation != oauthSigninOperation() {
+	if !ok || !cookie || code || recovery || bearer || feature.Binding != prepared.state.oauth.binding || feature.Operation != operation {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if !prepared.state.oauth.bound.CompareAndSwap(false, true) {
 		return PreparedIssuance{}, ErrIssuanceAlreadyBound
 	}
-	request := IssueRequest{state: &issueRequestState{oauth: &oauthIssueRequestState{command: command, binding: feature.Binding, record: prepared.state.oauth.record}}}
+	request := IssueRequest{state: &issueRequestState{oauth: &oauthIssueRequestState{command: command, binding: feature.Binding, record: prepared.state.oauth.record, profile: profile}}}
 	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: prepared.state.token, csrf: prepared.state.csrf, oauth: prepared.state.oauth}}, nil
 }
 
@@ -130,7 +171,11 @@ func (s *SessionIssuer) BindOAuth(prepared PreparedIssuance, command identity.Co
 // evidence or a recovery credential; the native owner must prove all admission
 // and atomic effects. Zero and every other issuance variant return false.
 func (r IssueRequest) OAuthCommand() (identity.Command, Session, bool) {
-	if r.state == nil || r.state.oauth == nil {
+	return r.oauthCommand(oauthCodeIssuance)
+}
+
+func (r IssueRequest) oauthCommand(profile oauthIssuanceProfile) (identity.Command, Session, bool) {
+	if r.state == nil || r.state.oauth == nil || r.state.oauth.profile != profile {
 		return identity.Command{}, Session{}, false
 	}
 	return r.state.oauth.command, r.state.oauth.record, true

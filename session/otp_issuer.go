@@ -208,7 +208,8 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	}
 	if r.state.oauth != nil {
 		p := r.state.oauth
-		return p.binding, oauthSigninOperation(), p.record, true
+		operation, ok := p.profile.operation()
+		return p.binding, operation, p.record, ok
 	}
 	if r.state.passkey != nil {
 		p := r.state.passkey
@@ -266,8 +267,8 @@ func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
 	if r.state != nil && r.state.enterpriseSSO != nil {
 		return ErrInvalidIssuance
 	}
-	if s.oauth {
-		if r.state == nil || r.state.oauth == nil {
+	if s.oauth != noOAuthIssuance {
+		if r.state == nil || r.state.oauth == nil || r.state.oauth.profile != s.oauth {
 			return ErrInvalidIssuance
 		}
 		return validateOAuthIssuanceAt(r.state.oauth.record, now)

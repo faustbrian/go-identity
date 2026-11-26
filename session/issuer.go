@@ -97,7 +97,7 @@ type SessionIssuer struct {
 	anonymousUpgrade bool
 	passkey          bool
 	passkeySignup    bool
-	oauth            bool
+	oauth            oauthIssuanceProfile
 	enterpriseSSO    enterpriseSessionProtocol
 }
 
@@ -189,7 +189,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || s.enterpriseSSO != noEnterpriseSession || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth != noOAuthIssuance || s.enterpriseSSO != noEnterpriseSession || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -303,9 +303,9 @@ type IssueResult struct {
 	Cookie        http.Cookie
 	Replayed      bool
 	RetryAfter    time.Duration
-	// DeliveryValidUntil is the original exclusive native delivery deadline for
-	// anonymous upgrade. Transports must preserve it through final commitment,
-	// not derive another lease from the returned session or their own clock.
+	// DeliveryValidUntil is the original exclusive delivery deadline for
+	// anonymous upgrade or One Tap. Transports must preserve it through final
+	// commitment, not derive another lease from the session or their own clock.
 	// Zero means no deadline was projected: other issuance profiles, replay,
 	// recovery or failure. It is not current authentication or reusable proof.
 	DeliveryValidUntil time.Time
@@ -376,7 +376,7 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 			return out, err
 		}
 	}
-	if s.oauth {
+	if s.oauth != noOAuthIssuance {
 		if err := validateOAuthIssuanceAt(out.Session, now); err != nil {
 			return out, err
 		}
@@ -435,6 +435,10 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 	}
 	out.Cookie = cookie
 	out.Token = p.state.token
+	if s.oauth == oneTapIssuance {
+		// Forwarding can outlive Issue; never renew the original proof cutoff.
+		out.DeliveryValidUntil = spec.Authentication.Proof.ExpiresAt
+	}
 	if s.anonymousUpgrade {
 		// The signed grant may expire before the replacement session. Preserve
 		// its exact original admission bound across subsequent HTTP forwarding.
@@ -463,7 +467,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth || s.enterpriseSSO != noEnterpriseSession || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil || r.state.oauth != nil || r.state.enterpriseSSO != nil {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || s.anonymous || s.anonymousUpgrade || s.passkey || s.oauth != noOAuthIssuance || s.enterpriseSSO != noEnterpriseSession || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil || r.state.anonymous != nil || r.state.upgrade != nil || r.state.passkey != nil || r.state.oauth != nil || r.state.enterpriseSSO != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()
@@ -492,6 +496,10 @@ func (s *SessionIssuer) finish(ctx context.Context, r IssueRequest, e IssueExecu
 	}
 	if r.state != nil && r.state.enterpriseSSO != nil {
 		// The callback completes the existing version-one SSO login transaction.
+		before, after = 1, 2
+	}
+	if r.state != nil && r.state.oauth != nil && r.state.oauth.profile == oneTapIssuance {
+		// This receipt completes the original version-one One Tap flow.
 		before, after = 1, 2
 	}
 	if r.state != nil && r.state.upgrade != nil {

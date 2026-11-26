@@ -11,6 +11,17 @@ populate the cookie. Keep its name distinct from session, flow and device cookie
 It is not a bearer or CSRF authority channel. Existing digest-bound protected
 header validation remains mandatory; replay cannot recreate a token.
 
+## Prospective Google One Tap session issuance
+
+`NewOneTapSessionIssuerWithCSRF` selects the final session, not the initial
+browser flow. Use `PrepareOneTap` and `BindOneTap` with the original anonymous
+callback command. The native executor borrows it through
+`IssueRequest.OneTapCommand` and commits provider/browser admission and session
+effects before returning the exact result. Ordinary OAuth cannot use this
+command. Only an exact new commit can deliver credentials, and the result
+retains the original proof cutoff for subsequent transport. Replay and recovery
+cannot redeliver the session or CSRF token.
+
 ## Prospective enterprise OIDC issuance
 
 `NewSSOOIDCSessionIssuer` and its CSRF variant select the enterprise callback

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select commit-gated One Tap session and CSRF credential delivery, separate
+  from ordinary OAuth. An exact new callback commit is required, and delivery
+  retains the original proof cutoff.
+
 - Prepare a Google One Tap cookie against the durable owner's exact admitted
   flow binding without changing the existing commit-gated disclosure path.
 
