@@ -24,6 +24,7 @@ use (
 	./http/password
 	./http/passkey
 	./http/phone
+	./http/scim
 	./http/session
 	./http/sso
 	./i18n
