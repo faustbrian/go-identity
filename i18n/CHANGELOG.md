@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an opt-in authenticated PostgreSQL locale-preference profile using the
+  existing kernel Work/journal, native password session/CSRF and current policy.
+  Require explicit exact-notice acceptance, canonical supported locales and CAS;
+  retain historical same-command results, update checkpoints and lifecycle fences.
+  Exact export/deletion acknowledgements and HTTP composition remain pending.
+
 - Bind locale composition to the current public identity kernel contracts;
   locale precedence and stored preference semantics are unchanged.
 

@@ -3,7 +3,8 @@
 Go 1.27 transport-neutral locale negotiation. This experimental module currently
 implements matching, typed error registration, catalog rendering and original-error
 resolution with locale precedence, configured fallbacks and preference policy.
-Durable preference persistence and lifecycle/export are not yet implemented.
+The opt-in `i18n/postgres` package adds an authenticated durable preference
+profile. Lifecycle export/deletion and HTTP composition remain unimplemented.
 
 ```go
 locale, err := (i18n.DefaultMatcher{}).Match(i18n.MatchInput{
@@ -50,7 +51,9 @@ coverage, mutation and release evidence remain pending.
 ## Security and privacy
 
 Language input is personal data, not authentication or a demographic signal.
-No preferences, cookies, headers, audit records or telemetry are persisted here.
+The pure matcher/resolver persists no preferences, cookies, headers, audit records
+or telemetry. The separately selected native preference adapter stores locale
+personal data and required mutation metadata as described below.
 Errors and `MatchInput` formatting redact raw inputs. A canonical tag or a
 match does not prove consent, tenant ownership or preference-write authority.
 Consumers must not log raw preference/header input or use it as an unbounded
@@ -271,8 +274,91 @@ Locale is personal data. The notice version must describe purpose and retention;
 the durable adapter and reference profile own retention/deletion enforcement.
 Session/HTTP caches and integrity-protected cookies are projections, not durable
 authority. They expire/invalidate under their respective lifecycle consumers.
-Exact-snapshot export, anonymization/deletion acknowledgements, unknown-outcome
-reconciliation and a concrete downstream preference adapter remain pending.
+Exact-snapshot export and anonymization/deletion acknowledgements remain pending.
+
+## Native durable preference profile
+
+`i18n/postgres.NewPreferenceStore(primaryPool, config, credentials)` implements
+the unchanged two-method `PreferenceStore`. Construct it for the current request
+and discard it after use: credentials are borrowed bearer/CSRF custody, not shared
+configuration. Formatting redacts the store/configuration/credentials and implicit
+JSON/text serialization rejects them. The pool and configured policy, clock and
+audit/lifecycle participants remain caller-owned; no goroutines are started.
+
+The selected profile requires the real native stateful password session reader,
+an exact human self-scope, current revision-matched `identity.i18n.get` or
+`identity.i18n.set` policy and resource type `locale_preference`. Command admission
+and receipt reads additionally require `identity.i18n.set` for that same current
+`identity.user`; the kernel supplies its command-read/recovery attributes.
+Every write also
+requires the synchronizer token bound to that exact session. Anonymous,
+organization, MFA, passkey and other method profiles fail closed rather than
+dropping their additional authority dimensions. HTTP still owns cookie/header
+extraction, origin/channel enforcement and response escaping; this is not an
+unauthenticated storage endpoint.
+
+Configure `Supported` and `CurrentNoticeVersion` explicitly. A user must submit
+that positive notice version for each new mutation after actually agreeing
+to the presented notice; omission, an older version, a session, or a presented
+token never supplies acceptance. This records explicit authenticated acceptance
+for this locale operation, not general consent or legal evidence. Changing notice
+or supported-locale policy requires separate reconciliation; it is not inferred
+from stored preferences. The notice must describe purpose and retention.
+
+Install the existing kernel, session/CSRF, authorization, audit and lifecycle
+schemas first. Allocate `PreferenceMigrationSource.Version` in the composition's
+single existing migration history and apply it **before enabling** this profile.
+Its new `identity_i18n` tables do not scan/backfill or alter existing user data.
+The new foreign key briefly locks the user table; a five-second lock timeout
+fails the migration instead of waiting indefinitely. Reverting code leaves the
+schema and data intact; no destructive down migration or automatic pruning exists.
+
+Writes use only the existing coordinator's reservation, journal, Work and commit.
+The native participant locks/checks original directory, user, identifier,
+credential, policy, session/family and CSRF authority, performs expected-version
+CAS, and rechecks before commit. Its locale update, required audit/lifecycle,
+checkpoint and original command result commit together. `ExpectedVersion == 0`
+is create-only. Canonical unsupported locales are rejected rather than negotiated
+and persisted. Reads return explicit absence and never store a fallback.
+
+Keep the same command ID and **all** original input on retry. Exact successful
+replay returns its historical locale/version/notice even after newer updates;
+altered intent or scope conflicts. A lost commit acknowledgement is unknown and
+is reconciled through that same kernel command, not a new identity or a guessed
+current preference. Replayed results still require current session/policy access.
+There is no automatic retry or regenerated authority.
+
+The `identity/i18n` contributor retains per-subject generation, privacy epoch,
+closed fence and monotonic preference-update checkpoint. Each committed update
+retains its command/fingerprint/generation and original projection for exact replay.
+These are committed effect records, not a second pending-command journal.
+The closed fence prevents reads, new writes and historical result disclosure.
+Locale payloads and retained results remain personal data: exact export and
+anonymization/deletion must erase both under the existing lifecycle cascade and
+coordinate kernel retry retention. No contributor acknowledgement, retention
+worker, privacy-export manifest binding or completed deletion is claimed here.
+
+An exact **committed** retry is historical disclosure, not another acceptance or
+write. The native store reads the kernel's immutable original scope/receipt and
+compares every original `PreferenceCommand` field against the committed update.
+Current authentication, CSRF, self-scope, policy and lifecycle fences still apply;
+an authorized new session or policy/notice/catalog revision does not replace the
+original result. Changed intent conflicts. A live original reservation remains
+unknown and cannot be replaced or executed under a retry's new admission. Only
+the kernel's existing recovery owner can reconcile it. Its generic observation
+deliberately hides original native input, so an indistinguishable changed live
+body/session also remains unknown; once committed, the exact original fields
+authoritatively distinguish replay from conflicting intent.
+
+For public resolution, pass this request-scoped store to `NewResolver`, obtain
+the authenticated preference through `PreferenceResolver.GetPreference`, and pass
+its locale as `ResolveInput.Session`. Explicit preference still takes precedence;
+cookie/header/default selection does not silently update durable state.
+The resolver's separately configured `PreferencePolicy` remains a fixed catalog
+policy: rebuilding it without an old locale still rejects that locale before
+calling its store. Use the native store for historical command results; catalog
+changes require their own documented preference reconciliation, not silent
+changes to accepted/resolved locales.
 
 ## FAQ and updates
 

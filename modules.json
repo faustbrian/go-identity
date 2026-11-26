@@ -3143,9 +3143,21 @@
           "coverage_required": true,
           "build_required": true,
           "build_tags": []
+        },
+        {
+          "module_directory": "i18n",
+          "directory": "postgres",
+          "name": "postgres",
+          "import_path": "github.com/faustbrian/go-identity/i18n/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
         }
       ],
-      "purpose": "Bounded identity localization, configured fallbacks and preference policy; durable preference lifecycle in development.",
+      "purpose": "Bounded identity localization, configured fallbacks and preference policy with an opt-in PostgreSQL adapter.",
       "lifecycle": "experimental",
       "kind": "public library",
       "releasable": true,
@@ -3153,13 +3165,28 @@
       "version": "0.0.0",
       "tag_prefix": "i18n/v",
       "owned_dependencies": [
-        "github.com/faustbrian/go-identity"
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-authentication/v2",
+        "github.com/faustbrian/go-authorization/v3",
+        "github.com/faustbrian/go-clock",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-identity/session/postgres",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-postgres"
       ],
       "reverse_owned_dependencies": [],
-      "external_runtime_dependencies": [],
-      "required_services": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
       "build_tags": [],
-      "test_tags": [],
+      "test_tags": [
+        "integration"
+      ],
       "interoperability_tools": [],
       "specifications": [],
       "conformance_corpora": [],
@@ -3189,7 +3216,7 @@
         "secondary_capabilities": [
           "identity-and-access"
         ],
-        "responsibility": "Bounded identity localization, configured fallbacks and preference policy; durable preference lifecycle in development.",
+        "responsibility": "Bounded identity localization, configured fallbacks and optional durable preference storage.",
         "non_goals": [
           "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
           "Provide user interfaces or a vendor-owned authentication engine."
@@ -3199,7 +3226,8 @@
           "github.com/faustbrian/go-identity/i18n"
         ],
         "package_selection": {
-          "github.com/faustbrian/go-identity/i18n": "Experimental Bounded identity localization, configured fallbacks and preference policy; durable preference lifecycle in development. Use only documented selected profiles; full qualification is pending."
+          "github.com/faustbrian/go-identity/i18n": "Use for configured locale negotiation, fallbacks, catalogs, and preference policy without a database.",
+          "github.com/faustbrian/go-identity/i18n/postgres": "Select for authenticated durable locale preferences through the existing identity Work and a caller-owned PostgreSQL pool."
         },
         "lifecycle_status": "active",
         "maturity": "experimental",
@@ -3218,7 +3246,7 @@
             "copy",
             "transfer"
           ],
-          "runtime_resources": "none",
+          "runtime_resources": "caller",
           "background_work": "none"
         },
         "optional_owned_dependencies": [],
