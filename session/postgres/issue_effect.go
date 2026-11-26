@@ -69,7 +69,7 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		if err != nil {
 			return err
 		}
-		if created != 1 && (b.OperationID == ssoOIDCSessionOperation().OperationID || b.OperationID == ssoOAuth2SessionOperation().OperationID || b.OperationID == kernel.SSOSAMLSigninOperation().OperationID || b.OperationID == kernel.SSOSAMLIDPConfirmationOperation().OperationID) {
+		if created != 1 && (b.OperationID == kernel.OneTapCallbackOperation().OperationID || b.OperationID == ssoOIDCSessionOperation().OperationID || b.OperationID == ssoOAuth2SessionOperation().OperationID || b.OperationID == kernel.SSOSAMLSigninOperation().OperationID || b.OperationID == kernel.SSOSAMLIDPConfirmationOperation().OperationID) {
 			return identity.ConflictError{}
 		}
 	}
@@ -111,6 +111,8 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		digest = passkeySignupIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == "identity.oauth.callback" {
 		digest = oauthSigninIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
+	} else if b.OperationID == kernel.OneTapCallbackOperation().OperationID {
+		digest = oneTapCallbackIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == ssoOIDCSessionOperation().OperationID {
 		digest = ssoOIDCSigninIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == ssoOAuth2SessionOperation().OperationID {

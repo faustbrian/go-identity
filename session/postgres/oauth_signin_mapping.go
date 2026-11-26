@@ -22,6 +22,10 @@ func oauthSessionOperation() identity.FeatureOperation {
 // organization, passkey, completed-MFA and credential-continuation profiles deny.
 // Tenant/user remain explicit even though the callback's command is anonymous.
 func OAuthSigninSessionFields(record session.Session) ([]identity.FeatureField, error) {
+	return providerSigninSessionFields(record)
+}
+
+func providerSigninSessionFields(record session.Session) ([]identity.FeatureField, error) {
 	if !oauthSigninRecord(record) {
 		return nil, session.ErrInvalidSessionCommand
 	}
@@ -47,13 +51,17 @@ func OAuthSigninSessionFields(record session.Session) ([]identity.FeatureField, 
 // must bind provider evidence to this exact selected user and credential, check
 // current authority and atomically consume state with the complete session.
 func OAuthSigninSession(command identity.Command) (session.Session, error) {
+	return providerSigninSession(command, oauthSessionOperation())
+}
+
+func providerSigninSession(command identity.Command, operation identity.FeatureOperation) (session.Session, error) {
 	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
 	feature, ok := command.Feature()
 	_, cookie := command.PreAuthCookie()
 	_, code := command.OneTimeCode()
 	_, recovery := command.RecoveryCode()
 	_, bearer := command.SessionToken()
-	if !ok || !cookie || code || recovery || bearer || feature.Operation != oauthSessionOperation() || feature.Binding.ActorKind != authorization.SubjectServiceAccount || feature.Binding.UserID != "" || feature.Binding.AnonymousFlowID == "" {
+	if !ok || !cookie || code || recovery || bearer || feature.Operation != operation || feature.Binding.ActorKind != authorization.SubjectServiceAccount || feature.Binding.UserID != "" || feature.Binding.AnonymousFlowID == "" {
 		return deny()
 	}
 	var tenant identity.TenantID

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage a new existing-account One Tap session in the original browser and
+  capability consumption transaction. Fence current linked account, authority
+  and factor generations. Retain only historical issuance evidence on replay.
+
 - Stage the exact prepared Google One Tap browser flow and historical receipt
   evidence in the OAuth coordinator's Work. Two forward schema steps preserve
   legacy evidence and validate the widened purpose constraint separately.

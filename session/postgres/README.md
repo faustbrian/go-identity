@@ -341,6 +341,21 @@ continues rejecting phone recipients. No secondary SMS/recovery fallback or
 HTTP route is implicit. Install the selected password/MFA session histories and
 the phone primary/continuation forward suffixes through their actual owners.
 
+## Provider-bound One Tap session issuance
+
+Install both steps from `OneTapCallbackSessionMigrationSource` after the
+validated session issuance history and before selecting the callback effect.
+Construct `NewOneTapCallbackEffect` with the exact Google callback provider and
+the existing OAuth single-factor session reader profile.
+
+The native OAuth owner proves the original browser and Google identity and
+selects an existing linked account. Freeze the session with
+`OneTapCallbackSessionFields`. Run `Apply` after the original one-use capability
+has been consumed provisionally in the same transaction, and call
+`CheckCurrent` in final admission. Any error must abort that transaction.
+The effect does not release credentials; `Recover` only reports whether the
+original issuance committed.
+
 ## Provider-bound One Tap callback initiation
 
 Use `NewProviderPreAuthIssueExecutor` with the exact provider/client/mode
