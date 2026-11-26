@@ -19,6 +19,8 @@ import (
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
+	oauthhttp "github.com/faustbrian/go-identity/http/oauth"
+	"github.com/faustbrian/go-identity/i18n"
 	"github.com/faustbrian/go-identity/oauth"
 	"github.com/faustbrian/go-identity/oauth/providers"
 	"github.com/faustbrian/go-identity/reference"
@@ -222,6 +224,48 @@ func TestReferencePostgresProviderDiscoveryHTTPS(t *testing.T) {
 			t.Fatal("implicit HEAD, OPTIONS or CORS admitted", method, status)
 		}
 	}
+	t.Run("localized-errors", func(t *testing.T) {
+		en := []i18n.Message{
+			{ID: oauthhttp.ProviderListInvalidRequestMessage, Template: "Invalid request."},
+			{ID: oauthhttp.ProviderListDeniedMessage, Template: "Request denied."},
+			{ID: oauthhttp.ProviderListRateLimitedMessage, Template: "Please retry later."},
+			{ID: oauthhttp.ProviderListUnavailableMessage, Template: "Temporarily unavailable."},
+		}
+		fi := []i18n.Message{{ID: oauthhttp.ProviderListInvalidRequestMessage, Template: "Virheellinen pyyntö."}}
+		localized := config
+		localized.ProviderDiscoveryLocalization = &oauthhttp.ProviderListLocalizationConfig{
+			DefaultLocale: "en", Catalogs: []i18n.Catalog{{Locale: "en", Version: 1, Messages: en}, {Locale: "fi", Version: 1, Messages: fi}},
+		}
+		localizedServer, err := reference.NewServer(localized, deps, selected.features)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fi[0].Template = "caller change after construction"
+		localizedAPI := httptest.NewTLSServer(localizedServer.Handler())
+		defer localizedAPI.Close()
+		for _, test := range []struct {
+			api            *httptest.Server
+			want, language string
+		}{
+			{api: localizedAPI, want: `{"error":"invalid_request","message":"Virheellinen pyyntö."}` + "\n", language: "fi"},
+			{api: api, want: `{"error":"invalid_request"}` + "\n"},
+		} {
+			r, err := http.NewRequestWithContext(ctx, http.MethodGet, test.api.URL+"/v1/oauth/provider-list?limit=0", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.Header.Set("Accept-Language", "fi")
+			response, err := test.api.Client().Do(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(io.LimitReader(response.Body, 1024))
+			_ = response.Body.Close()
+			if err != nil || response.StatusCode != 400 || response.Header.Get("Content-Language") != test.language || string(body) != test.want {
+				t.Fatalf("Reference discovery localization: status %d, language %q, body %q, error %v", response.StatusCode, response.Header.Get("Content-Language"), body, err)
+			}
+		}
+	})
 	if err := selected.stores.Close(ctx); err != nil {
 		t.Fatal(err)
 	}

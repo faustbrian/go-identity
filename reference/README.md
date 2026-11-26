@@ -27,6 +27,15 @@ migration is added. Configure an exact HTTPS `PublicHosts` binding in the
 server's network policy. Other operations retain their tenant-only guard.
 Omitting `ProviderDiscovery` advertises and serves no provider-list operation.
 
+To translate selected discovery errors, set
+`ReferenceConfig.ProviderDiscoveryLocalization` to an
+`oauthhttp.ProviderListLocalizationConfig` with a default locale and the four
+default messages documented by `http/oauth`. This option requires standalone
+provider discovery. It uses bounded `Accept-Language`, never cookies or
+sessions, and returns the actual rendered locale as `Content-Language` without
+changing the machine error, status, or retry hint. Nil keeps the original
+machine-only response. `NewServer` freezes the configured catalogs.
+
 Call `/v1/oauth/provider-list?limit=1` without Authorization, session, Origin,
 CSRF token or Idempotency-Key. The required canonical limit is 1..100; an
 optional nonempty cursor continues the same snapshot and limit:

@@ -101,6 +101,8 @@ github.com/faustbrian/go-identity/http/mfa v0.0.0-20261025150519-83149c8dcdf6 h1
 github.com/faustbrian/go-identity/http/mfa v0.0.0-20261025150519-83149c8dcdf6/go.mod h1:KCp1xKyB4cXqL0dcj1zh24I3D52hf2Pshp1bBaw6U2k=
 github.com/faustbrian/go-identity/http/oauth v0.0.0-20261126141528-f94f707d9ac3 h1:qyyLFVgh/ghgFhX13fIZNaEdDdbeiwpkXedZV64fWLU=
 github.com/faustbrian/go-identity/http/oauth v0.0.0-20261126141528-f94f707d9ac3/go.mod h1:t96pOY3LjMmwTrOW00WgGiRorUdLDQYeyDPUqdg2xns=
+github.com/faustbrian/go-identity/http/oauth v0.0.0-20261126145327-f52d7df47678 h1:wLLKbgpSaYLzom1w3AwcadH9Of6keoh6vr9ypjEALMo=
+github.com/faustbrian/go-identity/http/oauth v0.0.0-20261126145327-f52d7df47678/go.mod h1:PdKwB4GL4WOrlu86v+UITd6N8SeJcehZsfmLc+fz/II=
 github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1 h1:JJgzABmydpsbBMPJfRG1+iZfz9J3ehvti7hLl1xfS9g=
 github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1/go.mod h1:OZA0573vEzXxTuoX4z2rGyWDgnHsR2opTD8Xt4LrUaM=
 github.com/faustbrian/go-identity/http/organization v0.0.0-20261124151127-a3d59f97169b h1:i4aUhkVCQK3VqsiFdtGeWRVCVc/DQSinSjrmgslQm5U=
@@ -119,6 +121,8 @@ github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336
 github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e/go.mod h1:/U8vM3BooW9JV2Y3dowdaURlzjb/txfURULhXSTDBWQ=
 github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b h1:WW66OhXrpZQGrz8KsjphEvRYz2KO1GOiZlw9SX1aTuQ=
 github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b/go.mod h1:p8kzQt1XHZKXjEA3pHqCz9HqFne9NvvPKIr8MgdZ3J0=
+github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e h1:f0HjL3gZg2HQWn1Rmvi03kx0O3YiHqElNslzdDwx+xQ=
+github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e/go.mod h1:zzEa62EXtyMG/mVtF0gaBX8GyUAzgKcor2lp5xuuouw=
 github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc h1:EIXO9CBiJ6K2OekBbRxhfDJkPNyyw4GMqTwI18VpumQ=
 github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc/go.mod h1:jn+FI8ngM4okV2sKjzDMGYYXlBui6TVoQ3TCXjabohk=
 github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2 h1:9WtaSshuwIGfSBHxEQpIJ/p/HZRYCaNnYjbA3OX4brI=

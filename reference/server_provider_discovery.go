@@ -4,17 +4,22 @@ import (
 	"io"
 	"net/http"
 
+	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	oauthhttp "github.com/faustbrian/go-identity/http/oauth"
 )
 
-func (s *Server) providerDiscoveryFeature(network identityhttp.NetworkConfig) (*identityhttp.Feature, error) {
+func (s *Server) providerDiscoveryFeature(network identityhttp.NetworkConfig, localization *oauthhttp.ProviderListLocalizationConfig) (*identityhttp.Feature, error) {
 	owner := s.state.features.providerDiscovery
 	if owner == nil {
+		if localization != nil {
+			return nil, identity.InvalidInputError{Field: "reference_provider_discovery_localization"}
+		}
 		return nil, nil
 	}
 	feature, err := oauthhttp.NewProviderListFeature(oauthhttp.ProviderListConfig{
 		Network: network, Catalog: owner.catalog, Rate: owner.rate, MaximumDuration: owner.duration,
+		Localization: localization,
 	})
 	if err != nil {
 		return nil, err

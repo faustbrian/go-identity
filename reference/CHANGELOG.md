@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt into bounded localized errors on Reference's standalone public provider
+  listing without changing default responses or enabling authentication.
+
 - Select session-authenticated SCIM managed connection Get and List through
   Reference, with independent route selection, safe pagination and an additive
   managed-only migration. Configured SCIM Bulk remains independently selectable.

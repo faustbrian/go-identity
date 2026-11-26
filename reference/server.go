@@ -13,6 +13,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
+	oauthhttp "github.com/faustbrian/go-identity/http/oauth"
 )
 
 // DeploymentProfile selects authoritative PostgreSQL with optional Valkey.
@@ -76,6 +77,11 @@ type ReferenceConfig struct {
 	Workers               WorkerPolicy
 	Bootstrap             BootstrapPolicy
 	Tenant                TenantPolicy
+
+	// ProviderDiscoveryLocalization selects localized public errors only for
+	// a graph with standalone provider discovery. Nil keeps machine-only
+	// errors. NewServer validates and snapshots catalogs through the HTTP owner.
+	ProviderDiscoveryLocalization *oauthhttp.ProviderListLocalizationConfig
 }
 
 // ReadinessCode is a stable opaque blocking label, never an endpoint or error.
@@ -160,7 +166,7 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 		return nil, invalid
 	}
 	contributions := []identityhttp.Feature{probe}
-	if discovery, err := server.providerDiscoveryFeature(c.HTTP.Network); err != nil {
+	if discovery, err := server.providerDiscoveryFeature(c.HTTP.Network, c.ProviderDiscoveryLocalization); err != nil {
 		return nil, err
 	} else if discovery != nil {
 		contributions = append(contributions, *discovery)

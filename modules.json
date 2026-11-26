@@ -3176,7 +3176,7 @@
         "github.com/faustbrian/go-migrations/v3",
         "github.com/faustbrian/go-postgres"
       ],
-      "reverse_owned_dependencies": ["github.com/faustbrian/go-identity/http/oauth"],
+      "reverse_owned_dependencies": ["github.com/faustbrian/go-identity/http/oauth", "github.com/faustbrian/go-identity/reference"],
       "external_runtime_dependencies": [
         "postgresql"
       ],
@@ -4695,6 +4695,7 @@
         "github.com/faustbrian/go-identity/http/phone",
         "github.com/faustbrian/go-identity/http/scim",
         "github.com/faustbrian/go-identity/http/session",
+        "github.com/faustbrian/go-identity/i18n",
         "github.com/faustbrian/go-identity/magiclink",
         "github.com/faustbrian/go-identity/magiclink/postgres",
         "github.com/faustbrian/go-identity/mfa",
