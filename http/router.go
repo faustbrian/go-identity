@@ -94,9 +94,15 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 		return nil, OpenAPIDocument{}, ErrInvalidInput
 	}
 	selected := make(map[string]string, len(operations))
+	scimRoutes := make(map[string]bool, 2)
 	for _, op := range operations {
 		for _, path := range dispatchPaths(op) {
-			selected[op.Route.Method+" "+path] = op.Record.OperationID
+			key := op.Route.Method + " " + path
+			selected[key] = op.Record.OperationID
+			switch op.Record.OperationID {
+			case "identity.scim.bulk", "identity.scim.service-provider-config":
+				scimRoutes[key] = true
+			}
 		}
 	}
 	selectedNavigation := make(map[string]struct{})
@@ -142,7 +148,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	}
 	cors.(*corsHandler).next = dispatch
 	document.operations = cloneOperations(ops)
-	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout}, document, nil
+	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout, scimRoutes: scimRoutes}, document, nil
 }
 
 func samlNavigationFor(operationID string) CORSCredentialMode {
@@ -175,9 +181,10 @@ func validMiddleware(middleware []MiddlewareDescriptor) bool {
 }
 
 type routerHandler struct {
-	network *NetworkResolver
-	next    http.Handler
-	timeout time.Duration
+	network    *NetworkResolver
+	next       http.Handler
+	timeout    time.Duration
+	scimRoutes map[string]bool
 }
 
 func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -188,6 +195,10 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
 	defer cancel()
+	selectedSCIM := r.URL.RawPath == "" && h.scimRoutes[r.Method+" "+r.URL.Path]
+	if selectedSCIM {
+		ctx = context.WithValue(ctx, scimEnvelopeKey{}, true)
+	}
 	owned := r.Clone(ctx)
 	facts, err := h.network.resolve(owned)
 	if err != nil {
@@ -212,7 +223,11 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var body *routerBody
 	if owned.Body != nil && owned.Body != http.NoBody {
-		body = &routerBody{ReadCloser: http.MaxBytesReader(w, owned.Body, int64(h.network.decoder.limits.MaximumBodyBytes)), ctx: ctx}
+		maximum := int64(h.network.decoder.limits.MaximumBodyBytes)
+		if selectedSCIM && owned.Method == http.MethodPost {
+			maximum = scimBulkStreamBytes
+		}
+		body = &routerBody{ReadCloser: http.MaxBytesReader(w, owned.Body, maximum), ctx: ctx}
 		owned.Body = body
 	}
 	owned.GetBody = nil

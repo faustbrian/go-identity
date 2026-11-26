@@ -99,7 +99,7 @@ func (d *RequestDecoder) credentialEnvelope(r *http.Request, requirement HeaderR
 	if d == nil || !d.valid || r == nil || requirement > HeaderRequired {
 		return ErrInvalidInput
 	}
-	if err := d.envelope(r); err != nil {
+	if err := d.headerEnvelope(r); err != nil {
 		return err
 	}
 	// Validate raw query independently of cached Form/PostForm. This also

@@ -227,7 +227,7 @@ func (n *NetworkResolver) resolve(r *http.Request) (NetworkFacts, error) {
 	if n == nil || n.decoder == nil || r == nil {
 		return zero, ErrInvalidInput
 	}
-	if err := n.decoder.envelope(r); err != nil {
+	if err := n.decoder.headerEnvelope(r); err != nil {
 		return zero, err
 	}
 	client, ok := socketPeer(r.RemoteAddr)

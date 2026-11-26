@@ -42,6 +42,7 @@ func (DecodeError) Error() string { return "identity.http.invalid_request" }
 type RequestDecoder struct {
 	limits Limits
 	valid  bool
+	scim   bool
 }
 
 // Form reads application/x-www-form-urlencoded body parameters only; it never
@@ -209,6 +210,15 @@ func DecodeJSON[T any](decoder *RequestDecoder, request *http.Request) (T, error
 // envelope rejects metadata errors before borrowing the body. Subsequent
 // trusted-network, credential and route policy owners still validate semantics.
 func (d *RequestDecoder) envelope(r *http.Request) error {
+	return d.checkEnvelope(r, false)
+}
+
+func (d *RequestDecoder) headerEnvelope(r *http.Request) error {
+	selectedProtocol := d.scim || r.Context().Value(scimEnvelopeKey{}) != nil
+	return d.checkEnvelope(r, selectedProtocol)
+}
+
+func (d *RequestDecoder) checkEnvelope(r *http.Request, selectedProtocol bool) error {
 	if err := r.Context().Err(); err != nil {
 		return err
 	}
@@ -275,6 +285,11 @@ func (d *RequestDecoder) envelope(r *http.Request) error {
 	if len(r.TransferEncoding) != 0 && (len(r.TransferEncoding) != 1 || r.TransferEncoding[0] != "chunked" || r.ContentLength != -1 || hasLength) {
 		return DecodeError{}
 	}
+	// A selected SCIM handler owns representation and payload errors. Keep
+	// the preceding strict header, length-consistency, and framing checks.
+	if selectedProtocol {
+		return nil
+	}
 	encoding, hasEncoding := singleHeader(r.Header, "Content-Encoding")
 	if hasEncoding && !strings.EqualFold(encoding, "identity") {
 		return DecodeError{}
@@ -337,6 +352,9 @@ func media(headers http.Header, expected string) bool {
 }
 
 func (d *RequestDecoder) body(r *http.Request) ([]byte, error) {
+	if r.ContentLength > int64(d.limits.MaximumBodyBytes) {
+		return nil, DecodeError{}
+	}
 	if r.Body == nil {
 		if r.ContentLength > 0 {
 			return nil, DecodeError{}

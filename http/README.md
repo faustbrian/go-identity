@@ -490,6 +490,14 @@ one native operation does not authorize replacing previously retained contracts.
 The checked-in catalog retains those original rows and their source provenance
 alongside the new native source identity. It advertises no unselected handler.
 
+SCIM Bulk retains its canonical protocol-command classification. The affected
+transport row uses the optional Idempotency-Key extension specified in
+API_OPERATIONS.md and the SCIM transaction contract, rather than the older
+snapshot's conflicting forbidden-header column. No other catalog row changes.
+Selected SCIM Bulk and ServiceProviderConfig keep the common router's network
+and framing checks. Their feature owns SCIM representation errors and the
+executor's effective payload limits; no ordinary route's bounds change.
+
 Phone verification recovery's native definitions are owned by
 `phone/verification_contracts.json`. The embedded catalog retains all earlier
 rows unchanged and adds that original-session, code-free recovery contract with

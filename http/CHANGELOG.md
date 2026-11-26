@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let selected SCIM Bulk and discovery handlers own protocol representation
+  errors within bounded router custody, without widening ordinary routes.
+
 - Bind the opt-in SAML logout start to finite provider IDs. Its native owner
   checks the original session synchronizer; the route has no origin-only
   fallback.

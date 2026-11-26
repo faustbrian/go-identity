@@ -1,0 +1,97 @@
+package identityhttp_test
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	identityhttp "github.com/faustbrian/go-identity/http"
+)
+
+func TestRouterOnlySelectedSCIMOwnsItsBodyEnvelope(t *testing.T) {
+	policy := routerPolicy()
+	policy.Network.Limits.MaximumBodyBytes = 1 << 20
+	scimPath := "/scim/v2/Bulk"
+	var entered int
+	bulk, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
+		Owner: "scim", OperationID: "identity.scim.bulk",
+		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 2 << 20,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			entered++
+			if r.Header.Get("Content-Encoding") == "gzip" {
+				w.WriteHeader(http.StatusUnsupportedMediaType)
+				return
+			}
+			n, err := io.Copy(io.Discard, io.LimitReader(r.Body, (2<<20)+1))
+			if err != nil {
+				t.Error("generic stream cap intercepted the SCIM envelope", err)
+				return
+			}
+			if n > 2<<20 {
+				w.WriteHeader(http.StatusRequestEntityTooLarge)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bulk.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.scim.bulk","security":[],"responses":{"204":{"description":"fixture"}}}`)}
+	ordinary := routerOperation(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	h, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{bulk, ordinary}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, method, path, encoding string
+		size                         int
+		chunked                      bool
+		want                         int
+	}{
+		{"large SCIM request", "POST", scimPath, "", (1 << 20) + 33, false, 204},
+		{"chunked SCIM overrun", "POST", scimPath, "", (2 << 20) + 1, true, 413},
+		{"SCIM representation denial", "POST", scimPath, "gzip", 1, false, 415},
+		{"ordinary route retains its maximum", "GET", ordinary.Route.Path, "", (1 << 20) + 33, false, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := corsRequest(tc.method, tc.path, "")
+			r.Body = io.NopCloser(strings.NewReader(strings.Repeat(" ", tc.size)))
+			r.ContentLength = int64(tc.size)
+			if tc.chunked {
+				r.ContentLength = -1
+				r.TransferEncoding = []string{"chunked"}
+			}
+			if tc.encoding != "" {
+				r.Header.Set("Content-Encoding", tc.encoding)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != tc.want {
+				t.Fatalf("got status %d; want %d", w.Code, tc.want)
+			}
+		})
+	}
+	if entered != 3 {
+		t.Fatalf("SCIM handler received %d requests, want 3", entered)
+	}
+}
+
+func TestSCIMCredentialBoundaryKeepsOrdinaryJSONStrict(t *testing.T) {
+	_, decoder, err := identityhttp.NewSCIMRequestBoundary(routerPolicy().Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/scim/v2/Bulk", strings.NewReader("{}"))
+	r.Header.Set("Authorization", "Bearer fixture")
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Content-Encoding", "gzip")
+	if _, ok, err := decoder.Bearer(r, identityhttp.HeaderRequired); err != nil || !ok {
+		t.Fatal("credential syntax should not select SCIM's representation error", err)
+	}
+	if _, err := identityhttp.DecodeJSON[map[string]any](decoder, r); err == nil {
+		t.Fatal("ordinary JSON decoder did not retain its content encoding check")
+	}
+}
