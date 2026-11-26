@@ -446,6 +446,12 @@ after a new durable commitment. Recovering the original command returns its
 outcome, not a cookie or flow record. A compatible durable executor is required;
 these APIs do not verify a provider credential or install a sign-in endpoint.
 
+Use `NewOneTapStartPreAuthIssuer` when the executor owns the keyed Google One
+Tap start. It releases only on a new commit for `OneTapStartPreAuthOperation()`;
+a generic session pre-auth receipt for the same flow is not sufficient.
+Recovery queries the original One Tap operation and never releases a cookie.
+The executor still owns keyed custody and the atomic protected effects.
+
 These are private structural values, not authentication or primary active-state
 proof. `Check` requires authoritative time after locks and never consumes the
 flow. Owned `PreAuthIssuer` freezes configured origin/redirect policy and the

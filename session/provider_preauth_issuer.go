@@ -3,7 +3,19 @@ package session
 import (
 	"strings"
 	"time"
+
+	identity "github.com/faustbrian/go-identity"
 )
+
+// OneTapStartPreAuthOperation identifies the exact Google One Tap start that
+// can commit the pre-authentication flow. It conveys no execution authority.
+func OneTapStartPreAuthOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{
+		Owner: "identity/oauth/onetap", OperationID: "identity.oauth.onetap-start",
+		SchemaID: "oauth-onetap-start-v1", SchemaVersion: 1,
+		RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow,
+	}
+}
 
 // NewProviderPreAuthIssuer selects the trusted One Tap callback provider for
 // the original five-minute browser flow. It requires a configured HTTPS
@@ -11,13 +23,28 @@ import (
 // network or storage work. The independent durable executor must recognize
 // this exact provider-bound profile before issuance can deliver a cookie.
 func NewProviderPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, selected PreAuthProviderBinding) (*PreAuthIssuer, error) {
+	return newProviderPreAuthIssuer(executor, c, selected, PreAuthIssueOperation())
+}
+
+// NewOneTapStartPreAuthIssuer selects the Google callback flow and its exact
+// One Tap start commit. The issuer rejects a generic pre-auth issuance receipt
+// even for the same original flow. The executor must own keyed start and all
+// mandatory effects; this constructor neither executes nor replaces that work.
+func NewOneTapStartPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, selected PreAuthProviderBinding) (*PreAuthIssuer, error) {
+	if selected.ProviderID != "google" {
+		return nil, ErrInvalidIssuer
+	}
+	return newProviderPreAuthIssuer(executor, c, selected, OneTapStartPreAuthOperation())
+}
+
+func newProviderPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, selected PreAuthProviderBinding, operation identity.FeatureOperation) (*PreAuthIssuer, error) {
 	intent := PreAuthIntent{Action: c.Action, CallbackURL: c.CallbackURL, Purpose: c.Purpose}
 	if c.Cookie.name != "__Host-identity_flow" || c.FlowTTL != 5*time.Minute || !strings.HasPrefix(c.Origin, "https://") || !validProviderPreAuthProfile(intent, selected) {
 		return nil, ErrInvalidIssuer
 	}
 	selected.ProviderID = strings.Clone(selected.ProviderID)
 	selected.ClientID = strings.Clone(selected.ClientID)
-	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{}, selected)
+	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{}, selected, operation)
 }
 
 func (s *PreAuthIssuer) newPreAuthRecord(spec PreAuthTransactionSpec) (PreAuthTransaction, error) {

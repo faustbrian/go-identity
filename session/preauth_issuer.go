@@ -65,6 +65,7 @@ type PreAuthIssuer struct {
 	config       PreAuthIssuerConfig
 	frontchannel FrontchannelCookiePolicy
 	provider     PreAuthProviderBinding
+	operation    identity.FeatureOperation
 }
 
 // NewPreAuthIssuer validates trusted composition without IO or entropy. The
@@ -73,7 +74,7 @@ func NewPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig) (
 	if c.Cookie.name != "__Host-identity_flow" || c.Action == samlFrontchannelAction {
 		return nil, ErrInvalidIssuer
 	}
-	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{}, PreAuthProviderBinding{})
+	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{}, PreAuthProviderBinding{}, PreAuthIssueOperation())
 }
 
 // NewSAMLFrontchannelIssuer selects separate pre-authentication correlation for
@@ -92,16 +93,16 @@ func NewSAMLFrontchannelIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuer
 		c.Action != samlFrontchannelAction || c.FlowTTL != frontchannelCookieTTL || c.Purpose != PreAuthSessionIssuance || c.Cookie != (CookiePolicy{}) {
 		return nil, ErrInvalidIssuer
 	}
-	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{path: path}, PreAuthProviderBinding{})
+	return newPreAuthIssuer(executor, c, FrontchannelCookiePolicy{path: path}, PreAuthProviderBinding{}, PreAuthIssueOperation())
 }
 
-func newPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, frontchannel FrontchannelCookiePolicy, provider PreAuthProviderBinding) (*PreAuthIssuer, error) {
+func newPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, frontchannel FrontchannelCookiePolicy, provider PreAuthProviderBinding, operation identity.FeatureOperation) (*PreAuthIssuer, error) {
 	if issuerNil(executor) || issuerNil(c.Clock) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.FlowTTL < time.Minute || c.FlowTTL > 10*time.Minute || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 {
 		return nil, ErrInvalidIssuer
 	}
 	c.ActorID = identity.ActorID(strings.Clone(string(c.ActorID)))
 	c.Action, c.Origin, c.CallbackURL, c.PolicyID = strings.Clone(c.Action), strings.Clone(c.Origin), strings.Clone(c.CallbackURL), strings.Clone(c.PolicyID)
-	s := &PreAuthIssuer{executor: executor, config: c, frontchannel: frontchannel, provider: provider}
+	s := &PreAuthIssuer{executor: executor, config: c, frontchannel: frontchannel, provider: provider, operation: operation}
 	// A non-issuing structural template validates the selected profile without
 	// calling the clock or generating credential bytes during construction.
 	remember, _ := ResolveRememberPolicy(BrowserSession, LifetimeConfig{Default: BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
@@ -112,7 +113,7 @@ func newPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, f
 	}
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	command, err := s.original(input, "AQEBAQEBAQEBAQEBAQEBAQ", [32]byte{1}, stamp, TokenDigest{KeyVersion: c.LookupKey.state.version, Sum: [32]byte{1}})
-	if err != nil || s.binding(command).ValidateFor(PreAuthIssueOperation()) != nil {
+	if err != nil || s.binding(command).ValidateFor(s.operation) != nil {
 		return nil, ErrInvalidIssuer
 	}
 	return s, nil
@@ -146,7 +147,7 @@ func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (out PreparedPreAuthI
 	now := s.config.Clock.Now().UTC()
 	placeholder := TokenDigest{KeyVersion: s.config.LookupKey.state.version, Sum: [32]byte{1}}
 	command, err := s.original(input, "AQEBAQEBAQEBAQEBAQEBAQ", [32]byte{1}, now, placeholder)
-	if err != nil || s.binding(command).ValidateFor(PreAuthIssueOperation()) != nil {
+	if err != nil || s.binding(command).ValidateFor(s.operation) != nil {
 		return out, ErrInvalidIssuance
 	}
 	id, err := identity.NewPreAuthTransactionID()
@@ -193,14 +194,14 @@ func (s *PreAuthIssuer) original(i PreAuthPrepareInput, id identity.PreAuthTrans
 func (s *PreAuthIssuer) binding(c PreAuthIssueCommand) identity.CommandBinding {
 	p, _ := s.projectPreAuthRecord(c.Record)
 	i := p.Binding.Intent
-	op := PreAuthIssueOperation()
+	op := s.operation
 	return identity.CommandBinding{CommandID: c.CommandID, TenantID: i.TenantID, AnonymousFlowID: string(p.Binding.ID), ActorID: s.config.ActorID, ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, RecordID: string(p.Binding.ID), PolicyID: i.PolicyID, PolicyVersion: i.PolicyVersion, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, CorrelationID: c.CorrelationID}
 }
 
 func (s *PreAuthIssuer) originalProfile(c PreAuthIssueCommand) bool {
 	p, err := s.projectPreAuthRecord(c.Record)
 	i := p.Binding.Intent
-	return err == nil && p.Version == 1 && i.Purpose == s.config.Purpose && i.Action == s.config.Action && i.Origin == s.config.Origin && i.CallbackURL == s.config.CallbackURL && i.PolicyID == s.config.PolicyID && i.PolicyVersion == s.config.PolicyVersion && s.binding(c).ValidateFor(PreAuthIssueOperation()) == nil
+	return err == nil && p.Version == 1 && i.Purpose == s.config.Purpose && i.Action == s.config.Action && i.Origin == s.config.Origin && i.CallbackURL == s.config.CallbackURL && i.PolicyID == s.config.PolicyID && i.PolicyVersion == s.config.PolicyVersion && s.binding(c).ValidateFor(s.operation) == nil
 }
 
 // Command returns the unchanged private original for durable recovery, without
@@ -337,7 +338,7 @@ func (s *PreAuthIssuer) Recover(ctx context.Context, c PreAuthIssueCommand) (out
 func (s *PreAuthIssuer) finishPreAuth(ctx context.Context, c PreAuthIssueCommand, e PreAuthIssueExecution, dependencyErr error) (out PreAuthIssueResult, err error) {
 	out.CommandID, out.CommitOutcome = c.CommandID, identity.CommitOutcomeUnknown
 	r := e.Receipt
-	if r.Validate() != nil || r.Binding != s.binding(c) || r.Feature == nil || r.Feature.Operation != PreAuthIssueOperation() || r.Outcome == identity.CommitOutcomeCommitted && (r.Feature.BeforeVersion != 0 || r.Feature.AfterVersion != 1) {
+	if r.Validate() != nil || r.Binding != s.binding(c) || r.Feature == nil || r.Feature.Operation != s.operation || r.Outcome == identity.CommitOutcomeCommitted && (r.Feature.BeforeVersion != 0 || r.Feature.AfterVersion != 1) {
 		return out, identity.UnknownCommitError{CommandID: out.CommandID}
 	}
 	out.CommitOutcome, out.Replayed, out.RetryAfter = r.Outcome, e.Replayed, r.RetryAfter

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Require the exact Google One Tap start commit for the selected keyed issuer.
+  Generic pre-auth receipts cannot release its cookie, and recovery remains
+  outcome-only. Existing generic, provider-bound and SAML issuers are unchanged.
+
 - Add a selected five-minute One Tap callback issuer. It delivers the original
   host-only cookie only after a new commit; recovery exposes only the outcome.
 
