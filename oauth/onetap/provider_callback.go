@@ -3,13 +3,14 @@ package onetap
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/oauth"
 	"github.com/faustbrian/go-identity/session"
 )
 
-// ProviderBoundConfig freezes the exact Google callback policy and optional
+// ProviderBoundConfig freezes the exact Google browser policy and optional
 // trusted hosted-domain restriction. HostedDomain is empty or an exact canonical
 // domain accepted by oauth.NewGoogleHostedDomain; never choose it from callback
 // fields. Bind changes to it to the original PolicyID/PolicyVersion. Provider,
@@ -35,7 +36,8 @@ type ProviderBoundAdapterBinding struct {
 	Cookie      session.TokenDigest
 }
 
-// ProviderBoundValidator verifies read-only provider-selected callback evidence.
+// ProviderBoundValidator verifies read-only evidence for its constructor-selected
+// callback or redirect mode. A mode cannot be selected by the callback command.
 // It is concurrency-safe for distinct borrowed commands, owns no stores or
 // goroutines and consumes no flow. Provider and key-set lifetimes are Config's.
 type ProviderBoundValidator struct {
@@ -69,6 +71,31 @@ func NewProviderBoundValidator(c ProviderBoundConfig) (*ProviderBoundValidator, 
 		}
 		bound.hostedDomain = &domain
 	}
+	return bound, nil
+}
+
+// NewProviderBoundRedirectValidator selects only the Google button redirect
+// profile and one exact trusted same-origin HTTPS endpoint, at most 2048 visible
+// ASCII bytes. The endpoint must have a clean literal path without query,
+// fragment, escapes or semicolon; no aliases are normalized. Register this exact
+// login_uri for the configured Google client before browser use. Construction
+// performs no IO, clock reads, registration checks or transaction issuance.
+//
+// Validate requires that same endpoint in both the original CallbackURL and the
+// trusted Callback.Redirect context, the original initiating origin, a redirect-
+// bound transaction and an independently derived provider cookie digest. Google's
+// separate double-submit CSRF proof remains mandatory before credential parsing.
+// The result, borrowed dependency lifetime and read-only semantics are unchanged.
+func NewProviderBoundRedirectValidator(c ProviderBoundConfig, redirectURL string) (*ProviderBoundValidator, error) {
+	bound, err := NewProviderBoundValidator(c)
+	if err != nil {
+		return nil, err
+	}
+	if !canonicalRedirectEndpoint(c.Origin, redirectURL) {
+		return nil, failure(InvalidInput, nil)
+	}
+	bound.selected.Mode = session.PreAuthProviderRedirect
+	bound.validator.redirectURL = strings.Clone(redirectURL)
 	return bound, nil
 }
 

@@ -1,4 +1,4 @@
-// Package onetap validates the selected Google One Tap callback browser seam.
+// Package onetap validates the selected Google One Tap browser credential seam.
 // Validation is read-only provider evidence, not local authentication or durable
 // state admission. See README.md for the deliberately unsupported boundaries.
 package onetap
@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/netip"
 	"net/url"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -89,11 +90,13 @@ type AdapterBinding struct {
 	ProviderVersion      uint64
 }
 
-// Callback contains borrowed input from ONE callback-mode request. Adapters must
+// Callback contains borrowed input from ONE selected browser request. Adapters must
 // preserve every g_csrf_token cookie and body occurrence, including duplicates,
 // decoding the transport exactly once. Do not use a first-value/map Get parser.
-// Origin is the exact initiating request origin, not a client-config field.
-// Redirect must be empty: redirect-mode callbacks are not supported here.
+// Origin is the exact initiating origin established by the trusted adapter,
+// not a client-config field or an unchecked redirect POST Origin header.
+// Redirect is empty for callback mode. A separately configured redirect validator
+// requires its exact endpoint established by the trusted transport, not a body URL.
 // Credential and slices are synchronous borrowed values; do not mutate during
 // Validate, clear credential bytes afterwards, and never log this command.
 type Callback struct {
@@ -105,8 +108,9 @@ type Callback struct {
 // Validator freezes one callback policy. It is safe for concurrent distinct
 // borrowed commands; no IO, goroutines, credentials or mutable stores are owned.
 type Validator struct {
-	config  Config
-	profile oauth.ProviderProfile
+	config      Config
+	profile     oauth.ProviderProfile
+	redirectURL string
 }
 
 // NewValidator validates the selected callback policy without IO or clock reads.
@@ -176,7 +180,7 @@ func (v *Validator) matchesOriginalContext(b AdapterBinding) bool {
 }
 
 func (v *Validator) matchesBrowserContext(c Callback) bool {
-	return validCSRF(c.CSRFCookies, c.CSRFBody) && c.Origin == v.config.Origin && c.Redirect == ""
+	return validCSRF(c.CSRFCookies, c.CSRFBody) && c.Origin == v.config.Origin && c.Redirect == v.redirectURL
 }
 
 func (v *Validator) matchesOriginalIntent(i session.PreAuthIntent) bool {
@@ -186,7 +190,19 @@ func (v *Validator) matchesOriginalIntent(i session.PreAuthIntent) bool {
 	if i.PolicyID != v.config.PolicyID || i.PolicyVersion != v.config.PolicyVersion {
 		return false
 	}
-	return i.Action == "identity.oauth.onetap-start" && i.Purpose == session.PreAuthSessionIssuance && i.CallbackURL == ""
+	return i.Action == "identity.oauth.onetap-start" && i.Purpose == session.PreAuthSessionIssuance && i.CallbackURL == v.redirectURL
+}
+
+// GIS requires an exact registered login_uri (the JS reference's login_uri).
+// This local profile further limits it to one same-origin literal HTTPS path,
+// matching session's redirect-bound original without normalizing cookie intent.
+func canonicalRedirectEndpoint(origin, redirect string) bool {
+	if !visible(redirect, 2048) {
+		return false
+	}
+	endpoint, sameOrigin := strings.CutPrefix(redirect, origin)
+	return sameOrigin && strings.HasPrefix(endpoint, "/") && path.Clean(endpoint) == endpoint &&
+		!strings.ContainsAny(endpoint, "%?#\\;") && (&url.URL{Path: endpoint}).EscapedPath() == endpoint
 }
 
 func (v *Validator) verifyCredential(ctx context.Context, credential oauth.GoogleCredential, nonce [32]byte, domain *oauth.GoogleHostedDomain) (oauth.ProviderIdentity, error) {

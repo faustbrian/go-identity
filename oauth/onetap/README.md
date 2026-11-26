@@ -1,8 +1,8 @@
 # One Tap browser-option and callback-validation prerequisites
 
 This independently versioned module provides **typed non-secret browser options
-and read-only callback-mode validation**, not a complete One Tap login operation
-or a qualified M19 browser integration. It consumes the published generic OAuth
+and read-only callback or explicitly selected redirect validation**, not a
+complete One Tap login operation or a qualified M19 browser integration. It consumes the published generic OAuth
 Google credential validator and the existing opaque session pre-auth transaction.
 It adds no session, store, nonce generator, transaction reservation or claim
 parsing authority.
@@ -129,6 +129,61 @@ issues a session, links an account, stores a flow or renders browser options.
 The legacy `NewValidator`, `AdapterBinding` and `Result` remain unchanged and
 do not accept provider-bound records or gain hosted-domain enforcement.
 
+### Separately configured provider-bound redirect validation
+
+Use `NewProviderBoundRedirectValidator(config, exactRedirectURL)` to opt into
+read-only Google button redirect validation. The existing `NewValidator` and
+`NewProviderBoundValidator` remain callback-only; supplying a redirect to either
+does not change its mode. The new constructor takes the same trusted
+`ProviderBoundConfig`, including optional signed hosted-domain enforcement,
+and returns the existing `ProviderBoundValidator` and `ProviderBoundResult`.
+
+The endpoint is explicit trusted startup configuration, not a browser option,
+request-body URL or fallback to the current page. It must be at most 2048 visible
+ASCII bytes beneath the exact canonical HTTPS origin, with a clean literal path
+and no query, fragment, percent escapes or semicolon. Aliases are rejected, not
+normalized. Google additionally requires this exact `login_uri` to be registered
+for the configured client; this constructor does not check remote registration.
+
+```go
+validator, err := onetap.NewProviderBoundRedirectValidator(config,
+    "https://app.example/oauth/onetap-redirect")
+// Handle err before accepting provider credentials.
+result, err := validator.Validate(ctx, originalProviderBinding, onetap.Callback{
+    Origin: originalInitiatingOrigin,
+    Redirect: trustedExactEndpoint,
+    CSRFCookies: allGCSRFCookies,
+    CSRFBody: allGCSRFBodyValues,
+    Credential: oauth.GoogleCredential{IDToken: credentialBytes},
+})
+```
+
+Initiation must retain `session.PreAuthProviderRedirect`, the exact endpoint in
+the original intent's `CallbackURL`, and the same provider/client, tenant,
+origin, policy, nonce, RememberPolicy and original cutoff. The adapter must
+independently derive the provider cookie digest from actual original browser
+custody. `Callback.Origin` means that trusted original initiating context, not an
+unchecked raw `Origin` header on a redirect POST. `Callback.Redirect` is the exact
+endpoint established by trusted transport. Both must match the selected policy
+and original transaction before JWT verification. The original authority is
+checked again after verification; no mode, URL, time or Remember choice renews.
+Google's separate bounded `g_csrf_token` cookie/body proof is still required
+before token parsing. A credential, redirect URL or button `state` cannot replace
+it or the original provider-bound browser possession check.
+
+This is not redirect HTTP delivery or browser qualification. Google's
+[JavaScript reference](https://developers.google.com/identity/gsi/web/reference/js-reference#login_uri)
+specifies a POST credential to the exact registered endpoint and no `select_by`
+in that POST. Its [HTML server-side integration reference](https://developers.google.com/identity/gsi/web/reference/html-reference#server-side_integration)
+documents a URL-encoded body with `credential` and `g_csrf_token`, plus optional
+button `state`. The current popup HTTP JSON `flowId` is not a GIS redirect field.
+An eventual redirect transport must resolve the original per-flow locator from
+its own trusted transport/cookie custody before credential parsing, without
+adding a second state or replay owner. It must separately qualify redirect POST
+origin and cookie behavior; popup's same-origin JSON/Lax-cookie assumptions are
+not redirect interoperability evidence. No such HTTP adapter, locator or cookie
+policy is supplied here, and browser-start options remain prompt/popup-only.
+
 ### Legacy callback composition
 
 At initiation, the trusted owner must persist the purpose-specific
@@ -184,7 +239,7 @@ state and policy, fence the exact version, preserve RememberPolicy through MFA,
 atomically reserve/apply/finalize, and recover before retrying unknown completion.
 Never treat this result as active-state or local authentication authority.
 
-Redirect mode (including any nonempty inbound Redirect or stored CallbackURL),
+Redirect initiation, browser credential delivery and HTTP completion,
 prompt/button initialization, login hints, prompt dismissal/cancellation signals,
 email verification/linking policy, HTTP parsing and
 live browser/FedCM interoperability are not implemented. No raw claim API or
@@ -205,9 +260,10 @@ those browser requirements are already proven.
 Google's [server-side validation guide](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
 was checked on 2026-11-26 for double-submit ordering and opaque `g_csrf_token`
 semantics. The [GIS JavaScript reference](https://developers.google.com/identity/gsi/web/reference/js-reference)
-defines callback versus redirect configuration; this slice intentionally selects
-only the former. Local tests use SDK-compatible RS256 JWTs signed by generated
-test-only RSA keys and the real pinned validator with a signature-verifying
+defines callback versus redirect configuration; redirect validation is selected
+only through its separately named constructor. The redirect endpoint and POST
+references above were checked on 2026-11-27. Local tests use SDK-compatible RS256
+JWTs signed by generated test-only RSA keys and the real pinned validator with a signature-verifying
 static key set. They are not Google-issued fixtures or live browser proof.
 The [WHATWG host parser and ends-in-a-number rule](https://url.spec.whatwg.org/#ends-in-a-number-checker)
 define which ASCII numeric-ending hosts enter the IPv4 parser; aliases are
