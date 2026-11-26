@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Issue a separate path-scoped One Tap redirect cookie only for the original
+  admitted start and a fresh commit. Popup cookie delivery is unchanged.
+
 - Retain the original same-origin HTTPS endpoint and exact mode for a
   separately selected One Tap redirect binding. Existing callback issuance
   and cookie framing are unchanged.

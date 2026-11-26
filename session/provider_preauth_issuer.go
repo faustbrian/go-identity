@@ -37,6 +37,25 @@ func NewOneTapStartPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssu
 	return newProviderPreAuthIssuer(executor, c, selected, OneTapStartPreAuthOperation())
 }
 
+// NewOneTapRedirectStartPreAuthIssuer opts into Google's redirect POST for
+// one canonical same-origin HTTPS endpoint. Use the One Tap start action,
+// session issuance purpose, five-minute FlowTTL, and a zero Cookie policy.
+// Only PrepareOneTapStart can bind this profile to an admitted command. The
+// durable executor still owns the start effects and exact commit receipt;
+// this issuer supplies a separate frontchannel cookie, not a session.
+func NewOneTapRedirectStartPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, selected PreAuthProviderBinding) (*PreAuthIssuer, error) {
+	if selected.ProviderID != "google" || selected.Mode != PreAuthProviderRedirect || c.Cookie != (CookiePolicy{}) || c.FlowTTL != frontchannelCookieTTL {
+		return nil, ErrInvalidIssuer
+	}
+	frontchannel, err := NewOneTapRedirectFrontchannelCookiePolicy(c.Origin, c.CallbackURL)
+	if err != nil {
+		return nil, ErrInvalidIssuer
+	}
+	selected.ProviderID = strings.Clone(selected.ProviderID)
+	selected.ClientID = strings.Clone(selected.ClientID)
+	return newPreAuthIssuer(executor, c, frontchannel, selected, OneTapStartPreAuthOperation())
+}
+
 // PrepareOneTapStart generates the session-owned nonce and cookie for an
 // exact server-selected Google One Tap binding. Only a One Tap start issuer
 // accepts it. The durable executor calls it after admitting the keyed start

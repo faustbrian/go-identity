@@ -25,7 +25,8 @@ func PreAuthIssueOperation() identity.FeatureOperation {
 // values from client input. FlowTTL is 1..10 minutes (reference: five minutes),
 // independent of the resolved final-session remember choice. LookupKey must be
 // a dedicated retained pre-auth key; TokenSize is 32..64 bytes. Cookie must be
-// the validated __Host-identity_flow Lax/Strict policy. MaximumDuration is
+// the validated __Host-identity_flow Lax/Strict policy for ordinary flows;
+// explicitly selected frontchannel issuers require it to be zero. MaximumDuration is
 // 1ms..30s. Clock must be concurrency-safe, trusted and nonblocking.
 type PreAuthIssuerConfig struct {
 	ActorID                               identity.ActorID
@@ -136,6 +137,9 @@ type preparedPreAuthState struct {
 // clock and is never refreshed by retries or final-session remember policy.
 // No durable work, authentication, policy callback or proof consumption occurs.
 func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (PreparedPreAuthIssuance, error) {
+	if s != nil && s.provider.Mode == PreAuthProviderRedirect {
+		return PreparedPreAuthIssuance{}, ErrInvalidIssuance
+	}
 	return s.prepare(input, "", nil)
 }
 

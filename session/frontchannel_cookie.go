@@ -40,6 +40,21 @@ func NewFrontchannelCookiePolicy(callbackPath string) (FrontchannelCookiePolicy,
 	return FrontchannelCookiePolicy{path: callbackPath}, nil
 }
 
+// NewOneTapRedirectFrontchannelCookiePolicy selects the path of the trusted
+// registered Google redirect POST endpoint, not an inbound URL or an
+// application redirect. A root path is too broad. The callback still needs
+// exact route matching and proof that the browser owns the original flow.
+func NewOneTapRedirectFrontchannelCookiePolicy(origin, callbackURL string) (FrontchannelCookiePolicy, error) {
+	if !validOneTapRedirectTarget(origin, callbackURL) {
+		return FrontchannelCookiePolicy{}, ErrInvalidPolicy
+	}
+	path := callbackURL[len(origin):]
+	if path == "/" {
+		return FrontchannelCookiePolicy{}, ErrInvalidPolicy
+	}
+	return FrontchannelCookiePolicy{path: strings.Clone(path)}, nil
+}
+
 // NewSAMLIDPConfirmationCookiePolicy selects only the exact configured
 // unsolicited SAML POST path. The cookie is issued after the response arrives;
 // it is not an SP pre-authentication cookie or a normal session cookie. The

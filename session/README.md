@@ -477,6 +477,17 @@ the session issuer owns nonce and cookie generation. `Issue` still requires an
 exact fresh receipt before the browser can receive the cookie.
 The executor still owns keyed custody and the atomic protected effects.
 
+For the separately selected Google redirect POST profile, use
+`NewOneTapRedirectStartPreAuthIssuer` with `PreAuthProviderRedirect` and the
+registered same-origin HTTPS callback. Leave `Cookie` zero. Only the exact
+admitted `PrepareOneTapStart` may prepare the five-minute flow. A fresh commit
+returns `Secure`, `HttpOnly`, `SameSite=None` cookie attributes with the
+registered callback path and no Domain; replay and expiry release no bearer.
+Use `NewOneTapRedirectFrontchannelCookiePolicy` to clear those same attributes.
+Cookie Path is a browser scope, not an authorization boundary. The callback
+must independently verify possession at the exact registered endpoint and
+consume the original flow; these APIs do not install that endpoint.
+
 These are private structural values, not authentication or primary active-state
 proof. `Check` requires authoritative time after locks and never consumes the
 flow. Owned `PreAuthIssuer` freezes configured origin/redirect policy and the
