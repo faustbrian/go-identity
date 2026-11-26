@@ -352,6 +352,16 @@ Google credential, consume the flow, or issue a session. The ordinary read
 and normal session flows do not accept this stored profile; legacy bytes and
 migrations remain unchanged. Recovery still exposes only command outcomes.
 
+For the distinct keyed Google One Tap start, install both forward steps from
+`OneTapStartPreAuthMigrationSource` after ordinary pre-auth evidence history
+before enabling the OAuth writer. Put `OneTapStartPreAuthField` into the
+prepared command and call `StageOneTapStartPreAuth` with the same final Work
+that enlists the callback capability. The field binds the actual original
+provider, flow and cookie commitment without carrying the raw cookie.
+`RecoverOneTapStartPreAuth` returns only historical evidence to that original
+transaction's recovery participant. The live flow may already be retired.
+These boundaries do not issue a browser response or create a session.
+
 ## Explicit sessionless recovery pre-authentication
 
 `PreAuthIssueExecutorConfig.Purpose` must match the core issuer's explicit

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage the exact prepared Google One Tap browser flow and historical receipt
+  evidence in the OAuth coordinator's Work. Two forward schema steps preserve
+  legacy evidence and validate the widened purpose constraint separately.
+
 - Admit, reserve and consume the exact Google One Tap browser flow in its
   owning callback transaction. Legacy pre-auth flows retain their existing
   restrictions; the One Tap capability and OAuth session remain separate

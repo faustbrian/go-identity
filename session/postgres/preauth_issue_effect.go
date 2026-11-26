@@ -13,6 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
+	"github.com/jackc/pgx/v5"
 )
 
 type preAuthIssueProfile struct {
@@ -60,28 +61,44 @@ func (r *Repository) applyPreAuthIssue(ctx context.Context, w kernel.Work, comma
 		return identity.FeatureReceipt{}, session.ErrInvalidPreAuthTransaction
 	}
 	config := Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}
-	if err = insertSelectedPreAuth(ctx, w, config, record, r.preAuthIssue.provider); err != nil {
+	if err := stagePreAuthIssue(ctx, w, config, b, record, r.preAuthIssue.provider); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	return identity.FeatureReceipt{Operation: preAuthIssueOperation(), AfterVersion: 1}, nil
+}
+
+func stagePreAuthIssue[R SessionRows](ctx context.Context, w PreAuthWriter[R], c Config, b identity.CommandBinding, record session.PreAuthTransaction, provider session.PreAuthProviderBinding) error {
+	if err := insertSelectedPreAuth(ctx, w, c, record, provider); err != nil {
+		return err
 	}
 	// Admission uses locked primary time and the exact original commitment. An
 	// expired/changed flow aborts issuance and its retained evidence together.
-	if err = requireSelectedPreAuth(ctx, w, config, record, r.preAuthIssue.provider); err != nil {
-		return identity.FeatureReceipt{}, err
+	if err := requireSelectedPreAuth(ctx, w, c, record, provider); err != nil {
+		return err
 	}
-	payload, err := encodePreAuth(record)
+	original, err := preAuthIssueRecordDigest(record)
 	if err != nil {
-		return identity.FeatureReceipt{}, err
+		return err
 	}
-	original := sha256.Sum256(payload)
 	id, digest := preAuthIssueEvidence(b, original)
-	n, err := w.Exec(ctx, `INSERT INTO `+r.schema+`.preauth_issuances(tenant_id,command_id,purpose,flow_id,record_digest,binding_digest) VALUES($1,$2,$3,$4,$5,$6)`, string(b.TenantID), id, b.OperationID, b.RecordID, original[:], digest[:])
+	schema := pgx.Identifier{c.Schema}.Sanitize()
+	n, err := w.Exec(ctx, `INSERT INTO `+schema+`.preauth_issuances(tenant_id,command_id,purpose,flow_id,record_digest,binding_digest) VALUES($1,$2,$3,$4,$5,$6)`, string(b.TenantID), id, b.OperationID, b.RecordID, original[:], digest[:])
 	if err != nil {
-		return identity.FeatureReceipt{}, err
+		return err
 	}
 	if n != 1 {
-		return identity.FeatureReceipt{}, identity.ConflictError{}
+		return identity.ConflictError{}
 	}
-	return identity.FeatureReceipt{Operation: preAuthIssueOperation(), AfterVersion: 1}, nil
+	return nil
+}
+
+func preAuthIssueRecordDigest(record session.PreAuthTransaction) ([32]byte, error) {
+	payload, err := encodePreAuth(record)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	defer clear(payload)
+	return sha256.Sum256(payload), nil
 }
 
 // Retained evidence is a native atomic effect, not a journal or live flow. It
@@ -100,8 +117,16 @@ func (r *Repository) recoverPreAuthIssue(ctx context.Context, w kernel.RecoveryW
 	if err != nil || r.preAuthIssue == nil || b.ActorKind != authorization.SubjectServiceAccount || b.ActorID != r.preAuthIssue.actor || b.PolicyID != r.preAuthIssue.policy || b.PolicyVersion != r.preAuthIssue.version || feature.Operation != preAuthIssueOperation() || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 		return kernel.RecoveryUnknown, session.ErrInvalidPreAuthTransaction
 	}
+	return readPreAuthIssueEvidence(ctx, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, b)
+}
+
+func readPreAuthIssueEvidence[R SessionRows](ctx context.Context, w SessionQueryer[R], c Config, b identity.CommandBinding) (kernel.RecoveryStatus, error) {
+	if ctx == nil || !validSchema(c.Schema) {
+		return kernel.RecoveryUnknown, session.ErrInvalidPreAuthTransaction
+	}
 	id, _ := preAuthIssueEvidence(b, [32]byte{})
-	rows, err := w.Query(ctx, `SELECT purpose,flow_id,record_digest,binding_digest FROM `+r.schema+`.preauth_issuances WHERE tenant_id=$1 AND command_id=$2`, string(b.TenantID), id)
+	schema := pgx.Identifier{c.Schema}.Sanitize()
+	rows, err := w.Query(ctx, `SELECT purpose,flow_id,record_digest,binding_digest FROM `+schema+`.preauth_issuances WHERE tenant_id=$1 AND command_id=$2`, string(b.TenantID), id)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

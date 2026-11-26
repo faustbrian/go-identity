@@ -313,6 +313,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 	t.Run("owned executor with real audit and lifecycle", func(t *testing.T) {
 		ownedConfig := IssueExecutorConfig{Repository: Config{Schema: "session_store", MaximumDuration: time.Second}, Profile: *native.issueAdmission, Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, FinalAuthentication: &kernel.FinalAuthenticationConfig{Authority: authority, Namespace: "native-session"}}, Authorization: revokeQueryPolicy{}, Clock: clock.System{}, PolicyID: revokeBinding().PolicyID, PolicyVersion: 1, AuditRetentionVersion: 1}
 		t.Run("owned pre-auth initiation", func(t *testing.T) { testOwnedPreAuthIssue(t, ctx, pool, ownedConfig) })
+		t.Run("owned one tap start storage", func(t *testing.T) { testOneTapStartStorage(t, ctx, pool) })
 		executor, e := NewIssueExecutor(pool, ownedConfig)
 		if e != nil {
 			t.Fatal("owned constructor", e)
