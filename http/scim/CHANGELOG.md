@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add independent opt-in managed Group Get and List over HTTPS, preserving
+  native authorization, shared quota, Group projection and the Get ETag.
+
 - Add opt-in conditional User PUT with full native replacement, exact original
   If-Match and replay, shared protocol quota, and validated User/ETag/Location.
 

@@ -1,5 +1,19 @@
 # SCIM HTTP
 
+## Managed bearer Group reads
+
+`NewManagedGroupsReadFeature` independently selects
+`GET /scim/v2/Groups/{resource_id}` and `GET /scim/v2/Groups` through
+`EnableGet` and `EnableList`. Supply `ExecuteManagedAdmittedGroupRead`, the
+native limits and explicit member ceiling, the router's HTTPS tenant policy,
+and the same atomic rate backend and key as the other SCIM routes.
+
+Send an issued SCIM bearer. Get allows projection and returns the native
+representation and exact ETag. List allows bounded filter, sort, pagination
+and projection and returns one native snapshot. Native current authority
+precedes quota use and resource reads. Neither route accepts cookies as
+authority, conditional or range reads, or a request body.
+
 ## Managed bearer conditional User Replace
 
 `NewManagedUsersReplaceFeature` separately selects only
