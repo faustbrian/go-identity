@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Execute an exact native SCIM Group-create component in one root transaction.
+  Each child retains its original command, audit and lifecycle. A confirmed
+  Group denial rolls back all provisional changes before recording the
+  component's dependency failures.
+
 - Retain the exact protected no-effect 404 or 428 for Group Bulk mutations
   without a successful lifecycle or outbox participant.
 

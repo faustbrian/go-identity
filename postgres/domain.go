@@ -21,6 +21,8 @@ type domainExecution struct {
 	reservation *reservationState
 	ctx         context.Context
 	cancel      context.CancelFunc
+	// A component owns closure of its shared root transaction.
+	component bool
 	// Only the owned service bridge supplies prebuilt failure records. They
 	// never unpoison Work or permit more domain SQL; Abort stages after rollback.
 	abortAudits         map[string]audit.Record
@@ -99,29 +101,40 @@ func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 		}
 		return Work{}, failure
 	}
-	fence, err := beginJournal(bounded, tx, r.state.request, c.keys, r.state.journal, r.state.owner)
+	w, err := c.openDomainWork(bounded, tx, r.state, cancel)
 	if err != nil {
-		return fail(err)
-	}
-	if _, err = c.freezePlan(bounded, tx, r.state.plan.binding, r.state.request, claimReplay, r.state.plan.snapshot()); err != nil {
-		return fail(err)
-	}
-	w, err := newWork(bounded, tx, r.state.plan.binding, r.state.request, fence)
-	if err != nil {
-		return fail(err)
-	}
-	w.state.registry = c.registry.state
-	// Binding validates the registered execution's closed audit profile. Set
-	// that owner before binding so OAuth's three slots cannot fall back to the
-	// ordinary one-action kernel profile.
-	w.state.execution = &domainExecution{coordinator: c, reservation: r.state, ctx: bounded, cancel: cancel}
-	if err := r.state.plan.bindWork(w); err != nil {
-		invalidateWork(w)
 		return fail(err)
 	}
 	if err := configureKernelWork(bounded, w); err != nil {
 		invalidateWork(w)
 		return fail(err)
+	}
+	return w, nil
+}
+
+// openDomainWork binds the original command, lease and complete plan to Work.
+// The coordinator that owns tx must prove rollback on any error. A component
+// establishes all its journal locks before taking the ordinary tenant lock.
+func (c *Coordinator) openDomainWork(ctx context.Context, tx pgx.Tx, r *reservationState, cancel context.CancelFunc) (Work, error) {
+	fence, err := beginJournal(ctx, tx, r.request, c.keys, r.journal, r.owner)
+	if err != nil {
+		return Work{}, err
+	}
+	if _, err = c.freezePlan(ctx, tx, r.plan.binding, r.request, claimReplay, r.plan.snapshot()); err != nil {
+		return Work{}, err
+	}
+	w, err := newWork(ctx, tx, r.plan.binding, r.request, fence)
+	if err != nil {
+		return Work{}, err
+	}
+	w.state.registry = c.registry.state
+	// Binding validates the registered execution's closed audit profile. Set
+	// that owner before binding so OAuth's three slots cannot fall back to the
+	// ordinary one-action kernel profile.
+	w.state.execution = &domainExecution{coordinator: c, reservation: r, ctx: ctx, cancel: cancel}
+	if err := r.plan.bindWork(w); err != nil {
+		invalidateWork(w)
+		return Work{}, err
 	}
 	return w, nil
 }
@@ -293,7 +306,7 @@ func insertInitialUser(ctx context.Context, w Work, tenant identity.TenantID, us
 // fabricated terminal denial. No reveal-once output is produced. Zero/foreign/
 // already-closed handles return an invalid-input error without closing others.
 func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.CommandResult, error) {
-	if !c.owns(w) || w.state.closed {
+	if !c.owns(w) || w.state.closed || w.state.execution.component {
 		return identity.CommandResult{}, invalidWork()
 	}
 	defer func() {
@@ -301,26 +314,48 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 			_, _ = c.Abort(w, identity.UnavailableError{})
 		}
 	}()
-	if err := w.usable(); err != nil {
+	if err := c.stageDomainCommit(w, result); err != nil {
 		return c.Abort(w, err)
+	}
+	execution := w.state.execution
+	r := execution.reservation
+	// Closing aliases cancels their context, not the commit. Preserve its
+	// original lease deadline in a separately cancellable child of the caller.
+	deadline, _ := w.state.ctx.Deadline()
+	commit, cancelCommit := context.WithDeadline(execution.ctx, deadline)
+	defer cancelCommit()
+	invalidateWork(w)
+	defer execution.cancel()
+	if err := w.state.tx.Commit(commit); err != nil {
+		return featureOutcome(w.state.binding, r.request.feature, identity.CommitOutcomeUnknown, 0), readFailure(commit, err)
+	}
+	return result, nil
+}
+
+// stageDomainCommit enlists the exact effects and terminal journal without
+// releasing locks, closing Work, or making its provisional result visible.
+// A component may stage several original commands before one root commit.
+func (c *Coordinator) stageDomainCommit(w Work, result identity.CommandResult) error {
+	if err := w.usable(); err != nil {
+		return err
 	}
 	if w.state.execution.reservation.plan.scimBulkDenial != 0 || w.state.rows != nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding != w.state.binding || !matchesDomainResult(w, result) {
-		return c.Abort(w, identity.InvalidInputError{Field: "command_result"})
+		return identity.InvalidInputError{Field: "command_result"}
 	}
 	if err := completeAudits(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	plan := w.state.execution.reservation.plan
 	if plan.apiKeyVerification != nil {
 		if validateAPIKeyVerificationAudits(w) != nil || w.state.audits.records[0].ID() != result.AuditEventID {
-			return c.Abort(w, invalidAudit())
+			return invalidAudit()
 		}
 		if w.state.apiKeyVerification.PermissionsChanged {
 			if _, err := w.StagedLifecycle(); err != nil {
-				return c.Abort(w, err)
+				return err
 			}
 		} else if w.state.lifecycle.record != nil {
-			return c.Abort(w, invalidLifecycle())
+			return invalidLifecycle()
 		}
 	} else {
 		lifecycle := plan.lifecycle
@@ -331,21 +366,21 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 		for i, record := range w.state.audits.records {
 			attrs := record.Attributes()
 			if i == 0 && record.ID() != result.AuditEventID || record.Outcome() != outcome || record.ReasonCode() != reason || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(lifecycle.BeforeVersion, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(lifecycle.AfterVersion, 10) {
-				return c.Abort(w, invalidAudit())
+				return invalidAudit()
 			}
 		}
 		if _, err := w.StagedLifecycle(); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 	}
 	if err := c.persistCapabilityIssuance(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.persistDelivery(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.persistAuditPhase(w); err != nil {
-		return c.Abort(w, identity.UnavailableError{})
+		return identity.UnavailableError{}
 	}
 	for _, entry := range w.state.execution.reservation.plan.contributors {
 		if entry.descriptor.Owner == "outbox/postgres" {
@@ -380,133 +415,123 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 				err = entry.contributor.(LifecycleContributor).PersistLifecycle(w.state.ctx, w)
 			}
 			if err != nil {
-				return c.Abort(w, identity.UnavailableError{})
+				return identity.UnavailableError{}
 			}
 		}
 	}
 	if err := w.usable(); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	execution := w.state.execution
 	r := execution.reservation
 	if r.plan.counters != nil {
 		if w.state.counterCommand == nil {
-			return c.Abort(w, invalidWork())
+			return invalidWork()
 		}
 		// Effects remain provisional. A slow native/audit/outbox phase cannot
 		// substitute an earlier positive risk observation for current admission.
 		if err := c.checkCommandCounters(w.state.ctx, w, *w.state.counterCommand); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 	}
 	if r.plan.risk != nil {
 		if w.state.riskCommand == nil {
-			return c.Abort(w, invalidWork())
+			return invalidWork()
 		}
 		if err := c.runRiskExecution(w.state.ctx, w, *w.state.riskCommand, false); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 		if err := c.runRiskExecution(w.state.ctx, w, *w.state.riskCommand, true); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 	}
 	if r.plan.captchaUse != nil {
 		if w.state.captchaCommand == nil {
-			return c.Abort(w, invalidWork())
+			return invalidWork()
 		}
 		if err := c.runCaptchaExecution(w.state.ctx, w, *w.state.captchaCommand, captchaCheck); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 		if err := c.runCaptchaExecution(w.state.ctx, w, *w.state.captchaCommand, captchaFinalize); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 	}
 	if r.plan.otp != nil {
 		if w.state.otpCommand == nil {
-			return c.Abort(w, invalidWork())
+			return invalidWork()
 		}
 		if err := c.runOTPExecution(w.state.ctx, w, *w.state.otpCommand, otpCheck); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 		if err := c.runOTPExecution(w.state.ctx, w, *w.state.otpCommand, otpFinalize); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 	}
 	if err := deliveryFresh(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := issuanceFresh(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeIdentifierCapability(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeEmailVerification(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeManagedEmailVerification(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeCredentialReset(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeMagicLinkConsumption(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeProviderSigninConsumption(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeOrganizationInvitationConsumption(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeAnonymousUpgradeConsumption(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeMFACompletionConsumption(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if plan.feature != nil && plan.feature.Operation == SSOSAMLLogoutRelaySettlementOperation() {
 		if err := c.finalizeSSOSAMLLogoutRelaySettlement(w); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 	}
 	if plan.feature != nil && oauthCallbackDenialSelected(plan.feature.Operation) {
 		if w.state.featureReceipt == nil || w.state.featureReceipt.Operation != plan.feature.Operation {
-			return c.Abort(w, invalidWork())
+			return invalidWork()
 		}
 		if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
-			return c.Abort(w, err)
+			return err
 		}
 	}
 	if err := c.checkAuthenticatedCommand(w.state.ctx, w, true); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := terminalizeJournal(w.state.ctx, w.state.tx, r.request, r.journal, r.owner, result, "committed"); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.checkPreparedAdmission(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.checkFeatureCommit(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeAccountLink(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
 	if err := c.finalizeAccountUnlink(w); err != nil {
-		return c.Abort(w, err)
+		return err
 	}
-	// Closing aliases cancels their context, not the commit. Preserve its
-	// original lease deadline in a separately cancellable child of the caller.
-	deadline, _ := w.state.ctx.Deadline()
-	commit, cancelCommit := context.WithDeadline(execution.ctx, deadline)
-	defer cancelCommit()
-	invalidateWork(w)
-	defer execution.cancel()
-	if err := w.state.tx.Commit(commit); err != nil {
-		return featureOutcome(w.state.binding, r.request.feature, identity.CommitOutcomeUnknown, 0), readFailure(commit, err)
-	}
-	return result, nil
+	return nil
 }
 
 // Abort proves domain rollback before attempting a separate guarded terminal
@@ -519,7 +544,7 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 // classified failure records. Risk/CAPTCHA one-time owners release only after
 // proven rollback; other one-time profiles and retry bookkeeping remain closed.
 func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error) {
-	if !c.owns(w) || w.state.closed || cause == nil {
+	if !c.owns(w) || w.state.closed || w.state.execution.component || cause == nil {
 		return identity.CommandResult{}, invalidWork()
 	}
 	execution := w.state.execution
