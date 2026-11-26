@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Retain the original snapshot-derived SCIM Bulk PATCH `noTarget` denial
+  without a resource update or lifecycle effect.
+
 - Preserve exact pre-Prepare SCIM Bulk validation denials for supported User
   and Group writes in the protected child journal, without mutation authority.
 

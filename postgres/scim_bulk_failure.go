@@ -26,7 +26,8 @@ func scimBulkDenialCode(code FeatureFailureCode) bool {
 		code == FeatureFailureUserMissing || code == FeatureFailureUserVersionRequired || code == FeatureFailureUserVersionMismatch ||
 		code == FeatureFailureGroupCreateInvalidValue || code == FeatureFailureBulkChildInvalid ||
 		code == FeatureFailureSCIMBulkInvalidValue || code == FeatureFailureSCIMBulkMutability ||
-		code == FeatureFailureSCIMBulkInvalidSyntax || code == FeatureFailureSCIMBulkInvalidPath || code == FeatureFailureSCIMBulkUntypedBadRequest
+		code == FeatureFailureSCIMBulkInvalidSyntax || code == FeatureFailureSCIMBulkInvalidPath || code == FeatureFailureSCIMBulkUntypedBadRequest ||
+		code == FeatureFailureSCIMBulkNoTarget
 }
 
 func scimBulkGroupMutation(op identity.FeatureOperation) bool {

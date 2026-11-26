@@ -30,7 +30,8 @@ func TestSCIMBulkTypedValidationClosedOperationMatrix(t *testing.T) {
 				{"invalidSyntax", 15, method == "create" || method == "replace"},
 				{"invalidPath", 16, method == "patch"},
 				{"untypedBadRequest", 17, true},
-				{"unknown", 18, false},
+				{"noTarget", 18, method == "patch"},
+				{"unknown", 19, false},
 			} {
 				t.Run(resource+"/"+method+"/"+failure.name, func(t *testing.T) {
 					if got := featureFailureCodeAllowed(operation, failure.code); got != failure.allowed {

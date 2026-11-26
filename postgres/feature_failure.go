@@ -42,10 +42,10 @@ const (
 	// FeatureFailureBulkChildInvalid retains a malformed child without a
 	// resource operation or allocation. It cannot represent a write failure.
 	FeatureFailureBulkChildInvalid
-	// FeatureFailureSCIMBulkInvalidValue retains an original pre-Prepare Bulk
+	// FeatureFailureSCIMBulkInvalidValue retains an original pre-write Bulk
 	// User or Group invalidValue denial without granting mutation authority.
 	FeatureFailureSCIMBulkInvalidValue
-	// FeatureFailureSCIMBulkMutability retains an original pre-Prepare Bulk
+	// FeatureFailureSCIMBulkMutability retains an original pre-write Bulk
 	// User or Group create/replace/PATCH mutability denial.
 	FeatureFailureSCIMBulkMutability
 	// FeatureFailureSCIMBulkInvalidSyntax retains an original pre-Prepare Bulk
@@ -57,10 +57,13 @@ const (
 	// FeatureFailureSCIMBulkUntypedBadRequest retains an original pre-Prepare
 	// Bulk User or Group bad request that has no SCIM error type.
 	FeatureFailureSCIMBulkUntypedBadRequest
+	// FeatureFailureSCIMBulkNoTarget retains an original snapshot-derived Bulk
+	// User or Group PATCH noTarget denial without granting mutation authority.
+	FeatureFailureSCIMBulkNoTarget
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureSCIMBulkUntypedBadRequest
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureSCIMBulkNoTarget
 }
 
 // TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
@@ -121,7 +124,7 @@ func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailure
 		case FeatureFailureSCIMBulkInvalidSyntax:
 			return op.OperationID == "identity.scim.user-create" || op.OperationID == "identity.scim.user-replace" ||
 				op.OperationID == "identity.scim.group-create" || op.OperationID == "identity.scim.group-replace"
-		case FeatureFailureSCIMBulkInvalidPath:
+		case FeatureFailureSCIMBulkInvalidPath, FeatureFailureSCIMBulkNoTarget:
 			return op.OperationID == "identity.scim.user-patch" || op.OperationID == "identity.scim.group-patch"
 		case FeatureFailureSCIMBulkDependency:
 			return subject == "scim_group" || scimBulkUserMutation(op)
