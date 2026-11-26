@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in managed-bearer Group Create over HTTPS. Preserve native Group
+  validation and membership authority, shared protocol quota, and the exact
+  committed Group, ETag and Location.
+
 - Add independent opt-in managed Group Get and List over HTTPS, preserving
   native authorization, shared quota, Group projection and the Get ETag.
 

@@ -1,5 +1,15 @@
 # SCIM HTTP
 
+## Managed bearer Group Create
+
+Select `NewManagedGroupsCreateFeature` to enable `POST /scim/v2/Groups`.
+Use the same native connection authority, rate owner and explicit member
+ceiling as other selected Group operations. The handler accepts a bounded
+Group JSON body and issued bearer; it rejects client idempotency keys and
+does not map fields or retry native writes. An authorized creation returns
+the native Group with `201`, its strong ETag and canonical HTTPS Location.
+Other methods, Group reads, User routes and discovery are not selected.
+
 ## Managed bearer Group reads
 
 `NewManagedGroupsReadFeature` independently selects
