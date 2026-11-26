@@ -66,6 +66,13 @@ feature factories. Those factories must enforce their advertised controls;
 metadata cannot certify an arbitrary supplied handler. CORS policy for an
 unselected method/path is rejected. Preflight does no owner or hook work.
 
+The selected SCIM User Get operation dispatches `GET /scim/v2/Users/{resource_id}`
+to its owner with `Request.PathValue("resource_id")`. It accepts one unescaped
+resource segment of 1–128 ASCII letters, digits or `-._~`, excluding dot segments
+and the reserved `.search` endpoint. The router does not install this operation
+by default, grant cross-origin access to its template, or run the SCIM owner's
+bearer or resource authorization checks.
+
 Nonempty middleware requires each selected handler to implement
 `OperationMiddlewareBinder`; opaque handlers are rejected rather than receiving
 invented authentication phases. All policy, descriptor and wire validation

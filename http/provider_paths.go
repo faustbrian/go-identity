@@ -62,6 +62,11 @@ func validSAMLProviderEndpoint(path, endpoint string) bool {
 }
 
 func dispatchPaths(op OperationDescriptor) []string {
+	if scimUserGetOperation(op) {
+		// Keep the document's template out of literal dispatch and exact CORS
+		// selection. The selected handler owns the single-segment match.
+		return nil
+	}
 	if len(op.ProviderPathIDs) == 0 {
 		return []string{op.Route.Path}
 	}

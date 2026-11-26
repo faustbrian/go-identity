@@ -82,8 +82,10 @@ func NewCanonicalOperation(c CanonicalOperationConfig) (OperationDescriptor, err
 // NewSelectedHandler freezes exact dispatch for validated explicitly selected
 // feature contributions. Empty selects nothing and returns 404 for all paths.
 // Construction validates dependencies/collisions and invokes no handler or IO.
-// Routes are exact, root-mounted and case-sensitive: no cleaning, prefix match,
-// escaped aliases, redirects, implicit HEAD or automatic OPTIONS. Query/body,
+// Routes are root-mounted and case-sensitive. Only the canonical SCIM User
+// Get matches a single canonical resource segment and provides resource_id as
+// a request PathValue. There is no general prefix match, cleaning, escaped
+// alias, redirect, implicit HEAD or automatic OPTIONS. Query/body,
 // authentication, authorization, CSRF, rate and domain outcomes remain owned by
 // the selected real feature handlers; no second read, authentication or debit
 // is performed. Callers must use owned feature factories or trusted extension
@@ -110,7 +112,12 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 		allow   string
 	}
 	paths := make(map[string]selectedPath, len(ops))
+	var userGet http.Handler
 	for _, op := range ops {
+		if scimUserGetOperation(op) {
+			userGet = op.Handler
+			continue
+		}
 		for _, path := range dispatchPaths(op) {
 			p := paths[path]
 			if p.methods == nil {
@@ -148,11 +155,19 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 			return
 		}
 		p, ok := paths[r.URL.Path]
-		if !ok {
+		resourceID := ""
+		if !ok && userGet != nil {
+			resourceID = scimUserPathID(r.URL.Path)
+		}
+		if !ok && resourceID == "" {
 			deny(404, "not_found")
 			return
 		}
 		handler, ok := p.methods[r.Method]
+		if resourceID != "" {
+			handler, ok = userGet, r.Method == http.MethodGet
+			p.allow = http.MethodGet
+		}
 		if !ok {
 			w.Header().Set("Allow", p.allow)
 			deny(405, "method_not_allowed")
@@ -161,6 +176,10 @@ func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 		if r.Context().Err() != nil {
 			deny(503, "unavailable")
 			return
+		}
+		if resourceID != "" {
+			r = r.Clone(r.Context())
+			r.SetPathValue("resource_id", resourceID)
 		}
 		handler.ServeHTTP(w, r)
 	}), nil

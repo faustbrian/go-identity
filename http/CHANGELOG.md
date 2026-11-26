@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Dispatch explicitly selected canonical SCIM User GET requests with one
+  unescaped resource segment and `Request.PathValue("resource_id")`.
+  No general pattern routes or cross-origin grants are added.
+
 - Permit the explicit strict-bearer variant of managed SCIM connection Create.
   It retains the original keyed admission and administrative rate requirements;
   the existing cookie variant still requires CSRF protection.
