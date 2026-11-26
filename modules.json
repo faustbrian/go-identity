@@ -285,7 +285,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "http/oauth/v",
-      "owned_dependencies": ["github.com/faustbrian/go-authorization/v3","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-identity/oauth","github.com/faustbrian/go-identity/oauth/providers","github.com/faustbrian/go-identity/session","github.com/faustbrian/go-rate-limit/v2"],
+      "owned_dependencies": ["github.com/faustbrian/go-authorization/v3","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-identity/i18n","github.com/faustbrian/go-identity/oauth","github.com/faustbrian/go-identity/oauth/providers","github.com/faustbrian/go-identity/session","github.com/faustbrian/go-rate-limit/v2"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
       "required_services": [],
@@ -309,7 +309,7 @@
         "non_goals": ["Own accounts, sessions, state reservation, token exchange or durable transactions.", "Claim social signin, token refresh or full OAuth qualification from link-only HTTP composition."],
         "public_package_identifier": "oauthhttp",
         "primary_entry_packages": ["github.com/faustbrian/go-identity/http/oauth"],
-        "package_selection": {"github.com/faustbrian/go-identity/http/oauth":"Select account-link start and callback with original browser custody, or separately mount the public login-provider listing."},
+        "package_selection": {"github.com/faustbrian/go-identity/http/oauth":"Select account-link start and callback with original browser custody, or separately mount the public login-provider listing with optional translated errors."},
         "lifecycle_status": "active",
         "maturity": "experimental",
         "construction_styles": ["new-config", "plain-function", "validated-value"],
@@ -3176,7 +3176,7 @@
         "github.com/faustbrian/go-migrations/v3",
         "github.com/faustbrian/go-postgres"
       ],
-      "reverse_owned_dependencies": [],
+      "reverse_owned_dependencies": ["github.com/faustbrian/go-identity/http/oauth"],
       "external_runtime_dependencies": [
         "postgresql"
       ],

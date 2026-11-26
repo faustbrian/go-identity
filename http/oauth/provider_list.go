@@ -23,6 +23,9 @@ type ProviderListConfig struct {
 	Catalog         providers.Catalog
 	Rate            *identityhttp.SafeRateLimiter
 	MaximumDuration time.Duration
+	// Localization optionally selects safe public denial messages. Nil preserves
+	// the original machine-only JSON contract; it never affects successful pages.
+	Localization *ProviderListLocalizationConfig
 }
 
 // Format prevents borrowed catalog/configuration details from being disclosed.
@@ -67,7 +70,7 @@ func NewProviderListFeature(c ProviderListConfig) (identityhttp.Feature, error) 
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op.Wire = wireProviderList()
+	op.Wire = wireProviderList(c.Localization != nil)
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/oauth/providers", Operations: []identityhttp.OperationDescriptor{op}})
 }
 
@@ -109,6 +112,10 @@ func NewProviderListHandler(c ProviderListConfig) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	localization, err := newProviderListLocalization(c.Localization)
+	if err != nil {
+		return nil, err
+	}
 	reject := func(w http.ResponseWriter, r *http.Request, cause error) {
 		failure := providerListRejection{status: 503, code: "unavailable"}
 		var invalid providers.ProviderListInvalidRequestError
@@ -134,11 +141,16 @@ func NewProviderListHandler(c ProviderListConfig) (http.Handler, error) {
 			}
 			w.Header().Set("Retry-After", strconv.FormatInt(int64(seconds), 10))
 		}
+		body, locale := localization.response(r, failure)
+		if localization != nil && providerListLocalizedStatus(failure.status) {
+			w.Header().Add("Vary", "Accept-Language")
+		}
+		if locale != "" {
+			w.Header().Set("Content-Language", locale)
+		}
 		w.WriteHeader(failure.status)
 		if r == nil || r.Method != http.MethodHead {
-			_ = json.NewEncoder(w).Encode(struct {
-				Error string `json:"error"`
-			}{failure.code})
+			_, _ = w.Write(body)
 		}
 	}
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[providerListInput]{
@@ -259,7 +271,7 @@ func (h *providerListHandler) WithOperationMiddleware(m []identityhttp.Middlewar
 	return &providerListHandler{pipeline: bound}, nil
 }
 
-func wireProviderList() *identityhttp.WireOperation {
+func wireProviderList(localized bool) *identityhttp.WireOperation {
 	text := func(minimum, maximum int) map[string]any {
 		return map[string]any{"type": "string", "minLength": minimum, "maxLength": maximum}
 	}
@@ -278,13 +290,31 @@ func wireProviderList() *identityhttp.WireOperation {
 		responses[status] = response(failure)
 	}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"description": "Known shared rate.safe denial, rounded up to seconds; absent on unavailable authority.", "schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}}}
+	parameters := []any{
+		map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}},
+		map[string]any{"name": "cursor", "in": "query", "required": false, "schema": text(1, 512)},
+	}
+	if localized {
+		localizedFailure := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"error"}, "properties": map[string]any{
+			"error": failure["properties"].(map[string]any)["error"], "message": text(1, 8192),
+		}}
+		for _, status := range []string{"400", "403", "429", "503"} {
+			selected := responses[status].(map[string]any)
+			selected["content"] = response(localizedFailure).(map[string]any)["content"]
+			headers, _ := selected["headers"].(map[string]any)
+			if headers == nil {
+				headers = make(map[string]any)
+			}
+			headers["Content-Language"] = map[string]any{"description": "Actual rendered catalog locale, including message fallback. Absent when no localized message is emitted.", "schema": text(1, 64)}
+			headers["Vary"] = map[string]any{"schema": map[string]any{"type": "string", "const": "Accept-Language"}}
+			selected["headers"] = headers
+		}
+		parameters = append(parameters, map[string]any{"name": "Accept-Language", "in": "header", "required": false, "description": "One bounded language preference field, at most 32 ranges. Duplicate fields and malformed/duplicate ranges use the configured default. Complete exclusions retain machine-only errors; no cookies or session preferences participate.", "schema": text(0, 4096)})
+	}
 	data, _ := json.Marshal(map[string]any{
 		"operationId": "identity.oauth.provider-list", "security": []any{}, "responses": responses,
 		"description": "Explicit public HTTPS configured-provider discovery. Required limit, optional opaque cursor bound to the native snapshot and same limit. Only safe IDs, display names and actual configured modes; no session, CSRF, Origin, Authorization, body or Idempotency-Key. Shared canonical rate.safe, not provider protocol admission.",
-		"parameters": []any{
-			map[string]any{"name": "limit", "in": "query", "required": true, "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}},
-			map[string]any{"name": "cursor", "in": "query", "required": false, "schema": text(1, 512)},
-		},
+		"parameters":  parameters,
 	})
 	return &identityhttp.WireOperation{Definition: data}
 }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add independently opt-in provider-list public denial localization through the
+  typed `identity/i18n` registry/resolver. Bounded public language negotiation
+  adds only safe JSON messages and truthful language metadata; machine codes,
+  status, retry policy, successful pages and the disabled profile are unchanged.
+
 - Add independently opt-in public `GET /v1/oauth/provider-list` backed by the
   native immutable configured-provider catalog. Required bounded pagination
   returns only safe IDs, display names and selected modes, with shared safe-rate

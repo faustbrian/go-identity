@@ -45,6 +45,35 @@ emits its ceiling-seconds `Retry-After`; catalog failures invent no retry delay.
 The server still owns raw IO and write deadlines, and borrowed owners must
 honor the configured whole-operation deadline.
 
+### Optional provider-list localization
+
+Set only `ProviderListConfig.Localization` to select public translated denial
+messages. Supply `ProviderListLocalizationConfig{Catalogs: catalogs,
+DefaultLocale: "en"}` using `i18n.NewCatalog`. Each catalog's messages use this
+module's exported `ProviderListInvalidRequestMessage`,
+`ProviderListDeniedMessage`, `ProviderListRateLimitedMessage`, and
+`ProviderListUnavailableMessage` IDs. All four need parameter-free default-locale
+translations; other locales may omit a message and fall back to that default.
+Catalogs are trusted public text and frozen at handler construction. Replace
+translations by constructing a new handler; never include provider diagnostics,
+credential data, cursor text or enumeration state in a template.
+
+With this explicit opt-in, only 400, 403, 429 and 503 provider-list responses may
+add a JSON `message` alongside the unchanged machine `error`. They remain
+`application/json`, retain their status and existing `Retry-After`, and vary on
+`Accept-Language`. A rendered message has `Content-Language` equal to its actual
+catalog locale, including message fallback. Successful pages and other errors
+remain unchanged. The generated operation documents only the selected profile.
+
+The public route uses one `Accept-Language` field (at most 4096 bytes and 32
+ranges), then the configured default. Regional lookup, weights and exclusions
+are owned by `identity/i18n`; duplicate fields, malformed or duplicate ranges
+use the default. Explicit exclusion of every supported locale, cancellation,
+or an oversized serialized message retains the machine-only response without
+`Content-Language`. No locale is stored, no cookie is read or written, and no
+session preference or signin handler participates. Nil localization preserves
+the original exact machine-only response and wire contract.
+
 ## Supported profile
 
 - One explicitly configured HTTPS OIDC code/query/S256 provider per selected
