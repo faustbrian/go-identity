@@ -8,3 +8,13 @@ manifest:
 
 evidence:
   root: .verification
+
+operations:
+  - module: oauth/onetap
+    gate: fuzz
+    steps:
+      - type: go-test
+        packages: [.]
+        fuzz: FuzzCSRF
+        budget: 3s
+        timeout: 60s
