@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain the original same-origin HTTPS endpoint and exact mode for a
+  separately selected One Tap redirect binding. Existing callback issuance
+  and cookie framing are unchanged.
+
 - Select commit-gated One Tap session and CSRF credential delivery, separate
   from ordinary OAuth. An exact new callback commit is required, and delivery
   retains the original proof cutoff.

@@ -13,6 +13,15 @@ header validation remains mandatory; replay cannot recreate a token.
 
 ## Prospective Google One Tap session issuance
 
+`PreAuthProviderRedirect` represents original custody for a separately
+configured button redirect to one canonical same-origin HTTPS endpoint. The
+existing provider cookie digest binds the exact endpoint and mode; neither
+switching to popup nor changing the endpoint preserves the original binding.
+This only defines the structural binding for storage and recovery; durable
+adapters must explicitly support it. The existing popup issuers do not issue
+redirect cookies, and this mode neither selects an HTTP callback nor
+authenticates a provider credential.
+
 `NewOneTapSessionIssuerWithCSRF` selects the final session, not the initial
 browser flow. Use `PrepareOneTap` and `BindOneTap` with the original anonymous
 callback command. The native executor borrows it through

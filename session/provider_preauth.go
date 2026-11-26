@@ -3,6 +3,10 @@ package session
 import (
 	"fmt"
 	"io"
+	"net/netip"
+	"net/url"
+	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -11,9 +15,14 @@ import (
 // Zero and unrecognized modes are not provider-bound continuation authority.
 type PreAuthProviderMode uint8
 
-// PreAuthProviderCallback selects the One Tap JavaScript callback without a
-// redirect URL. Other modes require their own explicit composition.
-const PreAuthProviderCallback PreAuthProviderMode = 1
+const (
+	// PreAuthProviderCallback selects the One Tap JavaScript callback without a
+	// redirect URL.
+	PreAuthProviderCallback PreAuthProviderMode = 1
+	// PreAuthProviderRedirect selects the separately configured One Tap button
+	// redirect and its exact same-origin HTTPS endpoint. It is not an issuer.
+	PreAuthProviderRedirect PreAuthProviderMode = 2
+)
 
 // PreAuthProviderBinding is an exact startup-selected provider, positive
 // provider version, client and browser delivery mode. ProviderID and ClientID
@@ -33,7 +42,7 @@ type ProviderPreAuthTransactionSpec struct {
 	Provider    PreAuthProviderBinding
 }
 
-// NewProviderPreAuthTransaction freezes a validated One Tap callback profile
+// NewProviderPreAuthTransaction freezes a validated One Tap browser profile
 // without issuing or persisting a flow. It cannot confer primary authority or
 // consume a flow. The durable owner must use ProviderBindings and must not
 // reconstruct this selected flow from a legacy projection.
@@ -71,8 +80,8 @@ func (p PreAuthTransaction) CheckProvider(now time.Time, expected PreAuthBinding
 	return p.state.check(now, expected, cookie)
 }
 
-// ProviderPreAuthDigest derives the flow cookie lookup for an original One Tap
-// callback. It uses PreAuthDigest's framing with the separate domain
+// ProviderPreAuthDigest derives the original One Tap flow cookie lookup. It
+// uses PreAuthDigest's framing with the separate domain
 // golib-preauth-cookie-provider-v1 NUL, then appends length-prefixed provider
 // ID and client ID, uint64 provider version and uint8 mode before token size
 // and bytes. It never issues, verifies, or renews a cookie by itself.
@@ -87,10 +96,63 @@ func (t Token) ProviderPreAuthDigest(k DigestKey, binding PreAuthBinding, select
 }
 
 func validProviderPreAuthProfile(intent PreAuthIntent, selected PreAuthProviderBinding) bool {
-	return selected.Mode == PreAuthProviderCallback && selected.ProviderVersion != 0 &&
-		authorityKey(selected.ProviderID, 128) && authorityKey(selected.ClientID, 1024) &&
-		intent.Action == "identity.oauth.onetap-start" && intent.Purpose == PreAuthSessionIssuance &&
-		intent.CallbackURL == "" && intent.IdentifierBinding == ([32]byte{})
+	if selected.ProviderVersion == 0 || !authorityKey(selected.ProviderID, 128) || !authorityKey(selected.ClientID, 1024) ||
+		intent.Action != "identity.oauth.onetap-start" || intent.Purpose != PreAuthSessionIssuance || intent.IdentifierBinding != ([32]byte{}) {
+		return false
+	}
+	switch selected.Mode {
+	case PreAuthProviderCallback:
+		return intent.CallbackURL == ""
+	case PreAuthProviderRedirect:
+		return validOneTapRedirectTarget(intent.Origin, intent.CallbackURL)
+	default:
+		return false
+	}
+}
+
+// A browser must serialize the same literal origin and path that bind the
+// original cookie. This stricter rule is only for the new redirect mode.
+func validOneTapRedirectTarget(origin, callback string) bool {
+	endpoint, exact := strings.CutPrefix(callback, origin)
+	if !exact || !strings.HasPrefix(origin, "https://") || !preAuthURL(origin, true) || !preAuthURL(callback, false) ||
+		!strings.HasPrefix(endpoint, "/") || path.Clean(endpoint) != endpoint || strings.ContainsAny(endpoint, "%?#\\;") ||
+		(&url.URL{Path: endpoint}).EscapedPath() != endpoint {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host != strings.ToLower(u.Host) {
+		return false
+	}
+	host, port := u.Hostname(), u.Port()
+	if len(host) > 253 || port == "" && u.Host != host {
+		return false
+	}
+	if port != "" {
+		n, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || n == 0 || n == 443 || strconv.FormatUint(n, 10) != port || u.Host != host+":"+port {
+			return false
+		}
+	}
+	for label := range strings.SplitSeq(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := range len(label) {
+			b := label[i]
+			if !(b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '-') {
+				return false
+			}
+		}
+	}
+	// Browsers treat a final numeric label as an IPv4 candidate, including
+	// hexadecimal and short forms. Only the canonical dotted address is valid.
+	last := host[strings.LastIndexByte(host, '.')+1:]
+	if hex, prefixed := strings.CutPrefix(last, "0x"); strings.Trim(last, "0123456789") == "" ||
+		prefixed && strings.Trim(hex, "0123456789abcdef") == "" {
+		addr, err := netip.ParseAddr(host)
+		return err == nil && addr.Is4() && addr.String() == host
+	}
+	return true
 }
 
 // Format redacts the original provider context.

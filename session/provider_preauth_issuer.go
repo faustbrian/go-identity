@@ -59,7 +59,7 @@ func (s *PreAuthIssuer) PrepareOneTapStart(binding identity.CommandBinding, reme
 
 func newProviderPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, selected PreAuthProviderBinding, operation identity.FeatureOperation) (*PreAuthIssuer, error) {
 	intent := PreAuthIntent{Action: c.Action, CallbackURL: c.CallbackURL, Purpose: c.Purpose}
-	if c.Cookie.name != "__Host-identity_flow" || c.FlowTTL != 5*time.Minute || !strings.HasPrefix(c.Origin, "https://") || !validProviderPreAuthProfile(intent, selected) {
+	if selected.Mode != PreAuthProviderCallback || c.Cookie.name != "__Host-identity_flow" || c.FlowTTL != 5*time.Minute || !strings.HasPrefix(c.Origin, "https://") || !validProviderPreAuthProfile(intent, selected) {
 		return nil, ErrInvalidIssuer
 	}
 	selected.ProviderID = strings.Clone(selected.ProviderID)
