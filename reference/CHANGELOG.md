@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preview the exact mapped directory role at its running checkpoint through
+  the direct Reference worker, with separate authorization and no writes.
+
 - Inspect exact SCIM User drift through the Reference directory worker with
   separate read authorization and no writes or HTTP route.
 

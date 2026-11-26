@@ -107,6 +107,21 @@ func (s *DirectoryGroupRoleApplyService) Apply(ctx context.Context, request ssop
 	return s.executor.ApplyGeneration(bounded, request)
 }
 
+// ObserveDrift inspects the exact mapped role at the current directory
+// checkpoint under separate read authorization. It does not change access,
+// apply a repair, or advance the generation. Failure returns no report.
+func (s *DirectoryGroupRoleApplyService) ObserveDrift(ctx context.Context, request ssopg.DirectoryGroupRoleApplyRequest) (ssopg.DirectoryGroupRoleDrift, error) {
+	if s == nil || s.executor == nil {
+		return ssopg.DirectoryGroupRoleDrift{}, identity.InvalidInputError{Field: "reference_directory_group_role_drift"}
+	}
+	bounded, done, err := (composedPasswordReset{state: s.state}).enter(ctx, s.tenant)
+	if err != nil {
+		return ssopg.DirectoryGroupRoleDrift{}, err
+	}
+	defer done()
+	return s.executor.ObserveDrift(bounded, request)
+}
+
 func (DirectoryGroupRoleConfiguration) Format(s fmt.State, _ rune) {
 	_, _ = fmt.Fprint(s, "reference.DirectoryGroupRoleConfiguration(redacted)")
 }

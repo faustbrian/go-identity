@@ -4,6 +4,7 @@ package reference_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -24,6 +25,7 @@ import (
 	organizationpg "github.com/faustbrian/go-organization/postgres"
 	scim "github.com/faustbrian/go-scim"
 	scimorganization "github.com/faustbrian/go-scim/organization"
+	scimpostgres "github.com/faustbrian/go-scim/postgres"
 	"github.com/faustbrian/go-sso"
 	ssopg "github.com/faustbrian/go-sso/postgres"
 )
@@ -55,7 +57,7 @@ func (p referenceDirectoryPolicy) ObserveDirectoryRoleAuthorization(ctx context.
 func proveReferenceDirectoryGroupRoleJourney(t *testing.T, ctx context.Context, f liveStores,
 	serverConfig reference.ReferenceConfig, selected reference.StoreConfiguration, deps reference.ReferenceDependencies, configs []deliverypg.WorkerConfig,
 	features reference.FeatureSet, owner, member organizationTestHuman, source referenceDirectorySCIMSource,
-	generation referenceDirectoryProjection, predecessor [32]byte) [32]byte {
+	generation referenceDirectoryProjection, predecessor [32]byte, status func() referenceDirectoryProjection) [32]byte {
 	t.Helper()
 	port, err := features.Organizations()
 	if err != nil {
@@ -210,6 +212,61 @@ func proveReferenceDirectoryGroupRoleJourney(t *testing.T, ctx context.Context, 
 		GenerationID: generation.GenerationID, ProviderID: sso.ProviderID(generation.ProviderID),
 		MappingVersion: generation.MappingVersion, PredecessorCheckpoint: predecessor, Delta: delta,
 	}
+	type previewState struct {
+		generation                       referenceDirectoryProjection
+		attribution                      organizationpg.DirectoryTeamRoleAttribution
+		organization                     string
+		audits, events, commands, claims int
+	}
+	observeState := func() previewState {
+		t.Helper()
+		state := previewState{generation: status()}
+		attribution, err := repository.ObserveDirectoryTeamRoleAttribution(ctx, organizationpg.DirectoryTeamGrantScope{
+			TenantID: edge.scope.TenantID, OrganizationID: edge.scope.OrganizationID,
+			ProviderID: organization.ID(edge.scope.ProviderID), ConnectionID: organization.ID(edge.scope.ConnectionID),
+			GroupID: organization.ID(edge.groupID), TeamID: team, UserID: member.user,
+		}, directoryRole)
+		if err != nil {
+			t.Fatal("observe the exact source role contribution around Reference role inspection", err)
+		}
+		state.attribution = attribution
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT jsonb_build_object(
+ 'organizations',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.organizations r),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.memberships r),
+ 'teams',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.teams r),
+ 'team_memberships',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.team_memberships r),
+ 'grants',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.directory_team_grants r),
+ 'roles',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.custom_roles r),
+ 'bindings',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.team_role_bindings r),
+ 'role_grants',(SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM organization.directory_team_role_grants r)
+ )::text,
+ (SELECT count(*) FROM audit.records),
+ (SELECT count(*) FROM outbox_messages),
+ (SELECT count(*) FROM identity.commands),
+ (SELECT count(*) FROM identity.identity_command_id_claims)`).Scan(&state.organization, &state.audits, &state.events, &state.commands, &state.claims); err != nil {
+			t.Fatal("observe organization state and protected effects around Reference role inspection", err)
+		}
+		return state
+	}
+	assertUnchanged := func(before previewState) {
+		t.Helper()
+		if after := observeState(); after != before {
+			t.Fatal("Reference role inspection changed HTTPS Status, organization state, exact attribution, or protected effects")
+		}
+	}
+	beforePreview := observeState()
+	if beforePreview.attribution.Membership.Source || beforePreview.attribution.Membership.Local || beforePreview.attribution.RetainedGrantVersion != 0 {
+		t.Fatal("live mapped role must begin without its exact retained role or team membership")
+	}
+	if missing, err := worker.ObserveDrift(ctx, request); err != nil || missing != (ssopg.DirectoryGroupRoleDrift{
+		Kind: ssopg.DirectoryGroupRoleDriftMissing, Source: scimpostgres.DirectoryGroupEdgePresent,
+	}) {
+		t.Fatal("Reference role inspection did not report the exact live source's missing role contribution", err)
+	}
+	assertUnchanged(beforePreview)
+	permission(rolePort, "document.read", authorization.Deny)
+	permission(rolePort, "archive.read", authorization.Allow)
+	permission(rolePort, "document.write", authorization.Deny)
 	granted, err := worker.Apply(ctx, request)
 	if err != nil || len(granted.ChildOutcomes) != 1 || granted.ChildOutcomes[0].Outcome != identity.CommitOutcomeCommitted ||
 		granted.ChildOutcomes[0].Binding.ActorID != referenceDirectorySCIMActor || granted.ChildOutcomes[0].Binding.UserID != member.user || granted.Checkpoint == predecessor {
@@ -222,6 +279,27 @@ func proveReferenceDirectoryGroupRoleJourney(t *testing.T, ctx context.Context, 
 	if replay, err := worker.Apply(ctx, request); err != nil || !reflect.DeepEqual(replay, granted) {
 		t.Fatal("current role Apply did not replay its exact original receipt and checkpoint", err)
 	}
+	afterApply := observeState()
+	if afterApply.generation.Checkpoint != base64.RawURLEncoding.EncodeToString(granted.Checkpoint[:]) ||
+		afterApply.generation.ReadCount != 1 || afterApply.generation.AppliedCount != 1 || afterApply.generation.RejectedCount != 0 ||
+		!afterApply.attribution.Membership.Source || afterApply.attribution.RetainedGrantVersion == 0 {
+		t.Fatal("ordinary role Apply did not settle the exact source contribution and HTTPS checkpoint once")
+	}
+	if stale, err := worker.ObserveDrift(ctx, request); !errors.Is(err, sso.ErrDirectoryReconciliation) || stale != (ssopg.DirectoryGroupRoleDrift{}) {
+		t.Fatal("superseded Reference role checkpoint disclosed a drift report", err)
+	}
+	assertUnchanged(afterApply)
+	current := request
+	current.PredecessorCheckpoint = granted.Checkpoint
+	if aligned, err := worker.ObserveDrift(ctx, current); err != nil || aligned != (ssopg.DirectoryGroupRoleDrift{
+		Kind: ssopg.DirectoryGroupRoleDriftInSync, Source: scimpostgres.DirectoryGroupEdgePresent,
+	}) {
+		t.Fatal("Reference role inspection did not converge at the exact current successor", err)
+	}
+	assertUnchanged(afterApply)
+	permission(rolePort, "document.read", authorization.Allow)
+	permission(rolePort, "archive.read", authorization.Allow)
+	permission(rolePort, "document.write", authorization.Deny)
 
 	removedSource, err := source.groups.Execute(ctx, scim.Request{
 		Operation: scim.GroupReplace, ResourceID: edge.groupID, Credential: source.bearer,

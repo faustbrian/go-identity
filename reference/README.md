@@ -611,6 +611,13 @@ generation ID, exact mapping version, predecessor and one original Group
 child. A membership-only receipt cannot satisfy role Apply. Retry the same
 command on an unknown outcome; a historical retry cannot rewind the cursor.
 
+The same worker exposes Go-only `ObserveDrift` at the current running role
+checkpoint. Authorize `identity.sso.directory-sync-inspect-role-drift`
+separately from Apply. It distinguishes missing, stale and unexpected role
+contributions without granting permission, changing stored grants or advancing
+the generation. If the checkpoint or authoritative evidence changes, it returns
+no report.
+
 With the role worker selected, native organization permission checks and any
 separately enabled permission-check endpoint use that same live source. A
 removed SCIM edge cannot grant permission, even before its withdrawal is
