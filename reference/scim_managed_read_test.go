@@ -109,3 +109,26 @@ func TestManagedSCIMGroupReadSharesTheSelectedNativeAndRateOwner(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedSCIMGroupReplaceSharesTheSelectedOwnerAndMemberCeiling(t *testing.T) {
+	native := &ManagedSCIMConnectionConfiguration{}
+	standalone := &HTTPManagedSCIMGroupsReplaceConfiguration{Native: native, RateNamespace: "directory", RateKey: [32]byte{1}, MaximumMembers: 2}
+	config := StoreConfiguration{HTTPManagedSCIMGroupsReplace: standalone}
+	owner, field, err := managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || owner.Native != native || owner.RateNamespace != standalone.RateNamespace || owner.RateKey != standalone.RateKey || field != managedSCIMGroupsReplaceField {
+		t.Fatal("standalone Group Replace did not select its exact owner and quota", err)
+	}
+	config.HTTPManagedSCIMGroupsCreate = &HTTPManagedSCIMGroupsCreateConfiguration{Native: native, RateNamespace: "directory", RateKey: [32]byte{1}, MaximumMembers: 2}
+	if _, _, err := managedSCIMUsersOptions(config); err == nil {
+		t.Fatal("co-selected Group Replace accepted a second native/rate owner")
+	}
+	config.HTTPManagedSCIMGroupsReplace = &HTTPManagedSCIMGroupsReplaceConfiguration{MaximumMembers: 1}
+	if _, _, err := managedSCIMUsersOptions(config); err == nil {
+		t.Fatal("co-selected Group Replace accepted a different member ceiling")
+	}
+	config.HTTPManagedSCIMGroupsReplace.MaximumMembers = 2
+	owner, field, err = managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || owner.Native != native || owner.RateKey != standalone.RateKey || field != managedSCIMGroupsCreateField {
+		t.Fatal("co-selected Group Replace did not reuse the Create route's owner", err)
+	}
+}

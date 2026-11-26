@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into conditional managed SCIM Group PUT over HTTPS without enabling
+  Group reads, creation or other writes. Reuse the selected native owner and
+  protocol quota and retain original headerless replay.
+
 - Opt into Google One Tap popup Start and existing linked-account callback.
   Compose the native session, counted risk and proof owners, with the ordinary
   session reader and strict logout available on the selected cookie profile.

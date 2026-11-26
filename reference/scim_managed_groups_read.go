@@ -12,6 +12,7 @@ import (
 
 const managedSCIMGroupsReadField = "reference_http_managed_scim_groups_read"
 const managedSCIMGroupsCreateField = "reference_http_managed_scim_groups_create"
+const managedSCIMGroupsReplaceField = "reference_http_managed_scim_groups_replace"
 
 // HTTPManagedSCIMGroupsReadConfiguration opts independently into managed
 // Group Get and List, without selecting Group writes or connection lifecycle.
@@ -64,6 +65,24 @@ func (c HTTPManagedSCIMGroupsCreateConfiguration) MarshalText() ([]byte, error) 
 	return c.MarshalJSON()
 }
 
+// HTTPManagedSCIMGroupsReplaceConfiguration selects only conditional Group
+// PUT. Leave Native and the rate fields zero when another selected Group or
+// User route owns them. Co-selected Group routes use the same explicit member
+// ceiling; zero permits only empty Groups.
+type HTTPManagedSCIMGroupsReplaceConfiguration HTTPManagedSCIMGroupsCreateConfiguration
+
+func (HTTPManagedSCIMGroupsReplaceConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMGroupsReplaceConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMGroupsReplaceConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMGroupsReplaceField}
+}
+
+func (c HTTPManagedSCIMGroupsReplaceConfiguration) MarshalText() ([]byte, error) {
+	return c.MarshalJSON()
+}
+
 type referenceManagedGroupsExecutor struct {
 	state  *storeState
 	native *scimpg.ManagedConnectionService
@@ -85,4 +104,13 @@ func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupCreate(ctx co
 	}
 	defer done()
 	return s.native.ExecuteManagedAdmittedGroupCreate(bounded, tenant, request, maximumMembers, admit)
+}
+
+func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupReplace(ctx context.Context, tenant identity.TenantID, request scim.Request, maximumMembers int, admit scim.ProtocolAdmission) (scim.Response, error) {
+	bounded, done, err := s.state.enterFeature(ctx, true)
+	if err != nil {
+		return scim.Response{}, scim.NewError(503, "")
+	}
+	defer done()
+	return s.native.ExecuteManagedAdmittedGroupReplace(bounded, tenant, request, maximumMembers, admit)
 }

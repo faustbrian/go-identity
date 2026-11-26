@@ -1,5 +1,22 @@
 # Identity reference composition
 
+## Managed conditional SCIM Group replacement
+
+Set `HTTPManagedSCIMGroupsReplace` to select only
+`PUT /scim/v2/Groups/{resource_id}`. When another Group or User route already
+owns the native connection and protocol quota, leave `Native`, `RateNamespace`
+and `RateKey` zero. All selected Group operations share the explicit member
+ceiling. The route is tenant HTTPS and issued-bearer only; it needs no new
+migration beyond the managed SCIM connection and Group store history.
+
+Send the original strong `If-Match` and the full Group as
+`application/scim+json`, without `Idempotency-Key`. A success returns the
+committed Group with its ETag and Location. An equivalent retry with the
+original precondition can return that original result after current admission,
+without another write. Omitted writable values follow native replacement
+semantics; referenced resources must resolve with the supplied type within the
+connection. Other methods and routes remain independently selected.
+
 ## Google One Tap popup sign-in
 
 Set `StoreConfiguration.OneTap` on the PostgreSQL password/session baseline.

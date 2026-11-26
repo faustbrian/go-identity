@@ -105,6 +105,9 @@ type StoreConfiguration struct {
 	// HTTPManagedSCIMGroupsCreate independently selects managed-bearer Group
 	// Create. Nil leaves POST disabled without affecting Group or User reads.
 	HTTPManagedSCIMGroupsCreate *HTTPManagedSCIMGroupsCreateConfiguration
+	// HTTPManagedSCIMGroupsReplace independently selects conditional Group PUT.
+	// Nil leaves it disabled without affecting other Group or User operations.
+	HTTPManagedSCIMGroupsReplace *HTTPManagedSCIMGroupsReplaceConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration
