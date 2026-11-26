@@ -24,7 +24,9 @@ func scimBulkInvalidChildBinding(b identity.CommandBinding) bool {
 func scimBulkDenialCode(code FeatureFailureCode) bool {
 	return code == FeatureFailureGroupMissing || code == FeatureFailureGroupVersionRequired || code == FeatureFailureSCIMBulkDependency ||
 		code == FeatureFailureUserMissing || code == FeatureFailureUserVersionRequired || code == FeatureFailureUserVersionMismatch ||
-		code == FeatureFailureGroupCreateInvalidValue || code == FeatureFailureBulkChildInvalid
+		code == FeatureFailureGroupCreateInvalidValue || code == FeatureFailureBulkChildInvalid ||
+		code == FeatureFailureSCIMBulkInvalidValue || code == FeatureFailureSCIMBulkMutability ||
+		code == FeatureFailureSCIMBulkInvalidSyntax || code == FeatureFailureSCIMBulkInvalidPath || code == FeatureFailureSCIMBulkUntypedBadRequest
 }
 
 func scimBulkGroupMutation(op identity.FeatureOperation) bool {

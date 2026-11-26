@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve exact pre-Prepare SCIM Bulk validation denials for supported User
+  and Group writes in the protected child journal, without mutation authority.
+
 - Bind a resource-free malformed Bulk child to its own protected terminal
   denial, without granting a resource or lifecycle effect.
 
