@@ -94,7 +94,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 		return nil, OpenAPIDocument{}, ErrInvalidInput
 	}
 	selected := make(map[string]string, len(operations))
-	scimRoutes := make(map[string]bool, 3)
+	scimRoutes := make(map[string]bool, 4)
 	var scimUserGetSelected bool
 	var exactSCIMUserPaths map[string]struct{}
 	for _, op := range operations {
@@ -109,7 +109,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 			key := op.Route.Method + " " + path
 			selected[key] = op.Record.OperationID
 			switch op.Record.OperationID {
-			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list":
+			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list", "identity.scim.user-create":
 				scimRoutes[key] = true
 			}
 		}
@@ -250,7 +250,7 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body *routerBody
 	if owned.Body != nil && owned.Body != http.NoBody {
 		maximum := int64(h.network.decoder.limits.MaximumBodyBytes)
-		if selectedSCIM && owned.Method == http.MethodPost {
+		if selectedSCIM && owned.Method == http.MethodPost && owned.URL.Path == "/scim/v2/Bulk" {
 			maximum = scimBulkStreamBytes
 		}
 		body = &routerBody{ReadCloser: http.MaxBytesReader(w, owned.Body, maximum), ctx: ctx}

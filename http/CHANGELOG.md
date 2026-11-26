@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let the selected canonical SCIM User Create handler return its protocol
+  representation errors without extending the router's ordinary body limit.
+
 - Let the explicitly selected, canonical SCIM User Get handler own protocol
   representation errors after the common network and framing checks.
 

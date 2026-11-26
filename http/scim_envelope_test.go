@@ -96,9 +96,19 @@ func TestSCIMCredentialBoundaryKeepsOrdinaryJSONStrict(t *testing.T) {
 	}
 }
 
-func TestRouterDelegatesOnlySelectedSCIMUserListRepresentation(t *testing.T) {
+func TestRouterDelegatesOnlySelectedSCIMCollectionRepresentation(t *testing.T) {
+	t.Run("user list", func(t *testing.T) {
+		assertRouterDelegatesSCIMCollectionRepresentation(t, "identity.scim.user-list", http.MethodGet, http.MethodPost)
+	})
+	t.Run("user create", func(t *testing.T) {
+		assertRouterDelegatesSCIMCollectionRepresentation(t, "identity.scim.user-create", http.MethodPost, http.MethodGet)
+	})
+}
+
+func assertRouterDelegatesSCIMCollectionRepresentation(t *testing.T, operation, method, otherMethod string) {
+	t.Helper()
 	var entered int
-	list := scimUserOperation(t, "identity.scim.user-list", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	collection := scimUserOperation(t, operation, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		entered++
 		if r.Header.Get("Content-Encoding") != "gzip" {
 			t.Fatal("router changed the feature-owned representation header")
@@ -109,7 +119,7 @@ func TestRouterDelegatesOnlySelectedSCIMUserListRepresentation(t *testing.T) {
 	ordinary := routerOperation(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	selected, _, err := identityhttp.NewRouter(routerPolicy(), []identityhttp.OperationDescriptor{list, ordinary}, nil)
+	selected, _, err := identityhttp.NewRouter(routerPolicy(), []identityhttp.OperationDescriptor{collection, ordinary}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,12 +133,12 @@ func TestRouterDelegatesOnlySelectedSCIMUserListRepresentation(t *testing.T) {
 		duplicate          bool
 		want               int
 	}{
-		{"exact selected list", http.MethodGet, scimUserCollection, selected, false, http.StatusUnsupportedMediaType},
-		{"duplicate header stays malformed", http.MethodGet, scimUserCollection, selected, true, http.StatusBadRequest},
+		{"exact selected route", method, scimUserCollection, selected, false, http.StatusUnsupportedMediaType},
+		{"duplicate header stays malformed", method, scimUserCollection, selected, true, http.StatusBadRequest},
 		{"ordinary stays strict", http.MethodGet, ordinary.Route.Path, selected, false, http.StatusBadRequest},
-		{"disabled list stays strict", http.MethodGet, scimUserCollection, unselected, false, http.StatusBadRequest},
-		{"wrong method stays strict", http.MethodPost, scimUserCollection, selected, false, http.StatusBadRequest},
-		{"encoded alias stays strict", http.MethodGet, "/scim/v2/%55sers", selected, false, http.StatusBadRequest},
+		{"disabled route stays strict", method, scimUserCollection, unselected, false, http.StatusBadRequest},
+		{"wrong method stays strict", otherMethod, scimUserCollection, selected, false, http.StatusBadRequest},
+		{"encoded alias stays strict", method, "/scim/v2/%55sers", selected, false, http.StatusBadRequest},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := corsRequest(tc.method, tc.path, "")
@@ -144,7 +154,32 @@ func TestRouterDelegatesOnlySelectedSCIMUserListRepresentation(t *testing.T) {
 		})
 	}
 	if entered != 1 {
-		t.Fatalf("List handler received %d requests, want 1", entered)
+		t.Fatalf("collection handler received %d requests, want 1", entered)
+	}
+}
+
+func TestRouterSCIMUserCreateRetainsOrdinaryStreamLimit(t *testing.T) {
+	policy := routerPolicy()
+	policy.Network.Limits.MaximumBodyBytes = 1 << 20
+	create := scimUserOperation(t, "identity.scim.user-create", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	h, _, err := identityhttp.NewRouter(policy, []identityhttp.OperationDescriptor{create}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := corsRequest(http.MethodPost, scimUserCollection, "")
+	r.Body = io.NopCloser(strings.NewReader(strings.Repeat(" ", (1<<20)+1)))
+	r.ContentLength = -1
+	r.TransferEncoding = []string{"chunked"}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("non-Bulk stream escaped the ordinary router limit: status %d", w.Code)
 	}
 }
 
