@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add opt-in issued-bearer User PATCH. Preserve native If-Match, canonical
+  replay, and User/ETag/Location under the shared protocol quota.
+
 - Add opt-in managed conditional User Delete on the exact resource route.
   Forward singleton If-Match to native authority, forbid client retry keys and
   alternate input channels, and reuse shared atomic protocol admission. Return

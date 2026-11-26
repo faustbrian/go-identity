@@ -1,5 +1,29 @@
 # SCIM HTTP
 
+## Managed bearer conditional User PATCH
+
+`NewManagedUsersPatchFeature` selects only
+`PATCH /scim/v2/Users/{resource_id}`. Supply `ExecuteManagedAdmittedPatch`,
+its effective SCIM limits, the router's HTTPS tenant policy, and the same
+atomic rate backend, namespace and digest key as the other SCIM routes.
+For example, with those existing owners:
+
+```go
+feature, err := scimhttp.NewManagedUsersPatchFeature(scimhttp.ManagedUsersPatchConfig{
+    Network: network, Executor: nativeManagedConnections, Limits: nativeLimits,
+    Rate: sharedProtocolRate, MaximumDuration: 5 * time.Second,
+})
+```
+
+Forward the original singleton `If-Match` and a UTF-8 `application/scim+json`
+PatchOp within the smallest configured raw, decoded and SCIM bounds. Native
+authentication, PATCH validation and authority precede quota admission;
+current precondition comparison, the mutation and replay use the original
+native command. No caller request key, cookies, query, trailers, or retry
+cache is used. A success returns the native 200 User with its exact ETag
+and canonical Location. A denial exposes no partial User or version, and
+does not itself prove rollback. Other methods remain independently opt-in.
+
 ## Managed bearer conditional User Delete
 
 `NewManagedUsersDeleteFeature` selects only canonical
