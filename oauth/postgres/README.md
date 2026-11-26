@@ -26,14 +26,30 @@ RP verifier AAD schema. No new authority, journal, signup or email merge is adde
 Controlled signed-token/native PostgreSQL consumers do not claim live Google
 interoperability or complete provider-catalog qualification.
 
-## One Tap callback grant storage
+## Google One Tap browser start
 
 Install `OneTapCallbackGrantMigrationSource` after `MigrationSource`, using
 the same native OAuth schema and a new unused migration version. It adds a
 table for encrypted callback proof bound to the tenant, original browser
-flow and exact One Tap start command. It does not change existing RP rows or
-install a One Tap writer, route or callback. There is no backfill or down SQL;
-disabling a future One Tap selection must leave the schema and history intact.
+flow and exact One Tap start command without changing existing RP rows.
+Install the kernel request-key, preparation/admission and One Tap erasure
+histories, the session One Tap pre-auth histories, and the capability, audit
+and outbox contributors before selecting `NewOneTapStartService`. There is no
+backfill or down SQL; disabling the service leaves schema and history intact.
+
+Select a trusted tenant, HTTPS origin, service actor, Google callback-mode
+provider and the audited, counted risk policy. The application supplies
+`onetap.NewBrowserStartRequest` with trusted transport origin, network and
+device, resolved Remember policy, browser options and the original retry key.
+`Start` performs no Google network call. It commits the original pre-auth
+flow, one-use callback grant, sealed proof, audit and lifecycle together.
+
+Only a newly committed start from that invocation returns `Browser()`. Use its
+reveal-once token for the supplied blank `__Host-identity_flow` cookie and
+explicitly project the permitted browser fields without logging them. Retry
+unknown results only with the same original key and unchanged input. A
+committed retry returns the original outcome, not another nonce or cookie.
+This API does not install HTTP or authenticate a One Tap callback.
 
 ## Existing-account signin
 

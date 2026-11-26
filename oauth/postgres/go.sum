@@ -89,6 +89,10 @@ github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261123153514-abe47bf7546
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261123153514-abe47bf75461/go.mod h1:RX+HOkQhUwx+tjzCeVjDy2zZBJ2ozUY/hj/JJj1apws=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261122032933-02f80dcd47d8 h1:srtYoJvcOnnPpPaVJsFQae0e/NSJVaYjqAGm235qAwo=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261122032933-02f80dcd47d8/go.mod h1:a4z/upZrUScWow37uZElY+Ni6rvIrxirgbiDtWXDQJA=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57 h1:j8OGHdj0yXLz7YjIxQKl883wKt4CGhgX+DkfrdBoZq0=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57/go.mod h1:a4z/upZrUScWow37uZElY+Ni6rvIrxirgbiDtWXDQJA=
+github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d h1:TPSdEEGLrjVNEePRv9IiPKrNL6OXkM8tGUzYgZ5SdsY=
+github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d/go.mod h1:TbM/KKYqIretHMDudfHb+L0Y/6jRSuFArlu1lJ4el9I=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6 h1:ohdM4yyDKIaMf3iZbwR8irICYZhzvx2LnuhOCswXiNE=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6/go.mod h1:qxYVoKX0qfE9ZwMxL773dOwGxhixbKprZGgIg619Ekg=
 github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6 h1:8vtFdLM7k55fznPVEGZkgnJ+o1wrfZTHN/PJFWQJHeo=

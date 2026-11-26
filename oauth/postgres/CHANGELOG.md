@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in native Google One Tap Start. Commit the original pre-auth flow
+  and encrypted callback grant atomically with audit and lifecycle, release
+  browser custody only for a new confirmed commit, and keep exact retries
+  tokenless. Callback authentication and HTTP remain unselected.
+
 - Add the forward-only native One Tap callback grant schema. It can hold a
   single encrypted proof per exact original tenant and flow without extending
   its expiry or mixing it into authorization-code RP storage. No flow writer
