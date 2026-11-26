@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Retain a Group Bulk replace, patch, or delete precondition failure with the original denial audit and terminal receipt.
+
 - Allow the original SCIM Bulk child to own its protected audit when a native
   Group is replaced, patched, or deleted. Keep the ordinary Group lifecycle
   target and distinguish a changed PATCH from an unchanged PATCH.

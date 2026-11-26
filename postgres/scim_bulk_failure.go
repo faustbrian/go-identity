@@ -18,7 +18,7 @@ type SCIMBulkChildFailureContributor interface {
 }
 
 func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, code FeatureFailureCode) (err error) {
-	if code != FeatureFailureInvalidGroupMember && code != FeatureFailureConflict {
+	if code != FeatureFailureInvalidGroupMember && code != FeatureFailureConflict && code != FeatureFailurePrecondition {
 		return nil
 	}
 	if !c.owns(w) || w.usable() != nil {
@@ -27,6 +27,14 @@ func (c *Coordinator) recordSCIMBulkChildFailure(ctx context.Context, w Work, co
 	plan := w.state.execution.reservation.plan
 	if plan.feature == nil || len(plan.audits) != 1 || plan.audits[0].EventType != scimBulkApplyChildAudit {
 		return nil
+	}
+	// A Group create has no version precondition. Only the precise registered
+	// mutation tuples may turn 412 into a terminal Bulk child checkpoint.
+	if code == FeatureFailurePrecondition {
+		op := plan.feature.Operation
+		if featureFailureSubject(op) != "scim_group" || op.OperationID == "identity.scim.group-create" {
+			return nil
+		}
 	}
 	entry, err := c.registry.selectFeatureOperation(*plan.feature)
 	if err != nil || w.state.featureInvocation != nil {
