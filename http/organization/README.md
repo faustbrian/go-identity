@@ -360,6 +360,15 @@ the exact directory operation ID. A nil error grants admission, while audited
 limit denials return bounded retry-after duration. `Admit` remains limited to
 its existing organization operations.
 
+Use `AdmitSCIMConnectionCreate(ctx, facts, authenticatedUser)` for exactly
+`identity.scim.connection-create`. It returns `AdminRateResult` and the same
+typed transport rate errors as `Admit`, debits the same atomic actor, tenant and
+trusted-IP buckets on every attempt, and records the actual SCIM operation in
+mandatory denial auditing. Obtain `facts` from the trusted network resolver and
+the user from the actual current authenticated session; this method does not
+authenticate, authorize creation or accept a caller-selected operation ID.
+It selects no SCIM route, CSRF profile, credential issuance or persistence.
+
 `organization/postgres.OperationService` implements `Service` directly. No
 application organization store, command journal, transaction adapter or identity
 engine is required. The transport authenticates once for current actor-rate

@@ -20,6 +20,184 @@ type directoryRateAdmitter interface {
 	AdmitDirectorySync(context.Context, identityhttp.NetworkFacts, string, identity.UserID) (time.Duration, error)
 }
 
+type scimCreateRateAdmitter interface {
+	AdmitSCIMConnectionCreate(context.Context, identityhttp.NetworkFacts, identity.UserID) (organizationhttp.AdminRateResult, error)
+}
+
+func TestSCIMConnectionCreateSharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
+	f := newFixture(t)
+	var events []organizationhttp.AdminRateEvent
+	limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
+		Shared: &budgetBackend{used: make(map[string]uint64)}, Namespace: "organization-test", Key: [32]byte{1},
+		Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+		Denied: func(ctx context.Context, event organizationhttp.AdminRateEvent) error {
+			if _, ok := ctx.Deadline(); !ok {
+				t.Fatal("SCIM denial audit lacks its admission deadline")
+			}
+			events = append(events, event)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	admitter, ok := any(limiter).(scimCreateRateAdmitter)
+	if !ok {
+		t.Fatal("shared administrative owner cannot admit SCIM connection create")
+	}
+	resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/scim/connection-create", `{}`, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 29 {
+		if out, err := limiter.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+			t.Fatal("organization budget exhausted before actor capacity", err)
+		}
+	}
+	if out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), facts, "user-a"); err != nil || !out.Allowed || out.RetryAfter != 0 {
+		t.Fatal("SCIM create did not use final shared actor token", err)
+	}
+	if out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), facts, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed || out.RetryAfter != 2*time.Second {
+		t.Fatal("SCIM create bypassed exhausted shared budget", err)
+	}
+	if len(events) != 1 || events[0].Operation != "identity.scim.connection-create" || events[0].Reason != "limited" {
+		t.Fatal("SCIM create denial lost exact operation attribution")
+	}
+	if out, err := limiter.Admit(t.Context(), facts, organization.RemoveMember, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+		t.Fatal("SCIM create did not debit organization budget", err)
+	}
+}
+
+func TestSCIMConnectionCreateAdmissionUsesFreshCanonicalDebitsAndFiniteInputs(t *testing.T) {
+	f := newFixture(t)
+	admitter, ok := any(f.c.AdminRate).(scimCreateRateAdmitter)
+	if !ok {
+		t.Fatal("shared administrative owner cannot admit SCIM connection create")
+	}
+	resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/scim/connection-create", `{}`, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+		t.Fatal(err)
+	}
+	original := f.rate.last
+	for range 2 {
+		if out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), facts, "user-a"); err != nil || !out.Allowed {
+			t.Fatal("SCIM create admission failed", err)
+		}
+		if f.rate.last.CommandID == original.CommandID {
+			t.Fatal("SCIM create reused an earlier attempt identity")
+		}
+		for i, before := range original.Requests {
+			after := f.rate.last.Requests[i]
+			if before.Key != after.Key || before.Policy.ID() != after.Policy.ID() || before.Policy.Capacity() != after.Policy.Capacity() || after.Cost != 1 {
+				t.Fatal("SCIM create changed canonical organization buckets")
+			}
+		}
+		original = f.rate.last
+	}
+	for _, user := range []identity.UserID{"", "with space", identity.UserID(strings.Repeat("a", 129))} {
+		if out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), facts, user); !errors.Is(err, identityhttp.ErrInvalidInput) || out != (organizationhttp.AdminRateResult{}) || f.rate.calls != 3 {
+			t.Fatal("invalid actor reached the shared backend")
+		}
+	}
+	if out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), identityhttp.NetworkFacts{}, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || out != (organizationhttp.AdminRateResult{}) || f.rate.calls != 3 {
+		t.Fatal("unproven tenant/network reached shared backend")
+	}
+	if out, err := admitter.AdmitSCIMConnectionCreate(nil, facts, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || out != (organizationhttp.AdminRateResult{}) || f.rate.calls != 3 {
+		t.Fatal("missing request context reached shared backend")
+	}
+	publicConfig := f.c.Network
+	publicConfig.PublicHosts = []string{"public.example"}
+	publicResolver, err := identityhttp.NewNetworkResolver(publicConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicRequest := request(f, "/v1/scim/connection-create", `{}`, true)
+	publicRequest.Host = "public.example"
+	publicFacts, err := publicResolver.Resolve(publicRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), publicFacts, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || out != (organizationhttp.AdminRateResult{}) || f.rate.calls != 3 {
+		t.Fatal("public realm became an administrative tenant")
+	}
+	if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Operation("identity.scim.connection-create"), "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 3 {
+		t.Fatal("organization admission was broadened to SCIM")
+	}
+	if _, err := f.c.AdminRate.AdmitDirectorySync(t.Context(), facts, "identity.scim.connection-create", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 3 {
+		t.Fatal("directory admission was broadened to SCIM")
+	}
+	if err := f.c.AdminRate.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), facts, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || out != (organizationhttp.AdminRateResult{}) || f.rate.calls != 3 {
+		t.Fatal("closed SCIM admission reached backend")
+	}
+}
+
+func TestSCIMConnectionCreateAdmissionAuditsUnavailableAndFailsClosed(t *testing.T) {
+	for _, mode := range []string{"unknown-backend", "unavailable-backend", "panic-backend", "failed-audit", "panic-audit"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFixture(t)
+			var events []organizationhttp.AdminRateEvent
+			limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{Shared: f.rate, Namespace: "organization-test", Key: [32]byte{1}, Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+				Denied: func(_ context.Context, event organizationhttp.AdminRateEvent) error {
+					events = append(events, event)
+					if mode == "failed-audit" {
+						return errors.New("private audit diagnostic")
+					}
+					if mode == "panic-audit" {
+						panic("private audit diagnostic")
+					}
+					return nil
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { limiter.Close() })
+			admitter, ok := any(limiter).(scimCreateRateAdmitter)
+			if !ok {
+				t.Fatal("shared administrative owner cannot admit SCIM connection create")
+			}
+			switch mode {
+			case "unknown-backend":
+				f.rate.mode = 2
+			case "unavailable-backend":
+				f.rate.mode = 3
+			case "panic-backend":
+				f.rate.mode = 4
+			default:
+				f.rate.mode = 1
+			}
+			resolver, _ := identityhttp.NewNetworkResolver(f.c.Network)
+			facts, _ := resolver.Resolve(request(f, "/v1/scim/connection-create", `{}`, true))
+			out, err := admitter.AdmitSCIMConnectionCreate(t.Context(), facts, "user-a")
+			if !errors.Is(err, identityhttp.ErrRateUnavailable) || out != (organizationhttp.AdminRateResult{}) || strings.Contains(fmt.Sprint(err), "private") {
+				t.Fatal("SCIM admission failed open or leaked private diagnostics", err)
+			}
+			wantReason := "unavailable"
+			if mode == "failed-audit" || mode == "panic-audit" {
+				wantReason = "limited"
+			}
+			if len(events) != 1 || events[0].Operation != "identity.scim.connection-create" || events[0].Reason != wantReason {
+				t.Fatal("SCIM failure escaped exact mandatory denial auditing")
+			}
+		})
+	}
+}
+
 // budgetBackend fixes time for a bounded atomic-budget contract test. Production
 // admission still requires the caller's native shared atomic backend.
 type budgetBackend struct {

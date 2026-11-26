@@ -20,7 +20,7 @@ import (
 
 // AdminRateEvent is required denial auditing without request secrets, tenant,
 // actor, network address, submitted fields or underlying diagnostics. Operation
-// retains the exact selected organization or directory-sync operation ID. Reason
+// retains the exact selected organization, directory-sync or SCIM-create ID. Reason
 // is exactly limited or unavailable. This event is not a protected domain audit.
 type AdminRateEvent struct {
 	Operation organization.Operation
@@ -66,7 +66,8 @@ type adminRateState struct {
 // tenant100/minute and trusted full-IP60/minute, atomic shared fail-closed
 // admission plus mandatory secret-free denial auditing. Admit selects only its
 // finite organization profile; AdmitDirectorySync selects directory-sync start
-// and cancel without allocating separate budgets.
+// and cancel, and AdmitSCIMConnectionCreate selects only SCIM connection create.
+// All use the same budgets and mandatory denial auditor.
 func NewAdminRateLimiter(c AdminRateConfig) (out *AdminRateLimiter, err error) {
 	defer func() {
 		if recover() != nil {
@@ -136,6 +137,23 @@ func (l *AdminRateLimiter) AdmitDirectorySync(ctx context.Context, facts identit
 		return 0, identityhttp.ErrRateUnavailable
 	}
 	return 0, nil
+}
+
+// AdmitSCIMConnectionCreate admits exactly identity.scim.connection-create
+// through this owner's existing atomic actor, tenant and trusted-IP budgets.
+// The caller must supply resolver-owned tenant facts and a user obtained from
+// the actual current authenticated session; this method grants no creation
+// authority. Each call consumes a fresh attempt even for an exact keyed retry.
+// Known, successfully audited limits return ErrRateLimited and bounded
+// RetryAfter; backend ambiguity and failed auditing return ErrRateUnavailable
+// without a retry hint. Nil/closed owners, invalid facts/context or malformed
+// user IDs return ErrInvalidInput before backend access. No operation override,
+// process-local fallback, backend lifecycle or policy change is introduced.
+func (l *AdminRateLimiter) AdmitSCIMConnectionCreate(ctx context.Context, facts identityhttp.NetworkFacts, user identity.UserID) (AdminRateResult, error) {
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !boundedID(string(user)) {
+		return AdminRateResult{}, identityhttp.ErrInvalidInput
+	}
+	return l.admitOperation(ctx, facts, "identity.scim.connection-create", user)
 }
 
 func (l *AdminRateLimiter) admitOperation(ctx context.Context, facts identityhttp.NetworkFacts, op organization.Operation, user identity.UserID) (AdminRateResult, error) {

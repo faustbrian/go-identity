@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add dedicated SCIM connection-create admission on the existing atomic
+  administrative quota. Preserve shared organization/directory budgets and
+  exact SCIM denial attribution without broadening generic operation admission.
+
 - Add bounded directory-sync start/cancel admission on the existing shared
   administrative rate owner. Both exact operations consume the same atomic
   actor, tenant and trusted-IP budgets as organization mutations and retain
