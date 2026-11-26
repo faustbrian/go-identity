@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select session-authenticated SCIM managed connection Get and List through
+  Reference, with independent route selection, safe pagination and an additive
+  managed-only migration. Configured SCIM Bulk remains independently selectable.
+
 - Select standalone public configured-provider discovery over the existing
   PostgreSQL admission and HTTP-rate base, without an authentication feature
   graph. Preserve native opaque pagination, safe output and shared quota policy;

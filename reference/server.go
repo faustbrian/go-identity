@@ -189,10 +189,10 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if err != nil {
 		return nil, err
 	}
-	if bulk, err := server.scimBulkFeature(c.HTTP.Network); err != nil {
+	if scim, err := server.scimFeature(c.HTTP.Network); err != nil {
 		return nil, err
-	} else if bulk != nil {
-		contributions = append(contributions, *bulk)
+	} else if scim != nil {
+		contributions = append(contributions, *scim)
 	}
 	oauthFeature, err := server.oauthWorkloadFeature(c.HTTP.Network)
 	if err != nil {

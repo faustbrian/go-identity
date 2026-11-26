@@ -566,6 +566,29 @@ history, and keep `HTTPRate.AtomicAdmission` set if no other selected feature
 requires the installed atomic quota schema. Do not roll back its DDL or clear
 retained results.
 
+## Optional managed SCIM connection reads
+
+On a graph with `Organization`, `Session`, and `HTTPRate`, select
+`StoreConfiguration.HTTPManagedSCIMRead`. Enable `Get`, `List`, or both. Supply
+the current authorization service and policy version for `org:scim-read`,
+the native SCIM limits, and stable deployment values for the cursor key and
+safe-rate namespace. The graph uses the actual primary session and
+organization data; it does not read the retained session cache for these routes.
+
+Use the Reference operator migration flow to plan and apply the selected
+`scim/postgres` history, including `identity_scim_managed_connections`. Existing
+configured connections are not enrolled as managed connections. Provision a
+managed record separately through the native `scim/postgres` owner; this
+selection cannot issue, disclose, rotate, or delete its bearer.
+
+Send a current verified session bearer to
+`GET /v1/scim/connection-get?connectionID=…` or
+`GET /v1/scim/connection-list?organizationID=…&limit=…`. Pass a returned
+`nextCursor` unchanged with the same organization and limit for the next page.
+Cookies cannot authorize these calls. Either route can coexist with configured
+`SCIMBulk`. Clear the read selection to remove its routes and OpenAPI entries;
+retain installed migration history.
+
 ## Optional directory administration
 
 Select `StoreConfiguration.DirectorySync` with the configured tenant,

@@ -13,11 +13,34 @@ import (
 const (
 	scimProjectionHistory = "identity_scim_directory_groups"
 	scimBulkHistory       = "identity_scim_bulk"
+	scimManagedHistory    = "identity_scim_managed_connections"
+	scimManagedVersion    = migrations.Version(11)
 	scimBulkAliasHistory  = "identity_scim_bulk_requests"
 	scimBulkAliasVersion  = migrations.Version(2454)
 	scimBulkAliasGuard    = "request_key_aliases.request_key_aliases_scim_bulk_method"
 	scimSAMLPredecessor   = "request_key_aliases.request_key_aliases_saml_start_method"
 )
+
+func (s StoreSet) managedSCIMReadMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	if s.state.features == nil || s.state.features.httpManagedSCIMRead == nil {
+		return catalog, nil
+	}
+	catalog, err := ensureSCIMProjectionHistory(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	projection := catalog[slices.IndexFunc(catalog, func(h migrationHistory) bool { return h.namespace == scimProjectionHistory })].history
+	full, err := (scimpg.ManagedConnectionsMigrationSource{Base: fixedMigrationSource(projection), Version: scimManagedVersion}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(catalog, migrationHistory{
+		namespace: scimManagedHistory,
+		history:   full[len(projection):],
+		owners:    map[migrations.Version]ModuleID{scimManagedVersion: "scim/postgres"},
+		guards:    []migrationGuard{{version: scimManagedVersion, schema: "scim", tables: []string{"managed_connections"}}},
+	}), nil
+}
 
 // Bulk and directory synchronization consume the same installed native
 // connection/projection history. Neither owns a second copy of its prefix.

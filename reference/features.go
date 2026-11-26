@@ -94,6 +94,7 @@ type featureState struct {
 	enterpriseSAML               *enterpriseSAMLState
 	directorySync                *directorySyncState
 	scimBulk                     *scimBulkState
+	httpManagedSCIMRead          *managedSCIMReadState
 	oauthWorkload                *oauthWorkloadState
 	oauthDevice                  *oauthDeviceState
 	apiKey                       *apiKeyState
@@ -623,6 +624,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	managedSCIMRead, err := s.composeManagedSCIMRead(c, d, sessionOwner, organizationOwner)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			managedSCIMRead.close()
+		}
+	}()
 	var signupEvaluation risk.Evaluator
 	if c.Passkey != nil && c.Passkey.Signup != nil {
 		protected := c.Passkey.Protected.CommandCounters
@@ -999,6 +1009,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.enterpriseSAML = enterpriseSAMLOwner
 	s.features.directorySync = directorySync
 	s.features.scimBulk = scimBulk
+	s.features.httpManagedSCIMRead = managedSCIMRead
 	s.features.apiKey = apiKeyOwner
 	s.features.httpAPIKey = httpAPIKey
 	s.features.organization = organizationOwner
