@@ -450,6 +450,11 @@ Use `NewOneTapStartPreAuthIssuer` when the executor owns the keyed Google One
 Tap start. It releases only on a new commit for `OneTapStartPreAuthOperation()`;
 a generic session pre-auth receipt for the same flow is not sufficient.
 Recovery queries the original One Tap operation and never releases a cookie.
+After admitting the exact keyed start, its durable owner can call
+`PrepareOneTapStart` with the original server-selected command binding and
+resolved Remember policy. This keeps the coordinator's canonical flow ID while
+the session issuer owns nonce and cookie generation. `Issue` still requires an
+exact fresh receipt before the browser can receive the cookie.
 The executor still owns keyed custody and the atomic protected effects.
 
 These are private structural values, not authentication or primary active-state

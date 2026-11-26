@@ -135,7 +135,11 @@ type preparedPreAuthState struct {
 // flow ID, 32-byte nonce and opaque cookie. Original time comes from the trusted
 // clock and is never refreshed by retries or final-session remember policy.
 // No durable work, authentication, policy callback or proof consumption occurs.
-func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (out PreparedPreAuthIssuance, err error) {
+func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (PreparedPreAuthIssuance, error) {
+	return s.prepare(input, "", nil)
+}
+
+func (s *PreAuthIssuer) prepare(input PreAuthPrepareInput, id identity.PreAuthTransactionID, exact *identity.CommandBinding) (out PreparedPreAuthIssuance, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = PreparedPreAuthIssuance{}, ErrIssuerUnavailable
@@ -146,13 +150,23 @@ func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (out PreparedPreAuthI
 	}
 	now := s.config.Clock.Now().UTC()
 	placeholder := TokenDigest{KeyVersion: s.config.LookupKey.state.version, Sum: [32]byte{1}}
-	command, err := s.original(input, "AQEBAQEBAQEBAQEBAQEBAQ", [32]byte{1}, now, placeholder)
-	if err != nil || s.binding(command).ValidateFor(s.operation) != nil {
+	validationID := id
+	if validationID == "" {
+		validationID = "AQEBAQEBAQEBAQEBAQEBAQ"
+	}
+	command, err := s.original(input, validationID, [32]byte{1}, now, placeholder)
+	if err != nil {
 		return out, ErrInvalidIssuance
 	}
-	id, err := identity.NewPreAuthTransactionID()
-	if err != nil {
-		return out, ErrIssuerUnavailable
+	binding := s.binding(command)
+	if binding.ValidateFor(s.operation) != nil || (exact != nil && binding != *exact) {
+		return out, ErrInvalidIssuance
+	}
+	if id == "" {
+		id, err = identity.NewPreAuthTransactionID()
+		if err != nil {
+			return out, ErrIssuerUnavailable
+		}
 	}
 	var nonce [32]byte
 	if _, err = rand.Read(nonce[:]); err != nil {

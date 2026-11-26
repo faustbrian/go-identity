@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	authorization "github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -18,6 +19,95 @@ func TestOneTapStartPreAuthIssuerRequiresGoogle(t *testing.T) {
 	}
 	if actual, err := NewOneTapStartPreAuthIssuer(executor, config, other); !errors.Is(err, ErrInvalidIssuer) || actual != nil {
 		t.Fatal("exact Google start selected a different provider", err)
+	}
+}
+
+func TestOneTapStartPreAuthIssuerPreparesExactBoundFlow(t *testing.T) {
+	legacy, _, executor, _ := preAuthIssuerFixture(t)
+	config := legacy.config
+	op := OneTapStartPreAuthOperation()
+	config.Action, config.CallbackURL = op.OperationID, ""
+	provider := PreAuthProviderBinding{ProviderID: "google", ProviderVersion: 7, ClientID: "fixture-client", Mode: PreAuthProviderCallback}
+	selected, err := NewOneTapStartPreAuthIssuer(executor, config, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generic, err := NewProviderPreAuthIssuer(executor, config, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, existing := preAuthFixture(t)
+	intent := existing.Binding.Intent
+	const flowID = "AwMDAwMDAwMDAwMDAwMDAw"
+	binding := identity.CommandBinding{
+		CommandID: "AgICAgICAgICAgICAgICAg", TenantID: intent.TenantID, AnonymousFlowID: flowID, RecordID: flowID,
+		ActorID: config.ActorID, ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID,
+		SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: config.PolicyID, PolicyVersion: config.PolicyVersion,
+		CorrelationID: "onetap-start-bound-flow",
+	}
+	for _, tc := range []struct {
+		name   string
+		issuer *PreAuthIssuer
+		alter  func(*identity.CommandBinding)
+	}{
+		{name: "ordinary issuer", issuer: legacy},
+		{name: "generic provider issuer", issuer: generic},
+		{name: "wrong actor", issuer: selected, alter: func(b *identity.CommandBinding) { b.ActorID = "other-service" }},
+		{name: "wrong policy", issuer: selected, alter: func(b *identity.CommandBinding) { b.PolicyVersion++ }},
+		{name: "wrong operation", issuer: selected, alter: func(b *identity.CommandBinding) { b.OperationID = PreAuthIssueOperation().OperationID }},
+		{name: "invalid canonical flow", issuer: selected, alter: func(b *identity.CommandBinding) { b.AnonymousFlowID, b.RecordID = "noncanonical", "noncanonical" }},
+		{name: "different record", issuer: selected, alter: func(b *identity.CommandBinding) { b.RecordID = string(b.CommandID) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := binding
+			if tc.alter != nil {
+				tc.alter(&bad)
+			}
+			prepared, err := tc.issuer.PrepareOneTapStart(bad, intent.Remember)
+			if _, ok := prepared.Command(); ok || !errors.Is(err, ErrInvalidIssuance) {
+				t.Fatal("invalid One Tap selection produced a deliverable preparation", err)
+			}
+		})
+	}
+	prepared, err := selected.PrepareOneTapStart(binding, intent.Remember)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, ok := prepared.Command()
+	profile, profileErr := original.Record.ProviderBindings()
+	flow := profile.Transaction.Binding
+	if !ok || profileErr != nil || string(flow.ID) != flowID || flow.Intent.Nonce == ([32]byte{}) || flow.Intent.Remember != intent.Remember ||
+		profile.Provider != provider || selected.binding(original) != binding {
+		t.Fatal("preparation changed the coordinator's exact original One Tap binding", profileErr)
+	}
+	executor.execute = func(_ context.Context, command PreAuthIssueCommand) (PreAuthIssueExecution, error) {
+		if command != original {
+			t.Fatal("execution changed the one prepared browser record")
+		}
+		ordinary, err := NewPreAuthTransaction(profile.Transaction)
+		if err != nil {
+			t.Fatal(err)
+		}
+		confirmed := preAuthCommitted(PreAuthIssueCommand{CommandID: original.CommandID, CorrelationID: original.CorrelationID, Record: ordinary})
+		confirmed.Receipt.Binding = binding
+		confirmed.Receipt.Feature = &identity.FeatureReceipt{Operation: op, AfterVersion: 1}
+		return confirmed, nil
+	}
+	issued, err := selected.Issue(t.Context(), prepared)
+	if err != nil || issued.Flow != original.Record || issued.Cookie.Name != "__Host-identity_flow" {
+		t.Fatal("exact bound commitment did not release the original session-owned cookie", err)
+	}
+	wire, err := issued.Token.Reveal()
+	if err != nil {
+		t.Fatal("missing exact cookie token", err)
+	}
+	token, err := ParseToken(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := token.ProviderPreAuthDigest(config.LookupKey, flow, provider)
+	if err != nil || digest != profile.Transaction.Cookie {
+		t.Fatal("cookie was not bound to the selected provider and original flow", err)
 	}
 }
 

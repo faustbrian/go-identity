@@ -37,6 +37,26 @@ func NewOneTapStartPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssu
 	return newProviderPreAuthIssuer(executor, c, selected, OneTapStartPreAuthOperation())
 }
 
+// PrepareOneTapStart generates the session-owned nonce and cookie for an
+// exact server-selected Google One Tap binding. Only a One Tap start issuer
+// accepts it. The durable executor calls it after admitting the keyed start
+// and passes the original binding, never an ID or policy selected by the
+// browser. The record and anonymous flow ID must be identical and canonical.
+// No durable work occurs here; only Issue can release the cookie after an
+// exact new receipt. Retain the original preparation and never regenerate on
+// replay, recovery or unknown commitment.
+func (s *PreAuthIssuer) PrepareOneTapStart(binding identity.CommandBinding, remember RememberPolicy) (PreparedPreAuthIssuance, error) {
+	if s == nil || s.operation != OneTapStartPreAuthOperation() || binding.RecordID != binding.AnonymousFlowID {
+		return PreparedPreAuthIssuance{}, ErrInvalidIssuance
+	}
+	id, err := identity.ParsePreAuthTransactionID(binding.AnonymousFlowID)
+	if err != nil {
+		return PreparedPreAuthIssuance{}, ErrInvalidIssuance
+	}
+	input := PreAuthPrepareInput{CommandID: binding.CommandID, TenantID: binding.TenantID, CorrelationID: binding.CorrelationID, Remember: remember}
+	return s.prepare(input, id, &binding)
+}
+
 func newProviderPreAuthIssuer(executor PreAuthIssuanceExecutor, c PreAuthIssuerConfig, selected PreAuthProviderBinding, operation identity.FeatureOperation) (*PreAuthIssuer, error) {
 	intent := PreAuthIntent{Action: c.Action, CallbackURL: c.CallbackURL, Purpose: c.Purpose}
 	if c.Cookie.name != "__Host-identity_flow" || c.FlowTTL != 5*time.Minute || !strings.HasPrefix(c.Origin, "https://") || !validProviderPreAuthProfile(intent, selected) {

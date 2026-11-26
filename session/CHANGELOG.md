@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Prepare a Google One Tap cookie against the durable owner's exact admitted
+  flow binding without changing the existing commit-gated disclosure path.
+
 - Require the exact Google One Tap start commit for the selected keyed issuer.
   Generic pre-auth receipts cannot release its cookie, and recovery remains
   outcome-only. Existing generic, provider-bound and SAML issuers are unchanged.
