@@ -178,6 +178,11 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if socialFeature != nil {
 		contributions = append(contributions, *socialFeature)
 	}
+	if oneTap, err := server.oneTapFeature(c.HTTP.Network); err != nil {
+		return nil, err
+	} else if oneTap != nil {
+		contributions = append(contributions, *oneTap)
+	}
 	enterpriseFeatures, err := server.enterpriseOIDCFeatures(c.HTTP.Network)
 	if err != nil {
 		return nil, err

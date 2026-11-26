@@ -1,5 +1,41 @@
 # Identity reference composition
 
+## Google One Tap popup sign-in
+
+Set `StoreConfiguration.OneTap` on the PostgreSQL password/session baseline.
+Provide `OneTapConfiguration.Start` with a Google callback-mode provider, the
+original pre-auth cookie and trusted origin, a separate native OAuth schema,
+and the native capability, coordinator and sealed-grant settings. The
+Reference graph supplies its PostgreSQL session repository, authoritative clock,
+counted risk and capability preparation owners. Set `Completion` with the
+retained flow keys and the same native session issuer and CSRF key as the
+existing reader and logout. Keep the configured provider alive through server
+shutdown. It is borrowed, not closed by Reference.
+
+Apply the selected migration plan with `identity/oauth/postgres` alongside the
+existing identity, session, MFA, capability, risk, audit and outbox owners;
+then initialize and check Reference readiness. These forward histories retain
+the existing account and session issuers' data. Do not drop the migrations to
+disable the routes.
+
+With `HTTPOneTap.EnableStart` and `EnableCallback`, the server exposes
+`POST /v1/oauth/onetap-start` and `POST /v1/oauth/onetap-callback`. Use the
+configured HTTPS origin and signed browser device. Start takes one popup
+experience and a caller idempotency key; use an unchanged request for an
+uncertain Start, never for a different callback credential. The callback
+requires the original flow cookie and Google's separate double-submit
+`g_csrf_token`. It signs in an existing linked account with known-empty MFA
+authority. Fresh success sets the ordinary session cookie and a separate
+synchronizer cookie; no bearer is returned in JSON or redelivered on replay.
+When using the selected cookie session routes, send that synchronizer value as
+`X-CSRF-Token` on `POST /v1/session/signout`. Co-selected providers using a
+shared logout route must agree on the synchronizer cookie's attributes.
+
+Both HTTP operations are opt-in. This profile does not provide a UI, redirect
+mode, signup or account linking. See [the HTTP module](../http/oauth/README.md)
+for the wire contract and [the native module](../oauth/postgres/README.md) for
+credential custody and tokenless unknown-outcome recovery.
+
 ## Standalone public provider discovery
 
 `StoreConfiguration.ProviderDiscovery` explicitly selects public

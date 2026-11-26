@@ -5,6 +5,7 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -334,6 +335,7 @@ type signupGraphExtensions struct {
 	socialOIDCHTTPForeignOrigin bool
 	socialOIDCPostAuth          bool
 	socialProviderRefresh       string
+	oneTapPopup                 bool
 	organizationKey             bool
 	organizationKeyUpgrade      bool
 	organizationKeyMetadata     bool
@@ -570,6 +572,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.socialOIDC || extensions.socialProviderRefresh != "" {
 		socialPolicy = &referenceSocialOIDCPolicy{}
 		selectedAuthorization = socialPolicy
+	}
+	if extensions.oneTapPopup {
+		selectedAuthorization = referenceOneTapPopupPolicy{}
 	}
 	if extensions.apiKey {
 		selectedAuthorization = referenceAPIKeyPolicy{}
@@ -1421,6 +1426,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.socialOIDCHTTPSignin {
 		configureReferenceSocialSigninHTTP(t, &c)
 	}
+	var oneTapSigning *rsa.PrivateKey
+	if extensions.oneTapPopup {
+		oneTapSigning = configureReferenceOneTapPopup(t, &c, origin)
+	}
 	if extensions.sessionCache != nil {
 		extensions.sessionCache.configure(t, &c)
 	}
@@ -1530,7 +1539,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Fatal(err)
 	}
 	modules := []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/password/postgres", "identity/mfa/postgres", "capability/postgres/identity"}
-	if c.SocialOAuth != nil {
+	if c.SocialOAuth != nil || c.OneTap != nil {
 		modules = append(modules, "identity/oauth/postgres")
 	}
 	if c.OAuthDevice != nil {
@@ -1604,7 +1613,7 @@ END $$`); err != nil {
 		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
 		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
 	}
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace || extensions.scimManagedGroupsRead || extensions.scimManagedGroupsCreate
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.oneTapPopup || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace || extensions.scimManagedGroupsRead || extensions.scimManagedGroupsCreate
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -1959,6 +1968,8 @@ END $$`); err != nil {
 		{"identity.account.link-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.LinkStart},
 		{"identity.oauth.signin-start", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.SigninStart},
 		{"identity.oauth.callback", c.HTTPSocialOAuth != nil && c.HTTPSocialOAuth.Callback},
+		{"identity.oauth.onetap-start", c.HTTPOneTap != nil && c.HTTPOneTap.EnableStart},
+		{"identity.oauth.onetap-callback", c.HTTPOneTap != nil && c.HTTPOneTap.EnableCallback},
 		{"identity.sso.signin-start", c.HTTPEnterpriseOIDC != nil || c.HTTPEnterpriseOAuth2 != nil},
 		{"identity.sso.oidc-callback", c.HTTPEnterpriseOIDC != nil},
 		{"identity.sso.oidc-logout", c.HTTPEnterpriseOIDC != nil && c.HTTPEnterpriseOIDC.ProviderLogout},
@@ -2396,6 +2407,11 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			f.afterManagedChangeConfirmation = func(r email.ChangeConfirmRequest, token string) {
 				proveSelectedEmailChangeConfirmation(t, ctx, client, network.URL, origin, r, token)
 			}
+		}
+	}
+	if extensions.oneTapPopup {
+		f.afterEmailSignin = func(ctx context.Context, _ identity.UserID, _ []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			proveReferenceOneTapPopupTLS(t, ctx, c, deps, client, network.URL, origin, oneTapSigning)
 		}
 	}
 	if extensions.organization {

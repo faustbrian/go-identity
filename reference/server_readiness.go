@@ -445,8 +445,11 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
-	issuanceSchema, issuanceConstraint := "", ""
+	issuanceSchema, issuanceConstraint, oneTapSchema := "", "", ""
 	if f := state.features; f != nil {
+		if f.oneTap != nil && f.oneTap.complete != nil {
+			oneTapSchema = f.oneTap.session.Schema
+		}
 		if f.enterpriseSAML != nil && f.enterpriseSAML.idpStorage {
 			issuanceSchema, issuanceConstraint = f.enterpriseSAML.sessionSchema, samlIDPSessionIssuanceConstraint
 		} else if f.enterpriseSAML != nil {
@@ -459,9 +462,12 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			issuanceSchema, issuanceConstraint = f.socialOAuth.signin.sessionSchema, "session_issuances.session_issuances_purpose_oauth_v1"
 		}
 	}
-	if issuanceConstraint != "" {
+	if issuanceConstraint != "" || oneTapSchema != "" {
 		for i := range guards {
-			if guards[i].schema != issuanceSchema {
+			constraintName := issuanceConstraint
+			if oneTapSchema != "" && guards[i].schema == oneTapSchema {
+				constraintName = oneTapSessionIssuanceConstraint
+			} else if issuanceConstraint == "" || guards[i].schema != issuanceSchema {
 				continue
 			}
 			guards[i].constraints = slices.Clone(guards[i].constraints)
@@ -469,7 +475,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 				// The final native purpose expansion preserves the installed
 				// predicate under a new name. Collision/history guards stay unchanged.
 				if strings.HasPrefix(constraint, "session_issuances.session_issuances_purpose_") {
-					guards[i].constraints[j] = issuanceConstraint
+					guards[i].constraints[j] = constraintName
 				}
 			}
 		}

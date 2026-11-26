@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into Google One Tap popup Start and existing linked-account callback.
+  Compose the native session, counted risk and proof owners, with the ordinary
+  session reader and strict logout available on the selected cookie profile.
+
 - Opt independently into managed SCIM Group Create over HTTPS, sharing the
   selected native connection and protocol quota with co-selected Group reads.
 

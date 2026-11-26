@@ -46,6 +46,10 @@ type StoreConfiguration struct {
 	// explicitly selected routes and metadata over those actual native owners.
 	SocialOAuth     *SocialOAuthConfiguration
 	HTTPSocialOAuth *HTTPSocialOAuthConfiguration
+	// OneTap selects the native Google popup workflow. HTTPOneTap opts into
+	// its exact Start and/or credential callback routes independently.
+	OneTap     *OneTapConfiguration
+	HTTPOneTap *HTTPOneTapConfiguration
 	// EnterpriseOIDC selects native federation for one configured provider.
 	// It defaults to linked members; provisioning requires explicit JIT policy.
 	// HTTPEnterpriseOIDC independently opts into its browser start and callback.

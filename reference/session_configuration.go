@@ -286,11 +286,24 @@ func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSess
 		profile := v.Profile
 		selected.MagicLink = &profile
 	}
+	selectOAuth := false
 	if social := c.SocialOAuth; social != nil && social.Signin != nil {
 		completion := social.Signin.Completion
 		if completion.PolicyNamespace != common.PolicyNamespace || completion.Audience != common.Audience || !sessionIssuanceMatches(n, completion.Issuer, completion.CSRF) {
 			return deny()
 		}
+		selectOAuth = true
+	}
+	if oneTap := c.OneTap; oneTap != nil && oneTap.Completion != nil {
+		completion := *oneTap.Completion
+		if completion.PolicyNamespace != common.PolicyNamespace || completion.Audience != common.Audience || !sessionIssuanceMatches(n, completion.Issuer, completion.CSRF) {
+			return deny()
+		}
+		// One Tap issues the same verified provider credential provenance,
+		// without requiring the authorization-code sign-in service or route.
+		selectOAuth = true
+	}
+	if selectOAuth {
 		profile := sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: common.GlobalAuthorityID, PolicyNamespace: common.PolicyNamespace, Audience: common.Audience, AuthenticationMethod: "oauth", CredentialKind: identity.CredentialProvider, CredentialOwner: "identity/oauth"}
 		selected.OAuth = &profile
 	}

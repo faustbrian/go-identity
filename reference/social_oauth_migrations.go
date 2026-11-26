@@ -16,7 +16,7 @@ import (
 // password/session prerequisites; every previously installed prefix is intact.
 func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
 	f := s.state.features
-	if f == nil || f.socialOAuth == nil && f.enterpriseSessionSchema() == "" {
+	if f == nil || f.socialOAuth == nil && f.enterpriseSessionSchema() == "" && (f.oneTap == nil || f.oneTap.complete == nil) {
 		return catalog, nil
 	}
 	var err error
@@ -36,7 +36,7 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 	linkErasure := kernel.AccountLinkPreparationErasureMigrationSource{Base: startErasure, Version: 2403}
 	var accountHistory migrations.Source = kernel.AccountLinkPreparationErasureValidationMigrationSource{Base: linkErasure, Version: 2404}
 	enterpriseSchema := f.enterpriseSessionSchema()
-	if enterpriseSchema != "" || f.socialOAuth.unlink != nil {
+	if enterpriseSchema != "" || f.socialOAuth != nil && f.socialOAuth.unlink != nil {
 		expand := kernel.AccountUnlinkPreparationMigrationSource{Base: accountHistory, Version: 2405}
 		accountHistory = kernel.AccountUnlinkPreparationValidationMigrationSource{Base: expand, Version: 2406}
 	}
@@ -76,6 +76,9 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 	}
 	catalog = append(catalog, h)
 	if f.socialOAuth == nil {
+		if enterpriseSchema == "" {
+			return catalog, nil // One Tap uses the same account history, not auth-code session issuance.
+		}
 		return appendOAuthSigninSessionMigration(ctx, catalog, enterpriseSchema)
 	}
 	schema := f.socialOAuth.schema

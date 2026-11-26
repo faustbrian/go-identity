@@ -106,6 +106,17 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 			policy := enterprise.http.CSRFCookie
 			c.CSRFCookie = &policy
 		}
+		if oneTap := s.state.features.oneTap; oneTap != nil && oneTap.http.EnableCallback {
+			policy := oneTap.csrfCookie
+			if c.CSRFCookie != nil {
+				existing, existingErr := c.CSRFCookie.DeletionAttributes()
+				selected, selectedErr := policy.DeletionAttributes()
+				if existingErr != nil || selectedErr != nil || existing.String() != selected.String() {
+					return nil, identity.InvalidInputError{Field: oneTapReferenceField}
+				}
+			}
+			c.CSRFCookie = &policy
+		}
 	} else {
 		c.BearerSignOut = owner.bearer
 	}

@@ -89,6 +89,7 @@ type DeliveryConfiguration struct {
 type featureState struct {
 	providerDiscovery            *providerDiscoveryState
 	socialOAuth                  *socialOAuthState
+	oneTap                       *oneTapState
 	enterpriseOIDC               *enterpriseOIDCState
 	enterpriseOAuth2             *enterpriseOAuth2State
 	enterpriseSAML               *enterpriseSAMLState
@@ -182,6 +183,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if err := validateOneTapSelection(c); err != nil {
+		return err
+	}
 	if c.ProviderDiscovery != nil {
 		owner, err := composeProviderDiscovery(c, s.httpRate)
 		if err != nil {
@@ -588,6 +592,13 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	socialOAuthOwner, err := composeSocialOAuth(c, d, sessionOwner, evaluator)
 	if err != nil {
 		return err
+	}
+	oneTapOwner, err := composeOneTap(c, d, sessionOwner, evaluator)
+	if err != nil {
+		return err
+	}
+	if oneTapOwner != nil {
+		migrationConfig.preauthIssue = true
 	}
 	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
 	if err != nil {
@@ -1019,6 +1030,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.session = sessionOwner
 	s.features.oauthDevice = oauthDevice
 	s.features.socialOAuth = socialOAuthOwner
+	s.features.oneTap = oneTapOwner
 	s.features.enterpriseOIDC = enterpriseOIDCOwner
 	s.features.enterpriseOAuth2 = enterpriseOAuth2Owner
 	s.features.enterpriseSAML = enterpriseSAMLOwner

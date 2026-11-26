@@ -108,6 +108,10 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if err != nil {
 		return nil, err
 	}
+	catalog, err = s.oneTapMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
 	catalog, err = s.directorySyncMigrationCatalog(ctx, catalog)
 	if err != nil {
 		return nil, err

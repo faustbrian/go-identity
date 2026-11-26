@@ -8,7 +8,7 @@ require (
 	github.com/faustbrian/go-audit/postgres v1.1.1-0.20261126052105-2c40e1bc7d58
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
-	github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261124084308-14a0a4a45bb1
+	github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261126210851-1e724e37c01b
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-http-client/v2 v2.1.0
@@ -27,7 +27,7 @@ require (
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231
 	github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261025150519-83149c8dcdf6
-	github.com/faustbrian/go-identity/http/oauth v0.0.0-20261126145327-f52d7df47678
+	github.com/faustbrian/go-identity/http/oauth v0.0.0-20261126230123-5a98b763d0b6
 	github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1
 	github.com/faustbrian/go-identity/http/organization v0.0.0-20261126145644-ca3be759bba8
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f
@@ -41,22 +41,23 @@ require (
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261123153514-abe47bf75461
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261123033150-16bb95b21f95
-	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261122050153-ae44b7e223c1
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261126214320-551488061e87
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57
+	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d
+	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261126223714-d4a4a618650c
 	github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d
 	github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089
 	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261023131125-38648609fbb6
 	github.com/faustbrian/go-identity/password v0.0.0-20261027053124-3051d2cd42b5
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261122025034-f17a5dc39fa2
 	github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261126095329-3c5c71d20a70
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261126213222-ce50195e767a
 	github.com/faustbrian/go-identity/risk v0.0.0-20261124135856-92af48b3c9fc
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261026030542-4e0bab3755d5
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261124125758-d8bd5f7b074a
 	github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
-	github.com/faustbrian/go-identity/session v0.0.0-20261123125537-8d9afa5e1a45
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261124104504-c56933838be6
+	github.com/faustbrian/go-identity/session v0.0.0-20261126220500-cc979c08b313
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261126215700-6c560dec83ec
 	github.com/faustbrian/go-identity/session/valkey v0.0.0-20261113101712-a0f7aabc4f38
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
