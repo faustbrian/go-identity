@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fence the original linked Google account and provider credential during
+  One Tap callback Apply and final commit using the existing primary owner.
+
 - Select the distinct Google One Tap callback consumption plan inside the
   existing provider preparation and capability work. Scope its original flow,
   counted admission, single-use proof, One Tap audit and session lifecycle;

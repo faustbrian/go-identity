@@ -147,6 +147,12 @@ func signinAccountFromFields(f identity.FeatureCommandSpec, prefix, owner string
 // transaction. This check creates no transaction, callback, session, exchange
 // or renewed authority.
 func (w Work) RequireOAuthSigninProviderAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command) (time.Time, error) {
+	return w.requireProviderSigninCommandAccount(ctx, owner, command, oauthSigninAccountOperation(), OAuthSigninAccount)
+}
+
+func (w Work) requireProviderSigninCommandAccount(ctx context.Context, owner FeatureExecutionContributor, command identity.Command,
+	operation identity.FeatureOperation, decode func(identity.Command) (ProviderAccountAdmission, error),
+) (time.Time, error) {
 	if err := w.usable(); err != nil {
 		return time.Time{}, err
 	}
@@ -170,9 +176,10 @@ func (w Work) RequireOAuthSigninProviderAccount(ctx context.Context, owner Featu
 	} else if w.state.featureCommitCommand == nil || *w.state.featureCommitCommand != command {
 		return time.Time{}, w.fail(ctx, invalidWork())
 	}
-	expected, decodeErr := OAuthSigninAccount(command)
+	profile, selected := providerSigninProfile(operation)
+	expected, decodeErr := decode(command)
 	spec, _ := command.Feature()
-	if decodeErr != nil || spec.Binding != b || f.Operation != oauthSigninAccountOperation() || f.Contributor != (ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1}) || life.BeforeVersion != 0 || life.AfterVersion != 0 {
+	if !selected || decodeErr != nil || spec.Binding != b || f.Operation != operation || f.Contributor != profile.Contrib || life.BeforeVersion != profile.Lifecycle.BeforeVersion || life.AfterVersion != profile.Lifecycle.AfterVersion {
 		return time.Time{}, w.fail(ctx, invalidWork())
 	}
 	// Only the lookup key uses the provider-selected user. Work retains the

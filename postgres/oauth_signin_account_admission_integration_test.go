@@ -4,10 +4,12 @@ package postgres
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -15,6 +17,15 @@ import (
 // This exercises real identity-owned locks through an original anonymous Work,
 // not provider verification, coordinator issuance or the complete signin flow.
 func TestOAuthSigninAccountAdmissionPrimaryFence(t *testing.T) {
+	proveProviderSigninAccountPrimaryFence(t, false)
+}
+
+func TestOneTapCallbackAccountAdmissionPrimaryFence(t *testing.T) {
+	proveProviderSigninAccountPrimaryFence(t, true)
+}
+
+func proveProviderSigninAccountPrimaryFence(t *testing.T, oneTap bool) {
+	t.Helper()
 	ctx, pool, repository := newAccountAuthorityStore(t)
 	exec := func(sql string) {
 		t.Helper()
@@ -28,9 +39,17 @@ WITH metadata AS (SELECT 'oidc-local'::text AS provider,'https://issuer.example'
 INSERT INTO identity.accounts(tenant_id,user_id,account_id,provider,issuer,subject,subject_key,version,social_link_version,linked)
 SELECT 'tenant','selected-user','account',provider,issuer,subject,sha256(convert_to(octet_length(provider)::text||':'||provider||octet_length(issuer)::text||':'||issuer||octet_length(subject)::text||':'||subject,'UTF8')),5,7,true FROM metadata;
 INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant','selected-user','provider-ref','account')`)
+	fixture := signinAccountFixture()
+	if oneTap {
+		exec(`WITH metadata AS (SELECT 'google'::text AS provider,'https://accounts.google.com'::text AS issuer,'subject'::text AS subject)
+UPDATE identity.accounts a SET provider=m.provider,issuer=m.issuer,
+subject_key=sha256(convert_to(octet_length(m.provider)::text||':'||m.provider||octet_length(m.issuer)::text||':'||m.issuer||octet_length(m.subject)::text||':'||m.subject,'UTF8'))
+FROM metadata m WHERE a.tenant_id='tenant' AND a.account_id='account'`)
+		fixture.Account.Provider, fixture.Account.Issuer = "google", "https://accounts.google.com"
+	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
-	query := ProviderSigninAccountQuery{TenantID: "tenant", Provider: "oidc-local", Issuer: "https://issuer.example", Subject: "subject"}
+	query := ProviderSigninAccountQuery{TenantID: "tenant", Provider: fixture.Account.Provider, Issuer: fixture.Account.Issuer, Subject: "subject"}
 	if observed, err := repository.GetProviderSigninAccount(cancelled, query); !errors.Is(err, context.Canceled) || observed != (ProviderAccountAdmission{}) {
 		t.Fatal("provider read cancellation lost", err)
 	}
@@ -49,7 +68,7 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 		t.Run("owned-read/"+item.name, func(t *testing.T) {
 			out, err := repository.GetOwnedProviderAccount(ctx, item.tenant, item.user, item.account)
 			if item.match {
-				if err != nil || out != signinAccountFixture() {
+				if err != nil || out != fixture {
 					t.Fatal("exact linked account did not return its authority", err)
 				}
 			} else {
@@ -66,9 +85,8 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 UPDATE identity.credential_references SET enabled=true,version=11,expires_at=NULL WHERE tenant_id='tenant';
 UPDATE identity.accounts SET linked=true,social_link_version=7 WHERE tenant_id='tenant';
 INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant','selected-user','provider-ref','account') ON CONFLICT DO NOTHING`)
-			query := ProviderSigninAccountQuery{TenantID: "tenant", Provider: "oidc-local", Issuer: "https://issuer.example", Subject: "subject"}
 			expected, err := repository.GetProviderSigninAccount(ctx, query)
-			if err != nil || expected != signinAccountFixture() {
+			if err != nil || expected != fixture {
 				t.Fatal("actual original provider account snapshot", err)
 			}
 			switch mode {
@@ -104,9 +122,20 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 				}
 			}
 			s, command := signinAccountCommand(t, expected)
-			owner := &oauthSigninAccountParticipant{}
-			feature := &FeatureRegistration{Contributor: owner.Descriptor(), Operation: s.Operation}
+			var owner FeatureExecutionContributor = &oauthSigninAccountParticipant{}
+			require := Work.RequireOAuthSigninProviderAccount
 			life := &LifecyclePlan{EventType: "oauth.signin.v1"}
+			if oneTap {
+				s = oneTapCallbackAccountSpec(t, expected)
+				cookie := authentication.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32)))
+				command, err = identity.NewFeaturePreAuthCommand(s, cookie)
+				if err != nil {
+					t.Fatal("construct exact One Tap callback", err)
+				}
+				owner, require = &oneTapCallbackAccountParticipant{}, Work.RequireOneTapCallbackAccount
+				life = &LifecyclePlan{EventType: "session.created.v1", BeforeVersion: 1, AfterVersion: 2}
+			}
+			feature := &FeatureRegistration{Contributor: owner.Descriptor(), Operation: s.Operation}
 			frozen := &admittedKernelPlan{binding: s.Binding, feature: feature, lifecycle: life, fingerprint: [32]byte{7}}
 			reservation := &reservationState{plan: frozen, journal: journalReservation{generation: 3}}
 			bounded, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -121,7 +150,7 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 				w.state.featureApplying, w.state.featureApplyCommand, w.state.featureCommitCommand = false, nil, &command
 			}
 			before, _ := w.state.ctx.Deadline()
-			now, err := w.RequireOAuthSigninProviderAccount(bounded, owner, command)
+			now, err := require(w, bounded, owner, command)
 			after, _ := w.state.ctx.Deadline()
 			if before != after || w.state.binding != s.Binding {
 				t.Fatal("provider selection retargeted original flow or renewed lifetime")
@@ -159,7 +188,7 @@ INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account
 UPDATE identity.credential_references SET enabled=true,version=11,expires_at=NULL WHERE tenant_id='tenant';
 UPDATE identity.accounts SET linked=true,social_link_version=7 WHERE tenant_id='tenant';
 INSERT INTO identity.account_credentials(tenant_id,user_id,credential_id,account_id) VALUES('tenant','selected-user','provider-ref','account') ON CONFLICT DO NOTHING`)
-			query := ProviderSigninAccountQuery{TenantID: "tenant", Provider: "oidc-local", Issuer: "https://issuer.example", Subject: "subject"}
+			query := query
 			switch mode {
 			case "foreign-tenant":
 				query.TenantID = "other"
