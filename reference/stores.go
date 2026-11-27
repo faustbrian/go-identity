@@ -108,6 +108,9 @@ type StoreConfiguration struct {
 	// HTTPManagedSCIMGroupsReplace independently selects conditional Group PUT.
 	// Nil leaves it disabled without affecting other Group or User operations.
 	HTTPManagedSCIMGroupsReplace *HTTPManagedSCIMGroupsReplaceConfiguration
+	// HTTPManagedSCIMGroupsPatch independently selects conditional Group PATCH.
+	// Nil leaves it disabled without affecting other Group or User operations.
+	HTTPManagedSCIMGroupsPatch *HTTPManagedSCIMGroupsPatchConfiguration
 	// OAuthWorkload selects the configured machine-only native OAuth graph.
 	// Nil preserves existing profiles; HTTP selection remains independent.
 	OAuthWorkload *OAuthWorkloadConfiguration

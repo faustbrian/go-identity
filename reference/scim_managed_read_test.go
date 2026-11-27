@@ -132,3 +132,26 @@ func TestManagedSCIMGroupReplaceSharesTheSelectedOwnerAndMemberCeiling(t *testin
 		t.Fatal("co-selected Group Replace did not reuse the Create route's owner", err)
 	}
 }
+
+func TestManagedSCIMGroupPatchSharesTheSelectedOwnerAndMemberCeiling(t *testing.T) {
+	native := &ManagedSCIMConnectionConfiguration{}
+	standalone := &HTTPManagedSCIMGroupsPatchConfiguration{Native: native, RateNamespace: "directory", RateKey: [32]byte{1}, MaximumMembers: 2}
+	config := StoreConfiguration{HTTPManagedSCIMGroupsPatch: standalone}
+	owner, field, err := managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || owner.Native != native || owner.RateNamespace != standalone.RateNamespace || owner.RateKey != standalone.RateKey || field != managedSCIMGroupsPatchField {
+		t.Fatal("standalone Group PATCH did not select its exact owner and quota", err)
+	}
+	config.HTTPManagedSCIMGroupsReplace = &HTTPManagedSCIMGroupsReplaceConfiguration{Native: native, RateNamespace: "directory", RateKey: [32]byte{1}, MaximumMembers: 2}
+	if _, _, err := managedSCIMUsersOptions(config); err == nil {
+		t.Fatal("co-selected Group PATCH accepted a competing managed owner")
+	}
+	config.HTTPManagedSCIMGroupsPatch = &HTTPManagedSCIMGroupsPatchConfiguration{MaximumMembers: 1}
+	if _, _, err := managedSCIMUsersOptions(config); err == nil {
+		t.Fatal("co-selected Group PATCH accepted a different member ceiling")
+	}
+	config.HTTPManagedSCIMGroupsPatch.MaximumMembers = 2
+	owner, field, err = managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || owner.Native != native || owner.RateKey != standalone.RateKey || field != managedSCIMGroupsReplaceField {
+		t.Fatal("co-selected Group PATCH did not share the exact PUT owner and quota", err)
+	}
+}

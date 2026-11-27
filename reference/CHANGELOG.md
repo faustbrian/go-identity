@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into conditional managed SCIM Group PATCH over HTTPS using the
+  selected native owner and quota. Preserve ordered typed member changes,
+  atomic version checks and original replay independently of Group PUT.
+
 - Opt into conditional managed SCIM Group PUT over HTTPS without enabling
   Group reads, creation or other writes. Reuse the selected native owner and
   protocol quota and retain original headerless replay.

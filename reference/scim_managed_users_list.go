@@ -172,6 +172,7 @@ type managedSCIMUsersState struct {
 	listGroups      bool
 	createGroup     bool
 	replaceGroup    bool
+	patchGroup      bool
 	maxGroupMembers int
 }
 
@@ -242,6 +243,21 @@ func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListCon
 			owner, field = &profile, managedSCIMGroupsReplaceField
 		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
 			return nil, managedSCIMGroupsReplaceField, invalid
+		}
+	}
+	if groups := c.HTTPManagedSCIMGroupsPatch; groups != nil {
+		invalid := identity.InvalidInputError{Field: managedSCIMGroupsPatchField}
+		if groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers ||
+			c.HTTPManagedSCIMGroupsRead != nil && c.HTTPManagedSCIMGroupsRead.MaximumMembers != groups.MaximumMembers ||
+			c.HTTPManagedSCIMGroupsCreate != nil && c.HTTPManagedSCIMGroupsCreate.MaximumMembers != groups.MaximumMembers ||
+			c.HTTPManagedSCIMGroupsReplace != nil && c.HTTPManagedSCIMGroupsReplace.MaximumMembers != groups.MaximumMembers {
+			return nil, managedSCIMGroupsPatchField, invalid
+		}
+		profile := HTTPManagedSCIMUsersListConfiguration{Native: groups.Native, RateNamespace: groups.RateNamespace, RateKey: groups.RateKey}
+		if owner == nil {
+			owner, field = &profile, managedSCIMGroupsPatchField
+		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
+			return nil, managedSCIMGroupsPatchField, invalid
 		}
 	}
 	return owner, field, nil
@@ -318,6 +334,9 @@ func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDe
 	}
 	if groups := c.HTTPManagedSCIMGroupsReplace; groups != nil {
 		selected.replaceGroup, selected.maxGroupMembers = true, groups.MaximumMembers
+	}
+	if groups := c.HTTPManagedSCIMGroupsPatch; groups != nil {
+		selected.patchGroup, selected.maxGroupMembers = true, groups.MaximumMembers
 	}
 	if bulk != nil {
 		selected.rate = bulk.rate
@@ -474,6 +493,16 @@ func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) 
 		})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: managedSCIMGroupsReplaceField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.patchGroup {
+		feature, err := scimhttp.NewManagedGroupsPatchFeature(scimhttp.ManagedGroupsPatchConfig{
+			Network: network, Executor: referenceManagedGroupsExecutor{state: s.state, native: selected.native},
+			Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum, MaximumMembers: selected.maxGroupMembers,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMGroupsPatchField}
 		}
 		operations = append(operations, feature.Operations()...)
 	}

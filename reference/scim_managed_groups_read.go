@@ -13,6 +13,7 @@ import (
 const managedSCIMGroupsReadField = "reference_http_managed_scim_groups_read"
 const managedSCIMGroupsCreateField = "reference_http_managed_scim_groups_create"
 const managedSCIMGroupsReplaceField = "reference_http_managed_scim_groups_replace"
+const managedSCIMGroupsPatchField = "reference_http_managed_scim_groups_patch"
 
 // HTTPManagedSCIMGroupsReadConfiguration opts independently into managed
 // Group Get and List, without selecting Group writes or connection lifecycle.
@@ -83,6 +84,23 @@ func (c HTTPManagedSCIMGroupsReplaceConfiguration) MarshalText() ([]byte, error)
 	return c.MarshalJSON()
 }
 
+// HTTPManagedSCIMGroupsPatchConfiguration selects only conditional Group PATCH.
+// Reuse the selected managed owner, quota and explicit member ceiling when
+// composing other Group or User operations.
+type HTTPManagedSCIMGroupsPatchConfiguration HTTPManagedSCIMGroupsCreateConfiguration
+
+func (HTTPManagedSCIMGroupsPatchConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMGroupsPatchConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMGroupsPatchConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMGroupsPatchField}
+}
+
+func (c HTTPManagedSCIMGroupsPatchConfiguration) MarshalText() ([]byte, error) {
+	return c.MarshalJSON()
+}
+
 type referenceManagedGroupsExecutor struct {
 	state  *storeState
 	native *scimpg.ManagedConnectionService
@@ -113,4 +131,13 @@ func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupReplace(ctx c
 	}
 	defer done()
 	return s.native.ExecuteManagedAdmittedGroupReplace(bounded, tenant, request, maximumMembers, admit)
+}
+
+func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupPatch(ctx context.Context, tenant identity.TenantID, request scim.Request, maximumMembers int, admit scim.ProtocolAdmission) (scim.Response, error) {
+	bounded, done, err := s.state.enterFeature(ctx, true)
+	if err != nil {
+		return scim.Response{}, scim.NewError(503, "")
+	}
+	defer done()
+	return s.native.ExecuteManagedAdmittedGroupPatch(bounded, tenant, request, maximumMembers, admit)
 }

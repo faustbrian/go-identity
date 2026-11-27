@@ -1,5 +1,17 @@
 # Identity reference composition
 
+## Managed conditional SCIM Group PATCH
+
+Set `HTTPManagedSCIMGroupsPatch` to select only
+`PATCH /scim/v2/Groups/{resource_id}`. Use the issued managed bearer, the
+original strong `If-Match`, and canonical `application/scim+json` PatchOp. The
+native owner validates ordered operations and current authority, applies
+typed in-scope members, and retains the original committed result for
+equivalent retries. A changed request with a stale version does not write.
+The native and quota settings must remain zero when a co-selected User or
+Group route owns them. Co-selected Group routes share the exact member ceiling.
+No other operation or migration is enabled.
+
 ## Managed conditional SCIM Group replacement
 
 Set `HTTPManagedSCIMGroupsReplace` to select only
