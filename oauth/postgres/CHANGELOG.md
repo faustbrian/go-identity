@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an opt-in primary-backed social-provider registration authority with
+  independent connection epochs and atomic audited configuration events.
+
 - Recheck original global and tenant authority on the primary after proxy
   callback reservation and before releasing PKCE to provider generation.
 

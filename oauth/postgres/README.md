@@ -7,6 +7,28 @@ Both use native authority owners and the existing kernel coordinator, not
 application-written domain stores. Publication and complete OAuth qualification
 remain unfinished.
 
+## Live social-provider registration authority
+
+Apply `ProviderAuthorityMigrationSource` after the OAuth schema, before
+selecting a live reader. `NewProviderAuthority` reads the exact tenant and
+provider ID from the shared primary without caching. An absent registration
+or unavailable primary supplies no authority. `Version` is the live connection
+epoch; `ProfileVersion` selects the separately configured immutable protocol
+profile. Disabling advances the epoch without changing that profile.
+
+A trusted operator uses a separate PostgreSQL role through
+`NewProviderAuthorityOperator`. Apply an explicit initial enabled version,
+then supply the current expected epoch for each subsequent transition.
+Each successful transition commits the row, a redacted audit event and an
+existing outbox message together. An exact retry of the latest command has
+no additional effects; a superseded command cannot restore old state. A
+commit error may be ambiguous; inspect current state or retry the exact
+command, never issue a replacement to force the old result.
+
+This is the generic authority owner, not an HTTP administration endpoint.
+OAuth workflow fences and lifecycle cleanup must adopt it separately; the
+operator result does not acknowledge cleanup or provider-side revocation.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in
