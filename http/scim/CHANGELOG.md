@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add opt-in conditional Group PATCH with the original If-Match, bounded
+  PatchOp, shared quota and native replay. Keep Group PUT independent.
+
 - Add opt-in conditional Group PUT using the original strong If-Match, shared
   protocol quota and native replay. Return the validated Group, ETag and
   Location without enabling another Group operation.

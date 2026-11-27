@@ -80,38 +80,71 @@ func (ManagedGroupsReplaceConfig) MarshalText() ([]byte, error) {
 // closure and raw-IO/write deadlines. Separate generic authentication middleware
 // cannot bind this native-owned authority/admission window.
 func NewManagedGroupsReplaceFeature(c ManagedGroupsReplaceConfig) (identityhttp.Feature, error) {
-	if missingManagedOwner(c.Executor) || len(c.Network.TenantHosts) == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.MaximumMembers < 0 || c.MaximumMembers > scim.DefaultGroupMembers {
+	if missingManagedOwner(c.Executor) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	if _, err := scim.ParseMappingPath("displayName", nil, c.Limits); err != nil {
+	return newManagedGroupsConditionalFeature(managedGroupsConditionalConfig{
+		network: c.Network, rate: c.Rate, limits: c.Limits, duration: c.MaximumDuration, maximumMembers: c.MaximumMembers,
+	}, scim.GroupReplace, c.Executor.ExecuteManagedAdmittedGroupReplace)
+}
+
+type managedGroupsConditionalConfig struct {
+	network        identityhttp.NetworkConfig
+	rate           ProtocolRateConfig
+	limits         scim.Limits
+	duration       time.Duration
+	maximumMembers int
+}
+
+type managedGroupWriteExecutor func(context.Context, identity.TenantID, scim.Request, int, scim.ProtocolAdmission) (scim.Response, error)
+
+func newManagedGroupsConditionalFeature(c managedGroupsConditionalConfig, operation scim.Operation, executor managedGroupWriteExecutor) (identityhttp.Feature, error) {
+	if len(c.network.TenantHosts) == 0 || c.duration < time.Millisecond || c.duration > 30*time.Second || c.maximumMembers < 0 || c.maximumMembers > scim.DefaultGroupMembers {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	network, decoder, err := identityhttp.NewSCIMRequestBoundary(c.Network)
+	if _, err := scim.ParseMappingPath("displayName", nil, c.limits); err != nil {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	network, decoder, err := identityhttp.NewSCIMRequestBoundary(c.network)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	rate, err := newProtocolRate(c.Rate)
+	rate, err := newProtocolRate(c.rate)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	maximumBody := min(c.Limits.BodyBytes, int(c.Network.Limits.MaximumBodyBytes), int(c.Network.Limits.MaximumDecodedBytes))
-	h := managedGroupsReplaceHTTP{network: network, decoder: decoder, executor: c.Executor, rate: rate,
-		bodyMaximum: maximumBody, resourceMaximum: c.Limits.StringBytes, responseMaximum: c.Limits.ResponseBytes, duration: c.MaximumDuration, maximumMembers: c.MaximumMembers}
+	maximumBody := min(c.limits.BodyBytes, int(c.network.Limits.MaximumBodyBytes), int(c.network.Limits.MaximumDecodedBytes))
+	var method, operationID string
+	var wire *identityhttp.WireOperation
+	switch operation {
+	case scim.GroupReplace:
+		method, operationID = http.MethodPut, managedGroupsReplaceOperation
+		wire = managedGroupsReplaceWire(c.limits, maximumBody, c.maximumMembers)
+	case scim.GroupPatch:
+		method, operationID = http.MethodPatch, managedGroupsPatchOperation
+		wire = managedGroupsPatchWire(c.limits, maximumBody, c.maximumMembers)
+	default:
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	h := managedGroupsConditionalHTTP{method: method, operation: operation, network: network, decoder: decoder, executor: executor, rate: rate,
+		bodyMaximum: maximumBody, resourceMaximum: c.limits.StringBytes, responseMaximum: c.limits.ResponseBytes, duration: c.duration, maximumMembers: c.maximumMembers}
 	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
-		Owner: "scim", OperationID: managedGroupsReplaceOperation, Handler: http.HandlerFunc(h.serve),
-		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: uint64(c.Limits.ResponseBytes),
+		Owner: "scim", OperationID: operationID, Handler: http.HandlerFunc(h.serve),
+		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: uint64(c.limits.ResponseBytes),
 	})
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op.Wire = managedGroupsReplaceWire(c.Limits, maximumBody, c.MaximumMembers)
+	op.Wire = wire
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "scim", Operations: []identityhttp.OperationDescriptor{op}})
 }
 
-type managedGroupsReplaceHTTP struct {
+type managedGroupsConditionalHTTP struct {
+	method          string
+	operation       scim.Operation
 	network         *identityhttp.NetworkResolver
 	decoder         *identityhttp.RequestDecoder
-	executor        ManagedGroupsReplaceExecutor
+	executor        managedGroupWriteExecutor
 	rate            *protocolRate
 	bodyMaximum     int
 	resourceMaximum int
@@ -120,7 +153,7 @@ type managedGroupsReplaceHTTP struct {
 	maximumMembers  int
 }
 
-func (h *managedGroupsReplaceHTTP) serve(w http.ResponseWriter, r *http.Request) {
+func (h *managedGroupsConditionalHTTP) serve(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.duration)
 	defer cancel()
 	response, denial := h.execute(r.WithContext(ctx))
@@ -141,7 +174,7 @@ func (h *managedGroupsReplaceHTTP) serve(w http.ResponseWriter, r *http.Request)
 	_, _ = w.Write(response.Body)
 }
 
-func (h *managedGroupsReplaceHTTP) execute(r *http.Request) (response scim.Response, denial *scim.Error) {
+func (h *managedGroupsConditionalHTTP) execute(r *http.Request) (response scim.Response, denial *scim.Error) {
 	defer func() {
 		if recover() != nil {
 			response, denial = scim.Response{}, scim.NewError(503, "")
@@ -151,7 +184,7 @@ func (h *managedGroupsReplaceHTTP) execute(r *http.Request) (response scim.Respo
 	if resourceID == "" || r.URL.Path != "/scim/v2/Groups/"+resourceID || r.URL.RawPath != "" || r.URL.EscapedPath() != r.URL.Path {
 		return scim.Response{}, scim.NewError(404, "")
 	}
-	if r.Method != http.MethodPut {
+	if r.Method != h.method {
 		return scim.Response{}, scim.NewError(405, "")
 	}
 	if len(resourceID) > h.resourceMaximum {
@@ -197,7 +230,7 @@ func (h *managedGroupsReplaceHTTP) execute(r *http.Request) (response scim.Respo
 	ifMatch, _ := protocolHeader(r, "If-Match")
 	contentType, _ := protocolHeader(r, "Content-Type")
 	encoding, _ := protocolHeader(r, "Content-Encoding")
-	request := scim.Request{Operation: scim.GroupReplace, Credential: credential, ResourceID: resourceID, IfMatch: scim.Version(ifMatch), Body: body, ContentType: contentType, ContentEncoding: encoding}
+	request := scim.Request{Operation: h.operation, Credential: credential, ResourceID: resourceID, IfMatch: scim.Version(ifMatch), Body: body, ContentType: contentType, ContentEncoding: encoding}
 	calls, admitted := 0, false
 	gate := func(ctx context.Context, client scim.ProtocolClient) *scim.Error {
 		calls++
@@ -211,7 +244,7 @@ func (h *managedGroupsReplaceHTTP) execute(r *http.Request) (response scim.Respo
 		admitted = denial == nil
 		return denial
 	}
-	response, err = h.executor.ExecuteManagedAdmittedGroupReplace(r.Context(), facts.TenantID(), request, h.maximumMembers, gate)
+	response, err = h.executor(r.Context(), facts.TenantID(), request, h.maximumMembers, gate)
 	if err != nil {
 		var protocol *scim.Error
 		if errors.As(err, &protocol) && protocol != nil {

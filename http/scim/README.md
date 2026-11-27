@@ -1,5 +1,16 @@
 # SCIM HTTP
 
+## Managed bearer conditional Group PATCH
+
+Select `NewManagedGroupsPatchFeature` for
+`PATCH /scim/v2/Groups/{resource_id}` only. Send one issued SCIM bearer, the
+original strong `If-Match`, and a bounded `application/scim+json` PatchOp body.
+The native owner validates and applies ordered operations, including typed
+members, under its configured Group ceiling. It owns exact original-request
+replay and atomic version checks; the handler forwards the validated Group,
+ETag and Location. A stale version returns `412`; an exact replay does not
+apply the patch twice. Group PUT and reads are independently selectable.
+
 ## Managed bearer conditional Group Replace
 
 `NewManagedGroupsReplaceFeature` selects only
