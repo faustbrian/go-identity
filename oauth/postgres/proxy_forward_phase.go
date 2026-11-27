@@ -36,6 +36,7 @@ WHERE tenant_id=$1 AND transaction_id=$2 AND callback_command_id=$3 AND version=
 type proxyForwardPhase struct {
 	schema, authority, envelopeKey string
 	envelopes                      *secretenvelope.Service
+	directory                      *kernel.Repository
 	locator                        proxyBindingLocator
 	original                       proxyOriginalBinding
 	row                            proxyLookupRow
@@ -143,14 +144,18 @@ func (p *proxyForwardPhase) Check(ctx context.Context) error {
 	return nil
 }
 
+func (p *proxyForwardPhase) directoryAdmission() kernel.DirectoryAuthorityAdmission {
+	return kernel.DirectoryAuthorityAdmission{
+		Query:         kernel.DirectoryAuthorityQuery{TenantID: p.locator.Tenant, GlobalAuthorityID: p.authority},
+		GlobalVersion: p.original.GlobalVersion, TenantVersion: p.original.TenantVersion,
+	}
+}
+
 func (p *proxyForwardPhase) requireCurrent(ctx context.Context, w kernel.Work, version uint64) (time.Time, error) {
 	if err := p.Check(ctx); err != nil {
 		return time.Time{}, err
 	}
-	if err := w.RequireActiveDirectoryAuthority(ctx, p, kernel.DirectoryAuthorityAdmission{
-		Query:         kernel.DirectoryAuthorityQuery{TenantID: p.locator.Tenant, GlobalAuthorityID: p.authority},
-		GlobalVersion: p.original.GlobalVersion, TenantVersion: p.original.TenantVersion,
-	}); err != nil {
+	if err := w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
 		return time.Time{}, err
 	}
 	command, _ := base64.RawURLEncoding.DecodeString(string(p.locator.CallbackCommand))
@@ -219,6 +224,14 @@ func (p *proxyForwardPhase) Generate(ctx context.Context, generation uint64) ([]
 		ID: sha256.Sum256([]byte(p.locator.CallbackCommand)), Binding: p.original.Evidence, Nonce: p.original.CallbackNonce,
 	}
 	if !p.providerDenied {
+		// The generation marker has committed and released its directory locks.
+		// Recheck the same original epochs on the primary before revealing PKCE;
+		// this observation does not extend the original callback lifetime.
+		expected := p.directoryAdmission()
+		current, err := p.directory.GetDirectoryAuthority(ctx, expected.Query)
+		if err != nil || !current.Enabled || current.GlobalVersion != expected.GlobalVersion || current.TenantVersion != expected.TenantVersion || p.Check(ctx) != nil {
+			return nil, identity.ForbiddenError{}
+		}
 		plain, err := openProxyPart(ctx, p.envelopes, p.locator, proxyVerifier, 0, p.row.verifier, 4096)
 		if err != nil {
 			return nil, err

@@ -198,7 +198,7 @@ func (s *ProxyForwardService) ExecuteOAuthProxyForward(ctx context.Context, look
 		return oauthproxy.CallbackReconcile
 	}
 	phase := &proxyForwardPhase{schema: s.config.Schema, authority: s.config.GlobalAuthorityID, envelopeKey: s.config.CurrentEnvelopeKey,
-		envelopes: s.envelopes, locator: locator, original: original, row: row, command: command, proof: plan,
+		envelopes: s.envelopes, directory: s.directory, locator: locator, original: original, row: row, command: command, proof: plan,
 		generate: generate, providerDenied: lookup.ProviderDenied, startedAt: started}
 	defer func() { clear(phase.output.Artifact) }()
 	coordinator, registry, err := s.coordinator(phase)

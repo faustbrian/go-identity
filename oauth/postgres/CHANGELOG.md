@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recheck original global and tenant authority on the primary after proxy
+  callback reservation and before releasing PKCE to provider generation.
+
 - Add native existing-account preview completion. Bind the original browser
   and issue one preview-owned callback grant before redirect; consume the
   authenticated handoff and commit the preview session with proof erasure in
