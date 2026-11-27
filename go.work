@@ -36,6 +36,7 @@ use (
 	./oauth/onetap
 	./oauth/postgres
 	./oauth/providers
+	./oauth/proxy
 	./otp
 	./otp/postgres
 	./password
