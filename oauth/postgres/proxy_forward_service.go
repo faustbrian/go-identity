@@ -48,12 +48,13 @@ type ProxyForwardConfig struct {
 // The service borrows a primary pool and opens no routes or background work.
 // Each call independently binds proof, original ciphertext and generator.
 type ProxyForwardService struct {
-	pool      *database.Pool
-	directory *kernel.Repository
-	envelopes *envelope.Service
-	issuer    *capabilitypg.Issuer
-	limits    capability.Limits
-	config    ProxyForwardConfig
+	pool                                 *database.Pool
+	directory                            *kernel.Repository
+	envelopes                            *envelope.Service
+	issuer                               *capabilitypg.Issuer
+	limits                               capability.Limits
+	capabilityIssuer, capabilityAudience string
+	config                               ProxyForwardConfig
 }
 
 var _ oauthproxy.ProductionCallbackCommandStore = (*ProxyForwardService)(nil)
@@ -106,8 +107,10 @@ func NewProxyForwardService(pool *database.Pool, c ProxyForwardConfig) (*ProxyFo
 		return nil, invalid
 	}
 	limits := c.Capability.Crypto.Limits
+	capabilityIssuer, capabilityAudience := c.Capability.Crypto.Issuer, c.Capability.Audience
 	c.Capability = capabilitypg.IssuerConfig{}
-	s := &ProxyForwardService{pool: pool, directory: directory, envelopes: envelopes, issuer: issuer, limits: limits, config: c}
+	s := &ProxyForwardService{pool: pool, directory: directory, envelopes: envelopes, issuer: issuer, limits: limits,
+		capabilityIssuer: capabilityIssuer, capabilityAudience: capabilityAudience, config: c}
 	if _, _, err := s.coordinator(&proxyForwardPhase{}); err != nil {
 		return nil, invalid
 	}

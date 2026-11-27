@@ -44,36 +44,7 @@ func newProxyForwardIntegration(t *testing.T, corruptVerifier bool, providers ..
 	if len(providers) == 1 {
 		provider = providers[0]
 	}
-	proxyHistory, err := (ProxyTransactionMigrationSource{Schema: start.Schema, Version: 42}).Load(ctx)
-	if err != nil {
-		t.Fatal("load proxy owner history", err)
-	}
-	accounts, err := (kernel.AccountMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.MigrationSource{}, Version: 18}, Version: 19}).Load(ctx)
-	if err != nil {
-		t.Fatal("load real account owner history", err)
-	}
-	erasure, err := (kernel.OAuthProxyForwardPreparationErasureMigrationSource{
-		Base: kernel.OneTapCallbackPreparationErasureMigrationSource{Base: kernel.MigrationSource{}, Version: 20}, Version: 21,
-	}).Load(ctx)
-	if err != nil {
-		t.Fatal("load native proxy command erasure history", err)
-	}
-	tx, err := pool.Raw().Begin(ctx)
-	if err != nil {
-		t.Fatal("begin proxy fixture history", err)
-	}
-	defer tx.Rollback(ctx)
-	for _, migration := range append(append(accounts, erasure...), proxyHistory...) {
-		if migration.Version() <= 9 {
-			continue
-		}
-		if _, err := tx.Exec(ctx, migration.UpSQL()); err != nil {
-			t.Fatal("install proxy fixture owner history", migration.Name(), err)
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatal("commit proxy fixture owner history", err)
-	}
+	installProxyForwardIntegrationHistory(t, ctx, pool, start.Schema)
 
 	crypto, locator, original := proxyBindingFixture(t)
 	profile := provider.Profile()
@@ -218,6 +189,40 @@ VALUES($1,$2,$3,$4,$5,$6,$7,1,$8,$9,1,$10,$11,$11,'onetap-signing',$12,clock_tim
 	return proxyForwardIntegration{ctx: ctx, pool: pool, service: service, callback: callback, locator: locator, state: state, proofPlan: plan, original: original,
 		lookup: oauthproxy.CallbackLookup{StateDigest: stateDigest, ProductionDeployment: locator.Production, ProductionCallback: locator.CallbackURI,
 			ProviderID: profile.ID, ProviderVersion: profile.Version, Issuer: profile.Issuer, ClientID: profile.ClientID}}
+}
+
+func installProxyForwardIntegrationHistory(t *testing.T, ctx context.Context, pool *database.Pool, schema string) {
+	t.Helper()
+	proxyHistory, err := (ProxyTransactionMigrationSource{Schema: schema, Version: 42}).Load(ctx)
+	if err != nil {
+		t.Fatal("load proxy owner history", err)
+	}
+	accounts, err := (kernel.AccountMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.MigrationSource{}, Version: 18}, Version: 19}).Load(ctx)
+	if err != nil {
+		t.Fatal("load real account owner history", err)
+	}
+	erasure, err := (kernel.OAuthProxyForwardPreparationErasureMigrationSource{
+		Base: kernel.OneTapCallbackPreparationErasureMigrationSource{Base: kernel.MigrationSource{}, Version: 20}, Version: 21,
+	}).Load(ctx)
+	if err != nil {
+		t.Fatal("load native proxy command erasure history", err)
+	}
+	tx, err := pool.Raw().Begin(ctx)
+	if err != nil {
+		t.Fatal("begin proxy fixture history", err)
+	}
+	defer tx.Rollback(ctx)
+	for _, migration := range append(append(accounts, erasure...), proxyHistory...) {
+		if migration.Version() <= 9 {
+			continue
+		}
+		if _, err := tx.Exec(ctx, migration.UpSQL()); err != nil {
+			t.Fatal("install proxy fixture owner history", migration.Name(), err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal("commit proxy fixture owner history", err)
+	}
 }
 
 func TestProxyForwardProductionDenialCommitsOnceWithoutOpeningPKCE(t *testing.T) {

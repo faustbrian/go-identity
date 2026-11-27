@@ -26,7 +26,7 @@ RP verifier AAD schema. No new authority, journal, signup or email merge is adde
 Controlled signed-token/native PostgreSQL consumers do not claim live Google
 interoperability or complete provider-catalog qualification.
 
-## Production OAuth preview callback
+## Production OAuth preview Start and callback
 
 Install `ProxyTransactionMigrationSource` after the base OAuth schema. Select
 the identity coordinator's directory, preparation, external-admission and proxy
@@ -45,8 +45,27 @@ with the lifecycle effect. No production user, account or session is created or
 updated. A replay cannot disclose a previously committed result. An unknown
 outcome returns a redacted reconciliation error and never repeats an uncertain
 provider exchange. An exposed callback still needs counted provider-callback
-admission at its transport boundary. This adapter does not enable initiation,
-HTTP or preview session issuance.
+admission at its transport boundary. Selecting the callback alone does not
+enable initiation, HTTP or preview session issuance.
+
+To enable native initiation, also install the coordinator's
+`OAuthProxyStartPreparationErasureMigrationSource` after its forward counterpart.
+Construct `NewProxyStartService` with that same forward service and exact OIDC
+provider, claims profile, active state key, and production-scoped capability
+preparation codec. Select one trusted preview tenant, actor, HTTPS origin and
+redirect, recipient, and bearer authenticator. The principal must match the
+configured issuer and actor, with the sole configured audience and sole
+`identity.oauth.proxy-start` scope.
+
+Call `Start` with the original preview command and transaction, request
+fingerprint, and resolved Remember policy. Only the invocation that both
+generates the authorization and receives commit acknowledgement can return
+`Authorization()` and `Binding()`. Retain that binding in the intended preview
+before redirecting the browser. No verifier or grant proof is returned. Exact
+committed retries do not reveal another authorization. An unavailable result
+does not establish whether the original committed; do not restart with a new
+command or transaction to recover its result. This API neither mounts an HTTP
+route nor consumes the handoff in a preview session.
 
 ## Google One Tap browser start
 

@@ -2,11 +2,17 @@
 
 ## Unreleased
 
+- Add opt-in native OAuth preview Start. Authenticate the configured preview
+  principal and atomically commit one original transaction, one-use forward
+  grant, audit and lifecycle. Only a fresh acknowledged invocation can return
+  the provider authorization and original binding. HTTP admission and preview
+  session composition remain separate.
+
 - Add the opt-in native production OAuth preview callback. Match the original
   sealed transaction and one-use proof, open PKCE only after acknowledged
   reservation, and atomically settle the outcome without production identity or
   session effects. Replay and unknown settlement return no handoff. HTTP,
-  browser initiation and preview session composition remain separate.
+  native initiation and preview session composition are selected separately.
 
 - Add the opt-in, forward-only proxy custody migration after the base OAuth
   migration. It creates an empty table, leaves existing rows unchanged, and
