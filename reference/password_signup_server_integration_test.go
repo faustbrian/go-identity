@@ -339,6 +339,7 @@ type signupGraphExtensions struct {
 	socialOIDCPostAuth          bool
 	socialProviderRefresh       string
 	oneTapPopup                 bool
+	oneTapRedirect              bool
 	organizationKey             bool
 	organizationKeyUpgrade      bool
 	organizationKeyMetadata     bool
@@ -576,7 +577,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		socialPolicy = &referenceSocialOIDCPolicy{}
 		selectedAuthorization = socialPolicy
 	}
-	if extensions.oneTapPopup {
+	oneTapSelected := extensions.oneTapPopup || extensions.oneTapRedirect
+	if oneTapSelected {
 		selectedAuthorization = referenceOneTapPopupPolicy{}
 	}
 	if extensions.apiKey {
@@ -1430,7 +1432,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferenceSocialSigninHTTP(t, &c)
 	}
 	var oneTapSigning *rsa.PrivateKey
-	if extensions.oneTapPopup {
+	if extensions.oneTapRedirect {
+		oneTapSigning = configureReferenceOneTapRedirect(t, &c, origin)
+	} else if extensions.oneTapPopup {
 		oneTapSigning = configureReferenceOneTapPopup(t, &c, origin)
 	}
 	if extensions.sessionCache != nil {
@@ -1625,7 +1629,7 @@ END $$`); err != nil {
 		resumeUnlinkMigrationValidation(t, ctx, stores, deps)
 		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
 	}
-	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || extensions.oneTapPopup || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace || extensions.scimManagedGroupsRead || extensions.scimManagedGroupsCreate || extensions.scimManagedGroupsReplace || extensions.scimManagedGroupsPatch || extensions.scimManagedGroupsDelete
+	resumeSelectedGraph := extensions.factorReplacement || extensions.passkeyTOTP || extensions.socialOIDCNativeStart != "" || extensions.socialOIDCNativeSignin || extensions.socialOIDCHTTPSignin || oneTapSelected || extensions.enterpriseOIDC || extensions.enterpriseOAuth2 || extensions.enterpriseSAML || extensions.scimManagedUsersList || extensions.scimManagedUsersGet || extensions.scimManagedUsersCreate || extensions.scimManagedUsersDelete || extensions.scimManagedUsersPatch || extensions.scimManagedUsersReplace || extensions.scimManagedGroupsRead || extensions.scimManagedGroupsCreate || extensions.scimManagedGroupsReplace || extensions.scimManagedGroupsPatch || extensions.scimManagedGroupsDelete
 	if resumeSelectedGraph && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
 		// This larger selected graph can outlive the bounded operator call on a
 		// busy local database. Resume its durable exact prefix, never re-plan or
@@ -2424,8 +2428,12 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			}
 		}
 	}
-	if extensions.oneTapPopup {
+	if oneTapSelected {
 		f.afterEmailSignin = func(ctx context.Context, _ identity.UserID, _ []*http.Cookie, _ string, _ func(...string) ([]*http.Cookie, string), _ func([]*http.Cookie) bool) {
+			if extensions.oneTapRedirect {
+				proveReferenceOneTapRedirectTLS(t, ctx, c, deps, client, network.URL, origin, oneTapSigning)
+				return
+			}
 			proveReferenceOneTapPopupTLS(t, ctx, c, deps, client, network.URL, origin, oneTapSigning)
 		}
 	}

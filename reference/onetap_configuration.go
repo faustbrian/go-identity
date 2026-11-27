@@ -17,19 +17,22 @@ import (
 
 const oneTapReferenceField = "reference_onetap"
 
-// OneTapConfiguration opts into native Google popup initiation and, when
-// Completion is set, sign-in for existing linked accounts. Start uses the
+// OneTapConfiguration opts into native Google initiation and, when Completion
+// is set, sign-in for existing linked accounts. Redirect explicitly selects
+// the registered redirect-button profile instead of the default popup. Start uses the
 // Reference graph's original PostgreSQL session repository, authoritative
 // clock, risk evaluator and keys, capability preparation and audit retention.
 // The configured provider is borrowed; keep its lifetime through StoreSet.
 type OneTapConfiguration struct {
 	Start      oauthpg.OneTapStartConfig
 	Completion *oauthpg.OneTapCompletionConfig
+	Redirect   bool
 }
 
 // HTTPOneTapConfiguration selects the native owner's exact Start and/or
-// callback HTTP routes. Neither option enables generic OAuth, redirect mode,
-// signup or linking. Callback needs the graph's existing synchronizer policy.
+// callback HTTP routes for the single profile selected by OneTapConfiguration.
+// Neither enables generic OAuth, signup or linking. Callback needs the graph's
+// existing synchronizer policy.
 type HTTPOneTapConfiguration struct {
 	EnableStart, EnableCallback bool
 	CSRFCookie                  session.CSRFCookiePolicy
@@ -47,8 +50,11 @@ type oneTapState struct {
 	tenant      identity.TenantID
 	audience    string
 	duration    time.Duration
+	redirect    bool
 	http        HTTPOneTapConfiguration
 }
+
+const oneTapCallbackPath = "/v1/oauth/onetap-callback"
 
 func validateOneTapSelection(c StoreConfiguration) error {
 	invalid := identity.InvalidInputError{Field: oneTapReferenceField}
@@ -95,19 +101,23 @@ func composeOneTap(c StoreConfiguration, d ReferenceDependencies, selectedSessio
 	start.Issuance.Clock = execution.Clock
 	start.CapabilityPreparation = c.PasswordSignup.Preparation
 	start.Risk.Evaluation, start.Risk.Keys = evaluation, c.OTP.RiskKeys
-	service, err := oauthpg.NewOneTapStartService(d.PostgreSQL, start)
+	newStart, newCompletion := oauthpg.NewOneTapStartService, oauthpg.NewOneTapCompletionService
+	if n.Redirect {
+		newStart, newCompletion = oauthpg.NewOneTapRedirectStartService, oauthpg.NewOneTapRedirectCompletionService
+	}
+	service, err := newStart(d.PostgreSQL, start)
 	if err != nil {
 		return nil, err
 	}
 	state := &oneTapState{start: service, profile: start.Provider.Profile(), issuance: start.Issuance,
-		schema: start.Schema, session: execution.Repository, tenant: start.TenantID, audience: execution.Profile.Audience, duration: start.MaximumDuration}
+		schema: start.Schema, session: execution.Repository, tenant: start.TenantID, audience: execution.Profile.Audience, duration: start.MaximumDuration, redirect: n.Redirect}
 	if n.Completion != nil {
 		completion := *n.Completion
 		if completion.PolicyNamespace != execution.Profile.PolicyNamespace || completion.Audience != execution.Profile.Audience ||
 			!sessionIssuanceMatches(*c.Session, completion.Issuer, completion.CSRF) || !oneTapFlowKeyRetained(start.Issuance.LookupKey, completion.FlowKeys) {
 			return nil, invalid
 		}
-		state.complete, err = oauthpg.NewOneTapCompletionService(service, completion)
+		state.complete, err = newCompletion(service, completion)
 		if err != nil {
 			return nil, err
 		}
@@ -119,10 +129,16 @@ func composeOneTap(c StoreConfiguration, d ReferenceDependencies, selectedSessio
 			start.Issuance.Origin != c.OTP.PreAuth.Origin || (h.EnableCallback && state.complete == nil) {
 			return nil, invalid
 		}
-		flow, e := start.Issuance.Cookie.DeletionAttributes()
-		original, o := c.OTP.PreAuth.Cookie.DeletionAttributes()
-		if e != nil || o != nil || flow.String() != original.String() {
-			return nil, invalid
+		if n.Redirect {
+			if start.Issuance.CallbackURL != start.Issuance.Origin+oneTapCallbackPath {
+				return nil, invalid
+			}
+		} else {
+			flow, e := start.Issuance.Cookie.DeletionAttributes()
+			original, o := c.OTP.PreAuth.Cookie.DeletionAttributes()
+			if e != nil || o != nil || flow.String() != original.String() {
+				return nil, invalid
+			}
 		}
 		if h.EnableCallback {
 			if _, err := h.CSRFCookie.DeletionAttributes(); err != nil {

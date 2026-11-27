@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select Google One Tap redirect-button sign-in independently of popup.
+  Wire the trusted callback destination and original frontchannel proof into
+  the existing session reader and strict logout profile.
+
 - Opt into conditional managed SCIM Group DELETE over HTTPS. Reuse the
   selected native owner and quota, preserve canonical replay and optional
   aliasing, and leave member resources untouched.

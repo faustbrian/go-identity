@@ -41,6 +41,26 @@ without another write. Omitted writable values follow native replacement
 semantics; referenced resources must resolve with the supplied type within the
 connection. Other methods and routes remain independently selected.
 
+## Google One Tap redirect-button sign-in
+
+Use the same native One Tap and session baseline as popup, but set
+`OneTapConfiguration.Redirect = true`, set `Start.Issuance.CallbackURL` to
+the configured origin plus `/v1/oauth/onetap-callback`, and leave
+`Start.Issuance.Cookie` zero. Register that exact endpoint with Google. The
+selected native issuer uses a separate host-only, HttpOnly, Secure cookie
+with `SameSite=None` and the callback path. Enable either HTTP route
+explicitly with `HTTPOneTap`; the popup profile is not a fallback.
+
+Start takes the original signed device cookie and one `Idempotency-Key`.
+Use its committed projection to render the Google redirect button; pass
+`state` as the button state rather than an authentication token. The Google
+form POST uses the path cookie, `state`, signed `credential` and the matching
+`g_csrf_token` cookie/value. Sender origin and the ambient Lax device cookie
+are not callback authority. A fresh commit signs in the existing linked
+account and returns the ordinary session and synchronizer cookies. Use the
+existing session read and strict logout routes. No UI or live Google setup is
+provided by Reference.
+
 ## Google One Tap popup sign-in
 
 Set `StoreConfiguration.OneTap` on the PostgreSQL password/session baseline.
