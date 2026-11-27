@@ -20,6 +20,7 @@ import (
 
 const (
 	proxyOIDCContext       = "identity.oauth.proxy-oidc-evidence.v1"
+	proxyOIDCAuthorityV2   = "identity.oauth.proxy-oidc-evidence.v2"
 	proxyOIDCMaximumWire   = 8192
 	proxyOIDCMaximumRecord = 2048
 	proxyOIDCLifetime      = 5 * time.Minute
@@ -39,8 +40,13 @@ type ProxyOIDCEvidenceBinding struct {
 	ClientID, PreviewOrigin, PreviewRedirect, Recipient         string
 	ClaimsProfile                                               string
 	ProviderVersion, ClaimsVersion                              uint64
-	Remember                                                    session.RememberPolicy
-	IssuedAt, ExpiresAt                                         time.Time
+	// ProviderAuthorityEpoch is the live connection epoch, independent of the
+	// configured ProviderVersion. Zero selects the original legacy wire context.
+	// Only a caller that requires a nonzero current epoch may rely on this field
+	// as part of live authority; successful decoding grants no authority itself.
+	ProviderAuthorityEpoch uint64
+	Remember               session.RememberPolicy
+	IssuedAt, ExpiresAt    time.Time
 }
 
 // Format redacts original browser and transaction metadata.
@@ -254,14 +260,22 @@ func (b ProxyOIDCEvidenceBinding) context(key string) (secretenvelope.Context, e
 	if err != nil {
 		return secretenvelope.Context{}, err
 	}
-	frame, err := json.Marshal([]any{proxyOIDCContext, "verified-oidc", b.TenantID, b.CommandID, b.TransactionID,
+	purpose := proxyOIDCContext
+	if b.ProviderAuthorityEpoch != 0 {
+		purpose = proxyOIDCAuthorityV2
+	}
+	fields := []any{purpose, "verified-oidc", b.TenantID, b.CommandID, b.TransactionID,
 		b.RequestFingerprint, b.StateDigest, b.PKCEChallengeDigest, b.ProductionDeployment, b.PreviewDeployment,
 		b.ProviderID, b.ProviderVersion, b.Issuer, b.ClientID, b.PreviewOrigin, b.PreviewRedirect, b.Recipient,
-		b.ClaimsProfile, b.ClaimsVersion, remember, b.IssuedAt.UTC(), b.ExpiresAt.UTC(), key})
+		b.ClaimsProfile, b.ClaimsVersion, remember, b.IssuedAt.UTC(), b.ExpiresAt.UTC(), key}
+	if b.ProviderAuthorityEpoch != 0 {
+		fields = append(fields, b.ProviderAuthorityEpoch)
+	}
+	frame, err := json.Marshal(fields)
 	defer clear(frame)
 	if err != nil {
 		return secretenvelope.Context{}, err
 	}
 	digest := sha256.Sum256(frame)
-	return secretenvelope.NewContext(map[string]string{"purpose": proxyOIDCContext, "binding": base64.RawURLEncoding.EncodeToString(digest[:])})
+	return secretenvelope.NewContext(map[string]string{"purpose": purpose, "binding": base64.RawURLEncoding.EncodeToString(digest[:])})
 }

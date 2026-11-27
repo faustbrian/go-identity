@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Authenticate the live provider epoch in a separate v2 proxy evidence context
+  without changing legacy zero-epoch handoffs.
+
 - Accept exact case-sensitive native tenant identifiers in sealed OIDC proxy
   evidence, preserving the original tenant bytes in authenticated bindings.
 
