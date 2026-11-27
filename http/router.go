@@ -273,7 +273,7 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	denyBodyOverflow := func() {
 		create := owned.Method == http.MethodPost && (owned.URL.Path == "/scim/v2/Users" || owned.URL.Path == "/scim/v2/Groups")
 		prefix, _ := scimResourcePath(owned.URL.Path)
-		update := owned.Method == http.MethodPut && prefix != "" || owned.Method == http.MethodPatch && prefix == scimUserPathPrefix
+		update := prefix != "" && (owned.Method == http.MethodPut || owned.Method == http.MethodPatch)
 		if selectedSCIM && ctx.Err() == nil && (create || update) {
 			routerSCIMBodyTooLarge(w)
 			return

@@ -150,11 +150,23 @@ func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupCreate(t *testing.T) {
 	}
 }
 
-func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupReplace(t *testing.T) {
+func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupWrites(t *testing.T) {
+	for _, tc := range []struct{ method, operation string }{
+		{http.MethodPut, "identity.scim.group-replace"},
+		{http.MethodPatch, "identity.scim.group-patch"},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			assertSCIMGroupWriteEnvelope(t, tc.method, tc.operation)
+		})
+	}
+}
+
+func assertSCIMGroupWriteEnvelope(t *testing.T, method, operation string) {
+	t.Helper()
 	const path = "/scim/v2/Groups/Group_1-a.~"
 	policy := routerPolicy()
 	maximum := int64(policy.Network.Limits.MaximumBodyBytes)
-	replace := scimUserOperation(t, "identity.scim.group-replace", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	write := scimUserOperation(t, operation, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/scim+json")
 		w.Header().Set("X-Test-Resource", r.PathValue("resource_id"))
 		if r.Header.Get("Content-Encoding") != "" {
@@ -171,7 +183,7 @@ func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupReplace(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	replace.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.scim.group-replace","parameters":[{"name":"resource_id","in":"path","required":true,"schema":{"type":"string"}}],"security":[],"responses":{"200":{"description":"Test fixture"}}}`)}
+	write.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"` + operation + `","parameters":[{"name":"resource_id","in":"path","required":true,"schema":{"type":"string"}}],"security":[],"responses":{"200":{"description":"Test fixture"}}}`)}
 	get := scimUserOperation(t, "identity.scim.group-get", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -184,7 +196,11 @@ func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupReplace(t *testing.T) {
 		}
 		return h
 	}
-	selected, replaceOnly, getOnly := build(get, replace), build(replace), build(get)
+	selected, writeOnly, getOnly := build(get, write), build(write), build(get)
+	sibling := http.MethodPut
+	if method == http.MethodPut {
+		sibling = http.MethodPatch
+	}
 	for _, row := range []struct {
 		name, method, path, wantID string
 		router                     http.Handler
@@ -192,16 +208,17 @@ func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupReplace(t *testing.T) {
 		length                     int64
 		status                     int
 	}{
-		{"selected", "PUT", path, "Group_1-a.~", selected, false, 1, 200},
-		{"encoding", "PUT", path, "Group_1-a.~", selected, true, 1, 415},
-		{"known overflow", "PUT", path, "Group_1-a.~", selected, false, maximum + 1, 413},
-		{"streamed overflow", "PUT", path, "Group_1-a.~", selected, false, -1, 413},
+		{"selected", method, path, "Group_1-a.~", selected, false, 1, 200},
+		{"encoding", method, path, "Group_1-a.~", selected, true, 1, 415},
+		{"known overflow", method, path, "Group_1-a.~", selected, false, maximum + 1, 413},
+		{"streamed overflow", method, path, "Group_1-a.~", selected, false, -1, 413},
 		{"get still selected", "GET", path, "", selected, false, 1, 204},
-		{"get not implied", "GET", path, "", replaceOnly, false, 1, 405},
-		{"put not implied", "PUT", path, "", getOnly, true, 1, 400},
-		{"encoded alias", "PUT", "/scim/v2/Groups/%47roup", "", selected, true, 1, 400},
-		{"reserved search", "PUT", "/scim/v2/Groups/.search", "", selected, true, 1, 400},
-		{"wrong collection", "PUT", "/scim/v2/Users/Group_1-a.~", "", selected, true, 1, 400},
+		{"get not implied", "GET", path, "", writeOnly, false, 1, 405},
+		{"write not implied", method, path, "", getOnly, true, 1, 400},
+		{"sibling write not implied", sibling, path, "", writeOnly, true, 1, 400},
+		{"encoded alias", method, "/scim/v2/Groups/%47roup", "", selected, true, 1, 400},
+		{"reserved search", method, "/scim/v2/Groups/.search", "", selected, true, 1, 400},
+		{"wrong collection", method, "/scim/v2/Users/Group_1-a.~", "", selected, true, 1, 400},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			r := corsRequest(row.method, row.path, "")
@@ -219,8 +236,8 @@ func TestRouterAppliesSCIMBodyEnvelopeOnlyToSelectedGroupReplace(t *testing.T) {
 			if w.Code != row.status || w.Header().Get("X-Test-Resource") != row.wantID {
 				t.Fatalf("status=%d resource=%q; want %d and %q", w.Code, w.Header().Get("X-Test-Resource"), row.status, row.wantID)
 			}
-			if row.method == "PUT" && row.status != 400 && w.Header().Get("Content-Type") != "application/scim+json" {
-				t.Fatal("selected Group Replace lost its SCIM media type")
+			if row.method == method && row.status != 400 && w.Header().Get("Content-Type") != "application/scim+json" {
+				t.Fatal("selected Group write lost its SCIM media type")
 			}
 		})
 	}

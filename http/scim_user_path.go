@@ -24,6 +24,10 @@ func scimResourceOperationPrefix(op OperationDescriptor) string {
 			if op.Route.Method == http.MethodPut {
 				return scimGroupPathPrefix
 			}
+		case "identity.scim.group-patch":
+			if op.Route.Method == http.MethodPatch {
+				return scimGroupPathPrefix
+			}
 		}
 	}
 	return ""

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Route the explicitly selected SCIM Group PATCH to one canonical resource
+  ID with SCIM encoding and payload-size errors. Group PUT stays independent.
+
 - Route explicitly selected SCIM Group Replace to one canonical resource ID
   and return SCIM overflow errors at the existing body cap.
 
