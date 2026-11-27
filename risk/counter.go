@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	identity "github.com/faustbrian/go-identity"
 )
 
 var (
@@ -358,6 +360,11 @@ func (c CounterCoordinator) admitScope(scope Context, phase Phase) (Admission, e
 }
 
 func (c CounterCoordinator) prepareAdmitted(scope Context, subject Subject, phase Phase, a Admission, now time.Time) (CounterCommand, error) {
+	if scope.Operation == oauthProxyForwardAction && c.state.policy.state.oauthProxyForward {
+		if _, err := identity.ParsePreAuthTransactionID(subject.Resource); err != nil {
+			return CounterCommand{}, ErrInvalidCounterCommand
+		}
+	}
 	passkey := c.state.policy.state.passkeyDiscovery && (scope.Operation == "identity.passkey.signin-options" || scope.Operation == "identity.passkey.signin-verify")
 	oauth := c.state.policy.state.oauthDiscovery && (scope.Operation == "identity.oauth.signin-start" || scope.Operation == "identity.oauth.callback")
 	sso := scope.Operation == ssoDiscoveryAction

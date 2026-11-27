@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a selected Authentication profile for the production OAuth proxy
+  callback. It counts the trusted tenant, client IP and authenticated original
+  preview transaction without inventing a user identifier or device.
+
 - Admit exact SSO directory-sync-cancel through the existing privileged
   profile. Counters bind to the retained generation and original attempt;
   this grants no organization or directory write authority on its own.

@@ -144,14 +144,15 @@ type PolicyConfig struct {
 // invalid. It owns no store, clock or provider and never issues evidence.
 type Policy struct{ state *policyState }
 type policyState struct {
-	version          uint64
-	limits           VelocityLimits
-	profiles         map[ProfileClass]Profile
-	hibpTTL          time.Duration
-	hibpOperations   map[Action]bool
-	passkeyDiscovery bool
-	oauthDiscovery   bool
-	ssoDiscovery     bool
+	version           uint64
+	limits            VelocityLimits
+	profiles          map[ProfileClass]Profile
+	hibpTTL           time.Duration
+	hibpOperations    map[Action]bool
+	passkeyDiscovery  bool
+	oauthDiscovery    bool
+	ssoDiscovery      bool
+	oauthProxyForward bool
 }
 
 type profileBounds struct {
@@ -174,6 +175,25 @@ func NewPolicy(c PolicyConfig) (Policy, error) {
 // rules as NewPolicy. Use this same policy value for the counter and evaluator.
 func NewSSODiscoveryPolicy(c PolicyConfig) (Policy, error) {
 	return newPolicy(c, true)
+}
+
+const oauthProxyForwardAction Action = "identity.oauth.proxy-forward"
+
+// WithOAuthProxyForward selects the exact production proxy callback profile.
+// It requires tenant, trusted client network and the authenticated original
+// preview transaction, not a user or browser device absent on this hop. Use
+// the returned immutable policy for both counter and evaluator construction.
+// The original value and every other action's dimensions remain unchanged.
+func (p Policy) WithOAuthProxyForward() (Policy, error) {
+	if p.state == nil {
+		return Policy{}, ErrInvalidPolicy
+	}
+	if p.state.oauthProxyForward {
+		return p, nil
+	}
+	selected := *p.state
+	selected.oauthProxyForward = true
+	return Policy{state: &selected}, nil
 }
 
 func newPolicy(c PolicyConfig, ssoDiscovery bool) (Policy, error) {
@@ -279,7 +299,12 @@ func (p Policy) Admit(action Action) (Admission, error) {
 		return a, nil
 	}
 	a.Profile = p.state.profiles[class]
-	a.Profile.Dimensions = slices.Clone(a.Profile.Dimensions)
+	if action == oauthProxyForwardAction && p.state.oauthProxyForward {
+		a.Profile.Dimensions = []Dimension{TenantDimension, NetworkDimension, ResourceDimension}
+		a.Profile.MaxCounters = len(a.Profile.Dimensions)
+	} else {
+		a.Profile.Dimensions = slices.Clone(a.Profile.Dimensions)
+	}
 	a.Profile.RequiredSignals = slices.Clone(a.Profile.RequiredSignals)
 	if p.state.hibpOperations[action] {
 		a.Profile.RequiredSignals = append(a.Profile.RequiredSignals, "hibp")
