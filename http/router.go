@@ -66,6 +66,26 @@ type TransportPolicy struct {
 // without retrying work or asserting that a disconnected client received it.
 // Returned snapshots are concurrent-safe when borrowed handlers are.
 func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middleware []MiddlewareDescriptor) (http.Handler, OpenAPIDocument, error) {
+	return newRouter(policy, operations, middleware, nil)
+}
+
+// OAuthPreviewRelayPath is the fixed browser landing and completion path for
+// the OAuth proxy's preview deployment, not the provider's callback path.
+const OAuthPreviewRelayPath = "/oauth2/preview/complete"
+
+// NewRouterWithOAuthPreview explicitly mounts the trusted OAuth browser relay
+// at OAuthPreviewRelayPath inside the normal transport envelope. The relay
+// must own exact GET/POST, same-origin and native completion enforcement. It
+// receives neither CORS grants nor operation middleware and is not an OpenAPI
+// operation. A selected operation cannot claim the reserved path.
+func NewRouterWithOAuthPreview(policy TransportPolicy, operations []OperationDescriptor, preview http.Handler) (http.Handler, OpenAPIDocument, error) {
+	if preview == nil {
+		return nil, OpenAPIDocument{}, ErrInvalidInput
+	}
+	return newRouter(policy, operations, nil, preview)
+}
+
+func newRouter(policy TransportPolicy, operations []OperationDescriptor, middleware []MiddlewareDescriptor, preview http.Handler) (http.Handler, OpenAPIDocument, error) {
 	if policy.HandlerTimeout < time.Millisecond || policy.HandlerTimeout > 30*time.Second || len(operations) > 1024 || !validMiddleware(middleware) {
 		return nil, OpenAPIDocument{}, ErrInvalidInput
 	}
@@ -105,6 +125,9 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 			scimResourceMethods[prefix][op.Route.Method] = true
 		}
 		for _, path := range dispatchPaths(op) {
+			if preview != nil && path == OAuthPreviewRelayPath {
+				return nil, OpenAPIDocument{}, ErrInvalidInput
+			}
 			if _, id := scimResourcePath(path); id != "" {
 				if exactSCIMResourcePaths == nil {
 					exactSCIMResourcePaths = make(map[string]struct{})
@@ -161,8 +184,18 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 		return nil, OpenAPIDocument{}, err
 	}
 	cors.(*corsHandler).next = dispatch
+	next := cors
+	if preview != nil {
+		next = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == OAuthPreviewRelayPath {
+				preview.ServeHTTP(w, r)
+				return
+			}
+			cors.ServeHTTP(w, r)
+		})
+	}
 	document.operations = cloneOperations(ops)
-	return &routerHandler{network: network, next: cors, timeout: policy.HandlerTimeout, scimRoutes: scimRoutes,
+	return &routerHandler{network: network, next: next, timeout: policy.HandlerTimeout, scimRoutes: scimRoutes,
 		scimResourceMethods: scimResourceMethods, exactSCIMResourcePaths: exactSCIMResourcePaths}, document, nil
 }
 

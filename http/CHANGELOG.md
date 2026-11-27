@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep the opt-in OAuth preview browser relay inside the router's HTTP
+  deadline, streaming body cap and canceled-response guards.
+
 - Select exact tenant One Tap redirect form navigation separately from
   popup. The original proof owner receives the POST without a sender-origin
   assumption or any cross-origin script grant.

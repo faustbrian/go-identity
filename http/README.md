@@ -66,6 +66,12 @@ feature factories. Those factories must enforce their advertised controls;
 metadata cannot certify an arbitrary supplied handler. CORS policy for an
 unselected method/path is rejected. Preflight does no owner or hook work.
 
+Select `NewRouterWithOAuthPreview` only with the OAuth preview browser handler.
+Its fixed `/oauth2/preview/complete` landing and completion share the router's
+HTTPS, request deadline, streaming body bound and canceled-response protection.
+The relay itself owns origin, method and native completion enforcement; it
+adds no cross-origin grants or OpenAPI operation.
+
 Selected SCIM User Get, Delete, Patch and Replace independently dispatch
 on `/scim/v2/Users/{resource_id}`. Group Get and Replace on
 `/scim/v2/Groups/{resource_id}` and Group List on `/scim/v2/Groups` are also
