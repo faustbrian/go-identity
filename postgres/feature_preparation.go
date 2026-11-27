@@ -228,7 +228,7 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return result, identity.UnavailableError{}
 	}
 	external, gated := phase.(FeatureAdmissionPreparationContributor)
-	if (oauthProxyForwardClaim(q) || oneTapStartClaim(q) || oneTapCallbackClaim(q) || ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q)) && !gated {
+	if (oauthProxyStartClaim(q) || oauthProxyForwardClaim(q) || oneTapStartClaim(q) || oneTapCallbackClaim(q) || ssoEnterpriseStartClaim(q) || ssoOAuth2CallbackClaim(q) || ssoSAMLCallbackClaim(q) || ssoSAMLIDPConfirmationClaim(q) || ssoEnterpriseGrantRefreshClaim(q) || ssoSAMLLogoutRelayIssueClaim(q)) && !gated {
 		return result, invalidPreparation()
 	}
 	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
@@ -283,6 +283,9 @@ func (c *Coordinator) executePreparedFeatureCaptured(ctx context.Context, claimS
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	if ssoSAMLIDPConfirmationClaim(q) && !sameSSOSAMLIDPConfirmationCustody(original, generated) {
+		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
+	}
+	if oauthProxyStartClaim(q) && !sameOAuthProxyStartCustody(original, generated) {
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	if ssoSAMLLogoutRelayIssueClaim(q) && !sameSSOSAMLLogoutRelayIssueOrigin(original, generated) {
@@ -362,6 +365,12 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	}
 	if ssoEnterpriseStartSelected(p) && !validSSOEnterpriseStart(s.Binding, p) {
 		return q, nil, nil, invalidPreparation()
+	}
+	if oauthProxyStartSelected(p) {
+		intent, valid := decodeOAuthProxyStart(original)
+		if !valid || intent.sealed != ([32]byte{}) || !validOAuthProxyStartPlan(s.Binding, p) {
+			return q, nil, nil, invalidPreparation()
+		}
 	}
 	if s.Operation == SSOOIDCExplicitLinkStartOperation() && !validSSOOIDCExplicitLinkStartCommand(original, p) {
 		return q, nil, nil, invalidPreparation()
@@ -456,11 +465,14 @@ func preparationRetainsDeclaration(p CommandPlan) bool {
 	// reserved before exchange, so recovery needs the same frozen declaration.
 	// Enterprise start likewise retains its admission-gated declaration
 	// through terminal state issuance and temporary output erasure.
-	return p.CommandCounters != nil || providerSigninPreparation(p) || oneTapStartSelected(p) || ssoEnterpriseStartSelected(p) ||
+	return p.CommandCounters != nil || providerSigninPreparation(p) || oauthProxyStartSelected(p) || oneTapStartSelected(p) || ssoEnterpriseStartSelected(p) ||
 		p.Feature != nil && (p.Feature.Operation == SSOEnterpriseGrantRefreshOperation() || p.Feature.Operation == SSOSAMLLogoutRelayIssueOperation())
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
+	if oauthProxyStartSelected(original) && (!validOAuthProxyStartPlan(b, original) || !validOAuthProxyStartPlan(b, final) || final.CapabilityIssuance == nil) {
+		return false
+	}
 	if oauthRPInitiationSelected(original) && (!validOAuthRPInitiation(b, original) || !validOAuthRPInitiation(b, final) || final.CapabilityIssuance == nil) {
 		return false
 	}
@@ -508,7 +520,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		}
 		selectedIssuance := final.MFAContinuation != nil || i.RegistrationUserID != "" || i.ResetRecipientUserID != "" || i.MagicLinkRecipientUserID != "" ||
 			validManagedEmailIssuance(b, final) || validOrganizationInvitationIssuance(b, final) || phoneResetRequestPreparation(final) ||
-			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validOneTapStartPlan(b, final) ||
+			validAnonymousUpgradePreparation(b, final) || validOAuthRPInitiation(b, final) || validOAuthProxyStartPlan(b, final) || validOneTapStartPlan(b, final) ||
 			validSSOEnterpriseStart(b, final) || validSSOSAMLLogoutRelayIssuePlan(b, final)
 		if !selectedIssuance || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final) {
 			return false

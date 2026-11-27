@@ -48,6 +48,9 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.AccountLinkState != nil {
 		return nil, invalidPlan()
 	}
+	if oauthProxyStartSelected(p) && !validOAuthProxyStartPlan(binding, p) {
+		return nil, invalidPlan()
+	}
 	if !proofBase && p.Feature != nil && oauthCallbackDenialSelected(p.Feature.Operation) {
 		return encodeOAuthCallbackDenialPlan(binding, fingerprint, p)
 	}

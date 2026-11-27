@@ -192,6 +192,16 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 			return w.fail(w.state.ctx, err)
 		}
 	}
+	if w.state.binding.OperationID == oauthProxyStartPurpose {
+		if w.state.featureApplyCommand == nil {
+			return w.fail(w.state.ctx, invalidWork())
+		}
+		var err error
+		subject, err = oauthProxyStartGrantSubject(w.state.binding, w.state.execution.reservation.plan.snapshot(), *w.state.featureApplyCommand, payload)
+		if err != nil {
+			return w.fail(w.state.ctx, err)
+		}
+	}
 	if w.state.binding.OperationID == organizationInvitationSendOperation().OperationID || w.state.binding.OperationID == organizationInvitationResendOperation().OperationID {
 		var err error
 		var selected identity.UserID
@@ -272,6 +282,9 @@ func validateIssuanceContributor(b identity.CommandBinding, p *CapabilityIssuanc
 			return invalidPlan()
 		}
 		if grant.Purpose == oneTapCallbackPurpose && !validOneTapStartBinding(b) {
+			return invalidPlan()
+		}
+		if grant.Purpose == oauthProxyForwardPurpose && !validOAuthProxyStartBinding(b) {
 			return invalidPlan()
 		}
 	}

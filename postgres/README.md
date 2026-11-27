@@ -38,6 +38,21 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
+## OAuth proxy initiation preparation
+
+`OAuthProxyStartOperation` selects the native prepared start only. Its original
+command binds the preview request; retained generation may add only the exact
+encrypted-custody digest. The coordinator stages one scoped forward grant and
+no user, account, session or delivery. Ordinary command reservation cannot
+select this profile.
+
+Append `OAuthProxyStartPreparationErasureMigrationSource` after the existing
+proxy-forward erasure migration before enabling a native start writer. This
+replaces only the preparation guard function with a bounded lock timeout; no
+rows are scanned or rewritten. Decided starts erase temporary ciphertext in
+the original receipt transaction. Pending starts retain it. Code rollback does
+not require removing the guard.
+
 ## OAuth proxy callback preparation erasure
 
 Append `OAuthProxyForwardPreparationErasureMigrationSource` after existing

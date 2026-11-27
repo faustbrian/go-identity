@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a closed native OAuth proxy initiation plan. Only the prepared proxy
+  owner can stage its single forward grant, bound to the original request
+  and encrypted custody. Append the optional start erasure migration before
+  enabling the writer; pending output remains recoverable.
+
 - Erase duplicate OAuth proxy callback preparation only with its definitive
   terminal receipt. Preserve undecided custody and original tokenless replay;
   append `OAuthProxyForwardPreparationErasureMigrationSource` after existing
