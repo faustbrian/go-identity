@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose authenticated original provider, transaction and lifetime for OAuth
+  preview callback rate accounting. Require the trusted tenant and leave
+  original reservation, credential custody and callback execution untouched.
+
 - Add opt-in native OAuth preview Start. Authenticate the configured preview
   principal and atomically commit one original transaction, one-use forward
   grant, audit and lifecycle. Only a fresh acknowledged invocation can return

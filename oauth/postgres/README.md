@@ -48,6 +48,11 @@ provider exchange. An exposed callback still needs counted provider-callback
 admission at its transport boundary. Selecting the callback alone does not
 enable initiation, HTTP or preview session issuance.
 
+`ProxyCallbackRateSource` authenticates the original provider, transaction and
+lifetime for that transport's rate budget. Pass the trusted network tenant, not
+a tenant from callback parameters. This read does not reserve the original,
+release proof or PKCE, or replace the callback's own admission checks.
+
 To enable native initiation, also install the coordinator's
 `OAuthProxyStartPreparationErasureMigrationSource` after its forward counterpart.
 Construct `NewProxyStartService` with that same forward service and exact OIDC
