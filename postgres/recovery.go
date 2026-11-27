@@ -182,10 +182,13 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	if e != nil {
 		return result, e
 	}
-	if preparationOnly && providerSigninPreparation(plan) {
+	proxyForwardPending := plan.Feature != nil && plan.Feature.Operation == OAuthProxyForwardOperation()
+	if proxyForwardPending || preparationOnly && providerSigninPreparation(plan) {
 		// No final attachment does not prove that an external provider code was
 		// never exchanged. Keep the original state reservation and generation;
 		// metadata recovery must not turn uncertainty into rollback or release.
+		// A proxy attachment likewise proves no external compensation: a local
+		// rollback must not release an already attempted provider callback.
 		return result, nil
 	}
 	knownAccountLinkRefusal := false

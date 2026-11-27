@@ -110,6 +110,13 @@ func validateProviderSigninConsumption(owner FeatureExecutionContributor, comman
 	if !present || code || recovery || !providerSigninPreparation(plan) || plan.Feature.Operation != feature.Operation {
 		return invalidPlan()
 	}
+	if feature.Operation == OAuthProxyForwardOperation() {
+		native, ok := owner.(OAuthProxyForwardContributor)
+		if !ok || cookie || bearer || !validOAuthProxyForwardBinding(feature.Binding) {
+			return invalidPlan()
+		}
+		return native.ValidateOAuthProxyForward(command, *plan.Capability)
+	}
 	if feature.Operation == SSOOIDCExplicitLinkCallbackOperation() {
 		if native, ok := owner.(SSOOIDCExplicitLinkContributor); ok && bearer && !cookie && validSSOOIDCExplicitLinkBinding(feature.Binding) {
 			return native.ValidateSSOOIDCExplicitLinkConsumption(command, *plan.Capability)

@@ -605,6 +605,12 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := w.state.tx.Rollback(cleanup); err != nil {
 		return unknown, identity.UnavailableError{}
 	}
+	if r.preparation != nil && oauthProxyForwardClaim(r.request) {
+		// SQL rollback can undo only local effects. Provider exchange or token
+		// disposal may already have happened, so the original reservation and
+		// authenticated output must remain pending for reconciliation.
+		return unknown, identity.UnknownCommitError{CommandID: w.state.binding.CommandID}
+	}
 	if !complete {
 		return unknown, identity.UnavailableError{}
 	}

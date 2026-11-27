@@ -51,6 +51,10 @@ func validateCapabilityPlan(binding identity.CommandBinding, plan *CapabilityPla
 		return invalidPlan()
 	}
 	switch binding.OperationID {
+	case oauthProxyForwardPurpose:
+		if !validOAuthProxyForwardBinding(binding) {
+			return invalidPlan()
+		}
 	case "identity.oauth.callback":
 		if !validOAuthCallbackDenialBinding(binding) && binding.ValidateFor(oauthSigninAccountOperation()) != nil {
 			return invalidPlan()

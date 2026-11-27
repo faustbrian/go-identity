@@ -336,7 +336,7 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	}
 	// These native browser paths must pass gated preparation before obtaining
 	// Work. A caller-supplied plan cannot substitute for original admission.
-	if binding.OperationID == ssoSAMLSigninPurpose || binding.OperationID == ssoSAMLIDPConfirmationPurpose || binding.OperationID == oneTapStartPurpose {
+	if binding.OperationID == oauthProxyForwardPurpose || binding.OperationID == ssoSAMLSigninPurpose || binding.OperationID == ssoSAMLIDPConfirmationPurpose || binding.OperationID == oneTapStartPurpose {
 		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
 	if authenticatedOperation(binding) {

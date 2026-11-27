@@ -54,7 +54,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && binding.OperationID == ssoSAMLLogoutRelaySettlePurpose {
 		return encodeSSOSAMLLogoutRelaySettlementPlan(binding, fingerprint, p)
 	}
-	if !proofBase && p.Feature != nil && (p.Feature.Operation == OneTapCallbackOperation() || ssoEnterpriseConsumptionOperation(p.Feature.Operation) || p.Feature.Operation == oauthSigninAccountOperation() && p.Capability != nil) {
+	if !proofBase && p.Feature != nil && (p.Feature.Operation == OAuthProxyForwardOperation() || p.Feature.Operation == OneTapCallbackOperation() || ssoEnterpriseConsumptionOperation(p.Feature.Operation) || p.Feature.Operation == oauthSigninAccountOperation() && p.Capability != nil) {
 		return encodeProviderSigninConsumptionPlan(binding, fingerprint, p)
 	}
 	if p.APIKeyVerification != nil {

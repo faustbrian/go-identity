@@ -23,6 +23,12 @@ type providerSigninConsumptionProfile struct {
 
 func providerSigninProfile(op identity.FeatureOperation) (providerSigninConsumptionProfile, bool) {
 	switch op {
+	case OAuthProxyForwardOperation():
+		return providerSigninConsumptionProfile{
+			Contrib: OAuthProxyForwardDescriptor(), SubjectType: "oauth_proxy_transaction",
+			AuditEvent: "identity.oauth.use_proxy", AuditRetention: "protected", WireTag: "identity-oauth-proxy-forward-consumption-v1",
+			Lifecycle: OAuthProxyForwardLifecycle(), ExternalRiskOnly: true,
+		}, true
 	case oauthSigninAccountOperation():
 		return providerSigninConsumptionProfile{
 			Contrib:     ContributorDescriptor{Owner: "identity/oauth/postgres", ContractID: "identity.oauth.signin", Version: 1},
@@ -77,7 +83,7 @@ func providerSigninConsumptionOperation(op identity.FeatureOperation) bool {
 }
 
 func providerSigninBindingOperation(b identity.CommandBinding) (identity.FeatureOperation, bool) {
-	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), OneTapCallbackOperation(), ssoOIDCSigninOperation(), SSOOAuth2SigninOperation(), SSOSAMLSigninOperation(), SSOSAMLIDPConfirmationOperation(), SSOOIDCExplicitLinkCallbackOperation()} {
+	for _, op := range [...]identity.FeatureOperation{oauthSigninAccountOperation(), OneTapCallbackOperation(), ssoOIDCSigninOperation(), SSOOAuth2SigninOperation(), SSOSAMLSigninOperation(), SSOSAMLIDPConfirmationOperation(), SSOOIDCExplicitLinkCallbackOperation(), OAuthProxyForwardOperation()} {
 		if b.OperationID == op.OperationID && b.SchemaID == op.SchemaID {
 			return op, true
 		}
@@ -93,9 +99,9 @@ func providerSigninPreparation(p CommandPlan) bool {
 	return ok && p.Feature.Contributor == profile.Contrib && p.Capability.Purpose == capability.Purpose(p.Feature.Operation.OperationID)
 }
 
-// Only this fixed-depth envelope admits callback-state consumption for native
-// existing-account signin. Provider exchange and session effects remain owned
-// by the native contributor, not by a second coordinator or replay authority.
+// This fixed-depth envelope admits exact provider callback-state consumption.
+// The native contributor owns its selected outcome, which need not sign in a
+// user. This shared coordinator never creates a second replay authority.
 func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
 	capabilityOwner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
 	if p.Feature == nil || p.Capability == nil || p.Lifecycle == nil {
@@ -145,6 +151,9 @@ func encodeProviderSigninConsumptionPlan(b identity.CommandBinding, fingerprint 
 }
 
 func validProviderConsumptionBinding(b identity.CommandBinding, operation identity.FeatureOperation) bool {
+	if operation == OAuthProxyForwardOperation() {
+		return validOAuthProxyForwardBinding(b)
+	}
 	if operation == OneTapCallbackOperation() {
 		return validOneTapCallbackBinding(b)
 	}

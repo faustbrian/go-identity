@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit the exact OAuth proxy callback into the existing preparation and
+  single-use capability phases. Reserve original state before provider work,
+  fence the proxy-only outcome, and keep state pending for reconciliation
+  when an external exchange may have occurred before local rollback.
+
 - Erase One Tap callback preparation only when its original receipt becomes
   terminal. Retain pending and uncertain custody, and keep replay tokenless.
 

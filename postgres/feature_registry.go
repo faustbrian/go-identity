@@ -102,6 +102,9 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	if op.OperationID == oauthProxyForwardPurpose {
+		return op == OAuthProxyForwardOperation() && d == OAuthProxyForwardDescriptor()
+	}
 	if op.OperationID == oneTapStartPurpose {
 		return op == OneTapStartOperation() && d == oneTapStartDescriptor()
 	}
