@@ -81,20 +81,11 @@ func sealProxyOriginalBinding(ctx context.Context, service *secretenvelope.Servi
 	if err != nil {
 		return nil, errProxyBinding
 	}
-	b := original.Evidence
-	remember, err := b.Remember.Bindings()
+	record, err := freezeProxyEvidence(original.Evidence)
 	if err != nil {
 		return nil, errProxyBinding
 	}
-	record := proxyBindingRecord{
-		Version: 1, Tenant: string(b.TenantID), Transaction: string(b.TransactionID), Command: string(b.CommandID),
-		RequestFingerprint: b.RequestFingerprint, StateDigest: b.StateDigest, PKCEChallengeDigest: b.PKCEChallengeDigest,
-		ProductionDeployment: b.ProductionDeployment, PreviewDeployment: b.PreviewDeployment, Provider: b.ProviderID, Issuer: b.Issuer,
-		Client: b.ClientID, PreviewOrigin: b.PreviewOrigin, PreviewRedirect: b.PreviewRedirect, Recipient: b.Recipient,
-		ClaimsProfile: b.ClaimsProfile, ProviderVersion: b.ProviderVersion, ClaimsVersion: b.ClaimsVersion, Remember: remember,
-		IssuedAt: b.IssuedAt, ExpiresAt: b.ExpiresAt, CallbackNonce: original.CallbackNonce,
-		GlobalVersion: original.GlobalVersion, TenantVersion: original.TenantVersion,
-	}
+	record.CallbackNonce, record.GlobalVersion, record.TenantVersion = original.CallbackNonce, original.GlobalVersion, original.TenantVersion
 	if _, err := record.original(l); err != nil {
 		return nil, errProxyBinding
 	}
@@ -115,6 +106,21 @@ func sealProxyOriginalBinding(ctx context.Context, service *secretenvelope.Servi
 		return nil, proxyBindingFailure(work)
 	}
 	return wire, nil
+}
+
+func freezeProxyEvidence(b oauth.ProxyOIDCEvidenceBinding) (proxyBindingRecord, error) {
+	remember, err := b.Remember.Bindings()
+	if err != nil {
+		return proxyBindingRecord{}, errProxyBinding
+	}
+	return proxyBindingRecord{
+		Version: 1, Tenant: string(b.TenantID), Transaction: string(b.TransactionID), Command: string(b.CommandID),
+		RequestFingerprint: b.RequestFingerprint, StateDigest: b.StateDigest, PKCEChallengeDigest: b.PKCEChallengeDigest,
+		ProductionDeployment: b.ProductionDeployment, PreviewDeployment: b.PreviewDeployment, Provider: b.ProviderID, Issuer: b.Issuer,
+		Client: b.ClientID, PreviewOrigin: b.PreviewOrigin, PreviewRedirect: b.PreviewRedirect, Recipient: b.Recipient,
+		ClaimsProfile: b.ClaimsProfile, ProviderVersion: b.ProviderVersion, ClaimsVersion: b.ClaimsVersion, Remember: remember,
+		IssuedAt: b.IssuedAt, ExpiresAt: b.ExpiresAt,
+	}, nil
 }
 
 func openProxyOriginalBinding(ctx context.Context, service *secretenvelope.Service, l proxyBindingLocator, ciphertext []byte) (proxyOriginalBinding, error) {
@@ -180,28 +186,37 @@ func proxyBindingAAD(l proxyBindingLocator, key string) (secretenvelope.Context,
 }
 
 func (r proxyBindingRecord) original(l proxyBindingLocator) (proxyOriginalBinding, error) {
-	if r.Version != 1 || r.Tenant != string(l.Tenant) || r.Transaction != string(l.Transaction) || r.Command != string(l.OriginCommand) ||
+	if r.Tenant != string(l.Tenant) || r.Transaction != string(l.Transaction) || r.Command != string(l.OriginCommand) ||
 		r.ProductionDeployment != l.Production || r.Provider != l.Provider || r.ProviderVersion != l.ProviderVersion ||
 		r.IssuedAt != l.IssuedAt || r.ExpiresAt != l.ExpiresAt ||
-		r.RequestFingerprint == ([32]byte{}) || r.StateDigest == ([32]byte{}) || r.PKCEChallengeDigest == ([32]byte{}) ||
-		!rpProviderID(r.PreviewDeployment) || r.PreviewDeployment == r.ProductionDeployment ||
-		proxyBindingHTTPS(r.Issuer) == nil || !rpASCII(r.Client, 1, 1024) ||
-		!proxyBindingPreviewTarget(r.PreviewOrigin, r.PreviewRedirect) || !rpProviderID(r.Recipient) || !rpProviderID(r.ClaimsProfile) || r.ClaimsVersion == 0 ||
 		!proxyBindingNonce(r.CallbackNonce) || r.GlobalVersion == 0 || r.TenantVersion == 0 {
 		return proxyOriginalBinding{}, errProxyBinding
 	}
+	b, err := r.evidence()
+	if err != nil {
+		return proxyOriginalBinding{}, err
+	}
+	return proxyOriginalBinding{Evidence: b, CallbackNonce: r.CallbackNonce, GlobalVersion: r.GlobalVersion, TenantVersion: r.TenantVersion}, nil
+}
+
+func (r proxyBindingRecord) evidence() (oauth.ProxyOIDCEvidenceBinding, error) {
+	if r.Version != 1 || r.RequestFingerprint == ([32]byte{}) || r.StateDigest == ([32]byte{}) || r.PKCEChallengeDigest == ([32]byte{}) ||
+		!rpProviderID(r.PreviewDeployment) || r.PreviewDeployment == r.ProductionDeployment ||
+		proxyBindingHTTPS(r.Issuer) == nil || !rpASCII(r.Client, 1, 1024) ||
+		!proxyBindingPreviewTarget(r.PreviewOrigin, r.PreviewRedirect) || !rpProviderID(r.Recipient) || !rpProviderID(r.ClaimsProfile) || r.ClaimsVersion == 0 {
+		return oauth.ProxyOIDCEvidenceBinding{}, errProxyBinding
+	}
 	remember, err := session.NewRememberPolicy(r.Remember)
 	if err != nil {
-		return proxyOriginalBinding{}, errProxyBinding
+		return oauth.ProxyOIDCEvidenceBinding{}, errProxyBinding
 	}
-	b := oauth.ProxyOIDCEvidenceBinding{
+	return oauth.ProxyOIDCEvidenceBinding{
 		TenantID: identity.TenantID(r.Tenant), TransactionID: identity.PreAuthTransactionID(r.Transaction), CommandID: identity.CommandID(r.Command),
 		RequestFingerprint: r.RequestFingerprint, StateDigest: r.StateDigest, PKCEChallengeDigest: r.PKCEChallengeDigest,
 		ProductionDeployment: r.ProductionDeployment, PreviewDeployment: r.PreviewDeployment, ProviderID: r.Provider, ProviderVersion: r.ProviderVersion,
 		Issuer: r.Issuer, ClientID: r.Client, PreviewOrigin: r.PreviewOrigin, PreviewRedirect: r.PreviewRedirect, Recipient: r.Recipient,
 		ClaimsProfile: r.ClaimsProfile, ClaimsVersion: r.ClaimsVersion, Remember: remember, IssuedAt: r.IssuedAt, ExpiresAt: r.ExpiresAt,
-	}
-	return proxyOriginalBinding{Evidence: b, CallbackNonce: r.CallbackNonce, GlobalVersion: r.GlobalVersion, TenantVersion: r.TenantVersion}, nil
+	}, nil
 }
 
 func proxyBindingSQLTime(t time.Time) bool {

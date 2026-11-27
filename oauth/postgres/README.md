@@ -72,6 +72,11 @@ does not establish whether the original committed; do not restart with a new
 command or transaction to recover its result. This API neither mounts an HTTP
 route nor consumes the handoff in a preview session.
 
+Preview databases may separately install `ProxyPreviewBindingMigrationSource`
+after their base OAuth history. It only creates an empty expected-binding table
+and indexes; it does not select a writer, consumer or route. The preview's
+session and capability owners still decide whether a handoff can be used.
+
 ## Google One Tap browser start
 
 Install `OneTapCallbackGrantMigrationSource` after `MigrationSource`, using

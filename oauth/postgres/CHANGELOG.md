@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add optional forward-only native preview binding storage. It isolates the
+  independently retained original and proof from production proxy custody.
+  The migration installs no route or consumer and changes no existing data.
+
 - Expose authenticated original provider, transaction and lifetime for OAuth
   preview callback rate accounting. Require the trusted tenant and leave
   original reservation, credential custody and callback execution untouched.
