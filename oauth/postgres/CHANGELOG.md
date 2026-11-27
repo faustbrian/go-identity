@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Let native production and preview proxy owners opt into the same live
+  provider authority. Bind the exact epoch to new originals and handoffs and
+  recheck it before generation, session completion, and disclosure. Preserve
+  the static profile's legacy format; lifecycle cleanup is not selected.
+
 - Add an opt-in primary-backed social-provider registration authority with
   independent connection epochs and atomic audited configuration events.
 

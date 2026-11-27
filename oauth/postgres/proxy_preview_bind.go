@@ -43,6 +43,9 @@ func (s *ProxyPreviewService) Bind(ctx context.Context, r ProxyPreviewBindReques
 	start := s.signin.start
 	ctx, stop := context.WithTimeout(ctx, start.config.MaximumDuration)
 	defer stop()
+	if err := requireProxyProviderAuthority(ctx, s.authority, r.Binding); err != nil {
+		return err
+	}
 	p, err := s.bindPhase(ctx, r)
 	if err != nil {
 		return err
@@ -58,7 +61,7 @@ func (s *ProxyPreviewService) Bind(ctx context.Context, r ProxyPreviewBindReques
 	if receipt.Outcome != identity.CommitOutcomeCommitted || ctx.Err() != nil {
 		return oauthproxy.CompletionUnavailable
 	}
-	return nil
+	return requireProxyProviderAuthority(ctx, s.authority, r.Binding)
 }
 
 type proxyPreviewBindPhase struct {
@@ -202,6 +205,9 @@ func (p *proxyPreviewBindPhase) ValidateFeaturePreparation(c identity.Command, p
 func (p *proxyPreviewBindPhase) check(ctx context.Context, w kernel.Work, c identity.Command) error {
 	if c != p.command {
 		return identity.ForbiddenError{}
+	}
+	if err := requireProxyProviderAuthority(ctx, p.service.authority, p.expected.Evidence); err != nil {
+		return err
 	}
 	s := p.service.signin.start
 	if err := w.RequireActiveDirectoryAuthority(ctx, p, kernel.DirectoryAuthorityAdmission{

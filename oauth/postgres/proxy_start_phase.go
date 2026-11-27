@@ -91,6 +91,9 @@ func (p *proxyStartPhase) requireAuthority(ctx context.Context, work kernel.Work
 	}); err != nil {
 		return time.Time{}, err
 	}
+	if err := requireProxyProviderAuthority(ctx, p.forward.providerAuthority, p.original.Evidence); err != nil {
+		return time.Time{}, err
+	}
 	return work.DatabaseTime(ctx)
 }
 

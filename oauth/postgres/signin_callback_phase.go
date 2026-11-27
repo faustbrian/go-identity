@@ -140,6 +140,9 @@ const (
 
 func (p *signinCallbackPhase) requireTransaction(ctx context.Context, w kernel.Work, stage signinRPStage) error {
 	if p.preview != nil {
+		if err := requireProxyProviderAuthority(ctx, p.preview.authority, p.preview.binding.Evidence); err != nil {
+			return err
+		}
 		return requireProxyPreviewRow(ctx, w, p.service.start.config.Schema, p.preview.row, stage == signinRPConsumed)
 	}
 	v := p.flow.binding

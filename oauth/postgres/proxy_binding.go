@@ -71,6 +71,7 @@ type proxyBindingRecord struct {
 	IssuedAt, ExpiresAt                                       time.Time
 	CallbackNonce                                             string
 	GlobalVersion, TenantVersion                              uint64
+	ProviderAuthorityEpoch                                    uint64 `json:",omitempty"`
 }
 
 func sealProxyOriginalBinding(ctx context.Context, service *secretenvelope.Service, keyRef string, l proxyBindingLocator, original proxyOriginalBinding) ([]byte, error) {
@@ -113,13 +114,17 @@ func freezeProxyEvidence(b oauth.ProxyOIDCEvidenceBinding) (proxyBindingRecord, 
 	if err != nil {
 		return proxyBindingRecord{}, errProxyBinding
 	}
+	var version uint8 = 1
+	if b.ProviderAuthorityEpoch != 0 {
+		version = 2
+	}
 	return proxyBindingRecord{
-		Version: 1, Tenant: string(b.TenantID), Transaction: string(b.TransactionID), Command: string(b.CommandID),
+		Version: version, Tenant: string(b.TenantID), Transaction: string(b.TransactionID), Command: string(b.CommandID),
 		RequestFingerprint: b.RequestFingerprint, StateDigest: b.StateDigest, PKCEChallengeDigest: b.PKCEChallengeDigest,
 		ProductionDeployment: b.ProductionDeployment, PreviewDeployment: b.PreviewDeployment, Provider: b.ProviderID, Issuer: b.Issuer,
 		Client: b.ClientID, PreviewOrigin: b.PreviewOrigin, PreviewRedirect: b.PreviewRedirect, Recipient: b.Recipient,
 		ClaimsProfile: b.ClaimsProfile, ProviderVersion: b.ProviderVersion, ClaimsVersion: b.ClaimsVersion, Remember: remember,
-		IssuedAt: b.IssuedAt, ExpiresAt: b.ExpiresAt,
+		IssuedAt: b.IssuedAt, ExpiresAt: b.ExpiresAt, ProviderAuthorityEpoch: b.ProviderAuthorityEpoch,
 	}, nil
 }
 
@@ -200,7 +205,8 @@ func (r proxyBindingRecord) original(l proxyBindingLocator) (proxyOriginalBindin
 }
 
 func (r proxyBindingRecord) evidence() (oauth.ProxyOIDCEvidenceBinding, error) {
-	if r.Version != 1 || r.RequestFingerprint == ([32]byte{}) || r.StateDigest == ([32]byte{}) || r.PKCEChallengeDigest == ([32]byte{}) ||
+	if !(r.Version == 1 && r.ProviderAuthorityEpoch == 0 || r.Version == 2 && r.ProviderAuthorityEpoch != 0) ||
+		r.RequestFingerprint == ([32]byte{}) || r.StateDigest == ([32]byte{}) || r.PKCEChallengeDigest == ([32]byte{}) ||
 		!rpProviderID(r.PreviewDeployment) || r.PreviewDeployment == r.ProductionDeployment ||
 		proxyBindingHTTPS(r.Issuer) == nil || !rpASCII(r.Client, 1, 1024) ||
 		!proxyBindingPreviewTarget(r.PreviewOrigin, r.PreviewRedirect) || !rpProviderID(r.Recipient) || !rpProviderID(r.ClaimsProfile) || r.ClaimsVersion == 0 {
@@ -214,7 +220,8 @@ func (r proxyBindingRecord) evidence() (oauth.ProxyOIDCEvidenceBinding, error) {
 		TenantID: identity.TenantID(r.Tenant), TransactionID: identity.PreAuthTransactionID(r.Transaction), CommandID: identity.CommandID(r.Command),
 		RequestFingerprint: r.RequestFingerprint, StateDigest: r.StateDigest, PKCEChallengeDigest: r.PKCEChallengeDigest,
 		ProductionDeployment: r.ProductionDeployment, PreviewDeployment: r.PreviewDeployment, ProviderID: r.Provider, ProviderVersion: r.ProviderVersion,
-		Issuer: r.Issuer, ClientID: r.Client, PreviewOrigin: r.PreviewOrigin, PreviewRedirect: r.PreviewRedirect, Recipient: r.Recipient,
+		ProviderAuthorityEpoch: r.ProviderAuthorityEpoch,
+		Issuer:                 r.Issuer, ClientID: r.Client, PreviewOrigin: r.PreviewOrigin, PreviewRedirect: r.PreviewRedirect, Recipient: r.Recipient,
 		ClaimsProfile: r.ClaimsProfile, ClaimsVersion: r.ClaimsVersion, Remember: remember, IssuedAt: r.IssuedAt, ExpiresAt: r.ExpiresAt,
 	}, nil
 }

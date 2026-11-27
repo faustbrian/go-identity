@@ -37,6 +37,7 @@ type proxyForwardPhase struct {
 	schema, authority, envelopeKey string
 	envelopes                      *secretenvelope.Service
 	directory                      *kernel.Repository
+	providerAuthority              *ProviderAuthority
 	locator                        proxyBindingLocator
 	original                       proxyOriginalBinding
 	row                            proxyLookupRow
@@ -174,6 +175,9 @@ func (p *proxyForwardPhase) requireCurrent(ctx context.Context, w kernel.Work, v
 		return time.Time{}, identity.ForbiddenError{}
 	}
 	rows.Close()
+	if err := requireProxyProviderAuthority(ctx, p.providerAuthority, p.original.Evidence); err != nil {
+		return time.Time{}, err
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return time.Time{}, err
@@ -232,6 +236,13 @@ func (p *proxyForwardPhase) Generate(ctx context.Context, generation uint64) ([]
 		if err != nil || !current.Enabled || current.GlobalVersion != expected.GlobalVersion || current.TenantVersion != expected.TenantVersion || p.Check(ctx) != nil {
 			return nil, identity.ForbiddenError{}
 		}
+	}
+	// A provider change can commit after the generation reservation. Do not
+	// release the original verifier based on the earlier admission read.
+	if err := requireProxyProviderAuthority(ctx, p.providerAuthority, original.Binding); err != nil {
+		return nil, err
+	}
+	if !p.providerDenied {
 		plain, err := openProxyPart(ctx, p.envelopes, p.locator, proxyVerifier, 0, p.row.verifier, 4096)
 		if err != nil {
 			return nil, err

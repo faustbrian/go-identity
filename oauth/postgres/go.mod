@@ -13,7 +13,7 @@ require (
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261126214320-551488061e87
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261127054005-4f4c9ad64628
 	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13
 	github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127033843-935b75ea80cc
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261122025034-f17a5dc39fa2

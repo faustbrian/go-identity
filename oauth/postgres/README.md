@@ -26,8 +26,8 @@ commit error may be ambiguous; inspect current state or retry the exact
 command, never issue a replacement to force the old result.
 
 This is the generic authority owner, not an HTTP administration endpoint.
-OAuth workflow fences and lifecycle cleanup must adopt it separately; the
-operator result does not acknowledge cleanup or provider-side revocation.
+The proxy can opt into it as described below. The operator result does not
+acknowledge lifecycle cleanup or provider-side revocation.
 
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
@@ -113,6 +113,30 @@ proof erasure use the existing coordinator. Only a fresh acknowledged commit
 can return a bearer and a synchronizer token; that delivery retains the earliest
 original cutoff. This profile is existing-account signin only and does not
 mount HTTP routes, perform implicit signup or add account linking.
+
+### Live provider invalidation
+
+Select `NewProxyForwardServiceWithProviderAuthority` on production and
+`NewProxyPreviewServiceWithProviderAuthority` on preview. Construct their
+readers against the **same authoritative primary and schema**, using a
+dedicated read pool distinct from each local transaction pool. The runtime
+reader only needs SELECT. The operator uses its separately authorized pool.
+Do not point the readers at asynchronously replicated state.
+
+Start binds the current enabled epoch separately from the static provider
+profile. Production checks the original epoch again before opening its PKCE
+verifier and before releasing a handoff. Preview checks it before accepting
+the original binding, during session completion, and before delivering
+credentials. An unavailable authority denies new effects or delivery; a newer
+epoch never revives an older handoff, even with the same provider profile.
+The two constructor modes do not accept each other's originals. Switching
+to live validation intentionally rejects in-flight legacy inputs.
+
+These are fresh primary observations, not a distributed lock across the
+provider request or the other deployment's commit. A change observed after
+an acknowledged local commit can still withhold the result; it does not
+assert that no local row was committed. Retained-state invalidation and
+lifecycle cleanup are separate from the reader and operator.
 
 ## Google One Tap browser start
 

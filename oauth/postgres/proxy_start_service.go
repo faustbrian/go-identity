@@ -121,7 +121,12 @@ func (s *ProxyStartService) Start(ctx context.Context, request oauthproxy.Initia
 		}
 		return out, oauthproxy.InitiationUnavailable
 	}
-	phase, err := s.phase(preview, authority, started)
+	providerKey := ProviderAuthorityKey{TenantID: preview.TenantID, ProviderID: s.profile.ID}
+	providerEpoch, err := readProxyProviderEpoch(ctx, s.forward.providerAuthority, providerKey, s.profile.Version)
+	if err != nil {
+		return out, proxyStartAuthorityError(err)
+	}
+	phase, err := s.phase(preview, authority, providerEpoch, started)
 	if err != nil {
 		return out, oauthproxy.InitiationUnavailable
 	}
@@ -134,13 +139,27 @@ func (s *ProxyStartService) Start(ctx context.Context, request oauthproxy.Initia
 	if err != nil || ctx.Err() != nil || result.Outcome != identity.CommitOutcomeCommitted {
 		return out, oauthproxy.InitiationUnavailable
 	}
-	if !phase.generated || phase.response.URL() == "" || !time.Now().Before(phase.evidence.ExpiresAt) {
+	if !phase.generated || phase.response.URL() == "" {
+		return out, oauthproxy.InitiationDenied
+	}
+	if err := requireProxyProviderAuthority(ctx, s.forward.providerAuthority, phase.evidence); err != nil {
+		return out, proxyStartAuthorityError(err)
+	}
+	if ctx.Err() != nil || !time.Now().Before(phase.evidence.ExpiresAt) {
 		return out, oauthproxy.InitiationDenied
 	}
 	return ProxyStartResult{authorization: phase.response, binding: phase.evidence}, nil
 }
 
-func (s *ProxyStartService) phase(preview oauthproxy.InitiationBinding, authority kernel.DirectoryAuthorityRecord, started time.Time) (*proxyStartPhase, error) {
+func proxyStartAuthorityError(err error) error {
+	var denied identity.ForbiddenError
+	if errors.As(err, &denied) {
+		return oauthproxy.InitiationDenied
+	}
+	return oauthproxy.InitiationUnavailable
+}
+
+func (s *ProxyStartService) phase(preview oauthproxy.InitiationBinding, authority kernel.DirectoryAuthorityRecord, providerEpoch uint64, started time.Time) (*proxyStartPhase, error) {
 	c, profile, t := s.forward.config, s.profile, preview.Target
 	op := kernel.OAuthProxyStartOperation()
 	binding := identity.CommandBinding{
@@ -154,8 +173,13 @@ func (s *ProxyStartService) phase(preview oauthproxy.InitiationBinding, authorit
 	}
 	// Keep the immutable preview fingerprint, resolved policy and exact provider
 	// selection in the request commitment, but never include invocation time.
-	frame, err := json.Marshal([]any{"identity.oauth.proxy-start.v1", preview.RequestFingerprint, remember,
-		c.ProductionDeployment, t, profile, s.claims, s.version, s.lifetime, authority.Query.GlobalAuthorityID, authority.GlobalVersion, authority.TenantVersion})
+	fields := []any{"identity.oauth.proxy-start.v1", preview.RequestFingerprint, remember,
+		c.ProductionDeployment, t, profile, s.claims, s.version, s.lifetime, authority.Query.GlobalAuthorityID, authority.GlobalVersion, authority.TenantVersion}
+	if providerEpoch != 0 {
+		fields[0] = "identity.oauth.proxy-start.v2"
+		fields = append(fields, providerEpoch)
+	}
+	frame, err := json.Marshal(fields)
 	defer clear(frame)
 	if err != nil {
 		return nil, err
@@ -168,7 +192,8 @@ func (s *ProxyStartService) phase(preview oauthproxy.InitiationBinding, authorit
 			Evidence: oauth.ProxyOIDCEvidenceBinding{TenantID: preview.TenantID, CommandID: preview.CommandID, TransactionID: preview.TransactionID,
 				RequestFingerprint: preview.RequestFingerprint, ProductionDeployment: c.ProductionDeployment, PreviewDeployment: t.Deployment,
 				ProviderID: profile.ID, Issuer: profile.Issuer, ClientID: profile.ClientID, PreviewOrigin: t.Origin, PreviewRedirect: t.Redirect,
-				Recipient: t.Recipient, ProviderVersion: profile.Version, ClaimsProfile: s.claims, ClaimsVersion: s.version, Remember: preview.Remember}},
+				Recipient: t.Recipient, ProviderVersion: profile.Version, ProviderAuthorityEpoch: providerEpoch,
+				ClaimsProfile: s.claims, ClaimsVersion: s.version, Remember: preview.Remember}},
 	}
 	p.command, err = p.executionCommand([32]byte{})
 	return p, err

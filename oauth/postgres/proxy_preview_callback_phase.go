@@ -15,6 +15,7 @@ type proxyPreviewCallbackInput struct {
 	binding   proxyPreviewBinding
 	admission *oauthproxy.PreviewCompletionAdmission
 	request   oauthproxy.PreviewCompletionRequest
+	authority *ProviderAuthority
 }
 
 // Only the acknowledged native preparation path calls this after its counted
@@ -25,6 +26,9 @@ func (p *signinCallbackPhase) openProxyPreview(ctx context.Context) (oauth.Provi
 		return oauth.ProviderIdentity{}, time.Time{}, identity.ForbiddenError{}
 	}
 	preview := p.preview
+	if err := requireProxyProviderAuthority(ctx, preview.authority, preview.binding.Evidence); err != nil {
+		return oauth.ProviderIdentity{}, time.Time{}, err
+	}
 	evidence, err := preview.admission.Open(ctx, preview.binding.Evidence, p.flow.original, preview.request)
 	if err != nil {
 		return oauth.ProviderIdentity{}, time.Time{}, err

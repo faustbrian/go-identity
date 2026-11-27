@@ -50,6 +50,7 @@ type ProxyForwardConfig struct {
 type ProxyForwardService struct {
 	pool                                 *database.Pool
 	directory                            *kernel.Repository
+	providerAuthority                    *ProviderAuthority
 	envelopes                            *envelope.Service
 	issuer                               *capabilitypg.Issuer
 	limits                               capability.Limits
@@ -59,9 +60,10 @@ type ProxyForwardService struct {
 
 var _ oauthproxy.ProductionCallbackCommandStore = (*ProxyForwardService)(nil)
 
-// NewProxyForwardService selects only the production side of OAuth preview
-// forwarding. It validates configuration without I/O. Callers keep the pool
-// open and select the exact same deployment in NewProductionCommandCallback.
+// NewProxyForwardService selects static production OAuth preview forwarding.
+// It validates configuration without I/O. Callers keep the pool open and
+// select the exact same deployment in NewProductionCommandCallback. Use
+// NewProxyForwardServiceWithProviderAuthority for live provider invalidation.
 func NewProxyForwardService(pool *database.Pool, c ProxyForwardConfig) (*ProxyForwardService, error) {
 	invalid := identity.InvalidInputError{Field: "oauth_proxy_forward_configuration"}
 	if pool == nil || pool.Raw() == nil || !rpSchemaName(c.Schema) || !rpProviderID(c.ProductionDeployment) ||
@@ -114,6 +116,23 @@ func NewProxyForwardService(pool *database.Pool, c ProxyForwardConfig) (*ProxyFo
 	if _, _, err := s.coordinator(&proxyForwardPhase{}); err != nil {
 		return nil, invalid
 	}
+	return s, nil
+}
+
+// NewProxyForwardServiceWithProviderAuthority selects production OAuth preview
+// forwarding with a shared current-primary reader. Paired Start and callback
+// calls require the original profile and provider epoch to remain enabled.
+// The reader must use a pool distinct from the production transaction pool,
+// even when both pools connect to the same database. The caller owns both.
+func NewProxyForwardServiceWithProviderAuthority(pool *database.Pool, c ProxyForwardConfig, a *ProviderAuthority) (*ProxyForwardService, error) {
+	if pool == nil || a == nil || a.pool == nil || a.pool.Raw() == nil || pool.Raw() == a.pool.Raw() {
+		return nil, identity.InvalidInputError{Field: "oauth_proxy_provider_authority"}
+	}
+	s, err := NewProxyForwardService(pool, c)
+	if err != nil {
+		return nil, err
+	}
+	s.providerAuthority = a
 	return s, nil
 }
 
@@ -181,6 +200,9 @@ func (s *ProxyForwardService) ExecuteOAuthProxyForward(ctx context.Context, look
 		subtle.ConstantTimeCompare(original.Evidence.StateDigest[:], lookup.StateDigest[:]) != 1 {
 		return oauthproxy.ErrOriginalUnavailable
 	}
+	if err := requireProxyProviderAuthority(ctx, s.providerAuthority, original.Evidence); err != nil {
+		return proxyForwardAuthorityError(err)
+	}
 	command, err := makeProxyForwardCommand(locator, s.config.Actor, s.config.PolicyID, s.config.PolicyVersion, row.binding, lookup.ProviderDenied)
 	if err != nil {
 		return oauthproxy.CallbackReconcile
@@ -198,7 +220,8 @@ func (s *ProxyForwardService) ExecuteOAuthProxyForward(ctx context.Context, look
 		return oauthproxy.CallbackReconcile
 	}
 	phase := &proxyForwardPhase{schema: s.config.Schema, authority: s.config.GlobalAuthorityID, envelopeKey: s.config.CurrentEnvelopeKey,
-		envelopes: s.envelopes, directory: s.directory, locator: locator, original: original, row: row, command: command, proof: plan,
+		envelopes: s.envelopes, directory: s.directory, providerAuthority: s.providerAuthority,
+		locator: locator, original: original, row: row, command: command, proof: plan,
 		generate: generate, providerDenied: lookup.ProviderDenied, startedAt: started}
 	defer func() { clear(phase.output.Artifact) }()
 	coordinator, registry, err := s.coordinator(phase)
@@ -214,7 +237,21 @@ func (s *ProxyForwardService) ExecuteOAuthProxyForward(ctx context.Context, look
 		// command output, even when the original transaction is known committed.
 		return oauthproxy.ErrOriginalUnavailable
 	}
+	if err := requireProxyProviderAuthority(ctx, s.providerAuthority, original.Evidence); err != nil {
+		return proxyForwardAuthorityError(err)
+	}
+	if ctx.Err() != nil || !time.Now().Before(original.Evidence.ExpiresAt) {
+		return oauthproxy.CallbackReconcile
+	}
 	return nil
+}
+
+func proxyForwardAuthorityError(err error) error {
+	var denied identity.ForbiddenError
+	if errors.As(err, &denied) {
+		return oauthproxy.ErrOriginalUnavailable
+	}
+	return oauthproxy.CallbackReconcile
 }
 
 func (row proxyLookupRow) forwardLocator(lookup oauthproxy.CallbackLookup) (proxyBindingLocator, error) {

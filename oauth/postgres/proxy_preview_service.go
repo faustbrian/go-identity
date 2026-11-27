@@ -55,9 +55,33 @@ type ProxyPreviewService struct {
 	config    ProxyPreviewConfig
 	admission *oauthproxy.PreviewCompletionAdmission
 	crypto    capability.Service
+	authority *ProviderAuthority
 }
 
+// NewProxyPreviewService preserves the static preview contract. It accepts only
+// bindings without a live provider-authority epoch; live bindings require the
+// explicit authority constructor.
 func NewProxyPreviewService(signin *SigninCompletionService, c ProxyPreviewConfig) (*ProxyPreviewService, error) {
+	return newProxyPreviewService(signin, c, nil)
+}
+
+// NewProxyPreviewServiceWithProviderAuthority borrows a current-primary reader
+// for the service lifetime. Bind and Complete require the binding's exact live
+// epoch and immutable profile version to remain enabled through delivery.
+// The reader must use a separate pool from the local signin pool, even when
+// both pools target the same database: final Work already holds a local
+// connection. The caller retains ownership of the reader and its pool.
+func NewProxyPreviewServiceWithProviderAuthority(signin *SigninCompletionService, c ProxyPreviewConfig, a *ProviderAuthority) (*ProxyPreviewService, error) {
+	if signin == nil || signin.start == nil || signin.start.pool == nil || a == nil || a.pool == nil || a.pool.Raw() == nil {
+		return nil, oauthproxy.CompletionInvalid
+	}
+	if a.pool.Raw() == signin.start.pool.Raw() {
+		return nil, oauthproxy.CompletionInvalid
+	}
+	return newProxyPreviewService(signin, c, a)
+}
+
+func newProxyPreviewService(signin *SigninCompletionService, c ProxyPreviewConfig, a *ProviderAuthority) (*ProxyPreviewService, error) {
 	if signin == nil || signin.start == nil || signin.effect == nil || !rpDirectoryID(string(c.ActorID)) {
 		return nil, oauthproxy.CompletionInvalid
 	}
@@ -80,7 +104,7 @@ func NewProxyPreviewService(signin *SigninCompletionService, c ProxyPreviewConfi
 	if err != nil {
 		return nil, oauthproxy.CompletionInvalid
 	}
-	return &ProxyPreviewService{signin: signin, config: c, admission: admission, crypto: crypto}, nil
+	return &ProxyPreviewService{signin: signin, config: c, admission: admission, crypto: crypto, authority: a}, nil
 }
 
 func (s *ProxyPreviewService) registered(b oauth.ProxyOIDCEvidenceBinding) (oauth.ProviderProfile, bool) {
@@ -132,6 +156,9 @@ func (s *ProxyPreviewService) Complete(ctx context.Context, r ProxyPreviewCallba
 	if !selected {
 		return out, oauthproxy.CompletionDenied
 	}
+	if err := requireProxyProviderAuthority(ctx, s.authority, binding.Evidence); err != nil {
+		return out, err
+	}
 	flow, err := sessionpg.ReadPreAuth(ctx, start.pool.Raw(), start.config.Session, tenant, r.FlowID)
 	if err != nil {
 		return out, err
@@ -162,7 +189,7 @@ func (s *ProxyPreviewService) Complete(ctx context.Context, r ProxyPreviewCallba
 		flow: signinCallbackFlow{original: flow, statePlan: grant, loadedAt: readStarted,
 			binding: signinRPBinding{Provider: provider, IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt, CallbackCommandID: l.CallbackCommand,
 				Input: signinStartInput{Binding: rpStoredBinding(origin), Callback: s.config.Target.Redirect, GlobalVersion: binding.GlobalVersion, TenantVersion: binding.TenantVersion}}},
-		preview: &proxyPreviewCallbackInput{row: row, binding: binding, admission: s.admission, request: r.Handoff},
+		preview: &proxyPreviewCallbackInput{row: row, binding: binding, admission: s.admission, request: r.Handoff, authority: s.authority},
 	}
 	return s.complete(ctx, p)
 }
@@ -209,6 +236,9 @@ func (s *ProxyPreviewService) complete(ctx context.Context, p *signinCallbackPha
 	if p.prepared == (session.PreparedIssuance{}) || p.execution == nil {
 		return out, oauthproxy.CompletionDenied
 	}
+	if err := requireProxyProviderAuthority(ctx, s.authority, p.preview.binding.Evidence); err != nil {
+		return out, err
+	}
 	p.receipt, p.deliverable = receipt, true
 	bound, err := p.issuer.BindOAuth(p.prepared, p.command)
 	if err != nil {
@@ -228,7 +258,13 @@ func (s *ProxyPreviewService) complete(ctx context.Context, p *signinCallbackPha
 	}
 	account := p.execution.account.Account
 	spec, err := p.execution.record.Bindings()
-	if err != nil || ctx.Err() != nil || !s.config.Clock.Now().Before(spec.Authentication.Proof.ExpiresAt) {
+	if err != nil {
+		return out, oauthproxy.CompletionUnavailable
+	}
+	if err := requireProxyProviderAuthority(ctx, s.authority, p.preview.binding.Evidence); err != nil {
+		return out, err
+	}
+	if ctx.Err() != nil || !s.config.Clock.Now().Before(spec.Authentication.Proof.ExpiresAt) {
 		return out, oauthproxy.CompletionUnavailable
 	}
 	// Unlike a plain signin result, preview handoff delivery is limited by the
