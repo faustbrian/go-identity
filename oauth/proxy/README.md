@@ -40,6 +40,8 @@ evidence codec and a durable `ProductionCallbackStore`. The store must reserve
 the original state and fence its current authority before releasing PKCE. A
 trusted HTTP adapter supplies the actual registered callback URI and raw query to
 `Handle`. It must never derive the trusted URI from unverified request headers.
+`Lookup` uses the same parser to obtain the selector for pre-exchange admission;
+it does not reserve a callback, contact the provider, or prove original state.
 
 Native adapters that already own reservation, preparation and settlement can
 use `NewProductionCommandCallback` instead, passing a
@@ -50,7 +52,10 @@ commit before returning. Retained evidence may be reconciled without invoking
 the provider again or giving a replay a fresh handoff.
 
 On success, `Handle` returns an encrypted result and the exact registered
-destination only after token disposal and acknowledged settlement. It does not
+destination only after token disposal and acknowledged settlement.
+`Continuation` returns the original preview flow and earliest handoff cutoff so
+the transport can fence disclosure without extending the lifetime. It does not
+authenticate the preview browser or authorize handoff consumption. `Handle` does not
 set cookies or write local identity state. Do not log callback queries or the
 handoff, and do not automatically retry exchange on `CallbackReconcile`. Look up
 the original durable outcome and withhold any unresolved handoff.

@@ -16,6 +16,35 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
+func TestProductionCallbackLookupDoesNotReserveOrExchange(t *testing.T) {
+	f := newCallbackFixture(t)
+	p, err := newProductionCallback(ProductionCallbackConfig{ProductionDeployment: "production-a",
+		Codec: f.codec, Store: f.store, Clock: f.clock, Targets: []PreviewTarget{f.target}}, f.provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, denied := range []bool{false, true} {
+		query := f.query
+		if denied {
+			query = strings.Replace(query, "code=local-code", "error=access_denied", 1)
+		}
+		got, err := p.Lookup(t.Context(), f.route, query)
+		if err != nil || got.StateDigest != sha256.Sum256([]byte(f.state)) || got.ProviderDenied != denied ||
+			got.ProviderID != f.provider.profile.ID || got.ProviderVersion != f.provider.profile.Version || got.Issuer != f.provider.profile.Issuer ||
+			got.ClientID != f.provider.profile.ClientID || got.ProductionDeployment != "production-a" || got.ProductionCallback != f.route {
+			t.Fatal("lookup did not preserve exact configured query attribution", err)
+		}
+	}
+	for _, invalid := range []struct{ route, query string }{{f.route + "/other", f.query}, {f.route, f.query + "&state=duplicate"}} {
+		if got, err := p.Lookup(t.Context(), invalid.route, invalid.query); !errors.Is(err, CallbackInvalid) || got != (CallbackLookup{}) {
+			t.Fatal("invalid callback disclosed attribution", err)
+		}
+	}
+	if f.store.reserved != 0 || f.provider.attempts != 0 || f.store.terminal != 0 {
+		t.Fatal("transport lookup acted as native authority")
+	}
+}
+
 func TestProductionCallbackGatesProviderWorkOnOriginalReservation(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

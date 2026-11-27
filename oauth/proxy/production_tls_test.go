@@ -135,10 +135,16 @@ func testProductionTLSHandoff(t *testing.T, coordinated bool) {
 				if !errors.Is(err, CallbackReconcile) || result.Destination() != "" || len(result.Envelope()) != 0 {
 					t.Fatal("uncertainty released a preview handoff", err)
 				}
+				if flow, until, ok := result.Continuation(); ok || flow != "" || !until.IsZero() {
+					t.Fatal("uncertainty released browser continuation metadata")
+				}
 				return
 			}
 			if err != nil || result.Destination() != fixture.target.Redirect || !bytes.Equal(result.Envelope(), fixture.store.envelope) {
 				t.Fatal("acknowledged handoff did not match the registered target and retained envelope", err)
+			}
+			if flow, until, ok := result.Continuation(); !ok || flow != fixture.store.original.Binding.TransactionID || !until.Equal(fixture.now.Add(time.Minute)) {
+				t.Fatal("acknowledged continuation changed the original browser flow or deadline")
 			}
 			opened, err := codec.Open(t.Context(), fixture.store.original.Binding, result.Envelope())
 			if err != nil || opened.Subject() != "linked-test-subject" || !opened.IDTokenExpiresAt().Equal(fixture.now.Add(time.Minute)) {

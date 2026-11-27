@@ -35,6 +35,7 @@ type CallbackPrepared struct {
 	disposition CallbackDisposition
 	destination string
 	envelope    []byte
+	flow        identity.PreAuthTransactionID
 	issuedAt    time.Time
 	until       time.Time
 }
@@ -171,8 +172,8 @@ func (p *ProductionCallback) executeCommand(ctx context.Context, lookup Callback
 	if prepared.disposition == CallbackRejected {
 		return CallbackResult{}, CallbackDenied
 	}
-	if !prepared.disclosableAt(p.clock.Now()) {
+	if !prepared.disclosableAt(p.clock.Now()) || command.Err() != nil {
 		return CallbackResult{}, CallbackReconcile
 	}
-	return CallbackResult{destination: prepared.destination, envelope: bytes.Clone(prepared.envelope)}, nil
+	return CallbackResult{destination: prepared.destination, envelope: bytes.Clone(prepared.envelope), flow: prepared.flow, until: prepared.until}, nil
 }

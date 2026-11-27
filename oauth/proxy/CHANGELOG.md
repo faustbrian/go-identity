@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose a no-I/O production callback selector for transport admission and
+  the original preview flow and immutable cutoff after acknowledged settlement.
+
 - Authenticate a preview handoff against the independently loaded original
   browser flow, exact preview registration and original cookie before opening
   encrypted provider evidence. Return its unchanged observation and earliest

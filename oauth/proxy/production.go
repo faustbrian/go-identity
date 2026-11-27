@@ -167,10 +167,22 @@ func buildProductionCallback(c ProductionCallbackConfig, provider callbackProvid
 type CallbackResult struct {
 	destination string
 	envelope    []byte
+	flow        identity.PreAuthTransactionID
+	until       time.Time
 }
 
 func (r CallbackResult) Destination() string { return r.destination }
 func (r CallbackResult) Envelope() []byte    { return bytes.Clone(r.envelope) }
+
+// Continuation exposes the exact original preview flow and earliest handoff
+// cutoff after acknowledged settlement. The cutoff cannot be renewed. These
+// routing values do not authenticate a preview request or consume its proof.
+func (r CallbackResult) Continuation() (identity.PreAuthTransactionID, time.Time, bool) {
+	if _, err := identity.ParsePreAuthTransactionID(string(r.flow)); err != nil || r.until.IsZero() || r.destination == "" || len(r.envelope) == 0 {
+		return "", time.Time{}, false
+	}
+	return r.flow, r.until, true
+}
 
 func (CallbackResult) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("oauthproxy.CallbackResult(redacted)"))
@@ -186,29 +198,16 @@ const storageBudget = 5 * time.Second
 // reservation, a bounded detached context records the disposition, but a
 // handoff is never disclosed after cancellation or original expiry.
 func (p *ProductionCallback) Handle(ctx context.Context, receivedCallback, rawQuery string) (result CallbackResult, err error) {
-	if p == nil || ctx == nil || (p.store == nil && p.command == nil) || receivedCallback != p.profile.RedirectURI || ctx.Err() != nil {
-		return CallbackResult{}, CallbackInvalid
-	}
 	defer func() {
 		if recover() != nil {
 			result, err = CallbackResult{}, CallbackReconcile
 		}
 	}()
-	query, err := oauth.ParseQueryCallback(ctx, rawQuery, p.profile)
+	query, lookup, input, err := p.parseCallback(ctx, receivedCallback, rawQuery)
 	if err != nil {
-		return CallbackResult{}, CallbackInvalid
+		return CallbackResult{}, err
 	}
 	defer query.Destroy()
-
-	state, input, err := callbackState(ctx, query)
-	if err != nil {
-		return CallbackResult{}, CallbackInvalid
-	}
-	lookup := CallbackLookup{
-		StateDigest: state, ProductionDeployment: p.production, ProductionCallback: receivedCallback,
-		ProviderID: p.profile.ID, ProviderVersion: p.profile.Version, Issuer: p.profile.Issuer, ClientID: p.profile.ClientID,
-		ProviderDenied: query.Denied(),
-	}
 	if p.command != nil {
 		return p.executeCommand(ctx, lookup, input)
 	}
@@ -230,11 +229,47 @@ func (p *ProductionCallback) Handle(ctx context.Context, receivedCallback, rawQu
 	prepared := p.prepareOriginal(ctx, lookup, input, original)
 	defer clear(prepared.envelope)
 	result, err = p.finalize(ctx, original, prepared.disposition, prepared.envelope)
-	if err == nil && !prepared.disclosableAt(p.clock.Now()) {
-		clear(result.envelope)
-		return CallbackResult{}, CallbackReconcile
+	if err == nil {
+		if ctx.Err() != nil || !prepared.disclosableAt(p.clock.Now()) {
+			clear(result.envelope)
+			return CallbackResult{}, CallbackReconcile
+		}
+		result.flow, result.until = prepared.flow, prepared.until
 	}
 	return result, err
+}
+
+// Lookup uses exactly the same provider parser and callback registration as
+// Handle. It returns selectors for independent admission without reserving the
+// original or contacting the provider. The digest does not prove authority.
+func (p *ProductionCallback) Lookup(ctx context.Context, receivedCallback, rawQuery string) (CallbackLookup, error) {
+	query, lookup, _, err := p.parseCallback(ctx, receivedCallback, rawQuery)
+	if err != nil {
+		return CallbackLookup{}, err
+	}
+	query.Destroy()
+	return lookup, nil
+}
+
+func (p *ProductionCallback) parseCallback(ctx context.Context, receivedCallback, rawQuery string) (oauth.QueryCallback, CallbackLookup, identity.OAuthCallbackInput, error) {
+	if p == nil || ctx == nil || (p.store == nil && p.command == nil) || receivedCallback != p.profile.RedirectURI || ctx.Err() != nil {
+		return oauth.QueryCallback{}, CallbackLookup{}, identity.OAuthCallbackInput{}, CallbackInvalid
+	}
+	query, err := oauth.ParseQueryCallback(ctx, rawQuery, p.profile)
+	if err != nil {
+		return oauth.QueryCallback{}, CallbackLookup{}, identity.OAuthCallbackInput{}, CallbackInvalid
+	}
+	state, input, err := callbackState(ctx, query)
+	if err != nil || ctx.Err() != nil {
+		query.Destroy()
+		return oauth.QueryCallback{}, CallbackLookup{}, identity.OAuthCallbackInput{}, CallbackInvalid
+	}
+	lookup := CallbackLookup{
+		StateDigest: state, ProductionDeployment: p.production, ProductionCallback: receivedCallback,
+		ProviderID: p.profile.ID, ProviderVersion: p.profile.Version, Issuer: p.profile.Issuer, ClientID: p.profile.ClientID,
+		ProviderDenied: query.Denied(),
+	}
+	return query, lookup, input, nil
 }
 
 func (p *ProductionCallback) prepareOriginal(ctx context.Context, lookup CallbackLookup, input identity.OAuthCallbackInput, original OriginalCallback) CallbackPrepared {
@@ -266,7 +301,7 @@ func (p *ProductionCallback) prepareOriginal(ctx context.Context, lookup Callbac
 		until = original.Binding.ExpiresAt
 	}
 	return CallbackPrepared{disposition: CallbackForwarded, destination: original.Binding.PreviewRedirect,
-		envelope: artifact, issuedAt: original.Binding.IssuedAt, until: until}
+		envelope: artifact, flow: original.Binding.TransactionID, issuedAt: original.Binding.IssuedAt, until: until}
 }
 
 func callbackState(ctx context.Context, query oauth.QueryCallback) ([32]byte, identity.OAuthCallbackInput, error) {
