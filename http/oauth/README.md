@@ -7,6 +7,34 @@ exact selected `LinkStart`, `SigninStart` and/or `Callback` configuration and
 contribute it to `identity/http` composition. Native owners supply persistence,
 protocol and authentication; these handlers supply transport, not new engines.
 
+## Two-origin OAuth preview signin
+
+On production, explicitly select `NewProxyForwardFeature` for the one exact
+provider `GET /oauth2/callback/proxy`. Register that HTTPS callback with the
+provider in query mode. Supply the native production callback and original
+transaction rate source, the shared provider limiter, and a counted and audited
+risk evaluator built with `Policy.WithOAuthProxyForward()`. Only acknowledged
+fresh native forwarding can produce an empty 303 to the exact registered
+preview endpoint. A POST is not a provider callback alias.
+
+On the preview deployment, mount `NewProxyPreviewBrowserHandler` at the
+separately configured HTTPS endpoint. Select the original native preview
+completion service and the same cookie, device and synchronizer policies used
+for ordinary signin. Use a distinct same-origin success URL. The GET landing
+requires direct TLS and serves only a fixed, hash-authorized relay. The relay
+removes the encrypted fragment before making a same-origin POST. Only a fresh
+native result with the original browser and delivery deadline can return empty
+204, set the preview authentication and CSRF cookies, and expire the used flow
+cookie. No acceptance relies on cross-origin script access, referrer fallback,
+or a provider token reaching the preview. For unusual server setups the same
+GET and POST boundaries are separately available as `NewProxyHandoffLanding`
+and `NewProxyPreviewHandler`.
+
+The application must bind the original preview browser before navigating to
+the provider. Do not log callback queries, handoff redirect headers, completion
+bodies or cookie values. The transport never retries uncertain provider work
+or discloses a new session from a replay.
+
 ## Google One Tap redirect-button transport
 
 Select `NewOneTapRedirectStartFeature` and/or

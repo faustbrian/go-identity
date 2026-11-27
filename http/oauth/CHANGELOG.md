@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in production OAuth proxy query callback and exact preview browser
+  landing/completion. An encrypted fragment is cleared before same-origin
+  completion, which only delivers cookies for a fresh acknowledged preview
+  session. Production never sets cookies or forwards provider tokens.
+
 - Add an explicit Google One Tap redirect-button Start and HTML form callback.
   Document the selected wire profile, preserve the original path-bound flow
   and Google double-submit proofs, and grant no cross-origin script access.
