@@ -69,42 +69,77 @@ func (ManagedUsersDeleteConfig) MarshalText() ([]byte, error) {
 // deadlines remain required. Generic authentication middleware cannot replace
 // the native-owned authority/admission window.
 func NewManagedUsersDeleteFeature(c ManagedUsersDeleteConfig) (identityhttp.Feature, error) {
-	if missingManagedOwner(c.Executor) || len(c.Network.TenantHosts) == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
+	if missingManagedOwner(c.Executor) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	if _, err := scim.ParseMappingPath("userName", nil, c.Limits); err != nil {
-		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
-	}
-	network, decoder, err := identityhttp.NewSCIMRequestBoundary(c.Network)
-	if err != nil {
-		return identityhttp.Feature{}, err
-	}
-	rate, err := newProtocolRate(c.Rate)
-	if err != nil {
-		return identityhttp.Feature{}, err
-	}
-	h := managedUsersDeleteHTTP{network: network, decoder: decoder, executor: c.Executor, rate: rate, limits: c.Limits, duration: c.MaximumDuration}
-	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
-		Owner: "scim", OperationID: managedUsersDeleteOperation, Handler: http.HandlerFunc(h.serve),
-		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: uint64(c.Limits.ResponseBytes),
-	})
-	if err != nil {
-		return identityhttp.Feature{}, err
-	}
-	op.Wire = managedUsersDeleteWire(c.Limits)
-	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "scim", Operations: []identityhttp.OperationDescriptor{op}})
+	return newManagedDeleteFeature(managedDeleteConfig{
+		network: c.Network, rate: c.Rate, limits: c.Limits, duration: c.MaximumDuration,
+	}, scim.UserDelete, c.Executor.ExecuteManagedAdmittedDelete)
 }
 
-type managedUsersDeleteHTTP struct {
-	network  *identityhttp.NetworkResolver
-	decoder  *identityhttp.RequestDecoder
-	executor ManagedUsersDeleteExecutor
-	rate     *protocolRate
+type managedDeleteConfig struct {
+	network  identityhttp.NetworkConfig
+	rate     ProtocolRateConfig
 	limits   scim.Limits
 	duration time.Duration
 }
 
-func (h *managedUsersDeleteHTTP) serve(w http.ResponseWriter, r *http.Request) {
+type managedDeleteExecutor func(context.Context, identity.TenantID, scim.Request, scim.ProtocolAdmission) (scim.Response, error)
+
+func newManagedDeleteFeature(c managedDeleteConfig, operation scim.Operation, executor managedDeleteExecutor) (identityhttp.Feature, error) {
+	if len(c.network.TenantHosts) == 0 || c.duration < time.Millisecond || c.duration > 30*time.Second {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	var operationID, resourcePrefix, validationPath string
+	var keyRule identityhttp.HeaderRequirement
+	var wire *identityhttp.WireOperation
+	switch operation {
+	case scim.UserDelete:
+		operationID, resourcePrefix, validationPath = managedUsersDeleteOperation, "/scim/v2/Users/", "userName"
+		keyRule, wire = identityhttp.HeaderForbidden, managedUsersDeleteWire(c.limits)
+	case scim.GroupDelete:
+		operationID, resourcePrefix, validationPath = managedGroupsDeleteOperation, "/scim/v2/Groups/", "displayName"
+		keyRule, wire = identityhttp.HeaderOptional, managedGroupsDeleteWire(c.limits)
+	default:
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	if _, err := scim.ParseMappingPath(validationPath, nil, c.limits); err != nil {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	network, decoder, err := identityhttp.NewSCIMRequestBoundary(c.network)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	rate, err := newProtocolRate(c.rate)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	h := managedDeleteHTTP{operation: operation, resourcePrefix: resourcePrefix, keyRule: keyRule,
+		network: network, decoder: decoder, executor: executor, rate: rate, limits: c.limits, duration: c.duration}
+	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
+		Owner: "scim", OperationID: operationID, Handler: http.HandlerFunc(h.serve),
+		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: uint64(c.limits.ResponseBytes),
+	})
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	op.Wire = wire
+	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "scim", Operations: []identityhttp.OperationDescriptor{op}})
+}
+
+type managedDeleteHTTP struct {
+	operation      scim.Operation
+	resourcePrefix string
+	keyRule        identityhttp.HeaderRequirement
+	network        *identityhttp.NetworkResolver
+	decoder        *identityhttp.RequestDecoder
+	executor       managedDeleteExecutor
+	rate           *protocolRate
+	limits         scim.Limits
+	duration       time.Duration
+}
+
+func (h *managedDeleteHTTP) serve(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.duration)
 	defer cancel()
 	_, denial := h.execute(r.WithContext(ctx))
@@ -121,14 +156,14 @@ func (h *managedUsersDeleteHTTP) serve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *managedUsersDeleteHTTP) execute(r *http.Request) (response scim.Response, denial *scim.Error) {
+func (h *managedDeleteHTTP) execute(r *http.Request) (response scim.Response, denial *scim.Error) {
 	defer func() {
 		if recover() != nil {
 			response, denial = scim.Response{}, scim.NewError(503, "")
 		}
 	}()
 	resourceID := r.PathValue("resource_id")
-	if resourceID == "" || r.URL.Path != "/scim/v2/Users/"+resourceID || r.URL.RawPath != "" || r.URL.EscapedPath() != r.URL.Path {
+	if resourceID == "" || r.URL.Path != h.resourcePrefix+resourceID || r.URL.RawPath != "" || r.URL.EscapedPath() != r.URL.Path {
 		return scim.Response{}, scim.NewError(404, "")
 	}
 	if r.Method != http.MethodDelete {
@@ -158,8 +193,19 @@ func (h *managedUsersDeleteHTTP) execute(r *http.Request) (response scim.Respons
 			return scim.Response{}, scim.NewError(400, "invalidValue")
 		}
 	}
-	if _, _, err := h.decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil {
+	_, hasAlias, err := h.decoder.IdempotencyKey(r, h.keyRule)
+	if err != nil {
 		return scim.Response{}, scim.NewError(400, "invalidValue")
+	}
+	var alias string
+	if hasAlias {
+		// The request decoder just proved exact singleton token syntax. The
+		// existing native SCIM request accepts that same header as a string.
+		var present bool
+		alias, present = protocolHeader(r, "Idempotency-Key")
+		if !present {
+			return scim.Response{}, scim.NewError(400, "invalidValue")
+		}
 	}
 	credential, _, err := h.decoder.Bearer(r, identityhttp.HeaderRequired)
 	if err != nil {
@@ -168,7 +214,7 @@ func (h *managedUsersDeleteHTTP) execute(r *http.Request) (response scim.Respons
 	// Resolve/decoder reject duplicate security-sensitive headers. Native SCIM
 	// owns required and strong If-Match semantics; do not trim or reinterpret it.
 	ifMatch, _ := protocolHeader(r, "If-Match")
-	request := scim.Request{Operation: scim.UserDelete, Credential: credential, ResourceID: resourceID, IfMatch: scim.Version(ifMatch)}
+	request := scim.Request{Operation: h.operation, Credential: credential, ResourceID: resourceID, IfMatch: scim.Version(ifMatch), IdempotencyKey: alias}
 	calls, admitted := 0, false
 	gate := func(ctx context.Context, client scim.ProtocolClient) *scim.Error {
 		calls++
@@ -182,7 +228,7 @@ func (h *managedUsersDeleteHTTP) execute(r *http.Request) (response scim.Respons
 		admitted = denial == nil
 		return denial
 	}
-	response, err = h.executor.ExecuteManagedAdmittedDelete(r.Context(), facts.TenantID(), request, gate)
+	response, err = h.executor(r.Context(), facts.TenantID(), request, gate)
 	if err != nil {
 		var protocol *scim.Error
 		if errors.As(err, &protocol) && protocol != nil {

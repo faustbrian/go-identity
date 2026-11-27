@@ -1,5 +1,15 @@
 # SCIM HTTP
 
+## Managed bearer conditional Group DELETE
+
+Select `NewManagedGroupsDeleteFeature` for
+`DELETE /scim/v2/Groups/{resource_id}` only. Send one issued SCIM bearer and
+the original strong `If-Match`, with no body. One optional `Idempotency-Key`
+can alias the original native request; the same request also replays without
+a key. Alias reuse for a different request returns a conflict. Success is
+exactly empty `204`, including original replay. This does not remove member
+Users or Groups, and does not select any other operation.
+
 ## Managed bearer conditional Group PATCH
 
 Select `NewManagedGroupsPatchFeature` for

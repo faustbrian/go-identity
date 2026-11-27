@@ -6,9 +6,26 @@ import (
 )
 
 func managedUsersDeleteWire(limits scim.Limits) *identityhttp.WireOperation {
+	return managedDeleteWire(limits, managedUsersDeleteOperation, "SCIMManagedUserDeleteBearer",
+		"Exact HTTPS conditional User DELETE only. Router supplies resource_id; a single If-Match is forwarded unchanged to the native owner. No query, body, trailer, encoding, client Idempotency-Key, cookie fallback, CSRF requirement, automatic retry or response cache. Native schema/current bearer/connection/organization/policy and target/precondition validation precede one shared atomic rate.protocol charge (client120/minute, full IP240/minute, tenant600/minute), then native command/effect authority. Preserve canonical server-owned headerless replay and original deadlines without new custody. Success is exactly empty 204; errors disclose no partial representation or version. No other read/write, search, Groups, discovery or connection lifecycle is selected.")
+}
+
+func managedGroupsDeleteWire(limits scim.Limits) *identityhttp.WireOperation {
+	return managedDeleteWire(limits, managedGroupsDeleteOperation, "SCIMManagedGroupDeleteBearer",
+		"Opt-in HTTPS Group DELETE uses the issued scoped bearer and exact original If-Match. One optional Idempotency-Key only aliases the established native canonical request; it cannot select a different target, precondition or command. Native current authority, one shared protocol quota, Group-only deletion and original replay retain their existing owners. Success is exactly empty 204; errors disclose no partial representation or version. No query, body, cookies, automatic retry or sibling operation is selected.")
+}
+
+func managedDeleteWire(limits scim.Limits, operation, bearer, description string) *identityhttp.WireOperation {
 	parameters := []fields{
 		{"name": "resource_id", "in": "path", "required": true, "schema": fields{"type": "string", "minLength": 1, "maxLength": min(128, limits.StringBytes), "pattern": "^[A-Za-z0-9._~-]+$"}, "description": "Exact unescaped canonical resource segment, excluding dot, dot-dot and reserved .search."},
 		{"name": "If-Match", "in": "header", "required": true, "schema": fields{"type": "string", "minLength": 3, "maxLength": 256}, "description": "One exact strong native version, unchanged. Native authority owns required/strong validation and current comparison: missing returns 428, invalid 400, stale live version 412."},
+	}
+	if operation == managedGroupsDeleteOperation {
+		parameters = append(parameters, fields{
+			"name": "Idempotency-Key", "in": "header", "required": false,
+			"schema":      fields{"type": "string", "minLength": 1, "maxLength": 256},
+			"description": "One optional exact HTTP token alias for the original native request. Headerless replay still works; reuse for another request returns 409.",
+		})
 	}
 	errorSchema := wireObject([]string{"schemas", "status", "detail"}, fields{
 		"schemas": schemaURN(errorURN), "status": fields{"type": "string", "pattern": "^[45][0-9]{2}$"}, "detail": fields{"type": "string"}, "scimType": fields{"type": "string"},
@@ -33,9 +50,8 @@ func managedUsersDeleteWire(limits scim.Limits) *identityhttp.WireOperation {
 	responses["405"].(fields)["headers"] = fields{"Allow": fields{"schema": fields{"type": "string"}, "description": "Sorted exact methods selected for this resource path, without implicit HEAD or OPTIONS."}}
 	responses["429"].(fields)["headers"] = fields{"Retry-After": fields{"schema": fields{"type": "integer", "minimum": 1, "maximum": 3600}}}
 	return &identityhttp.WireOperation{
-		SecuritySchemes: []identityhttp.WireComponent{{Name: "SCIMManagedUserDeleteBearer", Definition: []byte(`{"type":"http","scheme":"bearer","description":"Exactly one issued scoped managed SCIM bearer; cookies never supply authority. Native current connection, organization and operation policy remain mandatory."}`)}},
-		Definition: wireJSON(fields{"operationId": managedUsersDeleteOperation, "parameters": parameters, "responses": responses,
-			"security":    []fields{{"SCIMManagedUserDeleteBearer": []string{}}},
-			"description": "Exact HTTPS conditional User DELETE only. Router supplies resource_id; a single If-Match is forwarded unchanged to the native owner. No query, body, trailer, encoding, client Idempotency-Key, cookie fallback, CSRF requirement, automatic retry or response cache. Native schema/current bearer/connection/organization/policy and target/precondition validation precede one shared atomic rate.protocol charge (client120/minute, full IP240/minute, tenant600/minute), then native command/effect authority. Preserve canonical server-owned headerless replay and original deadlines without new custody. Success is exactly empty 204; errors disclose no partial representation or version. No other read/write, search, Groups, discovery or connection lifecycle is selected."}),
+		SecuritySchemes: []identityhttp.WireComponent{{Name: bearer, Definition: []byte(`{"type":"http","scheme":"bearer","description":"Exactly one issued scoped managed SCIM bearer; cookies never supply authority. Native current connection, organization and operation policy remain mandatory."}`)}},
+		Definition: wireJSON(fields{"operationId": operation, "parameters": parameters, "responses": responses,
+			"security": []fields{{bearer: []string{}}}, "description": description}),
 	}
 }

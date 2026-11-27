@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add opt-in conditional Group DELETE with the original If-Match and an
+  optional alias to native headerless replay. Keep User DELETE unchanged.
+
 - Add opt-in conditional Group PATCH with the original If-Match, bounded
   PatchOp, shared quota and native replay. Keep Group PUT independent.
 
