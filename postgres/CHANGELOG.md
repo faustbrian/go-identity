@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Erase duplicate OAuth proxy callback preparation only with its definitive
+  terminal receipt. Preserve undecided custody and original tokenless replay;
+  append `OAuthProxyForwardPreparationErasureMigrationSource` after existing
+  preparation-erasure history before selecting the native proxy writer.
+
 - Admit the exact OAuth proxy callback into the existing preparation and
   single-use capability phases. Reserve original state before provider work,
   fence the proxy-only outcome, and keep state pending for reconciliation

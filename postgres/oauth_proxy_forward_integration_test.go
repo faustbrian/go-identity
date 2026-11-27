@@ -81,7 +81,7 @@ func TestOAuthProxyForwardKeepsOriginalStateAcrossExternalOutcomes(t *testing.T)
 	for _, mode := range []string{"committed", "exchange-unknown", "late-rollback"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, pool, repo := newAccountAuthorityStore(t)
-			for _, schema := range []string{preparationSchemaSQL, admissionPreparationSchemaSQL, counterPreparationSchemaSQL, `CREATE TABLE public.signin_preparation_state(command_id text PRIMARY KEY,fingerprint bytea NOT NULL,generation numeric NOT NULL,state text NOT NULL);
+			for _, schema := range []string{preparationSchemaSQL, admissionPreparationSchemaSQL, counterPreparationSchemaSQL, oauthProxyForwardPreparationErasureSQL, `CREATE TABLE public.signin_preparation_state(command_id text PRIMARY KEY,fingerprint bytea NOT NULL,generation numeric NOT NULL,state text NOT NULL);
 CREATE TABLE public.proxy_test_outcomes(command_id text PRIMARY KEY);
 CREATE TABLE public.identity_test_audits(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);
 CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE)`} {

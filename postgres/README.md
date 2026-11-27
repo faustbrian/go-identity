@@ -38,6 +38,22 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
+## OAuth proxy callback preparation erasure
+
+Append `OAuthProxyForwardPreparationErasureMigrationSource` after existing
+preparation-erasure history, including any selected One Tap callback erasure,
+before enabling the native proxy writer. Its `Base` preserves that history;
+choose a later `Version`. Installation only replaces the existing preparation
+guard with a bounded lock timeout; it neither rewrites retained rows nor
+enables a callback or preview endpoint. There is no down migration.
+
+Only the exact `OAuthProxyForwardOperation` profile-four terminal write may
+erase its duplicate encrypted preparation. The original receipt, declaration,
+plan and generation remain for tokenless replay. Pending, unknown and rolled-back
+outcomes retain recovery custody; older profiles and sibling routes keep their
+existing rules. Reverting the writer does not undo the widened guard or recover
+erased output.
+
 ## Google One Tap start preparation
 
 `OneTapStartOperation` selects only the OAuth PostgreSQL native initiation
