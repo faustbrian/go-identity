@@ -100,8 +100,9 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	f := newLiveStoresProfile(t, ctx, true, true)
 	productionConfig := p.production
 	installOAuthProxyProductionFixture(t, ctx, f, productionConfig, true)
-	productionConfig.HTTP = oauthProxyProductionHTTPConfiguration(t, f.pool)
-	production, err := reference.NewOAuthProxyProduction(f.pool, productionConfig)
+	runtimePool := newOAuthProxyProductionRuntimePool(t, ctx, f)
+	productionConfig.HTTP = oauthProxyProductionHTTPConfiguration(t, runtimePool)
+	production, err := reference.NewOAuthProxyProduction(runtimePool, productionConfig)
 	if err != nil {
 		t.Fatal("construct the public production proxy owner", err)
 	}
