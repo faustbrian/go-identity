@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accept exact case-sensitive native tenant identifiers in sealed OIDC proxy
+  evidence, preserving the original tenant bytes in authenticated bindings.
+
 - Add an opt-in identity-only OIDC proxy exchange boundary. Dispose parsed
   refresh tokens through one configured same-origin RFC7009 request before
   accepting verified identity, including cleanup on proof rejection. Preserve

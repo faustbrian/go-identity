@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,6 +72,46 @@ func proxyOIDCEvidenceFixture(t testing.TB) (*ProxyOIDCEvidenceCodec, *proxyOIDC
 		}},
 	}
 	return codec, clock, crypto, binding, profile
+}
+
+func TestProxyOIDCEvidencePreservesCanonicalTenantBinding(t *testing.T) {
+	codec, _, _, binding, original := proxyOIDCEvidenceFixture(t)
+	binding.TenantID = "AAAAAAAAAAAAAAAAAAAAAQ"
+	wire, err := codec.Seal(t.Context(), binding, original)
+	if err != nil || len(wire) == 0 {
+		t.Fatal("canonical native tenant could not seal verified exchange evidence", err)
+	}
+	restored, err := codec.Open(t.Context(), binding, wire)
+	if err != nil || restored.ProviderID() != original.ProviderID() || restored.Issuer() != original.Issuer() || restored.Subject() != original.Subject() || !restored.EvidenceExpiresAt().Equal(original.EvidenceExpiresAt()) {
+		t.Fatal("canonical native tenant could not recover its exact provider evidence", err)
+	}
+	changed := binding
+	changed.TenantID = identity.TenantID(strings.ToLower(string(binding.TenantID)))
+	if got, err := codec.Open(t.Context(), changed, wire); err == nil || got != (ProviderIdentity{}) {
+		t.Fatal("case-altered tenant disclosed another tenant's provider evidence")
+	}
+	for _, tc := range []struct {
+		name   string
+		tenant identity.TenantID
+	}{
+		{"empty", ""},
+		{"space", "native tenant"},
+		{"control", "native\x00tenant"},
+		{"delete", "native\x7ftenant"},
+		{"invalid-utf8", "native\xfftenant"},
+		{"oversized", identity.TenantID(strings.Repeat("A", 129))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			invalid := binding
+			invalid.TenantID = tc.tenant
+			if sealed, err := codec.Seal(t.Context(), invalid, original); err == nil || len(sealed) != 0 {
+				t.Fatal("invalid tenant sealed provider evidence")
+			}
+			if got, err := codec.Open(t.Context(), invalid, wire); err == nil || got != (ProviderIdentity{}) {
+				t.Fatal("invalid tenant disclosed provider evidence")
+			}
+		})
+	}
 }
 
 func FuzzProxyOIDCEvidenceOpen(f *testing.F) {

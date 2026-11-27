@@ -205,17 +205,18 @@ func (c *ProxyOIDCEvidenceCodec) begin(ctx context.Context, b ProxyOIDCEvidenceB
 }
 
 func (b ProxyOIDCEvidenceBinding) valid() bool {
-	if !identifier(string(b.TenantID)) || !identifier(b.ProductionDeployment) || !identifier(b.PreviewDeployment) || b.ProductionDeployment == b.PreviewDeployment ||
+	if !identifier(b.ProductionDeployment) || !identifier(b.PreviewDeployment) || b.ProductionDeployment == b.PreviewDeployment ||
 		!identifier(b.ProviderID) || b.ProviderVersion == 0 || !httpsURL(b.Issuer) || !visible(b.ClientID, 1, 1024) ||
 		!identifier(b.Recipient) || !identifier(b.ClaimsProfile) || b.ClaimsVersion == 0 || !proxyOIDCPreviewTarget(b.PreviewOrigin, b.PreviewRedirect) ||
 		b.RequestFingerprint == ([32]byte{}) || b.StateDigest == ([32]byte{}) || b.PKCEChallengeDigest == ([32]byte{}) ||
 		b.IssuedAt.IsZero() || b.IssuedAt.Year() < 1 || b.ExpiresAt.Year() > 9999 || !b.ExpiresAt.After(b.IssuedAt) || b.ExpiresAt.Sub(b.IssuedAt) > proxyOIDCLifetime {
 		return false
 	}
+	_, tenant := identity.ParseIdentifierID(string(b.TenantID))
 	_, command := identity.ParseCommandID(string(b.CommandID))
 	_, transaction := identity.ParsePreAuthTransactionID(string(b.TransactionID))
 	_, remember := b.Remember.Bindings()
-	return command == nil && transaction == nil && remember == nil
+	return tenant == nil && command == nil && transaction == nil && remember == nil
 }
 
 // Only registered canonical HTTPS DNS endpoints are accepted here, not paths
