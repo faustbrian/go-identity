@@ -29,28 +29,39 @@ func parseTokenResponse(status int, contentType string, body []byte, c OIDCConfi
 }
 
 func parseTokenResponseWithPolicy(status int, contentType string, body []byte, c OIDCConfig, googleAccounts, requireIDToken bool, policy OAuth2TokenPolicy) (tokenResponse, ErrorKind) {
-	var out tokenResponse
 	if policy != "" && (policy != OAuth2GitHubOAuthAppPolicy || requireIDToken || googleAccounts) {
-		return out, Unknown
+		return tokenResponse{}, Unknown
 	}
+	fields, ok := decodeTokenResponse(contentType, body, c)
+	if !ok {
+		return tokenResponse{}, Unknown
+	}
+	return parseTokenResponseFields(status, fields, c, googleAccounts, requireIDToken, policy)
+}
+
+// A complete bounded object is required before any field can acquire custody.
+// Semantic token validation and proxy-only cleanup consume this same decode.
+func decodeTokenResponse(contentType string, body []byte, c OIDCConfig) (map[string]any, bool) {
 	media, _, err := mime.ParseMediaType(contentType)
 	if err != nil || media != "application/json" || len(body) == 0 || int64(len(body)) > c.MaxResponseBytes || !utf8.Valid(body) {
-		return out, Unknown
+		return nil, false
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	budget := 0
 	value, err := readJSON(decoder, 0, &budget)
 	if err != nil {
-		return out, Unknown
+		return nil, false
 	}
 	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return out, Unknown
+		return nil, false
 	}
 	fields, ok := value.(map[string]any)
-	if !ok {
-		return out, Unknown
-	}
+	return fields, ok
+}
+
+func parseTokenResponseFields(status int, fields map[string]any, c OIDCConfig, googleAccounts, requireIDToken bool, policy OAuth2TokenPolicy) (tokenResponse, ErrorKind) {
+	var out tokenResponse
 	if refusal, present := fields["error"]; present {
 		name, ok := refusal.(string)
 		if !ok || !slices.Contains([]string{"invalid_request", "invalid_client", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope"}, name) || (status != 400 && status != 401) {
@@ -97,10 +108,11 @@ func parseTokenResponseWithPolicy(status int, contentType string, body []byte, c
 		if !expiryOK {
 			return out, Unknown
 		}
-		seconds, err = expiry.Int64()
-		if err != nil || seconds <= 0 || seconds > 365*24*60*60 {
+		parsedSeconds, err := expiry.Int64()
+		if err != nil || parsedSeconds <= 0 || parsedSeconds > 365*24*60*60 {
 			return out, Unknown
 		}
+		seconds = parsedSeconds
 	} else if policy != OAuth2GitHubOAuthAppPolicy {
 		return out, Unknown
 	}

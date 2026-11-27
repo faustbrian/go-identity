@@ -18,6 +18,22 @@ token's selected strings and booleans, preserving absent and null separately.
 It returns no raw token or unselected claim map and confers no authorization.
 Default providers do not project claims.
 
+`NewOIDCProxyExchange(provider, revocationEndpoint)` selects the identity-only
+production proxy exchange boundary. After native state admission, call its
+`Exchange` with the original callback, PKCE verifier and bound nonce. Its result
+is only `ProviderIdentity`, never `TokenSet`. It clears bounded response buffers
+and, when a refresh token is parsed, invokes the exact configured same-issuer-origin
+HTTPS RFC7009 endpoint once using the original provider's client-authentication
+method. An HTTP200 acknowledgement is required before accepting identity.
+Invalid OIDC proof still triggers disposal; uncertain disposal replaces proof
+rejection with `Unknown` for native reconciliation. A blank endpoint is allowed,
+but any refresh token then causes `Unknown`, not success. Malformed token
+responses remain `Unknown`. A valid bounded refresh token in a complete,
+duplicate-free HTTP200 JSON object is still disposed when unrelated token fields
+are invalid; error-bearing responses and ambiguous JSON never yield custody.
+The adapter borrows provider lifetime and grants no state, retry, persistence,
+account or session authority. Ordinary `OIDCProvider.Exchange` is unchanged.
+
 ## Consumer sequence
 
 1. Configure one `OIDCConfig` with explicit HTTPS authorization/token/issuer and

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an opt-in identity-only OIDC proxy exchange boundary. Dispose parsed
+  refresh tokens through one configured same-origin RFC7009 request before
+  accepting verified identity, including cleanup on proof rejection. Preserve
+  unknown disposal for reconciliation without exposing or persisting tokens;
+  ordinary OIDC exchange and OAuth2 revocation remain unchanged.
+
 - Add authenticated handoff of minimal OIDC code-exchange evidence to an exact
   preview recipient. Bind the original exchange client, transaction, signed
   times, Remember policy and rotating keys without forwarding tokens or claims.

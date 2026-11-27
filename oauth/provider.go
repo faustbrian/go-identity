@@ -431,6 +431,12 @@ type ExchangeResult struct {
 // come from that transaction, never from the inbound callback. No retries,
 // redirects, UserInfo fallback, refresh, token retention or session issuance occur.
 func (p *OIDCProvider) Exchange(ctx context.Context, input identity.OAuthCallbackInput, verifier PKCEVerifier, nonce string) (result ExchangeResult, err error) {
+	return p.exchangeCode(ctx, input, verifier, nonce, nil)
+}
+
+// A nonnil disposal owner selects the proxy's identity-only result. Keeping it
+// inside response custody permits cleanup even when signed OIDC proof fails.
+func (p *OIDCProvider) exchangeCode(ctx context.Context, input identity.OAuthCallbackInput, verifier PKCEVerifier, nonce string, disposeRefresh func(context.Context, []byte, []byte) error) (result ExchangeResult, err error) {
 	if ctx == nil || !p.ready() || !canonical32(nonce) {
 		return result, failure(InvalidInput, ctx)
 	}
@@ -456,7 +462,7 @@ func (p *OIDCProvider) Exchange(ctx context.Context, input identity.OAuthCallbac
 			return nil
 		}
 		exchangeErr = verifier.use(ctx, func(value []byte) error {
-			result, err = p.exchange(ctx, code, value, secret, nonce, &attempted)
+			result, err = p.exchange(ctx, code, value, secret, nonce, &attempted, disposeRefresh)
 			return err
 		})
 		return nil
@@ -480,7 +486,7 @@ func (p *OIDCProvider) Exchange(ctx context.Context, input identity.OAuthCallbac
 	return result, nil
 }
 
-func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []byte, nonce string, attempted *bool) (ExchangeResult, error) {
+func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []byte, nonce string, attempted *bool, disposeRefresh func(context.Context, []byte, []byte) error) (result ExchangeResult, exchangeErr error) {
 	q := url.Values{"grant_type": {"authorization_code"}, "code": {string(code)}, "code_verifier": {string(verifier)}, "redirect_uri": {p.config.RedirectURI}}
 	if p.config.ClientAuthentication == PublicClient {
 		q.Set("client_id", p.config.ClientID)
@@ -516,12 +522,33 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	if err != nil || int64(len(body)) > p.config.MaxResponseBytes {
 		return ExchangeResult{}, failure(Unknown, ctx)
 	}
-	receivedAt := p.config.Clock.Now()
-	parsed, kind := parseResponse(response.StatusCode, response.Header.Get("Content-Type"), body, p.config, p.googleAccounts)
+	var receivedAt time.Time
+	var parsed tokenResponse
+	var kind ErrorKind
+	if disposeRefresh == nil {
+		// Preserve the ordinary provider's response-receipt observation before
+		// parsing. Proxy exchange creates no token custody or receipt lifetime.
+		receivedAt = p.config.Clock.Now()
+		parsed, kind = parseResponse(response.StatusCode, response.Header.Get("Content-Type"), body, p.config, p.googleAccounts)
+	} else {
+		parsed, kind = parseProxyOIDCResponse(response.StatusCode, response.Header.Get("Content-Type"), body, p.config, p.googleAccounts)
+	}
+	defer parsed.clear()
+	if disposeRefresh != nil && len(parsed.refresh) > 0 {
+		// The proxy cannot accept a profile while a refresh credential remains
+		// live or its disposal is uncertain. Run before clearing parsed bytes,
+		// including every subsequent OIDC proof rejection and panic unwind.
+		defer func() {
+			if err := disposeRefresh(ctx, parsed.refresh, secret); err != nil {
+				result.Tokens.Destroy()
+				result = ExchangeResult{}
+				exchangeErr = failure(Unknown, ctx)
+			}
+		}()
+	}
 	if kind != "" {
 		return ExchangeResult{}, failure(kind, ctx)
 	}
-	defer parsed.clear()
 	nonceCheck := func(_ context.Context, actual string) error {
 		if subtle.ConstantTimeCompare([]byte(actual), []byte(nonce)) != 1 {
 			return failure(InvalidProof, nil)
@@ -589,6 +616,9 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
 	verified.exchangeClientID, verified.exchangeProviderVersion = p.config.ClientID, p.config.Version
+	if disposeRefresh != nil {
+		return ExchangeResult{Identity: verified}, nil
+	}
 	owner := &tokenOwner{access: bytes.Clone(parsed.access), refresh: bytes.Clone(parsed.refresh), id: bytes.Clone(parsed.id)}
 	tokens := TokenSet{owner: func() *tokenOwner { return owner }, receivedAt: receivedAt, expiresAt: receivedAt.Add(time.Duration(parsed.expires) * time.Second), requested: slices.Clone(p.config.Scopes), granted: slices.Clone(parsed.scopes), scopeReported: parsed.scopeReported}
 	return ExchangeResult{Identity: verified, Tokens: tokens}, nil
