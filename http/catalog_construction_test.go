@@ -45,6 +45,47 @@ func TestCanonicalOperationConstructionAllocationBudget(t *testing.T) {
 	}
 }
 
+func TestCanonicalOAuthProxyCallbackSelectsOnlyExactProviderGET(t *testing.T) {
+	const endpoint = "/oauth2/callback/proxy"
+	const owner = "identity/oauth/proxy"
+	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
+		Owner: owner, OperationID: "identity.oauth.proxy-forward",
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }),
+		CSRF:    identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.Route.Method != http.MethodGet || op.Route.Path != endpoint || op.Record.Idempotency != "once" || op.Record.RatePolicy != "rate.provider-callback" {
+		t.Fatalf("canonical proxy callback route: %s %s (%s, %s)", op.Route.Method, op.Route.Path, op.Record.Idempotency, op.Record.RatePolicy)
+	}
+	op.Wire = &identityhttp.WireOperation{Definition: []byte(`{"operationId":"identity.oauth.proxy-forward","responses":{"303":{"description":"Forward to the registered preview"}}}`)}
+	feature, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: owner, Operations: []identityhttp.OperationDescriptor{op}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, _, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Preview", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		method, path string
+		status       int
+	}{
+		{http.MethodGet, endpoint, http.StatusNoContent},
+		{http.MethodPost, endpoint, http.StatusMethodNotAllowed},
+		{http.MethodHead, endpoint, http.StatusMethodNotAllowed},
+		{http.MethodGet, endpoint + "/", http.StatusNotFound},
+	} {
+		r := httptest.NewRequest(tc.method, tc.path, nil)
+		w := httptest.NewRecorder()
+		selected.ServeHTTP(w, r)
+		if w.Code != tc.status || (tc.status == http.StatusMethodNotAllowed && w.Header().Get("Allow") != "GET") {
+			t.Fatalf("%s %s returned %d, want %d", tc.method, tc.path, w.Code, tc.status)
+		}
+	}
+}
+
 func TestCanonicalOperationConstructionMetadataIsolation(t *testing.T) {
 	config := catalogConstructionConfig(t)
 	want, err := identityhttp.NewCanonicalOperation(config)

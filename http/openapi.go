@@ -234,6 +234,8 @@ func protocolRedirectResponsesLocation(op OperationDescriptor) string {
 		return "/paths/~1saml2~1{provider_id}~1login/get/responses"
 	case op.Record.OperationID == "identity.oauth.callback" && op.Route.Path == "/v1/oauth/callback":
 		return "/paths/~1v1~1oauth~1callback/get/responses"
+	case op.Record.OperationID == "identity.oauth.proxy-forward" && op.Route.Path == "/oauth2/callback/proxy":
+		return "/paths/~1oauth2~1callback~1proxy/get/responses"
 	case op.Record.OperationID == "identity.sso.oidc-callback" && op.Route.Path == "/sso/oidc/callback":
 		return "/paths/~1sso~1oidc~1callback/get/responses"
 	case op.Record.OperationID == "identity.sso.oauth-callback" && op.Route.Path == "/sso/oauth2/callback":

@@ -504,6 +504,13 @@ SCIM Bulk retains its canonical protocol-command classification. The affected
 transport row uses the optional Idempotency-Key extension specified in
 API_OPERATIONS.md and the SCIM transaction contract, rather than the older
 snapshot's conflicting forbidden-header column. No other catalog row changes.
+
+The OAuth preview production callback uses a single exact `GET
+/oauth2/callback/proxy`. The preserved planning snapshot's POST method cannot
+receive the selected provider's query response. The scoped catalog projection
+changes only that method; it preserves the original source digests, existing
+controls and exact operation ID. Preview-local completion is a separate
+configured transport and is not a POST alias for this operation.
 Selected SCIM Bulk, ServiceProviderConfig, User List, User Create, and
 canonical User Get/Delete keep the common network and framing checks. Their feature
 owns SCIM representation errors; only Bulk receives the protocol stream
