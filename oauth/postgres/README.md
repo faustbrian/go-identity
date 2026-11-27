@@ -51,6 +51,39 @@ unknown results only with the same original key and unchanged input. A
 committed retry returns the original outcome, not another nonce or cookie.
 This API does not install HTTP or authenticate a One Tap callback.
 
+### Explicit Google button redirect start
+
+Select `NewOneTapRedirectStartService` with the same trusted start configuration,
+the exact registered canonical same-origin HTTPS `Issuance.CallbackURL` and a
+zero `Issuance.Cookie`. The endpoint must have a non-root literal path. Supply
+the distinct `onetap.NewBrowserRedirectStartRequest` to `StartRedirect`; this
+service rejects callback `Start`, and the callback start service rejects
+`StartRedirect`. `NewOneTapCompletionService` does not accept a redirect service.
+
+Redirect start uses the existing request-key, counted admission, atomic session,
+capability, audit and lifecycle owners without a new table or replay mechanism.
+Its profile binds the exact mode and endpoint in a separate digest domain;
+changing the endpoint cannot reuse an original keyed request. Existing popup
+fingerprints and prepared callback plaintext remain unchanged.
+
+Only its own fresh committed start returns `RedirectBrowser()`, never `Browser()`.
+Use the reveal-once opaque token for the supplied blank, host-only, Secure,
+HttpOnly, SameSite=None `__Secure-identity_frontchannel` cookie scoped to the
+configured callback path. `Projection` is the validator-owned typed GIS launch:
+original client, login URI, base64url nonce, canonical flow-ID button state,
+allowed parent origin and unchanged issuance/expiry. It is not a complete GIS
+object or a renderer. Button state is a locator, not the opaque cookie or
+Google's separate `g_csrf_token` proof. Do not invoke One Tap prompt for this
+redirect-button profile or log browser output.
+
+The trusted stable device from the admitted request is retained only inside the
+encrypted callback grant for future original-cookie-bound completion. It is
+not disclosed in browser output or accepted as a redirect callback hint.
+Replay and explicit recovery return historical metadata without browser custody;
+unknown, failed or expired delivery releases no cookie token or launch. No Google
+endpoint is contacted. This slice does not enable redirect callback completion,
+HTTP decoding, cookie response handling or live browser interoperability.
+
 ## Google One Tap callback and session
 
 Select `NewOneTapCompletionService` with the same configured start owner, the

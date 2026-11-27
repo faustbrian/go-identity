@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/base64"
+	"reflect"
 	"time"
 
 	authorization "github.com/faustbrian/go-authorization/v3"
@@ -32,6 +33,9 @@ type oneTapStoredCallbackGrant struct {
 	Original rpStoredBinding
 	Grant    rpStoredGrant
 	Proof    []byte
+	// Redirect POST cannot supply the start's trusted stable device. Keep it
+	// sealed for future original-cookie-bound completion, never as a public hint.
+	Device string `json:",omitempty"`
 }
 
 func (p *oneTapStartPhase) outputAAD(generation uint64) (envelope.Context, error) {
@@ -92,7 +96,11 @@ func (p *oneTapStartPhase) generateOutput(ctx context.Context, generation uint64
 			return identity.ForbiddenError{}
 		}
 		var err error
-		callback, err = s.sealOneTap(ctx, callbackAAD, oneTapStoredCallbackGrant{Original: rpStoredBinding(b), Grant: rpStoredGrant(plan.Grants[0]), Proof: proof}, 65536)
+		stored := oneTapStoredCallbackGrant{Original: rpStoredBinding(b), Grant: rpStoredGrant(plan.Grants[0]), Proof: proof}
+		if s.selected.Mode == session.PreAuthProviderRedirect {
+			stored.Device = p.request.Device
+		}
+		callback, err = s.sealOneTap(ctx, callbackAAD, stored, 65536)
 		return err
 	})
 	defer clear(checkpoint)
@@ -134,7 +142,7 @@ func (p *oneTapStartPhase) restoreOutput(ctx context.Context, generation uint64,
 		return oneTapStartOutput{}, record, grant, kernel.CapabilityIssuancePlan{}, err
 	}
 	flow := session.PreAuthBinding{ID: identity.PreAuthTransactionID(b.AnonymousFlowID), IssuedAt: out.IssuedAt, ExpiresAt: out.ExpiresAt,
-		Intent: session.PreAuthIntent{TenantID: b.TenantID, Action: b.OperationID, Origin: p.request.Origin, Nonce: out.Nonce, Remember: p.request.Remember,
+		Intent: session.PreAuthIntent{TenantID: b.TenantID, Action: b.OperationID, Origin: p.request.Origin, CallbackURL: p.service.config().Issuance.CallbackURL, Nonce: out.Nonce, Remember: p.request.Remember,
 			PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion, Purpose: session.PreAuthSessionIssuance}}
 	record, err = session.NewProviderPreAuthTransaction(session.ProviderPreAuthTransactionSpec{Provider: p.service.selected,
 		Transaction: session.PreAuthTransactionSpec{Binding: flow, Cookie: out.CookieDigest, Version: 1}})
@@ -193,7 +201,7 @@ func (p *oneTapStartPhase) RecoverParticipant(ctx context.Context, w kernel.Reco
 }
 
 func (p *oneTapStartPhase) deliver(ctx context.Context, result OneTapStartResult, receipt identity.CommandResult) (OneTapStartResult, error) {
-	if receipt.Binding != identity.CommandBinding(p.input.Binding) || receipt.Feature == nil || receipt.Feature.Operation != kernel.OneTapStartOperation() || receipt.Feature.AfterVersion != 1 {
+	if receipt.Outcome != identity.CommitOutcomeCommitted || result.Outcome != identity.CommitOutcomeCommitted || receipt.Binding != identity.CommandBinding(p.input.Binding) || receipt.Feature == nil || receipt.Feature.Operation != kernel.OneTapStartOperation() || receipt.Feature.AfterVersion != 1 {
 		return result, identity.UnavailableError{}
 	}
 	if !p.applied {
@@ -206,13 +214,47 @@ func (p *oneTapStartPhase) deliver(ctx context.Context, result OneTapStartResult
 		return result, err
 	}
 	bound, err := issued.Flow.ProviderBindings()
-	if err != nil || bound.Provider != p.service.selected || issued.Cookie.Name != "__Host-identity_flow" || issued.Token == (session.Token{}) {
+	if err != nil || bound.Provider != p.service.selected || issued.Token == (session.Token{}) || issued.Replayed || issued.CommitOutcome != identity.CommitOutcomeCommitted {
 		return result, identity.UnavailableError{}
 	}
 	flow := bound.Transaction.Binding
+	if bound.Provider.Mode == session.PreAuthProviderRedirect {
+		return p.deliverRedirect(result, issued, bound)
+	}
+	if bound.Provider.Mode != session.PreAuthProviderCallback || issued.Cookie.Name != "__Host-identity_flow" {
+		return result, identity.UnavailableError{}
+	}
 	browser := OneTapBrowserStart{FlowID: flow.ID, ClientID: bound.Provider.ClientID, Nonce: base64.RawURLEncoding.EncodeToString(flow.Intent.Nonce[:]),
 		Origin: flow.Intent.Origin, ExpiresAt: flow.ExpiresAt, Options: p.request.Options, Cookie: issued.Cookie, Token: issued.Token}
 	result.browser = func() OneTapBrowserStart { return browser }
+	return result, nil
+}
+
+func (p *oneTapStartPhase) deliverRedirect(result OneTapStartResult, issued session.PreAuthIssueResult, bound session.ProviderPreAuthTransactionSpec) (OneTapStartResult, error) {
+	s := p.service
+	c := s.config()
+	flow := bound.Transaction.Binding
+	policy, err := session.NewOneTapRedirectFrontchannelCookiePolicy(c.Issuance.Origin, c.Issuance.CallbackURL)
+	if err != nil || issued.Cookie.MaxAge <= 0 || issued.Cookie.MaxAge > 300 {
+		return result, identity.UnavailableError{}
+	}
+	// Reconstruct only the issuer cookie's attribute timestamp, never flow
+	// authority. The original provider-bound flow is checked independently.
+	cookieAt := issued.Cookie.Expires.Add(-time.Duration(issued.Cookie.MaxAge) * time.Second)
+	wantCookie, err := policy.Attributes(cookieAt, flow.ExpiresAt)
+	if err != nil || !reflect.DeepEqual(issued.Cookie, wantCookie) {
+		return result, identity.UnavailableError{}
+	}
+	projection, err := s.redirectValidator.BrowserRedirectStart(p.request.Options, issued.Flow)
+	if err != nil {
+		return result, identity.UnavailableError{}
+	}
+	now := c.Issuance.Clock.Now().UTC()
+	if issued.Flow.CheckProvider(now, flow, s.selected, bound.Transaction.Cookie) != nil || !now.Before(issued.Cookie.Expires) {
+		return result, identity.UnavailableError{}
+	}
+	browser := OneTapRedirectBrowserStart{Projection: projection, Cookie: issued.Cookie, Token: issued.Token}
+	result.redirectBrowser = func() OneTapRedirectBrowserStart { return browser }
 	return result, nil
 }
 

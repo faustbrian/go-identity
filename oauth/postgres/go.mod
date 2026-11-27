@@ -13,13 +13,13 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261126214320-551488061e87
 	github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57
-	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d
+	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261122025034-f17a5dc39fa2
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261126213222-ce50195e767a
 	github.com/faustbrian/go-identity/risk v0.0.0-20261122034753-6cea43cbedf2
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261122024644-105adde9ae64
-	github.com/faustbrian/go-identity/session v0.0.0-20261126220500-cc979c08b313
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261126215700-6c560dec83ec
+	github.com/faustbrian/go-identity/session v0.0.0-20261126235901-19a81db3fa1c
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261126235700-f95f922c9f7a
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1

@@ -50,7 +50,7 @@ type OneTapCompletionService struct {
 // entropy or migration. It does not select link, signup, or MFA bypass.
 func NewOneTapCompletionService(start *OneTapStartService, c OneTapCompletionConfig) (*OneTapCompletionService, error) {
 	invalid := identity.InvalidInputError{Field: "oauth_onetap_completion"}
-	if start == nil || start.config == nil || !rpASCII(c.ConfigurationID, 1, 128) || len(c.FlowKeys) < 1 || len(c.FlowKeys) > 32 || c.Issuer.Authority != nil {
+	if start == nil || start.config == nil || start.selected.Mode != session.PreAuthProviderCallback || !rpASCII(c.ConfigurationID, 1, 128) || len(c.FlowKeys) < 1 || len(c.FlowKeys) > 32 || c.Issuer.Authority != nil {
 		return nil, invalid
 	}
 	base := start.config()

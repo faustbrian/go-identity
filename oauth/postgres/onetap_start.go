@@ -31,7 +31,7 @@ type oneTapSecondClock struct{ session.IssuerClock }
 
 func (c oneTapSecondClock) Now() time.Time { return c.IssuerClock.Now().UTC().Truncate(time.Second) }
 
-// OneTapStartConfig selects one trusted tenant, Google callback provider and
+// OneTapStartConfig selects one trusted tenant, Google provider and
 // deployment policy. Install the kernel, session, capability and OAuth One Tap
 // migrations before use. Dependencies are borrowed for bounded requests; the
 // service starts no goroutines and owns no provider HTTP endpoint or session.
@@ -56,22 +56,36 @@ type OneTapStartConfig struct {
 // Independent calls share their existing durable coordinator only; volatile
 // browser credential custody belongs to one invocation.
 type OneTapStartService struct {
-	pool       *database.Pool
-	directory  *kernel.Repository
-	config     func() OneTapStartConfig
-	selected   session.PreAuthProviderBinding
-	profile    [32]byte
-	issuer     *capabilitypg.Issuer
-	checkpoint *capabilitypg.IssuancePreparationCodec
-	custody    risk.AuthenticationAdmissionCustody
-	envelopes  *envelope.Service
-	requestKey kernel.RequestKeyConfig
+	pool              *database.Pool
+	directory         *kernel.Repository
+	config            func() OneTapStartConfig
+	selected          session.PreAuthProviderBinding
+	profile           [32]byte
+	issuer            *capabilitypg.Issuer
+	checkpoint        *capabilitypg.IssuancePreparationCodec
+	custody           risk.AuthenticationAdmissionCustody
+	envelopes         *envelope.Service
+	requestKey        kernel.RequestKeyConfig
+	redirectValidator *onetap.ProviderBoundValidator
 }
 
 // NewOneTapStartService validates trusted startup inputs without I/O or flow
 // generation. The exact Google provider, actor, tenant and HTTPS origin cannot
 // be selected or replaced by the browser.
 func NewOneTapStartService(pool *database.Pool, c OneTapStartConfig) (*OneTapStartService, error) {
+	return newOneTapStartService(pool, c, session.PreAuthProviderCallback)
+}
+
+// NewOneTapRedirectStartService explicitly selects Google button redirect start.
+// Issuance.CallbackURL must be the exact registered canonical same-origin HTTPS
+// endpoint with a non-root path, and Issuance.Cookie must be zero. The session
+// owner supplies its path-bound frontchannel cookie. Only StartRedirect accepts
+// requests on this service; callback completion remains unselected.
+func NewOneTapRedirectStartService(pool *database.Pool, c OneTapStartConfig) (*OneTapStartService, error) {
+	return newOneTapStartService(pool, c, session.PreAuthProviderRedirect)
+}
+
+func newOneTapStartService(pool *database.Pool, c OneTapStartConfig, mode session.PreAuthProviderMode) (*OneTapStartService, error) {
 	invalid := identity.InvalidInputError{Field: "oauth_onetap_start_configuration"}
 	if pool == nil || pool.Raw() == nil || !rpSchemaName(c.Schema) || !rpASCII(c.ConfigurationID, 1, 96) || c.Provider == nil ||
 		c.AuditRetentionPolicyVersion == 0 || c.IntentKey == ([32]byte{}) || c.Issuance.Action != oneTapStartOperationID {
@@ -86,16 +100,23 @@ func NewOneTapStartService(pool *database.Pool, c OneTapStartConfig) (*OneTapSta
 		c.Coordinator.AdmissionPolicy.PolicyVersion != c.Issuance.PolicyVersion || c.Coordinator.QueryPolicy.PolicyVersion != c.Issuance.PolicyVersion {
 		return nil, invalid
 	}
-	_, err := onetap.NewProviderBoundValidator(onetap.ProviderBoundConfig{
+	validation := onetap.ProviderBoundConfig{
 		Provider: c.Provider, TenantID: c.TenantID, Origin: c.Issuance.Origin,
 		PolicyID: c.Issuance.PolicyID, PolicyVersion: c.Issuance.PolicyVersion, Clock: c.Issuance.Clock,
-	})
+	}
+	var redirectValidator *onetap.ProviderBoundValidator
+	var err error
+	if mode == session.PreAuthProviderRedirect {
+		redirectValidator, err = onetap.NewProviderBoundRedirectValidator(validation, c.Issuance.CallbackURL)
+	} else {
+		_, err = onetap.NewProviderBoundValidator(validation)
+	}
 	if err != nil {
 		return nil, invalid
 	}
 	profile := c.Provider.Profile()
 	selected := session.PreAuthProviderBinding{
-		ProviderID: profile.ID, ProviderVersion: profile.Version, ClientID: profile.ClientID, Mode: session.PreAuthProviderCallback,
+		ProviderID: profile.ID, ProviderVersion: profile.Version, ClientID: profile.ClientID, Mode: mode,
 	}
 	if _, err := sessionpg.NewRepository(pool, c.Session); err != nil {
 		return nil, invalid
@@ -154,20 +175,45 @@ func NewOneTapStartService(pool *database.Pool, c OneTapStartConfig) (*OneTapSta
 		return nil, invalid
 	}
 	defer clear(frame)
+	profileDigest := sha256.Sum256(frame)
+	if mode == session.PreAuthProviderRedirect {
+		// The deployed popup frame above is unchanged. Redirect intent and sealed
+		// custody use a separate domain and retain the exact mode and login URI.
+		redirectFrame, err := json.Marshal(struct {
+			Profile     [32]byte
+			Mode        session.PreAuthProviderMode
+			CallbackURL string
+		}{profileDigest, mode, c.Issuance.CallbackURL})
+		if err != nil {
+			return nil, invalid
+		}
+		digest := sha256.New()
+		_, _ = digest.Write([]byte("identity-oauth-onetap-redirect-start-profile-v1\x00"))
+		_, _ = digest.Write(redirectFrame)
+		clear(redirectFrame)
+		profileDigest = [32]byte(digest.Sum(nil))
+	}
 	// The owned cryptographic services already copied their keys. The request
 	// owner does not need those maps to enforce its selected execution profile.
 	c.EnvelopeKeys, c.Capability.RetainedReplayKeys = nil, nil
 	c.CapabilityPreparation = capabilitypg.IssuancePreparationConfig{}
 	s := &OneTapStartService{pool: pool, directory: directory, config: func() OneTapStartConfig { return c }, selected: selected,
-		profile: sha256.Sum256(frame), issuer: issuer, checkpoint: checkpoint, custody: custody, envelopes: envelopes, requestKey: requestKey}
+		profile: profileDigest, issuer: issuer, checkpoint: checkpoint, custody: custody, envelopes: envelopes, requestKey: requestKey, redirectValidator: redirectValidator}
 	p := &oneTapStartPhase{service: s}
-	if _, err := session.NewOneTapStartPreAuthIssuer(p, s.sessionIssuance(), selected); err != nil {
+	if _, err := s.newSessionIssuer(p); err != nil {
 		return nil, invalid
 	}
 	if _, _, err := s.coordinator(p); err != nil {
 		return nil, invalid
 	}
 	return s, nil
+}
+
+func (s *OneTapStartService) newSessionIssuer(p *oneTapStartPhase) (*session.PreAuthIssuer, error) {
+	if s.selected.Mode == session.PreAuthProviderRedirect {
+		return session.NewOneTapRedirectStartPreAuthIssuer(p, s.sessionIssuance(), s.selected)
+	}
+	return session.NewOneTapStartPreAuthIssuer(p, s.sessionIssuance(), s.selected)
 }
 
 func (s *OneTapStartService) sessionIssuance() session.PreAuthIssuerConfig {
@@ -217,15 +263,26 @@ type OneTapBrowserStart struct {
 	Token                   session.Token
 }
 
+// OneTapRedirectBrowserStart is fresh committed redirect transport custody.
+// Projection is the validator-owned typed GIS launch derived from the original
+// flow. Set only Cookie.Value by revealing Token once; never log this value.
+// This is not a session or a renderer. Original expiry cannot be renewed.
+type OneTapRedirectBrowserStart struct {
+	Projection onetap.BrowserRedirectStartProjection
+	Cookie     http.Cookie
+	Token      session.Token
+}
+
 // OneTapStartResult retains original command outcome independent of delivery.
 // Browser is present only if this invocation committed its own generated flow
 // and obtained custody from the exact session issuer receipt. Terminal replay
 // and explicit recovery do not release any browser material.
 type OneTapStartResult struct {
-	CommandID identity.CommandID
-	Outcome   identity.CommitOutcome
-	Replayed  bool
-	browser   func() OneTapBrowserStart
+	CommandID       identity.CommandID
+	Outcome         identity.CommitOutcome
+	Replayed        bool
+	browser         func() OneTapBrowserStart
+	redirectBrowser func() OneTapRedirectBrowserStart
 }
 
 // Browser returns the fresh committed browser context if this invocation owns
@@ -237,17 +294,53 @@ func (r OneTapStartResult) Browser() (OneTapBrowserStart, bool) {
 	return r.browser(), true
 }
 
+// RedirectBrowser returns only this invocation's fresh committed redirect
+// custody. Browser remains absent for redirect mode. Replay, recovery, unknown
+// commitment or expired delivery never releases a token or launch projection.
+func (r OneTapStartResult) RedirectBrowser() (OneTapRedirectBrowserStart, bool) {
+	if r.redirectBrowser == nil {
+		return OneTapRedirectBrowserStart{}, false
+	}
+	return r.redirectBrowser(), true
+}
+
 // Start resolves one original keyed request, performs admitted native
 // preparation, and commits flow, capability, sealed callback proof, audit and
 // lifecycle under the same coordinator. It calls no Google endpoint. If
 // commitment is unknown, use only the same original key or authorized recovery.
 func (s *OneTapStartService) Start(ctx context.Context, request onetap.BrowserStartRequest) (out OneTapStartResult, err error) {
-	if ctx == nil || s == nil || s.config == nil {
+	if s == nil || s.config == nil || s.selected.Mode != session.PreAuthProviderCallback {
 		return out, identity.InvalidInputError{Field: "oauth_onetap_start"}
 	}
-	c := s.config()
 	spec, err := request.Bindings()
-	if err != nil || spec.TenantID != c.TenantID || spec.Origin != c.Issuance.Origin {
+	if err != nil {
+		return out, identity.InvalidInputError{Field: "oauth_onetap_start"}
+	}
+	return s.start(ctx, spec)
+}
+
+// StartRedirect admits only an immutable redirect-button request on a service
+// explicitly selected by NewOneTapRedirectStartService. It uses the existing
+// keyed admission, risk, coordinator and atomic staging owners; no provider
+// endpoint is called. Unknown commitment requires the original key or recovery.
+func (s *OneTapStartService) StartRedirect(ctx context.Context, request onetap.BrowserRedirectStartRequest) (out OneTapStartResult, err error) {
+	if s == nil || s.config == nil || s.selected.Mode != session.PreAuthProviderRedirect {
+		return out, identity.InvalidInputError{Field: "oauth_onetap_start"}
+	}
+	spec, err := request.Bindings()
+	if err != nil {
+		return out, identity.InvalidInputError{Field: "oauth_onetap_start"}
+	}
+	return s.start(ctx, spec)
+}
+
+func (s *OneTapStartService) start(ctx context.Context, spec onetap.BrowserStartRequestSpec) (out OneTapStartResult, err error) {
+	c := s.config()
+	options, optionErr := spec.Options.Projection()
+	redirect := options.Experience == onetap.BrowserStartRedirectButton && options.Button != nil && options.Button.UXMode == onetap.ButtonRedirect
+	callback := options.Experience == onetap.BrowserStartPrompt || options.Experience == onetap.BrowserStartPopupButton
+	if ctx == nil || optionErr != nil || spec.TenantID != c.TenantID || spec.Origin != c.Issuance.Origin ||
+		(s.selected.Mode == session.PreAuthProviderRedirect && !redirect) || (s.selected.Mode == session.PreAuthProviderCallback && !callback) {
 		return out, identity.InvalidInputError{Field: "oauth_onetap_start"}
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.MaximumDuration)
@@ -255,11 +348,12 @@ func (s *OneTapStartService) Start(ctx context.Context, request onetap.BrowserSt
 	defer func() {
 		if recover() != nil {
 			out.browser = nil
+			out.redirectBrowser = nil
 			err = identity.UnavailableError{}
 		}
 	}()
 	p := &oneTapStartPhase{service: s, request: spec}
-	p.sessionIssuer, err = session.NewOneTapStartPreAuthIssuer(p, s.sessionIssuance(), s.selected)
+	p.sessionIssuer, err = s.newSessionIssuer(p)
 	if err != nil {
 		return out, err
 	}
@@ -313,3 +407,18 @@ func (OneTapBrowserStart) Format(s fmt.State, _ rune) {
 
 // MarshalJSON requires explicit transport projection; it cannot send a cookie.
 func (OneTapBrowserStart) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// Format hides transient redirect launch and cookie custody.
+func (OneTapRedirectBrowserStart) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("postgres.OneTapRedirectBrowserStart(redacted)"))
+}
+
+// MarshalJSON requires explicit transport projection; it cannot send a cookie.
+func (OneTapRedirectBrowserStart) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+
+// MarshalText refuses accidental browser-secret export.
+func (OneTapRedirectBrowserStart) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
