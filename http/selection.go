@@ -424,6 +424,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		}
 		csrfMatches := r.CSRFOrigin.Mode == want.CSRFOrigin.Mode
 		idempotencyMatches := r.Idempotency == want.Idempotency
+		// The redirect callback authenticates its original tenant browser and
+		// Google double-submit proof, not the sender origin of the form POST.
+		// The canonical popup callback keeps its exact-origin profile.
+		if r.OperationID == oneTapCallbackOperation && r.CSRFOrigin.Mode == CSRFBoundOrigin && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Native API-key management requires original keyed custody even for
 		// rotation/revocation. This explicit bearer profile cannot describe a
 		// cookie handler or inherit the older draft's non-keyed labels.

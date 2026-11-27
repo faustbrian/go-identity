@@ -93,7 +93,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	if !uniqueOperations(operations) || len(policy.CORS) > 1024 {
 		return nil, OpenAPIDocument{}, ErrInvalidInput
 	}
-	selected := make(map[string]string, len(operations))
+	selected := make(map[string]OperationRecord, len(operations))
 	scimRoutes := make(map[string]bool, 4)
 	scimResourceMethods := make(map[string]map[string]bool, 2)
 	var exactSCIMResourcePaths map[string]struct{}
@@ -112,7 +112,7 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 				exactSCIMResourcePaths[path] = struct{}{}
 			}
 			key := op.Route.Method + " " + path
-			selected[key] = op.Record.OperationID
+			selected[key] = op.Record
 			switch op.Record.OperationID {
 			case "identity.scim.bulk", "identity.scim.service-provider-config", "identity.scim.user-list", "identity.scim.user-create", "identity.scim.group-list", "identity.scim.group-create":
 				scimRoutes[key] = true
@@ -122,18 +122,18 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 	selectedNavigation := make(map[string]struct{})
 	for _, route := range policy.CORS {
 		key := route.Method + " " + route.Path
-		operationID, exists := selected[key]
-		want := samlNavigationFor(operationID)
-		if !exists || (want != 0 || isSAMLNavigation(route.Credentials)) && want != route.Credentials {
+		operation, exists := selected[key]
+		want := navigationProfileFor(operation)
+		if !exists || (want != 0 || isNavigationProfile(route.Credentials)) && want != route.Credentials {
 			return nil, OpenAPIDocument{}, ErrInvalidInput
 		}
 		if want != 0 {
 			selectedNavigation[key] = struct{}{}
 		}
 	}
-	for key, operationID := range selected {
-		mode := samlNavigationFor(operationID)
-		if mode == CORSSAMLIDPPostNavigation || mode == CORSSAMLLogoutPostNavigation {
+	for key, operation := range selected {
+		mode := navigationProfileFor(operation)
+		if mode == CORSSAMLIDPPostNavigation || mode == CORSSAMLLogoutPostNavigation || mode == CORSOneTapRedirectNavigation {
 			if _, ok := selectedNavigation[key]; !ok {
 				return nil, OpenAPIDocument{}, ErrInvalidInput
 			}
@@ -166,17 +166,23 @@ func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middlew
 		scimResourceMethods: scimResourceMethods, exactSCIMResourcePaths: exactSCIMResourcePaths}, document, nil
 }
 
-func samlNavigationFor(operationID string) CORSCredentialMode {
-	switch operationID {
+const oneTapRedirectCallbackPath = "/v1/oauth/onetap-callback"
+const oneTapCallbackOperation = "identity.oauth.onetap-callback"
+
+func navigationProfileFor(operation OperationRecord) CORSCredentialMode {
+	switch operation.OperationID {
 	case "identity.sso.saml-acs":
 		return CORSSAMLPostNavigation
 	case "identity.sso.saml-idp-init":
 		return CORSSAMLIDPPostNavigation
 	case "identity.sso.saml-slo":
 		return CORSSAMLLogoutPostNavigation
-	default:
-		return 0
+	case oneTapCallbackOperation:
+		if operation.CSRFOrigin.Mode == CSRFBoundOrigin {
+			return CORSOneTapRedirectNavigation
+		}
 	}
+	return 0
 }
 
 func validMiddleware(middleware []MiddlewareDescriptor) bool {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select exact tenant One Tap redirect form navigation separately from
+  popup. The original proof owner receives the POST without a sender-origin
+  assumption or any cross-origin script grant.
+
 - Dispatch an explicitly selected SCIM Group DELETE to one canonical Group
   ID. Preserve its SCIM envelope without implying other Group or User routes.
 

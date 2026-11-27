@@ -39,6 +39,11 @@ const (
 	// Neither preflight nor CORS script access is granted. Signed-message
 	// verification and replay custody remain the feature owner's responsibility.
 	CORSSAMLLogoutPostNavigation
+	// CORSOneTapRedirectNavigation forwards only Google One Tap redirect form
+	// POSTs to the exact tenant HTTPS callback. It grants no script access or
+	// preflight; the callback must authenticate the original browser binding and
+	// Google's double-submit proof. Sender Origin is never that authority.
+	CORSOneTapRedirectNavigation
 )
 
 // CORSRoutePolicy binds one exact method/path to copied CORS policy. Methods
@@ -53,6 +58,8 @@ const (
 // Unsolicited SAML navigation requires the SP origin followed by the IdP
 // origin and a concrete POST IdP-init path. SAML logout takes the same origin
 // ordering on a concrete POST SLO path, but only the IdP is a permitted sender.
+// One Tap redirect requires one exact tenant destination Origin, not a sender
+// list. It applies only to the canonical One Tap POST callback form.
 // All navigation modes require empty header/exposure and MaxAge settings.
 type CORSRoutePolicy struct {
 	Method, Path   string
@@ -77,6 +84,7 @@ type corsRoute struct {
 	headers           map[string]struct{}
 	bearer            bool
 	navigation        bool
+	oneTapRedirect    bool
 	destinationOrigin Origin
 	wrap              func(http.Handler) http.Handler
 }
@@ -113,7 +121,7 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 	}
 	h := &corsHandler{network: config.Network, next: next, routes: make(map[string]corsRoute, len(config.Routes))}
 	for _, policy := range config.Routes {
-		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSSAMLLogoutPostNavigation || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
+		if !corsMethod(policy.Method) || !validPath(policy.Path) || policy.Credentials < CORSNoCredentials || policy.Credentials > CORSOneTapRedirectNavigation || policy.MaxAge < 0 || policy.MaxAge > 24*time.Hour || policy.MaxAge%time.Second != 0 {
 			return nil, ErrInvalidInput
 		}
 		key := policy.Method + " " + policy.Path
@@ -121,7 +129,7 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 			return nil, ErrInvalidInput
 		}
 		route := corsRoute{bearer: policy.Credentials == CORSBearerCredentials,
-			navigation: isSAMLNavigation(policy.Credentials)}
+			navigation: isNavigationProfile(policy.Credentials), oneTapRedirect: policy.Credentials == CORSOneTapRedirectNavigation}
 		if route.navigation {
 			validPathAndOrigins := validSAMLACSPath(policy.Path) && len(policy.Origins) == 1
 			switch policy.Credentials {
@@ -129,6 +137,8 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 				validPathAndOrigins = validSAMLProviderEndpoint(policy.Path, "/idp-init") && len(policy.Origins) == 2
 			case CORSSAMLLogoutPostNavigation:
 				validPathAndOrigins = validSAMLProviderEndpoint(policy.Path, "/slo") && len(policy.Origins) == 2
+			case CORSOneTapRedirectNavigation:
+				validPathAndOrigins = policy.Path == oneTapRedirectCallbackPath && len(policy.Origins) == 1
 			}
 			if policy.Method != http.MethodPost || !validPathAndOrigins || len(policy.AllowedHeaders) != 0 || len(policy.ExposedHeaders) != 0 || policy.MaxAge != 0 {
 				return nil, ErrInvalidInput
@@ -152,6 +162,9 @@ func NewCORSHandler(config CORSConfig, next http.Handler) (http.Handler, error) 
 			}
 			if policy.Credentials == CORSSAMLLogoutPostNavigation {
 				delete(route.origins, route.destinationOrigin)
+			}
+			if route.oneTapRedirect {
+				route.origins = nil // The configured origin is a destination only.
 			}
 			h.routes[key] = route
 			continue
@@ -224,13 +237,6 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		deny(http.StatusForbidden)
 		return
 	}
-	if originPresent {
-		canonical, ok := (&OriginGuard{network: h.network}).canonicalOrigin(origin)
-		if !ok || string(canonical) != origin {
-			deny(http.StatusForbidden)
-			return
-		}
-	}
 	if !validPath(r.URL.Path) || r.URL.RawPath != "" {
 		deny(http.StatusForbidden)
 		return
@@ -244,8 +250,21 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		selectedMethod = method
 	}
 	route, selected := h.routes[selectedMethod+" "+r.URL.Path]
+	if originPresent && !(route.oneTapRedirect && origin == "null") {
+		canonical, ok := (&OriginGuard{network: h.network}).canonicalOrigin(origin)
+		if !ok || string(canonical) != origin {
+			deny(http.StatusForbidden)
+			return
+		}
+	}
 	_, allowed := route.origins[Origin(origin)]
-	if route.navigation {
+	if route.oneTapRedirect {
+		if preflight || facts.Realm() != RealmTenant || facts.Origin() != string(route.destinationOrigin) ||
+			r.URL.RawQuery != "" || r.URL.ForceQuery || !media(r.Header, "application/x-www-form-urlencoded") {
+			deny(http.StatusForbidden)
+			return
+		}
+	} else if route.navigation {
 		if preflight || !originPresent || !allowed || route.destinationOrigin != "" && string(route.destinationOrigin) != facts.Origin() {
 			deny(http.StatusForbidden)
 			return
@@ -293,8 +312,8 @@ func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route.wrap(next).ServeHTTP(w, engineRequest)
 }
 
-func isSAMLNavigation(mode CORSCredentialMode) bool {
-	return mode == CORSSAMLPostNavigation || mode == CORSSAMLIDPPostNavigation || mode == CORSSAMLLogoutPostNavigation
+func isNavigationProfile(mode CORSCredentialMode) bool {
+	return mode == CORSSAMLPostNavigation || mode == CORSSAMLIDPPostNavigation || mode == CORSSAMLLogoutPostNavigation || mode == CORSOneTapRedirectNavigation
 }
 
 func requestHeaders(r *http.Request) http.Header {
