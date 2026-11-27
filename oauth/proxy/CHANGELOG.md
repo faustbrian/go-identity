@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Authenticate a preview handoff against the independently loaded original
+  browser flow, exact preview registration and original cookie before opening
+  encrypted provider evidence. Return its unchanged observation and earliest
+  original deadline without consuming a grant or creating a session.
+
 - Add trusted preview initiation admission with one configured HTTPS registration
   and bounded bearer authentication. Exact subject, issuer, sole audience and
   proxy-start scope are required before returning unchanged command, transaction,

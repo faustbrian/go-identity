@@ -1,9 +1,9 @@
 # OAuth preview callback
 
-`github.com/faustbrian/go-identity/oauth/proxy` implements the production-side
-coordinator for a selected OIDC preview handoff. It selects one configured
-production callback URI and exact HTTPS registrations for preview deployments.
-The selected OIDC adapter returns verified evidence only, never provider tokens.
+`github.com/faustbrian/go-identity/oauth/proxy` coordinates a selected OIDC
+preview handoff. It selects one configured production callback URI and exact
+HTTPS registrations for preview deployments. The selected OIDC adapter
+returns verified evidence only, never provider tokens.
 
 ## Trusted preview initiation
 
@@ -55,7 +55,19 @@ set cookies or write local identity state. Do not log callback queries or the
 handoff, and do not automatically retry exchange on `CallbackReconcile`. Look up
 the original durable outcome and withhold any unresolved handoff.
 
-The store is the native replay and audit owner. This module does not ship the
-PostgreSQL adapter or HTTP route yet. Opening the evidence is not the same as
-consuming it: preview must still reserve and consume its own artifact before
-using the verified subject for local sign-in.
+The store is the native replay and audit owner. This module does not mount an
+HTTP route.
+
+## Preview completion admission
+
+Configure `PreviewCompletionAdmission` with the exact preview registration,
+tenant, trusted production deployment, browser policy and retained pre-auth
+digest keys. Pass the original handoff binding and full pre-auth flow from
+independent preview storage, not from the received envelope. `Open` requires
+the original browser's cookie and the exact trusted preview origin before
+decrypting the handoff. It returns only a tokenless provider observation, the
+digest of the authenticated wire, and the earliest original deadline.
+
+Successful opening does not consume the handoff or authorize a session. The
+native preview owner must still reserve and consume its one-use artifact,
+check current authority, and commit the existing local account/session effects.
