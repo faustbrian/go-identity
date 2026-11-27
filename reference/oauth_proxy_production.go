@@ -54,6 +54,7 @@ type OAuthProxyProduction struct {
 	productionDeployment string
 	previewTarget        oauthproxy.PreviewTarget
 	tenant               identity.TenantID
+	providerAuthority    *oauthpg.ProviderAuthority
 }
 
 // NewOAuthProxyProduction assembles native Start and the acknowledged command
@@ -61,11 +62,31 @@ type OAuthProxyProduction struct {
 // provider IO. Use NewOAuthProxyProductionMigrations to install the selected
 // native histories before invoking Start or mounting the handler.
 func NewOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration) (*OAuthProxyProduction, error) {
+	return newOAuthProxyProduction(pool, c, nil)
+}
+
+// NewOAuthProxyProductionWithProviderAuthority selects the live provider
+// profile for Start and forwarding. Borrow the shared primary reader via a
+// separate pool from production transaction work. The caller owns both pools.
+func NewOAuthProxyProductionWithProviderAuthority(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority) (*OAuthProxyProduction, error) {
+	if a == nil {
+		return nil, identity.InvalidInputError{Field: "reference_oauth_proxy_production"}
+	}
+	return newOAuthProxyProduction(pool, c, a)
+}
+
+func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority) (*OAuthProxyProduction, error) {
 	invalid := identity.InvalidInputError{Field: "reference_oauth_proxy_production"}
 	if c.Codec == nil || nilServerDependency(c.Clock) {
 		return nil, invalid
 	}
-	forward, err := oauthpg.NewProxyForwardService(pool, c.Native)
+	var forward *oauthpg.ProxyForwardService
+	var err error
+	if a == nil {
+		forward, err = oauthpg.NewProxyForwardService(pool, c.Native)
+	} else {
+		forward, err = oauthpg.NewProxyForwardServiceWithProviderAuthority(pool, c.Native, a)
+	}
 	if err != nil {
 		return nil, invalid
 	}
@@ -86,7 +107,7 @@ func NewOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfigur
 		return nil, invalid
 	}
 	result := &OAuthProxyProduction{start: start, pool: pool, provider: exchange.Profile(),
-		productionDeployment: c.Native.ProductionDeployment, previewTarget: target, tenant: c.Start.Preview.TenantID}
+		productionDeployment: c.Native.ProductionDeployment, previewTarget: target, tenant: c.Start.Preview.TenantID, providerAuthority: a}
 	if c.HTTP == nil {
 		return result, nil
 	}

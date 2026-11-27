@@ -4,10 +4,12 @@ package reference_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	oauthpg "github.com/faustbrian/go-identity/oauth/postgres"
 	"github.com/faustbrian/go-identity/reference"
 )
 
@@ -146,6 +148,65 @@ func TestReferencePostgresOAuthProxyProductionMigrationsNativeOnly(t *testing.T)
 	}
 	if err := f.pool.Raw().Ping(ctx); err != nil {
 		t.Fatal("native-only production migration owner closed the borrowed pool", err)
+	}
+}
+
+func TestReferencePostgresOAuthProxyProductionMigrationsAppendLiveAuthority(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	f := newLiveStoresProfile(t, ctx, false, true)
+	_, production := oauthProxyProductionConfiguration(t)
+	c := oauthProxyProductionMigrationConfiguration(production)
+	static, err := reference.NewOAuthProxyProductionMigrations(f.pool, c)
+	if err != nil {
+		t.Fatal("construct static production migration owner", err)
+	}
+	cleanupOAuthProxyProductionMigrations(t, ctx, f, static)
+	base, err := static.Plan(ctx)
+	if err != nil || len(base.Plan.Steps) == 0 {
+		t.Fatal("plan static production migration history", err)
+	}
+	assertOAuthProxyProductionMigrationApply(t, ctx, static, oauthProxyProductionMigrationRequest(t, base.Plan))
+	live, err := reference.NewOAuthProxyProductionMigrationsWithProviderAuthority(f.pool, c)
+	if err != nil {
+		t.Fatal("select live authority history for the existing production database", err)
+	}
+	defer live.Close(ctx)
+	plan, err := live.Plan(ctx)
+	if err != nil || len(plan.Plan.Steps) != 1 {
+		t.Fatal("plan did not preserve the installed history and append exactly one migration", err)
+	}
+	step := plan.Plan.Steps[0]
+	if step.Owner != "identity/oauth/postgres" || step.FromVersion != 2 || step.ToVersion != 3 {
+		t.Fatal("unexpected OAuth authority migration owner or version", step.Owner, step.FromVersion, step.ToVersion)
+	}
+	var absent bool
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT to_regclass('synthetic_oauth.provider_authorities') IS NULL`).Scan(&absent); err != nil || !absent {
+		t.Fatal("the original profile or live planning created the authority table", err)
+	}
+	key, err := identity.NewIdempotencyKey([]byte("production-proxy-authority-migration"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := reference.ReferenceMigrationApplyRequest{CommandID: "production_proxy_migrations_authority_0001", Plan: plan.Plan, IdempotencyKey: key}
+	for attempt := range 2 {
+		result, err := live.Apply(ctx, request)
+		wantReceipt := reference.MigrationContributorReceipt{Module: "identity/oauth/postgres", Version: 3}
+		receipts := result.Result.Receipts()
+		if err != nil || result.Result.State() != reference.MigrationApplied || result.Result.CommandID() != request.CommandID ||
+			result.Result.Digest() != plan.Plan.Digest || len(receipts) != 1 || receipts[0] != wantReceipt {
+			t.Fatal("incorrect migration attribution across apply and exact replay", attempt, result.Result.State(), receipts, err)
+		}
+	}
+	assertOAuthProxyProductionMigrationsCompatible(t, ctx, live, len(plan.Plan.Modules))
+	reader, err := oauthpg.NewProviderAuthority(f.pool, c.Schema, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := reader.Current(ctx, oauthpg.ProviderAuthorityKey{TenantID: c.TenantID, ProviderID: production.Start.Provider.Profile().ID})
+	var denied identity.ForbiddenError
+	if state != (oauthpg.ProviderAuthorityState{}) || !errors.As(err, &denied) {
+		t.Fatal("bootstrapping live authority implicitly registered a provider", err)
 	}
 }
 

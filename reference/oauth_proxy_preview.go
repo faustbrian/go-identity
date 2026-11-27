@@ -48,15 +48,16 @@ type OAuthProxyPreviewStartRequest struct {
 }
 
 type oauthProxyPreviewState struct {
-	owner    *oauthpg.ProxyPreviewService
-	config   oauthpg.ProxyPreviewConfig
-	provider oauth.ProviderProfile
-	http     *HTTPOAuthProxyPreviewConfiguration
-	signin   *socialSigninState
-	duration time.Duration
+	owner     *oauthpg.ProxyPreviewService
+	config    oauthpg.ProxyPreviewConfig
+	provider  oauth.ProviderProfile
+	http      *HTTPOAuthProxyPreviewConfiguration
+	signin    *socialSigninState
+	duration  time.Duration
+	authority *oauthpg.ProviderAuthority
 }
 
-func composeOAuthProxyPreview(c StoreConfiguration, social *socialOAuthState) (*oauthProxyPreviewState, error) {
+func composeOAuthProxyPreview(c StoreConfiguration, social *socialOAuthState, a *oauthpg.ProviderAuthority) (*oauthProxyPreviewState, error) {
 	if c.OAuthProxyPreview == nil {
 		return nil, nil
 	}
@@ -89,11 +90,17 @@ func composeOAuthProxyPreview(c StoreConfiguration, social *socialOAuthState) (*
 	if provider.ValidateQueryCallback() != nil {
 		return nil, invalid
 	}
-	owner, err := oauthpg.NewProxyPreviewService(social.signin.complete, n.Native)
+	var owner *oauthpg.ProxyPreviewService
+	var err error
+	if a == nil {
+		owner, err = oauthpg.NewProxyPreviewService(social.signin.complete, n.Native)
+	} else {
+		owner, err = oauthpg.NewProxyPreviewServiceWithProviderAuthority(social.signin.complete, n.Native, a)
+	}
 	if err != nil {
 		return nil, invalid
 	}
-	return &oauthProxyPreviewState{owner: owner, config: n.Native, provider: provider, http: n.HTTP, signin: social.signin, duration: min(social.duration, 20*time.Second)}, nil
+	return &oauthProxyPreviewState{owner: owner, config: n.Native, provider: provider, http: n.HTTP, signin: social.signin, duration: min(social.duration, 20*time.Second), authority: a}, nil
 }
 
 // StartOAuthProxyPreview commits the authenticated production Start, then
@@ -155,7 +162,10 @@ func sameProxyDatabase(preview, production *database.Pool) bool {
 
 func matchingProxyProduction(preview *oauthProxyPreviewState, production *OAuthProxyProduction) bool {
 	p, n := production.provider, preview.provider
-	return production.productionDeployment == preview.config.ProductionDeployment && production.previewTarget == preview.config.Target &&
+	// This is an in-process bridge: reject mismatched live mode or readers
+	// before either deployment consumes Start. Static pairs both use nil.
+	return production.providerAuthority == preview.authority && production.productionDeployment == preview.config.ProductionDeployment &&
+		production.previewTarget == preview.config.Target &&
 		production.tenant == preview.config.TenantID && p.ID == n.ID && p.Version == n.Version && p.Issuer == n.Issuer && p.ClientID == n.ClientID
 }
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into shared live provider authority for both OAuth proxy deployments.
+  Keep callback routes separately selected and add an append-only production
+  migration option for operators hosting the shared authority there.
+
 - Bootstrap standalone production OAuth preview forwarding through the existing
   Reference Check, Plan and Apply runner, without a password or session graph.
 

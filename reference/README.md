@@ -70,6 +70,32 @@ production, and the preview landing sends the encrypted handoff back only
 to its own origin. The preview's normal session read and synchronizer-bound
 logout consume that session. Provider tokens never reach the preview.
 
+### Live provider authority across deployments
+
+For a deployment that hosts provider authority in the production database,
+use `NewOAuthProxyProductionMigrationsWithProviderAuthority`. Apply its plan
+before switching runtime configuration. On an existing static installation
+it appends only the empty provider authority table. The table does not enroll
+a provider or change any grants. Keep the expanded migration selection after
+installation, including during a runtime rollback.
+
+Use `oauth/postgres.NewProviderAuthorityOperator` with a separate authorized
+pool to enroll the exact tenant and provider profile; the immutable profile
+version and the live epoch are distinct. Create `oauth/postgres.NewProviderAuthority`
+with a separate SELECT-only pool against the same authoritative primary and
+schema. Pass that reader to `NewOAuthProxyProductionWithProviderAuthority`
+and `ComposeStoresWithOAuthProxyPreviewProviderAuthority`. The in-process Go
+bridge requires the same reader instance on both sides. Each runtime keeps
+its own local transaction pool. Do not use a replica that can lag the write.
+
+Both native and HTTP transports retain their existing independent selection.
+Without the live constructors, the original static profile is unchanged.
+The live profile intentionally rejects in-flight static handoffs: drain them
+before switching or let their original lifetime expire. Missing registration,
+authority outage and an invalidated epoch cannot release a handoff or preview
+session credentials. Re-enabling the provider never revives an older handoff.
+This checks authority; it does not delete pending custody.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes

@@ -133,12 +133,16 @@ github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261126214320-551488061e8
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261126214320-551488061e87/go.mod h1:w2XKieH2o4ts+hTRJQiH63wcN6RzD6cR+QIEGszohZQ=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401 h1:ncs3tMt+XNdFerM3q2M+Zb/VivjFsh9eYvWooP1BB9Y=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401/go.mod h1:/s2y3YI+rRLF0r2NvSjjNffRyCo3YKfl2cGUpevyqnU=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261127054005-4f4c9ad64628 h1:Kr+F/IMlVMcxNnQZUYlRmmVrPhmgJttQrEkaiuoqklI=
+github.com/faustbrian/go-identity/oauth v0.0.0-20261127054005-4f4c9ad64628/go.mod h1:/s2y3YI+rRLF0r2NvSjjNffRyCo3YKfl2cGUpevyqnU=
 github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13 h1:eYz0iIKW2ubv9gNy+lJmsl9SejZQfYcon87bLwCPBds=
 github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13/go.mod h1:C1CSA6cV2fLAxvvz5wFAoGqiy+W2yXKt2hZLV5yQysk=
 github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127035403-ec6033dc04e2 h1:/6KHY7ECoer32ORgh6nZBjzKKdXJHOP5j6qQDEjIZ4s=
 github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127035403-ec6033dc04e2/go.mod h1:cz74bU4Bfxh9MwpxTbMm4IVhI0pdFapVxh9e6wF4pYM=
 github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127050335-83d544e35ba8 h1:6VD78lb2OWfInr2GFnLOfQWY7k+kYStA85j1DOtujto=
 github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127050335-83d544e35ba8/go.mod h1:cz74bU4Bfxh9MwpxTbMm4IVhI0pdFapVxh9e6wF4pYM=
+github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127055119-964d2f22ea4b h1:LjXsF4nLzw0OdD72jEKQMRkL5AKjXihVTDBGK8hMayE=
+github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127055119-964d2f22ea4b/go.mod h1:SCN+8o3tEJFP7KyVET1SThoJalTzR+FKkBkCtBAFQFQ=
 github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d h1:uvXELTmqPm4UL6u/VufQpLRO9lHsMSdRVSsHLHOdJ68=
 github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d/go.mod h1:cvLFPOaYPG+Wi8i49c/vc/g1La47QYi27So/Y6lDWa0=
 github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127040344-2e5e19bf1b03 h1:zQm/x8yZHh/jhQAMCght72O6engl8Sa/2bR+GxK8Fw0=

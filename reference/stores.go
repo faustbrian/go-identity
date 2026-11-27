@@ -14,6 +14,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
+	oauthpg "github.com/faustbrian/go-identity/oauth/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	riskpostgres "github.com/faustbrian/go-identity/risk/postgres"
 	riskvalkey "github.com/faustbrian/go-identity/risk/valkey"
@@ -308,6 +309,7 @@ type storeState struct {
 	httpRate               *httpRateState
 	durable                bool
 	productionProxyHistory []migrationHistory
+	proxyPreviewAuthority  *oauthpg.ProviderAuthority
 }
 
 type tenantRecovery struct {
@@ -323,6 +325,22 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
+	return composeStores(c, d, nil)
+}
+
+// ComposeStoresWithOAuthProxyPreviewProviderAuthority selects live provider
+// checks for an explicitly configured OAuthProxyPreview. The reader must use a
+// separate pool from the preview transaction pool and read the shared primary.
+// For the in-process Start bridge, pass the same reader to the production owner.
+// Like ComposeStores, this function performs no migrations or network I/O.
+func ComposeStoresWithOAuthProxyPreviewProviderAuthority(c StoreConfiguration, d ReferenceDependencies, a *oauthpg.ProviderAuthority) (StoreSet, error) {
+	if c.OAuthProxyPreview == nil || a == nil {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview"}
+	}
+	return composeStores(c, d, a)
+}
+
+func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority *oauthpg.ProviderAuthority) (StoreSet, error) {
 	if c.OAuthProxyPreview != nil && (c.SocialOAuth == nil || c.SocialOAuth.Signin == nil || c.OTP == nil || c.OAuthWorkload != nil || c.ProviderDiscovery != nil) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview"}
 	}
@@ -358,7 +376,7 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 		return StoreSet{}, err
 	}
 	if c.DurableAdmission != nil {
-		return composeDurableAdmission(c, d, migrationPolicy, httpRate)
+		return composeDurableAdmission(c, d, migrationPolicy, httpRate, proxyAuthority)
 	}
 	v := c.Velocity
 	if len(v.Tenants) < 1 || len(v.Tenants) > 128 || v.Batch < 1 || v.Batch > 1000 || v.MaxRecords < 1 || v.MaxRecords > 100000 || v.RecoveryTimeout <= 0 || v.RecoveryTimeout >= v.LeaseDuration {
@@ -400,7 +418,7 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
 	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
-	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy, httpRate: httpRate}
+	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy, httpRate: httpRate, proxyPreviewAuthority: proxyAuthority}
 	if err := state.composeFeatureStores(c, d); err != nil {
 		cancel()
 		return StoreSet{}, err

@@ -594,7 +594,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	oauthProxyPreview, err := composeOAuthProxyPreview(c, socialOAuthOwner)
+	oauthProxyPreview, err := composeOAuthProxyPreview(c, socialOAuthOwner, s.proxyPreviewAuthority)
 	if err != nil {
 		return err
 	}

@@ -40,6 +40,18 @@ type OAuthProxyProductionMigrations struct {
 // the returned owner before releasing its caller-owned migration pool. That
 // pool may use a separate migration role from the runtime pool.
 func NewOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration) (OAuthProxyProductionMigrations, error) {
+	return newOAuthProxyProductionMigrations(pool, c, false)
+}
+
+// NewOAuthProxyProductionMigrationsWithProviderAuthority appends the empty
+// provider authority table to the production OAuth history. Select it when this
+// database also hosts the shared authoritative provider registrations. It does
+// not enroll providers, change runtime privileges, or enable a listener.
+func NewOAuthProxyProductionMigrationsWithProviderAuthority(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration) (OAuthProxyProductionMigrations, error) {
+	return newOAuthProxyProductionMigrations(pool, c, true)
+}
+
+func newOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration, liveAuthority bool) (OAuthProxyProductionMigrations, error) {
 	invalid := identity.InvalidInputError{Field: "reference_oauth_proxy_production_migrations"}
 	if pool == nil || pool.Raw() == nil || c.Timeout < time.Millisecond || c.Timeout > time.Minute ||
 		c.Schema == "audit" || c.HTTPRiskSchema == "audit" || c.HTTPRiskSchema != "" && c.HTTPRiskSchema == c.Schema {
@@ -49,7 +61,7 @@ func NewOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProducti
 	if err != nil {
 		return OAuthProxyProductionMigrations{}, invalid
 	}
-	history, err := productionProxyMigrationCatalog(context.Background(), c)
+	history, err := productionProxyMigrationCatalog(context.Background(), c, liveAuthority)
 	if err != nil {
 		return OAuthProxyProductionMigrations{}, invalid
 	}
@@ -99,7 +111,7 @@ func (m OAuthProxyProductionMigrations) Apply(ctx context.Context, req Reference
 // Close cancels and joins operator work, without closing the borrowed pool.
 func (m OAuthProxyProductionMigrations) Close(ctx context.Context) error { return m.stores.Close(ctx) }
 
-func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProductionMigrationConfiguration) ([]migrationHistory, error) {
+func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProductionMigrationConfiguration, liveAuthority bool) ([]migrationHistory, error) {
 	directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.MigrationSource{}, Version: 10,
 		GlobalAuthorityID: c.GlobalAuthorityID, TenantIDs: []identity.TenantID{c.TenantID}}
 	keyed := kernel.RequestKeyMigrationSource{Base: directory, Version: 11}
@@ -128,10 +140,20 @@ func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProduction
 	if err != nil {
 		return nil, err
 	}
-	catalog = append(catalog, proxyOwnedHistory("identity_oauth_proxy", "identity/oauth/postgres", append(base, proxy...),
-		migrationGuard{version: 1, schema: c.Schema},
-		migrationGuard{version: 2, schema: c.Schema, tables: []string{"proxy_transactions"}},
-	))
+	oauthHistory := append(base, proxy...)
+	oauthGuards := []migrationGuard{
+		{version: 1, schema: c.Schema},
+		{version: 2, schema: c.Schema, tables: []string{"proxy_transactions"}},
+	}
+	if liveAuthority {
+		authority, err := (oauthpg.ProviderAuthorityMigrationSource{Schema: c.Schema, Version: 3}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		oauthHistory = append(oauthHistory, authority...)
+		oauthGuards = append(oauthGuards, migrationGuard{version: 3, schema: c.Schema, tables: []string{"provider_authorities"}})
+	}
+	catalog = append(catalog, proxyOwnedHistory("identity_oauth_proxy", "identity/oauth/postgres", oauthHistory, oauthGuards...))
 	capability, err := migrations.NewFSSource(ownedMigrationFiles{capabilitypg.Migrations()}, ".")
 	if err != nil {
 		return nil, err

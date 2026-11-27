@@ -7,6 +7,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	oauthpg "github.com/faustbrian/go-identity/oauth/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	riskvalkey "github.com/faustbrian/go-identity/risk/valkey"
@@ -39,7 +40,7 @@ func (DurableAdmissionConfiguration) MarshalText() ([]byte, error) {
 	return nil, risk.ErrSensitiveSerialization
 }
 
-func composeDurableAdmission(c StoreConfiguration, d ReferenceDependencies, migrationPolicy *MigrationApplyPolicy, httpRate *httpRateState) (StoreSet, error) {
+func composeDurableAdmission(c StoreConfiguration, d ReferenceDependencies, migrationPolicy *MigrationApplyPolicy, httpRate *httpRateState, proxyAuthority *oauthpg.ProviderAuthority) (StoreSet, error) {
 	if !emptyVelocity(c.Velocity) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_counter_ownership"}
 	}
@@ -55,7 +56,7 @@ func composeDurableAdmission(c StoreConfiguration, d ReferenceDependencies, migr
 	lifetime, cancel := context.WithCancel(context.Background())
 	drained := make(chan struct{})
 	close(drained)
-	state := &storeState{pool: d.PostgreSQL, lifetime: lifetime, cancel: cancel, drained: drained, tenants: tenants, policy: n.Policy, keys: append([]risk.CounterDigestKey(nil), n.Keys...), config: VelocityStoreConfiguration{Schema: n.Schema, PrimaryTimeout: n.Timeout}, migrations: migrationPolicy, httpRate: httpRate, durable: true}
+	state := &storeState{pool: d.PostgreSQL, lifetime: lifetime, cancel: cancel, drained: drained, tenants: tenants, policy: n.Policy, keys: append([]risk.CounterDigestKey(nil), n.Keys...), config: VelocityStoreConfiguration{Schema: n.Schema, PrimaryTimeout: n.Timeout}, migrations: migrationPolicy, httpRate: httpRate, durable: true, proxyPreviewAuthority: proxyAuthority}
 	if c.ProviderDiscovery == nil {
 		// Workflow builders still take their native policy and allocation inputs
 		// through the private Velocity fields. The standalone provider catalog

@@ -42,9 +42,9 @@ require (
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261126214320-551488061e87
-	github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401
+	github.com/faustbrian/go-identity/oauth v0.0.0-20261127054005-4f4c9ad64628
 	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13
-	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127050335-83d544e35ba8
+	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127055119-964d2f22ea4b
 	github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d
 	github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127040344-2e5e19bf1b03
 	github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089

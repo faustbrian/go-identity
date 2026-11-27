@@ -285,6 +285,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	scimManagedUsersDeactivation bool
 	oauthProxyPreview            bool
+	oauthProxyProviderAuthority  bool
 
 	scimBulk                    bool
 	scimManagedRead             bool
@@ -1442,6 +1443,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.oauthProxyPreview {
 		proxyPreview = configureReferenceOAuthProxyPreview(t, &c, origin, socialIssuer)
 		proxyPreview.previewPool = deps.PostgreSQL
+		if extensions.oauthProxyProviderAuthority {
+			proxyPreview.prepareProviderAuthority(t, ctx)
+		}
 	}
 	var oneTapSigning *rsa.PrivateKey
 	if extensions.oneTapRedirect {
@@ -1491,7 +1495,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.scimManagedGroupsDelete {
 		configureReferenceSCIMManagedGroupsDelete(&c)
 	}
-	stores, err := reference.ComposeStores(c, deps)
+	var stores reference.StoreSet
+	var err error
+	if proxyPreview != nil && proxyPreview.authority != nil {
+		stores, err = reference.ComposeStoresWithOAuthProxyPreviewProviderAuthority(c, deps, proxyPreview.authority)
+	} else {
+		stores, err = reference.ComposeStores(c, deps)
+	}
 	if extensions.socialOIDCHTTPForeignOrigin {
 		var invalid identity.InvalidInputError
 		if err == nil {

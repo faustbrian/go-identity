@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -34,12 +35,129 @@ func TestReferencePostgresOAuthProxyPreviewSignin(t *testing.T) {
 	}, true)
 }
 
+func TestReferencePostgresOAuthProxyPreviewLiveProviderAuthority(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{
+		postgresBaseline: true, socialOIDC: true, socialOIDCLinkOnly: true, oauthProxyPreview: true, oauthProxyProviderAuthority: true,
+	}, true)
+}
+
 const referenceOAuthProxyPreviewBodyLimit = 8192
 
 type referenceOAuthProxyPreviewProof struct {
-	production  reference.OAuthProxyProductionConfiguration
-	provider    *referenceSocialOIDCIssuer
-	previewPool *database.Pool
+	production        reference.OAuthProxyProductionConfiguration
+	provider          *referenceSocialOIDCIssuer
+	previewPool       *database.Pool
+	productionFixture *liveStores
+	authority         *oauthpg.ProviderAuthority
+	operator          *oauthpg.ProviderAuthorityOperator
+	readerRole        string
+	epoch             uint64
+}
+
+func (p *referenceOAuthProxyPreviewProof) prepareProviderAuthority(t *testing.T, ctx context.Context) {
+	t.Helper()
+	f := newLiveStoresProfile(t, ctx, true, true)
+	p.productionFixture = &f
+	var databaseName string
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT current_database()`).Scan(&databaseName); err != nil {
+		t.Fatal("identify the dedicated live-authority production primary", err)
+	}
+	p.readerRole = databaseName + "_provider_reader"
+	quoted := pgx.Identifier{p.readerRole}.Sanitize()
+	if _, err := f.pool.Raw().Exec(ctx, "CREATE ROLE "+quoted+" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"); err != nil {
+		t.Fatal("create the fixture-owned SELECT-only provider authority login", err)
+	}
+	t.Cleanup(func() {
+		bounded, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		if _, err := f.pool.Raw().Exec(bounded, "DROP OWNED BY "+quoted+"; DROP ROLE "+quoted); err != nil {
+			t.Error("release the exact fixture-owned provider reader role", err)
+		}
+	})
+	reader, err := database.New(ctx, database.Config{
+		DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 2,
+		Configure: func(c *database.PoolConfig) error {
+			c.ConnConfig.User, c.ConnConfig.Password = p.readerRole, ""
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal("open the independent provider authority read pool", err)
+	}
+	t.Cleanup(func() {
+		bounded, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		if err := reader.Close(bounded); err != nil {
+			t.Error("close the provider authority read pool", err)
+		}
+	})
+	p.authority, err = oauthpg.NewProviderAuthority(reader, p.production.Native.Schema, time.Second)
+	if err != nil {
+		t.Fatal("select the shared current-primary reader before preview composition", err)
+	}
+}
+
+func (p *referenceOAuthProxyPreviewProof) installProviderAuthority(t *testing.T, ctx context.Context, f liveStores) {
+	t.Helper()
+	history, err := (oauthpg.ProviderAuthorityMigrationSource{Schema: p.production.Native.Schema, Version: 43}).Load(ctx)
+	if err != nil || len(history) != 1 {
+		t.Fatal("load the native additive provider authority history", err)
+	}
+	tx, err := f.pool.Raw().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, history[0].UpSQL()); err != nil {
+		t.Fatal("install provider authority after the existing production bootstrap", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	quotedRole := pgx.Identifier{p.readerRole}.Sanitize()
+	quotedSchema := pgx.Identifier{p.production.Native.Schema}.Sanitize()
+	table := pgx.Identifier{p.production.Native.Schema, "provider_authorities"}.Sanitize()
+	if _, err := f.pool.Raw().Exec(ctx, "GRANT USAGE ON SCHEMA "+quotedSchema+" TO "+quotedRole+"; GRANT SELECT ON "+table+" TO "+quotedRole); err != nil {
+		t.Fatal("grant only exact-table provider authority reads", err)
+	}
+	var selectOnly bool
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT has_table_privilege($1,$2,'SELECT') AND
+ NOT has_table_privilege($1,$2,'INSERT,UPDATE,DELETE,TRUNCATE') AND
+ NOT has_schema_privilege($1,$3,'CREATE') AND
+ (SELECT NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication FROM pg_roles WHERE rolname=$1)`,
+		p.readerRole, table, p.production.Native.Schema).Scan(&selectOnly); err != nil || !selectOnly {
+		t.Fatal("the shared provider reader is not SELECT-only", err)
+	}
+	operatorAuthority, err := oauthpg.NewProviderAuthority(f.pool, p.production.Native.Schema, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.operator, err = oauthpg.NewProviderAuthorityOperator(operatorAuthority, p.production.Native.Actor)
+	if err != nil {
+		t.Fatal("construct the separately authorized native provider operator", err)
+	}
+	p.changeProviderAuthority(t, ctx, true)
+}
+
+func (p *referenceOAuthProxyPreviewProof) changeProviderAuthority(t *testing.T, ctx context.Context, enabled bool) {
+	t.Helper()
+	command, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := p.epoch + 1
+	if p.epoch == 0 {
+		next = 41
+	}
+	change := oauthpg.ProviderAuthorityChange{
+		Key:             oauthpg.ProviderAuthorityKey{TenantID: p.production.Start.Preview.TenantID, ProviderID: p.production.Start.Provider.Profile().ID},
+		ExpectedVersion: p.epoch, Next: oauthpg.ProviderAuthorityState{Version: next, ProfileVersion: p.production.Start.Provider.Profile().Version, Enabled: enabled},
+		CommandID: command,
+	}
+	if state, err := p.operator.Apply(ctx, change); err != nil || state != change.Next {
+		t.Fatal("commit the exact native provider authority transition", state, err)
+	}
+	p.epoch = next
 }
 
 func configureReferenceOAuthProxyPreview(t *testing.T, c *reference.StoreConfiguration, origin string, p *referenceSocialOIDCIssuer) *referenceOAuthProxyPreviewProof {
@@ -97,12 +215,35 @@ func configureReferenceOAuthProxyPreview(t *testing.T, c *reference.StoreConfigu
 // Go follows the relay's HTTP contract manually, not in a browser engine.
 func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Context, c reference.StoreConfiguration, features reference.FeatureSet, app *http.Client, base, origin string, user identity.UserID) {
 	t.Helper()
-	f := newLiveStoresProfile(t, ctx, true, true)
+	var f liveStores
+	if p.productionFixture != nil {
+		f = *p.productionFixture
+	} else {
+		f = newLiveStoresProfile(t, ctx, true, true)
+	}
 	productionConfig := p.production
 	installOAuthProxyProductionFixture(t, ctx, f, productionConfig, true)
+	if p.authority != nil {
+		// This database was created before the preview graph's audit cleanup
+		// was registered. Release its shared role grants before that cleanup.
+		t.Cleanup(func() {
+			bounded, stop := context.WithTimeout(context.Background(), 5*time.Second)
+			defer stop()
+			if _, err := f.pool.Raw().Exec(bounded, "DROP OWNED BY audit_writer,audit_reader,audit_retention"); err != nil {
+				t.Error("release production grants on the preview-owned audit roles", err)
+			}
+		})
+		p.installProviderAuthority(t, ctx, f)
+	}
 	runtimePool := newOAuthProxyProductionRuntimePool(t, ctx, f)
 	productionConfig.HTTP = oauthProxyProductionHTTPConfiguration(t, runtimePool)
-	production, err := reference.NewOAuthProxyProduction(runtimePool, productionConfig)
+	var production *reference.OAuthProxyProduction
+	var err error
+	if p.authority != nil {
+		production, err = reference.NewOAuthProxyProductionWithProviderAuthority(runtimePool, productionConfig, p.authority)
+	} else {
+		production, err = reference.NewOAuthProxyProduction(runtimePool, productionConfig)
+	}
 	if err != nil {
 		t.Fatal("construct the public production proxy owner", err)
 	}
@@ -240,13 +381,29 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	}
 	beforeExchanges := p.provider.exchanges.Load()
 	beforeRevocations := p.provider.proxyRevocations.Load()
-	authorization, err := features.StartOAuthProxyPreview(ctx, production, reference.OAuthProxyPreviewStartRequest{
+	startRequest := reference.OAuthProxyPreviewStartRequest{
 		Initiation: oauthproxy.InitiationRequest{
 			Credential: authentication.NewBearerCredential("synthetic-production-preview-invocation"),
 			CommandID:  command, TransactionID: flow, RequestFingerprint: sha256.Sum256([]byte("reference-preview-original-request")), Remember: remember,
 		},
 		FlowCookie: flowCookie, Network: "127.0.0.1", Device: deviceID,
-	})
+	}
+	if p.authority != nil {
+		static, err := reference.NewOAuthProxyProduction(runtimePool, productionConfig)
+		if err != nil {
+			t.Fatal("construct the mismatched static production bridge", err)
+		}
+		withheld, err := features.StartOAuthProxyPreview(ctx, static, startRequest)
+		if !errors.Is(err, oauthproxy.CompletionDenied) || withheld.URL() != "" || p.provider.exchanges.Load() != beforeExchanges {
+			t.Fatal("a static production owner entered the live preview bridge", err)
+		}
+		var noOriginal bool
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM synthetic_oauth.proxy_transactions WHERE tenant_id=$1 AND transaction_id=$2)`,
+			otpTenant, string(flow)).Scan(&noOriginal); err != nil || !noOriginal {
+			t.Fatal("mismatched bridge mode consumed the original live Start input", err)
+		}
+	}
+	authorization, err := features.StartOAuthProxyPreview(ctx, production, startRequest)
 	if err != nil {
 		t.Fatal("the public preview owner did not acknowledge both native origin bindings", err)
 	}
@@ -448,4 +605,146 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	if err := p.previewPool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM `+bindingsTable+` WHERE tenant_id=$1 AND flow_id=$2)`, otpTenant, string(foreignFlow)).Scan(&previewBindingExists); err != nil || previewBindingExists {
 		t.Fatal("wrong original browser unexpectedly committed a preview binding", err)
 	}
+	if p.authority == nil {
+		return
+	}
+
+	type liveAttempt struct {
+		browser  *http.Client
+		flow     identity.PreAuthTransactionID
+		command  identity.CommandID
+		callback *url.URL
+	}
+	startLiveAttempt := func(label string) liveAttempt {
+		t.Helper()
+		client := newBrowser()
+		flow, cookies := issueFlow(client)
+		var credential authentication.BearerCredential
+		var device string
+		for _, cookie := range cookies {
+			if cookie.Name == flowPolicy.Name {
+				credential = authentication.NewBearerCredential(cookie.Value)
+			}
+			if cookie.Name == devicePolicy.Name {
+				resolved, err := deviceCodec.Resolve(ctx, time.Now(), otpTenant, origin, cookie.Value)
+				if err != nil {
+					t.Fatal("resolve the new original browser device", err)
+				}
+				device = resolved.DeviceID()
+			}
+		}
+		command, err := identity.NewCommandID()
+		if err != nil || credential.Token() == "" || device == "" {
+			t.Fatal("prepare a fresh live-provider original browser", err)
+		}
+		authorization, err := features.StartOAuthProxyPreview(ctx, production, reference.OAuthProxyPreviewStartRequest{
+			Initiation: oauthproxy.InitiationRequest{
+				Credential: authentication.NewBearerCredential("synthetic-production-preview-invocation"),
+				CommandID:  command, TransactionID: flow, RequestFingerprint: sha256.Sum256([]byte(label)), Remember: remember,
+			},
+			FlowCookie: credential, Network: "127.0.0.1", Device: device,
+		})
+		if err != nil {
+			t.Fatal("acknowledge a fresh original through both live Reference owners", err)
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, authorization.URL(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := providerClient.Do(request)
+		if err != nil {
+			t.Fatal("authorize the fresh original at the controlled issuer", err)
+		}
+		response.Body.Close()
+		callback, err := url.Parse(response.Header.Get("Location"))
+		if err != nil || response.StatusCode != http.StatusSeeOther || callback.Scheme+"://"+callback.Host+callback.Path != p.provider.proxyRedirect {
+			t.Fatal("fresh original did not return the exact production callback", err)
+		}
+		return liveAttempt{browser: client, flow: flow, command: command, callback: callback}
+	}
+	invokeProductionCallback := func(callback *url.URL) (*http.Response, []byte) {
+		t.Helper()
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, productionServer.URL+callback.RequestURI(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Host = "production.example"
+		response, err := productionClient.Do(request)
+		if err != nil {
+			t.Fatal("invoke the original callback through restricted live Reference production", err)
+		}
+		wire, readErr := io.ReadAll(io.LimitReader(response.Body, 1025))
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil || len(wire) > 1024 {
+			t.Fatal("read the bounded production callback response")
+		}
+		return response, wire
+	}
+	old := startLiveAttempt("reference-live-before-disable")
+	beforeDisabledExchanges := p.provider.exchanges.Load()
+	beforeDisabledRevocations := p.provider.proxyRevocations.Load()
+	p.changeProviderAuthority(t, ctx, false)
+	assertOldCallbackRefused := func() {
+		t.Helper()
+		response, _ := invokeProductionCallback(old.callback)
+		if response.StatusCode < 400 || response.Header.Get("Location") != "" || len(response.Cookies()) != 0 ||
+			p.provider.exchanges.Load() != beforeDisabledExchanges || p.provider.proxyRevocations.Load() != beforeDisabledRevocations {
+			t.Fatal("invalidated live original exchanged with the provider or returned a handoff", response.StatusCode)
+		}
+		if readSessionCount() != beforeSessions+1 {
+			t.Fatal("invalidated production original created a preview session")
+		}
+		readSession(old.browser, false)
+	}
+	assertOldCallbackRefused()
+	p.changeProviderAuthority(t, ctx, true)
+	assertOldCallbackRefused()
+
+	fresh := startLiveAttempt("reference-live-after-reenable")
+	if fresh.command == old.command || fresh.flow == old.flow || fresh.callback.Query().Get("state") == old.callback.Query().Get("state") {
+		t.Fatal("fresh live Start reused the invalidated command, transaction or state")
+	}
+	freshForwarded, freshBody := invokeProductionCallback(fresh.callback)
+	freshHandoff, err := url.Parse(freshForwarded.Header.Get("Location"))
+	if err != nil || freshForwarded.StatusCode != http.StatusSeeOther || len(freshBody) != 0 || len(freshForwarded.Cookies()) != 0 ||
+		freshHandoff.Scheme+"://"+freshHandoff.Host+freshHandoff.Path != origin+reference.OAuthProxyPreviewPath || freshHandoff.RawQuery != "" ||
+		p.provider.exchanges.Load() != beforeDisabledExchanges+1 || p.provider.proxyRevocations.Load() != beforeDisabledRevocations+1 {
+		t.Fatal("fresh live epoch did not forward one exact tokenless handoff", freshForwarded.StatusCode)
+	}
+	freshParts := strings.Split(freshHandoff.Fragment, ".")
+	if len(freshParts) != 3 || freshParts[0] != "identity-proxy-v1" || freshParts[1] != string(fresh.flow) {
+		t.Fatal("fresh live handoff lost its original preview transaction")
+	}
+	freshEnvelope, err := base64.RawURLEncoding.Strict().DecodeString(freshParts[2])
+	if err != nil || len(freshEnvelope) == 0 || len(freshEnvelope) > 8192 {
+		t.Fatal("fresh live handoff did not carry a bounded evidence envelope", err)
+	}
+	defer clear(freshEnvelope)
+	freshPayload, err := json.Marshal(map[string]string{"flow": freshParts[1], "envelope": freshParts[2]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.changeProviderAuthority(t, ctx, false)
+	assertBoundHandoffRefused := func() {
+		t.Helper()
+		response, _ := call(fresh.browser, http.MethodPost, reference.OAuthProxyPreviewPath, string(freshPayload), "")
+		if response.StatusCode < 400 || len(response.Cookies()) != 0 || response.Header.Get("Location") != "" || readSessionCount() != beforeSessions+1 {
+			t.Fatal("shared provider invalidation disclosed a preview cookie or persisted a session", response.StatusCode)
+		}
+		readSession(fresh.browser, false)
+		var unchanged bool
+		if err := p.previewPool.Raw().QueryRow(ctx, `SELECT b.version=1 AND b.proof_ciphertext IS NOT NULL AND
+ (SELECT state='issued' FROM `+flowsTable+` WHERE tenant_id=$1 AND flow_id=$2) AND
+ NOT EXISTS(SELECT FROM audit.identity_command_bindings a WHERE a.command_id=b.callback_command_id) AND
+ NOT EXISTS(SELECT FROM public.identity_outbox_bindings o WHERE o.command_id=b.callback_command_id)
+ FROM `+bindingsTable+` b WHERE b.tenant_id=$1 AND b.flow_id=$2`, otpTenant, string(fresh.flow)).Scan(&unchanged); err != nil || !unchanged {
+			t.Fatal("refused live handoff changed preview browser, grant, audit or lifecycle custody", err)
+		}
+		if p.provider.exchanges.Load() != beforeDisabledExchanges+1 || p.provider.proxyRevocations.Load() != beforeDisabledRevocations+1 {
+			t.Fatal("refused live preview completion repeated provider work")
+		}
+	}
+	assertBoundHandoffRefused()
+	p.changeProviderAuthority(t, ctx, true)
+	assertBoundHandoffRefused()
 }
