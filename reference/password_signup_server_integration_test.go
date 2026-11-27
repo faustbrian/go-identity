@@ -284,6 +284,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 
 type signupGraphExtensions struct {
 	scimManagedUsersDeactivation bool
+	oauthProxyPreview            bool
 
 	scimBulk                    bool
 	scimManagedRead             bool
@@ -548,9 +549,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	network := httptest.NewUnstartedServer(nil)
 	t.Cleanup(network.Close)
 	origin := "https://" + network.Listener.Addr().String()
-	if extensions.passkeyHTTP {
-		// The authenticator's RP/origin is a real DNS deployment authority;
-		// only the TLS listener is local. Requests below retain this Host.
+	if extensions.passkeyHTTP || extensions.oauthProxyPreview {
+		// These profiles require DNS deployment authority; only the TLS
+		// listener is local. Requests below retain the selected Host.
 		origin = "https://identity.example"
 	}
 	c.OTP.PreAuth.Origin = origin
@@ -663,7 +664,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			socialOrigin = "https://other-origin.example"
 			c.PasswordSignin.Native.Origins = append(c.PasswordSignin.Native.Origins, socialOrigin)
 		}
-		socialIssuer = configureReferenceSocialOIDC(t, &c, socialOrigin, extensions.socialOIDCLinkOnly, extensions.socialOIDCPostAuth)
+		var registeredProxy []string
+		if extensions.oauthProxyPreview {
+			registeredProxy = []string{"https://production.example/oauth2/callback/proxy"}
+		}
+		socialIssuer = configureReferenceSocialOIDC(t, &c, socialOrigin, extensions.socialOIDCLinkOnly, extensions.socialOIDCPostAuth, registeredProxy...)
 		if socialRollbackClock != nil {
 			c.SocialOAuth.Issuer.Crypto.Clock = socialRollbackClock.now
 			c.PasswordSignup.Preparation.Clock = socialRollbackClock.now
@@ -1430,8 +1435,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			c.Organization, c.HTTPOrganization = nil, nil
 		}
 	}
-	if extensions.socialOIDCHTTPSignin {
+	if extensions.socialOIDCHTTPSignin || extensions.oauthProxyPreview {
 		configureReferenceSocialSigninHTTP(t, &c)
+	}
+	var proxyPreview *referenceOAuthProxyPreviewProof
+	if extensions.oauthProxyPreview {
+		proxyPreview = configureReferenceOAuthProxyPreview(t, &c, origin, socialIssuer)
+		proxyPreview.previewPool = deps.PostgreSQL
 	}
 	var oneTapSigning *rsa.PrivateKey
 	if extensions.oneTapRedirect {
@@ -1657,8 +1667,11 @@ END $$`); err != nil {
 		config.HTTP.Network.Limits.MaximumBodyBytes = 65536
 		config.HTTP.Network.Limits.MaximumFields = 128
 	}
-	if extensions.passkeyHTTP {
+	if extensions.passkeyHTTP || extensions.oauthProxyPreview {
 		config.HTTP.Network.TenantHosts = []identityhttp.TenantHost{{Host: "identity.example", TenantID: otpTenant}}
+	}
+	if extensions.oauthProxyPreview {
+		config.HTTP.Network.Limits.MaximumBodyBytes = referenceOAuthProxyPreviewBodyLimit
 	}
 	server, err := reference.NewServer(config, deps, features)
 	if err != nil {
@@ -2096,7 +2109,7 @@ END $$`); err != nil {
 	}
 	network.StartTLS()
 	client := network.Client()
-	if extensions.passkeyHTTP {
+	if extensions.passkeyHTTP || extensions.oauthProxyPreview {
 		client.Transport = passkeyFixtureHostTransport{next: client.Transport}
 	}
 	client.Timeout = 5 * time.Second
@@ -2704,6 +2717,9 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				}
 			}
 			proveReferenceSocialOIDC(t, ctx, client, network.URL, origin, socialIssuer, user, cookies, csrf, fresh, readSession, extensions.socialOIDCPersistent, extensions.socialOIDCLinkOnly, accounts, rotate, extensions.socialOIDCCollision, extensions.socialOIDCFailure, awaitExpiry, extensions.socialOIDCConcurrent, extensions.socialOIDCHTTPSignin)
+			if proxyPreview != nil {
+				proxyPreview.prove(t, ctx, c, features, client, network.URL, origin, user)
+			}
 			if extensions.socialOIDCNativeSignin {
 				proveNativeSocialSignin(t, ctx, c, deps, origin, "complete", &nativeSigninCompletionFixture{provider: socialIssuer, user: user, mode: extensions.socialOIDCNativeMode})
 			}

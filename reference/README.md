@@ -23,6 +23,32 @@ the selected rate and risk storage. The constructor does not apply migrations.
 The preview deployment uses a distinct database and session owner; this
 production entry point neither serves its landing page nor issues its session.
 
+## Preview-side OAuth sign-in
+
+Select `OAuthProxyPreview` on the preview's existing `SocialOAuth.Signin`
+graph. Use the same provider ID, version, issuer and client ID as production,
+but the preview's original browser and linked account use the preview pool.
+Apply the selected Reference migration plan before enabling traffic. The plan
+appends preview binding storage without changing the existing OAuth history.
+
+Set `OAuthProxyPreview.HTTP` to enable the `oauth-proxy` preauth method and the
+exact `GET` and `POST /oauth2/preview/complete` browser handoff. Register that
+HTTPS path on the preview, configure a distinct same-origin success path, and
+use the existing signed device, flow and session cookie profile. This selection
+does not expose a cross-origin API or replace ordinary social account linking.
+Keep native preview selected and omit `HTTP` to disable its browser endpoints
+without changing its migration history.
+
+Within a process that owns both Reference deployments, use
+`FeatureSet.StartOAuthProxyPreview` with the original preauth flow, trusted
+deployment credential, browser cookie, trusted network and signed device ID.
+It returns the provisioned provider URL only after preview Bind acknowledges
+the original browser. Do not retry an ambiguous Start or redirect on a Bind
+error. The Go bridge is not a cross-process endpoint. The provider returns to
+production, and the preview landing sends the encrypted handoff back only
+to its own origin. The preview's normal session read and synchronizer-bound
+logout consume that session. Provider tokens never reach the preview.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes

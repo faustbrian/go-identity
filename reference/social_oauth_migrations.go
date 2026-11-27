@@ -90,7 +90,18 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 	if err != nil {
 		return nil, err
 	}
-	catalog = append(catalog, migrationHistory{namespace: "identity_social_oauth", history: append(rp, vault...), owners: map[migrations.Version]ModuleID{1: "identity/oauth/postgres", 2: "identity/oauth/postgres"}, guards: []migrationGuard{{version: 1, schema: schema}, {version: 2, schema: schema, tables: []string{"token_sets"}}}})
+	oauthHistory := migrationHistory{namespace: "identity_social_oauth", history: append(rp, vault...), owners: map[migrations.Version]ModuleID{1: "identity/oauth/postgres", 2: "identity/oauth/postgres"}, guards: []migrationGuard{{version: 1, schema: schema}, {version: 2, schema: schema, tables: []string{"token_sets"}}}}
+	if f.oauthProxyPreview != nil {
+		const previewVersion = 3
+		bindings, err := (oauthpg.ProxyPreviewBindingMigrationSource{Schema: schema, Version: previewVersion}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		oauthHistory.history = append(oauthHistory.history, bindings...)
+		oauthHistory.owners[previewVersion] = "identity/oauth/postgres"
+		oauthHistory.guards = append(oauthHistory.guards, migrationGuard{version: previewVersion, schema: schema, tables: []string{"proxy_preview_bindings"}})
+	}
+	catalog = append(catalog, oauthHistory)
 	if f.socialOAuth.unlink != nil {
 		var predecessors []migrations.Migration
 		for _, history := range catalog {

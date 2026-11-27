@@ -46,9 +46,14 @@ type HTTPOAuthProxyProductionConfiguration struct {
 // workflow. It has no identity mutation, account linking, or session service.
 // It does not close borrowed resources and can serve concurrent requests.
 type OAuthProxyProduction struct {
-	start    *oauthpg.ProxyStartService
-	handler  http.Handler
-	document identityhttp.OpenAPIDocument
+	start                *oauthpg.ProxyStartService
+	handler              http.Handler
+	document             identityhttp.OpenAPIDocument
+	pool                 *database.Pool
+	provider             oauth.ProviderProfile
+	productionDeployment string
+	previewTarget        oauthproxy.PreviewTarget
+	tenant               identity.TenantID
 }
 
 // NewOAuthProxyProduction assembles native Start and the acknowledged command
@@ -80,7 +85,8 @@ func NewOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfigur
 	if err != nil {
 		return nil, invalid
 	}
-	result := &OAuthProxyProduction{start: start}
+	result := &OAuthProxyProduction{start: start, pool: pool, provider: exchange.Profile(),
+		productionDeployment: c.Native.ProductionDeployment, previewTarget: target, tenant: c.Start.Preview.TenantID}
 	if c.HTTP == nil {
 		return result, nil
 	}
@@ -90,7 +96,7 @@ func NewOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfigur
 	}
 	feature, err := oauthhttp.NewProxyForwardFeature(oauthhttp.ProxyForwardConfig{
 		Network: h.Network, Origin: h.Origin, TenantID: c.Start.Preview.TenantID,
-		Provider: exchange.Profile(), ProductionDeployment: c.Native.ProductionDeployment,
+		Provider: result.provider, ProductionDeployment: c.Native.ProductionDeployment,
 		Callback: callback, RateSource: forward, Rate: h.Rate, Risk: h.Risk,
 		AllowedTargets: []string{target.Redirect}, Now: c.Clock.Now, MaximumDuration: c.Native.MaximumDuration,
 	})

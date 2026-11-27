@@ -210,7 +210,7 @@ func TestReferencePostgresOAuthProxyProductionDenial(t *testing.T) {
 	}
 }
 
-func installOAuthProxyProductionFixture(t *testing.T, ctx context.Context, f liveStores, c reference.OAuthProxyProductionConfiguration) {
+func installOAuthProxyProductionFixture(t *testing.T, ctx context.Context, f liveStores, c reference.OAuthProxyProductionConfiguration, reuseAudit ...bool) {
 	t.Helper()
 	var source migrations.Source = kernel.DirectoryAuthorityMigrationSource{Base: kernel.MigrationSource{}, Version: 10,
 		GlobalAuthorityID: c.Native.GlobalAuthorityID, TenantIDs: []identity.TenantID{c.Start.Preview.TenantID}}
@@ -267,7 +267,15 @@ func installOAuthProxyProductionFixture(t *testing.T, ctx context.Context, f liv
 	if _, err := tx.Exec(ctx, `SET LOCAL search_path=public,pg_catalog; SET LOCAL lock_timeout='1s'; SET LOCAL statement_timeout='5s'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
+	// Distinct disposable databases in the same test can use the roles the
+	// preview fixture already owns. This never changes the product preflight.
+	sharedAudit := len(reuseAudit) == 1 && reuseAudit[0]
+	if sharedAudit {
+		var roles int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN ('audit_writer','audit_reader','audit_retention')`).Scan(&roles); err != nil || roles != 3 {
+			t.Fatal("preview fixture did not provision its three audit roles", err)
+		}
+	} else if _, err := tx.Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("reserve fixture-owned fresh audit roles", err)
 	}
 	for _, migration := range history {
@@ -282,6 +290,9 @@ func installOAuthProxyProductionFixture(t *testing.T, ctx context.Context, f liv
 	}
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal("commit production fixture owner histories", err)
+	}
+	if sharedAudit {
+		return
 	}
 	t.Cleanup(func() {
 		bounded, stop := context.WithTimeout(context.Background(), 3*time.Second)

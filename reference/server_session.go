@@ -117,6 +117,17 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 			}
 			c.CSRFCookie = &policy
 		}
+		if preview := s.state.features.oauthProxyPreview; preview != nil && preview.http != nil {
+			policy := preview.signin.csrfCookie
+			if c.CSRFCookie != nil {
+				existing, existingErr := c.CSRFCookie.DeletionAttributes()
+				selected, selectedErr := policy.DeletionAttributes()
+				if existingErr != nil || selectedErr != nil || existing.String() != selected.String() {
+					return nil, identity.InvalidInputError{Field: "reference_http_oauth_proxy_preview"}
+				}
+			}
+			c.CSRFCookie = &policy
+		}
 	} else {
 		c.BearerSignOut = owner.bearer
 	}

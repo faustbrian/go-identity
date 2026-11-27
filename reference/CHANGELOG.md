@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select OAuth preview binding, completion and strict session logout in the
+  existing Reference session graph. The trusted Go bridge releases provider
+  authorization only after the original preview browser is bound.
+
 - Compose a dedicated production OAuth preview owner with authenticated native
   Start and an independently selected provider callback. The production owner
   has no identity, account or session mutation service.

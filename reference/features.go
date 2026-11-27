@@ -89,6 +89,7 @@ type DeliveryConfiguration struct {
 type featureState struct {
 	providerDiscovery            *providerDiscoveryState
 	socialOAuth                  *socialOAuthState
+	oauthProxyPreview            *oauthProxyPreviewState
 	oneTap                       *oneTapState
 	enterpriseOIDC               *enterpriseOIDCState
 	enterpriseOAuth2             *enterpriseOAuth2State
@@ -593,6 +594,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	oauthProxyPreview, err := composeOAuthProxyPreview(c, socialOAuthOwner)
+	if err != nil {
+		return err
+	}
 	oneTapOwner, err := composeOneTap(c, d, sessionOwner, evaluator)
 	if err != nil {
 		return err
@@ -1030,6 +1035,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.session = sessionOwner
 	s.features.oauthDevice = oauthDevice
 	s.features.socialOAuth = socialOAuthOwner
+	s.features.oauthProxyPreview = oauthProxyPreview
 	s.features.oneTap = oneTapOwner
 	s.features.enterpriseOIDC = enterpriseOIDCOwner
 	s.features.enterpriseOAuth2 = enterpriseOAuth2Owner

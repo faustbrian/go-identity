@@ -434,7 +434,17 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 			}
 		}
 	}
-	handler, document, err := identityhttp.NewRouter(c.HTTP, operations, nil)
+	preview, err := server.oauthProxyPreviewHandler(network)
+	if err != nil {
+		return nil, redactedRouterFailure(err)
+	}
+	var handler http.Handler
+	var document identityhttp.OpenAPIDocument
+	if preview != nil {
+		handler, document, err = identityhttp.NewRouterWithOAuthPreview(c.HTTP, operations, preview)
+	} else {
+		handler, document, err = identityhttp.NewRouter(c.HTTP, operations, nil)
+	}
 	if err != nil {
 		return nil, redactedRouterFailure(err)
 	}

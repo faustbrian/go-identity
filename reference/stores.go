@@ -46,6 +46,9 @@ type StoreConfiguration struct {
 	// explicitly selected routes and metadata over those actual native owners.
 	SocialOAuth     *SocialOAuthConfiguration
 	HTTPSocialOAuth *HTTPSocialOAuthConfiguration
+	// OAuthProxyPreview selects native binding and completion on the preview
+	// database; the nested HTTP selection is independent.
+	OAuthProxyPreview *OAuthProxyPreviewConfiguration
 	// OneTap selects one native Google sign-in profile. HTTPOneTap opts into
 	// its exact Start and/or credential callback routes independently.
 	OneTap     *OneTapConfiguration
@@ -319,6 +322,9 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
+	if c.OAuthProxyPreview != nil && (c.SocialOAuth == nil || c.SocialOAuth.Signin == nil || c.OTP == nil || c.OAuthWorkload != nil || c.ProviderDiscovery != nil) {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview"}
+	}
 	if c.SCIMBulk != nil && (c.HTTPRate == nil || c.Organization == nil || c.OTP == nil ||
 		c.SCIMBulk.Native.GlobalAuthorityID != c.OTP.Store.GlobalAuthorityID ||
 		c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil) {

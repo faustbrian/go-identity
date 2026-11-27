@@ -464,7 +464,7 @@ func (p *referenceSocialOIDCPolicy) Decide(ctx context.Context, c authorization.
 	return (referenceRegistrationPolicy{}).Decide(ctx, c)
 }
 
-type referenceSocialOIDCGrant struct{ nonce, challenge, subject string }
+type referenceSocialOIDCGrant struct{ nonce, challenge, subject, redirect string }
 
 // Advance only the configured capability verifier's clock after the real vault
 // write fails. This deterministically expires retained execution authority at
@@ -508,6 +508,8 @@ type referenceSocialOIDCIssuer struct {
 	server            *httptest.Server
 	key               *ecdsa.PrivateKey
 	redirect          string
+	proxyRedirect     string
+	proxyRevocations  atomic.Int32
 	mu                sync.Mutex
 	grants            map[string]referenceSocialOIDCGrant
 	exchanges         atomic.Int64
@@ -518,13 +520,16 @@ type referenceSocialOIDCIssuer struct {
 	gate              atomic.Pointer[referenceSocialExchangeGate]
 }
 
-func configureReferenceSocialOIDC(t *testing.T, c *reference.StoreConfiguration, origin string, linkOnly, postAuthentication bool) *referenceSocialOIDCIssuer {
+func configureReferenceSocialOIDC(t *testing.T, c *reference.StoreConfiguration, origin string, linkOnly, postAuthentication bool, proxyRedirect ...string) *referenceSocialOIDCIssuer {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal("create controlled provider key")
 	}
 	p := &referenceSocialOIDCIssuer{key: key, redirect: origin + "/v1/oauth/callback", grants: make(map[string]referenceSocialOIDCGrant), formCredentials: postAuthentication}
+	if len(proxyRedirect) == 1 {
+		p.proxyRedirect = proxyRedirect[0]
+	}
 	p.server = httptest.NewTLSServer(http.HandlerFunc(p.serve))
 	t.Cleanup(p.server.Close)
 	providerConfig := oauth.OIDCConfig{ID: "reference-oidc", Version: 1, Issuer: p.server.URL, AuthorizationEndpoint: p.server.URL + "/authorize", TokenEndpoint: p.server.URL + "/token", RedirectURI: p.redirect, ClientID: "reference-social-client", ClientAuthentication: oauth.PublicClient, Scopes: []string{"openid", "profile"}, Algorithms: []string{"ES256"}, KeySet: p, HTTPClient: p.server.Client(), Timeout: 2 * time.Second}
@@ -561,12 +566,13 @@ func (p *referenceSocialOIDCIssuer) serve(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Cache-Control", "no-store")
 	if r.URL.Path == "/authorize" && r.Method == http.MethodGet {
 		q := r.URL.Query()
-		if q.Get("client_id") != "reference-social-client" || q.Get("redirect_uri") != p.redirect || q.Get("response_type") != "code" || q.Get("response_mode") != "query" || q.Get("code_challenge_method") != "S256" || len(q.Get("code_challenge")) != 43 || len(q.Get("nonce")) != 43 || len(q.Get("state")) != 43 {
+		redirect := q.Get("redirect_uri")
+		if q.Get("client_id") != "reference-social-client" || (redirect != p.redirect && (p.proxyRedirect == "" || redirect != p.proxyRedirect)) || q.Get("response_type") != "code" || q.Get("response_mode") != "query" || q.Get("code_challenge_method") != "S256" || len(q.Get("code_challenge")) != 43 || len(q.Get("nonce")) != 43 || len(q.Get("state")) != 43 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		if p.denyAuthorization.Swap(false) {
-			callback := p.redirect + "?" + (url.Values{"error": {"access_denied"}, "state": {q.Get("state")}, "iss": {p.server.URL}}).Encode()
+			callback := redirect + "?" + (url.Values{"error": {"access_denied"}, "state": {q.Get("state")}, "iss": {p.server.URL}}).Encode()
 			http.Redirect(w, r, callback, http.StatusSeeOther)
 			return
 		}
@@ -577,10 +583,21 @@ func (p *referenceSocialOIDCIssuer) serve(w http.ResponseWriter, r *http.Request
 		}
 		code := string(id)
 		p.mu.Lock()
-		p.grants[code] = referenceSocialOIDCGrant{nonce: q.Get("nonce"), challenge: q.Get("code_challenge"), subject: "stable-provider-subject"}
+		p.grants[code] = referenceSocialOIDCGrant{nonce: q.Get("nonce"), challenge: q.Get("code_challenge"), subject: "stable-provider-subject", redirect: redirect}
 		p.mu.Unlock()
-		callback := p.redirect + "?" + (url.Values{"code": {code}, "state": {q.Get("state")}, "iss": {p.server.URL}}).Encode()
+		callback := redirect + "?" + (url.Values{"code": {code}, "state": {q.Get("state")}, "iss": {p.server.URL}}).Encode()
 		http.Redirect(w, r, callback, http.StatusSeeOther)
+		return
+	}
+	if p.proxyRedirect != "" && r.URL.Path == "/revoke" && r.Method == http.MethodPost {
+		r.Body = http.MaxBytesReader(w, r.Body, 8192)
+		if err := r.ParseForm(); err != nil || r.URL.RawQuery != "" || r.Header.Get("Authorization") != "" ||
+			r.PostForm.Get("token") != "synthetic-provider-refresh" || r.PostForm.Get("token_type_hint") != "refresh_token" || r.PostForm.Get("client_id") != "reference-social-client" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		p.proxyRevocations.Add(1)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	if r.URL.Path != "/token" || r.Method != http.MethodPost {
@@ -589,7 +606,7 @@ func (p *referenceSocialOIDCIssuer) serve(w http.ResponseWriter, r *http.Request
 	}
 	p.exchanges.Add(1)
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
-	if err := r.ParseForm(); err != nil || r.Form.Get("grant_type") != "authorization_code" || r.Form.Get("client_id") != "reference-social-client" || r.Form.Get("redirect_uri") != p.redirect {
+	if err := r.ParseForm(); err != nil || r.Form.Get("grant_type") != "authorization_code" || r.Form.Get("client_id") != "reference-social-client" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -612,7 +629,7 @@ func (p *referenceSocialOIDCIssuer) serve(w http.ResponseWriter, r *http.Request
 	delete(p.grants, r.Form.Get("code"))
 	p.mu.Unlock()
 	challenge := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
-	if !ok || base64.RawURLEncoding.EncodeToString(challenge[:]) != grant.challenge {
+	if !ok || r.Form.Get("redirect_uri") != grant.redirect || base64.RawURLEncoding.EncodeToString(challenge[:]) != grant.challenge {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -774,6 +791,11 @@ func proveReferenceSocialOIDC(t *testing.T, ctx context.Context, client *http.Cl
 		closeErr := authorized.Body.Close()
 		if authorized.StatusCode != http.StatusSeeOther || readErr != nil || closeErr != nil || !strings.HasPrefix(authorized.Header.Get("Location"), p.redirect+"?") {
 			t.Fatal("provider did not return the configured code callback")
+		}
+		if p.proxyRedirect != "" {
+			// Keep the established TLS listener/cookie jar while the fixture
+			// transport supplies the selected DNS Host to Reference.
+			return base + "/v1/oauth/callback" + strings.TrimPrefix(authorized.Header.Get("Location"), p.redirect)
 		}
 		return authorized.Header.Get("Location")
 	}
