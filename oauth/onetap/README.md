@@ -33,14 +33,53 @@ spellings; width remains a typed number, not GIS's documented width string.
 For a button, `ux_mode` belongs to initialization, while type/theme/size/width
 belong to rendering. A future browser adapter must map these separately and
 obtain provider, client, authorized origin and nonce from trusted native binding.
-This contract accepts or returns none of those values, hints, identities,
+The option contract accepts or returns none of those values, hints, identities,
 credentials, arbitrary callback functions or redirects. Mutating or decoding a
 projection grants no authority and cannot replace the constructors.
 
-Both supported JavaScript experiences deliver credentials through a JavaScript
+Both existing JavaScript experiences deliver credentials through a JavaScript
 callback. Popup-button selection does not select redirect mode or a `login_uri`.
 There is no durable start operation, credential release or browser execution
 here, and the existing credential callback API remains unchanged.
+
+### Explicit redirect-button selection and original launch projection
+
+Use `NewBrowserRedirectStartOptions(button)` to opt into `redirect_button`
+and `ux_mode: "redirect"` with the same closed button presentation choices.
+It accepts no prompt or callback option, URL, nonce or state. Existing
+`NewBrowserStartOptions` calls and prompt/popup projection JSON stay unchanged.
+The existing `NewBrowserStartRequest` remains callback-mode only and rejects
+redirect options; this package does not start a native redirect flow yet.
+
+After its exact fresh durable start commit, the native owner may call
+`redirectValidator.BrowserRedirectStart(options, originalTransaction)` using
+the separately configured `NewProviderBoundRedirectValidator`. The method
+requires the original provider-bound Google redirect transaction and matches
+its exact provider/version/client, endpoint, tenant, origin and policy. It
+derives `ClientID`, `LoginURI`, the unpadded base64url `Nonce`, `State` equal
+to the original canonical flow ID, `AllowedParentOrigin`, and the unchanged
+`IssuedAt`/`ExpiresAt`; the detached `Button` retains the selected presentation.
+No browser-supplied launch values can replace those original fields.
+
+This typed representation is not a complete GIS object. Client ID, nonce,
+`login_uri` and button UX mode map to initialization, presentation and `State`
+map to the button, and numeric width maps to GIS's width string. The exact
+allowed parent origin is a transport restriction, not a request to enable
+One Tap's intermediate iframe. Do not invoke the prompt for this profile.
+`State` is a public locator, never cookie custody or Google's separate CSRF
+proof. Google's [button state reference](https://developers.google.com/identity/gsi/web/reference/html-reference#data-state)
+documents its return with the credential; the
+[server-side integration reference](https://developers.google.com/identity/gsi/web/reference/html-reference#server-side_integration)
+requires ignoring unrecognized response parameters. A later bounded decoder
+must preserve that rule without relaxing singleton checks for recognized fields.
+
+Projection does not read time, issue/consume state or confirm activity. It can
+project expired records. The native owner must freshly fence current activity,
+original expiry and the exact original option fingerprint/journal at commit,
+then invoke this method without renewing the lifetime. Mutation or decoding of
+the detached representation grants no authority. JSON intentionally carries
+the browser-facing nonce and locator; do not log it. No HTML/JavaScript renderer,
+credential release, browser interoperability proof or HTTP decoder is added.
 
 Use `NewBrowserStartRequest` to hand the native owner one bounded, immutable
 original. Supply the tenant, exact canonical HTTPS origin, canonical peer IP
@@ -181,8 +220,10 @@ An eventual redirect transport must resolve the original per-flow locator from
 its own trusted transport/cookie custody before credential parsing, without
 adding a second state or replay owner. It must separately qualify redirect POST
 origin and cookie behavior; popup's same-origin JSON/Lax-cookie assumptions are
-not redirect interoperability evidence. No such HTTP adapter, locator or cookie
-policy is supplied here, and browser-start options remain prompt/popup-only.
+not redirect interoperability evidence. No such HTTP adapter or cookie policy
+is supplied here. The explicit redirect-button launch projection supplies only
+the original flow ID locator; it does not establish cookie possession or consume
+that flow.
 
 ### Legacy callback composition
 
@@ -239,8 +280,8 @@ state and policy, fence the exact version, preserve RememberPolicy through MFA,
 atomically reserve/apply/finalize, and recover before retrying unknown completion.
 Never treat this result as active-state or local authentication authority.
 
-Redirect initiation, browser credential delivery and HTTP completion,
-prompt/button initialization, login hints, prompt dismissal/cancellation signals,
+Durable redirect initiation, browser credential delivery and HTTP completion,
+browser initialization/execution, login hints, prompt dismissal/cancellation signals,
 email verification/linking policy, HTTP parsing and
 live browser/FedCM interoperability are not implemented. No raw claim API or
 email/domain assertion is fabricated to cover those gaps. The selected origin

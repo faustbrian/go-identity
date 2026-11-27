@@ -2,12 +2,20 @@
 
 ## Unreleased
 
+- Add explicitly selected redirect-button options and a typed launch projection
+  from the separately configured Google redirect validator and original
+  provider-bound transaction. Derive the registered login URI, client, base64url
+  nonce, canonical flow-ID button state, exact parent origin and original
+  lifetime without accepting replacement launch values. Existing prompt/popup
+  constructors and JSON remain unchanged. This non-authoritative projection
+  issues/consumes no state and requires native fresh-commit admission before
+  release; it supplies no renderer, HTTP decoder or browser qualification.
 - Add explicitly configured read-only provider-bound Google button redirect
   validation with an exact same-origin HTTPS endpoint. Preserve original mode,
   nonce, provider/client, policy, cookie, cutoff and RememberPolicy; require the
   separate Google double-submit CSRF proof before JWT verification and recheck
-  original expiry afterwards. Existing callback constructors and browser-start
-  options remain unchanged; redirect initiation, HTTP delivery and live browser
+  original expiry afterwards. Existing callback constructors remain unchanged;
+  durable redirect initiation, HTTP delivery and live browser
   interoperability are not supplied.
 - Add an immutable, redacted browser-start request that retains the exact
   bounded transport context, retry key, prompt/button and resolved Remember

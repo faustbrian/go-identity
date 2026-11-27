@@ -78,7 +78,7 @@ const (
 // OneTapButtonConfig is copied by NewOneTapButtonOptions. Type, Theme and Size
 // are required closed choices. Width is a minimum in pixels; zero omits the
 // setting, while positive values must not exceed GIS's 400-pixel maximum.
-// This slice supports popup UX only; there is no redirect or callback input.
+// Delivery is selected separately; there is no redirect URL or callback input.
 type OneTapButtonConfig struct {
 	Type  ButtonType
 	Theme ButtonTheme
@@ -86,7 +86,7 @@ type OneTapButtonConfig struct {
 	Width uint16
 }
 
-// OneTapButtonOptions is an immutable selected subset of GIS popup-button
+// OneTapButtonOptions is an immutable selected subset of GIS button
 // options. Its zero value is invalid. It grants no initiation authority.
 type OneTapButtonOptions struct {
 	config OneTapButtonConfig
@@ -128,21 +128,27 @@ const (
 	BrowserStartPrompt BrowserStartExperience = "prompt"
 	// BrowserStartPopupButton selects the GIS button with popup UX.
 	BrowserStartPopupButton BrowserStartExperience = "popup_button"
+	// BrowserStartRedirectButton selects only the GIS button with redirect UX.
+	BrowserStartRedirectButton BrowserStartExperience = "redirect_button"
 )
 
 // ButtonUXMode is the GIS initialization UX mode used by this button slice.
 type ButtonUXMode string
 
-// ButtonPopup is the only supported button UX mode; GIS delivers its credential
-// to the application's JavaScript callback, not to a login_uri redirect.
-const ButtonPopup ButtonUXMode = "popup"
+const (
+	// ButtonPopup delivers the credential to a JavaScript callback.
+	ButtonPopup ButtonUXMode = "popup"
+	// ButtonRedirect posts the credential to the exact configured login_uri.
+	ButtonRedirect ButtonUXMode = "redirect"
+)
 
-// BrowserStartOptions is an immutable, closed choice of prompt OR popup-button
-// options. Its zero value is invalid; use NewBrowserStartOptions. Concurrent
+// BrowserStartOptions is an immutable, closed choice of prompt, popup-button or
+// redirect-button options. Its zero value is invalid; use a constructor. Concurrent
 // reads are safe. It neither starts a transaction nor releases a credential.
 type BrowserStartOptions struct {
-	prompt OneTapPromptOptions
-	button OneTapButtonOptions
+	prompt   OneTapPromptOptions
+	button   OneTapButtonOptions
+	redirect bool
 }
 
 // NewBrowserStartOptions accepts exactly one constructor-created option and one
@@ -154,6 +160,17 @@ func NewBrowserStartOptions(prompt OneTapPromptOptions, button OneTapButtonOptio
 	return BrowserStartOptions{prompt: prompt, button: button}, nil
 }
 
+// NewBrowserRedirectStartOptions selects only a constructor-created GIS button
+// with redirect UX. It accepts no prompt, callback, login_uri or state. Native
+// execution must bind the selection to its original provider-bound transaction.
+// A zero button returns redacted InvalidInput without IO.
+func NewBrowserRedirectStartOptions(button OneTapButtonOptions) (BrowserStartOptions, error) {
+	if !button.valid {
+		return BrowserStartOptions{}, failure(InvalidInput, nil)
+	}
+	return BrowserStartOptions{button: button, redirect: true}, nil
+}
+
 // PromptProjection is a detached, non-authoritative typed prompt option copy.
 // Changing or decoding it cannot construct OneTapPromptOptions.
 type PromptProjection struct {
@@ -161,7 +178,7 @@ type PromptProjection struct {
 	CancelOnTapOutside bool          `json:"cancel_on_tap_outside"`
 }
 
-// ButtonProjection is a detached, non-authoritative typed popup-button option
+// ButtonProjection is a detached, non-authoritative typed button option
 // copy. UXMode belongs to GIS initialization; the other fields describe button
 // rendering. Width is numeric here; GIS documents its render width as a string.
 // This is not a complete object to pass directly to either GIS method.
@@ -198,8 +215,12 @@ func (options BrowserStartOptions) Projection() (BrowserStartProjection, error) 
 		}, nil
 	}
 	config := options.button.config
+	experience, mode := BrowserStartPopupButton, ButtonPopup
+	if options.redirect {
+		experience, mode = BrowserStartRedirectButton, ButtonRedirect
+	}
 	return BrowserStartProjection{
-		Experience: BrowserStartPopupButton,
-		Button:     &ButtonProjection{UXMode: ButtonPopup, Type: config.Type, Theme: config.Theme, Size: config.Size, Width: config.Width},
+		Experience: experience,
+		Button:     &ButtonProjection{UXMode: mode, Type: config.Type, Theme: config.Theme, Size: config.Size, Width: config.Width},
 	}, nil
 }
