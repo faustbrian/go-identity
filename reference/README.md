@@ -1,5 +1,28 @@
 # Identity reference composition
 
+## Production OAuth preview callback
+
+Use `NewOAuthProxyProduction` with a dedicated production PostgreSQL pool,
+the native forward and authenticated start configurations, and the selected
+provider and encrypted handoff codec. The production owner has no account,
+identity mutation, or session service. Use its typed `Start` only from the
+trusted preview integration, and disclose the provider authorization only
+after the preview acknowledges binding the original browser.
+
+Enable `HTTP` separately and mount `Handler` for the exact configured HTTPS
+`GET /oauth2/callback/proxy`; register that same URI with the provider. Use
+the shared provider callback limiter and a counted, audited evaluator with
+`Policy.WithOAuthProxyForward`. `OpenAPI` describes only this selected route.
+Without `HTTP`, there is no route or advertised operation. Never log callback
+queries, provider responses, redirect headers, or encrypted handoffs.
+
+Install the native owner histories before serving: kernel directory and
+command preparation (including forward then start erasure), the OAuth base
+and proxy transaction schema, capability, audit and lifecycle outbox, and
+the selected rate and risk storage. The constructor does not apply migrations.
+The preview deployment uses a distinct database and session owner; this
+production entry point neither serves its landing page nor issues its session.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose a dedicated production OAuth preview owner with authenticated native
+  Start and an independently selected provider callback. The production owner
+  has no identity, account or session mutation service.
+
 - Managed SCIM User PATCH deactivation now selects the existing directory
   membership history and withdraws the exact source with the inactive
   projection. Independent access and global user status are preserved.
