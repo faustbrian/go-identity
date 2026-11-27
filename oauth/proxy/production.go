@@ -116,6 +116,7 @@ type ProductionCallback struct {
 	profile    oauth.ProviderProfile
 	codec      *oauth.ProxyOIDCEvidenceCodec
 	store      ProductionCallbackStore
+	command    ProductionCallbackCommandStore
 	clock      oauth.Clock
 	targets    map[string]PreviewTarget
 }
@@ -131,7 +132,14 @@ func NewProductionCallback(c ProductionCallbackConfig) (*ProductionCallback, err
 }
 
 func newProductionCallback(c ProductionCallbackConfig, provider callbackProviderExchange) (*ProductionCallback, error) {
-	if !identifier(c.ProductionDeployment) || c.Codec == nil || c.Store == nil || c.Clock == nil || len(c.Targets) == 0 || len(c.Targets) > 64 {
+	if c.Store == nil {
+		return nil, CallbackInvalid
+	}
+	return buildProductionCallback(c, provider)
+}
+
+func buildProductionCallback(c ProductionCallbackConfig, provider callbackProviderExchange) (*ProductionCallback, error) {
+	if !identifier(c.ProductionDeployment) || c.Codec == nil || c.Clock == nil || len(c.Targets) == 0 || len(c.Targets) > 64 {
 		return nil, CallbackInvalid
 	}
 	profile := provider.Profile()
@@ -178,7 +186,7 @@ const storageBudget = 5 * time.Second
 // reservation, a bounded detached context records the disposition, but a
 // handoff is never disclosed after cancellation or original expiry.
 func (p *ProductionCallback) Handle(ctx context.Context, receivedCallback, rawQuery string) (result CallbackResult, err error) {
-	if p == nil || ctx == nil || p.store == nil || receivedCallback != p.profile.RedirectURI || ctx.Err() != nil {
+	if p == nil || ctx == nil || (p.store == nil && p.command == nil) || receivedCallback != p.profile.RedirectURI || ctx.Err() != nil {
 		return CallbackResult{}, CallbackInvalid
 	}
 	defer func() {
@@ -201,6 +209,9 @@ func (p *ProductionCallback) Handle(ctx context.Context, receivedCallback, rawQu
 		ProviderID: p.profile.ID, ProviderVersion: p.profile.Version, Issuer: p.profile.Issuer, ClientID: p.profile.ClientID,
 		ProviderDenied: query.Denied(),
 	}
+	if p.command != nil {
+		return p.executeCommand(ctx, lookup, input)
+	}
 	reserveCtx, stop := context.WithTimeout(ctx, storageBudget)
 	defer stop()
 	original, err := p.store.Reserve(reserveCtx, lookup)
@@ -216,35 +227,46 @@ func (p *ProductionCallback) Handle(ctx context.Context, receivedCallback, rawQu
 	if err != nil || original.ID == ([32]byte{}) {
 		return CallbackResult{}, CallbackReconcile
 	}
+	prepared := p.prepareOriginal(ctx, lookup, input, original)
+	defer clear(prepared.envelope)
+	result, err = p.finalize(ctx, original, prepared.disposition, prepared.envelope)
+	if err == nil && !prepared.disclosableAt(p.clock.Now()) {
+		clear(result.envelope)
+		return CallbackResult{}, CallbackReconcile
+	}
+	return result, err
+}
+
+func (p *ProductionCallback) prepareOriginal(ctx context.Context, lookup CallbackLookup, input identity.OAuthCallbackInput, original OriginalCallback) CallbackPrepared {
 	if !p.matchesOriginal(lookup, original) {
-		return p.finalize(ctx, original, CallbackNeedsReconciliation, nil)
+		return CallbackPrepared{disposition: CallbackNeedsReconciliation}
 	}
 	if lookup.ProviderDenied || ctx.Err() != nil || !p.current(original.Binding) {
-		return p.finalize(ctx, original, CallbackRejected, nil)
+		return CallbackPrepared{disposition: CallbackRejected}
 	}
 	work, cancel := context.WithTimeout(ctx, original.Binding.ExpiresAt.Sub(p.clock.Now()))
 	defer cancel()
 	proof, err := p.provider.Exchange(work, input, original.Verifier, original.Nonce)
 	if err != nil {
-		return p.finalize(ctx, original, exchangeDisposition(err), nil)
+		return CallbackPrepared{disposition: exchangeDisposition(err)}
 	}
 	if work.Err() != nil || !p.current(original.Binding) || !proof.EvidenceExpiresAt().After(p.clock.Now()) {
-		return p.finalize(ctx, original, CallbackRejected, nil)
+		return CallbackPrepared{disposition: CallbackRejected}
 	}
 	artifact, err := p.codec.Seal(work, original.Binding, proof)
 	if err != nil {
-		return p.finalize(ctx, original, CallbackNeedsReconciliation, nil)
+		return CallbackPrepared{disposition: CallbackNeedsReconciliation}
 	}
-	defer clear(artifact)
 	if work.Err() != nil || !p.current(original.Binding) || !proof.EvidenceExpiresAt().After(p.clock.Now()) {
-		return p.finalize(ctx, original, CallbackRejected, nil)
+		clear(artifact)
+		return CallbackPrepared{disposition: CallbackRejected}
 	}
-	result, err = p.finalize(ctx, original, CallbackForwarded, artifact)
-	if err == nil && !proof.EvidenceExpiresAt().After(p.clock.Now()) {
-		clear(result.envelope)
-		return CallbackResult{}, CallbackReconcile
+	until := proof.EvidenceExpiresAt()
+	if original.Binding.ExpiresAt.Before(until) {
+		until = original.Binding.ExpiresAt
 	}
-	return result, err
+	return CallbackPrepared{disposition: CallbackForwarded, destination: original.Binding.PreviewRedirect,
+		envelope: artifact, issuedAt: original.Binding.IssuedAt, until: until}
 }
 
 func callbackState(ctx context.Context, query oauth.QueryCallback) ([32]byte, identity.OAuthCallbackInput, error) {

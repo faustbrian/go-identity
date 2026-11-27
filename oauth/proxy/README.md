@@ -11,6 +11,14 @@ the original state and fence its current authority before releasing PKCE. A
 trusted HTTP adapter supplies the actual registered callback URI and raw query to
 `Handle`. It must never derive the trusted URI from unverified request headers.
 
+Native adapters that already own reservation, preparation and settlement can
+use `NewProductionCommandCallback` instead, passing a
+`ProductionCallbackCommandStore` and leaving `ProductionCallbackConfig.Store`
+nil. The adapter runs the supplied synchronous generation only after its
+original durable reservation and generation marker. It must acknowledge the
+commit before returning. Retained evidence may be reconciled without invoking
+the provider again or giving a replay a fresh handoff.
+
 On success, `Handle` returns an encrypted result and the exact registered
 destination only after token disposal and acknowledged settlement. It does not
 set cookies or write local identity state. Do not log callback queries or the

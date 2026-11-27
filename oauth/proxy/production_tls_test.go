@@ -2,6 +2,7 @@ package oauthproxy
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -23,6 +24,15 @@ import (
 )
 
 func TestProductionCallbackTLSHandoffRequiresConfirmedDisposalAndSettlement(t *testing.T) {
+	testProductionTLSHandoff(t, false)
+}
+
+func TestProductionCommandCallbackTLSHandoffRequiresAcknowledgedCommit(t *testing.T) {
+	testProductionTLSHandoff(t, true)
+}
+
+func testProductionTLSHandoff(t *testing.T, coordinated bool) {
+	t.Helper()
 	for _, tc := range []struct {
 		name                string
 		revocationStatus    int
@@ -88,10 +98,31 @@ func TestProductionCallbackTLSHandoffRequiresConfirmedDisposalAndSettlement(t *t
 			if tc.loseAcknowledgement {
 				fixture.store.finishErr = errors.New("local simulated lost settlement acknowledgement")
 			}
-			callback, err := NewProductionCallback(ProductionCallbackConfig{
+			config := ProductionCallbackConfig{
 				ProductionDeployment: "production-a", Provider: exchange, Codec: codec,
-				Store: fixture.store, Clock: fixture.clock, Targets: []PreviewTarget{fixture.target},
-			})
+				Clock: fixture.clock, Targets: []PreviewTarget{fixture.target},
+			}
+			var callback *ProductionCallback
+			if coordinated {
+				callback, err = NewProductionCommandCallback(config, callbackCommandFunc(func(ctx context.Context, lookup CallbackLookup, generate CallbackGeneration) error {
+					original, err := fixture.store.Reserve(ctx, lookup)
+					if err != nil {
+						return err
+					}
+					prepared, err := generate(ctx, original)
+					if err != nil {
+						fixture.store.terminal = prepared.Disposition() // Observed, not a durably settled disposition.
+						return err
+					}
+					if !prepared.ExpiresAt().Equal(fixture.now.Add(time.Minute)) {
+						t.Error("prepared handoff did not retain the original earliest expiry")
+					}
+					return fixture.store.Finalize(ctx, original.ID, prepared.Disposition(), prepared.Envelope())
+				}))
+			} else {
+				config.Store = fixture.store
+				callback, err = NewProductionCallback(config)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
