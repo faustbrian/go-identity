@@ -44,7 +44,7 @@ require (
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261126214320-551488061e87
 	github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401
 	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13
-	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127035403-ec6033dc04e2
+	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127050335-83d544e35ba8
 	github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d
 	github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127040344-2e5e19bf1b03
 	github.com/faustbrian/go-identity/otp v0.0.0-20261023111815-6bc180019089

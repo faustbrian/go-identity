@@ -137,6 +137,8 @@ github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f1
 github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13/go.mod h1:C1CSA6cV2fLAxvvz5wFAoGqiy+W2yXKt2hZLV5yQysk=
 github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127035403-ec6033dc04e2 h1:/6KHY7ECoer32ORgh6nZBjzKKdXJHOP5j6qQDEjIZ4s=
 github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127035403-ec6033dc04e2/go.mod h1:cz74bU4Bfxh9MwpxTbMm4IVhI0pdFapVxh9e6wF4pYM=
+github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127050335-83d544e35ba8 h1:6VD78lb2OWfInr2GFnLOfQWY7k+kYStA85j1DOtujto=
+github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261127050335-83d544e35ba8/go.mod h1:cz74bU4Bfxh9MwpxTbMm4IVhI0pdFapVxh9e6wF4pYM=
 github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d h1:uvXELTmqPm4UL6u/VufQpLRO9lHsMSdRVSsHLHOdJ68=
 github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d/go.mod h1:cvLFPOaYPG+Wi8i49c/vc/g1La47QYi27So/Y6lDWa0=
 github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127040344-2e5e19bf1b03 h1:zQm/x8yZHh/jhQAMCght72O6engl8Sa/2bR+GxK8Fw0=
