@@ -28,6 +28,10 @@ func scimResourceOperationPrefix(op OperationDescriptor) string {
 			if op.Route.Method == http.MethodPatch {
 				return scimGroupPathPrefix
 			}
+		case "identity.scim.group-delete":
+			if op.Route.Method == http.MethodDelete {
+				return scimGroupPathPrefix
+			}
 		}
 	}
 	return ""

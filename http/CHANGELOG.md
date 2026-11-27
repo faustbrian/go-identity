@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Dispatch an explicitly selected SCIM Group DELETE to one canonical Group
+  ID. Preserve its SCIM envelope without implying other Group or User routes.
+
 - Route the explicitly selected SCIM Group PATCH to one canonical resource
   ID with SCIM encoding and payload-size errors. Group PUT stays independent.
 
