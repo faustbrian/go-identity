@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Scope native OAuth proxy retirement to the original Apply invocation,
+  tenant, flow, issuing command and exact grant role. Keep retirement
+  separate from authentication and uncertain provider exchange outcomes.
+
 - Add a closed native OAuth proxy initiation plan. Only the prepared proxy
   owner can stage its single forward grant, bound to the original request
   and encrypted custody. Append the optional start erasure migration before

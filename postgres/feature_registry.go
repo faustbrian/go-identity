@@ -108,6 +108,9 @@ func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperatio
 	if op.OperationID == oauthProxyStartPurpose {
 		return op == OAuthProxyStartOperation() && d == OAuthProxyStartDescriptor()
 	}
+	if op.OperationID == oauthProxyRetirementOperation {
+		return op == OAuthProxyOriginRetirementOperation() && d == OAuthProxyOriginRetirementDescriptor()
+	}
 	if op.OperationID == oneTapStartPurpose {
 		return op == OneTapStartOperation() && d == oneTapStartDescriptor()
 	}

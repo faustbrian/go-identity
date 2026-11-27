@@ -38,6 +38,23 @@ original replay remain with the existing coordinator. Recovery never reconstruct
 success from a present user; all frozen participants must prove noncommit before
 releasing an expired pending command.
 
+## OAuth proxy origin retirement
+
+`NewOAuthProxyOriginRetirementCommand` selects one production forward grant
+or one preview callback grant for the exact issuing command and flow. The
+anonymous target and correlation name the original custody, not a user or
+an authenticated actor. A distinct source command and version bind the
+reason for retirement to the frozen mutation. Use the retirement descriptor
+and lifecycle declaration with an ordinary audited feature command.
+
+During the original native Apply, `Work.OAuthProxyOriginRetirementScope`
+returns the exact scope to the capability adapter. The OAuth PostgreSQL
+owner must independently authenticate its original custody, verify current
+retirement authority, and lock the relevant record in that Work before it
+uses this scope. This operation does not prove provider disable, classify
+an unknown exchange, finalize an authentication callback, or release any
+credential. It does not open another connection or transaction.
+
 ## OAuth proxy initiation preparation
 
 `OAuthProxyStartOperation` selects the native prepared start only. Its original

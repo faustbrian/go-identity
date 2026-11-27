@@ -65,6 +65,11 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if oauthProxyRetirementSelected(plan) {
+		if _, ok := decodeOAuthProxyRetirement(command); !ok {
+			return invalidPlan()
+		}
+	}
 	if plan.Feature != nil && plan.Feature.Operation == SSOSAMLIDPArrivalOperation() && !plainSSOSAMLIDPArrival(command) {
 		return invalidPlan()
 	}
@@ -302,6 +307,9 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		if !gated || !final || !validOAuthProxyStartPlan(b, p) || preparation != (p.CapabilityIssuance == nil) {
 			return nil, invalidPlan()
 		}
+	}
+	if oauthProxyRetirementSelected(p) && preparation {
+		return nil, invalidPlan()
 	}
 	if p.SCIMBulkDenial != 0 {
 		if _, ok := feature.contributor.(SCIMBulkChildFailureContributor); !ok || preparation {
