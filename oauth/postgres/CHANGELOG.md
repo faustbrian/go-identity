@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the opt-in native production OAuth preview callback. Match the original
+  sealed transaction and one-use proof, open PKCE only after acknowledged
+  reservation, and atomically settle the outcome without production identity or
+  session effects. Replay and unknown settlement return no handoff. HTTP,
+  browser initiation and preview session composition remain separate.
+
 - Add the opt-in, forward-only proxy custody migration after the base OAuth
   migration. It creates an empty table, leaves existing rows unchanged, and
   does not enable a callback. Keep the expanded schema on code rollback.

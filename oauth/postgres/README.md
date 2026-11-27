@@ -26,6 +26,28 @@ RP verifier AAD schema. No new authority, journal, signup or email merge is adde
 Controlled signed-token/native PostgreSQL consumers do not claim live Google
 interoperability or complete provider-catalog qualification.
 
+## Production OAuth preview callback
+
+Install `ProxyTransactionMigrationSource` after the base OAuth schema. Select
+the identity coordinator's directory, preparation, external-admission and proxy
+preparation-erasure histories, and the capability, audit and lifecycle owners.
+Configure `NewProxyForwardService` with a production deployment, primary pool,
+service actor, policy/authority IDs and retained state and wrapping keys. Pass
+the returned service to `oauthproxy.NewProductionCommandCallback` for the same
+deployment and exact configured provider and preview targets.
+
+The original transaction must already be durably recorded. Generation can open
+its PKCE verifier only after the coordinator acknowledges exclusive reservation
+and the generation marker. A provider denial never opens the verifier. The
+callback atomically finalizes the original proof, records the known disposition,
+erases temporary proof and PKCE custody, and commits `identity.oauth.use_proxy`
+with the lifecycle effect. No production user, account or session is created or
+updated. A replay cannot disclose a previously committed result. An unknown
+outcome returns a redacted reconciliation error and never repeats an uncertain
+provider exchange. An exposed callback still needs counted provider-callback
+admission at its transport boundary. This adapter does not enable initiation,
+HTTP or preview session issuance.
+
 ## Google One Tap browser start
 
 Install `OneTapCallbackGrantMigrationSource` after `MigrationSource`, using
