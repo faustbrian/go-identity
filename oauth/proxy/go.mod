@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-identity v0.0.0-20261109180909-8901e7f09812
 	github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401
 	github.com/faustbrian/go-identity/session v0.0.0-20261028180115-9a0e8a020cce
@@ -16,7 +17,6 @@ require (
 	github.com/faustbrian/go-authentication v1.0.0 // indirect
 	github.com/faustbrian/go-authentication/oidc v1.0.1 // indirect
 	github.com/faustbrian/go-authentication/oidc/v2 v2.0.1-0.20261113095502-c3c7b7cba8f4 // indirect
-	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68 // indirect
 	github.com/faustbrian/go-authentication/v3 v3.0.0 // indirect
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060 // indirect
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec // indirect

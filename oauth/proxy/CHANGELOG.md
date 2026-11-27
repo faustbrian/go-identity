@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add trusted preview initiation admission with one configured HTTPS registration
+  and bounded bearer authentication. Exact subject, issuer, sole audience and
+  proxy-start scope are required before returning unchanged command, transaction,
+  request fingerprint and resolved remember bindings. Cancellation, panic and
+  authentication failures return only redacted typed errors; admission has no
+  provider, persistence, issuance or HTTP effects.
+
 - Validate callback tenant bindings as exact Directory IDs, preserving uppercase
   canonical IDs while rejecting malformed values without provider work or a
   handoff. Deployment, recipient and claims-profile slug rules are unchanged.
