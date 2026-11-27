@@ -16,12 +16,21 @@ the shared provider callback limiter and a counted, audited evaluator with
 Without `HTTP`, there is no route or advertised operation. Never log callback
 queries, provider responses, redirect headers, or encrypted handoffs.
 
-Install the native owner histories before serving: kernel directory and
-command preparation (including forward then start erasure), the OAuth base
-and proxy transaction schema, capability, audit and lifecycle outbox, and
-the selected rate and risk storage. The constructor does not apply migrations.
-The preview deployment uses a distinct database and session owner; this
-production entry point neither serves its landing page nor issues its session.
+Before serving, build `NewOAuthProxyProductionMigrations` with a migration
+pool targeting the same dedicated database. Set `Schema`, `GlobalAuthorityID`
+and `TenantID` to match production; set `HTTPRiskSchema` to the durable counter
+schema only when selecting the HTTP callback. `Check` and `Plan` are read-only.
+Set the explicit `Apply` policy and submit the returned plan with a deployment
+command ID and idempotency key. Retry a pending or ambiguous apply using the
+same request; inspect `Check` again before serving. Do not change applied
+schema or bootstrap authority IDs, or use this owner to adopt manually
+installed schemas. The native audit role preflight still applies.
+
+This profile installs the kernel directory and command preparation, the OAuth
+base and proxy custody, capability, audit, and root and identity outbox. It
+does not require password, OTP, session, delivery or Valkey stores. The
+preview deployment uses a different database and session owner; production
+neither serves the preview landing page nor issues the preview session.
 
 ## Preview-side OAuth sign-in
 

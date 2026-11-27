@@ -58,8 +58,8 @@ type OAuthProxyProduction struct {
 
 // NewOAuthProxyProduction assembles native Start and the acknowledged command
 // callback against the dedicated production pool. It performs no database or
-// provider IO. Install the existing proxy, command, capability, audit and
-// directory histories before invoking Start or mounting the handler.
+// provider IO. Use NewOAuthProxyProductionMigrations to install the selected
+// native histories before invoking Start or mounting the handler.
 func NewOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration) (*OAuthProxyProduction, error) {
 	invalid := identity.InvalidInputError{Field: "reference_oauth_proxy_production"}
 	if c.Codec == nil || nilServerDependency(c.Clock) {

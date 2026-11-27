@@ -290,23 +290,24 @@ type VelocityStoreConfiguration struct {
 type StoreSet struct{ state *storeState }
 
 type storeState struct {
-	pool       *database.Pool
-	mu         sync.Mutex
-	closed     bool
-	active     int
-	drained    chan struct{}
-	lifetime   context.Context
-	cancel     context.CancelFunc
-	tenants    map[string]*tenantRecovery
-	native     riskvalkey.VelocityRecovery
-	primary    riskpostgres.VelocityRecovery
-	config     VelocityStoreConfiguration
-	policy     risk.Policy
-	keys       []risk.CounterDigestKey
-	features   *featureState
-	migrations *MigrationApplyPolicy
-	httpRate   *httpRateState
-	durable    bool
+	pool                   *database.Pool
+	mu                     sync.Mutex
+	closed                 bool
+	active                 int
+	drained                chan struct{}
+	lifetime               context.Context
+	cancel                 context.CancelFunc
+	tenants                map[string]*tenantRecovery
+	native                 riskvalkey.VelocityRecovery
+	primary                riskpostgres.VelocityRecovery
+	config                 VelocityStoreConfiguration
+	policy                 risk.Policy
+	keys                   []risk.CounterDigestKey
+	features               *featureState
+	migrations             *MigrationApplyPolicy
+	httpRate               *httpRateState
+	durable                bool
+	productionProxyHistory []migrationHistory
 }
 
 type tenantRecovery struct {

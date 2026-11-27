@@ -55,9 +55,9 @@ func (a oauthProxyProductionPreviewAuthentication) Authenticate(ctx context.Cont
 func TestReferencePostgresOAuthProxyProductionDenial(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
-	f := newLiveStoresProfile(t, ctx, true, true)
+	f := newLiveStoresProfile(t, ctx, false, true)
 	_, c := oauthProxyProductionConfiguration(t)
-	installOAuthProxyProductionFixture(t, ctx, f, c)
+	applyOAuthProxyProductionMigrations(t, ctx, f, c)
 
 	principal, err := authentication.NewPrincipal(authentication.PrincipalSpec{
 		Subject: string(c.Start.Preview.ActorID), Method: "bearer", Issuer: c.Start.Preview.Issuer,

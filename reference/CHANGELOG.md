@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bootstrap standalone production OAuth preview forwarding through the existing
+  Reference Check, Plan and Apply runner, without a password or session graph.
+
 - Select OAuth preview binding, completion and strict session logout in the
   existing Reference session graph. The trusted Go bridge releases provider
   authorization only after the original preview browser is bound.

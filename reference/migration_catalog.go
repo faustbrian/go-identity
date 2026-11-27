@@ -40,6 +40,9 @@ type migrationGuard struct {
 }
 
 func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, error) {
+	if s.state.productionProxyHistory != nil {
+		return s.state.productionProxyHistory, ctx.Err()
+	}
 	catalog, err := s.baseMigrationCatalog(ctx)
 	if err != nil {
 		return nil, err
