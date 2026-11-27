@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/faustbrian/go-authorization/v3"
@@ -25,6 +26,9 @@ type oneTapVerifiedCallbackGrant struct {
 	Grant            kernel.CapabilityPlan
 	IssuedAt         time.Time
 	CiphertextDigest [32]byte
+	// Keep private original device context behind a closure so diagnostic
+	// traversal cannot disclose it before a trusted completion uses it.
+	device func() string
 }
 
 // original must come from session/postgres.ReadProviderPreAuth, not browser
@@ -49,7 +53,7 @@ func (s *OneTapStartService) loadOneTapCallbackGrant(ctx context.Context, origin
 	flow := original.Transaction.Binding
 	intent := flow.Intent
 	if original.Provider != s.selected || intent.TenantID != c.TenantID || intent.Action != oneTapStartOperationID ||
-		intent.Origin != c.Issuance.Origin || intent.PolicyID != c.Issuance.PolicyID || intent.PolicyVersion != c.Issuance.PolicyVersion {
+		intent.Origin != c.Issuance.Origin || intent.CallbackURL != c.Issuance.CallbackURL || intent.PolicyID != c.Issuance.PolicyID || intent.PolicyVersion != c.Issuance.PolicyVersion {
 		return out, identity.ForbiddenError{}
 	}
 	if _, err := session.NewProviderPreAuthTransaction(original); err != nil ||
@@ -105,6 +109,18 @@ func (s *OneTapStartService) loadOneTapCallbackGrant(ctx context.Context, origin
 		}
 		return out, err
 	}
+	switch s.selected.Mode {
+	case session.PreAuthProviderCallback:
+		if stored.Device != "" {
+			return out, identity.ForbiddenError{}
+		}
+	case session.PreAuthProviderRedirect:
+		if !rpASCII(stored.Device, 1, 128) || strings.ContainsRune(stored.Device, ' ') {
+			return out, identity.ForbiddenError{}
+		}
+	default:
+		return out, identity.ForbiddenError{}
+	}
 	meta := kernel.CapabilityPlan(stored.Grant)
 	if identity.CommandBinding(stored.Original) != b || meta.Purpose != oneTapCallbackPurpose || meta.MaxUses != 1 ||
 		meta.ReplayKeyVersion == 0 || meta.ProofFingerprint == ([32]byte{}) || !meta.ExpiresAt.Equal(flow.ExpiresAt) {
@@ -150,5 +166,9 @@ func (s *OneTapStartService) loadOneTapCallbackGrant(ctx context.Context, origin
 	}
 	out.Original, out.Grant = b, meta
 	out.IssuedAt, out.CiphertextDigest = flow.IssuedAt, sha256.Sum256(ciphertext)
+	if s.selected.Mode == session.PreAuthProviderRedirect {
+		device := stored.Device
+		out.device = func() string { return device }
+	}
 	return out, nil
 }

@@ -58,7 +58,8 @@ the exact registered canonical same-origin HTTPS `Issuance.CallbackURL` and a
 zero `Issuance.Cookie`. The endpoint must have a non-root literal path. Supply
 the distinct `onetap.NewBrowserRedirectStartRequest` to `StartRedirect`; this
 service rejects callback `Start`, and the callback start service rejects
-`StartRedirect`. `NewOneTapCompletionService` does not accept a redirect service.
+`StartRedirect`. The popup `NewOneTapCompletionService` does not accept a redirect
+service; redirect completion is separately selected below.
 
 Redirect start uses the existing request-key, counted admission, atomic session,
 capability, audit and lifecycle owners without a new table or replay mechanism.
@@ -81,8 +82,8 @@ encrypted callback grant for future original-cookie-bound completion. It is
 not disclosed in browser output or accepted as a redirect callback hint.
 Replay and explicit recovery return historical metadata without browser custody;
 unknown, failed or expired delivery releases no cookie token or launch. No Google
-endpoint is contacted. This slice does not enable redirect callback completion,
-HTTP decoding, cookie response handling or live browser interoperability.
+endpoint is contacted. Start does not enable callback completion, HTTP decoding,
+cookie response handling or live browser interoperability.
 
 ## Google One Tap callback and session
 
@@ -107,6 +108,32 @@ the returned `DeliveryValidUntil`; do not derive another deadline. A repeated
 browser request cannot disclose either token again. For unknown outcomes use
 the returned command ID with authorized `RecoverCallback` in the exact original
 flow scope. Recovery returns historical receipt metadata, not authentication.
+
+### Explicit Google redirect completion
+
+Select `NewOneTapRedirectCompletionService` with the original redirect start
+service and the same completion configuration, including any trusted exact
+`HostedDomain` restriction. Submit `OneTapRedirectCallbackRequest` to
+`RedirectCallback`; `Callback` remains popup-only, and the redirect constructor
+rejects a popup start service. No HTTP route or provider endpoint is installed.
+
+The request carries the original flow ID and opaque frontchannel cookie, Google's
+credential/double-submit values, the exact trusted initiating origin and registered
+redirect endpoint, and the trusted current peer address. It has no device field.
+Origin, endpoint, mode, bounded credential/CSRF shape and independent original
+cookie possession are checked before the original grant's sealed stable device
+is available to counted native risk. A popup grant must have no retained device;
+a redirect grant must retain the exact bounded device from its admitted start.
+The redirect intent has a separate HMAC domain and binds the exact endpoint;
+popup intent, session effects and cookie bytes remain unchanged.
+
+Signed credential, signed hosted-domain restriction, existing linked account,
+current authorization and known-empty MFA admission still use the existing
+owners. Session issuance, original browser/grant consumption and proof erasure
+remain one atomic commit. Fresh commitment alone delivers session bearer/CSRF;
+replay and `RecoverCallback` expose no credentials or refreshed deadline. This
+does not add signup/linking, a browser-selected device, a new replay store, HTTP
+decoding or live Google/browser interoperability proof.
 
 ## Existing-account signin
 

@@ -2,13 +2,22 @@
 
 ## Unreleased
 
+- Add separately selected native Google redirect completion with an exact
+  registered endpoint, original frontchannel cookie possession and Google's
+  double-submit proof. Count only the authenticated sealed start device and
+  trusted current network; expose no redirect device input. Reuse signed-domain,
+  linked-account/MFA, atomic session/consume/erasure and tokenless recovery
+  owners while preserving popup intent and effect framing. HTTP and browser
+  qualification remain unselected.
+
 - Add explicitly configured durable Google button redirect start using the
   existing keyed admission and atomic flow/grant/audit/lifecycle owners. Bind
   the exact mode and registered endpoint, retain trusted device only in the
   sealed grant, and release the path-bound frontchannel cookie with typed GIS
   launch only for a fresh commit. Replay/recovery stay tokenless; callback
   constructors and output remain separate, and popup framing is unchanged.
-  Redirect completion, HTTP delivery and browser qualification are not enabled.
+  Redirect completion is selected separately; HTTP delivery and browser
+  qualification are not enabled.
 
 - Add opt-in native Google One Tap completion for an existing linked account
   with known-empty MFA. Commit browser and capability consumption, sealed-proof

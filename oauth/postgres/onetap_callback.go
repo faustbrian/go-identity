@@ -49,8 +49,20 @@ type OneTapCompletionService struct {
 // NewOneTapCompletionService freezes trusted callback policy without IO,
 // entropy or migration. It does not select link, signup, or MFA bypass.
 func NewOneTapCompletionService(start *OneTapStartService, c OneTapCompletionConfig) (*OneTapCompletionService, error) {
+	return newOneTapCompletionService(start, c, session.PreAuthProviderCallback)
+}
+
+// NewOneTapRedirectCompletionService explicitly selects completion of an
+// original NewOneTapRedirectStartService flow at its exact registered endpoint.
+// HostedDomain remains the trusted exact signed-claim restriction. This does not
+// enable HTTP, signup, linking or an MFA bypass; all existing effect owners apply.
+func NewOneTapRedirectCompletionService(start *OneTapStartService, c OneTapCompletionConfig) (*OneTapCompletionService, error) {
+	return newOneTapCompletionService(start, c, session.PreAuthProviderRedirect)
+}
+
+func newOneTapCompletionService(start *OneTapStartService, c OneTapCompletionConfig, mode session.PreAuthProviderMode) (*OneTapCompletionService, error) {
 	invalid := identity.InvalidInputError{Field: "oauth_onetap_completion"}
-	if start == nil || start.config == nil || start.selected.Mode != session.PreAuthProviderCallback || !rpASCII(c.ConfigurationID, 1, 128) || len(c.FlowKeys) < 1 || len(c.FlowKeys) > 32 || c.Issuer.Authority != nil {
+	if start == nil || start.config == nil || start.selected.Mode != mode || !rpASCII(c.ConfigurationID, 1, 128) || len(c.FlowKeys) < 1 || len(c.FlowKeys) > 32 || c.Issuer.Authority != nil {
 		return nil, invalid
 	}
 	base := start.config()
@@ -66,8 +78,15 @@ func NewOneTapCompletionService(start *OneTapStartService, c OneTapCompletionCon
 			return nil, invalid
 		}
 	}
-	validator, err := onetap.NewProviderBoundValidator(onetap.ProviderBoundConfig{Provider: base.Provider, TenantID: base.TenantID,
-		Origin: base.Issuance.Origin, PolicyID: base.Issuance.PolicyID, PolicyVersion: base.Issuance.PolicyVersion, Clock: base.Issuance.Clock, HostedDomain: c.HostedDomain})
+	validation := onetap.ProviderBoundConfig{Provider: base.Provider, TenantID: base.TenantID,
+		Origin: base.Issuance.Origin, PolicyID: base.Issuance.PolicyID, PolicyVersion: base.Issuance.PolicyVersion, Clock: base.Issuance.Clock, HostedDomain: c.HostedDomain}
+	var validator *onetap.ProviderBoundValidator
+	var err error
+	if mode == session.PreAuthProviderRedirect {
+		validator, err = onetap.NewProviderBoundRedirectValidator(validation, base.Issuance.CallbackURL)
+	} else {
+		validator, err = onetap.NewProviderBoundValidator(validation)
+	}
 	if err != nil {
 		return nil, invalid
 	}
@@ -104,6 +123,20 @@ type OneTapCallbackRequest struct {
 	Device     string
 }
 
+// OneTapRedirectCallbackRequest borrows one decoded Google redirect credential.
+// Origin and Redirect must be the exact original initiating origin and registered
+// endpoint established by trusted transport, not raw form fields. FlowCookie is
+// the original path-bound frontchannel cookie; Google's CSRF remains separate.
+// Network is the trusted current peer address. There is deliberately no Device
+// field: counted device context comes only from the cookie-authenticated sealed
+// original start grant. Do not mutate borrowed fields during RedirectCallback.
+type OneTapRedirectCallbackRequest struct {
+	FlowID     identity.PreAuthTransactionID
+	FlowCookie auth.BearerCredential
+	Callback   onetap.Callback
+	Network    netip.Addr
+}
+
 // OneTapCallbackResult delivers bearer and CSRF custody only after a fresh
 // original commit. Recovery is separate and returns receipt metadata only.
 type OneTapCallbackResult struct {
@@ -133,12 +166,35 @@ func (s *OneTapCompletionService) coordinator(p *oneTapCallbackPhase) (*kernel.C
 // atomically. A browser retry cannot deliver credentials again. Use authorised
 // receipt-only recovery after an unknown outcome, not another callback.
 func (s *OneTapCompletionService) Callback(ctx context.Context, r OneTapCallbackRequest) (out OneTapCallbackResult, err error) {
-	if ctx == nil || s == nil || s.start == nil {
+	if s == nil || s.start == nil || s.start.selected.Mode != session.PreAuthProviderCallback {
+		return out, identity.InvalidInputError{Field: "oauth_onetap_callback"}
+	}
+	return s.callback(ctx, r)
+}
+
+// RedirectCallback completes only the explicitly selected redirect profile.
+// It authenticates the original flow cookie, exact mode/endpoint and separate
+// Google double-submit before loading sealed device context. The existing
+// coordinator then owns counted risk, signed credential/account/MFA admission,
+// session issuance, flow/grant consumption and erasure atomically. Only a fresh
+// commit can deliver a session bearer and CSRF token; recovery is receipt-only.
+func (s *OneTapCompletionService) RedirectCallback(ctx context.Context, r OneTapRedirectCallbackRequest) (out OneTapCallbackResult, err error) {
+	if s == nil || s.start == nil || s.start.selected.Mode != session.PreAuthProviderRedirect {
+		return out, identity.InvalidInputError{Field: "oauth_onetap_callback"}
+	}
+	if !r.Network.IsValid() || r.Network.Zone() != "" || r.Network.IsUnspecified() || r.Network.IsMulticast() {
+		return out, identity.ForbiddenError{}
+	}
+	return s.callback(ctx, OneTapCallbackRequest{FlowID: r.FlowID, FlowCookie: r.FlowCookie, Callback: r.Callback, Network: r.Network})
+}
+
+func (s *OneTapCompletionService) callback(ctx context.Context, r OneTapCallbackRequest) (out OneTapCallbackResult, err error) {
+	if ctx == nil {
 		return out, identity.InvalidInputError{Field: "oauth_onetap_callback"}
 	}
 	c := s.start.config()
 	x := r.Callback
-	if x.Origin != c.Issuance.Origin || x.Redirect != "" || len(x.CSRFCookies) != 1 || len(x.CSRFBody) != 1 ||
+	if x.Origin != c.Issuance.Origin || x.Redirect != c.Issuance.CallbackURL || len(x.CSRFCookies) != 1 || len(x.CSRFBody) != 1 ||
 		len(x.CSRFCookies[0]) < 1 || len(x.CSRFCookies[0]) > 1024 || len(x.CSRFBody[0]) < 1 || len(x.CSRFBody[0]) > 1024 ||
 		len(x.Credential.IDToken) == 0 || len(x.Credential.IDToken) > c.Provider.Profile().MaxTokenBytes ||
 		(!r.Network.IsValid() && r.Device == "") || r.Network.Zone() != "" || len(r.Device) > 128 {
@@ -146,6 +202,9 @@ func (s *OneTapCompletionService) Callback(ctx context.Context, r OneTapCallback
 	}
 	csrfCookie, csrfBody := sha256.Sum256([]byte(x.CSRFCookies[0])), sha256.Sum256([]byte(x.CSRFBody[0]))
 	if subtle.ConstantTimeCompare(csrfCookie[:], csrfBody[:]) != 1 {
+		return out, identity.ForbiddenError{}
+	}
+	if s.start.selected.Mode == session.PreAuthProviderRedirect && (!oneTapRedirectCSRFValue(x.CSRFCookies[0]) || !oneTapRedirectCSRFValue(x.CSRFBody[0])) {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.MaximumDuration)
@@ -166,6 +225,12 @@ func (s *OneTapCompletionService) Callback(ctx context.Context, r OneTapCallback
 		return out, err
 	}
 	defer grant.Proof.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
+	if s.start.selected.Mode == session.PreAuthProviderRedirect {
+		if grant.device == nil {
+			return out, identity.ForbiddenError{}
+		}
+		r.Device = grant.device()
+	}
 	b, err := oneTapCallbackBinding(grant.Original)
 	if err != nil {
 		return out, err
@@ -186,6 +251,9 @@ func (s *OneTapCompletionService) Callback(ctx context.Context, r OneTapCallback
 		return out, identity.ForbiddenError{}
 	}
 	intent := oneTapCallbackIntent(c.IntentKey, digest, x)
+	if s.start.selected.Mode == session.PreAuthProviderRedirect {
+		intent = oneTapRedirectCallbackIntent(c.IntentKey, digest, x)
+	}
 	cmd, err := identity.NewFeaturePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: kernel.OneTapCallbackOperation(), Fields: []identity.FeatureField{
 		{Name: "onetap.callback.intent", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: intent[:]}},
 		{Name: "onetap.callback.profile", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: s.profile[:]}},
@@ -280,6 +348,16 @@ func (OneTapCallbackRequest) MarshalJSON() ([]byte, error) {
 	return nil, session.ErrSecretSerialization
 }
 func (OneTapCallbackRequest) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+
+func (OneTapRedirectCallbackRequest) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("[REDACTED]"))
+}
+func (OneTapRedirectCallbackRequest) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+func (OneTapRedirectCallbackRequest) MarshalText() ([]byte, error) {
 	return nil, session.ErrSecretSerialization
 }
 
