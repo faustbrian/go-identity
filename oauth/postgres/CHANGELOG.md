@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the opt-in, forward-only proxy custody migration after the base OAuth
+  migration. It creates an empty table, leaves existing rows unchanged, and
+  does not enable a callback. Keep the expanded schema on code rollback.
+
 - Add separately selected native Google redirect completion with an exact
   registered endpoint, original frontchannel cookie possession and Google's
   double-submit proof. Count only the authenticated sealed start device and
