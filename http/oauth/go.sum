@@ -34,6 +34,8 @@ github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93 h1:3dVAt3uY
 github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
 github.com/faustbrian/go-identity/http v0.0.0-20261109202903-8112f3df2617 h1:ooKdEWxF9BUX4GSelXdhMx5rxldJxNfI3IU7c7qkhA4=
 github.com/faustbrian/go-identity/http v0.0.0-20261109202903-8112f3df2617/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
+github.com/faustbrian/go-identity/http v0.0.0-20261127005200-a24b915e2798 h1:q7/K59Cku+ZgVasa0KvQMjY360JgFvARybSY+GeiA0w=
+github.com/faustbrian/go-identity/http v0.0.0-20261127005200-a24b915e2798/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e h1:f0HjL3gZg2HQWn1Rmvi03kx0O3YiHqElNslzdDwx+xQ=
 github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e/go.mod h1:zzEa62EXtyMG/mVtF0gaBX8GyUAzgKcor2lp5xuuouw=
 github.com/faustbrian/go-identity/oauth v0.0.0-20261122013004-c5e094dcd9a9 h1:8fuqmwU71yMWhNuhiMQAqVpnijjOZznQzITJI6FRzA4=
@@ -42,6 +44,8 @@ github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57 h1:j8
 github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57/go.mod h1:a4z/upZrUScWow37uZElY+Ni6rvIrxirgbiDtWXDQJA=
 github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d h1:TPSdEEGLrjVNEePRv9IiPKrNL6OXkM8tGUzYgZ5SdsY=
 github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d/go.mod h1:TbM/KKYqIretHMDudfHb+L0Y/6jRSuFArlu1lJ4el9I=
+github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13 h1:eYz0iIKW2ubv9gNy+lJmsl9SejZQfYcon87bLwCPBds=
+github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13/go.mod h1:C1CSA6cV2fLAxvvz5wFAoGqiy+W2yXKt2hZLV5yQysk=
 github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d h1:uvXELTmqPm4UL6u/VufQpLRO9lHsMSdRVSsHLHOdJ68=
 github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d/go.mod h1:cvLFPOaYPG+Wi8i49c/vc/g1La47QYi27So/Y6lDWa0=
 github.com/faustbrian/go-identity/session v0.0.0-20261113041908-c370ef9887da h1:uC0hJNjmM0XnCcJs6XAfdIt/BPDWgbcIJetH0W8LN2k=
@@ -52,6 +56,8 @@ github.com/faustbrian/go-identity/session v0.0.0-20261126164520-77d5e9e2c065 h1:
 github.com/faustbrian/go-identity/session v0.0.0-20261126164520-77d5e9e2c065/go.mod h1:Gz2OXGEGnxdviC2a+vEcE0BfxAxaCZwNTHScUmh++P0=
 github.com/faustbrian/go-identity/session v0.0.0-20261126220500-cc979c08b313 h1:TKjgCOA1uM9CEcIb0wLEWxq0refDsbeLm1g3PogPZeA=
 github.com/faustbrian/go-identity/session v0.0.0-20261126220500-cc979c08b313/go.mod h1:Gz2OXGEGnxdviC2a+vEcE0BfxAxaCZwNTHScUmh++P0=
+github.com/faustbrian/go-identity/session v0.0.0-20261126235901-19a81db3fa1c h1:DPFPTXq/kv4t4Uo+5JEEud2a8uA9CwKgZ4wDAPR30O0=
+github.com/faustbrian/go-identity/session v0.0.0-20261126235901-19a81db3fa1c/go.mod h1:Gz2OXGEGnxdviC2a+vEcE0BfxAxaCZwNTHScUmh++P0=
 github.com/faustbrian/go-json-schema/v2 v2.0.0 h1:88kzwDCcP8Xo3SaDyUzc6oWtl83id9P6uY/gjgyQ/74=
 github.com/faustbrian/go-json-schema/v2 v2.0.0/go.mod h1:ikxluAloOz0MuH7up4K9tIpKVGO/Y8z72wQ/hpvwHn4=
 github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEWMARORc=

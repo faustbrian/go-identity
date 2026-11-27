@@ -7,6 +7,22 @@ exact selected `LinkStart`, `SigninStart` and/or `Callback` configuration and
 contribute it to `identity/http` composition. Native owners supply persistence,
 protocol and authentication; these handlers supply transport, not new engines.
 
+## Google One Tap redirect-button transport
+
+Select `NewOneTapRedirectStartFeature` and/or
+`NewOneTapRedirectCallbackFeature` instead of the popup variants on the same
+canonical routes. Start accepts an exact same-origin JSON button request with
+its retry key and signed initiating device. On a fresh commit, it returns a
+detached GIS launch projection and the original callback-path cookie.
+
+The callback accepts the Google HTML form with the original frontchannel
+cookie, canonical `state`, signed credential and matching `g_csrf_token`
+cookie/value. Install the router's `CORSOneTapRedirectNavigation` for the
+exact configured tenant destination; it grants no cross-origin script access.
+The callback does not require the Lax device cookie or trust sender `Origin`
+or `Referer`. Neither transport adds UI, retries an uncertain mutation, or
+reissues cookies on replay.
+
 ## Google One Tap popup transport
 
 `NewOneTapStartFeature` opts into the canonical keyed start POST and

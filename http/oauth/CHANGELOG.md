@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an explicit Google One Tap redirect-button Start and HTML form callback.
+  Document the selected wire profile, preserve the original path-bound flow
+  and Google double-submit proofs, and grant no cross-origin script access.
+
 - Add independently selected Google One Tap popup Start and credential
   callback routes. Keep cookie delivery tied to the fresh native outcome,
   preserve exact origin and browser custody, and expose no UI or redirect.

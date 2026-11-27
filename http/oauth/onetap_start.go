@@ -101,9 +101,10 @@ func NewOneTapStartFeature(c OneTapStartConfig) (identityhttp.Feature, error) {
 const maximumOneTapStartResponse = 16384
 
 type oneTapStartState struct {
-	facts   identityhttp.NetworkFacts
-	device  session.BrowserDevice
-	request onetap.BrowserStartRequest
+	facts           identityhttp.NetworkFacts
+	device          session.BrowserDevice
+	request         onetap.BrowserStartRequest
+	redirectRequest onetap.BrowserRedirectStartRequest
 }
 
 // NewOneTapStartHandler requires exact HTTPS tenant/Origin, a signed existing
@@ -115,7 +116,11 @@ type oneTapStartState struct {
 // There is no transport store, automatic retry, token redelivery or restart on
 // lost acknowledgement. The server owns raw IO/write deadlines.
 func NewOneTapStartHandler(c OneTapStartConfig) (http.Handler, error) {
-	if c.Start == nil || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || !oneTapStartVisible(c.ProviderID, 128) || !oneTapStartVisible(c.ClientID, 1024) {
+	return newOneTapStartHandler(c, nil)
+}
+
+func newOneTapStartHandler(c OneTapStartConfig, redirect *oneTapRedirectStartBinding) (http.Handler, error) {
+	if (c.Start == nil && redirect == nil) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || !oneTapStartVisible(c.ProviderID, 128) || !oneTapStartVisible(c.ClientID, 1024) {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	if _, err := identity.ParseIdentifierID(c.ProviderID); err != nil {
@@ -124,8 +129,14 @@ func NewOneTapStartHandler(c OneTapStartConfig) (http.Handler, error) {
 	if _, err := session.ResolveRememberPolicy(session.RememberDefault, c.Lifetime); err != nil {
 		return nil, identityhttp.ErrInvalidInput
 	}
-	flow, err := c.FlowCookie.DeletionAttributes()
-	if err != nil || flow.Name != "__Host-identity_flow" || flow.SameSite != http.SameSiteLaxMode {
+	var flow http.Cookie
+	var err error
+	if redirect == nil {
+		flow, err = c.FlowCookie.DeletionAttributes()
+	} else {
+		flow, err = redirect.cookie.DeletionAttributes()
+	}
+	if err != nil || (redirect == nil && (flow.Name != "__Host-identity_flow" || flow.SameSite != http.SameSiteLaxMode)) {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	deviceCookie, err := c.Device.Cookie.DeletionAttributes()
@@ -218,11 +229,16 @@ func NewOneTapStartHandler(c OneTapStartConfig) (http.Handler, error) {
 			if err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			options, remember, err := decodeOneTapStart(body, c.Lifetime)
+			options, remember, err := decodeOneTapStartMode(body, c.Lifetime, redirect != nil)
 			if err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			s.request, err = onetap.NewBrowserStartRequest(onetap.BrowserStartRequestSpec{TenantID: s.facts.TenantID(), Origin: s.facts.Origin(), Network: s.facts.ClientIP().String(), Device: s.device.DeviceID(), Key: key, Options: options, Remember: remember})
+			spec := onetap.BrowserStartRequestSpec{TenantID: s.facts.TenantID(), Origin: s.facts.Origin(), Network: s.facts.ClientIP().String(), Device: s.device.DeviceID(), Key: key, Options: options, Remember: remember}
+			if redirect == nil {
+				s.request, err = onetap.NewBrowserStartRequest(spec)
+			} else {
+				s.redirectRequest, err = onetap.NewBrowserRedirectStartRequest(spec)
+			}
 			return s, err
 		},
 		Authenticate: func(r *http.Request, s oneTapStartState) (oneTapStartState, error) {
@@ -250,6 +266,10 @@ func NewOneTapStartHandler(c OneTapStartConfig) (http.Handler, error) {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
+			if redirect != nil {
+				redirect.handle(w, r, s, delivery, reject)
+				return
+			}
 			out, err := c.Start(r.Context(), s.request)
 			if err != nil {
 				reject(w, r, err)
@@ -265,7 +285,8 @@ func NewOneTapStartHandler(c OneTapStartConfig) (http.Handler, error) {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
-			delivery.out, delivery.body, delivery.ctx = out, body, r.Context()
+			delivery.cookie, delivery.token, delivery.expires = out.Cookie, out.Token, out.ExpiresAt
+			delivery.body, delivery.ctx = body, r.Context()
 			delivery.current = func() bool { _, err := oneTapStartProjection(c, s, out, c.Now()); return err == nil }
 			delivery.now = c.Now
 			w.Header().Set("Content-Type", "application/json")
@@ -290,7 +311,7 @@ func oneTapStartVisible(value string, maximum int) bool {
 	return true
 }
 
-func decodeOneTapStart(body map[string]json.RawMessage, lifetime session.LifetimeConfig) (onetap.BrowserStartOptions, session.RememberPolicy, error) {
+func decodeOneTapStartMode(body map[string]json.RawMessage, lifetime session.LifetimeConfig, redirect bool) (onetap.BrowserStartOptions, session.RememberPolicy, error) {
 	deny := func() (onetap.BrowserStartOptions, session.RememberPolicy, error) {
 		return onetap.BrowserStartOptions{}, session.RememberPolicy{}, identityhttp.ErrInvalidInput
 	}
@@ -315,6 +336,9 @@ func decodeOneTapStart(body map[string]json.RawMessage, lifetime session.Lifetim
 				choice = session.PersistentSession
 			}
 		case "prompt":
+			if redirect {
+				return deny()
+			}
 			var fields map[string]json.RawMessage
 			if json.Unmarshal(raw, &fields) != nil || len(fields) != 2 {
 				return deny()
@@ -354,7 +378,13 @@ func decodeOneTapStart(body map[string]json.RawMessage, lifetime session.Lifetim
 			return deny()
 		}
 	}
-	options, err := onetap.NewBrowserStartOptions(prompt, button)
+	var options onetap.BrowserStartOptions
+	var err error
+	if redirect {
+		options, err = onetap.NewBrowserRedirectStartOptions(button)
+	} else {
+		options, err = onetap.NewBrowserStartOptions(prompt, button)
+	}
 	if err != nil {
 		return deny()
 	}
@@ -409,15 +439,30 @@ func oneTapStartProjection(c OneTapStartConfig, s oneTapStartState, out OneTapSt
 	actual := out.Cookie
 	// Native PreAuthIssuer owns the five-minute original expiry. net/http drops
 	// malformed cookie attributes, so compare before assigning the sole bearer.
-	if err != nil || actual.Value != "" || actual.Name != expected.Name || actual.Path != expected.Path || actual.Domain != "" || !actual.Secure || !actual.HttpOnly || actual.SameSite != expected.SameSite || actual.Partitioned || actual.Quoted || actual.Raw != "" || actual.RawExpires != "" || len(actual.Unparsed) != 0 || actual.MaxAge < 1 || actual.MaxAge > 300 || !actual.Expires.Equal(out.ExpiresAt) {
+	if err != nil || !oneTapStartCookieMatches(expected, actual, out.ExpiresAt) {
 		return deny()
 	}
 	return oneTapStartResponse{ClientID: out.ClientID, Nonce: out.Nonce, FlowID: out.FlowID, ExpiresAt: out.ExpiresAt, Options: options}, nil
 }
 
+func oneTapStartCookieMatches(expected, actual http.Cookie, expires time.Time) bool {
+	if actual.Value != "" || actual.Name != expected.Name || actual.Path != expected.Path || actual.Domain != "" {
+		return false
+	}
+	if !actual.Secure || !actual.HttpOnly || actual.SameSite != expected.SameSite || actual.Partitioned || actual.Quoted {
+		return false
+	}
+	if actual.Raw != "" || actual.RawExpires != "" || len(actual.Unparsed) != 0 {
+		return false
+	}
+	return actual.MaxAge >= 1 && actual.MaxAge <= 300 && actual.Expires.Equal(expires)
+}
+
 type oneTapStartDeliveryKey struct{}
 type oneTapStartDelivery struct {
-	out       OneTapStartHTTPResult
+	cookie    http.Cookie
+	token     session.Token
+	expires   time.Time
 	body      []byte
 	ctx       context.Context
 	current   func() bool
@@ -466,12 +511,12 @@ func (h *oneTapStartHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if status != http.StatusOK || delivery.ctx == nil || delivery.ctx.Err() != nil || delivery.current == nil || !delivery.current() {
 					refused = true
 				} else {
-					actual := delivery.out.Cookie
-					actual.MaxAge = min(actual.MaxAge, int(delivery.out.ExpiresAt.Sub(delivery.now())/time.Second))
+					actual := delivery.cookie
+					actual.MaxAge = min(actual.MaxAge, int(delivery.expires.Sub(delivery.now())/time.Second))
 					if actual.MaxAge < 1 {
 						refused = true
 					} else {
-						value, err := delivery.out.Token.Reveal()
+						value, err := delivery.token.Reveal()
 						if err != nil || delivery.ctx.Err() != nil {
 							refused = true
 						} else if _, err = session.ParseToken(value); err != nil {

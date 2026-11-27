@@ -6,12 +6,12 @@ require (
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
-	github.com/faustbrian/go-identity/http v0.0.0-20261109202903-8112f3df2617
+	github.com/faustbrian/go-identity/http v0.0.0-20261127005200-a24b915e2798
 	github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e
 	github.com/faustbrian/go-identity/oauth v0.0.0-20261126160606-943930fdcf57
-	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261126200957-ef2963c9c07d
+	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13
 	github.com/faustbrian/go-identity/oauth/providers v0.0.0-20261126135002-a348d77d3a7d
-	github.com/faustbrian/go-identity/session v0.0.0-20261126220500-cc979c08b313
+	github.com/faustbrian/go-identity/session v0.0.0-20261126235901-19a81db3fa1c
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/felixge/httpsnoop v1.1.0
 )

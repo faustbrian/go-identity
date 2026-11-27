@@ -7,6 +7,10 @@ import (
 )
 
 func wireOneTapStart(c OneTapStartConfig) *identityhttp.WireOperation {
+	return wireOneTapStartProfile(c.Origin, "")
+}
+
+func wireOneTapStartProfile(origin identityhttp.Origin, callbackURL string) *identityhttp.WireOperation {
 	text := func(minimum, maximum int) map[string]any {
 		return map[string]any{"type": "string", "minLength": minimum, "maxLength": maximum}
 	}
@@ -30,7 +34,8 @@ func wireOneTapStart(c OneTapStartConfig) *identityhttp.WireOperation {
 	// Native options are detached GIS subsets, not a complete initialization or
 	// render call: their established projection uses GIS snake_case spellings.
 	promptOutput := object([]string{"context", "cancel_on_tap_outside"}, map[string]any{"context": context, "cancel_on_tap_outside": boolean})
-	buttonOutput := object([]string{"ux_mode", "type", "theme", "size"}, map[string]any{"ux_mode": map[string]any{"type": "string", "const": "popup"}, "type": buttonType, "theme": theme, "size": size, "width": width})
+	buttonOutputFields := map[string]any{"ux_mode": map[string]any{"type": "string", "const": "popup"}, "type": buttonType, "theme": theme, "size": size, "width": width}
+	buttonOutput := object([]string{"ux_mode", "type", "theme", "size"}, buttonOutputFields)
 	options := map[string]any{"oneOf": []any{
 		object([]string{"experience", "prompt"}, map[string]any{"experience": map[string]any{"type": "string", "const": "prompt"}, "prompt": promptOutput}),
 		object([]string{"experience", "button"}, map[string]any{"experience": map[string]any{"type": "string", "const": "popup_button"}, "button": buttonOutput}),
@@ -40,6 +45,20 @@ func wireOneTapStart(c OneTapStartConfig) *identityhttp.WireOperation {
 	flowID := text(22, 22)
 	flowID["pattern"] = "^[A-Za-z0-9_-]{22}$"
 	success := object([]string{"clientId", "nonce", "flowId", "expiresAt", "options"}, map[string]any{"clientId": text(1, 1024), "nonce": nonce, "flowId": flowID, "expiresAt": map[string]any{"type": "string", "format": "date-time"}, "options": options})
+	description := "Explicit anonymous Google One Tap prompt OR popup-button start. Exact HTTPS host-mapped tenant and configured Origin; one Idempotency-Key and existing signed browser Device. A valid singleton ambient flow cookie does not select or authorize Start; only a fresh accepted result may replace it. No provider/client/callback override, hints, user information, redirect or UI. Shared provider/IP admission precedes one synchronous native Start. Only this invocation's fresh committed result delivers its detached options and original flow cookie. Replay and unknown commitment reveal nothing; lost acknowledgement never triggers transport retry, reissue or restart. GIS script/CSP/COOP integration remains the consumer's responsibility; this route supplies neither UI nor callback handling."
+	cookie := "Exactly the original reveal-once __Host-identity_flow credential after a fresh exact committed Start. Secure, HttpOnly, host-only, Path=/, SameSite=Lax, original expiry and bounded remaining Max-Age. Never replay, unknown outcome, error, device renewal or session issuance."
+	if callbackURL != "" {
+		request = object([]string{"button"}, map[string]any{"button": button, "remember": remember})
+		buttonOutputFields["ux_mode"] = map[string]any{"type": "string", "const": "redirect"}
+		instant := map[string]any{"type": "string", "format": "date-time"}
+		success = object([]string{"experience", "client_id", "login_uri", "nonce", "state", "allowed_parent_origin", "issued_at", "expires_at", "button"}, map[string]any{
+			"experience": map[string]any{"type": "string", "const": "redirect_button"}, "client_id": text(1, 1024),
+			"login_uri": map[string]any{"type": "string", "const": callbackURL}, "nonce": nonce, "state": flowID,
+			"allowed_parent_origin": map[string]any{"type": "string", "const": string(origin)}, "issued_at": instant, "expires_at": instant, "button": buttonOutput,
+		})
+		description = "Explicit Google redirect button Start for the configured HTTPS tenant and Origin. A single Idempotency-Key and original signed Device precede shared provider/IP admission. Only a fresh committed result delivers detached GIS options and the original path-bound frontchannel cookie. State is a flow locator, not a credential or the Google double-submit proof. No prompt, redirect response, provider or endpoint override, replayed delivery, or callback activation. GIS rendering and browser navigation belong to the consumer."
+		cookie = "Exactly one original __Secure-identity_frontchannel cookie on a fresh commit. Secure, HttpOnly, host-only, Path=/v1/oauth/onetap-callback, SameSite=None; original five-minute deadline and bounded remaining Max-Age. No device renewal or session issuance."
+	}
 	failure := object([]string{"error"}, map[string]any{"error": enum("invalid_request", "denied", "https_required", "conflict", "not_found", "method_not_allowed", "misdirected_request", "rate_limited", "unavailable")})
 	response := func(schema any) map[string]any {
 		return map[string]any{"description": "No-store/nosniff JSON with Referrer-Policy: no-referrer. No raw native result or credential in JSON.", "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
@@ -52,14 +71,14 @@ func wireOneTapStart(c OneTapStartConfig) *identityhttp.WireOperation {
 		"schema": map[string]any{"type": "string", "const": "identity.http.origin_denied\n"},
 	}
 	responses["405"].(map[string]any)["headers"] = map[string]any{"Allow": map[string]any{"schema": map[string]any{"type": "string", "const": "POST"}}}
-	responses["200"].(map[string]any)["headers"] = map[string]any{"Set-Cookie": map[string]any{"description": "Exactly the original reveal-once __Host-identity_flow credential after a fresh exact committed Start. Secure, HttpOnly, host-only, Path=/, SameSite=Lax, original expiry and bounded remaining Max-Age. Never replay, unknown outcome, error, device renewal or session issuance.", "schema": text(1, 4096)}}
+	responses["200"].(map[string]any)["headers"] = map[string]any{"Set-Cookie": map[string]any{"description": cookie, "schema": text(1, 4096)}}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"description": "Known shared provider/IP denial, rounded up to bounded whole seconds. Absent on unavailable authority; not permission to restart an unknown command.", "schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}}}
 	definition, _ := json.Marshal(map[string]any{
 		"operationId": "identity.oauth.onetap-start",
-		"description": "Explicit anonymous Google One Tap prompt OR popup-button start. Exact HTTPS host-mapped tenant and configured Origin; one Idempotency-Key and existing signed browser Device. A valid singleton ambient flow cookie does not select or authorize Start; only a fresh accepted result may replace it. No provider/client/callback override, hints, user information, redirect or UI. Shared provider/IP admission precedes one synchronous native Start. Only this invocation's fresh committed result delivers its detached options and original flow cookie. Replay and unknown commitment reveal nothing; lost acknowledgement never triggers transport retry, reissue or restart. GIS script/CSP/COOP integration remains the consumer's responsibility; this route supplies neither UI nor callback handling.",
+		"description": description,
 		"security":    []any{map[string]any{"OneTapStartDevice": []string{}}},
 		"parameters": []any{
-			map[string]any{"name": "Origin", "in": "header", "required": true, "schema": map[string]any{"type": "string", "const": string(c.Origin)}},
+			map[string]any{"name": "Origin", "in": "header", "required": true, "schema": map[string]any{"type": "string", "const": string(origin)}},
 			map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": text(1, 256)},
 		},
 		"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}},
