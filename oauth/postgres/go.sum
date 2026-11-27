@@ -85,8 +85,8 @@ github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401 h1:nc
 github.com/faustbrian/go-identity/oauth v0.0.0-20261127024309-a3efdf491401/go.mod h1:/s2y3YI+rRLF0r2NvSjjNffRyCo3YKfl2cGUpevyqnU=
 github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13 h1:eYz0iIKW2ubv9gNy+lJmsl9SejZQfYcon87bLwCPBds=
 github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13/go.mod h1:C1CSA6cV2fLAxvvz5wFAoGqiy+W2yXKt2hZLV5yQysk=
-github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127030934-d569284383e2 h1:oYFPPt7aaix7JoItXbvBrvSs2Ulw7v/qMAM7m5DUkyU=
-github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127030934-d569284383e2/go.mod h1:SAg3AFygggPLEmesdJA9XS7VGx3/PjX22FlzV9Xv3gQ=
+github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127033843-935b75ea80cc h1:xmqKN+MB5F6yA0q/Ge/82HBqSx1vGpyQPj/qmAy9bew=
+github.com/faustbrian/go-identity/oauth/proxy v0.0.0-20261127033843-935b75ea80cc/go.mod h1:SAg3AFygggPLEmesdJA9XS7VGx3/PjX22FlzV9Xv3gQ=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6 h1:ohdM4yyDKIaMf3iZbwR8irICYZhzvx2LnuhOCswXiNE=
 github.com/faustbrian/go-identity/otp v0.0.0-20261020141901-5c1b01401fc6/go.mod h1:qxYVoKX0qfE9ZwMxL773dOwGxhixbKprZGgIg619Ekg=
 github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261020215141-387cc56b91f6 h1:8vtFdLM7k55fznPVEGZkgnJ+o1wrfZTHN/PJFWQJHeo=

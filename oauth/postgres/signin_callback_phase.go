@@ -20,6 +20,7 @@ type signinCallbackPhase struct {
 	service           *SigninCompletionService
 	request           oauth.SigninCallbackRequest
 	flow              signinCallbackFlow
+	preview           *proxyPreviewCallbackInput
 	original, command identity.Command
 	coordinator       *kernel.Coordinator
 	registry          *kernel.ContributorRegistry
@@ -138,6 +139,9 @@ const (
 )
 
 func (p *signinCallbackPhase) requireTransaction(ctx context.Context, w kernel.Work, stage signinRPStage) error {
+	if p.preview != nil {
+		return requireProxyPreviewRow(ctx, w, p.service.start.config.Schema, p.preview.row, stage == signinRPConsumed)
+	}
 	v := p.flow.binding
 	b, provider := v.Input.Binding, v.Provider
 	origin, err := base64.RawURLEncoding.Strict().DecodeString(string(b.CommandID))
@@ -288,6 +292,12 @@ func (p *signinCallbackPhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 	receipt, err := p.service.effect.Apply(ctx, w, p, c, p.flow.original)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if p.preview != nil {
+		if err := settleProxyPreviewRow(ctx, w, p.service.start.config.Schema, p.preview.row); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		return receipt, nil
 	}
 	b := p.flow.binding.Input.Binding
 	n, err := w.Exec(ctx, `UPDATE `+rpQuotedSchema(p.service.start.config.Schema)+`.transactions SET version=2,secrets_erased_at=clock_timestamp(),pkce_ciphertext=NULL,state_proof_ciphertext=NULL,binding_ciphertext=$3 WHERE tenant_id=$1 AND transaction_id=$2 AND version=1 AND secrets_erased_at IS NULL`, string(b.TenantID), b.RecordID, p.execution.terminalBinding)

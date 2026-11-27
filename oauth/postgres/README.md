@@ -77,6 +77,21 @@ after their base OAuth history. It only creates an empty expected-binding table
 and indexes; it does not select a writer, consumer or route. The preview's
 session and capability owners still decide whether a handoff can be used.
 
+Select `NewProxyPreviewService` in the preview with its existing native signin
+and session owners. Issue an ordinary `identity.oauth.callback` pre-auth flow
+for the exact preview origin, completion URL and resolved Remember policy.
+Use that flow in authenticated production Start. Before redirecting the browser,
+pass the acknowledged original binding and original cookie to preview `Bind`.
+An exact Bind retry does not reissue the original grant.
+
+Pass the returned encrypted handoff and original browser cookie to preview
+`Complete`. It never calls the provider. The one-use grant, browser, current
+linked account, known-empty MFA, policy, opaque session, audit, lifecycle and
+proof erasure use the existing coordinator. Only a fresh acknowledged commit
+can return a bearer and a synchronizer token; that delivery retains the earliest
+original cutoff. This profile is existing-account signin only and does not
+mount HTTP routes, perform implicit signup or add account linking.
+
 ## Google One Tap browser start
 
 Install `OneTapCallbackGrantMigrationSource` after `MigrationSource`, using

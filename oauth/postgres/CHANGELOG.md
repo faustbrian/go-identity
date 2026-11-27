@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add native existing-account preview completion. Bind the original browser
+  and issue one preview-owned callback grant before redirect; consume the
+  authenticated handoff and commit the preview session with proof erasure in
+  the same Work. No provider exchange, production identity write or HTTP route
+  is added by the preview service.
+
 - Add optional forward-only native preview binding storage. It isolates the
   independently retained original and proof from production proxy custody.
   The migration installs no route or consumer and changes no existing data.

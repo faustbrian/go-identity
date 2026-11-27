@@ -14,6 +14,7 @@ import (
 	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
+	"github.com/faustbrian/go-identity/oauth"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
@@ -71,34 +72,43 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 		return nil, err
 	}
 	b := v.Input.Binding
-	verifierBinding, err := newRPVerifierBinding(string(b.TenantID), v.Provider, b.RecordID, v.StateDigest, b.OperationID)
-	if err != nil {
-		return nil, err
+	var verified oauth.ProviderIdentity
+	var providerExpiresAt time.Time
+	if p.preview != nil {
+		verified, providerExpiresAt, err = p.openProxyPreview(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		verifierBinding, err := newRPVerifierBinding(string(b.TenantID), v.Provider, b.RecordID, v.StateDigest, b.OperationID)
+		if err != nil {
+			return nil, err
+		}
+		verifier, err := s.verifiers.open(ctx, verifierBinding, p.flow.pkce, v.IssuedAt, v.ExpiresAt, now.UTC())
+		if err != nil {
+			return nil, err
+		}
+		defer verifier.Destroy()
+		if verifier.Challenge() != v.Challenge {
+			return nil, identity.ForbiddenError{}
+		}
+		provider, ok := s.providers.Lookup(v.Provider.ID)
+		if !ok || !reflect.DeepEqual(provider.Profile(), v.Provider) || !oauth2ProviderMatches(provider, v.OAuth2, v.OAuth2TokenPolicy) {
+			return nil, identity.ForbiddenError{}
+		}
+		input, ok := p.request.Callback.Input()
+		if !ok {
+			return nil, identity.ForbiddenError{}
+		}
+		// Only FeaturePreparationAdmission.Generate reaches this exchange after
+		// acknowledged one-use state reservation. No primary Work/lock is retained.
+		result, err := provider.Exchange(ctx, input, verifier, protocolNonce(v.Provider, v.Nonce))
+		defer result.Tokens.Destroy()
+		if err != nil {
+			return nil, err
+		}
+		verified, providerExpiresAt = result.Identity, result.Identity.EvidenceExpiresAt()
 	}
-	verifier, err := s.verifiers.open(ctx, verifierBinding, p.flow.pkce, v.IssuedAt, v.ExpiresAt, now.UTC())
-	if err != nil {
-		return nil, err
-	}
-	defer verifier.Destroy()
-	if verifier.Challenge() != v.Challenge {
-		return nil, identity.ForbiddenError{}
-	}
-	provider, ok := s.providers.Lookup(v.Provider.ID)
-	if !ok || !reflect.DeepEqual(provider.Profile(), v.Provider) || !oauth2ProviderMatches(provider, v.OAuth2, v.OAuth2TokenPolicy) {
-		return nil, identity.ForbiddenError{}
-	}
-	input, ok := p.request.Callback.Input()
-	if !ok {
-		return nil, identity.ForbiddenError{}
-	}
-	// Only FeaturePreparationAdmission.Generate reaches this exchange after
-	// acknowledged one-use state reservation. No primary Work/lock is retained.
-	result, err := provider.Exchange(ctx, input, verifier, protocolNonce(v.Provider, v.Nonce))
-	defer result.Tokens.Destroy()
-	if err != nil {
-		return nil, err
-	}
-	verified := result.Identity
 	if verified.ProviderID() != v.Provider.ID || verified.Issuer() != v.Provider.Issuer || verified.Subject() == "" {
 		return nil, identity.ForbiddenError{}
 	}
@@ -131,7 +141,7 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 	if err := admission.CheckAt(ctx, now); err != nil {
 		return nil, err
 	}
-	until := verified.EvidenceExpiresAt()
+	until := providerExpiresAt
 	if deadline := p.flow.loadedAt.Add(20 * time.Second); deadline.Before(until) {
 		until = deadline
 	}
@@ -176,21 +186,24 @@ func (p *signinCallbackPhase) generate(ctx context.Context, generation uint64, a
 		return nil, err
 	}
 	fields = append(fields, accountFields...)
-	terminalAAD, err := signinBindingAAD(v, "binding")
-	if err != nil {
-		return nil, err
+	var terminal []byte
+	if p.preview == nil {
+		terminalAAD, err := signinBindingAAD(v, "binding")
+		if err != nil {
+			return nil, err
+		}
+		terminalPlain, err := json.Marshal(signinStoredTransaction{Binding: v, State: rpStoredGrant(p.flow.statePlan), ResultFields: fields})
+		if err != nil {
+			return nil, err
+		}
+		defer clear(terminalPlain)
+		terminal, err = s.seal(ctx, terminalAAD, terminalPlain)
+		if err != nil {
+			return nil, err
+		}
+		defer clear(terminal)
 	}
-	terminalPlain, err := json.Marshal(signinStoredTransaction{Binding: v, State: rpStoredGrant(p.flow.statePlan), ResultFields: fields})
-	if err != nil {
-		return nil, err
-	}
-	defer clear(terminalPlain)
-	terminal, err := s.seal(ctx, terminalAAD, terminalPlain)
-	if err != nil {
-		return nil, err
-	}
-	defer clear(terminal)
-	plain, err := json.Marshal(signinCallbackOutput{Schema: 1, Fields: fields, ProviderExpiresAt: verified.EvidenceExpiresAt(), Admission: signinStoredAdmission(admission.Prepared()), ReadStarted: p.flow.loadedAt, TerminalBinding: terminal})
+	plain, err := json.Marshal(signinCallbackOutput{Schema: 1, Fields: fields, ProviderExpiresAt: providerExpiresAt, Admission: signinStoredAdmission(admission.Prepared()), ReadStarted: p.flow.loadedAt, TerminalBinding: terminal})
 	if err != nil || len(plain) > 128<<10 {
 		return nil, identity.UnavailableError{}
 	}
@@ -290,9 +303,17 @@ func (p *signinCallbackPhase) restore(ctx context.Context, generation uint64, wi
 	if spec.IssuedAt.Before(stored.ReadStarted) || proof.ExpiresAt.After(stored.ProviderExpiresAt) || proof.ExpiresAt.After(v.ExpiresAt) || proof.ExpiresAt.After(stored.ReadStarted.Add(20*time.Second)) {
 		return deny()
 	}
-	terminal, err := p.service.start.openSigninTransaction(ctx, v, stored.TerminalBinding)
-	if err != nil || !reflect.DeepEqual(terminal.Binding, v) || kernel.CapabilityPlan(terminal.State) != p.flow.statePlan || !sameRPFields(terminal.ResultFields, stored.Fields) {
-		return deny()
+	if p.preview != nil {
+		// Preview recovery uses only this original command's encrypted native
+		// preparation. A later envelope cannot extend or replace its evidence.
+		if len(stored.TerminalBinding) != 0 || stored.ProviderExpiresAt.After(p.preview.binding.Evidence.ExpiresAt) {
+			return deny()
+		}
+	} else {
+		terminal, err := p.service.start.openSigninTransaction(ctx, v, stored.TerminalBinding)
+		if err != nil || !reflect.DeepEqual(terminal.Binding, v) || kernel.CapabilityPlan(terminal.State) != p.flow.statePlan || !sameRPFields(terminal.ResultFields, stored.Fields) {
+			return deny()
+		}
 	}
 	flow, err := p.flow.original.Bindings()
 	if err != nil {
