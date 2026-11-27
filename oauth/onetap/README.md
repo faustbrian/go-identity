@@ -49,7 +49,15 @@ and `ux_mode: "redirect"` with the same closed button presentation choices.
 It accepts no prompt or callback option, URL, nonce or state. Existing
 `NewBrowserStartOptions` calls and prompt/popup projection JSON stay unchanged.
 The existing `NewBrowserStartRequest` remains callback-mode only and rejects
-redirect options; this package does not start a native redirect flow yet.
+redirect options. Use the distinct `NewBrowserRedirectStartRequest(spec)` with
+the same `BrowserStartRequestSpec` and explicitly selected redirect options for
+trusted native redirect start. The new type cannot be assigned or converted to
+`BrowserStartRequest`; prompt and popup options are rejected by its constructor.
+It retains the exact tenant, canonical origin/peer IP, bounded device, retry key,
+options and resolved Remember policy, and `Bindings()` returns only that
+unchanged original to trusted native execution. Both request types are immutable,
+zero-invalid, redacted in diagnostics and deny JSON/text export. They add no
+provider, client or URL input, authorization, reservation or native flow issuance.
 
 After its exact fresh durable start commit, the native owner may call
 `redirectValidator.BrowserRedirectStart(options, originalTransaction)` using

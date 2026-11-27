@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a distinct immutable, redacted `BrowserRedirectStartRequest` with the
+  existing bounded transport input shape and exact original bindings. Accept
+  only selected redirect-button options, preserve retry and resolved Remember
+  policy, and deny cross-mode conversion, zero/wire construction and JSON/text
+  export. The existing callback request still rejects redirect options; neither
+  request selects a provider, client, login URI or native flow authority.
 - Add explicitly selected redirect-button options and a typed launch projection
   from the separately configured Google redirect validator and original
   provider-bound transaction. Derive the registered login URI, client, base64url

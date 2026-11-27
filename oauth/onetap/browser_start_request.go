@@ -37,13 +37,22 @@ type BrowserStartRequest struct {
 // explicitly resolved Remember policy. Redirect options are not accepted by
 // this callback-mode request. It performs no IO or entropy work.
 func NewBrowserStartRequest(spec BrowserStartRequestSpec) (BrowserStartRequest, error) {
+	if spec.Options.redirect {
+		return BrowserStartRequest{}, failure(InvalidInput, nil)
+	}
+	return newBrowserStartRequest(spec)
+}
+
+// Mode-specific constructors share the same bounded immutable input shape;
+// only they decide which selected browser experience may cross their boundary.
+func newBrowserStartRequest(spec BrowserStartRequestSpec) (BrowserStartRequest, error) {
 	if _, err := identity.ParseIdentifierID(string(spec.TenantID)); err != nil {
 		return BrowserStartRequest{}, failure(InvalidInput, nil)
 	}
 	if !canonicalOrigin(spec.Origin) || !browserStartNetwork(spec.Network) || !visible(spec.Device, 128) {
 		return BrowserStartRequest{}, failure(InvalidInput, nil)
 	}
-	if spec.Key == (identity.IdempotencyKey{}) || spec.Options.redirect || spec.Options.prompt.valid == spec.Options.button.valid {
+	if spec.Key == (identity.IdempotencyKey{}) || spec.Options.prompt.valid == spec.Options.button.valid {
 		return BrowserStartRequest{}, failure(InvalidInput, nil)
 	}
 	if _, err := spec.Remember.Bindings(); err != nil {
