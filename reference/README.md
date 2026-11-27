@@ -32,6 +32,18 @@ does not require password, OTP, session, delivery or Valkey stores. The
 preview deployment uses a different database and session owner; production
 neither serves the preview landing page nor issues the preview session.
 
+Run the proxy as a separate non-owner PostgreSQL login, not the migration
+role. Grant access only to the command journal, proxy/capability custody,
+native append-only audit, outbox and the selected HTTP admission tables. Do
+not grant access to write identity users or create objects in their schema.
+Directory admission locks the existing global and tenant rows with `FOR
+SHARE`. On PostgreSQL this needs `UPDATE` on one column of each table: grant
+only the corresponding ID column and enable row security. For this login,
+allow reads and use an UPDATE policy with `USING (true) WITH CHECK (false)`
+so the locks work but updates are denied. Do not give it owner, role-changing
+or row-security bypass privileges. The [production runtime fixture](oauth_proxy_production_privileges_integration_test.go)
+shows the tested grants and checks these permissions on the actual login.
+
 ## Preview-side OAuth sign-in
 
 Select `OAuthProxyPreview` on the preview's existing `SocialOAuth.Signin`

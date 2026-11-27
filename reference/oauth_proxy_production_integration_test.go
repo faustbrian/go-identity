@@ -58,6 +58,7 @@ func TestReferencePostgresOAuthProxyProductionDenial(t *testing.T) {
 	f := newLiveStoresProfile(t, ctx, false, true)
 	_, c := oauthProxyProductionConfiguration(t)
 	applyOAuthProxyProductionMigrations(t, ctx, f, c)
+	runtimePool := newOAuthProxyProductionRuntimePool(t, ctx, f)
 
 	principal, err := authentication.NewPrincipal(authentication.PrincipalSpec{
 		Subject: string(c.Start.Preview.ActorID), Method: "bearer", Issuer: c.Start.Preview.Issuer,
@@ -88,8 +89,8 @@ func TestReferencePostgresOAuthProxyProductionDenial(t *testing.T) {
 	}
 	t.Cleanup(provider.Close)
 	c.Start.Provider = provider
-	c.HTTP = oauthProxyProductionHTTPConfiguration(t, f.pool)
-	owner, err := reference.NewOAuthProxyProduction(f.pool, c)
+	c.HTTP = oauthProxyProductionHTTPConfiguration(t, runtimePool)
+	owner, err := reference.NewOAuthProxyProduction(runtimePool, c)
 	if err != nil {
 		t.Fatal("construct public production owner", err)
 	}
