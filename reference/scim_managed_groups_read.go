@@ -14,6 +14,7 @@ const managedSCIMGroupsReadField = "reference_http_managed_scim_groups_read"
 const managedSCIMGroupsCreateField = "reference_http_managed_scim_groups_create"
 const managedSCIMGroupsReplaceField = "reference_http_managed_scim_groups_replace"
 const managedSCIMGroupsPatchField = "reference_http_managed_scim_groups_patch"
+const managedSCIMGroupsDeleteField = "reference_http_managed_scim_groups_delete"
 
 // HTTPManagedSCIMGroupsReadConfiguration opts independently into managed
 // Group Get and List, without selecting Group writes or connection lifecycle.
@@ -101,6 +102,22 @@ func (c HTTPManagedSCIMGroupsPatchConfiguration) MarshalText() ([]byte, error) {
 	return c.MarshalJSON()
 }
 
+// HTTPManagedSCIMGroupsDeleteConfiguration selects only conditional Group DELETE.
+// Co-selected Group routes share the same managed owner, quota and member ceiling.
+type HTTPManagedSCIMGroupsDeleteConfiguration HTTPManagedSCIMGroupsCreateConfiguration
+
+func (HTTPManagedSCIMGroupsDeleteConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = io.WriteString(w, "reference.HTTPManagedSCIMGroupsDeleteConfiguration(redacted)")
+}
+
+func (HTTPManagedSCIMGroupsDeleteConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: managedSCIMGroupsDeleteField}
+}
+
+func (c HTTPManagedSCIMGroupsDeleteConfiguration) MarshalText() ([]byte, error) {
+	return c.MarshalJSON()
+}
+
 type referenceManagedGroupsExecutor struct {
 	state  *storeState
 	native *scimpg.ManagedConnectionService
@@ -140,4 +157,13 @@ func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupPatch(ctx con
 	}
 	defer done()
 	return s.native.ExecuteManagedAdmittedGroupPatch(bounded, tenant, request, maximumMembers, admit)
+}
+
+func (s referenceManagedGroupsExecutor) ExecuteManagedAdmittedGroupDelete(ctx context.Context, tenant identity.TenantID, request scim.Request, maximumMembers int, admit scim.ProtocolAdmission) (scim.Response, error) {
+	bounded, done, err := s.state.enterFeature(ctx, true)
+	if err != nil {
+		return scim.Response{}, scim.NewError(503, "")
+	}
+	defer done()
+	return s.native.ExecuteManagedAdmittedGroupDelete(bounded, tenant, request, maximumMembers, admit)
 }

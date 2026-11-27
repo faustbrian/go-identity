@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into conditional managed SCIM Group DELETE over HTTPS. Reuse the
+  selected native owner and quota, preserve canonical replay and optional
+  aliasing, and leave member resources untouched.
+
 - Opt into conditional managed SCIM Group PATCH over HTTPS using the
   selected native owner and quota. Preserve ordered typed member changes,
   atomic version checks and original replay independently of Group PUT.

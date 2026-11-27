@@ -1,5 +1,17 @@
 # Identity reference composition
 
+## Managed conditional SCIM Group DELETE
+
+Set `HTTPManagedSCIMGroupsDelete` to opt into
+`DELETE /scim/v2/Groups/{resource_id}` with one issued managed bearer and the
+original strong `If-Match`. Send no body. `Idempotency-Key` is optional; it
+aliases the same native canonical request and may not retarget it. The first
+committed deletion and an admitted replay both return an empty `204`. Member
+Users, nested Groups and organization memberships are not removed. Co-selected
+Group/User routes share the owner and quota; Group routes must also agree on
+the member ceiling. No other route or new SQL is introduced; the migration
+plan selects the existing shared canonical-request alias history when needed.
+
 ## Managed conditional SCIM Group PATCH
 
 Set `HTTPManagedSCIMGroupsPatch` to select only

@@ -173,6 +173,7 @@ type managedSCIMUsersState struct {
 	createGroup     bool
 	replaceGroup    bool
 	patchGroup      bool
+	deleteGroup     bool
 	maxGroupMembers int
 }
 
@@ -204,6 +205,7 @@ func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListCon
 			return nil, option.field, identity.InvalidInputError{Field: option.field}
 		}
 	}
+	groupCeiling, groupSelected := 0, false
 	if groups := c.HTTPManagedSCIMGroupsRead; groups != nil {
 		invalid := identity.InvalidInputError{Field: managedSCIMGroupsReadField}
 		if !groups.EnableGet && !groups.EnableList || groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers {
@@ -217,48 +219,32 @@ func managedSCIMUsersOptions(c StoreConfiguration) (*HTTPManagedSCIMUsersListCon
 		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
 			return nil, managedSCIMGroupsReadField, invalid
 		}
+		groupCeiling, groupSelected = groups.MaximumMembers, true
 	}
-	if groups := c.HTTPManagedSCIMGroupsCreate; groups != nil {
-		invalid := identity.InvalidInputError{Field: managedSCIMGroupsCreateField}
-		if groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers ||
-			c.HTTPManagedSCIMGroupsRead != nil && c.HTTPManagedSCIMGroupsRead.MaximumMembers != groups.MaximumMembers {
-			return nil, managedSCIMGroupsCreateField, invalid
+	for _, option := range [...]struct {
+		groups *HTTPManagedSCIMGroupsCreateConfiguration
+		field  string
+	}{
+		{c.HTTPManagedSCIMGroupsCreate, managedSCIMGroupsCreateField},
+		{(*HTTPManagedSCIMGroupsCreateConfiguration)(c.HTTPManagedSCIMGroupsReplace), managedSCIMGroupsReplaceField},
+		{(*HTTPManagedSCIMGroupsCreateConfiguration)(c.HTTPManagedSCIMGroupsPatch), managedSCIMGroupsPatchField},
+		{(*HTTPManagedSCIMGroupsCreateConfiguration)(c.HTTPManagedSCIMGroupsDelete), managedSCIMGroupsDeleteField},
+	} {
+		groups := option.groups
+		if groups == nil {
+			continue
+		}
+		invalid := identity.InvalidInputError{Field: option.field}
+		if groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers || groupSelected && groups.MaximumMembers != groupCeiling {
+			return nil, option.field, invalid
 		}
 		profile := HTTPManagedSCIMUsersListConfiguration{Native: groups.Native, RateNamespace: groups.RateNamespace, RateKey: groups.RateKey}
 		if owner == nil {
-			owner, field = &profile, managedSCIMGroupsCreateField
+			owner, field = &profile, option.field
 		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
-			return nil, managedSCIMGroupsCreateField, invalid
+			return nil, option.field, invalid
 		}
-	}
-	if groups := c.HTTPManagedSCIMGroupsReplace; groups != nil {
-		invalid := identity.InvalidInputError{Field: managedSCIMGroupsReplaceField}
-		if groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers ||
-			c.HTTPManagedSCIMGroupsRead != nil && c.HTTPManagedSCIMGroupsRead.MaximumMembers != groups.MaximumMembers ||
-			c.HTTPManagedSCIMGroupsCreate != nil && c.HTTPManagedSCIMGroupsCreate.MaximumMembers != groups.MaximumMembers {
-			return nil, managedSCIMGroupsReplaceField, invalid
-		}
-		profile := HTTPManagedSCIMUsersListConfiguration{Native: groups.Native, RateNamespace: groups.RateNamespace, RateKey: groups.RateKey}
-		if owner == nil {
-			owner, field = &profile, managedSCIMGroupsReplaceField
-		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
-			return nil, managedSCIMGroupsReplaceField, invalid
-		}
-	}
-	if groups := c.HTTPManagedSCIMGroupsPatch; groups != nil {
-		invalid := identity.InvalidInputError{Field: managedSCIMGroupsPatchField}
-		if groups.MaximumMembers < 0 || groups.MaximumMembers > scim.DefaultGroupMembers ||
-			c.HTTPManagedSCIMGroupsRead != nil && c.HTTPManagedSCIMGroupsRead.MaximumMembers != groups.MaximumMembers ||
-			c.HTTPManagedSCIMGroupsCreate != nil && c.HTTPManagedSCIMGroupsCreate.MaximumMembers != groups.MaximumMembers ||
-			c.HTTPManagedSCIMGroupsReplace != nil && c.HTTPManagedSCIMGroupsReplace.MaximumMembers != groups.MaximumMembers {
-			return nil, managedSCIMGroupsPatchField, invalid
-		}
-		profile := HTTPManagedSCIMUsersListConfiguration{Native: groups.Native, RateNamespace: groups.RateNamespace, RateKey: groups.RateKey}
-		if owner == nil {
-			owner, field = &profile, managedSCIMGroupsPatchField
-		} else if profile != (HTTPManagedSCIMUsersListConfiguration{}) {
-			return nil, managedSCIMGroupsPatchField, invalid
-		}
+		groupCeiling, groupSelected = groups.MaximumMembers, true
 	}
 	return owner, field, nil
 }
@@ -337,6 +323,9 @@ func (s *storeState) composeManagedSCIMUsers(c StoreConfiguration, d ReferenceDe
 	}
 	if groups := c.HTTPManagedSCIMGroupsPatch; groups != nil {
 		selected.patchGroup, selected.maxGroupMembers = true, groups.MaximumMembers
+	}
+	if groups := c.HTTPManagedSCIMGroupsDelete; groups != nil {
+		selected.deleteGroup, selected.maxGroupMembers = true, groups.MaximumMembers
 	}
 	if bulk != nil {
 		selected.rate = bulk.rate
@@ -503,6 +492,16 @@ func (s *Server) managedSCIMUsersOperations(network identityhttp.NetworkConfig) 
 		})
 		if err != nil {
 			return nil, identity.InvalidInputError{Field: managedSCIMGroupsPatchField}
+		}
+		operations = append(operations, feature.Operations()...)
+	}
+	if selected.deleteGroup {
+		feature, err := scimhttp.NewManagedGroupsDeleteFeature(scimhttp.ManagedGroupsDeleteConfig{
+			Network: network, Executor: referenceManagedGroupsExecutor{state: s.state, native: selected.native},
+			Rate: selected.rate, Limits: selected.limits, MaximumDuration: selected.maximum, MaximumMembers: selected.maxGroupMembers,
+		})
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: managedSCIMGroupsDeleteField}
 		}
 		operations = append(operations, feature.Operations()...)
 	}

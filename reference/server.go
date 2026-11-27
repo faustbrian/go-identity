@@ -424,7 +424,7 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 				operations[i].Handler = server.guardProviderDiscoveryLifetime(operations[i].Handler)
 			case "identity.scim.bulk", "identity.scim.service-provider-config",
 				"identity.scim.user-list", "identity.scim.user-get", "identity.scim.user-create", "identity.scim.user-delete", "identity.scim.user-patch",
-				"identity.scim.group-get", "identity.scim.group-list", "identity.scim.group-create", "identity.scim.group-replace", "identity.scim.group-patch":
+				"identity.scim.group-get", "identity.scim.group-list", "identity.scim.group-create", "identity.scim.group-replace", "identity.scim.group-patch", "identity.scim.group-delete":
 				operations[i].Handler = server.guardTenantResponse(network, operations[i].Handler, writeSCIMBulkGuardError)
 			default:
 				operations[i].Handler = server.guardTenant(network, operations[i].Handler)

@@ -155,3 +155,27 @@ func TestManagedSCIMGroupPatchSharesTheSelectedOwnerAndMemberCeiling(t *testing.
 		t.Fatal("co-selected Group PATCH did not share the exact PUT owner and quota", err)
 	}
 }
+
+func TestManagedSCIMGroupDeleteUsesTheSelectedOwnerAndMemberCeiling(t *testing.T) {
+	native := &ManagedSCIMConnectionConfiguration{}
+	deleteOption := &HTTPManagedSCIMGroupsDeleteConfiguration{Native: native, RateNamespace: "directory", RateKey: [32]byte{1}, MaximumMembers: 4}
+	config := StoreConfiguration{HTTPManagedSCIMGroupsDelete: deleteOption}
+	owner, field, err := managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || owner.Native != native || owner.RateNamespace != deleteOption.RateNamespace || owner.RateKey != deleteOption.RateKey || field != managedSCIMGroupsDeleteField {
+		t.Fatal("standalone Group DELETE did not retain its owned native and quota selection", err)
+	}
+	patch := &HTTPManagedSCIMGroupsPatchConfiguration{Native: native, RateNamespace: "directory", RateKey: [32]byte{1}, MaximumMembers: 4}
+	config.HTTPManagedSCIMGroupsPatch = patch
+	if _, _, err := managedSCIMUsersOptions(config); err == nil {
+		t.Fatal("co-selected Group DELETE accepted a duplicate native or quota owner")
+	}
+	config.HTTPManagedSCIMGroupsDelete = &HTTPManagedSCIMGroupsDeleteConfiguration{MaximumMembers: 0}
+	if _, _, err := managedSCIMUsersOptions(config); err == nil {
+		t.Fatal("co-selected Group DELETE accepted a different member ceiling")
+	}
+	config.HTTPManagedSCIMGroupsDelete.MaximumMembers = patch.MaximumMembers
+	owner, field, err = managedSCIMUsersOptions(config)
+	if err != nil || owner == nil || owner.Native != patch.Native || owner.RateNamespace != patch.RateNamespace || owner.RateKey != patch.RateKey || field != managedSCIMGroupsPatchField {
+		t.Fatal("co-selected Group DELETE did not share the exact Group PATCH profile", err)
+	}
+}

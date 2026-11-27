@@ -42,6 +42,20 @@ func (s StoreSet) managedSCIMReadMigrationCatalog(ctx context.Context, catalog [
 			return nil, err
 		}
 	}
+	if f.httpManagedSCIMUsers != nil && f.httpManagedSCIMUsers.deleteGroup {
+		if len(catalog) == 0 || catalog[0].namespace != "" {
+			return nil, identity.InvalidInputError{Field: "reference_catalog"}
+		}
+		// Native Group DELETE checks canonical aliases even when the original
+		// delete had no alias, so standalone selection needs the shared history.
+		if !slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == canonicalRequestHistory }) {
+			requests, err := canonicalRequestMigrationHistory(ctx, catalog[0].history)
+			if err != nil {
+				return nil, err
+			}
+			catalog = append(catalog, requests)
+		}
+	}
 	catalog, err := ensureSCIMProjectionHistory(ctx, catalog)
 	if err != nil {
 		return nil, err
