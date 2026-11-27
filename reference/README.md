@@ -1,5 +1,15 @@
 # Identity reference composition
 
+## Managed SCIM User deactivation
+
+Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes
+the existing Organization directory membership history. Use an issued managed
+bearer and the current strong `If-Match` to PATCH `active` to `false`. The
+User remains readable as inactive. The same transaction withdraws only the
+connection's current membership source. The last directory source may remove
+directory-owned access; global identity status and unrelated grants remain
+unchanged. A retry of a committed request returns its original response.
+
 ## Managed conditional SCIM Group DELETE
 
 Set `HTTPManagedSCIMGroupsDelete` to opt into

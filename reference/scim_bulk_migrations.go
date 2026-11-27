@@ -35,7 +35,9 @@ func (s StoreSet) managedSCIMReadMigrationCatalog(ctx context.Context, catalog [
 			return nil, err
 		}
 	}
-	if f.httpManagedSCIMUsers != nil && f.httpManagedSCIMUsers.deleteUser {
+	if f.httpManagedSCIMUsers != nil && (f.httpManagedSCIMUsers.deleteUser || f.httpManagedSCIMUsers.patchUser) {
+		// Managed User DELETE and a PATCH that makes a projection inactive
+		// both apply the selected connection's directory-membership policy.
 		var err error
 		catalog, err = ensureDirectoryMembershipHistory(ctx, catalog)
 		if err != nil {

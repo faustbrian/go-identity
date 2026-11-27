@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Managed SCIM User PATCH deactivation now selects the existing directory
+  membership history and withdraws the exact source with the inactive
+  projection. Independent access and global user status are preserved.
+
 - Select Google One Tap redirect-button sign-in independently of popup.
   Wire the trusted callback destination and original frontchannel proof into
   the existing session reader and strict logout profile.

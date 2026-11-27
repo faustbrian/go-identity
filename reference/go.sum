@@ -267,6 +267,8 @@ github.com/faustbrian/go-organization v0.0.0-20261122135635-30af6abd1547 h1:cvTP
 github.com/faustbrian/go-organization v0.0.0-20261122135635-30af6abd1547/go.mod h1:8EBHPVyBEdcoI0/3fOdwKPj/8YgQcjUtAcIPROGg5Ro=
 github.com/faustbrian/go-organization/postgres v0.0.0-20261126135735-651322f9c111 h1:wIGosEU7jAohKdjnzxnnEJSw9kCwBBxmzdRAo950Jv4=
 github.com/faustbrian/go-organization/postgres v0.0.0-20261126135735-651322f9c111/go.mod h1:fMhktg16MlVnzA9RrJKeEY4DI7sCuDp6pPDFwBlFrKQ=
+github.com/faustbrian/go-organization/postgres v0.0.0-20261127010933-1241e66b1fd9 h1:UmTw5PQ3aoTEu6T6dvoU6XPoXXmw602qwvTcOoxDymQ=
+github.com/faustbrian/go-organization/postgres v0.0.0-20261127010933-1241e66b1fd9/go.mod h1:fMhktg16MlVnzA9RrJKeEY4DI7sCuDp6pPDFwBlFrKQ=
 github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86 h1:lo/Aaj1zwOKvkbdE3TnwLo3ceaehtqphu35GySqHW68=
 github.com/faustbrian/go-passkey v0.0.0-20261025074150-30bf01583c86/go.mod h1:xo+sxfPGP2ieP7k8RDdziBimaw4ImeeVZYEQ/s99ICY=
 github.com/faustbrian/go-passkey/postgres v0.0.0-20261025200953-935ddaffedb1 h1:UUIClP6lyYWTuq7jxAPTXurE/K7jHY7T8rA3Sr0lNQY=
@@ -323,6 +325,8 @@ github.com/faustbrian/go-scim/postgres v0.0.0-20261126235536-8c0e1b86a647 h1:HdV
 github.com/faustbrian/go-scim/postgres v0.0.0-20261126235536-8c0e1b86a647/go.mod h1:VRiUb5O67MlqK20F4Cnkt9p4NTT1a6FMZ5fqnN0iZCw=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261127003019-3f5f32ad57e3 h1:tOqNRMGQiQSGJKsRt+4qvhGD+72MFBLG29kpGnj3Mew=
 github.com/faustbrian/go-scim/postgres v0.0.0-20261127003019-3f5f32ad57e3/go.mod h1:f2yt1HX77WyqPTSANFsKWp+KLQjCnM5ltj5lMaBAoLg=
+github.com/faustbrian/go-scim/postgres v0.0.0-20261127011809-b5ba68cef843 h1:i0aQfCBKaOvpupv0p7QqFBfADsEpXifFMG9nvZi+djs=
+github.com/faustbrian/go-scim/postgres v0.0.0-20261127011809-b5ba68cef843/go.mod h1:xkz/lGYWoWSW2gG5gSTw7cqlod58EXb8NODjYcJSXRk=
 github.com/faustbrian/go-secret-envelope/v2 v2.0.1 h1:1GHj2WZhKZihdhlbsU12o7T5kaA9z7IOy/1RQGu3RhA=
 github.com/faustbrian/go-secret-envelope/v2 v2.0.1/go.mod h1:X8VgGx/HsaHif3pNbS6A35sYg3SzF1+8A1YIZMd6Lnw=
 github.com/faustbrian/go-service v1.1.2 h1:8gKlxhILZzn1gQg5edVzRomlqLLaa07e2nC9dZ2rxIM=

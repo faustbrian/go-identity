@@ -283,6 +283,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	scimManagedUsersDeactivation bool
+
 	scimBulk                    bool
 	scimManagedRead             bool
 	scimManagedCreate           bool
@@ -2532,7 +2534,11 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 				proveReferenceSCIMUsersReplaceHTTPS(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
 			} else if extensions.scimManagedUsersPatch {
 				createReferenceSCIMOrganization(t, ctx, selected, cookies, csrf, *scimBulkSource)
-				proveReferenceSCIMUsersPatchHTTPS(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
+				if extensions.scimManagedUsersDeactivation {
+					proveReferenceSCIMUsersDeactivationHTTPS(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
+				} else {
+					proveReferenceSCIMUsersPatchHTTPS(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
+				}
 			} else if extensions.scimManagedUsersList {
 				createReferenceSCIMOrganization(t, ctx, selected, cookies, csrf, *scimBulkSource)
 				proveReferenceSCIMStandaloneUsersList(t, ctx, selectedConfig, selected, client, network.URL, cookies, csrf, *scimBulkSource)
