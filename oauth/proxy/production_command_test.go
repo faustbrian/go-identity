@@ -69,6 +69,55 @@ func TestProductionCommandCallbackDoesNotTreatEmptyCommitAsFreshHandoff(t *testi
 	}
 }
 
+func TestProductionCommandCallbackDenialValidatesExactDirectoryTenant(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		tenant      identity.TenantID
+		disposition CallbackDisposition
+		want        CallbackError
+	}{
+		{"uppercase directory ID", "01ARZ3NDEKTSV4RRFFQ69G5FAV", CallbackRejected, CallbackDenied},
+		{"empty tenant", "", CallbackNeedsReconciliation, CallbackReconcile},
+		{"tenant with space", "tenant a", CallbackNeedsReconciliation, CallbackReconcile},
+		{"tenant with control", "tenant\x7f", CallbackNeedsReconciliation, CallbackReconcile},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newCallbackFixture(t)
+			fixture.store.original.Binding.TenantID = tc.tenant
+			fixture.query = strings.Replace(fixture.query, "code=local-code", "error=access_denied", 1)
+			fixture.store.original.Verifier = oauth.PKCEVerifier{}
+			fixture.store.original.Nonce = ""
+			var generated bool
+			callback, err := newProductionCommandCallback(ProductionCallbackConfig{
+				ProductionDeployment: "production-a", Codec: fixture.codec, Clock: fixture.clock, Targets: []PreviewTarget{fixture.target},
+			}, fixture.provider, callbackCommandFunc(func(ctx context.Context, lookup CallbackLookup, generate CallbackGeneration) error {
+				if !lookup.ProviderDenied || lookup.StateDigest != fixture.store.original.Binding.StateDigest {
+					t.Fatal("command did not select the original provider denial")
+				}
+				generated = true
+				prepared, generationErr := generate(ctx, fixture.store.original)
+				if prepared.Disposition() != tc.disposition || len(prepared.Envelope()) != 0 {
+					t.Fatalf("denial prepared disposition %v, want %v, or released an envelope", prepared.Disposition(), tc.disposition)
+				}
+				if tc.disposition == CallbackRejected && generationErr != nil {
+					t.Fatalf("valid original denial was not acknowledged: %v", generationErr)
+				}
+				if tc.disposition == CallbackNeedsReconciliation && !errors.Is(generationErr, CallbackReconcile) {
+					t.Fatalf("invalid tenant was not left for reconciliation: %v", generationErr)
+				}
+				return generationErr
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := callback.Handle(t.Context(), fixture.route, fixture.query)
+			if !generated || !errors.Is(err, tc.want) || result.Destination() != "" || len(result.Envelope()) != 0 || fixture.provider.attempts != 0 {
+				t.Fatalf("denial returned an unexpected outcome or performed provider work: %v", err)
+			}
+		})
+	}
+}
+
 type cancellationCallbackProvider struct {
 	profile         oauth.ProviderProfile
 	cancelCaller    func()

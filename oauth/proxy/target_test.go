@@ -2,6 +2,7 @@ package oauthproxy
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	identity "github.com/faustbrian/go-identity"
@@ -51,23 +52,36 @@ func TestProductionCallbackConfigIdentifiersMatchEvidenceBinding(t *testing.T) {
 }
 
 func TestProductionCallbackRecordIdentifiersGateProviderExchange(t *testing.T) {
+	type identifierCase struct {
+		value    string
+		attempts int
+	}
 	for _, field := range []struct {
-		name string
-		set  func(*oauth.ProxyOIDCEvidenceBinding, string)
+		name  string
+		set   func(*oauth.ProxyOIDCEvidenceBinding, string)
+		cases []identifierCase
 	}{
-		{"tenant", func(b *oauth.ProxyOIDCEvidenceBinding, value string) { b.TenantID = identity.TenantID(value) }},
-		{"claims profile", func(b *oauth.ProxyOIDCEvidenceBinding, value string) { b.ClaimsProfile = value }},
-	} {
-		for _, tc := range []struct {
-			value    string
-			attempts int
-		}{
+		{"tenant", func(b *oauth.ProxyOIDCEvidenceBinding, value string) { b.TenantID = identity.TenantID(value) }, []identifierCase{
+			{"canonical-1", 1},
+			{"-leading-hyphen", 1},
+			{"_leading_underscore", 1},
+			{"01ARZ3NDEKTSV4RRFFQ69G5FAV", 1},
+			{"Uppercase", 1},
+			{"dotted.name", 1},
+			{"", 0},
+			{"tenant a", 0},
+			{"tenant\x7f", 0},
+			{strings.Repeat("a", 129), 0},
+		}},
+		{"claims profile", func(b *oauth.ProxyOIDCEvidenceBinding, value string) { b.ClaimsProfile = value }, []identifierCase{
 			{"canonical-1", 1},
 			{"-leading-hyphen", 1},
 			{"_leading_underscore", 1},
 			{"Uppercase", 0},
 			{"dotted.name", 0},
-		} {
+		}},
+	} {
+		for _, tc := range field.cases {
 			t.Run(field.name+"/"+tc.value, func(t *testing.T) {
 				fixture := newCallbackFixture(t)
 				field.set(&fixture.store.original.Binding, tc.value)

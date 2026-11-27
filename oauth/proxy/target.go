@@ -73,12 +73,13 @@ func identifier(s string) bool {
 }
 
 func validRecord(b oauth.ProxyOIDCEvidenceBinding) bool {
-	if !identifier(string(b.TenantID)) || !identifier(b.ClaimsProfile) || b.ClaimsVersion == 0 || b.RequestFingerprint == ([32]byte{}) ||
+	if !identifier(b.ClaimsProfile) || b.ClaimsVersion == 0 || b.RequestFingerprint == ([32]byte{}) ||
 		b.IssuedAt.IsZero() || b.IssuedAt.Year() < 1 || b.ExpiresAt.Year() > 9999 || !b.ExpiresAt.After(b.IssuedAt) || b.ExpiresAt.Sub(b.IssuedAt) > 5*time.Minute {
 		return false
 	}
+	_, tenant := identity.ParseIdentifierID(string(b.TenantID))
 	_, command := identity.ParseCommandID(string(b.CommandID))
 	_, transaction := identity.ParsePreAuthTransactionID(string(b.TransactionID))
 	_, remember := b.Remember.Bindings()
-	return command == nil && transaction == nil && remember == nil
+	return tenant == nil && command == nil && transaction == nil && remember == nil
 }

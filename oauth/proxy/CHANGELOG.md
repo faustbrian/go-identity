@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Validate callback tenant bindings as exact Directory IDs, preserving uppercase
+  canonical IDs while rejecting malformed values without provider work or a
+  handoff. Deployment, recipient and claims-profile slug rules are unchanged.
+
 - Add a command-owned callback mode so the native coordinator can already
   own reservation, preparation and atomic settlement. The provider step is
   invocation-local and cannot disclose a handoff on replay or without an
