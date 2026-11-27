@@ -49,11 +49,16 @@ and lifecycle declaration with an ordinary audited feature command.
 
 During the original native Apply, `Work.OAuthProxyOriginRetirementScope`
 returns the exact scope to the capability adapter. The OAuth PostgreSQL
-owner must independently authenticate its original custody, verify current
-retirement authority, and lock the relevant record in that Work before it
-uses this scope. This operation does not prove provider disable, classify
-an unknown exchange, finalize an authentication callback, or release any
-credential. It does not open another connection or transaction.
+owner must authenticate the original custody, verify current retirement
+authority, and protect the custody transition from concurrent changes in the
+same Work. The scope does not prove provider disable, classify an unknown
+exchange, finalize an authentication callback, or release any credential.
+
+`Work.OAuthProxyOriginRetirementGrant` reads the original committed Start or
+Bind plan in that Work. It returns only the exact non-bearer grant locator,
+including after proof expiry or ciphertext erasure. Missing, pruned, or
+mismatched history does not acknowledge retirement. The lookup opens no other
+connection and does not change command or grant state.
 
 ## OAuth proxy initiation preparation
 

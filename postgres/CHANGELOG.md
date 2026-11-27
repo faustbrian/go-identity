@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recover the exact OAuth proxy retirement grant locator from the original
+  committed Start or Bind plan, even after proof expiry or ciphertext erasure.
+
 - Scope native OAuth proxy retirement to the original Apply invocation,
   tenant, flow, issuing command and exact grant role. Keep retirement
   separate from authentication and uncertain provider exchange outcomes.
