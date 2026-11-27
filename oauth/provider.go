@@ -375,6 +375,8 @@ type ProviderIdentity struct {
 	hasAuthenticationTime             bool
 	idTokenIssuedAt, idTokenExpiresAt time.Time
 	evidenceExpiresAt                 time.Time
+	exchangeClientID                  string
+	exchangeProviderVersion           uint64
 	oidcClaims                        *oidcClaimProjection
 	oauth2Claims                      *oauth2ClaimProjection
 }
@@ -586,6 +588,7 @@ func (p *OIDCProvider) exchange(ctx context.Context, code, verifier, secret []by
 	if !ok {
 		return ExchangeResult{}, failure(InvalidProof, ctx)
 	}
+	verified.exchangeClientID, verified.exchangeProviderVersion = p.config.ClientID, p.config.Version
 	owner := &tokenOwner{access: bytes.Clone(parsed.access), refresh: bytes.Clone(parsed.refresh), id: bytes.Clone(parsed.id)}
 	tokens := TokenSet{owner: func() *tokenOwner { return owner }, receivedAt: receivedAt, expiresAt: receivedAt.Add(time.Duration(parsed.expires) * time.Second), requested: slices.Clone(p.config.Scopes), granted: slices.Clone(parsed.scopes), scopeReported: parsed.scopeReported}
 	return ExchangeResult{Identity: verified, Tokens: tokens}, nil

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add authenticated handoff of minimal OIDC code-exchange evidence to an exact
+  preview recipient. Bind the original exchange client, transaction, signed
+  times, Remember policy and rotating keys without forwarding tokens or claims.
+
 - Add an opt-in exact canonical Google hosted-domain constraint for direct
   credentials. Require the signed `hd` string after existing strict Google
   validation, reuse bounded selected-claim projection and reject missing,
