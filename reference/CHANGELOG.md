@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose approved impersonation over the native password/TOTP primary.
+  Independently opt into HTTPS Start and child-only Stop with retained keyed
+  retry custody and no ordinary-session cookie replacement.
+
 - Add an opt-in server constructor for localized public email password-signin
   errors. Keep the native account, session and route selection unchanged.
 

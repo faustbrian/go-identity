@@ -283,6 +283,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	impersonation                bool
 	passwordSigninLocalization   bool
 	scimManagedUsersDeactivation bool
 	oauthProxyPreview            bool
@@ -654,6 +655,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.administrativeEmailQueries || extensions.administrativeEmailRemoval {
 		f.adminEmailGrant = &administrativeEmailGrant{removal: extensions.administrativeEmailRemoval}
 		selectedAuthorization = f.adminEmailGrant
+	}
+	if extensions.impersonation {
+		selectedAuthorization = referenceImpersonationPolicy{}
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
 	var socialIssuer *referenceSocialOIDCIssuer
@@ -1046,6 +1050,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passwordMFA || extensions.phoneTOTP {
 		configureReferencePasswordMFA(t, &c, origin)
+	}
+	if extensions.impersonation {
+		configureReferenceImpersonation(t, &c, origin)
 	}
 	if extensions.passwordRecovery {
 		totp := c.PasswordSignin.TOTP
@@ -1598,6 +1605,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if c.Organization != nil {
 		modules = append(modules, "organization/postgres")
 	}
+	if c.Impersonation != nil {
+		modules = append(modules, "identity/impersonation/postgres")
+	}
 	if c.EnterpriseOIDC != nil || c.EnterpriseOAuth2 != nil || c.EnterpriseSAML != nil || extensions.directorySync {
 		modules = append(modules, "sso/postgres")
 	}
@@ -1736,6 +1746,14 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	for _, op := range []string{"identity.impersonation.start", "identity.impersonation.stop"} {
+		if seen[op] != (c.HTTPImpersonation != nil) {
+			t.Fatal("impersonation OpenAPI selection differs from configured HTTP", op)
+		}
+		if c.HTTPImpersonation != nil {
+			wantOperations++
+		}
+	}
 	if c.HTTPAPIKey != nil {
 		wantOperations += 3
 	}
@@ -3087,6 +3105,17 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			}
 			proveReferenceDeviceHTTP(t, ctx, client, network.URL, origin, cookies, csrf)
 		}
+	}
+	if extensions.impersonation {
+		native, err := features.Impersonation()
+		if err != nil {
+			t.Fatal("selected native impersonation unavailable", err)
+		}
+		requester, requesterCSRF := referenceImpersonationAdmin(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-requester")
+		approver, approverCSRF := referenceImpersonationAdmin(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-approver")
+		target := registerReferenceOrganizationHuman(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-target")
+		proveReferenceImpersonationHTTP(t, ctx, native, client, network.URL, origin, requester, approver, requesterCSRF, approverCSRF, target.user)
+		return
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
 	if extensions.phoneTOTP && !*f.phoneTOTPCompleted {

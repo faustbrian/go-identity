@@ -148,6 +148,32 @@ record the pair's proxy cleanup. Retry the original selector after any
 ambiguous outcome. The provider cascade remains pending and there is no HTTP
 operator route or claim about external revocation.
 
+## Approved impersonation
+
+Select `StoreConfiguration.Impersonation` on the native password-plus-TOTP
+graph. Provide an explicit impersonation policy, a dedicated child lookup key
+and a retained envelope key. The existing deployment authorizer must allow
+the selected impersonation actions for the exact actor, target and requested
+application permissions. Run the existing Reference migration Plan and Apply
+before enabling traffic; the selected profile installs the native
+`identity_impersonation` history.
+
+Use `FeatureSet.Impersonation()` to prepare and execute a request, then
+prepare and execute approval with a different authenticated administrator.
+Retain the prepared command binding so the original administrator can
+reconcile ambiguous request and approval outcomes. The native
+`ValidateUse` method verifies exact approved application permissions without
+authenticating an ordinary session.
+
+To expose Start and Stop, also select `HTTPImpersonation` with exact trusted
+origins and independent, retained keyed-Start envelope keys. Start requires
+the original ordinary cookie and CSRF proof, the approved grant and version,
+and an `Idempotency-Key`. Only the first committed Start issues the child
+credentials; exact retries return metadata. Stop requires the child cookie
+and its own synchronizer and clears only the child cookies. Direct Go
+request and approval do not add HTTP routes; leaving HTTP unselected adds
+no routes or OpenAPI operations.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes

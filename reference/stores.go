@@ -135,6 +135,10 @@ type StoreConfiguration struct {
 	Organization *OrganizationConfiguration
 	// HTTPOrganization independently selects organization routes and metadata.
 	HTTPOrganization *HTTPOrganizationConfiguration
+	// Impersonation selects approved impersonation over the password/TOTP graph.
+	Impersonation *ImpersonationConfiguration
+	// HTTPImpersonation independently selects only HTTPS Start and self-Stop.
+	HTTPImpersonation *HTTPImpersonationConfiguration
 	// Passkey explicitly selects native existing-account passkey workflows.
 	// Nil exposes no passkey handle, route or method; HTTP stays independent.
 	Passkey *PasskeyConfiguration

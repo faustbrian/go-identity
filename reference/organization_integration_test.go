@@ -778,8 +778,12 @@ func organizationHumanFromSession(t *testing.T, ctx context.Context, sessions re
 	}
 	return organizationTestHuman{auth: organization.Authentication{TenantID: otpTenant, Bearer: auth.NewBearerCredential(cookies[0].Value)}, user: binding.UserID, sessionID: binding.SessionID, cookies: cookies, csrf: csrf}
 }
-func registerReferenceOrganizationHuman(t *testing.T, ctx context.Context, client *http.Client, base, origin string, features reference.FeatureSet, workers reference.WorkerSet, messages <-chan string) organizationTestHuman {
+func registerReferenceOrganizationHuman(t *testing.T, ctx context.Context, client *http.Client, base, origin string, features reference.FeatureSet, workers reference.WorkerSet, messages <-chan string, profile ...string) organizationTestHuman {
 	t.Helper()
+	email, signupKey := "organization-recipient@example.invalid", "reference-recipient-signup"
+	if len(profile) == 1 {
+		email, signupKey = profile[0]+"@example.invalid", "reference-"+profile[0]+"-signup"
+	}
 	post := func(path string, value any, key string, cookies []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()
 		wire, err := json.Marshal(value)
@@ -820,7 +824,7 @@ func registerReferenceOrganizationHuman(t *testing.T, ctx context.Context, clien
 		return out, r.Cookies()
 	}
 	flow, cookies := issue("signup")
-	_, wire := post("/v1/password/signup", map[string]any{"flowID": flow.FlowID, "email": "organization-recipient@example.invalid", "password": "synthetic-registration-password", "callbackURL": origin + "/confirm"}, "reference-recipient-signup", cookies)
+	_, wire := post("/v1/password/signup", map[string]any{"flowID": flow.FlowID, "email": email, "password": "synthetic-registration-password", "callbackURL": origin + "/confirm"}, signupKey, cookies)
 	var registered passwordhttp.SignupResponse
 	if json.Unmarshal(wire, &registered) != nil || !registered.VerificationRequired || registered.CommitOutcome != "committed" {
 		t.Fatal("genuine recipient signup")
@@ -848,7 +852,7 @@ func registerReferenceOrganizationHuman(t *testing.T, ctx context.Context, clien
 		t.Fatal("genuine recipient verification")
 	}
 	flow, cookies = issue("password")
-	response, wire := post("/v1/password/signin", map[string]any{"flowID": flow.FlowID, "identifier": "organization-recipient@example.invalid", "password": "synthetic-registration-password", "callbackURL": origin + "/reset"}, "", cookies)
+	response, wire := post("/v1/password/signin", map[string]any{"flowID": flow.FlowID, "identifier": email, "password": "synthetic-registration-password", "callbackURL": origin + "/reset"}, "", cookies)
 	var signed passwordhttp.SigninResponse
 	if json.Unmarshal(wire, &signed) != nil || !signed.SignedIn {
 		t.Fatal("genuine recipient signin")
