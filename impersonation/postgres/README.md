@@ -142,3 +142,22 @@ hold; the result never issues, rotates or discloses a bearer. An independently
 revoked or expired grant cannot be stopped by a new command. Retain the
 original binding and derived proof for `RecoverStop`, which runs current
 recovery policy and returns only the command receipt.
+
+## Opt in to keyed Start
+
+Install the existing kernel request-key and request-key preparation
+migrations alongside the selected self-stop migration. Wrap the configured
+self-stop service with `NewKeyedStartService`, a stable request-key namespace
+and lookup configuration, and `KeyedStartCustody` with an independent local
+encryption keyring. Keep the configuration ID stable for the same deployment
+and execution profile. Retain old ciphertext keys for retained requests.
+
+Call `Start` with the same actor, approved grant/version and
+`identity.IdempotencyKey` for a retry. The kernel scopes admission to the
+current original actor and tenant, the canonical Start operation and POST.
+The native Start and recovery policies are also required. Only the original
+acknowledged mapping winner can execute and receive the original bearer and
+stop synchronizer. A replay may return the original receipt but cannot
+recover a bearer or synchronizer. Reusing a key for a different grant
+conflicts; a retained mapping without an execution claim returns Unknown
+with the original command ID and never starts the grant again.

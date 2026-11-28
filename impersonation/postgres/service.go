@@ -172,12 +172,16 @@ func (p PreparedCommand) Binding() (identity.CommandBinding, error) {
 }
 
 func (s *Service) coordinator(phase *approvalPhase) (*kernel.Coordinator, *kernel.ContributorRegistry, error) {
-	registry, err := kernel.NewContributorRegistry([]kernel.Contributor{s.directory, s.config.Audit, s.config.Lifecycle, s.config.Risk, phase})
+	registry, err := s.registry(phase)
 	if err != nil {
 		return nil, nil, err
 	}
 	coordinator, err := kernel.NewCoordinator(s.pool, registry, s.config.Coordinator)
 	return coordinator, registry, err
+}
+
+func (s *Service) registry(phase *approvalPhase) (*kernel.ContributorRegistry, error) {
+	return kernel.NewContributorRegistry([]kernel.Contributor{s.directory, s.config.Audit, s.config.Lifecycle, s.config.Risk, phase})
 }
 
 // PrepareRequest authenticates, authorizes and freezes the pending request.

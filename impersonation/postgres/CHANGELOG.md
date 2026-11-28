@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add native keyed Start over the existing durable request-key owner. Only the
+  acknowledged original execution can deliver the child secret pair; exact
+  retries and restart recovery disclose only the original command result.
+
 - Add opt-in impersonated self-stop with a separate child CSRF proof. Resume
   only the caller's original still-valid parent session, without issuing a
   bearer, and recover the exact terminal receipt after restart.

@@ -34,6 +34,7 @@ type approvalPhase struct {
 	start    *activationIntent
 	revoke   *revocationIntent
 	stop     *stopIntent
+	keyed    *keyedStartInvocation
 	command  identity.Command
 	counters kernel.CommandCounterPlan
 	audit    kernel.AuditPlan
