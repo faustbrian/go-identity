@@ -108,6 +108,25 @@ durable custody. Transaction failure may be observed as unavailable, not a
 terminal callback result. Legacy row metadata is not backfilled, and neither
 the projection nor activation proves that a cleanup generation is sealed.
 
+### Seal an admitted disable before scanning
+
+After activation, construct a `ProxyCustodyFenceOperator` for the exact origin
+and tenant. It borrows a read-only provider-primary pool with SELECT on the
+admission table, and a separate local pool with SELECT, INSERT and UPDATE on
+the local fence table. The local operator does not need custody writes or DDL.
+Keep both pools outside the callback role. The operator pins the original
+provider operator's actor ID.
+
+Pass the admission's tenant, source command, cascade ID and generation to
+`SealAdmittedProviderDisable`. The operator rereads the pending admission;
+an audit-only or ordinary unadmitted disable cannot seal. The local gate must
+be active on the selected table. An acknowledged result means the local
+cutoff covers that admission’s prior epoch, even if the provider has since
+been re-enabled. A later seal may already cover it; an older retry never
+lowers the cutoff. Retry an unknown commit with the same selector. This
+operator neither retires existing rows nor acknowledges cleanup; scanning
+and per-origin retirement remain separate.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in

@@ -54,15 +54,13 @@ func proxyCustodyFenceHistory(ctx context.Context, schema string, version migrat
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	var custody, fence, role, check string
-	switch kind {
-	case kernel.OAuthProxyRetireProduction:
-		custody, fence, role = "proxy_transactions", "proxy_production_write_fences", "production"
-		check = "OR NEW.fence_provider_id IS DISTINCT FROM NEW.provider_id"
-	case kernel.OAuthProxyRetirePreview:
-		custody, fence, role = "proxy_preview_bindings", "proxy_preview_write_fences", "preview"
-	default:
+	custody, fence, role := proxyCustodyFenceStorage(kind)
+	if role == "" {
 		return nil, invalid
+	}
+	var check string
+	if kind == kernel.OAuthProxyRetireProduction {
+		check = "OR NEW.fence_provider_id IS DISTINCT FROM NEW.provider_id"
 	}
 	namespace := rpQuotedSchema(schema) + "."
 	name, sql := "identity_oauth_proxy_"+role+"_write_fence", proxyCustodyFenceExpand
@@ -76,6 +74,17 @@ func proxyCustodyFenceHistory(ctx context.Context, schema string, version migrat
 		return nil, identity.UnavailableError{}
 	}
 	return []migrations.Migration{migration}, nil
+}
+
+func proxyCustodyFenceStorage(kind kernel.OAuthProxyRetirementKind) (custody, fence, role string) {
+	switch kind {
+	case kernel.OAuthProxyRetireProduction:
+		return "proxy_transactions", "proxy_production_write_fences", "production"
+	case kernel.OAuthProxyRetirePreview:
+		return "proxy_preview_bindings", "proxy_preview_write_fences", "preview"
+	default:
+		return "", "", ""
+	}
 }
 
 const proxyCustodyFenceExpand = `SET LOCAL lock_timeout = '5s';

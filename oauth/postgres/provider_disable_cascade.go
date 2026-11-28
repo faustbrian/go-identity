@@ -102,14 +102,25 @@ func providerDisableCascadeInsertSQL(table string) string {
 }
 
 func (o *ProviderAuthorityOperator) readDisableCascade(ctx context.Context, tx pgx.Tx, c ProviderAuthorityChange, window time.Duration) (ProviderDisableAdmission, error) {
+	row := tx.QueryRow(ctx, providerDisableCascadeReadSQL(o.authority.cascadeTable), string(c.Key.TenantID), string(c.CommandID))
+	admission, err := decodeProviderDisableAdmission(ctx, row, c.Key.TenantID, c.CommandID, o.actor)
+	if err != nil || admission.CascadeID == "" {
+		return admission, err
+	}
+	if admission.Disable != c || admission.Deadline.Sub(admission.AdmittedAt) != window {
+		return ProviderDisableAdmission{}, identity.ConflictError{}
+	}
+	return admission, nil
+}
+
+func decodeProviderDisableAdmission(ctx context.Context, row pgx.Row, tenant identity.TenantID, command identity.CommandID, operator identity.ActorID) (ProviderDisableAdmission, error) {
 	var provider, actor, previous, disabled, profile, rawID, manifest, topic, hold string
 	var generation int64
 	var version, status int16
 	var contracts []byte
 	var admitted, deadline time.Time
-	err := tx.QueryRow(ctx, providerDisableCascadeReadSQL(o.authority.cascadeTable), string(c.Key.TenantID), string(c.CommandID)).
-		Scan(&provider, &actor, &previous, &disabled, &profile, &rawID, &generation, &manifest, &topic, &version,
-			&contracts, &status, &hold, &admitted, &deadline)
+	err := row.Scan(&provider, &actor, &previous, &disabled, &profile, &rawID, &generation, &manifest, &topic, &version,
+		&contracts, &status, &hold, &admitted, &deadline)
 	if ctx.Err() != nil {
 		return ProviderDisableAdmission{}, ctx.Err()
 	}
@@ -119,22 +130,25 @@ func (o *ProviderAuthorityOperator) readDisableCascade(ctx context.Context, tx p
 	if err != nil {
 		return ProviderDisableAdmission{}, providerAuthorityFailure(ctx)
 	}
-	if actor != string(o.actor) {
+	if actor != string(operator) {
 		return ProviderDisableAdmission{}, identity.ForbiddenError{}
 	}
-	if provider != c.Key.ProviderID || previous != strconv.FormatUint(c.ExpectedVersion, 10) ||
-		disabled != strconv.FormatUint(c.Next.Version, 10) || profile != strconv.FormatUint(c.Next.ProfileVersion, 10) ||
-		deadline.Sub(admitted) != window {
-		return ProviderDisableAdmission{}, identity.ConflictError{}
-	}
 	id, err := identity.ParseCascadeID(rawID)
+	prior, pErr := strconv.ParseUint(previous, 10, 64)
+	epoch, eErr := strconv.ParseUint(disabled, 10, 64)
+	configuration, cErr := strconv.ParseUint(profile, 10, 64)
+	_, windowErr := providerDisableCascadeWindow(deadline.Sub(admitted))
 	var consumers []ProviderDisableConsumer
 	if err != nil || generation != 1 || manifest != providerDisableCascadeManifest || topic != providerDisableCascadeTopic ||
 		version != 1 || status != int16(identity.RevocationPending) || hold != providerDisableCascadeHold || admitted.IsZero() ||
+		deadline.IsZero() || !deadline.After(admitted) || windowErr != nil || !rpProviderID(provider) ||
+		pErr != nil || eErr != nil || cErr != nil || prior == 0 || epoch <= prior || configuration == 0 ||
 		json.Unmarshal(contracts, &consumers) != nil || !slices.Equal(consumers, providerDisableCascadeConsumers()) {
 		return ProviderDisableAdmission{}, identity.UnavailableError{}
 	}
-	return ProviderDisableAdmission{CascadeID: id, Generation: 1, Disable: c, EventID: c.CommandID, EventTopic: topic,
+	change := ProviderAuthorityChange{Key: ProviderAuthorityKey{TenantID: tenant, ProviderID: provider}, ExpectedVersion: prior,
+		Next: ProviderAuthorityState{Version: epoch, ProfileVersion: configuration}, CommandID: command}
+	return ProviderDisableAdmission{CascadeID: id, Generation: 1, Disable: change, EventID: command, EventTopic: topic,
 		EventVersion: 1, ManifestVersion: manifest, Consumers: consumers, Status: identity.RevocationPending,
 		AdmittedAt: admitted.UTC(), Deadline: deadline.UTC()}, nil
 }

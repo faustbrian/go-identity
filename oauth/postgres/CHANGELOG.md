@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Seal an activated local OAuth custody origin against the exact pending
+  provider-primary admission. Reject forged or unadmitted disables and never
+  lower the local cutoff on an older retry.
+
 - Add an opt-in database gate for production Start and preview Bind. Expand
   first, switch to the selected live writers, then activate to exclude legacy
   inserts and reject writes at or below the locally denied provider epoch.
