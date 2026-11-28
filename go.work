@@ -29,6 +29,7 @@ use (
 	./http/sso
 	./i18n
 	./impersonation
+	./impersonation/postgres
 	./magiclink
 	./magiclink/postgres
 	./mfa
