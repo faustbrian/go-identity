@@ -79,6 +79,21 @@ original binding for `Recover`; exact replay returns only the original
 metadata. The private reason is encrypted, and old approval or revocation
 writers cannot make another transition after denial.
 
+### Read the current quorum
+
+The Denial profile also exposes `Service.Quorum`. Pass the exact tenant,
+grant ID, and an ordinary password/TOTP session credential. The authorizer
+must allow `identity.impersonation.quorum` on the exact
+`identity.impersonation.grant` resource at the current policy revision.
+No CSRF proof or command is needed for this read.
+
+The result is one primary snapshot: the selected policy's required approval
+count (one for this profile), distinct approver ID and decision time where
+present, and the observed status. Denied, revoked, and stopped are terminal;
+otherwise the applicable exclusive deadline determines expiry. The read does
+not create authority, expose reasons or approval credentials, or change stored
+state. It does not configure multiple approvers or select an HTTP route.
+
 ## Opt in to activation and online use
 
 Apply version 2 from `ActivationMigrationSource{}` before selecting activation.

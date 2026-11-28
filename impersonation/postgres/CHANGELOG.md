@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Read the quorum and safe approval metadata for one exact grant using an
+  explicitly authorized, fresh ordinary administrator over the Denial profile.
+
 - Add opt-in distinct-administrator denial of an exact pending request.
   Preserve the private reason, exact replay and one terminal effect across
   current and predecessor approval/revocation writers.

@@ -100,6 +100,22 @@ type authenticatedActor struct {
 }
 
 func authenticateActor(ctx context.Context, reader *session.SessionService, cfg sessionpg.SessionServiceConfig, csrfKey session.CSRFKey, input Authentication) (authenticatedActor, error) {
+	actor, err := authenticateOrdinaryActor(ctx, reader, cfg, input)
+	if err != nil {
+		return authenticatedActor{}, err
+	}
+	spec, err := actor.observed.Session.Bindings()
+	if err != nil || spec.TenantID != input.Tenant {
+		return authenticatedActor{}, identity.ForbiddenError{}
+	}
+	csrfBinding := session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}
+	if actor.observed.Session.CSRFState().Check(csrfBinding, input.CSRF, csrfKey) != nil {
+		return authenticatedActor{}, identity.ForbiddenError{}
+	}
+	return actor, nil
+}
+
+func authenticateOrdinaryActor(ctx context.Context, reader *session.SessionService, cfg sessionpg.SessionServiceConfig, input Authentication) (authenticatedActor, error) {
 	if ctx == nil || reader == nil {
 		return authenticatedActor{}, impersonation.ErrInvalidInput
 	}
@@ -119,14 +135,6 @@ func authenticateActor(ctx context.Context, reader *session.SessionService, cfg 
 	actor := authenticatedActor{input: input, observed: observation}
 	if err := actor.requireFresh(now); err != nil {
 		return authenticatedActor{}, err
-	}
-	spec, err := observation.Session.Bindings()
-	if err != nil || spec.TenantID != input.Tenant {
-		return authenticatedActor{}, identity.ForbiddenError{}
-	}
-	csrfBinding := session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}
-	if observation.Session.CSRFState().Check(csrfBinding, input.CSRF, csrfKey) != nil {
-		return authenticatedActor{}, identity.ForbiddenError{}
 	}
 	return actor, nil
 }
