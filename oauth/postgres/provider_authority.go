@@ -20,6 +20,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const (
+	providerAuthorityRecordPrefix = "oauth-provider-authority:"
+	providerAuthorityDisableAudit = "identity.oauth.provider.disable"
+)
+
 // ProviderAuthorityKey identifies one social-provider connection. ProviderID
 // is the registered configuration ID, never an issuer or user-supplied URL.
 type ProviderAuthorityKey struct {
@@ -212,14 +217,14 @@ func (a *ProviderAuthority) registerQuery() string {
 func (o *ProviderAuthorityOperator) stage(ctx context.Context, tx pgx.Tx, c ProviderAuthorityChange, now time.Time) error {
 	action, topic := "identity.oauth.provider.configure", "social_provider.configuration_changed.v1"
 	if !c.Next.Enabled {
-		action, topic = "identity.oauth.provider.disable", "social_provider.disabled.v1"
+		action, topic = providerAuthorityDisableAudit, "social_provider.disabled.v1"
 	}
 	command, tenant := string(c.CommandID), string(c.Key.TenantID)
 	// The native audit store retains accepted record identities after payload
 	// pruning. A duplicate effect must abort this transaction even when its
 	// outbox message was already delivered and removed.
 	builder, err := audit.NewBuilder(audit.BuilderConfig{Clock: func() time.Time { return now },
-		IDGenerator: func() (string, error) { return "oauth-provider-authority:" + command, nil }})
+		IDGenerator: func() (string, error) { return providerAuthorityRecordPrefix + command, nil }})
 	if err != nil {
 		return identity.UnavailableError{}
 	}

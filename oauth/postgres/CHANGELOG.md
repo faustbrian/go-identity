@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in exact-origin OAuth proxy retirement after a retained provider
+  disable. Revoke the original unused grant and erase local bearer custody
+  in the same audited transaction without changing the original callback
+  outcome or affecting a later enabled epoch.
+
 - Let native production and preview proxy owners opt into the same live
   provider authority. Bind the exact epoch to new originals and handoffs and
   recheck it before generation, session completion, and disclosure. Preserve

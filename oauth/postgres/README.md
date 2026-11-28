@@ -29,6 +29,30 @@ This is the generic authority owner, not an HTTP administration endpoint.
 The proxy can opt into it as described below. The operator result does not
 acknowledge lifecycle cleanup or provider-side revocation.
 
+### Retire one original after provider disable
+
+Apply the two `ProxyRetirementMigrationSource` entries, in order and in
+separate transactions, after the selected production or preview custody
+migration. The first entry has a short exclusive schema lock and does not
+rewrite rows; the second validates existing rows without blocking ordinary
+reads and writes. Enable retirement only after both entries are applied.
+Existing callback writers can still use open and settled rows. Disabling the
+retirement caller does not restore erased credentials or reverse the migration.
+
+Use `NewProxyRetirementAuthority` with the authoritative audit reader and the
+configured provider operator. Keep this reader separate from the restricted
+callback role. Call `RetireDisabledProviderOrigin` on the live-authority
+production or preview service with one original issuance, flow, and committed
+disable. The method authenticates the retained disable before opening local
+Work. It does not accept claims about the operator or prior epoch from a
+browser. Missing audit or original issuance history denies retirement.
+
+A committed result means the exact local grant was retired or already terminal,
+local bearer custody was erased, and one audit and lifecycle effect committed
+with it. This does not settle a previously unknown provider exchange, close the
+provider's whole cascade, or publish an HTTP route. A later enabled epoch is
+not eligible. Retry an ambiguous result only with the same command and inputs.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in

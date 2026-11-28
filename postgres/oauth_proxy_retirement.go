@@ -74,8 +74,9 @@ func NewOAuthProxyOriginRetirementCommand(b identity.CommandBinding, kind OAuthP
 
 // OAuthProxyOriginRetirementScope returns the frozen target only during the
 // exact registered OAuth custody owner's original Apply. The owner must
-// authenticate the retirement source and lock the exact original custody
-// before delegating to the capability adapter. This guard performs no I/O.
+// authenticate the retirement source and original custody. When the callback
+// path locks the grant first, use the same lock order and compare the exact
+// custody locator when erasing it in Work. This guard performs no I/O.
 func (w Work) OAuthProxyOriginRetirementScope(ctx context.Context, owner FeatureExecutionContributor, command identity.Command) (OAuthProxyOriginRetirementScope, error) {
 	if err := w.RequireFeatureCommand(ctx, owner, command); err != nil {
 		return OAuthProxyOriginRetirementScope{}, err
