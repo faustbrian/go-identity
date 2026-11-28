@@ -3,8 +3,8 @@
 This optional adapter persists one pending impersonation request and one
 approval by a different administrator. A separate opt-in activates that
 exact approved grant and validates a distinct derived credential online.
-There are no HTTP routes, ordinary session issuance or public revocation
-commands in this profile.
+A third selection adds explicit administrator revocation. The adapter does
+not expose HTTP routes, ordinary session issuance or impersonated self-stop.
 
 ## Compose
 
@@ -86,3 +86,33 @@ after policy callbacks; a revoked or expired grant cannot be served from
 a cache. The result is marked with separate actor, target and grant IDs.
 It authorizes only that use, not future requests or an ordinary session.
 Reserved identity and organization administration actions are excluded.
+
+## Opt in to administrator revocation
+
+Apply all five versions from `RevocationMigrationSource{}` before calling
+`NewServiceWithRevocation` with the existing activation configuration. It
+preserves both installed migrations. Version 3 adds empty terminal storage;
+versions 4 and 5 each add one metadata-only guard with a five-second local lock
+timeout, without rewriting or scanning existing rows. If either guard cannot
+be installed, keep revocation disabled. An older request/approval/activation
+binary can keep handling other grants. If migrations and application use
+different database roles, permit the legacy writer roles to read the terminal
+table's tenant and grant key columns for the guards. Code rollback retains the
+storage and both guards; never remove them to re-enable a revoked grant.
+
+A fresh ordinary administrator distinct from the target supplies their
+password-plus-TOTP session, original CSRF proof, a new command ID, grant ID,
+expected version (1 pending, 2 approved, 3 active), and private reason to
+`PrepareRevoke`. The policy must allow `identity.impersonation.revoke` on the
+original target with the `impersonation.grant-id` attribute. Execution checks
+the administrator again and takes the exact grant lock. A committed receipt
+means that the terminal version, protected audit, lifecycle event, and command
+journal committed together. It does not require the target or original grant
+requester to remain active.
+
+Use the same prepared command for an exact retry or recover its original
+binding after restart. Neither returns a credential or the private reason.
+After commit, an existing derived bearer fails its next authoritative check.
+The old request and approval are historical records, not authority; the
+database guards prevent older binaries from approving or activating that
+grant again.

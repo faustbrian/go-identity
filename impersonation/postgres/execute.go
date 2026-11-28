@@ -27,8 +27,14 @@ func (s *Service) Execute(ctx context.Context, input PreparedCommand) (identity.
 	if err := s.requireActor(bounded, phase.actor.input, b); err != nil {
 		return identity.CommandResult{}, err
 	}
-	if err := s.authorize(bounded, b, scope); err != nil {
-		return identity.CommandResult{}, err
+	if b.OperationID == revokeAction {
+		if err := s.authorizeRevocation(bounded, b); err != nil {
+			return identity.CommandResult{}, err
+		}
+	} else {
+		if err := s.authorize(bounded, b, scope); err != nil {
+			return identity.CommandResult{}, err
+		}
 	}
 	if b.OperationID == approveAction {
 		requester := s.originalRequesterBinding(phase.observed)
@@ -93,7 +99,8 @@ func (s *Service) Recover(ctx context.Context, auth Authentication, binding iden
 	isOriginalRequest := string(binding.CommandID) == binding.RecordID
 	if !selected || err != nil || binding.ValidateFor(op) != nil || (binding.OperationID == requestAction) != isOriginalRequest ||
 		binding.ActorKind != authorization.SubjectUser || binding.CorrelationID != string(binding.CommandID) ||
-		identity.UserID(binding.ActorID) == binding.UserID || binding.OperationID == startAction && s.activation == nil {
+		identity.UserID(binding.ActorID) == binding.UserID || binding.OperationID == startAction && s.activation == nil ||
+		binding.OperationID == revokeAction && !s.revocation {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
 	bounded, stop := context.WithTimeout(ctx, s.config.Coordinator.MaximumDuration)

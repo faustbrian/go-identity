@@ -10,7 +10,7 @@ require (
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
 	github.com/faustbrian/go-identity/impersonation v0.0.0-20261128060409-ec2ff88687be
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261128060008-a65bb39723d4
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261128064753-40cd49f6dbc8
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261128062444-5bbc0f7c1e0a
 	github.com/faustbrian/go-identity/risk v0.0.0-20261124125401-3845f97fe8aa
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261124125758-d8bd5f7b074a

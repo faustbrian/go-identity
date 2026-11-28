@@ -32,6 +32,7 @@ type approvalPhase struct {
 	reason   impersonation.Reason
 	approver approvalParticipant
 	start    *activationIntent
+	revoke   *revocationIntent
 	command  identity.Command
 	counters kernel.CommandCounterPlan
 	audit    kernel.AuditPlan
@@ -49,7 +50,18 @@ func (p *approvalPhase) FeatureOperations() []identity.FeatureOperation {
 		start, _ := approvalOperation(startAction)
 		operations = append(operations, start)
 	}
+	if p.service.revocation {
+		revoke, _ := approvalOperation(revokeAction)
+		operations = append(operations, revoke)
+	}
 	return operations
+}
+
+func (p *approvalPhase) lifecycle() kernel.LifecyclePlan {
+	if p.revoke != nil {
+		return revocationLifecycle(p.revoke.before)
+	}
+	return grantLifecycle(p.binding.OperationID)
 }
 
 func grantLifecycle(action string) kernel.LifecyclePlan {
@@ -64,13 +76,12 @@ func grantLifecycle(action string) kernel.LifecyclePlan {
 
 func (s *Service) prepare(ctx context.Context, p *approvalPhase, network string) (PreparedCommand, error) {
 	b := p.binding
-	op, ok := approvalOperation(b.OperationID)
-	if !ok || b.ValidateFor(op) != nil {
-		return PreparedCommand{}, impersonation.ErrInvalidInput
-	}
 	fields, err := sessionpg.OriginalSessionFields(p.actor.observed.Session)
 	if err != nil {
 		return PreparedCommand{}, identity.ForbiddenError{}
+	}
+	if p.revoke != nil {
+		return s.prepareCommand(ctx, p, network, append(fields, p.revoke.fields(p.observed.digest)...))
 	}
 	digest := p.original.request.Digest()
 	fields = append(fields,
@@ -95,6 +106,15 @@ func (s *Service) prepare(ctx context.Context, p *approvalPhase, network string)
 	if p.start != nil {
 		fields = append(fields, p.start.commandFields()...)
 	}
+	return s.prepareCommand(ctx, p, network, fields)
+}
+
+func (s *Service) prepareCommand(ctx context.Context, p *approvalPhase, network string, fields []identity.FeatureField) (PreparedCommand, error) {
+	b := p.binding
+	op, ok := approvalOperation(b.OperationID)
+	if !ok || b.ValidateFor(op) != nil {
+		return PreparedCommand{}, impersonation.ErrInvalidInput
+	}
 	command, err := identity.NewFeatureSessionCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, p.actor.input.Bearer)
 	if err != nil {
 		return PreparedCommand{}, err
@@ -110,7 +130,7 @@ func (s *Service) prepare(ctx context.Context, p *approvalPhase, network string)
 	if err := p.actor.requireFresh(at); err != nil {
 		return PreparedCommand{}, err
 	}
-	if b.OperationID != requestAction && !at.Before(p.observed.expiresAt) {
+	if b.OperationID != requestAction && b.OperationID != revokeAction && !at.Before(p.observed.expiresAt) {
 		return PreparedCommand{}, impersonation.ErrExpired
 	}
 	command, counters, err := s.config.Risk.PrepareCommandCounters(command, risk.Subject{Actor: string(b.ActorID), Resource: b.RecordID, Network: network}, at)
@@ -118,7 +138,7 @@ func (s *Service) prepare(ctx context.Context, p *approvalPhase, network string)
 		return PreparedCommand{}, err
 	}
 	p.command, p.counters = command, counters
-	lifecycle := grantLifecycle(b.OperationID)
+	lifecycle := p.lifecycle()
 	p.audit, err = grantAudit(b, op, lifecycle, at)
 	if err != nil {
 		return PreparedCommand{}, err
@@ -171,7 +191,7 @@ func (p *approvalPhase) ValidateFeatureCommand(command identity.Command, plan ke
 	op, ok := approvalOperation(p.binding.OperationID)
 	if !ok || command == (identity.Command{}) || command != p.command || plan.Feature == nil ||
 		*plan.Feature != (kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}) ||
-		plan.SubjectType != grantSubject || plan.Lifecycle == nil || *plan.Lifecycle != grantLifecycle(p.binding.OperationID) ||
+		plan.SubjectType != grantSubject || plan.Lifecycle == nil || *plan.Lifecycle != p.lifecycle() ||
 		plan.CommandCounters == nil || *plan.CommandCounters != p.counters || len(plan.Audits) != 1 || plan.Audits[0] != p.audit ||
 		plan.Capability != nil || plan.CapabilityIssuance != nil || plan.Delivery != nil || plan.OTP != nil || plan.RiskEvidence != nil ||
 		plan.CaptchaEvidence != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil {
@@ -186,7 +206,7 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 	}
 	var locked grantRecord
 	b := p.binding
-	if b.OperationID == approveAction || b.OperationID == startAction {
+	if b.OperationID == approveAction || b.OperationID == startAction || b.OperationID == revokeAction {
 		var err error
 		locked, err = lockGrant(ctx, w, b.TenantID, impersonation.GrantID(b.RecordID))
 		if err != nil {
@@ -229,11 +249,19 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 		if err != nil {
 			return identity.FeatureReceipt{}, p.storageError(err)
 		}
-	} else if err := p.applyActivation(ctx, w, at); err != nil {
-		return identity.FeatureReceipt{}, p.storageError(err)
+	} else if b.OperationID == startAction {
+		if err := p.applyActivation(ctx, w, at); err != nil {
+			return identity.FeatureReceipt{}, p.storageError(err)
+		}
+	} else if b.OperationID == revokeAction {
+		if err := p.applyRevocation(ctx, w, locked, at); err != nil {
+			return identity.FeatureReceipt{}, p.storageError(err)
+		}
+	} else {
+		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
 	op, _ := approvalOperation(b.OperationID)
-	l := grantLifecycle(b.OperationID)
+	l := p.lifecycle()
 	return identity.FeatureReceipt{Operation: op, BeforeVersion: l.BeforeVersion, AfterVersion: l.AfterVersion}, nil
 }
 
@@ -252,11 +280,15 @@ func (p *approvalPhase) storageError(err error) error {
 func (p *approvalPhase) checkCurrent(ctx context.Context, w kernel.Work, command identity.Command) (time.Time, error) {
 	b, registration, l, err := w.FeatureScope(p)
 	op, _ := approvalOperation(p.binding.OperationID)
-	if err != nil || b != p.binding || command != p.command || registration != (kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}) || l != grantLifecycle(b.OperationID) {
+	if err != nil || b != p.binding || command != p.command || registration != (kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}) || l != p.lifecycle() {
 		return time.Time{}, identity.ForbiddenError{}
 	}
-	if err := w.RequireActiveTargetUser(ctx, p, p.target); err != nil {
-		return time.Time{}, err
+	// A revoked/suspended target cannot block authority reduction. The revoke
+	// command still binds the original target and exact grant under its lock.
+	if b.OperationID != revokeAction {
+		if err := w.RequireActiveTargetUser(ctx, p, p.target); err != nil {
+			return time.Time{}, err
+		}
 	}
 	c := p.service.config
 	if err := p.actor.checkWork(ctx, w, p, c.Session, c.CSRFKey, b); err != nil {
@@ -284,7 +316,7 @@ func (p *approvalPhase) checkCurrent(ctx context.Context, w kernel.Work, command
 		return time.Time{}, err
 	}
 	at = at.UTC()
-	if b.OperationID != requestAction && !at.Before(p.observed.expiresAt) {
+	if b.OperationID != requestAction && b.OperationID != revokeAction && !at.Before(p.observed.expiresAt) {
 		return time.Time{}, identity.ConflictError{CommandID: b.CommandID}
 	}
 	// Resolve expiry against the latest in-transaction primary time after the
@@ -306,7 +338,16 @@ func (p *approvalPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c
 func (p *approvalPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
 	b, registration, l, err := w.FeatureScope(p)
 	op, selected := approvalOperation(b.OperationID)
-	if err != nil || !selected || registration != (kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}) || l != grantLifecycle(b.OperationID) {
+	if err != nil || !selected || registration != (kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}) {
+		return kernel.RecoveryUnknown, identity.ForbiddenError{}
+	}
+	if b.OperationID == revokeAction {
+		if !p.service.revocation || l.BeforeVersion < 1 || l.BeforeVersion > 3 || l != revocationLifecycle(l.BeforeVersion) {
+			return kernel.RecoveryUnknown, identity.ForbiddenError{}
+		}
+		return recoverRevocationEffect(ctx, w, b, l)
+	}
+	if l != grantLifecycle(b.OperationID) {
 		return kernel.RecoveryUnknown, identity.ForbiddenError{}
 	}
 	if b.OperationID == startAction && p.service.activation != nil {

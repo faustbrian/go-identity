@@ -46,7 +46,7 @@ func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("impersonation
 func (Config) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
 // Service runs direct-Go request and distinct-administrator approval, and
-// optional activation and online use. It borrows all dependencies, owns no
+// optional activation, online use and revocation. It borrows all dependencies, owns no
 // background workers, and never treats approval alone as access authority.
 type Service struct {
 	pool       *database.Pool
@@ -54,6 +54,7 @@ type Service struct {
 	sessions   *session.SessionService
 	config     Config
 	activation *activationService
+	revocation bool
 }
 
 // Format prevents printing the coordinator's keys and other runtime secrets.
