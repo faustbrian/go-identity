@@ -74,28 +74,36 @@ func newOwnedSessionExecutionWithCleanup(pool *database.Pool, c IssueExecutorCon
 		return nil, err
 	}
 	native.cleanupBatch = cleanupBatch
-	domain, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: c.Coordinator.MaximumDuration})
-	if err != nil {
-		return nil, err
-	}
-	auditing, err := auditpostgres.NewIdentityContributor(auditpostgres.Config{})
-	if err != nil {
-		return nil, session.ErrInvalidIssuer
-	}
-	lifecycle, err := identityoutbox.NewContributor()
-	if err != nil {
-		return nil, session.ErrInvalidIssuer
-	}
-	registry, err := kernel.NewContributorRegistry([]kernel.Contributor{domain, native, auditing, lifecycle})
-	if err != nil {
-		return nil, err
-	}
-	c.Coordinator.QueryPolicy = &kernel.CommandQueryPolicy{Authorization: c.Authorization, Clock: c.Clock, PolicyVersion: c.PolicyVersion}
-	coordinator, err := kernel.NewCoordinator(pool, registry, c.Coordinator)
+	coordinator, registry, err := newSessionCoordinator(pool, c, native)
 	if err != nil {
 		return nil, err
 	}
 	return &IssueExecutor{coordinator, registry, native, c.Authorization, c.Clock, c.PolicyID, c.PolicyVersion, c.AuditRetentionVersion, c.Coordinator.MaximumDuration}, nil
+}
+
+func newSessionCoordinator(pool *database.Pool, c IssueExecutorConfig, native kernel.FeatureExecutionContributor) (*kernel.Coordinator, *kernel.ContributorRegistry, error) {
+	domain, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: c.Coordinator.MaximumDuration})
+	if err != nil {
+		return nil, nil, err
+	}
+	auditing, err := auditpostgres.NewIdentityContributor(auditpostgres.Config{})
+	if err != nil {
+		return nil, nil, session.ErrInvalidIssuer
+	}
+	lifecycle, err := identityoutbox.NewContributor()
+	if err != nil {
+		return nil, nil, session.ErrInvalidIssuer
+	}
+	registry, err := kernel.NewContributorRegistry([]kernel.Contributor{domain, native, auditing, lifecycle})
+	if err != nil {
+		return nil, nil, err
+	}
+	c.Coordinator.QueryPolicy = &kernel.CommandQueryPolicy{Authorization: c.Authorization, Clock: c.Clock, PolicyVersion: c.PolicyVersion}
+	coordinator, err := kernel.NewCoordinator(pool, registry, c.Coordinator)
+	if err != nil {
+		return nil, nil, err
+	}
+	return coordinator, registry, nil
 }
 
 func nilIssueDependency(value any) bool {

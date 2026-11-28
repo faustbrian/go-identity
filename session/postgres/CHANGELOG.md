@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Execute exact single-session administrator revocation with the original
+  password/TOTP actor and synchronizer fenced on the native transaction.
+  Reuse the session mutation, durable audit/outbox and command recovery.
+
 - Add uncached primary liveness checks for exact ordinary password-plus-TOTP
   parent references. Derived-session owners can check current authority and
   effective expiry without retaining, accepting or returning a parent bearer.

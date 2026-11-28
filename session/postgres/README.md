@@ -1,5 +1,20 @@
 # PostgreSQL session storage
 
+## Single-session administrator revocation
+
+Install `AdminRevokeMigrationSource` after the single-session revocation
+journal and any selected legacy issuer-end-session suffix. Apply expansion and
+validation in separate runner transactions before enabling the writer. The
+expansion keeps the existing purpose check and rows; it does not scan the
+journal under the exclusive lock. Disable the writer to roll back adoption;
+keep the expanded journal for historical recovery.
+
+Use `NewAdminRevokeExecutor` with the same primary password/TOTP session
+reader passed to `session.NewAdminRevokeService`. On an unknown commit, use
+`RecoverAdminSessionRevoke` with the original command and current authenticated
+actor authorization. Do not interpret a new no-op as recovery of the original
+result.
+
 ## Native enterprise OIDC issuance
 
 Install `CSRFMigrationSource` when issuing CSRF-bearing sessions, and install

@@ -119,11 +119,17 @@ func (r *Repository) applySingleSessionRevocationWithCSRF(ctx context.Context, w
 	if err := r.requireRevokeOrganization(bounded, w, owner, b, original); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	return r.writeSingleSessionRevocation(bounded, w, b, feature, transition, original)
+}
+
+// The caller owns admission and any locks; this CAS retains the existing
+// terminal state and journal for both self-service and administrator writes.
+func (r *Repository) writeSingleSessionRevocation(ctx context.Context, w kernel.Work, b identity.CommandBinding, feature kernel.FeatureRegistration, transition kernel.LifecyclePlan, original session.Session) (identity.FeatureReceipt, error) {
 	payload, _, err := encodeRecord(original)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	n, err := w.Exec(bounded, `UPDATE `+r.schema+`.sessions SET state='revoked' WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND version=$4::numeric AND state='active' AND record=$5::jsonb`, string(b.TenantID), string(b.UserID), b.RecordID, strconv.FormatUint(spec.Version, 10), string(payload))
+	n, err := w.Exec(ctx, `UPDATE `+r.schema+`.sessions SET state='revoked' WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND version=$4::numeric AND state='active' AND record=$5::jsonb`, string(b.TenantID), string(b.UserID), b.RecordID, strconv.FormatUint(transition.BeforeVersion, 10), string(payload))
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -134,7 +140,7 @@ func (r *Repository) applySingleSessionRevocationWithCSRF(ctx context.Context, w
 	recordDigest := sha256.Sum256(payload)
 	// The original record/version remains immutable. The terminal successor is
 	// retained independently of payload cleanup, never used to resurrect a row.
-	n, err = w.Exec(bounded, `INSERT INTO `+r.schema+`.session_revocations(tenant_id,command_id,purpose,user_id,session_id,before_version,after_version,binding_digest,record_digest) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9)`, string(b.TenantID), id, b.OperationID, string(b.UserID), b.RecordID, strconv.FormatUint(transition.BeforeVersion, 10), strconv.FormatUint(transition.AfterVersion, 10), digest[:], recordDigest[:])
+	n, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.session_revocations(tenant_id,command_id,purpose,user_id,session_id,before_version,after_version,binding_digest,record_digest) VALUES($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9)`, string(b.TenantID), id, b.OperationID, string(b.UserID), b.RecordID, strconv.FormatUint(transition.BeforeVersion, 10), strconv.FormatUint(transition.AfterVersion, 10), digest[:], recordDigest[:])
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -145,8 +151,12 @@ func (r *Repository) applySingleSessionRevocationWithCSRF(ctx context.Context, w
 }
 
 func (r *Repository) recoverRevokeOne(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
-	b, feature, transition, err := w.FeatureScope(r)
-	if err != nil || feature.Operation != session.RevokeOneOperation() || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
+	return r.recoverSingleSessionRevocation(ctx, w, r, session.RevokeOneOperation())
+}
+
+func (r *Repository) recoverSingleSessionRevocation(ctx context.Context, w kernel.RecoveryWork, owner kernel.FeatureExecutionContributor, op identity.FeatureOperation) (kernel.RecoveryStatus, error) {
+	b, feature, transition, err := w.FeatureScope(owner)
+	if err != nil || feature.Operation != op || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	id, digest := revocationEvidence(b, transition)

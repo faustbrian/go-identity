@@ -269,11 +269,15 @@ func (e *RevokeOneExecutor) executeRevokeOne(ctx context.Context, request sessio
 // original coordinator Work and commit, including later audit/outbox phases.
 // It only narrows the caller/configured budget; it does not refresh authority.
 func (e *RevokeOneExecutor) primaryDeadline(ctx context.Context, until time.Time) (context.Context, context.CancelFunc, error) {
-	read, cancelRead := context.WithTimeout(ctx, e.owned.native.maximumDuration)
+	return sessionPrimaryDeadline(ctx, e.owned.native, e.owned.maximumDuration, until)
+}
+
+func sessionPrimaryDeadline(ctx context.Context, native *Repository, maximumDuration time.Duration, until time.Time) (context.Context, context.CancelFunc, error) {
+	read, cancelRead := context.WithTimeout(ctx, native.maximumDuration)
 	defer cancelRead()
 	started := time.Now()
 	var now time.Time
-	if err := e.owned.native.pool.Raw().QueryRow(read, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+	if err := native.pool.Raw().QueryRow(read, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 		return nil, nil, readError(read, err)
 	}
 	if !sessionReadTime(now) {
@@ -283,8 +287,8 @@ func (e *RevokeOneExecutor) primaryDeadline(ctx context.Context, until time.Time
 	if remaining <= 0 {
 		return nil, nil, session.ErrUnauthenticated
 	}
-	if remaining > e.owned.maximumDuration {
-		remaining = e.owned.maximumDuration
+	if remaining > maximumDuration {
+		remaining = maximumDuration
 	}
 	bounded, stop := context.WithDeadline(ctx, started.Add(remaining))
 	if bounded.Err() != nil {
