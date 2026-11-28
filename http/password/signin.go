@@ -129,6 +129,10 @@ const (
 )
 
 func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor, profile signinProfile) (http.Handler, error) {
+	return newSigninHandlerLocalized(c, middleware, profile, nil)
+}
+
+func newSigninHandlerLocalized(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor, profile signinProfile, localization *signinLocalization) (http.Handler, error) {
 	action, route, identifierField := "identity.password.signin", "/v1/password/signin", "identifier"
 	switch profile {
 	case usernameSigninProfile:
@@ -218,7 +222,7 @@ func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescri
 			w.Header().Set("Retry-After", strconv.FormatInt(int64((min(max(f.retry, time.Second), time.Hour)+time.Second-1)/time.Second), 10))
 		}
 		a.out.Error = f.code
-		writeSigninResponse(w, f.status, &a.out)
+		localization.writeError(w, r, f.status, &a.out)
 	}
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SigninState]{MaximumDuration: c.MaximumDuration, Middleware: middleware, Reject: reject,
 		Decode: func(r *http.Request) (SigninState, error) {

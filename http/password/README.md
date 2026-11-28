@@ -5,6 +5,23 @@ Go 1.27. Base `identity/http` does not import this optional module.
 
 ## Adoption and API
 
+### Localized browser email password-signin errors
+
+Use `NewSigninFeatureWithLocalization(signinConfig, localization)` for email
+sign-in alone, or `NewFeatureWithSigninLocalization(featureConfig, localization)`
+when selecting sibling password operations. Set `DefaultLocale` and provide an
+`i18n.Catalog` for that locale with parameter-free messages for every
+`identity.password.signin.<code>` listed in the selected operation's OpenAPI.
+Other catalogs can omit messages and fall back to the default. Catalogs are
+copied when the feature is constructed.
+
+The JSON attempt error can include `message` for display. Keep branching on
+`error`; HTTP status, retry hints, recovery metadata and credential custody do
+not change. The response names the rendered language in `Content-Language` and
+varies on `Accept-Language`. Invalid, repeated or oversized language headers use
+the default. Cookies, account data and credentials never select a language.
+Success, sibling routes, and failures written by the shared router are unchanged.
+
 ### Verified-phone password signin
 
 Select `NewPhoneSigninFeature(signinConfig)` or `NewPhoneSigninHandler` with

@@ -61,6 +61,24 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // they cannot replace input or grant transaction authority. Returned selection
 // is frozen; changing configuration pointers later cannot change its profile.
 func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
+	return newFeature(c, middleware, nil)
+}
+
+// NewFeatureWithSigninLocalization contributes the ordinary password feature
+// with an additive localized public error message on email signin only.
+// It requires signin to be selected and does not localize its siblings.
+func NewFeatureWithSigninLocalization(c FeatureConfig, config SigninLocalizationConfig) (identityhttp.Feature, error) {
+	if c.Signin == nil {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	localization, err := newSigninLocalization(config)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	return newFeature(c, nil, localization)
+}
+
+func newFeature(c FeatureConfig, middleware []identityhttp.MiddlewareDescriptor, localization *signinLocalization) (identityhttp.Feature, error) {
 	verificationProfiles := 0
 	if c.BearerVerification != nil {
 		verificationProfiles++
@@ -109,7 +127,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 		ops = append(ops, op)
 	}
 	if c.Signin != nil {
-		op, err := signinOperation(*c.Signin, middleware)
+		op, err := signinOperationProfileLocalized(*c.Signin, middleware, emailSigninProfile, localization)
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}

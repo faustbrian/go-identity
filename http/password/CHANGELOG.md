@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into localized public email password-signin errors with explicitly
+  supplied catalogs and bounded `Accept-Language` negotiation. Preserve machine
+  codes, statuses, retries, recovery and successful credential delivery.
+
 - Explicitly select verified-phone/password signin with closed `phoneNumber`
   input and its original target-bound browser flow. Reuse native verification,
   rate, session and recovery owners; no enrollment, OTP or MFA fallback route is

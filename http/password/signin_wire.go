@@ -13,6 +13,12 @@ func NewSigninFeature(c SigninConfig) (identityhttp.Feature, error) {
 	return NewFeatureWithMiddleware(FeatureConfig{Signin: &c}, nil)
 }
 
+// NewSigninFeatureWithLocalization selects browser email password signin with
+// additive localized error messages. Successful responses remain unchanged.
+func NewSigninFeatureWithLocalization(c SigninConfig, config SigninLocalizationConfig) (identityhttp.Feature, error) {
+	return NewFeatureWithSigninLocalization(FeatureConfig{Signin: &c}, config)
+}
+
 // NewSigninFeatureWithMiddleware selects the real frozen native phases.
 // Router rebinding preserves original credential and response custody.
 func NewSigninFeatureWithMiddleware(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
@@ -23,21 +29,25 @@ func signinOperation(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (ide
 	return signinOperationProfile(c, m, emailSigninProfile)
 }
 func signinOperationProfile(c SigninConfig, m []identityhttp.MiddlewareDescriptor, profile signinProfile) (identityhttp.OperationDescriptor, error) {
+	return signinOperationProfileLocalized(c, m, profile, nil)
+}
+
+func signinOperationProfileLocalized(c SigninConfig, m []identityhttp.MiddlewareDescriptor, profile signinProfile, localization *signinLocalization) (identityhttp.OperationDescriptor, error) {
 	owner, action := identityhttp.ModuleID("identity/password"), "identity.password.signin"
 	if profile == usernameSigninProfile {
 		owner, action = "identity/username", "identity.username.signin"
 	} else if profile == phoneSigninProfile {
 		owner, action = "identity/phone", "identity.phone.password-signin"
 	}
-	h, err := newSigninHandler(c, m, profile)
+	h, err := newSigninHandlerLocalized(c, m, profile, localization)
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: owner, OperationID: action, Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: owner, OperationID: action, Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: signinMaximumResponseBytes})
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	op.Wire = signinWireProfile(c, profile)
+	op.Wire = signinWireProfileLocalized(c, profile, localization != nil)
 	return op, nil
 }
 
@@ -45,13 +55,17 @@ func signinWire(c SigninConfig) *identityhttp.WireOperation {
 	return signinWireProfile(c, emailSigninProfile)
 }
 func signinWireProfile(c SigninConfig, profile signinProfile) *identityhttp.WireOperation {
+	return signinWireProfileLocalized(c, profile, false)
+}
+
+func signinWireProfileLocalized(c SigninConfig, profile signinProfile, localized bool) *identityhttp.WireOperation {
 	text := func(max any) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": max} }
 	object := func(required []string, fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
 	}
 	id := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$", "not": map[string]any{"const": "AAAAAAAAAAAAAAAAAAAAAA"}}
 	recovery := object([]string{"commandID", "tenantID", "flowID", "actorID", "actorKind"}, map[string]any{"commandID": id, "tenantID": text(256), "flowID": id, "actorID": text(256), "actorKind": map[string]any{"const": "service-account"}})
-	codes := map[string]any{"type": "string", "enum": []string{"invalid_request", "origin_denied", "https_required", "not_found", "method_not_allowed", "misdirected_request", "rate_limited", "rate_limiter_unavailable", "denied", "unavailable", "conflict", "in_progress"}}
+	codes := map[string]any{"type": "string", "enum": signinPublicErrorCodes}
 	success := object([]string{"signedIn", "commandID", "sessionID", "commitOutcome", "recovery"}, map[string]any{"signedIn": map[string]any{"const": true}, "commandID": id, "sessionID": text(128), "commitOutcome": map[string]any{"const": "committed"}, "recovery": recovery})
 	attempt := object([]string{"signedIn", "commitOutcome", "error"}, map[string]any{"signedIn": map[string]any{"const": false}, "commandID": id, "sessionID": text(128), "commitOutcome": map[string]any{"type": "string", "enum": []string{"none", "not_committed", "committed", "unknown", "conflict", "in_progress"}}, "recovery": recovery, "error": codes})
 	attempt["dependentRequired"] = map[string]any{"commandID": []string{"recovery"}, "recovery": []string{"commandID"}}
@@ -105,6 +119,23 @@ func signinWireProfile(c SigninConfig, profile signinProfile) *identityhttp.Wire
 		definition["description"] = "Explicit password-first MFA selection. Original flow/cookie, mapped HTTPS tenant/Origin, callback, remember and signed device remain mandatory. Correct password commits either the selected single-factor session or a challenge-only X-MFA-Token; partial authentication cannot issue a session. Native current factor/risk/credential authority is decisive. Replay, ambiguity, errors, cancellation and expired response commitment withhold credentials. Recovery preserves original metadata without proof redelivery."
 		if profile == usernameSigninProfile {
 			definition["description"] = "Explicit username/password-first TOTP selection retains the exact original username-signin flow, browser/device custody and remember choice. Current username and credential/factor authority are native. Correct password commits either an authoritative known-empty-factor session or a challenge-only X-MFA-Token. No session or synchronizer accompanies the challenge. Ambiguity, replay, cancellation, errors and expiry never redeliver custody or fall back to another primary."
+		}
+	}
+	if localized {
+		attempt["properties"].(map[string]any)["message"] = text(8192)
+		definition["parameters"] = append(definition["parameters"].([]any), map[string]any{
+			"name": "Accept-Language", "in": "header", "schema": text(signinMaximumLanguageBytes),
+			"description": "Advisory preference for password-signin error text. Invalid, oversized or repeated fields use the configured default.",
+		})
+		for _, status := range []string{"400", "403", "404", "405", "409", "421", "429", "503"} {
+			reply := responses[status].(map[string]any)
+			headers, _ := reply["headers"].(map[string]any)
+			if headers == nil {
+				headers = make(map[string]any)
+				reply["headers"] = headers
+			}
+			headers["Content-Language"] = map[string]any{"description": "Language of the optional public error message.", "schema": text(128)}
+			headers["Vary"] = map[string]any{"description": "Includes Accept-Language for localized JSON attempts.", "schema": map[string]any{"type": "string"}}
 		}
 	}
 	data, _ := json.Marshal(definition)
