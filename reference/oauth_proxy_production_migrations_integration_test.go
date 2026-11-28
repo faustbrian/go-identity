@@ -210,6 +210,113 @@ func TestReferencePostgresOAuthProxyProductionMigrationsAppendLiveAuthority(t *t
 	}
 }
 
+func TestReferencePostgresOAuthProxyProductionMigrationsAppendRetirement(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	f := newLiveStoresProfile(t, ctx, false, true)
+	_, production := oauthProxyProductionConfiguration(t)
+	c := oauthProxyProductionMigrationConfiguration(production)
+	static, err := reference.NewOAuthProxyProductionMigrations(f.pool, c)
+	if err != nil {
+		t.Fatal("construct unchanged static production migration owner", err)
+	}
+	cleanupOAuthProxyProductionMigrations(t, ctx, f, static)
+	staticPlan, err := static.Plan(ctx)
+	if err != nil || len(staticPlan.Plan.Steps) == 0 {
+		t.Fatal("plan unchanged static production migrations", err)
+	}
+	for _, step := range staticPlan.Plan.Steps {
+		if step.Owner == "identity/oauth/postgres" && step.ToVersion > 2 {
+			t.Fatal("default static profile opted into later OAuth history", step.ToVersion)
+		}
+	}
+	live, err := reference.NewOAuthProxyProductionMigrationsWithProviderAuthority(f.pool, c)
+	if err != nil {
+		t.Fatal("construct installed live production migration owner", err)
+	}
+	defer live.Close(ctx)
+	base, err := live.Plan(ctx)
+	if err != nil || len(base.Plan.Steps) == 0 {
+		t.Fatal("plan installed live production history", err)
+	}
+	for _, step := range base.Plan.Steps {
+		if step.Owner == "identity/oauth/postgres" && step.ToVersion > 3 {
+			t.Fatal("default live profile opted into retirement", step.ToVersion)
+		}
+	}
+	assertOAuthProxyProductionMigrationSchemaAbsent(t, ctx, f)
+	assertOAuthProxyProductionMigrationApply(t, ctx, live, oauthProxyProductionMigrationRequest(t, base.Plan))
+	assertOAuthProxyProductionMigrationsCompatible(t, ctx, live, len(base.Plan.Modules))
+	var originalLedger string
+	const originalHistory = `SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text
+ FROM public.golib_migrations_identity_oauth_proxy m WHERE version<=3`
+	if err := f.pool.Raw().QueryRow(ctx, originalHistory).Scan(&originalLedger); err != nil {
+		t.Fatal("snapshot authenticated installed OAuth migration history", err)
+	}
+	var retirementAbsent bool
+	const noRetirementSchema = `SELECT NOT EXISTS (
+ SELECT 1 FROM pg_attribute WHERE attrelid='synthetic_oauth.proxy_transactions'::regclass
+ AND attname IN ('retirement_source_command_id','retirement_source_version','retired_at') AND NOT attisdropped)
+ AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='synthetic_oauth.proxy_transactions'::regclass
+ AND conname='proxy_transactions_retirement_shape')`
+	if err := f.pool.Raw().QueryRow(ctx, noRetirementSchema).Scan(&retirementAbsent); err != nil || !retirementAbsent {
+		t.Fatal("default live migration apply created opt-in retirement schema", err)
+	}
+
+	retirement, err := reference.NewOAuthProxyProductionMigrationsWithRetirement(f.pool, c)
+	if err != nil {
+		t.Fatal("select retirement history for the installed live production database", err)
+	}
+	defer retirement.Close(ctx)
+	plan, err := retirement.Plan(ctx)
+	if err != nil || len(plan.Plan.Steps) != 2 {
+		t.Fatal("retirement plan did not append exactly two migrations", err)
+	}
+	for i, step := range plan.Plan.Steps {
+		if step.Owner != "identity/oauth/postgres" || step.FromVersion != uint64(3+i) || step.ToVersion != uint64(4+i) {
+			t.Fatal("retirement plan changed an unrelated owner or installed version", step)
+		}
+	}
+	if err := f.pool.Raw().QueryRow(ctx, noRetirementSchema).Scan(&retirementAbsent); err != nil || !retirementAbsent {
+		t.Fatal("retirement selection or planning installed schema before operator apply", err)
+	}
+	key, err := identity.NewIdempotencyKey([]byte("production-proxy-retirement-migration"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := reference.ReferenceMigrationApplyRequest{CommandID: "production_proxy_migrations_retirement_0001", Plan: plan.Plan, IdempotencyKey: key}
+	for attempt := range 2 {
+		result, err := retirement.Apply(ctx, request)
+		receipts := result.Result.Receipts()
+		wantReceipt := reference.MigrationContributorReceipt{Module: "identity/oauth/postgres", Version: 5}
+		if err != nil || result.Result.State() != reference.MigrationApplied || result.Result.CommandID() != request.CommandID ||
+			result.Result.Digest() != request.Plan.Digest || len(receipts) != 1 || receipts[0] != wantReceipt {
+			t.Fatal("retirement apply or exact replay lost its original command and latest receipt", attempt, receipts, err)
+		}
+	}
+	var retainedLedger string
+	if err := f.pool.Raw().QueryRow(ctx, originalHistory).Scan(&retainedLedger); err != nil || retainedLedger != originalLedger {
+		t.Fatal("retirement upgrade changed authenticated predecessor migration records", err)
+	}
+	var latestSchema bool
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT
+ (SELECT count(*)=3 AND bool_and(NOT attnotnull) FROM pg_attribute
+ WHERE attrelid='synthetic_oauth.proxy_transactions'::regclass AND NOT attisdropped AND
+ ((attname='retirement_source_command_id' AND atttypid='bytea'::regtype) OR
+  (attname='retirement_source_version' AND atttypid='numeric'::regtype) OR
+  (attname='retired_at' AND atttypid='timestamptz'::regtype)))
+ AND EXISTS (SELECT 1 FROM pg_constraint
+ WHERE conrelid='synthetic_oauth.proxy_transactions'::regclass
+ AND conname='proxy_transactions_retirement_shape' AND contype='c' AND convalidated)`).Scan(&latestSchema); err != nil || !latestSchema {
+		t.Fatal("retirement upgrade omitted explicit columns or validated custody constraint", err)
+	}
+	assertOAuthProxyProductionMigrationsCompatible(t, ctx, retirement, len(plan.Plan.Modules))
+	noop, err := retirement.Plan(ctx)
+	if err != nil || len(noop.Plan.Steps) != 0 || noop.Plan.Digest == [32]byte{} {
+		t.Fatal("retirement replay did not leave a valid no-op migration plan", err)
+	}
+}
+
 func oauthProxyProductionMigrationRequest(t *testing.T, plan reference.MigrationPlan) reference.ReferenceMigrationApplyRequest {
 	t.Helper()
 	key, err := identity.NewIdempotencyKey([]byte("production-proxy-migration-retry"))

@@ -40,7 +40,7 @@ func (DurableAdmissionConfiguration) MarshalText() ([]byte, error) {
 	return nil, risk.ErrSensitiveSerialization
 }
 
-func composeDurableAdmission(c StoreConfiguration, d ReferenceDependencies, migrationPolicy *MigrationApplyPolicy, httpRate *httpRateState, proxyAuthority *oauthpg.ProviderAuthority) (StoreSet, error) {
+func composeDurableAdmission(c StoreConfiguration, d ReferenceDependencies, migrationPolicy *MigrationApplyPolicy, httpRate *httpRateState, proxyAuthority *oauthpg.ProviderAuthority, proxyRetirement *oauthpg.ProxyRetirementAuthority) (StoreSet, error) {
 	if !emptyVelocity(c.Velocity) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_counter_ownership"}
 	}
@@ -56,7 +56,7 @@ func composeDurableAdmission(c StoreConfiguration, d ReferenceDependencies, migr
 	lifetime, cancel := context.WithCancel(context.Background())
 	drained := make(chan struct{})
 	close(drained)
-	state := &storeState{pool: d.PostgreSQL, lifetime: lifetime, cancel: cancel, drained: drained, tenants: tenants, policy: n.Policy, keys: append([]risk.CounterDigestKey(nil), n.Keys...), config: VelocityStoreConfiguration{Schema: n.Schema, PrimaryTimeout: n.Timeout}, migrations: migrationPolicy, httpRate: httpRate, durable: true, proxyPreviewAuthority: proxyAuthority}
+	state := &storeState{pool: d.PostgreSQL, lifetime: lifetime, cancel: cancel, drained: drained, tenants: tenants, policy: n.Policy, keys: append([]risk.CounterDigestKey(nil), n.Keys...), config: VelocityStoreConfiguration{Schema: n.Schema, PrimaryTimeout: n.Timeout}, migrations: migrationPolicy, httpRate: httpRate, durable: true, proxyPreviewAuthority: proxyAuthority, proxyPreviewRetirement: proxyRetirement}
 	if c.ProviderDiscovery == nil {
 		// Workflow builders still take their native policy and allocation inputs
 		// through the private Velocity fields. The standalone provider catalog

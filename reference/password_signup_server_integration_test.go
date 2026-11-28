@@ -286,6 +286,7 @@ type signupGraphExtensions struct {
 	scimManagedUsersDeactivation bool
 	oauthProxyPreview            bool
 	oauthProxyProviderAuthority  bool
+	oauthProxyRetirement         bool
 
 	scimBulk                    bool
 	scimManagedRead             bool
@@ -1446,6 +1447,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		if extensions.oauthProxyProviderAuthority {
 			proxyPreview.prepareProviderAuthority(t, ctx)
 		}
+		if extensions.oauthProxyRetirement {
+			proxyPreview.prepareRetirementAuthority(t)
+		}
 	}
 	var oneTapSigning *rsa.PrivateKey
 	if extensions.oneTapRedirect {
@@ -1497,7 +1501,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	var stores reference.StoreSet
 	var err error
-	if proxyPreview != nil && proxyPreview.authority != nil {
+	if proxyPreview != nil && proxyPreview.retirement != nil {
+		stores, err = reference.ComposeStoresWithOAuthProxyPreviewRetirement(c, deps, proxyPreview.authority, proxyPreview.retirement)
+	} else if proxyPreview != nil && proxyPreview.authority != nil {
 		stores, err = reference.ComposeStoresWithOAuthProxyPreviewProviderAuthority(c, deps, proxyPreview.authority)
 	} else {
 		stores, err = reference.ComposeStores(c, deps)

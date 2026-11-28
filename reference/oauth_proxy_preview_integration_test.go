@@ -13,16 +13,19 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	auditpg "github.com/faustbrian/go-audit/postgres"
 	authentication "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/oauth"
 	oauthpg "github.com/faustbrian/go-identity/oauth/postgres"
 	oauthproxy "github.com/faustbrian/go-identity/oauth/proxy"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
@@ -41,6 +44,13 @@ func TestReferencePostgresOAuthProxyPreviewLiveProviderAuthority(t *testing.T) {
 	}, true)
 }
 
+func TestReferencePostgresOAuthProxyPreviewRetiresDisabledOrigins(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{
+		postgresBaseline: true, socialOIDC: true, socialOIDCLinkOnly: true,
+		oauthProxyPreview: true, oauthProxyProviderAuthority: true, oauthProxyRetirement: true,
+	}, true)
+}
+
 const referenceOAuthProxyPreviewBodyLimit = 8192
 
 type referenceOAuthProxyPreviewProof struct {
@@ -50,8 +60,26 @@ type referenceOAuthProxyPreviewProof struct {
 	productionFixture *liveStores
 	authority         *oauthpg.ProviderAuthority
 	operator          *oauthpg.ProviderAuthorityOperator
+	retirement        *oauthpg.ProxyRetirementAuthority
 	readerRole        string
 	epoch             uint64
+}
+
+func (p *referenceOAuthProxyPreviewProof) prepareRetirementAuthority(t *testing.T) {
+	t.Helper()
+	if p.productionFixture == nil || p.authority == nil {
+		t.Fatal("retirement requires the separately owned live production authority")
+	}
+	// The trusted operator reads retained production audit evidence through the
+	// fixture-owner pool, never by widening the restricted callback login.
+	reader, err := auditpg.New(p.productionFixture.pool.Raw(), auditpg.Config{})
+	if err != nil {
+		t.Fatal("construct the trusted production audit reader", err)
+	}
+	p.retirement, err = oauthpg.NewProxyRetirementAuthority(reader, p.production.Native.Actor)
+	if err != nil {
+		t.Fatal("select the original provider operator for both local retirements", err)
+	}
 }
 
 func (p *referenceOAuthProxyPreviewProof) prepareProviderAuthority(t *testing.T, ctx context.Context) {
@@ -137,9 +165,30 @@ func (p *referenceOAuthProxyPreviewProof) installProviderAuthority(t *testing.T,
 		t.Fatal("construct the separately authorized native provider operator", err)
 	}
 	p.changeProviderAuthority(t, ctx, true)
+	if p.retirement != nil {
+		history, err := (oauthpg.ProxyRetirementMigrationSource{
+			Schema: p.production.Native.Schema, Version: 44, Kind: kernel.OAuthProxyRetireProduction,
+		}).Load(ctx)
+		if err != nil || len(history) != 2 {
+			t.Fatal("load the opt-in production retirement migration suffix", err)
+		}
+		for _, migration := range history {
+			tx, err := f.pool.Raw().Begin(ctx)
+			if err != nil {
+				t.Fatal("begin production retirement migration", err)
+			}
+			if _, err := tx.Exec(ctx, migration.UpSQL()); err != nil {
+				_ = tx.Rollback(ctx)
+				t.Fatal("install production retirement migration", err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatal("commit production retirement migration", err)
+			}
+		}
+	}
 }
 
-func (p *referenceOAuthProxyPreviewProof) changeProviderAuthority(t *testing.T, ctx context.Context, enabled bool) {
+func (p *referenceOAuthProxyPreviewProof) changeProviderAuthority(t *testing.T, ctx context.Context, enabled bool) oauthpg.ProviderAuthorityChange {
 	t.Helper()
 	command, err := identity.NewCommandID()
 	if err != nil {
@@ -158,6 +207,7 @@ func (p *referenceOAuthProxyPreviewProof) changeProviderAuthority(t *testing.T, 
 		t.Fatal("commit the exact native provider authority transition", state, err)
 	}
 	p.epoch = next
+	return change
 }
 
 func configureReferenceOAuthProxyPreview(t *testing.T, c *reference.StoreConfiguration, origin string, p *referenceSocialOIDCIssuer) *referenceOAuthProxyPreviewProof {
@@ -239,7 +289,9 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	productionConfig.HTTP = oauthProxyProductionHTTPConfiguration(t, runtimePool)
 	var production *reference.OAuthProxyProduction
 	var err error
-	if p.authority != nil {
+	if p.retirement != nil {
+		production, err = reference.NewOAuthProxyProductionWithRetirement(runtimePool, productionConfig, p.authority, p.retirement)
+	} else if p.authority != nil {
 		production, err = reference.NewOAuthProxyProductionWithProviderAuthority(runtimePool, productionConfig, p.authority)
 	} else {
 		production, err = reference.NewOAuthProxyProduction(runtimePool, productionConfig)
@@ -683,7 +735,7 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	old := startLiveAttempt("reference-live-before-disable")
 	beforeDisabledExchanges := p.provider.exchanges.Load()
 	beforeDisabledRevocations := p.provider.proxyRevocations.Load()
-	p.changeProviderAuthority(t, ctx, false)
+	disable := p.changeProviderAuthority(t, ctx, false)
 	assertOldCallbackRefused := func() {
 		t.Helper()
 		response, _ := invokeProductionCallback(old.callback)
@@ -703,6 +755,11 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	fresh := startLiveAttempt("reference-live-after-reenable")
 	if fresh.command == old.command || fresh.flow == old.flow || fresh.callback.Query().Get("state") == old.callback.Query().Get("state") {
 		t.Fatal("fresh live Start reused the invalidated command, transaction or state")
+	}
+	if p.retirement != nil {
+		p.proveRetirement(t, ctx, f, c, features, production, old.command, old.flow, fresh.command, fresh.flow, disable)
+		assertOldCallbackRefused()
+		return
 	}
 	freshForwarded, freshBody := invokeProductionCallback(fresh.callback)
 	freshHandoff, err := url.Parse(freshForwarded.Header.Get("Location"))
@@ -747,4 +804,136 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	assertBoundHandoffRefused()
 	p.changeProviderAuthority(t, ctx, true)
 	assertBoundHandoffRefused()
+}
+
+func (p *referenceOAuthProxyPreviewProof) proveRetirement(t *testing.T, ctx context.Context, productionFixture liveStores,
+	c reference.StoreConfiguration, features reference.FeatureSet, production *reference.OAuthProxyProduction,
+	oldCommand identity.CommandID, oldFlow identity.PreAuthTransactionID,
+	newCommand identity.CommandID, newFlow identity.PreAuthTransactionID, disable oauthpg.ProviderAuthorityChange) {
+	t.Helper()
+	snapshot := func(pool *database.Pool, query string, args ...any) string {
+		t.Helper()
+		var value string
+		if err := pool.Raw().QueryRow(ctx, query, args...).Scan(&value); err != nil {
+			t.Fatal("snapshot exact local retirement custody", err)
+		}
+		return value
+	}
+	sessionSchema := c.Session.Native.Execution.Repository.Schema
+	sessions := pgx.Identifier{sessionSchema, "sessions"}.Sanitize()
+	families := pgx.Identifier{sessionSchema, "families"}.Sanitize()
+	issuances := pgx.Identifier{sessionSchema, "session_issuances"}.Sanitize()
+	flows := pgx.Identifier{sessionSchema, "preauth_transactions"}.Sanitize()
+	browserSQL := `SELECT jsonb_build_array(
+ (SELECT jsonb_agg(to_jsonb(s) ORDER BY to_jsonb(s)::text) FROM ` + sessions + ` s),
+ (SELECT jsonb_agg(to_jsonb(f) ORDER BY to_jsonb(f)::text) FROM ` + families + ` f),
+ (SELECT jsonb_agg(to_jsonb(i) ORDER BY to_jsonb(i)::text) FROM ` + issuances + ` i),
+ (SELECT jsonb_agg(to_jsonb(p) ORDER BY flow_id) FROM ` + flows + ` p))::text`
+	browsers := snapshot(p.previewPool, browserSQL)
+	exchanges, revocations := p.provider.exchanges.Load(), p.provider.proxyRevocations.Load()
+	productionTable := pgx.Identifier{p.production.Native.Schema, "proxy_transactions"}.Sanitize()
+	previewTable := pgx.Identifier{c.SocialOAuth.Schema, "proxy_preview_bindings"}.Sanitize()
+
+	for _, local := range []struct {
+		name, table, flowColumn, purpose, erasedColumns string
+		pool                                            *database.Pool
+		retire                                          func(context.Context, oauthpg.ProxyOriginRetirementRequest) (identity.CommandResult, error)
+	}{
+		{"production", productionTable, "transaction_id", "identity.oauth.proxy-forward",
+			"'state_proof_ciphertext','pkce_ciphertext','handoff_ciphertext'", productionFixture.pool, production.RetireDisabledProviderOrigin},
+		{"preview", previewTable, "flow_id", "identity.oauth.callback",
+			"'proof_ciphertext'", p.previewPool, features.RetireDisabledOAuthProxyPreviewOrigin},
+	} {
+		t.Run(local.name, func(t *testing.T) {
+			var grantID, grantProvenance string
+			if err := local.pool.Raw().QueryRow(ctx, `SELECT capability_id,(to_jsonb(g)-'state')::text
+ FROM public.capability_identity_one_use g WHERE tenant_id=$1 AND origin_command_id=$2
+ AND subject_id=$3 AND purpose=$4 AND state='issued' AND uses=0`, string(otpTenant), string(oldCommand),
+				string(oldFlow), local.purpose).Scan(&grantID, &grantProvenance); err != nil {
+				t.Fatal("read the exact old unused local grant", err)
+			}
+			custodySQL := `SELECT to_jsonb(p)::text FROM ` + local.table + ` p WHERE tenant_id=$1 AND ` + local.flowColumn + `=$2`
+			stableSQL := `SELECT (to_jsonb(p)-ARRAY['version',` + local.erasedColumns + `,
+ 'retirement_source_command_id','retirement_source_version','retired_at'])::text
+ FROM ` + local.table + ` p WHERE tenant_id=$1 AND ` + local.flowColumn + `=$2`
+			journalSQL := `SELECT COALESCE(jsonb_agg(to_jsonb(c) ORDER BY c.command_id),'[]'::jsonb)::text
+ FROM identity.commands c WHERE c.tenant_id=$1 AND c.command_id IN
+ (SELECT callback_command_id FROM ` + local.table + ` WHERE tenant_id=$1)`
+			otherGrantsSQL := `SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY capability_id),'[]'::jsonb)::text
+ FROM public.capability_identity_one_use g WHERE capability_id<>$1`
+			newGrantSQL := `SELECT to_jsonb(g)::text FROM public.capability_identity_one_use g
+ WHERE tenant_id=$1 AND origin_command_id=$2 AND subject_id=$3 AND purpose=$4 AND state='issued' AND uses=0`
+			oldCustody := snapshot(local.pool, stableSQL, string(otpTenant), string(oldFlow))
+			newCustody := snapshot(local.pool, custodySQL, string(otpTenant), string(newFlow))
+			newGrant := snapshot(local.pool, newGrantSQL, string(otpTenant), string(newCommand), string(newFlow), local.purpose)
+			journal := snapshot(local.pool, journalSQL, string(otpTenant))
+			otherGrants := snapshot(local.pool, otherGrantsSQL, grantID)
+			command, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := oauthpg.ProxyOriginRetirementRequest{
+				CommandID: command, OriginCommandID: oldCommand, FlowID: oldFlow, Disable: disable,
+			}
+			result, err := local.retire(ctx, request)
+			if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Validate() != nil ||
+				result.Binding.CommandID != command || result.Feature == nil || result.Feature.Operation != kernel.OAuthProxyOriginRetirementOperation() {
+				t.Fatal("public Reference owner did not commit exact disabled-origin retirement", result.Outcome, err)
+			}
+			assertEffects := func() {
+				t.Helper()
+				source, err := base64.RawURLEncoding.Strict().DecodeString(string(disable.CommandID))
+				if err != nil {
+					t.Fatal(err)
+				}
+				erased := "proof_ciphertext IS NULL"
+				if local.name == "production" {
+					erased = "state_proof_ciphertext IS NULL AND pkce_ciphertext IS NULL AND handoff_ciphertext IS NULL AND outcome IS NULL"
+				}
+				var retired bool
+				if err := local.pool.Raw().QueryRow(ctx, `SELECT version=3 AND `+erased+`
+ AND binding_ciphertext IS NOT NULL AND settled_at IS NULL AND retirement_source_command_id=$3
+ AND retirement_source_version=$4::numeric AND retired_at IS NOT NULL AND retired_at>=issued_at
+ FROM `+local.table+` WHERE tenant_id=$1 AND `+local.flowColumn+`=$2`, string(otpTenant), string(oldFlow),
+					source, disable.Next.Version).Scan(&retired); err != nil || !retired {
+					t.Fatal("local retirement retained bearer custody, lost disable provenance or fabricated callback settlement", err)
+				}
+				var state, provenance string
+				if err := local.pool.Raw().QueryRow(ctx, `SELECT state,(to_jsonb(g)-'state')::text
+ FROM public.capability_identity_one_use g WHERE capability_id=$1`, grantID).Scan(&state, &provenance); err != nil ||
+					state != "revoked" || provenance != grantProvenance {
+					t.Fatal("local retirement did not revoke only the exact unused original grant", err)
+				}
+				if snapshot(local.pool, stableSQL, string(otpTenant), string(oldFlow)) != oldCustody ||
+					snapshot(local.pool, custodySQL, string(otpTenant), string(newFlow)) != newCustody ||
+					snapshot(local.pool, newGrantSQL, string(otpTenant), string(newCommand), string(newFlow), local.purpose) != newGrant ||
+					snapshot(local.pool, journalSQL, string(otpTenant)) != journal || snapshot(local.pool, otherGrantsSQL, grantID) != otherGrants ||
+					snapshot(p.previewPool, browserSQL) != browsers {
+					t.Fatal("retirement changed original binding, callback journal, session, browser or newer-epoch custody")
+				}
+				commandBytes, err := base64.RawURLEncoding.Strict().DecodeString(string(command))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var audits, events int
+				if err := local.pool.Raw().QueryRow(ctx, `SELECT
+ (SELECT count(*) FROM audit.identity_command_bindings WHERE tenant_id=$1 AND command_id=$2),
+ (SELECT count(*) FROM public.identity_outbox_bindings WHERE tenant_id=$1 AND command_id=$2)`,
+					string(otpTenant), commandBytes).Scan(&audits, &events); err != nil || audits != 1 || events != 1 {
+					t.Fatal("local retirement did not retain exactly one audit and lifecycle effect", audits, events, err)
+				}
+				if p.provider.exchanges.Load() != exchanges || p.provider.proxyRevocations.Load() != revocations {
+					t.Fatal("local retirement performed external provider work")
+				}
+			}
+			assertEffects()
+			retiredCustody := snapshot(local.pool, custodySQL, string(otpTenant), string(oldFlow))
+			replay, err := local.retire(ctx, request)
+			if err != nil || !reflect.DeepEqual(replay, result) ||
+				snapshot(local.pool, custodySQL, string(otpTenant), string(oldFlow)) != retiredCustody {
+				t.Fatal("exact public retirement replay did not recover the same result and custody", err)
+			}
+			assertEffects()
+		})
+	}
 }

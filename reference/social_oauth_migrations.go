@@ -100,6 +100,17 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 		oauthHistory.history = append(oauthHistory.history, bindings...)
 		oauthHistory.owners[previewVersion] = "identity/oauth/postgres"
 		oauthHistory.guards = append(oauthHistory.guards, migrationGuard{version: previewVersion, schema: schema, tables: []string{"proxy_preview_bindings"}})
+		if s.state.proxyPreviewRetirement != nil {
+			retirement, guard, err := proxyRetirementMigrationSuffix(ctx, schema, kernel.OAuthProxyRetirePreview)
+			if err != nil {
+				return nil, err
+			}
+			oauthHistory.history = append(oauthHistory.history, retirement...)
+			for _, step := range retirement {
+				oauthHistory.owners[step.Version()] = "identity/oauth/postgres"
+			}
+			oauthHistory.guards = append(oauthHistory.guards, guard)
+		}
 	}
 	catalog = append(catalog, oauthHistory)
 	if f.socialOAuth.unlink != nil {

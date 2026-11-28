@@ -47,6 +47,7 @@ type HTTPOAuthProxyProductionConfiguration struct {
 // It does not close borrowed resources and can serve concurrent requests.
 type OAuthProxyProduction struct {
 	start                *oauthpg.ProxyStartService
+	forward              *oauthpg.ProxyForwardService
 	handler              http.Handler
 	document             identityhttp.OpenAPIDocument
 	pool                 *database.Pool
@@ -55,6 +56,7 @@ type OAuthProxyProduction struct {
 	previewTarget        oauthproxy.PreviewTarget
 	tenant               identity.TenantID
 	providerAuthority    *oauthpg.ProviderAuthority
+	retirement           *oauthpg.ProxyRetirementAuthority
 }
 
 // NewOAuthProxyProduction assembles native Start and the acknowledged command
@@ -62,7 +64,7 @@ type OAuthProxyProduction struct {
 // provider IO. Use NewOAuthProxyProductionMigrations to install the selected
 // native histories before invoking Start or mounting the handler.
 func NewOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration) (*OAuthProxyProduction, error) {
-	return newOAuthProxyProduction(pool, c, nil)
+	return newOAuthProxyProduction(pool, c, nil, nil)
 }
 
 // NewOAuthProxyProductionWithProviderAuthority selects the live provider
@@ -72,10 +74,22 @@ func NewOAuthProxyProductionWithProviderAuthority(pool *database.Pool, c OAuthPr
 	if a == nil {
 		return nil, identity.InvalidInputError{Field: "reference_oauth_proxy_production"}
 	}
-	return newOAuthProxyProduction(pool, c, a)
+	return newOAuthProxyProduction(pool, c, a, nil)
 }
 
-func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority) (*OAuthProxyProduction, error) {
+// NewOAuthProxyProductionWithRetirement selects live provider checks and
+// direct-Go retirement for this production deployment. Install the selected
+// retirement migration history first. Borrow the trusted audit reader for the
+// lifetime of the owner; this does not grant audit access to the callback pool
+// or install an HTTP route.
+func NewOAuthProxyProductionWithRetirement(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority, retirement *oauthpg.ProxyRetirementAuthority) (*OAuthProxyProduction, error) {
+	if a == nil || retirement == nil {
+		return nil, identity.InvalidInputError{Field: "reference_oauth_proxy_production_retirement"}
+	}
+	return newOAuthProxyProduction(pool, c, a, retirement)
+}
+
+func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority, retirement *oauthpg.ProxyRetirementAuthority) (*OAuthProxyProduction, error) {
 	invalid := identity.InvalidInputError{Field: "reference_oauth_proxy_production"}
 	if c.Codec == nil || nilServerDependency(c.Clock) {
 		return nil, invalid
@@ -106,8 +120,9 @@ func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfigur
 	if err != nil {
 		return nil, invalid
 	}
-	result := &OAuthProxyProduction{start: start, pool: pool, provider: exchange.Profile(),
-		productionDeployment: c.Native.ProductionDeployment, previewTarget: target, tenant: c.Start.Preview.TenantID, providerAuthority: a}
+	result := &OAuthProxyProduction{start: start, forward: forward, pool: pool, provider: exchange.Profile(),
+		productionDeployment: c.Native.ProductionDeployment, previewTarget: target, tenant: c.Start.Preview.TenantID,
+		providerAuthority: a, retirement: retirement}
 	if c.HTTP == nil {
 		return result, nil
 	}
@@ -141,6 +156,17 @@ func (p *OAuthProxyProduction) Start(ctx context.Context, request oauthproxy.Ini
 		return oauthpg.ProxyStartResult{}, oauthproxy.InitiationInvalid
 	}
 	return p.start.Start(ctx, request)
+}
+
+// RetireDisabledProviderOrigin retires one exact configured production origin.
+// A committed result is local only: it proves neither preview cleanup nor
+// completion of a provider-wide cascade. Ambiguous results retain the original
+// command for retry. No HTTP endpoint invokes this method.
+func (p *OAuthProxyProduction) RetireDisabledProviderOrigin(ctx context.Context, request oauthpg.ProxyOriginRetirementRequest) (identity.CommandResult, error) {
+	if p == nil || p.forward == nil || p.retirement == nil || request.Disable.Key.TenantID != p.tenant || request.Disable.Key.ProviderID != p.provider.ID {
+		return identity.CommandResult{}, identity.ForbiddenError{}
+	}
+	return p.forward.RetireDisabledProviderOrigin(ctx, p.retirement, request)
 }
 
 // Handler exposes only the explicitly configured provider GET, or a 404

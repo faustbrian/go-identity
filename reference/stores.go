@@ -310,6 +310,7 @@ type storeState struct {
 	durable                bool
 	productionProxyHistory []migrationHistory
 	proxyPreviewAuthority  *oauthpg.ProviderAuthority
+	proxyPreviewRetirement *oauthpg.ProxyRetirementAuthority
 }
 
 type tenantRecovery struct {
@@ -325,7 +326,7 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
-	return composeStores(c, d, nil)
+	return composeStores(c, d, nil, nil)
 }
 
 // ComposeStoresWithOAuthProxyPreviewProviderAuthority selects live provider
@@ -337,10 +338,21 @@ func ComposeStoresWithOAuthProxyPreviewProviderAuthority(c StoreConfiguration, d
 	if c.OAuthProxyPreview == nil || a == nil {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview"}
 	}
-	return composeStores(c, d, a)
+	return composeStores(c, d, a, nil)
 }
 
-func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority *oauthpg.ProviderAuthority) (StoreSet, error) {
+// ComposeStoresWithOAuthProxyPreviewRetirement selects live preview authority
+// and the explicit preview retirement migration suffix. Borrow the same
+// trusted production audit reader as the production retirement owner. This
+// adds no HTTP route, migration I/O, or production write authority.
+func ComposeStoresWithOAuthProxyPreviewRetirement(c StoreConfiguration, d ReferenceDependencies, a *oauthpg.ProviderAuthority, retirement *oauthpg.ProxyRetirementAuthority) (StoreSet, error) {
+	if c.OAuthProxyPreview == nil || a == nil || retirement == nil {
+		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview_retirement"}
+	}
+	return composeStores(c, d, a, retirement)
+}
+
+func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority *oauthpg.ProviderAuthority, proxyRetirement *oauthpg.ProxyRetirementAuthority) (StoreSet, error) {
 	if c.OAuthProxyPreview != nil && (c.SocialOAuth == nil || c.SocialOAuth.Signin == nil || c.OTP == nil || c.OAuthWorkload != nil || c.ProviderDiscovery != nil) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview"}
 	}
@@ -376,7 +388,7 @@ func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority
 		return StoreSet{}, err
 	}
 	if c.DurableAdmission != nil {
-		return composeDurableAdmission(c, d, migrationPolicy, httpRate, proxyAuthority)
+		return composeDurableAdmission(c, d, migrationPolicy, httpRate, proxyAuthority, proxyRetirement)
 	}
 	v := c.Velocity
 	if len(v.Tenants) < 1 || len(v.Tenants) > 128 || v.Batch < 1 || v.Batch > 1000 || v.MaxRecords < 1 || v.MaxRecords > 100000 || v.RecoveryTimeout <= 0 || v.RecoveryTimeout >= v.LeaseDuration {
@@ -418,7 +430,7 @@ func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
 	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
-	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy, httpRate: httpRate, proxyPreviewAuthority: proxyAuthority}
+	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy, httpRate: httpRate, proxyPreviewAuthority: proxyAuthority, proxyPreviewRetirement: proxyRetirement}
 	if err := state.composeFeatureStores(c, d); err != nil {
 		cancel()
 		return StoreSet{}, err

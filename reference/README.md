@@ -96,6 +96,32 @@ authority outage and an invalidated epoch cannot release a handoff or preview
 session credentials. Re-enabling the provider never revives an older handoff.
 This checks authority; it does not delete pending custody.
 
+### Retire a disabled provider's original proxy custody
+
+For the production database, apply the history selected by
+`NewOAuthProxyProductionMigrationsWithRetirement` before enabling the trusted
+retirement caller. For preview, use `ComposeStoresWithOAuthProxyPreviewRetirement`
+and apply the selected preview plan before initializing the feature set. Each
+profile appends expansion and validation as versions 4 and 5. No existing
+history changes, and the expansion does not rewrite existing rows.
+
+Build one `oauth/postgres.NewProxyRetirementAuthority` with the separately
+authorized production audit reader and the provider operator identity. Pass it
+to `NewOAuthProxyProductionWithRetirement` and the preview retirement composer
+alongside the shared live provider reader. The production callback pool does
+not need audit read privileges. No HTTP handler or OpenAPI operation exposes
+these calls.
+
+Call `OAuthProxyProduction.RetireDisabledProviderOrigin` and
+`FeatureSet.RetireDisabledOAuthProxyPreviewOrigin` with the exact retained
+provider-disable change, original issuing command and flow. Each origin uses
+its own retirement command and reports only its own committed result. Retry
+the same command and inputs after an ambiguous result. A local commit erases
+that origin's bearer custody without changing its original callback outcome.
+It does not complete the provider-wide cascade. To stop retirement, stop
+invoking the trusted methods and retain the expanded migration selection;
+already erased material is not restored.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes

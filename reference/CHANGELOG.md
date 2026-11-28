@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into trusted retirement of exact disabled OAuth proxy origins on both
+  deployments. Append the selected custody migrations without exposing an
+  HTTP operator route or granting audit reads to callback roles.
+
 - Opt into shared live provider authority for both OAuth proxy deployments.
   Keep callback routes separately selected and add an append-only production
   migration option for operators hosting the shared authority there.

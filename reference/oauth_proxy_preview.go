@@ -152,6 +152,26 @@ func (f FeatureSet) StartOAuthProxyPreview(ctx context.Context, production *OAut
 	return authorization, nil
 }
 
+// RetireDisabledOAuthProxyPreviewOrigin retires one original preview binding
+// using the selected shared disable evidence. It opens no production work and
+// creates or revokes no session. A committed result acknowledges this origin
+// only; retry the exact request after an ambiguous result.
+func (f FeatureSet) RetireDisabledOAuthProxyPreviewOrigin(ctx context.Context, request oauthpg.ProxyOriginRetirementRequest) (identity.CommandResult, error) {
+	if f.state == nil || f.state.proxyPreviewRetirement == nil {
+		return identity.CommandResult{}, identity.ForbiddenError{}
+	}
+	work, done, err := f.state.enterFeature(ctx, true)
+	if err != nil {
+		return identity.CommandResult{}, err
+	}
+	defer done()
+	preview := f.state.features.oauthProxyPreview
+	if preview == nil || preview.owner == nil || request.Disable.Key.ProviderID != preview.provider.ID {
+		return identity.CommandResult{}, identity.ForbiddenError{}
+	}
+	return preview.owner.RetireDisabledProviderOrigin(work, f.state.proxyPreviewRetirement, request)
+}
+
 func sameProxyDatabase(preview, production *database.Pool) bool {
 	if preview == nil || production == nil || preview.Raw() == nil || production.Raw() == nil || preview.Raw() == production.Raw() {
 		return true

@@ -35,12 +35,20 @@ type OAuthProxyProductionMigrations struct {
 	modules []ModuleID
 }
 
+type productionProxyMigrationProfile uint8
+
+const (
+	productionProxyStatic productionProxyMigrationProfile = iota
+	productionProxyLiveAuthority
+	productionProxyRetirement
+)
+
 // NewOAuthProxyProductionMigrations freezes the exact selected native histories
 // without I/O. It installs nothing and never adopts unmanaged histories. Close
 // the returned owner before releasing its caller-owned migration pool. That
 // pool may use a separate migration role from the runtime pool.
 func NewOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration) (OAuthProxyProductionMigrations, error) {
-	return newOAuthProxyProductionMigrations(pool, c, false)
+	return newOAuthProxyProductionMigrations(pool, c, productionProxyStatic)
 }
 
 // NewOAuthProxyProductionMigrationsWithProviderAuthority appends the empty
@@ -48,10 +56,17 @@ func NewOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProducti
 // database also hosts the shared authoritative provider registrations. It does
 // not enroll providers, change runtime privileges, or enable a listener.
 func NewOAuthProxyProductionMigrationsWithProviderAuthority(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration) (OAuthProxyProductionMigrations, error) {
-	return newOAuthProxyProductionMigrations(pool, c, true)
+	return newOAuthProxyProductionMigrations(pool, c, productionProxyLiveAuthority)
 }
 
-func newOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration, liveAuthority bool) (OAuthProxyProductionMigrations, error) {
+// NewOAuthProxyProductionMigrationsWithRetirement selects live provider
+// authority plus the two ordered retirement schema steps. It preserves the
+// existing history and does not enable retirement or change runtime grants.
+func NewOAuthProxyProductionMigrationsWithRetirement(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration) (OAuthProxyProductionMigrations, error) {
+	return newOAuthProxyProductionMigrations(pool, c, productionProxyRetirement)
+}
+
+func newOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration, profile productionProxyMigrationProfile) (OAuthProxyProductionMigrations, error) {
 	invalid := identity.InvalidInputError{Field: "reference_oauth_proxy_production_migrations"}
 	if pool == nil || pool.Raw() == nil || c.Timeout < time.Millisecond || c.Timeout > time.Minute ||
 		c.Schema == "audit" || c.HTTPRiskSchema == "audit" || c.HTTPRiskSchema != "" && c.HTTPRiskSchema == c.Schema {
@@ -61,7 +76,7 @@ func newOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProducti
 	if err != nil {
 		return OAuthProxyProductionMigrations{}, invalid
 	}
-	history, err := productionProxyMigrationCatalog(context.Background(), c, liveAuthority)
+	history, err := productionProxyMigrationCatalog(context.Background(), c, profile)
 	if err != nil {
 		return OAuthProxyProductionMigrations{}, invalid
 	}
@@ -111,7 +126,7 @@ func (m OAuthProxyProductionMigrations) Apply(ctx context.Context, req Reference
 // Close cancels and joins operator work, without closing the borrowed pool.
 func (m OAuthProxyProductionMigrations) Close(ctx context.Context) error { return m.stores.Close(ctx) }
 
-func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProductionMigrationConfiguration, liveAuthority bool) ([]migrationHistory, error) {
+func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProductionMigrationConfiguration, profile productionProxyMigrationProfile) ([]migrationHistory, error) {
 	directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.MigrationSource{}, Version: 10,
 		GlobalAuthorityID: c.GlobalAuthorityID, TenantIDs: []identity.TenantID{c.TenantID}}
 	keyed := kernel.RequestKeyMigrationSource{Base: directory, Version: 11}
@@ -145,13 +160,21 @@ func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProduction
 		{version: 1, schema: c.Schema},
 		{version: 2, schema: c.Schema, tables: []string{"proxy_transactions"}},
 	}
-	if liveAuthority {
+	if profile != productionProxyStatic {
 		authority, err := (oauthpg.ProviderAuthorityMigrationSource{Schema: c.Schema, Version: 3}).Load(ctx)
 		if err != nil {
 			return nil, err
 		}
 		oauthHistory = append(oauthHistory, authority...)
 		oauthGuards = append(oauthGuards, migrationGuard{version: 3, schema: c.Schema, tables: []string{"provider_authorities"}})
+	}
+	if profile == productionProxyRetirement {
+		retirement, guard, err := proxyRetirementMigrationSuffix(ctx, c.Schema, kernel.OAuthProxyRetireProduction)
+		if err != nil {
+			return nil, err
+		}
+		oauthHistory = append(oauthHistory, retirement...)
+		oauthGuards = append(oauthGuards, guard)
 	}
 	catalog = append(catalog, proxyOwnedHistory("identity_oauth_proxy", "identity/oauth/postgres", oauthHistory, oauthGuards...))
 	capability, err := migrations.NewFSSource(ownedMigrationFiles{capabilitypg.Migrations()}, ".")
@@ -184,6 +207,24 @@ func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProduction
 		proxyOwnedHistory("identity_http_rate", "rate-limit/postgres", []migrations.Migration{rate},
 			migrationGuard{version: rate.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}),
 	), nil
+}
+
+func proxyRetirementMigrationSuffix(ctx context.Context, schema string, kind kernel.OAuthProxyRetirementKind) ([]migrations.Migration, migrationGuard, error) {
+	const version = 4 // The production and preview proxy histories each reserve 1–3.
+	var table string
+	switch kind {
+	case kernel.OAuthProxyRetireProduction:
+		table = "proxy_transactions"
+	case kernel.OAuthProxyRetirePreview:
+		table = "proxy_preview_bindings"
+	default:
+		return nil, migrationGuard{}, identity.InvalidInputError{Field: "reference_oauth_proxy_retirement_migration"}
+	}
+	history, err := (oauthpg.ProxyRetirementMigrationSource{Schema: schema, Version: version, Kind: kind}).Load(ctx)
+	guard := migrationGuard{version: version, schema: schema,
+		columns:     []string{table + ".retirement_source_command_id", table + ".retirement_source_version", table + ".retired_at"},
+		constraints: []string{table + "." + table + "_retirement_shape"}}
+	return history, guard, err
 }
 
 func proxyOwnedHistory(namespace string, owner ModuleID, history []migrations.Migration, guards ...migrationGuard) migrationHistory {
