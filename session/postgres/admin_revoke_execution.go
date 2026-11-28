@@ -85,48 +85,13 @@ func (e *AdminRevokeExecutor) ExecuteAdminSessionRevoke(ctx context.Context, req
 			out = session.AdminSessionRevokeResult{}
 		}
 	}()
-	if ctx == nil || e == nil || e.base == nil {
-		return out, session.ErrInvalidInput
-	}
-	b, ok := req.Binding()
-	if !ok || b.PolicyID != e.base.policyID || b.PolicyVersion != e.base.policyVersion {
-		return out, identity.ForbiddenError{}
-	}
-	if err := req.Validate(e.config.Sessions, e.base.clock.Now()); err != nil {
-		return out, err
-	}
-	if _, err := selectRevokeCSRFKey(req.Caller(), req.CSRFToken(), []session.CSRFKey{e.config.CSRFKey}); err != nil {
-		return out, err
-	}
-	actor, err := req.Caller().Bindings()
-	if err != nil || actor.Audience != e.config.Actor.Audience {
-		return out, identity.ForbiddenError{}
-	}
-	remember, err := actor.Remember.Bindings()
-	if err != nil {
-		return out, identity.ForbiddenError{}
-	}
-	factor, err := req.Caller().MFAAuthentication().Bindings()
-	if err != nil {
-		return out, identity.ForbiddenError{}
-	}
-	// Cap Work to the original authentication and the selected fifteen-minute
-	// M24 TOTP profile (session.PrepareAdminSessionRevoke). The late native
-	// check also validates the core policy itself after effects are staged.
-	deadline := earliestAdminRevokeDeadline(req.ValidUntil(), actor.Authentication.Proof.IssuedAt.Add(remember.FreshFor), factor.VerifiedAt.Add(15*time.Minute))
-	bounded, stop, err := sessionPrimaryDeadline(ctx, e.base.native, e.base.maximumDuration, deadline)
+	admission, err := e.admitAdminRevocation(ctx, req, session.AdminSessionRevokeOperation())
 	if err != nil {
 		return out, err
 	}
-	defer stop()
-	decision := authorization.DecisionContext{
-		PolicyRevision: authorization.Revision(b.PolicyVersion), CorrelationID: b.CorrelationID,
-		Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: authorization.SubjectUser}, Action: authorization.Action(b.OperationID), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}},
-	}
-	if err = e.base.allow(bounded, decision); err != nil {
-		return out, err
-	}
-	target, present, err := e.base.native.readAdminRevokeTarget(bounded, b, actor.Audience)
+	defer admission.cancel()
+	b, bounded := admission.binding, admission.ctx
+	target, present, err := e.base.native.readAdminRevokeTarget(bounded, b, admission.audience)
 	if err != nil {
 		return out, err
 	}
@@ -170,6 +135,58 @@ func (e *AdminRevokeExecutor) ExecuteAdminSessionRevoke(ctx context.Context, req
 	return adminRevokeCommitResult(b, target.version, result, err)
 }
 
+type adminRevocationAdmission struct {
+	binding  identity.CommandBinding
+	decision authorization.DecisionContext
+	audience string
+	ctx      context.Context
+	cancel   context.CancelFunc
+}
+
+func (e *AdminRevokeExecutor) admitAdminRevocation(ctx context.Context, req session.AdminSessionRevocation, op identity.FeatureOperation) (out adminRevocationAdmission, err error) {
+	if ctx == nil || e == nil || e.base == nil {
+		return out, session.ErrInvalidInput
+	}
+	b, ok := req.Binding()
+	if !ok || b.ValidateFor(op) != nil || b.PolicyID != e.base.policyID || b.PolicyVersion != e.base.policyVersion {
+		return out, identity.ForbiddenError{}
+	}
+	if err := req.Validate(e.config.Sessions, e.base.clock.Now()); err != nil {
+		return out, err
+	}
+	if _, err := selectRevokeCSRFKey(req.Caller(), req.CSRFToken(), []session.CSRFKey{e.config.CSRFKey}); err != nil {
+		return out, err
+	}
+	actor, err := req.Caller().Bindings()
+	if err != nil || actor.Audience != e.config.Actor.Audience {
+		return out, identity.ForbiddenError{}
+	}
+	remember, err := actor.Remember.Bindings()
+	if err != nil {
+		return out, identity.ForbiddenError{}
+	}
+	factor, err := req.Caller().MFAAuthentication().Bindings()
+	if err != nil {
+		return out, identity.ForbiddenError{}
+	}
+	// The Work budget cannot outlive either source of original freshness.
+	// Commit also rechecks core policy on the primary after staging effects.
+	deadline := earliestAdminRevokeDeadline(req.ValidUntil(), actor.Authentication.Proof.IssuedAt.Add(remember.FreshFor), factor.VerifiedAt.Add(15*time.Minute))
+	bounded, cancel, err := sessionPrimaryDeadline(ctx, e.base.native, e.base.maximumDuration, deadline)
+	if err != nil {
+		return out, err
+	}
+	decision := authorization.DecisionContext{
+		PolicyRevision: authorization.Revision(b.PolicyVersion), CorrelationID: b.CorrelationID,
+		Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: authorization.SubjectUser}, Action: authorization.Action(b.OperationID), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}},
+	}
+	if err = e.base.allow(bounded, decision); err != nil {
+		cancel()
+		return out, err
+	}
+	return adminRevocationAdmission{binding: b, decision: decision, audience: actor.Audience, ctx: bounded, cancel: cancel}, nil
+}
+
 func earliestAdminRevokeDeadline(lease, primary, factor time.Time) time.Time {
 	if primary.Before(lease) {
 		lease = primary
@@ -198,29 +215,31 @@ func planAdminRevoke(owned *IssueExecutor, b identity.CommandBinding, target adm
 	if err != nil {
 		return identity.Command{}, kernel.CommandPlan{}, err
 	}
+	return planAdminRevocation(owned, command, b, session.AdminSessionRevokeOperation(), "session", adminRevokeTransition(target.version))
+}
+
+func planAdminRevocation(owned *IssueExecutor, command identity.Command, b identity.CommandBinding, op identity.FeatureOperation, subject string, transition kernel.LifecyclePlan) (identity.Command, kernel.CommandPlan, error) {
 	bld, err := audit.NewBuilder(audit.BuilderConfig{})
 	if err != nil {
 		return identity.Command{}, kernel.CommandPlan{}, session.ErrUnavailable
 	}
-	op := session.AdminSessionRevokeOperation()
-	transition := adminRevokeTransition(target.version)
 	const retention = "protected"
 	record, err := bld.Build(audit.RecordInput{
 		OccurredAt: owned.clock.Now().UTC().Truncate(time.Microsecond), Action: op.OperationID, Outcome: audit.OutcomeSucceeded,
-		Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "session", ID: b.RecordID},
+		Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: subject, ID: b.RecordID},
 		Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID},
 		Policy:  audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{Redacted: true},
-		Attributes: map[string]string{"command.id": string(b.CommandID), "aggregate.id": b.RecordID, "aggregate.type": "session", "aggregate.before_version": strconv.FormatUint(transition.BeforeVersion, 10), "aggregate.after_version": strconv.FormatUint(transition.AfterVersion, 10), "retention.class": retention},
+		Attributes: map[string]string{"command.id": string(b.CommandID), "aggregate.id": b.RecordID, "aggregate.type": subject, "aggregate.before_version": strconv.FormatUint(transition.BeforeVersion, 10), "aggregate.after_version": strconv.FormatUint(transition.AfterVersion, 10), "retention.class": retention},
 	})
 	if err != nil {
 		return identity.Command{}, kernel.CommandPlan{}, session.ErrUnavailable
 	}
-	digest, err := kernel.FeatureAuditBindingDigest(b, op, "session", record)
+	digest, err := kernel.FeatureAuditBindingDigest(b, op, subject, record)
 	if err != nil {
 		return identity.Command{}, kernel.CommandPlan{}, err
 	}
 	declaration := kernel.CommandPlan{
-		Contributors: owned.registry.Descriptors(), SubjectType: "session", Feature: &kernel.FeatureRegistration{Contributor: owned.native.Descriptor(), Operation: op}, Lifecycle: &transition,
+		Contributors: owned.registry.Descriptors(), SubjectType: subject, Feature: &kernel.FeatureRegistration{Contributor: owned.native.Descriptor(), Operation: op}, Lifecycle: &transition,
 		Audits: []kernel.AuditPlan{{EventType: op.OperationID, SchemaVersion: 1, BindingDigest: digest, RetentionClass: retention, RetentionPolicyVersion: owned.retentionVersion, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}},
 	}
 	plan, err := owned.coordinator.PrepareCommandPlan(b, command, declaration)

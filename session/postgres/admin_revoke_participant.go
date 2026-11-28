@@ -86,47 +86,71 @@ func (p *adminRevokeParticipant) ApplyFeature(ctx context.Context, w kernel.Work
 		return out, session.ErrInvalidSessionCommand
 	}
 	caller := p.request.Caller()
-	actor, err := caller.Bindings()
-	if err != nil || actor.TenantID != b.TenantID || identity.ActorID(actor.UserID) != b.ActorID {
-		return out, identity.ForbiddenError{}
-	}
-	actorBinding := b
-	actorBinding.UserID = actor.UserID
-	directory, credential, policy, err := OriginalMFAPasswordSessionAdmission(p.profile, caller, actorBinding)
+	actor, err := requireAdminRevocationActor(ctx, w, p, p.profile, b, caller)
 	if err != nil {
-		return out, identity.ForbiddenError{}
-	}
-	if err = w.RequireActiveDirectoryAuthority(ctx, p, directory); err != nil {
-		return out, err
-	}
-	if _, err = w.RequireActiveActorCredential(ctx, p, credential); err != nil {
-		return out, err
-	}
-	if err = w.RequireActiveActorAuthorization(ctx, p, policy); err != nil {
-		return out, err
-	}
-	factor, err := caller.MFAAuthentication().Bindings()
-	if err != nil || factor.Method != "totp" {
-		return out, identity.ForbiddenError{}
-	}
-	if err = mfapg.RequireAdminSessionRevokeActorTOTPSessionFactor(ctx, w, p, actor.UserID, factor.FactorID, mfapg.TOTPSessionFactorState{EnrollmentVersion: factor.EnrollmentVersion, AuthorityVersion: factor.FactorAuthorityVersion}); err != nil {
 		return out, err
 	}
 	if err = p.lockAdminRevokePair(ctx, w, b.TenantID, actor.SessionID, b.RecordID); err != nil {
 		return out, err
 	}
-	cfg := Config{Schema: strings.Trim(p.schema, "\""), MaximumDuration: p.maximumDuration}
-	if err = RequireCSRF(ctx, w, cfg, caller, p.request.CSRFToken(), p.csrf); err != nil {
+	if err := p.Repository.requireAdminRevocationSession(ctx, w, p.sessions, p.request, p.csrf); err != nil {
 		return out, err
+	}
+	return p.writeSingleSessionRevocation(ctx, w, b, feature, transition, p.target.record)
+}
+
+func requireAdminRevocationActor(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, profile IdentifierAdmissionConfig, b identity.CommandBinding, caller session.Session) (session.SessionSpec, error) {
+	actor, err := caller.Bindings()
+	if err != nil || actor.TenantID != b.TenantID || identity.ActorID(actor.UserID) != b.ActorID {
+		return session.SessionSpec{}, identity.ForbiddenError{}
+	}
+	actorBinding := b
+	actorBinding.UserID = actor.UserID
+	directory, credential, policy, err := OriginalMFAPasswordSessionAdmission(profile, caller, actorBinding)
+	if err != nil {
+		return session.SessionSpec{}, identity.ForbiddenError{}
+	}
+	if err = w.RequireActiveDirectoryAuthority(ctx, owner, directory); err != nil {
+		return session.SessionSpec{}, err
+	}
+	if _, err = w.RequireActiveActorCredential(ctx, owner, credential); err != nil {
+		return session.SessionSpec{}, err
+	}
+	if err = w.RequireActiveActorAuthorization(ctx, owner, policy); err != nil {
+		return session.SessionSpec{}, err
+	}
+	factor, err := caller.MFAAuthentication().Bindings()
+	if err != nil || factor.Method != "totp" {
+		return session.SessionSpec{}, identity.ForbiddenError{}
+	}
+	expected := mfapg.TOTPSessionFactorState{EnrollmentVersion: factor.EnrollmentVersion, AuthorityVersion: factor.FactorAuthorityVersion}
+	switch b.OperationID {
+	case session.AdminSessionRevokeOperation().OperationID:
+		err = mfapg.RequireAdminSessionRevokeActorTOTPSessionFactor(ctx, w, owner, actor.UserID, factor.FactorID, expected)
+	case session.AdminSessionRevokeAllOperation().OperationID:
+		err = mfapg.RequireAdminSessionRevokeAllActorTOTPSessionFactor(ctx, w, owner, actor.UserID, factor.FactorID, expected)
+	default:
+		err = identity.ForbiddenError{}
+	}
+	if err != nil {
+		return session.SessionSpec{}, err
+	}
+	return actor, nil
+}
+
+func (r *Repository) requireAdminRevocationSession(ctx context.Context, w kernel.Work, sessions *session.SessionService, req session.AdminSessionRevocation, csrf session.CSRFKey) error {
+	cfg := Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}
+	if err := RequireCSRF(ctx, w, cfg, req.Caller(), req.CSRFToken(), csrf); err != nil {
+		return err
 	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
-		return out, err
+		return err
 	}
-	if p.request.Validate(p.sessions, now) != nil {
-		return out, identity.ForbiddenError{}
+	if req.Validate(sessions, now) != nil {
+		return identity.ForbiddenError{}
 	}
-	return p.writeSingleSessionRevocation(ctx, w, b, feature, transition, p.target.record)
+	return nil
 }
 
 // Lock both session IDs in their existing C-collation order before obtaining
@@ -179,17 +203,21 @@ func (p *adminRevokeParticipant) RecoverParticipant(ctx context.Context, w kerne
 // the same actor authority and both session locks are still held. A wait in
 // any of those phases must not carry the original admission past freshness.
 func (p *adminRevokeParticipant) CheckFeatureCommit(ctx context.Context, w kernel.Work, command identity.Command) error {
-	b, feature, _, err := w.FeatureScope(p)
-	request, present := p.request.Binding()
+	return checkAdminRevocationCommit(ctx, w, p, command, p.request, p.sessions, session.AdminSessionRevokeOperation())
+}
+
+func checkAdminRevocationCommit(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, req session.AdminSessionRevocation, sessions *session.SessionService, op identity.FeatureOperation) error {
+	b, feature, _, err := w.FeatureScope(owner)
+	request, present := req.Binding()
 	spec, native := command.Feature()
-	if err != nil || !present || !native || b != request || spec.Binding != b || feature.Operation != session.AdminSessionRevokeOperation() || spec.Operation != feature.Operation {
+	if err != nil || !present || !native || b != request || spec.Binding != b || feature.Operation != op || spec.Operation != feature.Operation {
 		return identity.ForbiddenError{}
 	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
 	}
-	if p.request.Validate(p.sessions, now) != nil {
+	if req.Validate(sessions, now) != nil {
 		return identity.ForbiddenError{}
 	}
 	return nil

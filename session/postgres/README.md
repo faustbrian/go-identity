@@ -15,6 +15,20 @@ reader passed to `session.NewAdminRevokeService`. On an unknown commit, use
 actor authorization. Do not interpret a new no-op as recovery of the original
 result.
 
+## Administrator session-set revocation
+
+Install both steps from `AdminRevokeAllMigrationSource` before enabling
+`session.NewAdminRevokeAllService` with the shared native executor. Use
+`Load` for an online concurrent index build, or `LoadOffline` for an
+explicit bootstrap or maintenance window. The two index histories have
+different checksums; do not switch profiles after applying either one.
+
+The service revokes only the exact target user's active sessions, across
+all audiences. A committed zero count still advances the session-only
+subject version. On an unknown commit, use `RecoverAdminSessionRevokeAll`
+with the original command and current actor authorization; a later command
+does not recover the original count.
+
 ## Native enterprise OIDC issuance
 
 Install `CSRFMigrationSource` when issuing CSRF-bearing sessions, and install

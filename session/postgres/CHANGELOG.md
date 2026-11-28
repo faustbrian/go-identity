@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Revoke an authorized user's sessions across all audiences in one transaction.
+  Retain the exact original count and session-only subject version for recovery,
+  including a committed zero-count result.
+
 - Execute exact single-session administrator revocation with the original
   password/TOTP actor and synchronizer fenced on the native transaction.
   Reuse the session mutation, durable audit/outbox and command recovery.
