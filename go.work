@@ -14,6 +14,7 @@ use (
 	./http/anonymous
 	./http/apikey
 	./http/email
+	./http/impersonation
 	./http/magiclink
 	./http/mfa
 	./http/oauth

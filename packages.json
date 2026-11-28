@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"http/impersonation","directory":".","name":"impersonationhttp","import_path":"github.com/faustbrian/go-identity/http/impersonation","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"apikey/valkey","directory":".","name":"apikeyvalkey","import_path":"github.com/faustbrian/go-identity/apikey/valkey","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"session/valkey","directory":".","name":"sessionvalkey","import_path":"github.com/faustbrian/go-identity/session/valkey","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"oauth/onetap","directory":".","name":"onetap","import_path":"github.com/faustbrian/go-identity/oauth/onetap","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
