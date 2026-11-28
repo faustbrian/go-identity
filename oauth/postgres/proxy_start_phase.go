@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"reflect"
 	"slices"
+	"strconv"
 	"time"
 
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
@@ -37,6 +38,7 @@ type proxyStartPhase struct {
 	preparedGeneration    uint64
 	preparedDigest        [32]byte
 	issued                capabilitypg.PreparedIssuance
+	custodyFence          bool
 }
 
 var _ kernel.FeatureAdmissionPreparationContributor = (*proxyStartPhase)(nil)
@@ -281,10 +283,18 @@ func (p *proxyStartPhase) RestoreFeaturePreparation(ctx context.Context, c ident
 }
 
 func insertProxyStartSQL(schema string) string {
+	return proxyStartInsertSQL(schema, false)
+}
+
+func proxyStartInsertSQL(schema string, fenced bool) string {
+	var columns, values string
+	if fenced {
+		columns, values = ",fence_provider_id,fence_provider_epoch", ",$16,$17::numeric"
+	}
 	return `INSERT INTO ` + rpQuotedSchema(schema) + `.proxy_transactions(tenant_id,transaction_id,origin_command_id,callback_command_id,
 production_deployment,provider_id,configuration_version,production_callback_uri,state_key_version,state_lookup_digest,
-binding_ciphertext,state_proof_ciphertext,pkce_ciphertext,issued_at,expires_at,version)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,1)`
+binding_ciphertext,state_proof_ciphertext,pkce_ciphertext,issued_at,expires_at,version` + columns + `)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,1` + values + `)`
 }
 
 func (p *proxyStartPhase) ApplyFeature(ctx context.Context, work kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
@@ -303,9 +313,19 @@ func (p *proxyStartPhase) ApplyFeature(ctx context.Context, work kernel.Work, co
 	}
 	origin, _ := base64.RawURLEncoding.DecodeString(string(l.OriginCommand))
 	callback, _ := base64.RawURLEncoding.DecodeString(string(l.CallbackCommand))
-	count, err := work.Exec(ctx, insertProxyStartSQL(p.forward.config.Schema), string(l.Tenant), string(l.Transaction), origin, callback,
+	args := []any{string(l.Tenant), string(l.Transaction), origin, callback,
 		l.Production, l.Provider, l.ProviderVersion, l.CallbackURI, l.StateKeyVersion, l.LookupDigest[:], o.BindingCiphertext,
-		o.StateProofCiphertext, o.PKCECiphertext, l.IssuedAt, l.ExpiresAt)
+		o.StateProofCiphertext, o.PKCECiphertext, l.IssuedAt, l.ExpiresAt}
+	statement := insertProxyStartSQL(p.forward.config.Schema)
+	if p.custodyFence {
+		epoch := p.original.Evidence.ProviderAuthorityEpoch
+		if epoch == 0 {
+			return identity.FeatureReceipt{}, identity.ForbiddenError{}
+		}
+		args = append(args, l.Provider, strconv.FormatUint(epoch, 10))
+		statement = proxyStartInsertSQL(p.forward.config.Schema, true)
+	}
+	count, err := work.Exec(ctx, statement, args...)
 	if err != nil || count != 1 {
 		return identity.FeatureReceipt{}, identity.UnavailableError{}
 	}

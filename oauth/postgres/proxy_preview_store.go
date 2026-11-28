@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
@@ -41,9 +42,17 @@ WHERE tenant_id=$1 AND flow_id=$2`
 }
 
 func insertProxyPreviewSQL(schema string) string {
+	return proxyPreviewInsertSQL(schema, false)
+}
+
+func proxyPreviewInsertSQL(schema string, fenced bool) string {
+	var columns, values string
+	if fenced {
+		columns, values = ",fence_provider_id,fence_provider_epoch", ",$9,$10::numeric"
+	}
 	return `INSERT INTO ` + rpQuotedSchema(schema) + `.proxy_preview_bindings
-(tenant_id,flow_id,origin_command_id,callback_command_id,issued_at,expires_at,binding_ciphertext,proof_ciphertext,version)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,1)`
+(tenant_id,flow_id,origin_command_id,callback_command_id,issued_at,expires_at,binding_ciphertext,proof_ciphertext,version` + columns + `)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,1` + values + `)`
 }
 
 func recoverProxyPreviewBindingSQL(schema string) string {
@@ -116,14 +125,23 @@ func readProxyPreviewRow(ctx context.Context, db proxyLookupQueryer, schema stri
 	return row, nil
 }
 
-func insertProxyPreviewRow(ctx context.Context, w kernel.Work, schema string, row proxyPreviewRow) error {
+func insertProxyPreviewRow(ctx context.Context, w kernel.Work, schema string, row proxyPreviewRow, fenced bool, provider string, epoch uint64) error {
 	if ctx == nil || !rpSchemaName(schema) || !validProxyPreviewRow(row) {
 		return identity.InvalidInputError{Field: "oauth_proxy_preview_custody"}
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	count, err := w.Exec(ctx, insertProxyPreviewSQL(schema), proxyPreviewOriginalArgs(row)...)
+	args := proxyPreviewOriginalArgs(row)
+	statement := insertProxyPreviewSQL(schema)
+	if fenced {
+		if !rpProviderID(provider) || epoch == 0 {
+			return identity.ForbiddenError{}
+		}
+		args = append(args, provider, strconv.FormatUint(epoch, 10))
+		statement = proxyPreviewInsertSQL(schema, true)
+	}
+	count, err := w.Exec(ctx, statement, args...)
 	if err != nil {
 		return err // Work owns bounded SQL execution and redacted error translation.
 	}

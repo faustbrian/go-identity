@@ -439,7 +439,8 @@ func (p *proxyPreviewBindPhase) ApplyFeature(ctx context.Context, w kernel.Work,
 		return identity.FeatureReceipt{}, err
 	}
 	start := p.service.signin.start
-	if err := insertProxyPreviewRow(ctx, w, start.config.Schema, p.row); err != nil {
+	evidence := p.expected.Evidence
+	if err := insertProxyPreviewRow(ctx, w, start.config.Schema, p.row, p.service.custodyFence, evidence.ProviderID, evidence.ProviderAuthorityEpoch); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if err := start.issuer.Stage(ctx, w, p.issued); err != nil {

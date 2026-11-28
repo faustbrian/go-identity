@@ -51,11 +51,12 @@ type ProxyPreviewCallbackRequest struct {
 // account preview signin. It never exchanges provider codes or writes to the
 // production database. Both commands reuse the ordinary OAuth coordinator.
 type ProxyPreviewService struct {
-	signin    *SigninCompletionService
-	config    ProxyPreviewConfig
-	admission *oauthproxy.PreviewCompletionAdmission
-	crypto    capability.Service
-	authority *ProviderAuthority
+	signin       *SigninCompletionService
+	config       ProxyPreviewConfig
+	admission    *oauthproxy.PreviewCompletionAdmission
+	crypto       capability.Service
+	authority    *ProviderAuthority
+	custodyFence bool
 }
 
 // NewProxyPreviewService preserves the static preview contract. It accepts only
@@ -79,6 +80,19 @@ func NewProxyPreviewServiceWithProviderAuthority(signin *SigninCompletionService
 		return nil, oauthproxy.CompletionInvalid
 	}
 	return newProxyPreviewService(signin, c, a)
+}
+
+// NewProxyPreviewServiceWithCustodyFence selects the live preview writer for
+// a schema with the optional custody fence expansion. Only the authenticated
+// original supplies the provider and epoch in the local Bind transaction.
+// The existing Complete path and its database privileges are unchanged.
+func NewProxyPreviewServiceWithCustodyFence(signin *SigninCompletionService, c ProxyPreviewConfig, a *ProviderAuthority) (*ProxyPreviewService, error) {
+	service, err := NewProxyPreviewServiceWithProviderAuthority(signin, c, a)
+	if err != nil {
+		return nil, err
+	}
+	service.custodyFence = true
+	return service, nil
 }
 
 func newProxyPreviewService(signin *SigninCompletionService, c ProxyPreviewConfig, a *ProviderAuthority) (*ProxyPreviewService, error) {

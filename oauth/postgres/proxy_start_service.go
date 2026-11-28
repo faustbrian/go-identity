@@ -39,15 +39,16 @@ type ProxyStartConfig struct {
 // borrows the exact forward store and provider but starts no HTTP listener,
 // contacts no provider during initiation, and creates no identity or session.
 type ProxyStartService struct {
-	forward    *ProxyForwardService
-	admission  *oauthproxy.PreviewInitiationAdmission
-	provider   *oauth.OIDCProvider
-	profile    oauth.ProviderProfile
-	checkpoint *capabilitypg.IssuancePreparationCodec
-	claims     string
-	version    uint64
-	stateKey   uint32
-	lifetime   time.Duration
+	forward      *ProxyForwardService
+	admission    *oauthproxy.PreviewInitiationAdmission
+	provider     *oauth.OIDCProvider
+	profile      oauth.ProviderProfile
+	checkpoint   *capabilitypg.IssuancePreparationCodec
+	claims       string
+	version      uint64
+	stateKey     uint32
+	lifetime     time.Duration
+	custodyFence bool
 }
 
 // NewProxyStartService validates and snapshots one trusted preview profile
@@ -75,6 +76,22 @@ func NewProxyStartService(forward *ProxyForwardService, c ProxyStartConfig) (*Pr
 	}
 	return &ProxyStartService{forward: forward, admission: admission, provider: c.Provider, profile: profile, checkpoint: checkpoint,
 		claims: c.ClaimsProfile, version: c.ClaimsVersion, stateKey: c.CurrentStateKeyVersion, lifetime: c.StateLifetime}, nil
+}
+
+// NewProxyStartServiceWithCustodyFence selects the live production writer
+// for a schema with the optional custody fence expansion. The authoritative
+// provider projection comes from the same original as the encrypted binding.
+// Activate the database gate only after all writers have switched.
+func NewProxyStartServiceWithCustodyFence(forward *ProxyForwardService, c ProxyStartConfig) (*ProxyStartService, error) {
+	if forward == nil || forward.providerAuthority == nil {
+		return nil, oauthproxy.InitiationInvalid
+	}
+	service, err := NewProxyStartService(forward, c)
+	if err != nil {
+		return nil, err
+	}
+	service.custodyFence = true
+	return service, nil
 }
 
 // ProxyStartResult holds the newly committed authorization request and the
@@ -184,7 +201,7 @@ func (s *ProxyStartService) phase(preview oauthproxy.InitiationBinding, authorit
 	if err != nil {
 		return nil, err
 	}
-	p := &proxyStartPhase{forward: s.forward, checkpoint: s.checkpoint, binding: binding, request: sha256.Sum256(frame), startedAt: started,
+	p := &proxyStartPhase{forward: s.forward, checkpoint: s.checkpoint, binding: binding, request: sha256.Sum256(frame), startedAt: started, custodyFence: s.custodyFence,
 		profile: s.provider, lifetime: s.lifetime, issuer: s.forward.capabilityIssuer, audience: s.forward.capabilityAudience,
 		locator: proxyBindingLocator{Tenant: preview.TenantID, Transaction: preview.TransactionID, OriginCommand: preview.CommandID,
 			Production: c.ProductionDeployment, Provider: profile.ID, CallbackURI: profile.RedirectURI, ProviderVersion: profile.Version, StateKeyVersion: s.stateKey},

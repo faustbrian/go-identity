@@ -84,6 +84,30 @@ does not authorize or perform that mutation, open bearer custody, or call the
 provider. A missing continuation ends this traversal, not the cascade: it does
 not establish a stable snapshot or exclude a delayed writer.
 
+### Select the local custody writer gate
+
+Roll out independently for the production and preview custody tables:
+
+1. Apply `ProxyCustodyWriteFenceMigrationSource` for that origin. It adds two
+   nullable columns without a backfill and creates an empty fence table.
+   Existing writers and settled rows remain usable during this step.
+2. Give the restricted writer SELECT on its local fence table (no mutation or
+   schema ownership) and select `NewProxyStartServiceWithCustodyFence` or
+   `NewProxyPreviewServiceWithCustodyFence` for every writer of that table.
+   The selected writer projects the registered provider and live epoch from
+   its authenticated original. Existing readers and callbacks are unchanged.
+3. In a separate migration, apply `ProxyCustodyWriteFenceActivationSource`
+   only after these writers are running. The bounded DDL wait lets earlier
+   INSERTs finish. The insert-only gate checks new rows at Read Committed
+   transaction commit; unselected binaries cannot insert, but existing rows
+   can still settle. Do not roll back to an unselected writer after activation.
+
+If a local denied-through epoch is installed, the gate rejects the same or
+older epoch in that tenant/provider without releasing credentials or creating
+durable custody. Transaction failure may be observed as unavailable, not a
+terminal callback result. Legacy row metadata is not backfilled, and neither
+the projection nor activation proves that a cleanup generation is sealed.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an opt-in database gate for production Start and preview Bind. Expand
+  first, switch to the selected live writers, then activate to exclude legacy
+  inserts and reject writes at or below the locally denied provider epoch.
+
 - Let provider operators opt into a durable cleanup generation in the same
   transaction as disable, audit and outbox. Bind its original source command,
   deadline and required consumers without changing the existing event payload.
