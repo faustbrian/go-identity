@@ -32,7 +32,7 @@ require (
 	github.com/faustbrian/go-identity/http/organization v0.0.0-20261126145644-ca3be759bba8
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f
 	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261025150519-83149c8dcdf6
-	github.com/faustbrian/go-identity/http/password v0.0.0-20261019015043-422b56d1052b
+	github.com/faustbrian/go-identity/http/password v0.0.0-20261128045025-64c742f675c9
 	github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806
 	github.com/faustbrian/go-identity/http/scim v0.0.0-20261127003455-4a711f454711
 	github.com/faustbrian/go-identity/http/session v0.0.0-20261113101704-fdefdeeb336e

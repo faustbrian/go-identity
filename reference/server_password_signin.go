@@ -48,6 +48,17 @@ type passwordSigninHTTPState struct {
 	mfaContinuation  bool
 }
 
+const passwordSigninLocalizationField = "reference_password_signin_localization"
+
+// NewServerWithPasswordSigninLocalization adds translated display text to
+// public email password-signin errors on an explicitly selected graph. It has
+// NewServer's ownership and validation rules and does not select signin itself.
+// The HTTP owner validates and snapshots the catalogs; other routes and
+// successful responses do not use this selection.
+func NewServerWithPasswordSigninLocalization(c ReferenceConfig, d ReferenceDependencies, f FeatureSet, localization passwordhttp.SigninLocalizationConfig) (*Server, error) {
+	return newServer(c, d, f, &localization)
+}
+
 func composePasswordSigninHTTP(c StoreConfiguration, original *preAuthHTTPState) (*passwordSigninHTTPState, error) {
 	if c.HTTPPasswordSignin == nil {
 		return nil, nil
@@ -92,7 +103,7 @@ func (s *Server) passwordSigninHTTPConfig(network identityhttp.NetworkConfig, f 
 }
 
 // Each canonical owner contributes once, even when reset and signin coexist.
-func (s *Server) passwordFeature(network identityhttp.NetworkConfig, f FeatureSet) (*identityhttp.Feature, error) {
+func (s *Server) passwordFeature(network identityhttp.NetworkConfig, f FeatureSet, localization *passwordhttp.SigninLocalizationConfig) (*identityhttp.Feature, error) {
 	config, err := s.passwordResetHTTPConfig(network, f)
 	if err != nil {
 		return nil, err
@@ -100,6 +111,9 @@ func (s *Server) passwordFeature(network identityhttp.NetworkConfig, f FeatureSe
 	config.Signin, err = s.passwordSigninHTTPConfig(network, f)
 	if err != nil {
 		return nil, err
+	}
+	if localization != nil && config.Signin == nil {
+		return nil, identity.InvalidInputError{Field: passwordSigninLocalizationField}
 	}
 	config.Signup, err = s.passwordSignupHTTPConfig(network, f)
 	if err != nil {
@@ -111,9 +125,17 @@ func (s *Server) passwordFeature(network identityhttp.NetworkConfig, f FeatureSe
 	if config.ResetRequest == nil && config.ResetComplete == nil && config.Signin == nil && config.Signup == nil && config.Change == nil && config.CookieVerification == nil && config.BrowserDeviceBearerVerification == nil {
 		return nil, nil
 	}
-	feature, err := passwordhttp.NewFeature(config)
-	if err != nil {
-		return nil, err
+	var feature identityhttp.Feature
+	if localization == nil {
+		feature, err = passwordhttp.NewFeature(config)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		feature, err = passwordhttp.NewFeatureWithSigninLocalization(config, *localization)
+		if err != nil {
+			return nil, identity.InvalidInputError{Field: passwordSigninLocalizationField}
+		}
 	}
 	ops, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
 	if err != nil {

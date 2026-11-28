@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an opt-in server constructor for localized public email password-signin
+  errors. Keep the native account, session and route selection unchanged.
+
 - Add opt-in production/preview proxy maintenance over the native pair:
   separate schema expansion and activation, fenced writers, resumable local
   drains and an exact pair-only acknowledgement. No HTTP operator route.

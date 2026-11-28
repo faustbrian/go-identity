@@ -14,6 +14,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	oauthhttp "github.com/faustbrian/go-identity/http/oauth"
+	passwordhttp "github.com/faustbrian/go-identity/http/password"
 )
 
 // DeploymentProfile selects authoritative PostgreSQL with optional Valkey.
@@ -119,6 +120,10 @@ type Server struct {
 // and identityhttp.ErrInvalidInput failures; other causes are redacted to
 // identity.UnavailableError. The original error/configuration is not retained.
 func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Server, error) {
+	return newServer(c, d, f, nil)
+}
+
+func newServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet, signinLocalization *passwordhttp.SigninLocalizationConfig) (*Server, error) {
 	invalid := identity.InvalidInputError{Field: "reference_server"}
 	s := f.state
 	if s == nil || d.PostgreSQL == nil || d.PostgreSQL != s.pool || !matchingProfile(c.Profile, s.durable) || c.Bootstrap.Enabled || c.Migration.ApplyOnStartup || c.Migration.LockTimeout < time.Millisecond || c.Migration.LockTimeout > 5*time.Minute || c.Migration.CommandRetention < time.Hour || c.Migration.CommandRetention > 87600*time.Hour || c.Workers.MaxConcurrency < 1 || c.Workers.MaxConcurrency > 1024 || c.Workers.LeaseDuration < time.Second || c.Workers.LeaseDuration > time.Hour || c.Workers.DrainTimeout < time.Second || c.Workers.DrainTimeout > time.Hour || nilServerDependency(c.Tenant.Resolver) || len(c.ProviderConfiguration) > 64 {
@@ -377,8 +382,12 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 			contributions = append(contributions, *selected)
 		}
 	}
-	selected, err = server.passwordFeature(c.HTTP.Network, f)
+	selected, err = server.passwordFeature(c.HTTP.Network, f, signinLocalization)
 	if err != nil {
+		var invalidLocalization identity.InvalidInputError
+		if signinLocalization != nil && errors.As(err, &invalidLocalization) && invalidLocalization.Field == passwordSigninLocalizationField {
+			return nil, invalidLocalization
+		}
 		return nil, invalid
 	}
 	if selected != nil {

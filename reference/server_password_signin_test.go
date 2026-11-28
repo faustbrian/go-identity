@@ -1,9 +1,12 @@
 package reference
 
 import (
+	"errors"
 	"testing"
 	"time"
 
+	identity "github.com/faustbrian/go-identity"
+	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -48,11 +51,21 @@ func TestPasswordSigninSelectedServerRoutes(t *testing.T) {
 	if !seen["identity.password.signin"] || !seen["identity.session.preauth-issue"] || len(seen) != 4 {
 		t.Fatal("password route omitted or unrelated route selected")
 	}
+	assertInvalidLocalization := func() {
+		t.Helper()
+		localized, err := NewServerWithPasswordSigninLocalization(c, d, f, passwordhttp.SigninLocalizationConfig{DefaultLocale: "en"})
+		var invalid identity.InvalidInputError
+		if localized != nil || !errors.As(err, &invalid) || invalid.Field != passwordSigninLocalizationField {
+			t.Fatal("invalid localization exposed a server", err)
+		}
+	}
+	assertInvalidLocalization() // No default catalog for a selected route.
 	f.state.features.httpPasswordSignin = nil
 	s, err = NewServer(c, d, f)
 	if err != nil || len(s.OpenAPI().Operations()) != 3 {
 		t.Fatal("disabled password HTTP retained route", err)
 	}
+	assertInvalidLocalization() // Opt-in cannot activate a disabled route.
 	if h, err := composePasswordSigninHTTP(StoreConfiguration{}, nil); err != nil || h != nil {
 		t.Fatal("unselected password HTTP acquired dependencies", err)
 	}

@@ -1492,6 +1492,21 @@ following signin. Replay and recovery never retry callbacks. Unknown/rollback
 do not invoke After. These existing verification fields do not select OTP or
 email-change callbacks.
 
+## Localized email password-signin errors
+
+Compose the existing `HTTPPasswordSignin` graph, then use
+`NewServerWithPasswordSigninLocalization(config, dependencies, features, localization)`
+instead of `NewServer`. Supply `passwordhttp.SigninLocalizationConfig` with
+a canonical default locale and catalogs using the existing
+[`identity.password.signin.<code>` message contract](../http/password/README.md#localized-browser-email-password-signin-errors).
+The constructor rejects localization if email password signin is not selected.
+
+Clients can send `Accept-Language` and display the optional JSON `message`
+using the reported `Content-Language`. Keep branching on the existing machine
+`error`. This opt-in does not change verified sign-in, session or CSRF issuance,
+sibling routes, or the ordinary `NewServer` profile. It does not select stored
+preferences or localize delivery templates.
+
 ## Original-browser registration verification and signin
 
 Set `PasswordSignup.VerificationSignin` to a native

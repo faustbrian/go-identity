@@ -39,6 +39,7 @@ import (
 )
 
 type liveStores struct {
+	passwordSigninLocalization         bool
 	passwordSigninPersistent           bool
 	mfaOTPDisable                      bool
 	mfaOTPDisableAll                   bool

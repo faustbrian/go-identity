@@ -283,6 +283,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	passwordSigninLocalization   bool
 	scimManagedUsersDeactivation bool
 	oauthProxyPreview            bool
 	oauthProxyProviderAuthority  bool
@@ -1713,7 +1714,13 @@ END $$`); err != nil {
 	if extensions.oauthProxyPreview {
 		config.HTTP.Network.Limits.MaximumBodyBytes = referenceOAuthProxyPreviewBodyLimit
 	}
-	server, err := reference.NewServer(config, deps, features)
+	var server *reference.Server
+	if extensions.passwordSigninLocalization {
+		f.passwordSigninLocalization = true
+		server, err = reference.NewServerWithPasswordSigninLocalization(config, deps, features, *referencePasswordSigninLocalization(t))
+	} else {
+		server, err = reference.NewServer(config, deps, features)
+	}
 	if err != nil {
 		var invalid identity.InvalidInputError
 		if errors.As(err, &invalid) {
@@ -3110,6 +3117,9 @@ func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores,
 		}
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Origin", origin)
+		if f.passwordSigninLocalization && path == "/v1/password/signin" {
+			r.Header.Set("Accept-Language", "fi")
+		}
 		if key != "" {
 			r.Header.Set("Idempotency-Key", key)
 		}
@@ -3190,9 +3200,12 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	if f.passwordSigninPersistent {
 		loginBody["remember"] = true
 	}
-	r, _ = invoke("/v1/password/signin", loginBody, "", loginCookies)
+	r, p = invoke("/v1/password/signin", loginBody, "", loginCookies)
 	if r.StatusCode == 200 || len(r.Cookies()) != 0 {
 		t.Fatal("unverified registration authenticated")
+	}
+	if f.passwordSigninLocalization {
+		assertReferenceLocalizedPasswordSigninDenial(t, r, p)
 	}
 	if _, err := workers.ProcessDeliveryOne(ctx, 0); err != nil {
 		t.Fatal("actual encrypted delivery", err)
@@ -3267,6 +3280,9 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	var signed passwordhttp.SigninResponse
 	if r.StatusCode != 200 || json.Unmarshal(p, &signed) != nil || signed.CommitOutcome != "committed" || signed.SessionID == "" || len(r.Cookies()) != 1 {
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
+	}
+	if f.passwordSigninLocalization {
+		assertReferenceUnlocalizedPasswordSigninSuccess(t, r, p)
 	}
 	if queryEmail {
 		proveReferenceEmailQueries(t, ctx, f, features, r.Cookies(), correlation.UserID, identity.IdentifierID(correlation.RecordID), composedEmailQueries)
