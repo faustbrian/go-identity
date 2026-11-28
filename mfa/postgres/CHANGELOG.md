@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an actor-scoped TOTP session factor fence for the exact native
+  impersonation request and approval operations. The target's factor never
+  satisfies this check; existing self-service fences remain unchanged.
+
 - Lock the selected Google One Tap callback's exact linked account and
   known-empty factor generation through its original transaction. Missing,
   enrolled or changed factor authority denies without creating a factor row.
