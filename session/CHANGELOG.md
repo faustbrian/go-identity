@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Authorize a complete administrator revocation of one user's session set.
+  Report the affected count and a session-only invalidation version, even
+  when no sessions were active. The original administrator custody is reused.
+
 - Prepare a separate administrator command for one exact target session.
   The direct service requires the original fresh password/TOTP cookie and
   synchronizer and authorizes the target before calling a durable executor.

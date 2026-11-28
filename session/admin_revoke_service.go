@@ -66,17 +66,21 @@ type AdminRevokeService struct {
 
 // NewAdminRevokeService validates the explicit runtime composition without IO.
 func NewAdminRevokeService(sessions *SessionService, executor AdminRevokeExecutor, c AdminRevokeConfig) (*AdminRevokeService, error) {
-	if !sessions.Configured() || issuerNil(executor) || issuerNil(c.Authorization) || c.CSRFKey.Version() == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second {
-		return nil, ErrInvalidInput
-	}
-	// Validate configuration with the shared binding grammar, not a second
-	// policy syntax that could disagree with the transactional owner.
-	validation := AdminSessionRevokeRequest{TenantID: "validation", TargetSubjectID: "validation", SessionID: "validation", CommandID: "AQEBAQEBAQEBAQEBAQEBAQ", CorrelationID: "validation"}
-	if adminRevokeBinding(validation, c, "validation").ValidateFor(AdminSessionRevokeOperation()) != nil {
+	if !sessions.Configured() || issuerNil(executor) || !validAdminRevokeConfig(c) {
 		return nil, ErrInvalidInput
 	}
 	c.PolicyID = strings.Clone(c.PolicyID)
 	return &AdminRevokeService{sessions: sessions, executor: executor, config: c}, nil
+}
+
+func validAdminRevokeConfig(c AdminRevokeConfig) bool {
+	if issuerNil(c.Authorization) || c.CSRFKey.Version() == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second {
+		return false
+	}
+	// Validate configuration with the shared binding grammar, not a second
+	// policy syntax that could disagree with the transactional owner.
+	validation := AdminSessionRevokeRequest{TenantID: "validation", TargetSubjectID: "validation", SessionID: "validation", CommandID: "AQEBAQEBAQEBAQEBAQEBAQ", CorrelationID: "validation"}
+	return adminRevokeBinding(validation, c, "validation").ValidateFor(AdminSessionRevokeOperation()) == nil
 }
 
 // AdminSessionRevoke revokes at most the one authorized session. Neither
@@ -100,29 +104,47 @@ func (s *AdminRevokeService) AdminSessionRevokeWithAdmission(ctx context.Context
 }
 
 func (s *AdminRevokeService) adminSessionRevoke(ctx context.Context, r AdminSessionRevokeRequest, admit func(context.Context, identity.UserID) error) (out AdminSessionRevokeResult, err error) {
+	if s == nil || issuerNil(s.executor) {
+		return out, ErrInvalidInput
+	}
+	intent := adminRevocationInput{binding: adminRevokeBinding(r, s.config, r.ActorID), operation: AdminSessionRevokeOperation(), credential: r.Credential, csrf: r.CSRF}
+	return runAdminRevocation(ctx, s.sessions, s.config, intent, admit, s.executor.ExecuteAdminSessionRevoke, func(result AdminSessionRevokeResult) bool {
+		return result.Revoked == (result.Version > 0)
+	})
+}
+
+type adminRevocationInput struct {
+	binding    identity.CommandBinding
+	operation  identity.FeatureOperation
+	credential Credential
+	csrf       CSRFToken
+}
+
+func runAdminRevocation[R any](ctx context.Context, sessions *SessionService, config AdminRevokeConfig, input adminRevocationInput, admit func(context.Context, identity.UserID) error, execute func(context.Context, AdminSessionRevocation) (R, error), confirmed func(R) bool) (out R, err error) {
 	entered := false
 	defer func() {
 		if recover() != nil {
-			out, err = AdminSessionRevokeResult{}, ErrUnavailable
+			var zero R
+			out, err = zero, ErrUnavailable
 			if entered {
-				err = identity.UnknownCommitError{CommandID: r.CommandID}
+				err = identity.UnknownCommitError{CommandID: input.binding.CommandID}
 			}
 		}
 	}()
-	if s == nil || !s.sessions.Configured() || ctx == nil || r.Credential.Kind() != CredentialCookie {
+	if !sessions.Configured() || ctx == nil || input.credential.Kind() != CredentialCookie {
 		return out, ErrInvalidInput
 	}
-	actor := r.ActorID
-	if actor == "" {
-		actor = "validation"
+	binding := input.binding
+	deriveActor := binding.ActorID == ""
+	if deriveActor {
+		binding.ActorID = "validation"
 	}
-	binding := adminRevokeBinding(r, s.config, actor)
-	if binding.ValidateFor(AdminSessionRevokeOperation()) != nil {
+	if binding.ValidateFor(input.operation) != nil {
 		return out, ErrInvalidInput
 	}
-	bounded, stop := context.WithTimeout(ctx, s.config.MaximumDuration)
+	bounded, stop := context.WithTimeout(ctx, config.MaximumDuration)
 	defer stop()
-	caller, err := s.sessions.Get(bounded, GetRequest{TenantID: r.TenantID, Credential: r.Credential})
+	caller, err := sessions.Get(bounded, GetRequest{TenantID: binding.TenantID, Credential: input.credential})
 	if err != nil {
 		return out, signOutError(err)
 	}
@@ -130,21 +152,21 @@ func (s *AdminRevokeService) adminSessionRevoke(ctx context.Context, r AdminSess
 	if err != nil {
 		return out, ErrUnauthenticated
 	}
-	if r.ActorID == "" {
+	if deriveActor {
 		binding.ActorID = identity.ActorID(source.UserID)
 	}
-	prepared, err := s.sessions.PrepareAdminSessionRevoke(caller, binding, r.CSRF, s.config.CSRFKey)
+	prepared, err := sessions.prepareAdminRevocation(caller, binding, input.operation, input.csrf, config.CSRFKey)
 	if err != nil {
 		return out, err
 	}
-	now := s.sessions.config.Clock.Now()
+	now := sessions.config.Clock.Now()
 	valid, expire := context.WithTimeout(bounded, prepared.ValidUntil().Sub(now))
 	defer expire()
-	if err := adminRevokeCurrent(valid, s.sessions, prepared, now); err != nil {
+	if err := adminRevokeCurrent(valid, sessions, prepared, now); err != nil {
 		return out, err
 	}
-	decision, err := s.config.Authorization.Decide(valid, authorization.DecisionContext{
-		PolicyRevision: s.config.PolicyRevision, CorrelationID: binding.CorrelationID,
+	decision, err := config.Authorization.Decide(valid, authorization.DecisionContext{
+		PolicyRevision: config.PolicyRevision, CorrelationID: binding.CorrelationID,
 		Request: authorization.Request{
 			Tenant:  authorization.TenantID(binding.TenantID),
 			Subject: authorization.Subject{ID: authorization.SubjectID(binding.ActorID), Kind: authorization.SubjectUser},
@@ -158,27 +180,27 @@ func (s *AdminRevokeService) adminSessionRevoke(ctx context.Context, r AdminSess
 	if err != nil {
 		return out, ErrUnavailable
 	}
-	if decision.Outcome != authorization.Allow || decision.Revision != s.config.PolicyRevision {
+	if decision.Outcome != authorization.Allow || decision.Revision != config.PolicyRevision {
 		return out, identity.ForbiddenError{}
 	}
-	if err := adminRevokeCurrent(valid, s.sessions, prepared, s.sessions.config.Clock.Now()); err != nil {
+	if err := adminRevokeCurrent(valid, sessions, prepared, sessions.config.Clock.Now()); err != nil {
 		return out, err
 	}
 	if admit != nil {
 		if err := admit(valid, source.UserID); err != nil {
 			return out, err
 		}
-		if err := adminRevokeCurrent(valid, s.sessions, prepared, s.sessions.config.Clock.Now()); err != nil {
+		if err := adminRevokeCurrent(valid, sessions, prepared, sessions.config.Clock.Now()); err != nil {
 			return out, err
 		}
 	}
 	entered = true
-	result, err := s.executor.ExecuteAdminSessionRevoke(valid, prepared)
+	result, err := execute(valid, prepared)
 	if err != nil {
 		return out, err
 	}
-	if result.Revoked != (result.Version > 0) {
-		return out, identity.UnknownCommitError{CommandID: r.CommandID}
+	if !confirmed(result) {
+		return out, identity.UnknownCommitError{CommandID: input.binding.CommandID}
 	}
 	return result, nil
 }

@@ -139,10 +139,60 @@ func TestAdminSessionRevokeCustodyBindsAdministratorAndDistinctTarget(t *testing
 			t.Fatal("denied target reached execution", err)
 		}
 	})
+	t.Run("administrator all targets the user aggregate, including no sessions", func(t *testing.T) {
+		var calls int
+		policy := adminRevokePolicy(func(_ context.Context, d authorization.DecisionContext) (authorization.Decision, error) {
+			if d.Request.Action != "identity.admin.session-revoke-all" || d.Request.Resource.Type != "identity.user" || d.Request.Resource.ID != "target-user" || d.Request.Subject.ID != "user-a" {
+				t.Fatal("bulk policy lost its separate operation, actor or target")
+			}
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 1}, nil
+		})
+		writer := adminRevokeAllWriter(func(_ context.Context, r session.AdminSessionRevocation) (session.AdminSessionRevokeAllResult, error) {
+			calls++
+			b, ok := r.Binding()
+			if !ok || b.OperationID != "identity.admin.session-revoke-all" || b.RecordID != "target-user" || b.UserID != "target-user" || b.ActorID != "user-a" || r.Caller() != caller.Session || r.Validate(service, clock.now) != nil {
+				t.Fatal("writer lost the opaque original actor or exact subject aggregate")
+			}
+			if calls == 2 {
+				return session.AdminSessionRevokeAllResult{RevokedCount: 100001, SubjectVersion: 2}, nil
+			}
+			return session.AdminSessionRevokeAllResult{RevokedCount: 0, SubjectVersion: 1}, nil
+		})
+		admin, err := session.NewAdminRevokeAllService(service, writer, session.AdminRevokeConfig{Authorization: policy, PolicyID: command.PolicyID, PolicyRevision: 1, CSRFKey: key, MaximumDuration: time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := session.AdminSessionRevokeAllRequest{TenantID: command.TenantID, ActorID: "user-a", TargetSubjectID: "target-user", CommandID: command.CommandID, CorrelationID: command.CorrelationID, Credential: request.Credential, CSRF: token}
+		out, err := admin.AdminSessionRevokeAll(context.Background(), r)
+		if err != nil || out.RevokedCount != 0 || out.SubjectVersion != 1 || calls != 1 {
+			t.Fatal("zero-session invalidation did not advance its own version", err)
+		}
+		out, err = admin.AdminSessionRevokeAll(context.Background(), r)
+		var unknown identity.UnknownCommitError
+		if !errors.As(err, &unknown) || out != (session.AdminSessionRevokeAllResult{}) {
+			t.Fatal("malformed durable result was exposed as confirmation", err)
+		}
+		b := command
+		op := session.AdminSessionRevokeAllOperation()
+		b.OperationID, b.SchemaID, b.RecordID = op.OperationID, op.SchemaID, "target-session"
+		if _, err := service.PrepareAdminSessionRevokeAll(caller, b, token, key); err == nil {
+			t.Fatal("bulk request accepted a session record instead of its subject")
+		}
+		b.RecordID = string(b.UserID)
+		if _, err := service.PrepareAdminSessionRevoke(caller, b, token, key); err == nil {
+			t.Fatal("single-session preparation accepted the bulk operation")
+		}
+	})
 	clock.now = caller.ValidUntil()
 	if prepared.Validate(service, clock.now) == nil {
 		t.Fatal("original exclusive deadline accepted")
 	}
+}
+
+type adminRevokeAllWriter func(context.Context, session.AdminSessionRevocation) (session.AdminSessionRevokeAllResult, error)
+
+func (f adminRevokeAllWriter) ExecuteAdminSessionRevokeAll(ctx context.Context, r session.AdminSessionRevocation) (session.AdminSessionRevokeAllResult, error) {
+	return f(ctx, r)
 }
 
 type adminRevokeWriter func(context.Context, session.AdminSessionRevocation) (session.AdminSessionRevokeResult, error)

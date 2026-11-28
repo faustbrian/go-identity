@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a separate original-administrator TOTP fence for exact native
+  administrator session-revoke-all Work, bound to the target user's session-set
+  aggregate. Keep single-session, self-service and impersonation admission
+  unchanged.
+
 - Fence the original administrator's confirmed TOTP enrollment and factor
   generation for the exact native administrator session-revoke operation,
   including when the administrator owns the target session. Keep self-service

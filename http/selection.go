@@ -483,10 +483,10 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 			r.CSRFOrigin.TokenMaximumAge == 0 && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
-		// Native single-session administrator revocation checks the original
-		// actor-session synchronizer without independent token age. Revoke-all
-		// is a separate operation and retains its canonical profile.
-		if r.OperationID == "identity.admin.session-revoke" &&
+		// Native single-session and all-session administrator revocation check
+		// the original actor-session synchronizer without independent token age.
+		// Other administrative rows retain their canonical profile.
+		if (r.OperationID == "identity.admin.session-revoke" || r.OperationID == "identity.admin.session-revoke-all") &&
 			r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" &&
 			r.CSRFOrigin.TokenMaximumAge == 0 && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true

@@ -14,6 +14,12 @@ func AdminSessionRevokeOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/session", OperationID: "identity.admin.session-revoke", SchemaID: "session-admin-revoke-one", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
+// AdminSessionRevokeAllOperation identifies a target user's session-set
+// aggregate. Its record is the target user ID, never a specific session.
+func AdminSessionRevokeAllOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/session", OperationID: "identity.admin.session-revoke-all", SchemaID: "session-admin-revoke-all", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
 // AdminSessionRevocation holds the exact target command and the original
 // administrator-session admission. Zero is invalid. Copies do not renew the
 // admission. It carries no authorization decision or target observation.
@@ -31,13 +37,25 @@ type adminSessionRevocationState struct {
 // the target, then check current actor authority, session, factor and CSRF
 // in the transaction before changing anything. It must use its own CSRF key
 // policy and never serialize the input secret into command or recovery data.
-func (s *SessionService) PrepareAdminSessionRevoke(caller GetResult, binding identity.CommandBinding, token CSRFToken, key CSRFKey) (out AdminSessionRevocation, err error) {
+func (s *SessionService) PrepareAdminSessionRevoke(caller GetResult, binding identity.CommandBinding, token CSRFToken, key CSRFKey) (AdminSessionRevocation, error) {
+	return s.prepareAdminRevocation(caller, binding, AdminSessionRevokeOperation(), token, key)
+}
+
+// PrepareAdminSessionRevokeAll freezes original administrator custody for an
+// exact user session set in the same tenant. This performs no authorization
+// decision or durable effect; the native writer must independently authorize
+// that user and recheck original freshness and the synchronizer in its Work.
+func (s *SessionService) PrepareAdminSessionRevokeAll(caller GetResult, binding identity.CommandBinding, token CSRFToken, key CSRFKey) (AdminSessionRevocation, error) {
+	return s.prepareAdminRevocation(caller, binding, AdminSessionRevokeAllOperation(), token, key)
+}
+
+func (s *SessionService) prepareAdminRevocation(caller GetResult, binding identity.CommandBinding, op identity.FeatureOperation, token CSRFToken, key CSRFKey) (out AdminSessionRevocation, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = AdminSessionRevocation{}, ErrUnavailable
 		}
 	}()
-	if !s.Configured() || binding.ValidateFor(AdminSessionRevokeOperation()) != nil || binding.ActorKind != authorization.SubjectUser {
+	if !s.Configured() || binding.ValidateFor(op) != nil || binding.ActorKind != authorization.SubjectUser || op == AdminSessionRevokeAllOperation() && binding.RecordID != string(binding.UserID) {
 		return out, ErrInvalidSessionCommand
 	}
 	if err := validateAdminSessionCaller(s, caller, binding, s.config.Clock.Now()); err != nil {
