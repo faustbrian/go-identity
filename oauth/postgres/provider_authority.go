@@ -54,16 +54,19 @@ type ProviderAuthorityChange struct {
 // primary. Runtime readers need SELECT only and should use a different pool
 // role from the operator. The caller owns the pool and its lifecycle.
 type ProviderAuthority struct {
-	pool    *database.Pool
-	table   string
-	timeout time.Duration
+	pool         *database.Pool
+	table        string
+	cascadeTable string
+	timeout      time.Duration
 }
 
 func NewProviderAuthority(pool *database.Pool, schema string, timeout time.Duration) (*ProviderAuthority, error) {
 	if pool == nil || pool.Raw() == nil || !providerAuthoritySchema(schema) || timeout < time.Millisecond || timeout > 20*time.Second {
 		return nil, providerAuthorityInvalid()
 	}
-	return &ProviderAuthority{pool: pool, table: rpQuotedSchema(schema) + `.provider_authorities`, timeout: timeout}, nil
+	namespace := rpQuotedSchema(schema)
+	return &ProviderAuthority{pool: pool, table: namespace + `.provider_authorities`,
+		cascadeTable: namespace + ".provider_disable_cascades", timeout: timeout}, nil
 }
 
 // Current reads the exact tenant/connection without a positive cache. A
@@ -123,6 +126,10 @@ func NewProviderAuthorityOperator(authority *ProviderAuthority, actor identity.A
 // repeat or restore old authority. If commit is ambiguous, read current
 // authority or retry the exact command; never infer it from the error.
 func (o *ProviderAuthorityOperator) Apply(ctx context.Context, c ProviderAuthorityChange) (ProviderAuthorityState, error) {
+	return o.apply(ctx, c, nil)
+}
+
+func (o *ProviderAuthorityOperator) apply(ctx context.Context, c ProviderAuthorityChange, cascade *providerDisableCascadeSelection) (ProviderAuthorityState, error) {
 	if o == nil || o.authority == nil || ctx == nil || !validProviderAuthorityKey(c.Key) ||
 		c.Next.Version <= c.ExpectedVersion || c.Next.ProfileVersion == 0 || c.ExpectedVersion == 0 && !c.Next.Enabled {
 		return ProviderAuthorityState{}, providerAuthorityInvalid()
@@ -139,7 +146,32 @@ func (o *ProviderAuthorityOperator) Apply(ctx context.Context, c ProviderAuthori
 	}
 	defer rollbackProviderAuthority(tx)
 
+	if cascade != nil {
+		stored, err := o.readDisableCascade(ctx, tx, c, cascade.window)
+		if err != nil {
+			return ProviderAuthorityState{}, err
+		}
+		if stored.CascadeID != "" {
+			cascade.admission = stored
+			return c.Next, nil
+		}
+	}
 	acceptedAt, err := o.advance(ctx, tx, c)
+	var conflict identity.ConflictError
+	if cascade != nil && (err == nil && acceptedAt.IsZero() || errors.As(err, &conflict)) {
+		// A concurrent exact command can commit between the first read and
+		// the authority CAS. Read its immutable generation, not current state.
+		stored, readErr := o.readDisableCascade(ctx, tx, c, cascade.window)
+		if readErr != nil {
+			return ProviderAuthorityState{}, readErr
+		}
+		if stored.CascadeID == "" {
+			// Never backfill a legacy disable or convert a stale command.
+			return ProviderAuthorityState{}, identity.ConflictError{}
+		}
+		cascade.admission = stored
+		return c.Next, nil
+	}
 	if err != nil {
 		return ProviderAuthorityState{}, err
 	}
@@ -148,6 +180,12 @@ func (o *ProviderAuthorityOperator) Apply(ctx context.Context, c ProviderAuthori
 	}
 	if acceptedAt.IsZero() { // The existing state was an exact replay.
 		return c.Next, nil
+	}
+	if cascade != nil {
+		cascade.admission, err = o.stageDisableCascade(ctx, tx, c, acceptedAt, cascade.window)
+		if err != nil {
+			return ProviderAuthorityState{}, err
+		}
 	}
 	if err := o.stage(ctx, tx, c, acceptedAt); err != nil {
 		return ProviderAuthorityState{}, err
@@ -217,7 +255,7 @@ func (a *ProviderAuthority) registerQuery() string {
 func (o *ProviderAuthorityOperator) stage(ctx context.Context, tx pgx.Tx, c ProviderAuthorityChange, now time.Time) error {
 	action, topic := "identity.oauth.provider.configure", "social_provider.configuration_changed.v1"
 	if !c.Next.Enabled {
-		action, topic = providerAuthorityDisableAudit, "social_provider.disabled.v1"
+		action, topic = providerAuthorityDisableAudit, providerDisableCascadeTopic
 	}
 	command, tenant := string(c.CommandID), string(c.Key.TenantID)
 	// The native audit store retains accepted record identities after payload

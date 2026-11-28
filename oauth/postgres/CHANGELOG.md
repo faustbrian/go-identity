@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let provider operators opt into a durable cleanup generation in the same
+  transaction as disable, audit and outbox. Bind its original source command,
+  deadline and required consumers without changing the existing event payload.
+
 - Discover authenticated OAuth proxy origins for an exact retained disable in
   bounded native PostgreSQL pages. Enumeration does not mutate custody or
   acknowledge provider-wide cleanup.

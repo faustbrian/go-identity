@@ -29,6 +29,25 @@ This is the generic authority owner, not an HTTP administration endpoint.
 The proxy can opt into it as described below. The operator result does not
 acknowledge lifecycle cleanup or provider-side revocation.
 
+### Admit a provider-disable cleanup generation
+
+Apply `ProviderDisableCascadeMigrationSource` after the provider-authority
+migration in the same namespace before opting in. Grant the trusted operator
+role SELECT and INSERT on the new admission table; callback and current
+authority readers need no access to it. The migration creates a new empty
+table and indexes, with no rewrite or backfill of existing authority rows.
+
+Use `ApplyDisableCascade(ctx, change, 0)` instead of `Apply` when this provider
+disable should admit cleanup. A zero window selects seven days; explicit
+whole-second windows range from one hour to thirty days. A successful call
+commits the disable, a pending generation with the frozen required consumers,
+the audit record and the existing `social_provider.disabled.v1` outbox event.
+The event ID is the original command ID. Exact retry, even after re-enable,
+returns the original cascade ID and deadline; a disable committed without
+admission cannot retroactively acquire one. Pausing callers does not undo an
+admitted disable. A pending generation neither proves cleanup nor waives
+retention rules at any consumer. No HTTP route is enabled.
+
 ### Retire one original after provider disable
 
 Apply the two `ProxyRetirementMigrationSource` entries, in order and in
