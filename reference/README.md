@@ -165,6 +165,18 @@ records pending cleanup. Unban permits fresh authentication; it does not restore
 old sessions or complete a pending cleanup cascade. This direct selection does
 not mount HTTP routes.
 
+To mount `POST /v1/admin/user-ban`, `POST /v1/admin/user-unban`, or both, select
+`HTTPUserStatusAdministration` and `HTTPRate`. Configure exact mapped HTTPS
+origins. If a co-selected feature already owns the administrative quota, leave
+the status quota settings unset to borrow it. Each request uses the original
+ordinary cookie, `X-CSRF-Token`, and exactly one `Idempotency-Key` header.
+
+Ban accepts `{ "userID": "…", "reason": "…" }` and optional UTC `expiresAt`
+with at most six fractional digits. Unban accepts `{ "userID": "…",
+"expectedVersion": 2 }`; use the target's current aggregate version. The first
+admission captures the internal versions. Exact retries reuse those versions
+and do not renew authority or complete pending cleanup.
+
 ## Approved impersonation
 
 Select `StoreConfiguration.Impersonation` on the native password-plus-TOTP

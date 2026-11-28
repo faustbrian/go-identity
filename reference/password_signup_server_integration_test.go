@@ -372,6 +372,7 @@ type signupGraphExtensions struct {
 	organizationBindings        bool
 	organizationTeamBindings    bool
 	userStatusAdministration    bool
+	userStatusHTTP              bool
 	passkey                     bool
 	passkeyUpgrade              bool
 	passkeyDiscovery            bool
@@ -1073,6 +1074,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.userStatusAdministration {
 		configureReferenceUserStatusAdministration(t, &c)
+		if extensions.userStatusHTTP {
+			configureReferenceUserStatusHTTP(t, &c, origin)
+		}
 	}
 	if extensions.impersonation {
 		configureReferenceImpersonation(t, &c, origin)
@@ -2157,6 +2161,20 @@ END $$`); err != nil {
 		id       string
 		selected bool
 	}{
+		{"identity.admin.user-ban", c.HTTPUserStatusAdministration != nil && c.HTTPUserStatusAdministration.Ban},
+		{"identity.admin.user-unban", c.HTTPUserStatusAdministration != nil && c.HTTPUserStatusAdministration.Unban},
+	} {
+		if operation.selected {
+			wantOperations++
+		}
+		if seen[operation.id] != operation.selected {
+			t.Fatal("user status selection differs from actual Reference document", operation.id)
+		}
+	}
+	for _, operation := range []struct {
+		id       string
+		selected bool
+	}{
 		{"identity.scim.connection-get", c.HTTPManagedSCIMRead != nil && c.HTTPManagedSCIMRead.Get},
 		{"identity.scim.connection-list", c.HTTPManagedSCIMRead != nil && c.HTTPManagedSCIMRead.List},
 		{"identity.scim.connection-create", extensions.scimManagedCreate},
@@ -3155,7 +3173,11 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 		}
 	}
 	if extensions.userStatusAdministration {
-		proveReferenceUserStatusAdministration(t, ctx, f, features, workers, c, userStatusPolicy, client, network.URL, origin, messages)
+		if extensions.userStatusHTTP {
+			proveReferenceUserStatusHTTP(t, ctx, f, features, workers, c, userStatusPolicy, client, network.URL, origin, messages)
+		} else {
+			proveReferenceUserStatusAdministration(t, ctx, f, features, workers, c, userStatusPolicy, client, network.URL, origin, messages)
+		}
 		return
 	}
 	if extensions.impersonation || extensions.impersonationDenial || extensions.impersonationQuorum {

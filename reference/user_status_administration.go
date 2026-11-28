@@ -66,16 +66,21 @@ func (AdminUserStatusRequest) MarshalText() ([]byte, error) {
 type UserStatusAdministrationService struct{ state *storeState }
 
 type userStatusAdministrationState struct {
-	native   *identity.UserStatusService
-	sessions *session.SessionService
-	keys     *kernel.Coordinator
-	auth     authorization.Service
-	clock    clock.Clock
-	csrf     session.CSRFKey
-	status   identity.UserStatusConfig
+	native      *identity.UserStatusService
+	sessions    *session.SessionService
+	keys        *kernel.Coordinator
+	preparation *kernel.StatusUnitOfWork
+	auth        authorization.Service
+	clock       clock.Clock
+	csrf        session.CSRFKey
+	status      identity.UserStatusConfig
+	http        *userStatusHTTPState
 }
 
 func validateUserStatusAdministrationSelection(c StoreConfiguration) error {
+	if h := c.HTTPUserStatusAdministration; h != nil && (c.UserStatusAdministration == nil || c.HTTPRate == nil || !h.Ban && !h.Unban || len(h.TrustedOrigins) < 1 || len(h.TrustedOrigins) > 128) {
+		return identity.InvalidInputError{Field: "reference_http_user_status"}
+	}
 	if c.UserStatusAdministration == nil {
 		return nil
 	}
@@ -141,7 +146,7 @@ func composeUserStatusAdministration(c StoreConfiguration, d ReferenceDependenci
 	status.Policy.AllowedTransitions = slices.Clone(status.Policy.AllowedTransitions)
 	status.Query.RedactionReasons = slices.Clone(status.Query.RedactionReasons)
 	return &userStatusAdministrationState{
-		native: native, sessions: sessions, keys: keys, auth: auth, clock: validation.Clock, csrf: login.CSRFKey, status: status,
+		native: native, sessions: sessions, keys: keys, preparation: uow, auth: auth, clock: validation.Clock, csrf: login.CSRFKey, status: status,
 	}, nil
 }
 
@@ -205,30 +210,9 @@ func (n *userStatusAdministrationState) change(ctx context.Context, action strin
 	if err != nil {
 		return result, err
 	}
-	scope := authorization.DecisionContext{
-		PolicyRevision: authorization.Revision(n.status.Query.PolicyVersion),
-		Request: authorization.Request{
-			Tenant:      authorization.TenantID(req.TenantID),
-			Subject:     authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(actor)},
-			Action:      authorization.Action(action),
-			Resource:    authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(req.UserID)},
-			Environment: authorization.Environment{Time: n.status.Query.Clock.Now().UTC()},
-		},
-	}
-	admit := scope.Clone()
-	admit.Request.Resource.Attributes = authorization.Attributes{
-		"identity.command.read-admission": authorization.BoolValue(true),
-		"identity.command.recovery":       authorization.BoolValue(false),
-	}
-	decision, err := n.auth.Decide(work, admit)
-	if work.Err() != nil {
-		return result, work.Err()
-	}
-	if err != nil {
-		return result, identity.UnavailableError{}
-	}
-	if decision.Outcome != authorization.Allow || decision.Revision != scope.PolicyRevision {
-		return result, identity.ForbiddenError{}
+	scope := n.actorScope(action, req, actor)
+	if err := n.authorizeTarget(work, scope); err != nil {
+		return result, err
 	}
 	if err := checkAdminStatusFreshness(observed, n.clock.Now()); err != nil {
 		return result, err
@@ -244,10 +228,46 @@ func (n *userStatusAdministrationState) change(ctx context.Context, action strin
 	if err := checkAdminStatusFreshness(observed, n.clock.Now()); err != nil {
 		return result, err
 	}
+	return n.executeStatus(work, action, req, key.CommandID, scope)
+}
+
+func (n *userStatusAdministrationState) actorScope(action string, req AdminUserStatusRequest, actor identity.UserID) authorization.DecisionContext {
+	return authorization.DecisionContext{
+		PolicyRevision: authorization.Revision(n.status.Query.PolicyVersion),
+		Request: authorization.Request{
+			Tenant:      authorization.TenantID(req.TenantID),
+			Subject:     authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(actor)},
+			Action:      authorization.Action(action),
+			Resource:    authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(req.UserID)},
+			Environment: authorization.Environment{Time: n.status.Query.Clock.Now().UTC()},
+		},
+	}
+}
+
+func (n *userStatusAdministrationState) authorizeTarget(work context.Context, scope authorization.DecisionContext) error {
+	admit := scope.Clone()
+	admit.Request.Resource.Attributes = authorization.Attributes{
+		"identity.command.read-admission": authorization.BoolValue(true),
+		"identity.command.recovery":       authorization.BoolValue(false),
+	}
+	decision, err := n.auth.Decide(work, admit)
+	if work.Err() != nil {
+		return work.Err()
+	}
+	if err != nil {
+		return identity.UnavailableError{}
+	}
+	if decision.Outcome != authorization.Allow || decision.Revision != scope.PolicyRevision {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
+
+func (n *userStatusAdministrationState) executeStatus(work context.Context, action string, req AdminUserStatusRequest, commandID identity.CommandID, scope authorization.DecisionContext) (identity.UserStatusResult, error) {
 	// No random command input is generated after this point. The native owner
 	// receives exactly the same ID, target, versions and intent on a retry.
 	command := identity.UserStatusRequest{
-		CommandID: key.CommandID, TenantID: req.TenantID, UserID: req.UserID,
+		CommandID: commandID, TenantID: req.TenantID, UserID: req.UserID,
 		ExpectedVersion: req.ExpectedVersion, ExpectedAuthorityVersion: req.ExpectedAuthorityVersion,
 		Reason: req.Reason, ExpiresAt: req.ExpiresAt, ActorScope: scope,
 	}

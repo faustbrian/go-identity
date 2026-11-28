@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Mount HTTPS ban and unban independently over the existing status owner.
+  Use the original administrator session and shared quota, and retain exact
+  retry preconditions without adding public version fields.
+
 - Compose opt-in direct Go user ban and unban using fresh password/TOTP
   sessions, stored CSRF, and the native keyed status journal.
 

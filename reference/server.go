@@ -246,6 +246,11 @@ func newServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet, signinL
 	if impersonationFeature != nil {
 		contributions = append(contributions, *impersonationFeature)
 	}
+	if status, err := server.userStatusFeature(c.HTTP.Network); err != nil {
+		return nil, err
+	} else if status != nil {
+		contributions = append(contributions, *status)
+	}
 	passkeyFeature, err := server.passkeyFeature(c.HTTP.Network, f)
 	if err != nil {
 		return nil, err

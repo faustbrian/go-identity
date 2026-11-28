@@ -684,6 +684,14 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			impersonationOwner.close()
 		}
 	}()
+	if err := composeUserStatusHTTP(c, userStatusOwner, s.httpRate, httpOrganization, directorySync, managedSCIMCreate, impersonationOwner); err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			userStatusOwner.closeHTTP()
+		}
+	}()
 	managedUsers, err := s.composeManagedSCIMUsers(c, d, sessionOwner, organizationOwner, managedSCIMCreate, scimBulk)
 	if err != nil {
 		return err

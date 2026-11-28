@@ -42,6 +42,9 @@ type StoreConfiguration struct {
 	// UserStatusAdministration selects authenticated native ban and unban.
 	// It does not select HTTP routes or lifecycle cleanup consumers.
 	UserStatusAdministration *UserStatusAdministrationConfiguration
+	// HTTPUserStatusAdministration independently mounts selected status routes.
+	// Omission keeps the direct Go selection and does not expose HTTP writes.
+	HTTPUserStatusAdministration *HTTPUserStatusAdministrationConfiguration
 	// ProviderDiscovery selects only the public configured-provider list over
 	// PostgreSQL DurableAdmission and HTTPRate. It cannot select sign-in.
 	ProviderDiscovery *ProviderDiscoveryConfiguration
@@ -663,6 +666,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 		state.features.httpManagedSCIMRead.close()
 		state.features.httpManagedSCIMCreate.close()
 		state.features.impersonation.close()
+		state.features.userStatusAdministration.closeHTTP()
 	}
 	if state.features != nil && state.features.httpAnonymous != nil {
 		state.features.httpAnonymous.close()
