@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use the administrator's original TOTP fence for impersonation revocation.
+  Require a canonical grant identifier distinct from the revoke command ID.
+
 - Fence the original administrator's TOTP factor during the exact native
   impersonation activation command, without accepting target factors or
   changing request and approval admission.
