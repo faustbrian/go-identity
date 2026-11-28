@@ -148,6 +148,23 @@ record the pair's proxy cleanup. Retry the original selector after any
 ambiguous outcome. The provider cascade remains pending and there is no HTTP
 operator route or claim about external revocation.
 
+## User status administration
+
+Select `StoreConfiguration.UserStatusAdministration` on the native password
+and TOTP graph. Configure the status policy, registered ban reasons, redaction,
+retention, and exact pending-consumer contracts. Use
+`FeatureSet.UserStatusAdministration()` for direct `AdminUserBan` and
+`AdminUserUnban` calls. The original ordinary cookie credential and stored CSRF
+proof identify the administrator. Authorize both the exact target operation and
+request-key admission in the graph's current policy.
+
+Pass the target's current status and authority versions and an idempotency key.
+A retry with the same key and intent recovers the original result; changing the
+target, versions, reason, or expiry conflicts. Ban commits the status change and
+records pending cleanup. Unban permits fresh authentication; it does not restore
+old sessions or complete a pending cleanup cascade. This direct selection does
+not mount HTTP routes.
+
 ## Approved impersonation
 
 Select `StoreConfiguration.Impersonation` on the native password-plus-TOTP

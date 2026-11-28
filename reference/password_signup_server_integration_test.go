@@ -371,6 +371,7 @@ type signupGraphExtensions struct {
 	organizationRoles           bool
 	organizationBindings        bool
 	organizationTeamBindings    bool
+	userStatusAdministration    bool
 	passkey                     bool
 	passkeyUpgrade              bool
 	passkeyDiscovery            bool
@@ -580,6 +581,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	var userStatusPolicy *referenceUserStatusAdministrationPolicy
+	if extensions.userStatusAdministration {
+		userStatusPolicy = &referenceUserStatusAdministrationPolicy{}
+		selectedAuthorization = userStatusPolicy
+	}
 	if extensions.oauthDevice {
 		selectedAuthorization = referenceDevicePolicy{}
 	}
@@ -1064,6 +1070,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passwordMFA || extensions.phoneTOTP {
 		configureReferencePasswordMFA(t, &c, origin)
+	}
+	if extensions.userStatusAdministration {
+		configureReferenceUserStatusAdministration(t, &c)
 	}
 	if extensions.impersonation {
 		configureReferenceImpersonation(t, &c, origin)
@@ -3144,6 +3153,10 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			}
 			proveReferenceDeviceHTTP(t, ctx, client, network.URL, origin, cookies, csrf)
 		}
+	}
+	if extensions.userStatusAdministration {
+		proveReferenceUserStatusAdministration(t, ctx, f, features, workers, c, userStatusPolicy, client, network.URL, origin, messages)
+		return
 	}
 	if extensions.impersonation || extensions.impersonationDenial || extensions.impersonationQuorum {
 		native, err := features.Impersonation()

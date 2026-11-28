@@ -106,6 +106,7 @@ type featureState struct {
 	organization                 *organizationState
 	httpOrganization             *organizationHTTPState
 	impersonation                *impersonationState
+	userStatusAdministration     *userStatusAdministrationState
 	passkey                      *passkeyState
 	anonymous                    *anonymousState
 	httpAnonymous                *anonymousHTTPState
@@ -185,6 +186,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if err := validateUserStatusAdministrationSelection(c); err != nil {
+		return err
+	}
 	if err := validateImpersonationSelection(c); err != nil {
 		return err
 	}
@@ -621,6 +625,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	impersonationOwner, err := composeImpersonation(c, d, sessionOwner, crypto)
+	if err != nil {
+		return err
+	}
+	userStatusOwner, err := composeUserStatusAdministration(c, d)
 	if err != nil {
 		return err
 	}
@@ -1066,6 +1074,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.organization = organizationOwner
 	s.features.httpOrganization = httpOrganization
 	s.features.impersonation = impersonationOwner
+	s.features.userStatusAdministration = userStatusOwner
 	s.features.passwordVerification = passwordVerificationOwner
 	s.features.anonymous = anonymousOwner
 	s.features.httpAnonymous = httpAnonymous

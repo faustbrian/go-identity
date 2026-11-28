@@ -39,6 +39,9 @@ type ReferenceDependencies struct {
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
+	// UserStatusAdministration selects authenticated native ban and unban.
+	// It does not select HTTP routes or lifecycle cleanup consumers.
+	UserStatusAdministration *UserStatusAdministrationConfiguration
 	// ProviderDiscovery selects only the public configured-provider list over
 	// PostgreSQL DurableAdmission and HTTPRate. It cannot select sign-in.
 	ProviderDiscovery *ProviderDiscoveryConfiguration

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose opt-in direct Go user ban and unban using fresh password/TOTP
+  sessions, stored CSRF, and the native keyed status journal.
+
 - Independently select HTTPS quorum inspection for the single-approval
   impersonation profile. Reuse the existing audited administrative quota.
 
