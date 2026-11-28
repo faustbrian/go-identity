@@ -157,3 +157,84 @@ func TestImpersonationActorTOTPBindingAdmitsOnlyExactRevoke(t *testing.T) {
 		})
 	}
 }
+
+func TestImpersonationActorTOTPBindingAdmitsOnlyExactDeny(t *testing.T) {
+	commandID, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	grantID, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registration := kernel.FeatureRegistration{
+		Operation: identity.FeatureOperation{
+			Owner: "identity/impersonation", OperationID: "identity.impersonation.deny",
+			SchemaID: "impersonation-deny", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired,
+		},
+		Contributor: kernel.ContributorDescriptor{Owner: "identity/impersonation/postgres", ContractID: "identity.impersonation", Version: 1},
+	}
+	binding := identity.CommandBinding{
+		CommandID: commandID, TenantID: "tenant", UserID: "target", ActorID: "administrator",
+		ActorKind: authorization.SubjectUser, RecordID: string(grantID),
+		OperationID: registration.Operation.OperationID, SchemaID: registration.Operation.SchemaID,
+		SchemaVersion: 1, PolicyID: "administrator-policy", PolicyVersion: 1, CorrelationID: string(commandID),
+	}
+	for _, tc := range []struct {
+		name  string
+		actor identity.UserID
+		alter func(*identity.CommandBinding, *kernel.FeatureRegistration)
+		want  bool
+	}{
+		{name: "exact deny", actor: "administrator", want: true},
+		{name: "empty actor"},
+		{name: "target factor", actor: "target"},
+		{name: "foreign actor", actor: "foreign"},
+		{name: "same subject", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.UserID = "administrator" }},
+		{name: "missing target", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.UserID = "" }},
+		{name: "wrong command actor", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.ActorID = "foreign" }},
+		{name: "service actor", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) {
+			b.ActorKind = authorization.SubjectServiceAccount
+		}},
+		{name: "API key actor", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) {
+			b.ActorKind = authorization.SubjectAPIKey
+		}},
+		{name: "other owner", actor: "administrator", alter: func(_ *identity.CommandBinding, f *kernel.FeatureRegistration) {
+			f.Operation.Owner = "identity/session"
+		}},
+		{name: "other contributor", actor: "administrator", alter: func(_ *identity.CommandBinding, f *kernel.FeatureRegistration) {
+			f.Contributor.Owner = "identity/session/postgres"
+		}},
+		{name: "other contract", actor: "administrator", alter: func(_ *identity.CommandBinding, f *kernel.FeatureRegistration) {
+			f.Contributor.ContractID = "identity.session"
+		}},
+		{name: "other contributor version", actor: "administrator", alter: func(_ *identity.CommandBinding, f *kernel.FeatureRegistration) { f.Contributor.Version = 2 }},
+		{name: "other schema", actor: "administrator", alter: func(b *identity.CommandBinding, f *kernel.FeatureRegistration) {
+			b.SchemaID, f.Operation.SchemaID = "impersonation-revoke", "impersonation-revoke"
+		}},
+		{name: "other schema version", actor: "administrator", alter: func(b *identity.CommandBinding, f *kernel.FeatureRegistration) {
+			b.SchemaVersion, f.Operation.SchemaVersion = 2, 2
+		}},
+		{name: "other operation", actor: "administrator", alter: func(b *identity.CommandBinding, f *kernel.FeatureRegistration) {
+			b.OperationID, f.Operation.OperationID = "identity.impersonation.stop", "identity.impersonation.stop"
+		}},
+		{name: "omitted record registration", actor: "administrator", alter: func(_ *identity.CommandBinding, f *kernel.FeatureRegistration) {
+			f.Operation.RecordRequirement = identity.FeatureRecordOmitted
+		}},
+		{name: "missing command", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.CommandID = "" }},
+		{name: "noncanonical command", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.CommandID = "command" }},
+		{name: "missing grant", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.RecordID = "" }},
+		{name: "noncanonical grant", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.RecordID = "grant" }},
+		{name: "command substituted for grant", actor: "administrator", alter: func(b *identity.CommandBinding, _ *kernel.FeatureRegistration) { b.RecordID = string(commandID) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b, f := binding, registration
+			if tc.alter != nil {
+				tc.alter(&b, &f)
+			}
+			if got := impersonationActorTOTPBindingMatches(b, f, tc.actor); got != tc.want {
+				t.Fatalf("deny actor factor admission = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}

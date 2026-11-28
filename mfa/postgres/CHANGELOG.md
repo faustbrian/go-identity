@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use the administrator's original TOTP fence for exact impersonation denial.
+  Require a canonical grant identifier distinct from the deny command ID.
+
 - Use the administrator's original TOTP fence for impersonation revocation.
   Require a canonical grant identifier distinct from the revoke command ID.
 
