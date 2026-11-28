@@ -25,6 +25,10 @@ type RequestKeyPreparationContributor interface {
 	PrepareRequestKey(context.Context, RequestKeyPreparationBinding, identity.RequestIntent) ([]byte, error)
 }
 
+type requestKeyPreparer interface {
+	PrepareRequestKey(context.Context, RequestKeyPreparationBinding, identity.RequestIntent) ([]byte, error)
+}
+
 // RequestKeyPreparationBinding is original input provenance, not execution or
 // current authority. Authenticate the complete scalar binding as envelope AAD.
 // Namespace, scope, feature and policy are trusted composition; admission and
@@ -53,7 +57,7 @@ func (RequestKeyPreparationBinding) LogValue() slog.Value {
 }
 
 type requestKeyPreparation struct {
-	owner                                        RequestKeyPreparationContributor
+	owner                                        requestKeyPreparer
 	feature                                      FeatureRegistration
 	identity                                     [32]byte
 	candidate                                    RequestKeyAdmission
@@ -130,7 +134,7 @@ func requestPreparationIdentity(f FeatureRegistration) [32]byte {
 	return sha256.Sum256(wire)
 }
 
-func generateRequestPreparation(ctx context.Context, p RequestKeyPreparationContributor, b RequestKeyPreparationBinding, intent identity.RequestIntent) (wire []byte, err error) {
+func generateRequestPreparation(ctx context.Context, p requestKeyPreparer, b RequestKeyPreparationBinding, intent identity.RequestIntent) (wire []byte, err error) {
 	defer func() {
 		if recover() != nil {
 			wire, err = nil, identity.UnavailableError{}

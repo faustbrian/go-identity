@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain the original aggregate and authority versions for keyed administrative
+  ban and unban. Matching retries recover the same command and preconditions
+  from the existing status request-key history without rereading the target.
+
 - Fence both frozen impersonation participants during native activation and
   the reviewing administrator during approval. Preserve the original actor
   and target and reuse the current account and authorization row locks.
