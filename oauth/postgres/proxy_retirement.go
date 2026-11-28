@@ -16,12 +16,14 @@ import (
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
-// ProxyRetirementAuthority borrows the authoritative audit reader and pins
-// the provider operator identity. Keep this trusted operator composition out
-// of callback handlers. It owns no pool or background work.
+// ProxyRetirementAuthority selects one trusted source: either retained
+// audit history or an exact sealed provider-primary admission. Keep this
+// operator composition out of callback handlers. It owns no pool.
 type ProxyRetirementAuthority struct {
 	reader   *auditpg.Store
 	operator identity.ActorID
+	sealer   *ProxyCustodyFenceOperator
+	source   ProxyCustodyFenceSealRequest
 }
 
 // NewProxyRetirementAuthority selects a separately authorized audit reader.
@@ -91,7 +93,7 @@ func (*proxyRetirementPhase) FeatureOperations() []identity.FeatureOperation {
 
 func (p *proxyRetirementPhase) execute(ctx context.Context, authority *ProxyRetirementAuthority, pool *database.Pool, directory *kernel.Repository,
 	config kernel.CoordinatorConfig, actor identity.ActorID, policy string, policyVersion, retention uint64) (identity.CommandResult, error) {
-	if ctx == nil || authority == nil || authority.reader == nil {
+	if ctx == nil || !authority.selected() {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
 	ctx, cancel := context.WithTimeout(ctx, config.MaximumDuration)
@@ -106,9 +108,8 @@ func (p *proxyRetirementPhase) execute(ctx context.Context, authority *ProxyReti
 	if err != nil {
 		return identity.CommandResult{}, err
 	}
-	// Authenticate the immutable source before opening local Work. Preview
-	// must not hold local locks while it reads the production audit primary.
-	if err := readProxyProviderDisable(ctx, authority.reader, authority.operator, r.Disable); err != nil {
+	// Authenticate the source before reserving or opening local Work.
+	if err := authority.authenticate(ctx, pool, p.schema, p.kind, r.Disable); err != nil {
 		return identity.CommandResult{}, err
 	}
 	p.command = command

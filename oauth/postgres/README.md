@@ -127,6 +127,15 @@ lowers the cutoff. Retry an unknown commit with the same selector. This
 operator neither retires existing rows nor acknowledges cleanup; scanning
 and per-origin retirement remain separate.
 
+For an admitted generation, use `NewSealedProxyRetirementAuthority` with the
+same seal operator and selector when discovering or retiring its originals.
+Each operation verifies that the exact admission still exists and that the
+service's own custody database has the matching active gate and cutoff. It
+does not require the source audit payload after pruning. Pass the unchanged
+disable to both operations and replay a retirement with the original command
+ID. This selection does not change the explicit audit-only path for legacy
+disables, and traversal exhaustion still does not acknowledge cleanup.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in

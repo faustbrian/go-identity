@@ -8,6 +8,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	"github.com/jackc/pgx/v5"
@@ -50,6 +51,7 @@ func (s *ProxyForwardService) ListDisabledProviderOrigins(ctx context.Context, a
 	c := s.config
 	read := proxyRetirementDiscovery{
 		pool: s.pool, envelopes: s.envelopes, timeout: c.MaximumDuration, production: c.ProductionDeployment,
+		schema: c.Schema, kind: kernel.OAuthProxyRetireProduction,
 		statement: productionRetirementDiscoverySQL(rpQuotedSchema(c.Schema) + ".proxy_transactions"),
 	}
 	return read.page(ctx, authority, r)
@@ -66,6 +68,7 @@ func (s *ProxyPreviewService) ListDisabledProviderOrigins(ctx context.Context, a
 	read := proxyRetirementDiscovery{
 		pool: start.pool, envelopes: start.envelopes, timeout: start.config.MaximumDuration,
 		production: s.config.ProductionDeployment, preview: s.config.Target.Deployment,
+		schema: start.config.Schema, kind: kernel.OAuthProxyRetirePreview,
 		statement: previewRetirementDiscoverySQL(rpQuotedSchema(start.config.Schema) + ".proxy_preview_bindings"),
 	}
 	return read.page(ctx, authority, r)
@@ -77,6 +80,8 @@ type proxyRetirementDiscovery struct {
 	timeout    time.Duration
 	production string
 	preview    string
+	schema     string
+	kind       kernel.OAuthProxyRetirementKind
 	statement  string
 }
 
@@ -100,7 +105,7 @@ func validateProxyRetirementDiscoveryRequest(r ProxyRetirementDiscoveryRequest) 
 }
 
 func (d proxyRetirementDiscovery) page(ctx context.Context, authority *ProxyRetirementAuthority, r ProxyRetirementDiscoveryRequest) (ProxyRetirementDiscoveryPage, error) {
-	if ctx == nil || authority == nil || authority.reader == nil || d.pool == nil || d.pool.Raw() == nil || d.envelopes == nil {
+	if ctx == nil || !authority.selected() || d.pool == nil || d.pool.Raw() == nil || d.envelopes == nil {
 		return ProxyRetirementDiscoveryPage{}, identity.ForbiddenError{}
 	}
 	if err := validateProxyRetirementDiscoveryRequest(r); err != nil {
@@ -108,7 +113,7 @@ func (d proxyRetirementDiscovery) page(ctx context.Context, authority *ProxyReti
 	}
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
-	if err := readProxyProviderDisable(ctx, authority.reader, authority.operator, r.Disable); err != nil {
+	if err := authority.authenticate(ctx, d.pool, d.schema, d.kind, r.Disable); err != nil {
 		return ProxyRetirementDiscoveryPage{}, err
 	}
 

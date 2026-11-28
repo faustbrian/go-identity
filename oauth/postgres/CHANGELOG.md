@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let the existing discovery and exact retirement consume a sealed admitted
+  generation without relying on retained source audit payload. Recheck the
+  gate and cutoff in the custody database before listing or mutating origins.
+
 - Seal an activated local OAuth custody origin against the exact pending
   provider-primary admission. Reject forged or unadmitted disables and never
   lower the local cutoff on an older retry.
