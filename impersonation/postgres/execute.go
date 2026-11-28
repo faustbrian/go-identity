@@ -36,6 +36,13 @@ func (s *Service) Execute(ctx context.Context, input PreparedCommand) (identity.
 			return identity.CommandResult{}, err
 		}
 	}
+	if b.OperationID == startAction {
+		approval := phase.start.retained
+		approver := s.binding(approveAction, approval.commandID, phase.observed.id, b.TenantID, approval.approver, b.UserID)
+		if err := s.authorize(bounded, approver, scope); err != nil {
+			return identity.CommandResult{}, err
+		}
+	}
 	reserved, result, err := p.coordinator.ReserveCommand(bounded, b, phase.command, p.plan)
 	if err != nil || reserved == (kernel.Reservation{}) {
 		if result.Outcome != identity.CommitOutcomeInvalid {
@@ -86,7 +93,7 @@ func (s *Service) Recover(ctx context.Context, auth Authentication, binding iden
 	isOriginalRequest := string(binding.CommandID) == binding.RecordID
 	if !selected || err != nil || binding.ValidateFor(op) != nil || (binding.OperationID == requestAction) != isOriginalRequest ||
 		binding.ActorKind != authorization.SubjectUser || binding.CorrelationID != string(binding.CommandID) ||
-		identity.UserID(binding.ActorID) == binding.UserID {
+		identity.UserID(binding.ActorID) == binding.UserID || binding.OperationID == startAction && s.activation == nil {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
 	bounded, stop := context.WithTimeout(ctx, s.config.Coordinator.MaximumDuration)

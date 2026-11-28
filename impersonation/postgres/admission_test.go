@@ -20,7 +20,7 @@ func TestDecisionBindsAdministratorTargetAndRequestedScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	for _, name := range []string{"identity.impersonation.request", "identity.impersonation.approve"} {
+	for _, name := range []string{requestAction, approveAction, startAction} {
 		op, ok := approvalOperation(name)
 		if !ok {
 			t.Fatalf("missing selected operation %s", name)
@@ -39,7 +39,16 @@ func TestDecisionBindsAdministratorTargetAndRequestedScope(t *testing.T) {
 			t.Fatal("target authority substituted for the administrator")
 		}
 	}
-	if _, ok := approvalOperation("identity.impersonation.start"); ok {
-		t.Fatal("approval-only profile selected session activation")
+}
+
+func TestStartRegistrationRequiresExplicitActivationService(t *testing.T) {
+	start, ok := approvalOperation(startAction)
+	if !ok || start.SchemaID != "impersonation-start" || start.SchemaVersion != 1 {
+		t.Fatal("activation has no exact canonical owner schema")
+	}
+	ordinary := &approvalPhase{service: &Service{}}
+	enabled := &approvalPhase{service: &Service{activation: &activationService{}}}
+	if slices.Contains(ordinary.FeatureOperations(), start) || !slices.Contains(enabled.FeatureOperations(), start) {
+		t.Fatal("activation was not exclusive to the selected service")
 	}
 }

@@ -30,6 +30,8 @@ type approvalPhase struct {
 	observed grantRecord
 	payload  []byte
 	reason   impersonation.Reason
+	approver approvalParticipant
+	start    *activationIntent
 	command  identity.Command
 	counters kernel.CommandCounterPlan
 	audit    kernel.AuditPlan
@@ -39,15 +41,23 @@ var _ kernel.FeatureCommitContributor = (*approvalPhase)(nil)
 
 func (*approvalPhase) Descriptor() kernel.ContributorDescriptor { return approvalDescriptor }
 
-func (*approvalPhase) FeatureOperations() []identity.FeatureOperation {
+func (p *approvalPhase) FeatureOperations() []identity.FeatureOperation {
 	request, _ := approvalOperation(requestAction)
 	approve, _ := approvalOperation(approveAction)
-	return []identity.FeatureOperation{request, approve}
+	operations := []identity.FeatureOperation{request, approve}
+	if p.service.activation != nil {
+		start, _ := approvalOperation(startAction)
+		operations = append(operations, start)
+	}
+	return operations
 }
 
 func grantLifecycle(action string) kernel.LifecyclePlan {
 	if action == requestAction {
 		return kernel.LifecyclePlan{EventType: "impersonation.requested.v1", AfterVersion: 1}
+	}
+	if action == startAction {
+		return kernel.LifecyclePlan{EventType: "impersonation.started.v1", BeforeVersion: 2, AfterVersion: 3}
 	}
 	return kernel.LifecyclePlan{EventType: "impersonation.approved.v1", BeforeVersion: 1, AfterVersion: 2}
 }
@@ -79,6 +89,12 @@ func (s *Service) prepare(ctx context.Context, p *approvalPhase, network string)
 			identity.FeatureField{Name: "impersonation.grant-expires", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: p.observed.expiresAt}},
 		)
 	}
+	if b.OperationID == approveAction || b.OperationID == startAction {
+		fields = append(fields, p.approver.commandFields()...)
+	}
+	if p.start != nil {
+		fields = append(fields, p.start.commandFields()...)
+	}
 	command, err := identity.NewFeatureSessionCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, p.actor.input.Bearer)
 	if err != nil {
 		return PreparedCommand{}, err
@@ -94,7 +110,7 @@ func (s *Service) prepare(ctx context.Context, p *approvalPhase, network string)
 	if err := p.actor.requireFresh(at); err != nil {
 		return PreparedCommand{}, err
 	}
-	if b.OperationID == approveAction && !at.Before(p.observed.expiresAt) {
+	if b.OperationID != requestAction && !at.Before(p.observed.expiresAt) {
 		return PreparedCommand{}, impersonation.ErrExpired
 	}
 	command, counters, err := s.config.Risk.PrepareCommandCounters(command, risk.Subject{Actor: string(b.ActorID), Resource: b.RecordID, Network: network}, at)
@@ -170,7 +186,7 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 	}
 	var locked grantRecord
 	b := p.binding
-	if b.OperationID == approveAction {
+	if b.OperationID == approveAction || b.OperationID == startAction {
 		var err error
 		locked, err = lockGrant(ctx, w, b.TenantID, impersonation.GrantID(b.RecordID))
 		if err != nil {
@@ -195,7 +211,7 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 		if err != nil {
 			return identity.FeatureReceipt{}, p.storageError(err)
 		}
-	} else {
+	} else if b.OperationID == approveAction {
 		grant, err := impersonation.NewPendingGrant(id, p.original.request, locked.requestedAt)
 		if err != nil || !locked.expiresAt.Equal(grant.ExpiresAt()) {
 			return identity.FeatureReceipt{}, identity.UnavailableError{}
@@ -213,6 +229,8 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 		if err != nil {
 			return identity.FeatureReceipt{}, p.storageError(err)
 		}
+	} else if err := p.applyActivation(ctx, w, at); err != nil {
+		return identity.FeatureReceipt{}, p.storageError(err)
 	}
 	op, _ := approvalOperation(b.OperationID)
 	l := grantLifecycle(b.OperationID)
@@ -244,12 +262,20 @@ func (p *approvalPhase) checkCurrent(ctx context.Context, w kernel.Work, command
 	if err := p.actor.checkWork(ctx, w, p, c.Session, c.CSRFKey, b); err != nil {
 		return time.Time{}, err
 	}
-	if b.OperationID == approveAction {
+	if b.OperationID == approveAction || b.OperationID == startAction {
 		requester := identity.User{ID: p.observed.requester, TenantID: b.TenantID, Status: identity.StatusActive, Version: p.original.requesterUserVersion}
 		policy := kernel.UserAuthorizationAdmission{Scope: authority.AuthorityScope{
 			TenantID: authorization.TenantID(b.TenantID), SubjectID: authorization.SubjectID(requester.ID), PolicyNamespace: c.Session.Profile.PolicyNamespace,
 		}, Version: p.original.requesterAuthorityVersion}
 		if err := w.RequireActiveImpersonationRequester(ctx, p, command, requester, policy); err != nil {
+			return time.Time{}, err
+		}
+		if err := w.RequireActiveImpersonationApprover(ctx, p, command, p.approver.user, p.approver.admission()); err != nil {
+			return time.Time{}, err
+		}
+	}
+	if b.OperationID == startAction {
+		if err := p.checkRetainedActivationApproval(ctx, w); err != nil {
 			return time.Time{}, err
 		}
 	}
@@ -258,7 +284,7 @@ func (p *approvalPhase) checkCurrent(ctx context.Context, w kernel.Work, command
 		return time.Time{}, err
 	}
 	at = at.UTC()
-	if b.OperationID == approveAction && !at.Before(p.observed.expiresAt) {
+	if b.OperationID != requestAction && !at.Before(p.observed.expiresAt) {
 		return time.Time{}, identity.ConflictError{CommandID: b.CommandID}
 	}
 	// Resolve expiry against the latest in-transaction primary time after the
@@ -270,7 +296,10 @@ func (p *approvalPhase) checkCurrent(ctx context.Context, w kernel.Work, command
 }
 
 func (p *approvalPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {
-	_, err := p.checkCurrent(ctx, w, c)
+	at, err := p.checkCurrent(ctx, w, c)
+	if err == nil && p.binding.OperationID == startAction {
+		err = p.checkStoredActivationDeadline(ctx, w, at)
+	}
 	return err
 }
 
@@ -279,6 +308,9 @@ func (p *approvalPhase) RecoverParticipant(ctx context.Context, w kernel.Recover
 	op, selected := approvalOperation(b.OperationID)
 	if err != nil || !selected || registration != (kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}) || l != grantLifecycle(b.OperationID) {
 		return kernel.RecoveryUnknown, identity.ForbiddenError{}
+	}
+	if b.OperationID == startAction && p.service.activation != nil {
+		return recoverActivationEffect(ctx, w, b)
 	}
 	return recoverGrantEffect(ctx, w, b)
 }

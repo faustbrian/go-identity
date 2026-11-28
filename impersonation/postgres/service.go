@@ -45,14 +45,15 @@ func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("impersonation
 // MarshalJSON refuses implicit runtime configuration export.
 func (Config) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
-// Service runs direct-Go request and single-distinct-administrator approval.
-// It borrows all dependencies, owns no connections or background workers, and
-// never issues sessions or treats an approved grant as access authority.
+// Service runs direct-Go request and distinct-administrator approval, and
+// optional activation and online use. It borrows all dependencies, owns no
+// background workers, and never treats approval alone as access authority.
 type Service struct {
-	pool      *database.Pool
-	directory *kernel.Repository
-	sessions  *session.SessionService
-	config    Config
+	pool       *database.Pool
+	directory  *kernel.Repository
+	sessions   *session.SessionService
+	config     Config
+	activation *activationService
 }
 
 // Format prevents printing the coordinator's keys and other runtime secrets.
@@ -282,11 +283,22 @@ func (s *Service) PrepareApproval(ctx context.Context, input ApproveInput) (Prep
 		return PreparedCommand{}, err
 	}
 	target := identity.User{ID: observed.target, TenantID: spec.TenantID, Status: identity.StatusActive, Version: original.request.Target().Version()}
-	sealed, err := sealApprovalReason(bounded, s.config.Envelopes, s.config.EnvelopeKey, spec.TenantID, input.GrantID, observed.requester, observed.target, spec.UserID, observed.digest, input.Reason)
+	approver, err := s.activeUser(bounded, spec.TenantID, spec.UserID)
 	if err != nil {
 		return PreparedCommand{}, err
 	}
-	return s.prepare(bounded, &approvalPhase{service: s, binding: binding, actor: actor, original: original, target: target, observed: observed, payload: sealed, reason: input.Reason}, input.Network)
+	_, _, admission, err := sessionpg.OriginalMFAPasswordSessionAdmission(s.config.Session.Profile, actor.observed.Session, actorAdmissionBinding(binding))
+	if err != nil {
+		return PreparedCommand{}, identity.ForbiddenError{}
+	}
+	epoch := approvalEpoch{userVersion: approver.Version, authorizationVersion: admission.Version, namespace: admission.Scope.PolicyNamespace}
+	decision := approvalRecord{commandID: input.CommandID, approver: spec.UserID}
+	sealed, err := sealActivationApproval(bounded, s.config.Envelopes, s.config.EnvelopeKey, observed, decision, input.Reason, epoch)
+	if err != nil {
+		return PreparedCommand{}, err
+	}
+	participant := approvalParticipant{user: approver, epoch: epoch}
+	return s.prepare(bounded, &approvalPhase{service: s, binding: binding, actor: actor, original: original, target: target, observed: observed, payload: sealed, reason: input.Reason, approver: participant}, input.Network)
 }
 
 func (s *Service) binding(action string, id identity.CommandID, grantID impersonation.GrantID, tenant identity.TenantID, actor, target identity.UserID) identity.CommandBinding {

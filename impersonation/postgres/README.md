@@ -1,8 +1,10 @@
 # PostgreSQL impersonation requests and approvals
 
 This optional adapter persists one pending impersonation request and one
-approval by a different administrator. It does not activate an impersonation,
-issue or revoke a session, grant target access, or expose an HTTP handler.
+approval by a different administrator. A separate opt-in activates that
+exact approved grant and validates a distinct derived credential online.
+There are no HTTP routes, ordinary session issuance or public revocation
+commands in this profile.
 
 ## Compose
 
@@ -52,3 +54,35 @@ request and approval reasons are encrypted and are not projected into the
 receipt, audit or lifecycle event. Authorization is not delegated to the
 approver's target session or to a caller-selected identity. This profile
 does not treat a committed counter charge or denial audit as grant approval.
+
+## Opt in to activation and online use
+
+Apply version 2 from `ActivationMigrationSource{}` before selecting activation.
+The activation history retains version 1 byte-for-byte. Version 2 creates an
+empty table, its indexes and a lineage guard; it does not rewrite, backfill or lock the
+existing grant/approval tables. An older binary can keep serving the
+unchanged request/approval flow. Revert the application without removing
+the new table or its retained evidence.
+
+Use `NewServiceWithActivation` with an independently generated lookup key.
+Rotation to a different key denies old derived credentials; their lifetime is
+at most fifteen minutes. Only approved requests with retained approval
+authority versions can start. Historic approval envelopes remain valid as
+historical approval receipts, but cannot start a session with authority
+versions they did not record.
+
+The original administrator calls `PrepareStart` with the exact approved
+version, their current ordinary TOTP session and the original CSRF proof,
+then calls `ExecuteStart`. A committed receipt may transfer one derived
+credential to the caller; invoke its `Reveal` only for the authorized
+response. Exact retries and recovery return the original receipt without
+minting a second credential. No raw bearer, parent credential, approval
+reason or synchronizer is stored in the active grant.
+
+Call `ValidateUse` for **each** requested application permission. The service
+checks the exact live grant, approved scope, current actor and target
+permissions, original parent, and approver versions. It rereads the grant
+after policy callbacks; a revoked or expired grant cannot be served from
+a cache. The result is marked with separate actor, target and grant IDs.
+It authorizes only that use, not future requests or an ordinary session.
+Reserved identity and organization administration actions are excluded.

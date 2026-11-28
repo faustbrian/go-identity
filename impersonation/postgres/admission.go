@@ -19,6 +19,7 @@ import (
 const (
 	requestAction    = "identity.impersonation.request"
 	approveAction    = "identity.impersonation.approve"
+	startAction      = "identity.impersonation.start"
 	scopeAttribute   = "impersonation.scope"
 	maximumFreshness = 15 * time.Minute
 )
@@ -32,6 +33,8 @@ func approvalOperation(name string) (identity.FeatureOperation, bool) {
 		schema = "impersonation-request"
 	case approveAction:
 		schema = "impersonation-approve"
+	case startAction:
+		schema = "impersonation-start"
 	default:
 		return identity.FeatureOperation{}, false
 	}

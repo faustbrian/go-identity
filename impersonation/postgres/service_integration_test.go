@@ -112,6 +112,21 @@ func TestImpersonationServiceTwoAdminApprovalPostgres(t *testing.T) {
 			}
 			assertM24Grant(t, ctx, pool, requestID, "approved", 2, 1)
 			assertM24CommandEffects(t, ctx, pool, approvalInput.CommandID, 1)
+			savedGrant := m24Must(observeGrant(ctx, pool, approver.Tenant, approvalInput.GrantID))
+			var decision approvalRecord
+			var decisionID, decisionActor string
+			if err := pool.Raw().QueryRow(ctx, `SELECT command_id,approver_id,encrypted_payload,decided_at
+				FROM identity_impersonation.approvals WHERE tenant_id=$1 AND grant_id=$2`,
+				string(approver.Tenant), string(approvalInput.GrantID)).
+				Scan(&decisionID, &decisionActor, &decision.payload, &decision.decidedAt); err != nil {
+				t.Fatal("cannot read durable decision evidence", err)
+			}
+			decision.commandID, decision.approver = identity.CommandID(decisionID), identity.UserID(decisionActor)
+			savedReason, epoch, err := openActivationApproval(ctx, cfg.Envelopes, savedGrant, decision)
+			if err != nil || decision.commandID != approvalInput.CommandID || savedReason != approvalInput.Reason ||
+				epoch != (approvalEpoch{userVersion: 1, authorizationVersion: 1, namespace: cfg.Session.Profile.PolicyNamespace}) {
+				t.Fatal("approval did not seal the exact retained authority and intent", err)
+			}
 			if replay := m24Must(service.Execute(ctx, approval)); !reflect.DeepEqual(replay, approved) {
 				t.Fatal("approval replay did not return its exact original result")
 			}

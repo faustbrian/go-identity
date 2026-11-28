@@ -150,7 +150,8 @@ func recoverGrantEffect(ctx context.Context, w kernel.RecoveryWork, binding iden
 
 func grantRecoveryQuery(binding identity.CommandBinding) (string, []any, error) {
 	op, selected := approvalOperation(binding.OperationID)
-	if !selected || binding.ValidateFor(op) != nil || binding.ActorKind != authorization.SubjectUser || identity.UserID(binding.ActorID) == binding.UserID || !validStoredGrantKey(binding.TenantID, impersonation.GrantID(binding.RecordID)) {
+	if !selected || binding.OperationID != requestAction && binding.OperationID != approveAction ||
+		binding.ValidateFor(op) != nil || binding.ActorKind != authorization.SubjectUser || identity.UserID(binding.ActorID) == binding.UserID || !validStoredGrantKey(binding.TenantID, impersonation.GrantID(binding.RecordID)) {
 		return "", nil, invalidStorageInput()
 	}
 	if binding.OperationID == requestAction {
