@@ -16,6 +16,7 @@ const (
 	providerDisableCascadeTopic    = "social_provider.disabled.v1"
 	providerDisableCascadeManifest = "identity-lifecycle-consumers-v1"
 	providerDisableCascadeHold     = "not_applicable"
+	providerDisableProxyConsumerID = "identity/oauth/proxy"
 )
 
 // ProviderDisableConsumer is a required, versioned consumer of this generation.
@@ -44,6 +45,7 @@ type ProviderDisableAdmission struct {
 type providerDisableCascadeSelection struct {
 	window    time.Duration
 	admission ProviderDisableAdmission
+	proxyPair *proxyDisablePairScope
 }
 
 // ApplyDisableCascade atomically disables the selected connection and admits
@@ -54,6 +56,10 @@ type providerDisableCascadeSelection struct {
 // window. Later re-enable does not change that command's retained admission.
 // A disable originally committed through Apply cannot acquire admission later.
 func (o *ProviderAuthorityOperator) ApplyDisableCascade(ctx context.Context, c ProviderAuthorityChange, window time.Duration) (ProviderDisableAdmission, error) {
+	return o.applyDisableCascade(ctx, c, window, nil)
+}
+
+func (o *ProviderAuthorityOperator) applyDisableCascade(ctx context.Context, c ProviderAuthorityChange, window time.Duration, pair *proxyDisablePairScope) (ProviderDisableAdmission, error) {
 	if c.Next.Enabled || c.ExpectedVersion == 0 {
 		return ProviderDisableAdmission{}, providerAuthorityInvalid()
 	}
@@ -61,7 +67,7 @@ func (o *ProviderAuthorityOperator) ApplyDisableCascade(ctx context.Context, c P
 	if err != nil {
 		return ProviderDisableAdmission{}, err
 	}
-	selection := providerDisableCascadeSelection{window: window}
+	selection := providerDisableCascadeSelection{window: window, proxyPair: pair}
 	if _, err := o.apply(ctx, c, &selection); err != nil {
 		return ProviderDisableAdmission{}, err
 	}
@@ -82,7 +88,7 @@ func providerDisableCascadeWindow(window time.Duration) (time.Duration, error) {
 // cleanup list. No owner disappears merely because its adapter is absent.
 func providerDisableCascadeConsumers() []ProviderDisableConsumer {
 	return []ProviderDisableConsumer{
-		{"identity/oauth", 1}, {"identity/oauth/onetap", 1}, {"identity/oauth/proxy", 1},
+		{"identity/oauth", 1}, {"identity/oauth/onetap", 1}, {providerDisableProxyConsumerID, 1},
 		{"identity", 1}, {"identity/session", 1}, {"identity/session/valkey", 1},
 		{"identity/delivery", 1}, {"audit", 1},
 	}
@@ -101,14 +107,19 @@ func providerDisableCascadeInsertSQL(table string) string {
  VALUES($1,$2,$3,$4,$5::numeric,$6::numeric,$7::numeric,$8,1,$9,$10,1,$11::jsonb,1,'not_applicable',$12,$13)`
 }
 
-func (o *ProviderAuthorityOperator) readDisableCascade(ctx context.Context, tx pgx.Tx, c ProviderAuthorityChange, window time.Duration) (ProviderDisableAdmission, error) {
+func (o *ProviderAuthorityOperator) readDisableCascade(ctx context.Context, tx pgx.Tx, c ProviderAuthorityChange, selection *providerDisableCascadeSelection) (ProviderDisableAdmission, error) {
 	row := tx.QueryRow(ctx, providerDisableCascadeReadSQL(o.authority.cascadeTable), string(c.Key.TenantID), string(c.CommandID))
 	admission, err := decodeProviderDisableAdmission(ctx, row, c.Key.TenantID, c.CommandID, o.actor)
 	if err != nil || admission.CascadeID == "" {
 		return admission, err
 	}
-	if admission.Disable != c || admission.Deadline.Sub(admission.AdmittedAt) != window {
+	if admission.Disable != c || admission.Deadline.Sub(admission.AdmittedAt) != selection.window {
 		return ProviderDisableAdmission{}, identity.ConflictError{}
+	}
+	if selection.proxyPair != nil {
+		if _, err := readProxyDisablePair(ctx, tx, o.authority.proxyPairsTable, admission, *selection.proxyPair); err != nil {
+			return ProviderDisableAdmission{}, err
+		}
 	}
 	return admission, nil
 }

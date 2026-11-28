@@ -54,10 +54,11 @@ type ProviderAuthorityChange struct {
 // primary. Runtime readers need SELECT only and should use a different pool
 // role from the operator. The caller owns the pool and its lifecycle.
 type ProviderAuthority struct {
-	pool         *database.Pool
-	table        string
-	cascadeTable string
-	timeout      time.Duration
+	pool            *database.Pool
+	table           string
+	cascadeTable    string
+	proxyPairsTable string
+	timeout         time.Duration
 }
 
 func NewProviderAuthority(pool *database.Pool, schema string, timeout time.Duration) (*ProviderAuthority, error) {
@@ -66,7 +67,7 @@ func NewProviderAuthority(pool *database.Pool, schema string, timeout time.Durat
 	}
 	namespace := rpQuotedSchema(schema)
 	return &ProviderAuthority{pool: pool, table: namespace + `.provider_authorities`,
-		cascadeTable: namespace + ".provider_disable_cascades", timeout: timeout}, nil
+		cascadeTable: namespace + ".provider_disable_cascades", proxyPairsTable: namespace + ".provider_disable_proxy_pairs", timeout: timeout}, nil
 }
 
 // Current reads the exact tenant/connection without a positive cache. A
@@ -147,7 +148,7 @@ func (o *ProviderAuthorityOperator) apply(ctx context.Context, c ProviderAuthori
 	defer rollbackProviderAuthority(tx)
 
 	if cascade != nil {
-		stored, err := o.readDisableCascade(ctx, tx, c, cascade.window)
+		stored, err := o.readDisableCascade(ctx, tx, c, cascade)
 		if err != nil {
 			return ProviderAuthorityState{}, err
 		}
@@ -161,7 +162,7 @@ func (o *ProviderAuthorityOperator) apply(ctx context.Context, c ProviderAuthori
 	if cascade != nil && (err == nil && acceptedAt.IsZero() || errors.As(err, &conflict)) {
 		// A concurrent exact command can commit between the first read and
 		// the authority CAS. Read its immutable generation, not current state.
-		stored, readErr := o.readDisableCascade(ctx, tx, c, cascade.window)
+		stored, readErr := o.readDisableCascade(ctx, tx, c, cascade)
 		if readErr != nil {
 			return ProviderAuthorityState{}, readErr
 		}
@@ -185,6 +186,11 @@ func (o *ProviderAuthorityOperator) apply(ctx context.Context, c ProviderAuthori
 		cascade.admission, err = o.stageDisableCascade(ctx, tx, c, acceptedAt, cascade.window)
 		if err != nil {
 			return ProviderAuthorityState{}, err
+		}
+		if cascade.proxyPair != nil {
+			if err := stageProxyDisablePair(ctx, tx, a.proxyPairsTable, cascade.admission, *cascade.proxyPair); err != nil {
+				return ProviderAuthorityState{}, err
+			}
 		}
 	}
 	if err := o.stage(ctx, tx, c, acceptedAt); err != nil {

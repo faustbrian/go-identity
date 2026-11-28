@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Atomically bind an opt-in provider disable to one configured production and
+  preview pair, and acknowledge only that proxy consumer after both actual
+  durable drains finish. Keep the provider cascade pending.
+
 - Resume sealed local proxy drains when a separate trusted retirement already
   covered the exact staged target. Preserve the drain command's no-change
   journal result without a second successful retirement event.

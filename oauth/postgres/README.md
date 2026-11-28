@@ -158,6 +158,31 @@ successful retirement. Unknown outcomes and ordinary failures do not advance
 the cursor. `Retired` counts confirmed local targets, not successful commands,
 session revocations, or consumer acknowledgements. No HTTP route is added.
 
+### Confirm cleanup for one configured production and preview pair
+
+Apply `ProxyDisablePairMigrationSource` on the provider primary after
+`ProviderDisableCascadeMigrationSource` and before opting in. It creates one
+empty table and does not backfill old disables. Legacy clients and callbacks
+do not read it. Leave the table intact if opting out later.
+
+Build `NewProxyDisablePairOperator` from the configured production Start,
+matching preview service, and the existing trusted provider operator. Keep
+both custody deployment names and database bindings stable across restarts.
+Use its `ApplyDisableCascade` to freeze the pair with the original disable,
+audit and outbox. Seal both actual local origins and drive their public drains
+with the exact admitted source. Call `Acknowledge` after both are exhausted.
+An unpaired, substituted or incomplete admission cannot be acknowledged.
+Retry an uncertain acknowledgment with the same selector; a completed repeat
+returns the original timestamp without rerunning drain work.
+
+The provider-primary operator needs SELECT, INSERT for the frozen selector,
+and UPDATE on `acknowledged_at` only. Its existing shared provider reader
+needs no new grants. Actual
+custody roles must be able to read their existing gate, cutoff and checkpoint.
+The acknowledgement covers only this pair and the `identity/oauth/proxy`
+consumer. It neither covers other or historical origins nor completes the
+provider cascade, confirms external revocation or raises another event.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in

@@ -39,16 +39,18 @@ type ProxyStartConfig struct {
 // borrows the exact forward store and provider but starts no HTTP listener,
 // contacts no provider during initiation, and creates no identity or session.
 type ProxyStartService struct {
-	forward      *ProxyForwardService
-	admission    *oauthproxy.PreviewInitiationAdmission
-	provider     *oauth.OIDCProvider
-	profile      oauth.ProviderProfile
-	checkpoint   *capabilitypg.IssuancePreparationCodec
-	claims       string
-	version      uint64
-	stateKey     uint32
-	lifetime     time.Duration
-	custodyFence bool
+	forward       *ProxyForwardService
+	admission     *oauthproxy.PreviewInitiationAdmission
+	previewTenant identity.TenantID
+	previewTarget oauthproxy.PreviewTarget
+	provider      *oauth.OIDCProvider
+	profile       oauth.ProviderProfile
+	checkpoint    *capabilitypg.IssuancePreparationCodec
+	claims        string
+	version       uint64
+	stateKey      uint32
+	lifetime      time.Duration
+	custodyFence  bool
 }
 
 // NewProxyStartService validates and snapshots one trusted preview profile
@@ -74,7 +76,8 @@ func NewProxyStartService(forward *ProxyForwardService, c ProxyStartConfig) (*Pr
 	if err != nil {
 		return nil, oauthproxy.InitiationInvalid
 	}
-	return &ProxyStartService{forward: forward, admission: admission, provider: c.Provider, profile: profile, checkpoint: checkpoint,
+	return &ProxyStartService{forward: forward, admission: admission, previewTenant: c.Preview.TenantID, previewTarget: c.Preview.Target,
+		provider: c.Provider, profile: profile, checkpoint: checkpoint,
 		claims: c.ClaimsProfile, version: c.ClaimsVersion, stateKey: c.CurrentStateKeyVersion, lifetime: c.StateLifetime}, nil
 }
 
