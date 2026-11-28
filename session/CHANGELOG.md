@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- List an exact authorized user's sessions through a separate admin API.
+  Reuse the primary page reader with actor- and target-bound cursors. The
+  existing self-list operation remains self-only.
+
 - Issue a separate path-scoped One Tap redirect cookie only for the original
   admitted start and a fresh commit. Popup cookie delivery is unchanged.
 

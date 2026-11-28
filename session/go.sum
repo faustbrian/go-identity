@@ -12,8 +12,6 @@ github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec h1:z
 github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec/go.mod h1:ssUHOHCArf/XQ+xfzVOmiDsV3eTPJeS2hyFH5uhqIJE=
 github.com/faustbrian/go-clock v1.2.0 h1:vy2700wB/gaXRgW7zWw1iF7twxrKDyL3dSd3fz1DdAA=
 github.com/faustbrian/go-clock v1.2.0/go.mod h1:ZU+wKx09xmXbtOf+swccuicq5Bkezby3k49uk7PCoA0=
-github.com/faustbrian/go-identity v0.0.0-20261019000410-c5205a35b05c h1:x+tCMpIxkwekIQ44vvPyQoATVZRC+lC4EsOYqqYPpZI=
-github.com/faustbrian/go-identity v0.0.0-20261019000410-c5205a35b05c/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
 github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93 h1:3dVAt3uY0Q+5AikAWh/2/QQmC00UvwX9njmKpT1N02Q=
 github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
 github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEWMARORc=

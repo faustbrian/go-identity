@@ -17,7 +17,8 @@ import (
 )
 
 // SessionPageQuery is an owned primary metadata scan, not authentication.
-// Scope is derived from the authenticated caller. Limit is 1..100 raw records;
+// Scope is derived from the authenticated caller or exact authorized admin
+// target. Limit is 1..100 raw records;
 // AfterSessionID is empty or a canonical exclusive bytewise keyset marker.
 // Readers must use exact tenant/user/audience predicates and ascending session
 // IDs, return at most Limit records, and bound IO by ctx. Do not mutate during
@@ -185,7 +186,8 @@ func (s *ListService) List(ctx context.Context, request ListRequest) (out ListRe
 	if valid.Err() != nil {
 		return out, sessionReadFailure(valid)
 	}
-	page, err := s.pages.ReadSessionPage(valid, SessionPageQuery{TenantID: spec.TenantID, UserID: spec.UserID, Audience: spec.Audience, AfterSessionID: marker, Limit: request.Limit})
+	query := SessionPageQuery{TenantID: spec.TenantID, UserID: spec.UserID, Audience: spec.Audience, AfterSessionID: marker, Limit: request.Limit}
+	page, err := s.pages.ReadSessionPage(valid, query)
 	if valid.Err() != nil {
 		return out, sessionReadFailure(valid)
 	}
@@ -196,36 +198,9 @@ func (s *ListService) List(ctx context.Context, request ListRequest) (out ListRe
 	if caller.ValidateAt(now) != nil {
 		return out, ErrUnauthenticated
 	}
-	if len(page.Entries) > int(request.Limit) || (page.HasMore && len(page.Entries) != int(request.Limit)) {
-		return out, ErrUnavailable
-	}
-	devices := make([]Device, 0, len(page.Entries))
-	last := marker
-	for _, row := range page.Entries {
-		r, e := row.Session.Bindings()
-		if e != nil || r.TenantID != spec.TenantID || r.UserID != spec.UserID || r.Audience != spec.Audience || r.SessionID <= last || !validListLabel(row.Label) {
-			return out, ErrUnavailable
-		}
-		last = r.SessionID
-		lifetime, e := row.Session.Lifetime(now)
-		if e != nil && !errors.Is(e, ErrExpired) {
-			return out, ErrUnavailable
-		}
-		inactive := row.Revoked || row.FamilyRevoked || errors.Is(e, ErrExpired)
-		current := r.SessionID == spec.SessionID
-		if current && (inactive || !sameIssuedSession(row.Session, caller.Session)) {
-			return out, ErrUnauthenticated
-		}
-		if inactive && !request.IncludeInactive {
-			continue
-		}
-		if errors.Is(e, ErrExpired) {
-			lifetime, e = row.Session.Lifetime(r.LastActivityAt)
-			if e != nil {
-				return out, ErrUnavailable
-			}
-		}
-		devices = append(devices, Device{SessionID: r.SessionID, Label: strings.Clone(row.Label), LastSeenAt: r.LastActivityAt.UTC(), ExpiresAt: lifetime.ExpiresAt.UTC(), Current: current, Inactive: inactive})
+	devices, last, err := projectSessionPage(page, query, caller.Session, spec, now, request.IncludeInactive)
+	if err != nil {
+		return out, err
 	}
 	if valid.Err() != nil {
 		return out, sessionReadFailure(valid)
@@ -243,6 +218,41 @@ func (s *ListService) List(ctx context.Context, request ListRequest) (out ListRe
 	return out, nil
 }
 
+func projectSessionPage(page SessionPage, query SessionPageQuery, caller Session, actor SessionSpec, now time.Time, includeInactive bool) ([]Device, string, error) {
+	if len(page.Entries) > int(query.Limit) || (page.HasMore && len(page.Entries) != int(query.Limit)) {
+		return nil, "", ErrUnavailable
+	}
+	devices := make([]Device, 0, len(page.Entries))
+	last := query.AfterSessionID
+	for _, row := range page.Entries {
+		r, e := row.Session.Bindings()
+		if e != nil || r.TenantID != query.TenantID || r.UserID != query.UserID || r.Audience != query.Audience || r.SessionID <= last || !validListLabel(row.Label) {
+			return nil, "", ErrUnavailable
+		}
+		last = r.SessionID
+		lifetime, e := row.Session.Lifetime(now)
+		if e != nil && !errors.Is(e, ErrExpired) {
+			return nil, "", ErrUnavailable
+		}
+		inactive := row.Revoked || row.FamilyRevoked || errors.Is(e, ErrExpired)
+		current := r.UserID == actor.UserID && r.SessionID == actor.SessionID
+		if current && (inactive || !sameIssuedSession(row.Session, caller)) {
+			return nil, "", ErrUnauthenticated
+		}
+		if inactive && !includeInactive {
+			continue
+		}
+		if errors.Is(e, ErrExpired) {
+			lifetime, e = row.Session.Lifetime(r.LastActivityAt)
+			if e != nil {
+				return nil, "", ErrUnavailable
+			}
+		}
+		devices = append(devices, Device{SessionID: r.SessionID, Label: strings.Clone(row.Label), LastSeenAt: r.LastActivityAt.UTC(), ExpiresAt: lifetime.ExpiresAt.UTC(), Current: current, Inactive: inactive})
+	}
+	return devices, last, nil
+}
+
 func validListLabel(label string) bool {
 	if len(label) > 128 || !utf8.ValidString(label) {
 		return false
@@ -258,9 +268,13 @@ func validListLabel(label string) bool {
 // This digest binds a non-authoritative pagination locator only. Length framing
 // prevents delimiter aliases; no signature, bearer or capability is invented.
 func listScope(spec SessionSpec, inactive bool) [32]byte {
+	return listScopeDigest("identity.session.list.cursor.v1\x00", inactive, string(spec.TenantID), string(spec.UserID), spec.Audience)
+}
+
+func listScopeDigest(domain string, inactive bool, scope ...string) [32]byte {
 	h := sha256.New()
-	h.Write([]byte("identity.session.list.cursor.v1\x00"))
-	for _, value := range []string{string(spec.TenantID), string(spec.UserID), spec.Audience} {
+	h.Write([]byte(domain))
+	for _, value := range scope {
 		var size [2]byte
 		binary.BigEndian.PutUint16(size[:], uint16(len(value)))
 		h.Write(size[:])

@@ -721,6 +721,14 @@ bytewise session-ID order; concurrent inserts before the marker are not revisite
 Cancellation, outage, corrupt pages or expired original caller admission return
 no partial metadata. HTTP owns explicit authorized DTO serialization.
 
+`NewAdminListService(primarySessions, ownedPages, config)` provides the
+separate `AdminSessionList` operation. Pass the trusted tenant, original
+credential, matching `ActorID`, exact `TargetSubjectID` and a limit of 1..100.
+The configured primary restricts the session audience. Current admin policy
+must authorize the actor for the target on every page. The cursor is scoped to
+the administrator, tenant, target and audience and cannot be used by self-list.
+The admin page includes inactive devices and returns no session credentials.
+
 ### Fresh self-service bulk revocation
 
 `NewSetRevocationService(primarySessions, ownedExecutor, SetRevocationConfig{...})`
