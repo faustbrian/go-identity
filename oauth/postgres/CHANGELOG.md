@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Resume a sealed local OAuth custody drain from a durable page checkpoint.
+  Reuse the original retirement commands after interruption and advance only
+  once the kernel journal confirms them.
+
 - Let the existing discovery and exact retirement consume a sealed admitted
   generation without relying on retained source audit payload. Recheck the
   gate and cutoff in the custody database before listing or mutating origins.

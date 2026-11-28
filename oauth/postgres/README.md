@@ -136,6 +136,25 @@ disable to both operations and replay a retirement with the original command
 ID. This selection does not change the explicit audit-only path for legacy
 disables, and traversal exhaustion still does not acknowledge cleanup.
 
+### Resume a sealed local drain
+
+Apply `ProxyRetirementDrainMigrationSource` after installing the selected
+custody migrations. Select `NewProductionProxyRetirementDrain` or
+`NewPreviewProxyRetirementDrain` with the sealed authority. Use a trusted
+maintenance instance whose local role can SELECT, INSERT and UPDATE the
+checkpoint table in the same database as its custody; ordinary callback
+instances do not need these grants.
+
+Call `Step(ctx, limit)` with a limit of 1–32. A step may store one page and
+confirm at most one target. It keeps the exact pending command IDs through
+interruptions, including a failure to save progress after retirement commits.
+Retry with the same selected generation and deployment; a contested
+checkpoint can return a conflict without skipping the target. Stop when
+`Exhausted` is true, not merely when a page has no matches. An unavailable
+journal result or a failed target does not advance the cursor. `Retired`
+counts confirmed local commands, not session revocations or consumer
+acknowledgements. No background worker or HTTP route is added.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in
