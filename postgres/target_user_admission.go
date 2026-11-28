@@ -37,7 +37,11 @@ func (w Work) RequireActiveTargetUser(ctx context.Context, owner FeatureExecutio
 	if expected.Validate(b.TenantID) != nil || expected.TenantID != b.TenantID || expected.ID != b.UserID || expected.Status != identity.StatusActive {
 		return w.fail(ctx, invalidWork())
 	}
-	rows, err := w.Query(ctx, `SELECT status,version::text FROM identity.users WHERE tenant_id=$1 AND user_id=$2 FOR SHARE`, string(b.TenantID), string(b.UserID))
+	return w.requireActiveUserRecord(ctx, expected)
+}
+
+func (w Work) requireActiveUserRecord(ctx context.Context, expected identity.User) error {
+	rows, err := w.Query(ctx, `SELECT status,version::text FROM identity.users WHERE tenant_id=$1 AND user_id=$2 FOR SHARE`, string(expected.TenantID), string(expected.ID))
 	if err != nil {
 		return err
 	}

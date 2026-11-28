@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Recheck the original impersonation requester's account and authorization
+  versions inside the exact native approval. Keep the requester's role
+  separate from the authenticating approver and the target account.
+
 - Preserve an OAuth proxy retirement's no-change outcome on replay when the
   native owner confirms another command already retired the exact origin.
 
