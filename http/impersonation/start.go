@@ -38,7 +38,7 @@ type StartConfig struct {
 // NewStartFeature selects only the approved-grant Start route. It does not
 // select any other impersonation operation or perform runtime I/O.
 func NewStartFeature(c StartConfig) (identityhttp.Feature, error) {
-	return newStartFeature(c, nil)
+	return newStartFeature(c, nil, nil, nil)
 }
 
 // NewStartStopFeature selects Start and Stop together with the same HTTPS,
@@ -47,10 +47,19 @@ func NewStartStopFeature(c StartConfig, stop StopService) (identityhttp.Feature,
 	if missingOwner(stop) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	return newStartFeature(c, stop)
+	return newStartFeature(c, stop, nil, nil)
 }
 
-func newStartFeature(c StartConfig, stop StopService) (identityhttp.Feature, error) {
+// NewStartStopDenyFeature selects all three operations over the same HTTPS
+// ingress. Each remains owned by its native service and only Deny uses rate.
+func NewStartStopDenyFeature(c StartConfig, stop StopService, deny DenyService, rate DenyRate) (identityhttp.Feature, error) {
+	if missingOwner(stop) || missingOwner(deny) || missingOwner(rate) {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	return newStartFeature(c, stop, deny, rate)
+}
+
+func newStartFeature(c StartConfig, stop StopService, deny DenyService, rate DenyRate) (identityhttp.Feature, error) {
 	if missingOwner(c.Native) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
@@ -66,6 +75,13 @@ func newStartFeature(c StartConfig, stop StopService) (identityhttp.Feature, err
 	ops := []identityhttp.OperationDescriptor{start}
 	if stop != nil {
 		op, err := stopDescriptor(ingress, stop)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		ops = append(ops, op)
+	}
+	if deny != nil {
+		op, err := denyDescriptor(ingress, deny, rate)
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}

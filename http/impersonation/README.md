@@ -1,11 +1,13 @@
 # Impersonation HTTP
 
-This opt-in contribution exposes approved-grant Start and browser self-stop.
+This opt-in contribution exposes approved-grant Start, browser self-stop
+and distinct-administrator denial of a pending grant.
 Install the native self-stop and existing request-key preparation migrations
 before composing native services for the selected routes. Select
 `NewStartStopFeature` to use one ingress policy for both, or
 `NewStartFeature` or `NewStopFeature` to expose just one. Base HTTP does not
-import this adapter.
+import this adapter. Select `NewDenyFeature` for denial alone or
+`NewStartStopDenyFeature` for all three on the same ingress.
 
 ## Start
 
@@ -43,3 +45,24 @@ cookies, and the adapter does not retry an unresolved mutation. An exact
 known response includes the command ID for operator correlation. There is no
 automatic HTTP recovery, approval, revoke or Reference composition in
 this selection.
+
+## Deny
+
+`POST /v1/impersonation/deny` requires the mapped HTTPS Origin and the
+distinct ordinary administrator's cookie and stored `X-CSRF-Token`.
+Send only `grantID`, `expectedVersion: 1` and a private non-blank
+`reason` of at most 1024 UTF-8 bytes. Do not send `Idempotency-Key`,
+a caller-selected command ID, or a bearer header.
+
+Compose the native `NewServiceWithDenial` only after its migration history
+through version 9. Use the existing shared audited admin quota, with the
+same namespace and key as other administrative operations. The admitted
+native preparation supplies the actual actor before the rate debit; a quota
+failure never invokes native Execute.
+
+On success, JSON includes `denied: true`, the committed outcome, and the
+exact command and grant IDs. No response includes the reason or changes
+any cookie. Repeating the semantic request after a denial returns a
+conflict, without another terminal effect. The transport never retries an
+unresolved native command. This selection enables no approval, quorum or
+revocation endpoint.

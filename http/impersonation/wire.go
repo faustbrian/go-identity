@@ -76,3 +76,35 @@ func stopWire() *identityhttp.WireOperation {
 	scheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": ChildCookieName, "description": "Dedicated child credential, never an ordinary actor session."})
 	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: "ImpersonationChildCookie", Definition: scheme}}}
 }
+
+func denyWire(cookie string) *identityhttp.WireOperation {
+	id := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$"}
+	payload := func(s any) map[string]any { return map[string]any{"application/json": map[string]any{"schema": s}} }
+	request := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"grantID", "expectedVersion", "reason"}, "properties": map[string]any{
+		"grantID": id, "expectedVersion": map[string]any{"type": "integer", "const": 1},
+		"reason": map[string]any{"type": "string", "minLength": 1, "maxLength": 1024, "writeOnly": true, "description": "Private non-blank reason, at most 1024 UTF-8 bytes."},
+	}}
+	response := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"denied", "commitOutcome"}, "properties": map[string]any{
+		"denied": map[string]any{"type": "boolean"}, "commandID": id, "grantID": id,
+		"commitOutcome": map[string]any{"type": "string", "enum": []string{"none", "committed", "unknown", "not_committed", "conflict", "in_progress"}},
+		"error":         map[string]any{"type": "string", "enum": []string{"invalid_request", "denied", "conflict", "unavailable", "rate_limited", "misdirected_request", "not_found", "method_not_allowed"}},
+	}}
+	responses := map[string]any{}
+	for _, status := range []string{"200", "400", "403", "409", "421", "429", "503"} {
+		responses[status] = map[string]any{"description": "Credential-free denial result; no response issues or clears cookies.", "content": payload(response)}
+	}
+	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 60}}}
+	operation := map[string]any{
+		"operationId": denyOperation.OperationID,
+		"description": "Deny one exact pending grant using a distinct administrator's ordinary session and stored synchronizer. The shared audited admin quota is required. Idempotency-Key is forbidden. No automatic retry occurs after an unknown outcome.",
+		"security":    []any{map[string]any{"ImpersonationDenialCookie": []string{}}},
+		"parameters": []any{
+			map[string]any{"in": "header", "name": "Origin", "required": true, "schema": map[string]any{"type": "string"}},
+			map[string]any{"in": "header", "name": "X-CSRF-Token", "required": true, "schema": map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}},
+		},
+		"requestBody": map[string]any{"required": true, "content": payload(request)}, "responses": responses,
+	}
+	definition, _ := json.Marshal(operation)
+	scheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": cookie, "description": "Original ordinary administrator cookie."})
+	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: "ImpersonationDenialCookie", Definition: scheme}}}
+}
