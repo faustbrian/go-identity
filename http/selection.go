@@ -475,6 +475,14 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 			r.CSRFOrigin.TokenMaximumAge == 0 && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
+		// Native administrator ban/unban consumes the original ordinary-session
+		// synchronizer. Its lifetime follows session state, not an independent
+		// token age; other administrative rows retain their canonical profile.
+		if (r.OperationID == "identity.admin.user-ban" || r.OperationID == "identity.admin.user-unban") &&
+			r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" &&
+			r.CSRFOrigin.TokenMaximumAge == 0 && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Verification selects either strict bearer custody or the stored-session
 		// synchronizer protected by its native transaction owner. Selection grants
 		// no authority and does not issue or age an independent CSRF token.

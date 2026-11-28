@@ -22,6 +22,10 @@ import (
 // Impersonation start/stop additionally admit SessionState with the exact
 // X-CSRF-Token header and no Referer fallback. Start binds the original actor
 // session; stop binds the derived child. The selected handler owns that check.
+// Administrator user-ban/user-unban additionally admit SessionState with the
+// exact X-CSRF-Token header, zero independent token age and no Referer fallback.
+// Their handlers bind the original ordinary administrator session; other
+// administrative operations retain their canonical policy.
 // Organization create/update/member-add/member-update/member-remove/member-leave,
 // owner-transfer, archive/restore, team create/update/delete/member-add/member-remove
 // role create/update/delete and invitation send/accept/resend/cancel/reject/expire

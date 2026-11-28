@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit the original stored-session synchronizer for the opt-in user ban
+  and unban descriptors without changing their keyed request contract.
+
 - Admit the canonical impersonation denial descriptor with its native
   ordinary-session synchronizer and existing repeat contract.
 
