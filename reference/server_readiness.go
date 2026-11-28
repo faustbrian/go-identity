@@ -147,6 +147,15 @@ func readinessSchemaPresent(ctx context.Context, state *storeState, catalog []mi
 			if _, selected := history.owners[guard.version]; !selected {
 				continue
 			}
+			if history.namespace == adminSessionRevokeHistory {
+				// These purpose checks are mutually exclusive successors on the
+				// same journal, not a list of objects that must coexist.
+				present, err := guard.exists(ctx, state)
+				if err != nil || !present {
+					return false, err
+				}
+				continue
+			}
 			schemas = append(schemas, guard.schema)
 			roles = append(roles, guard.roles...)
 			for _, table := range guard.tables {

@@ -21,7 +21,7 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261018110349-e38aa409e7d8
-	github.com/faustbrian/go-identity/http v0.0.0-20261128093333-eb30472f1d89
+	github.com/faustbrian/go-identity/http v0.0.0-20261128103602-ace7d7f2ae14
 	github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93
 	github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029135707-3291fee4a90f
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231
@@ -36,7 +36,7 @@ require (
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261128045025-64c742f675c9
 	github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806
 	github.com/faustbrian/go-identity/http/scim v0.0.0-20261127003455-4a711f454711
-	github.com/faustbrian/go-identity/http/session v0.0.0-20261128101821-a26fa6a33214
+	github.com/faustbrian/go-identity/http/session v0.0.0-20261128104603-8afbb5a9fdb3
 	github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b
 	github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e
 	github.com/faustbrian/go-identity/impersonation v0.0.0-20261128060409-ec2ff88687be
@@ -44,7 +44,7 @@ require (
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261128081822-ca0b012d1048
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261128103602-ace7d7f2ae14
 	github.com/faustbrian/go-identity/oauth v0.0.0-20261127054005-4f4c9ad64628
 	github.com/faustbrian/go-identity/oauth/onetap v0.0.0-20261127001245-ba11059f5f13
 	github.com/faustbrian/go-identity/oauth/postgres v0.0.0-20261128043111-a8b4af52d6b4
@@ -60,8 +60,8 @@ require (
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261026030542-4e0bab3755d5
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261124125758-d8bd5f7b074a
 	github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3
-	github.com/faustbrian/go-identity/session v0.0.0-20261128100743-762aadc071f0
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261128060844-611ac945c9dd
+	github.com/faustbrian/go-identity/session v0.0.0-20261128103602-ace7d7f2ae14
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261128110552-0ded768052d8
 	github.com/faustbrian/go-identity/session/valkey v0.0.0-20261113101712-a0f7aabc4f38
 	github.com/faustbrian/go-identity/username v0.0.0-20261018153841-d825f044ef94
 	github.com/faustbrian/go-migrations/v3 v3.1.1-0.20261015110643-ca105f265cfc

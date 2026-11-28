@@ -162,6 +162,14 @@ Reference migration planning before enabling the route. The existing index
 build is transactional; schedule it in a maintenance window on a populated
 session store. The server does not apply migrations at startup.
 
+Select `HTTPAdminSessionRevoke` to mount `POST /v1/admin/session-revoke`
+with `{"userID":"…","sessionID":"…"}`. Send the original administrator
+cookie, the selected sign-in Origin, and its `X-CSRF-Token`. Do not send an
+idempotency key. A committed revocation returns `revoked: true` and the new
+version; a missing or already-revoked target returns `revoked: false` without
+a version. Other sessions and credentials are unaffected. Apply both planned
+journal migration phases before enabling the writer.
+
 ### Ban and unban
 
 Select `StoreConfiguration.UserStatusAdministration` on the native password

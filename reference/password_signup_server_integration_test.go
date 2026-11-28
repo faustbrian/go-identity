@@ -374,6 +374,7 @@ type signupGraphExtensions struct {
 	userStatusAdministration    bool
 	userStatusHTTP              bool
 	adminSessionListHTTP        bool
+	adminSessionRevokeHTTP      bool
 	passkey                     bool
 	passkeyUpgrade              bool
 	passkeyDiscovery            bool
@@ -587,6 +588,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.adminSessionListHTTP {
 		adminSessionListPolicy = &referenceAdminSessionListPolicy{}
 		selectedAuthorization = adminSessionListPolicy
+	}
+	var adminSessionRevokePolicy *referenceAdminSessionRevokePolicy
+	if extensions.adminSessionRevokeHTTP {
+		adminSessionRevokePolicy = &referenceAdminSessionRevokePolicy{}
+		selectedAuthorization = adminSessionRevokePolicy
 	}
 	var userStatusPolicy *referenceUserStatusAdministrationPolicy
 	if extensions.userStatusAdministration {
@@ -1080,6 +1086,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.adminSessionListHTTP {
 		configureReferenceAdminSessionListHTTP(t, &c)
+	}
+	if extensions.adminSessionRevokeHTTP {
+		configureReferenceAdminSessionRevokeHTTP(t, &c)
 	}
 	if extensions.userStatusAdministration {
 		configureReferenceUserStatusAdministration(t, &c)
@@ -1799,6 +1808,12 @@ END $$`); err != nil {
 		t.Fatal("administrator session list OpenAPI selection differs from configured HTTP")
 	}
 	if c.HTTPAdminSessionList != nil {
+		wantOperations++
+	}
+	if seen["identity.admin.session-revoke"] != (c.HTTPAdminSessionRevoke != nil) {
+		t.Fatal("administrator session revoke OpenAPI selection differs from configured HTTP")
+	}
+	if c.HTTPAdminSessionRevoke != nil {
 		wantOperations++
 	}
 	for _, op := range []string{"identity.impersonation.start", "identity.impersonation.stop"} {
@@ -3189,6 +3204,10 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 	}
 	if extensions.adminSessionListHTTP {
 		proveReferenceAdminSessionListHTTP(t, ctx, f, features, workers, c, adminSessionListPolicy, client, network.URL, origin, messages)
+		return
+	}
+	if extensions.adminSessionRevokeHTTP {
+		proveReferenceAdminSessionRevokeHTTP(t, ctx, f, features, workers, c, adminSessionRevokePolicy, client, network.URL, origin, messages)
 		return
 	}
 	if extensions.userStatusAdministration {

@@ -101,6 +101,10 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if err != nil {
 		return nil, err
 	}
+	catalog, err = s.adminSessionRevokeMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
 	catalog, err = s.apiKeyMigrationCatalog(ctx, catalog)
 	if err != nil {
 		return nil, err
@@ -192,7 +196,7 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
 		retainAtomic := s.state.httpRate != nil && s.state.httpRate.atomicAdmission
 		if f := s.state.features; f != nil {
-			retainAtomic = retainAtomic || f.adminSessionList != nil ||
+			retainAtomic = retainAtomic || f.adminSessionList != nil || f.adminSessionRevoke != nil ||
 				f.impersonation != nil && f.impersonation.admin != nil ||
 				f.userStatusAdministration != nil && f.userStatusAdministration.http != nil
 		}

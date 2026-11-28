@@ -47,6 +47,8 @@ type StoreConfiguration struct {
 	HTTPUserStatusAdministration *HTTPUserStatusAdministrationConfiguration
 	// HTTPAdminSessionList opts into the same-tenant administrative read only.
 	HTTPAdminSessionList *HTTPAdminSessionListConfiguration
+	// HTTPAdminSessionRevoke opts into revoking one exact authorized session.
+	HTTPAdminSessionRevoke *HTTPAdminSessionRevokeConfiguration
 	// ProviderDiscovery selects only the public configured-provider list over
 	// PostgreSQL DurableAdmission and HTTPRate. It cannot select sign-in.
 	ProviderDiscovery *ProviderDiscoveryConfiguration
@@ -670,6 +672,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 		state.features.impersonation.close()
 		state.features.userStatusAdministration.closeHTTP()
 		state.features.adminSessionList.close()
+		state.features.adminSessionRevoke.close()
 	}
 	if state.features != nil && state.features.httpAnonymous != nil {
 		state.features.httpAnonymous.close()

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into HTTPS single-session administrator revocation over the native
+  PostgreSQL writer and shared administrative quota. Preserve sibling sessions
+  and return no version for an authorized no-op.
+
 - Mount an opt-in administrator session list using native password/TOTP and
   PostgreSQL paging. Share the admin quota and select its existing schema.
 
