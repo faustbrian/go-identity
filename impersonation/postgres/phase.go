@@ -33,6 +33,7 @@ type approvalPhase struct {
 	approver approvalParticipant
 	start    *activationIntent
 	revoke   *revocationIntent
+	deny     *denialIntent
 	stop     *stopIntent
 	keyed    *keyedStartInvocation
 	command  identity.Command
@@ -48,6 +49,10 @@ func (p *approvalPhase) FeatureOperations() []identity.FeatureOperation {
 	request, _ := approvalOperation(requestAction)
 	approve, _ := approvalOperation(approveAction)
 	operations := []identity.FeatureOperation{request, approve}
+	if p.service.denial {
+		deny, _ := approvalOperation(denyAction)
+		operations = append(operations, deny)
+	}
 	if p.service.activation != nil {
 		start, _ := approvalOperation(startAction)
 		operations = append(operations, start)
@@ -80,6 +85,9 @@ func grantLifecycle(action string) kernel.LifecyclePlan {
 	if action == startAction {
 		return kernel.LifecyclePlan{EventType: "impersonation.started.v1", BeforeVersion: 2, AfterVersion: 3}
 	}
+	if action == denyAction {
+		return kernel.LifecyclePlan{EventType: "impersonation.denied.v1", BeforeVersion: 1, AfterVersion: 2}
+	}
 	return kernel.LifecyclePlan{EventType: "impersonation.approved.v1", BeforeVersion: 1, AfterVersion: 2}
 }
 
@@ -91,6 +99,9 @@ func (s *Service) prepare(ctx context.Context, p *approvalPhase, network string)
 	}
 	if p.revoke != nil {
 		return s.prepareCommand(ctx, p, network, append(fields, p.revoke.fields(p.observed.digest)...))
+	}
+	if p.deny != nil {
+		return s.prepareCommand(ctx, p, network, append(fields, p.deny.fields(p.observed.digest)...))
 	}
 	digest := p.original.request.Digest()
 	fields = append(fields,
@@ -152,7 +163,7 @@ func (s *Service) prepareCommand(ctx context.Context, p *approvalPhase, network 
 			return PreparedCommand{}, err
 		}
 	}
-	if b.OperationID == approveAction || b.OperationID == startAction {
+	if b.OperationID == approveAction || b.OperationID == startAction || b.OperationID == denyAction {
 		if !at.Before(p.observed.expiresAt) {
 			return PreparedCommand{}, impersonation.ErrExpired
 		}
@@ -273,6 +284,10 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 		if err != nil {
 			return identity.FeatureReceipt{}, p.storageError(err)
 		}
+	} else if b.OperationID == denyAction {
+		if err := p.applyDenial(ctx, w, locked, at); err != nil {
+			return identity.FeatureReceipt{}, p.storageError(err)
+		}
 	} else if b.OperationID == startAction {
 		if err := p.applyActivation(ctx, w, at); err != nil {
 			return identity.FeatureReceipt{}, p.storageError(err)
@@ -318,9 +333,9 @@ func (p *approvalPhase) checkInvocation(ctx context.Context, w kernel.Work, comm
 	if b.OperationID == stopAction {
 		return p.checkStopWork(ctx, w, stopStatus)
 	}
-	// A revoked/suspended target cannot block authority reduction. The revoke
-	// command still binds the original target and exact grant under its lock.
-	if b.OperationID != revokeAction {
+	// An inactive target cannot block authority reduction. Denial and revoke
+	// still bind the original target and exact grant under its lock.
+	if b.OperationID != revokeAction && b.OperationID != denyAction {
 		if err := w.RequireActiveTargetUser(ctx, p, p.target); err != nil {
 			return time.Time{}, err
 		}
@@ -390,6 +405,12 @@ func (p *approvalPhase) RecoverParticipant(ctx context.Context, w kernel.Recover
 	}
 	if l != grantLifecycle(b.OperationID) {
 		return kernel.RecoveryUnknown, identity.ForbiddenError{}
+	}
+	if b.OperationID == denyAction {
+		if !p.service.denial {
+			return kernel.RecoveryUnknown, identity.ForbiddenError{}
+		}
+		return recoverDenialEffect(ctx, w, b)
 	}
 	if b.OperationID == startAction && p.service.activation != nil {
 		return recoverActivationEffect(ctx, w, b)

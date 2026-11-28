@@ -110,7 +110,7 @@ func (s *Service) Recover(ctx context.Context, auth Authentication, binding iden
 	if !selected || err != nil || binding.ValidateFor(op) != nil || (binding.OperationID == requestAction) != isOriginalRequest ||
 		binding.ActorKind != authorization.SubjectUser || binding.CorrelationID != string(binding.CommandID) ||
 		identity.UserID(binding.ActorID) == binding.UserID || binding.OperationID == startAction && s.activation == nil ||
-		binding.OperationID == revokeAction && !s.revocation || binding.OperationID == stopAction {
+		binding.OperationID == revokeAction && !s.revocation || binding.OperationID == denyAction && !s.denial || binding.OperationID == stopAction {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
 	return s.recoverBound(ctx, binding, func(bounded context.Context) error {

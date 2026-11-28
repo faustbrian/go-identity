@@ -3,7 +3,8 @@
 This optional adapter persists one pending impersonation request and one
 approval by a different administrator. A separate opt-in activates that
 exact approved grant and validates a distinct derived credential online.
-Separate selections add administrator revocation and impersonated self-stop.
+Separate selections add administrator revocation, impersonated self-stop
+and terminal denial of a pending request.
 The adapter does not expose HTTP routes or ordinary session issuance.
 
 ## Compose
@@ -54,6 +55,29 @@ request and approval reasons are encrypted and are not projected into the
 receipt, audit or lifecycle event. Authorization is not delegated to the
 approver's target session or to a caller-selected identity. This profile
 does not treat a committed counter charge or denial audit as grant approval.
+
+## Opt in to pending denial
+
+Apply `DenialMigrationSource{}` through version 9 before enabling
+`NewServiceWithDenial`. The new migrations retain versions 1–6, create empty
+denial custody, replace the existing approval guard's function and install
+a revocation-insert guard with a five-second local lock timeout. Nothing
+rewrites or backfills history. Roll back code without removing these guards
+or the retained markers.
+
+An independently authorized administrator calls `PrepareDenial` with their
+ordinary password/TOTP session, its CSRF proof, a distinct command ID, the
+exact pending grant ID and version 1, and a private reason. Authorize the
+named `identity.impersonation.deny` decision for the approval permission,
+bound to the original tenant, target, grant ID and scope. The requester and
+target cannot deny the grant. Use the separately authorized revocation
+operation for approved or active grants.
+
+`Execute` commits the terminal denial at version 2 with its protected
+audit, lifecycle and result. It creates no session or credential. Retain the
+original binding for `Recover`; exact replay returns only the original
+metadata. The private reason is encrypted, and old approval or revocation
+writers cannot make another transition after denial.
 
 ## Opt in to activation and online use
 

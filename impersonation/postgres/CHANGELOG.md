@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in distinct-administrator denial of an exact pending request.
+  Preserve the private reason, exact replay and one terminal effect across
+  current and predecessor approval/revocation writers.
+
 - Add native keyed Start over the existing durable request-key owner. Only the
   acknowledged original execution can deliver the child secret pair; exact
   retries and restart recovery disclose only the original command result.

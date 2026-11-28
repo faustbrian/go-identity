@@ -19,6 +19,7 @@ import (
 const (
 	requestAction    = "identity.impersonation.request"
 	approveAction    = "identity.impersonation.approve"
+	denyAction       = "identity.impersonation.deny"
 	startAction      = "identity.impersonation.start"
 	revokeAction     = "identity.impersonation.revoke"
 	stopAction       = "identity.impersonation.stop"
@@ -35,6 +36,8 @@ func approvalOperation(name string) (identity.FeatureOperation, bool) {
 		schema = "impersonation-request"
 	case approveAction:
 		schema = "impersonation-approve"
+	case denyAction:
+		schema = "impersonation-deny"
 	case startAction:
 		schema = "impersonation-start"
 	case revokeAction:
@@ -53,6 +56,10 @@ func actorDecision(binding identity.CommandBinding, scope impersonation.Scope, n
 	if !selected || binding.ValidateFor(op) != nil || binding.ActorKind != authorization.SubjectUser || identity.UserID(binding.ActorID) == binding.UserID || len(permissions) == 0 || now.IsZero() {
 		return authorization.DecisionContext{}, impersonation.ErrInvalidInput
 	}
+	attributes := authorization.Attributes{scopeAttribute: authorization.StringSetValue(permissions)}
+	if binding.OperationID == denyAction {
+		attributes["impersonation.grant-id"] = authorization.StringValue(binding.RecordID)
+	}
 	return authorization.DecisionContext{
 		PolicyRevision: authorization.Revision(binding.PolicyVersion),
 		CorrelationID:  binding.CorrelationID,
@@ -61,7 +68,7 @@ func actorDecision(binding identity.CommandBinding, scope impersonation.Scope, n
 			Action:      authorization.Action(op.OperationID),
 			Resource:    authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(binding.UserID)},
 			Tenant:      authorization.TenantID(binding.TenantID),
-			Attributes:  authorization.Attributes{scopeAttribute: authorization.StringSetValue(permissions)},
+			Attributes:  attributes,
 			Environment: authorization.Environment{Time: now.UTC()},
 		},
 	}, nil
