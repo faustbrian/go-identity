@@ -167,10 +167,11 @@ func TestAPIKeyManagementSelectsOnlyExplicitBearerKeyedProfile(t *testing.T) {
 		}
 	}
 }
-func TestCanonicalImpersonationStartStopRequireStoredSynchronizer(t *testing.T) {
+func TestCanonicalImpersonationCookieOperationsRequireStoredSynchronizer(t *testing.T) {
 	for _, item := range []struct{ operation, path, idempotency string }{
 		{"identity.impersonation.start", "/v1/impersonation/start", "keyed"},
 		{"identity.impersonation.stop", "/v1/impersonation/stop", "repeat"},
+		{"identity.impersonation.deny", "/v1/impersonation/deny", "repeat"},
 	} {
 		t.Run(item.operation, func(t *testing.T) {
 			config := identityhttp.CanonicalOperationConfig{

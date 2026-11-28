@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit the canonical impersonation denial descriptor with its native
+  ordinary-session synchronizer and existing repeat contract.
+
 - Admit stored-session synchronizer metadata for opt-in impersonation Start
   and Stop routes without changing their keyed and repeat contracts.
 
