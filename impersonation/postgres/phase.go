@@ -33,6 +33,7 @@ type approvalPhase struct {
 	approver approvalParticipant
 	start    *activationIntent
 	revoke   *revocationIntent
+	stop     *stopIntent
 	command  identity.Command
 	counters kernel.CommandCounterPlan
 	audit    kernel.AuditPlan
@@ -54,10 +55,17 @@ func (p *approvalPhase) FeatureOperations() []identity.FeatureOperation {
 		revoke, _ := approvalOperation(revokeAction)
 		operations = append(operations, revoke)
 	}
+	if p.service.selfStop {
+		stop, _ := approvalOperation(stopAction)
+		operations = append(operations, stop)
+	}
 	return operations
 }
 
 func (p *approvalPhase) lifecycle() kernel.LifecyclePlan {
+	if p.stop != nil {
+		return stopLifecycle
+	}
 	if p.revoke != nil {
 		return revocationLifecycle(p.revoke.before)
 	}
@@ -115,7 +123,14 @@ func (s *Service) prepareCommand(ctx context.Context, p *approvalPhase, network 
 	if !ok || b.ValidateFor(op) != nil {
 		return PreparedCommand{}, impersonation.ErrInvalidInput
 	}
-	command, err := identity.NewFeatureSessionCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, p.actor.input.Bearer)
+	spec := identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}
+	var command identity.Command
+	var err error
+	if p.stop != nil {
+		command, err = identity.NewFeatureCommand(spec)
+	} else {
+		command, err = identity.NewFeatureSessionCommand(spec, p.actor.input.Bearer)
+	}
 	if err != nil {
 		return PreparedCommand{}, err
 	}
@@ -127,11 +142,19 @@ func (s *Service) prepareCommand(ctx context.Context, p *approvalPhase, network 
 		return PreparedCommand{}, identity.UnavailableError{}
 	}
 	at = at.UTC()
-	if err := p.actor.requireFresh(at); err != nil {
-		return PreparedCommand{}, err
+	if p.stop != nil {
+		if !p.stop.unexpired(at) {
+			return PreparedCommand{}, impersonation.ErrExpired
+		}
+	} else {
+		if err := p.actor.requireFresh(at); err != nil {
+			return PreparedCommand{}, err
+		}
 	}
-	if b.OperationID != requestAction && b.OperationID != revokeAction && !at.Before(p.observed.expiresAt) {
-		return PreparedCommand{}, impersonation.ErrExpired
+	if b.OperationID == approveAction || b.OperationID == startAction {
+		if !at.Before(p.observed.expiresAt) {
+			return PreparedCommand{}, impersonation.ErrExpired
+		}
 	}
 	command, counters, err := s.config.Risk.PrepareCommandCounters(command, risk.Subject{Actor: string(b.ActorID), Resource: b.RecordID, Network: network}, at)
 	if err != nil {
@@ -206,13 +229,13 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 	}
 	var locked grantRecord
 	b := p.binding
-	if b.OperationID == approveAction || b.OperationID == startAction || b.OperationID == revokeAction {
+	if b.OperationID != requestAction {
 		var err error
 		locked, err = lockGrant(ctx, w, b.TenantID, impersonation.GrantID(b.RecordID))
 		if err != nil {
 			return identity.FeatureReceipt{}, p.storageError(err)
 		}
-		if !sameGrant(locked, p.observed) {
+		if p.stop == nil && !sameGrant(locked, p.observed) {
 			return identity.FeatureReceipt{}, identity.ConflictError{CommandID: b.CommandID}
 		}
 	}
@@ -257,6 +280,10 @@ func (p *approvalPhase) ApplyFeature(ctx context.Context, w kernel.Work, command
 		if err := p.applyRevocation(ctx, w, locked, at); err != nil {
 			return identity.FeatureReceipt{}, p.storageError(err)
 		}
+	} else if b.OperationID == stopAction {
+		if err := p.storeStop(ctx, w, locked, at); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	} else {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
@@ -278,10 +305,17 @@ func (p *approvalPhase) storageError(err error) error {
 }
 
 func (p *approvalPhase) checkCurrent(ctx context.Context, w kernel.Work, command identity.Command) (time.Time, error) {
+	return p.checkInvocation(ctx, w, command, impersonation.StatusActive)
+}
+
+func (p *approvalPhase) checkInvocation(ctx context.Context, w kernel.Work, command identity.Command, stopStatus impersonation.Status) (time.Time, error) {
 	b, registration, l, err := w.FeatureScope(p)
 	op, _ := approvalOperation(p.binding.OperationID)
 	if err != nil || b != p.binding || command != p.command || registration != (kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}) || l != p.lifecycle() {
 		return time.Time{}, identity.ForbiddenError{}
+	}
+	if b.OperationID == stopAction {
+		return p.checkStopWork(ctx, w, stopStatus)
 	}
 	// A revoked/suspended target cannot block authority reduction. The revoke
 	// command still binds the original target and exact grant under its lock.
@@ -328,7 +362,7 @@ func (p *approvalPhase) checkCurrent(ctx context.Context, w kernel.Work, command
 }
 
 func (p *approvalPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {
-	at, err := p.checkCurrent(ctx, w, c)
+	at, err := p.checkInvocation(ctx, w, c, impersonation.StatusStopped)
 	if err == nil && p.binding.OperationID == startAction {
 		err = p.checkStoredActivationDeadline(ctx, w, at)
 	}
@@ -346,6 +380,12 @@ func (p *approvalPhase) RecoverParticipant(ctx context.Context, w kernel.Recover
 			return kernel.RecoveryUnknown, identity.ForbiddenError{}
 		}
 		return recoverRevocationEffect(ctx, w, b, l)
+	}
+	if b.OperationID == stopAction {
+		if !p.service.selfStop || l != stopLifecycle {
+			return kernel.RecoveryUnknown, identity.ForbiddenError{}
+		}
+		return recoverStopEffect(ctx, w, b)
 	}
 	if l != grantLifecycle(b.OperationID) {
 		return kernel.RecoveryUnknown, identity.ForbiddenError{}

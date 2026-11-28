@@ -24,10 +24,20 @@ func (s *Service) Execute(ctx context.Context, input PreparedCommand) (identity.
 	phase := p.phase
 	b := phase.binding
 	scope := phase.original.request.Scope()
-	if err := s.requireActor(bounded, phase.actor.input, b); err != nil {
+	requireOriginal := func(ctx context.Context) error {
+		if phase.stop != nil {
+			return phase.stop.checkPreparedStop(ctx, s, b)
+		}
+		return s.requireActor(ctx, phase.actor.input, b)
+	}
+	if err := requireOriginal(bounded); err != nil {
 		return identity.CommandResult{}, err
 	}
-	if b.OperationID == revokeAction {
+	if b.OperationID == stopAction {
+		if err := s.authorizeStop(bounded, b); err != nil {
+			return identity.CommandResult{}, err
+		}
+	} else if b.OperationID == revokeAction {
 		if err := s.authorizeRevocation(bounded, b); err != nil {
 			return identity.CommandResult{}, err
 		}
@@ -52,7 +62,7 @@ func (s *Service) Execute(ctx context.Context, input PreparedCommand) (identity.
 	reserved, result, err := p.coordinator.ReserveCommand(bounded, b, phase.command, p.plan)
 	if err != nil || reserved == (kernel.Reservation{}) {
 		if result.Outcome != identity.CommitOutcomeInvalid {
-			if authErr := s.requireActor(bounded, phase.actor.input, b); authErr != nil {
+			if authErr := requireOriginal(bounded); authErr != nil {
 				return identity.CommandResult{}, authErr
 			}
 		}
@@ -100,12 +110,19 @@ func (s *Service) Recover(ctx context.Context, auth Authentication, binding iden
 	if !selected || err != nil || binding.ValidateFor(op) != nil || (binding.OperationID == requestAction) != isOriginalRequest ||
 		binding.ActorKind != authorization.SubjectUser || binding.CorrelationID != string(binding.CommandID) ||
 		identity.UserID(binding.ActorID) == binding.UserID || binding.OperationID == startAction && s.activation == nil ||
-		binding.OperationID == revokeAction && !s.revocation {
+		binding.OperationID == revokeAction && !s.revocation || binding.OperationID == stopAction {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
+	return s.recoverBound(ctx, binding, func(bounded context.Context) error {
+		return s.requireActor(bounded, auth, binding)
+	})
+}
+
+func (s *Service) recoverBound(ctx context.Context, binding identity.CommandBinding, requireOriginal func(context.Context) error) (identity.CommandResult, error) {
+	op, _ := approvalOperation(binding.OperationID)
 	bounded, stop := context.WithTimeout(ctx, s.config.Coordinator.MaximumDuration)
 	defer stop()
-	if err := s.requireActor(bounded, auth, binding); err != nil {
+	if err := requireOriginal(bounded); err != nil {
 		return identity.CommandResult{}, err
 	}
 	coordinator, _, err := s.coordinator(&approvalPhase{service: s})
@@ -141,7 +158,7 @@ func (s *Service) Recover(ctx context.Context, auth Authentication, binding iden
 	if result.Binding != binding || result.Feature == nil || result.Feature.Operation != op {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
-	if authErr := s.requireActor(bounded, auth, binding); authErr != nil {
+	if authErr := requireOriginal(bounded); authErr != nil {
 		return identity.CommandResult{}, authErr
 	}
 	return result, err

@@ -118,7 +118,11 @@ func (s *Service) PrepareRevoke(ctx context.Context, input RevokeInput) (Prepare
 }
 
 func (s *Service) authorizeRevocation(ctx context.Context, b identity.CommandBinding) error {
-	op, _ := approvalOperation(revokeAction)
+	return s.authorizeTerminalAction(ctx, b, revokeAction)
+}
+
+func (s *Service) authorizeTerminalAction(ctx context.Context, b identity.CommandBinding, action string) error {
+	op, _ := approvalOperation(action)
 	if b.ValidateFor(op) != nil || b.ActorKind != authorization.SubjectUser || identity.UserID(b.ActorID) == b.UserID {
 		return identity.ForbiddenError{}
 	}
@@ -126,7 +130,7 @@ func (s *Service) authorizeRevocation(ctx context.Context, b identity.CommandBin
 		PolicyRevision: authorization.Revision(b.PolicyVersion), CorrelationID: b.CorrelationID,
 		Request: authorization.Request{
 			Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(b.ActorID)},
-			Action:  authorization.Action(revokeAction), Tenant: authorization.TenantID(b.TenantID),
+			Action:  authorization.Action(action), Tenant: authorization.TenantID(b.TenantID),
 			Resource:    authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)},
 			Attributes:  authorization.Attributes{"impersonation.grant-id": authorization.StringValue(b.RecordID)},
 			Environment: authorization.Environment{Time: s.config.Session.Validation.Clock.Now().UTC()},

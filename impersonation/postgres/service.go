@@ -55,6 +55,7 @@ type Service struct {
 	config     Config
 	activation *activationService
 	revocation bool
+	selfStop   bool
 }
 
 // Format prevents printing the coordinator's keys and other runtime secrets.

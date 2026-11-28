@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in impersonated self-stop with a separate child CSRF proof. Resume
+  only the caller's original still-valid parent session, without issuing a
+  bearer, and recover the exact terminal receipt after restart.
+
 - Add opt-in administrator revocation of pending, approved or active grants.
   Keep old approval and activation writers from reviving a revoked grant,
   and recover the original terminal receipt without disclosing the reason.

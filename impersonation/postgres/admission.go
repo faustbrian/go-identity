@@ -21,6 +21,7 @@ const (
 	approveAction    = "identity.impersonation.approve"
 	startAction      = "identity.impersonation.start"
 	revokeAction     = "identity.impersonation.revoke"
+	stopAction       = "identity.impersonation.stop"
 	scopeAttribute   = "impersonation.scope"
 	maximumFreshness = 15 * time.Minute
 )
@@ -38,6 +39,8 @@ func approvalOperation(name string) (identity.FeatureOperation, bool) {
 		schema = "impersonation-start"
 	case revokeAction:
 		schema = "impersonation-revoke"
+	case stopAction:
+		schema = "impersonation-stop"
 	default:
 		return identity.FeatureOperation{}, false
 	}

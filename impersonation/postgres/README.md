@@ -3,8 +3,8 @@
 This optional adapter persists one pending impersonation request and one
 approval by a different administrator. A separate opt-in activates that
 exact approved grant and validates a distinct derived credential online.
-A third selection adds explicit administrator revocation. The adapter does
-not expose HTTP routes, ordinary session issuance or impersonated self-stop.
+Separate selections add administrator revocation and impersonated self-stop.
+The adapter does not expose HTTP routes or ordinary session issuance.
 
 ## Compose
 
@@ -116,3 +116,29 @@ After commit, an existing derived bearer fails its next authoritative check.
 The old request and approval are historical records, not authority; the
 database guards prevent older binaries from approving or activating that
 grant again.
+
+## Opt in to impersonated self-stop
+
+Install `SelfStopMigrationSource{}` before selecting `NewServiceWithSelfStop`.
+Its version 6 adds two empty immutable tables (child synchronizer digests and
+stop receipts), without modifying or locking earlier application tables.
+Existing deployments can keep using the prior constructors and starts.
+Code rollback retains the tables and the already terminal grant versions.
+
+Use the same `PrepareStart` but call `ExecuteStoppableStart` to receive the
+one-time derived credential and its separately revealed `StopCSRF` proof.
+This profile rejects `ExecuteStart` because it cannot deliver that proof.
+Reveal each only for the authorized response, and present them together to
+`PrepareStop`. This path cannot retrofit a proof for an earlier activation.
+Ordinary session CSRF and synchronizers from other grants are not accepted.
+The action policy must allow `identity.impersonation.stop` for the original
+actor on the target with the exact `impersonation.grant-id` attribute.
+
+`ExecuteStop` makes one irreversible terminal update. It can also validate
+the existing original actor session if the caller presents that original
+ordinary bearer separately. A zero `Parent` means it could not be resumed,
+without undoing a committed stop. Use the original credential you already
+hold; the result never issues, rotates or discloses a bearer. An independently
+revoked or expired grant cannot be stopped by a new command. Retain the
+original binding and derived proof for `RecoverStop`, which runs current
+recovery policy and returns only the command receipt.

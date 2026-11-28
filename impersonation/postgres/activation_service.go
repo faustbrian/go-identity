@@ -106,6 +106,13 @@ type ActivationResult struct {
 	Credential DerivedCredential
 }
 
+// StoppableActivationResult transfers a separate child-bound synchronizer
+// alongside the same one-shot derived bearer. Neither appears on replay.
+type StoppableActivationResult struct {
+	ActivationResult
+	StopCSRF session.CSRFToken
+}
+
 type approvalParticipant struct {
 	user  identity.User
 	epoch approvalEpoch
@@ -133,16 +140,25 @@ type activationIntent struct {
 	parent     sessionpg.OriginalPasswordTOTPParentReference
 	credential DerivedCredential
 	digest     session.TokenDigest
+	stopCSRF   session.CSRFToken
+	stopProof  session.CSRFStateSpec
 	delivered  atomic.Bool
 }
 
 func (a *activationIntent) commandFields() []identity.FeatureField {
-	return []identity.FeatureField{
+	fields := []identity.FeatureField{
 		{Name: "impersonation.approval-command", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(a.retained.commandID)}},
 		{Name: "impersonation.approved-at", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: a.retained.decidedAt}},
 		{Name: "impersonation.derived-lookup", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: a.digest.Sum[:]}},
 		{Name: "impersonation.derived-key", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(a.digest.KeyVersion)}},
 	}
+	if a.stopProof.KeyVersion != 0 {
+		fields = append(fields,
+			identity.FeatureField{Name: "impersonation.stop-csrf-key", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(a.stopProof.KeyVersion)}},
+			identity.FeatureField{Name: "impersonation.stop-csrf-digest", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: a.stopProof.Digest[:]}},
+		)
+	}
+	return fields
 }
 
 // PrepareStart binds the original ordinary TOTP/CSRF requester, exact
@@ -223,6 +239,12 @@ func (s *Service) PrepareStart(ctx context.Context, input StartInput) (PreparedA
 	start := &activationIntent{approved: approved, approval: approval, retained: retained,
 		parent: sessionpg.OriginalPasswordTOTPParentReference{TenantID: spec.TenantID, ActorID: spec.UserID,
 			SessionID: spec.SessionID, SessionVersion: spec.Version, Lookup: spec.Lookup}, credential: credential, digest: digest}
+	if s.selfStop {
+		start.stopCSRF, start.stopProof, err = newStopProof(g.tenant, g.id, s.config.CSRFKey)
+		if err != nil {
+			return PreparedActivation{}, err
+		}
+	}
 	p := &approvalPhase{service: s, binding: b, actor: actor, original: original, observed: g, start: start,
 		target:   identity.User{ID: g.target, TenantID: g.tenant, Status: identity.StatusActive, Version: original.request.Target().Version()},
 		approver: approvalParticipant{user: identity.User{ID: retained.approver, TenantID: g.tenant, Status: identity.StatusActive, Version: epoch.userVersion}, epoch: epoch}}
@@ -238,14 +260,33 @@ func (s *Service) PrepareStart(ctx context.Context, input StartInput) (PreparedA
 // secret; use Recover with the original binding rather than creating a new
 // command. Restart recovery discloses metadata only.
 func (s *Service) ExecuteStart(ctx context.Context, input PreparedActivation) (ActivationResult, error) {
-	prepared := input.command.state
-	if s == nil || s.activation == nil || prepared == nil || prepared.owner != s || prepared.phase.start == nil {
+	if s != nil && s.selfStop {
+		// This result cannot transfer the separately issued synchronizer.
 		return ActivationResult{}, impersonation.ErrInvalidInput
 	}
+	result, err := s.executeStart(ctx, input)
+	return result.ActivationResult, err
+}
+
+// ExecuteStoppableStart issues both original secrets from the exact first
+// committed start. Use it only on the opt-in self-stop profile.
+func (s *Service) ExecuteStoppableStart(ctx context.Context, input PreparedActivation) (StoppableActivationResult, error) {
+	if s == nil || !s.selfStop {
+		return StoppableActivationResult{}, impersonation.ErrInvalidInput
+	}
+	return s.executeStart(ctx, input)
+}
+
+func (s *Service) executeStart(ctx context.Context, input PreparedActivation) (StoppableActivationResult, error) {
+	prepared := input.command.state
+	if s == nil || s.activation == nil || prepared == nil || prepared.owner != s || prepared.phase.start == nil {
+		return StoppableActivationResult{}, impersonation.ErrInvalidInput
+	}
 	receipt, err := s.Execute(ctx, input.command)
-	result := ActivationResult{Receipt: receipt}
+	result := StoppableActivationResult{ActivationResult: ActivationResult{Receipt: receipt}}
 	if err == nil && receipt.Outcome == identity.CommitOutcomeCommitted && prepared.phase.start.delivered.CompareAndSwap(false, true) {
 		result.Credential = prepared.phase.start.credential
+		result.StopCSRF = prepared.phase.start.stopCSRF
 	}
 	return result, err
 }
@@ -328,7 +369,7 @@ func (p *approvalPhase) applyActivation(ctx context.Context, w kernel.Work, at t
 	}
 	// Store only digests. Delivery custody remains private in the prepared
 	// value and cannot become a persisted or recovered ordinary session.
-	return insertActivation(ctx, w, activationRecord{
+	record := activationRecord{
 		tenant: active.TenantID, grantID: active.GrantID, commandID: p.binding.CommandID, approvalID: p.start.retained.commandID,
 		actor: active.ActorID, target: active.TargetID, approver: p.approver.user.ID, requestDigest: p.observed.digest,
 		scope: active.Scope, policy: active.Policy,
@@ -336,7 +377,14 @@ func (p *approvalPhase) applyActivation(ctx context.Context, w kernel.Work, at t
 		approverVersion: p.approver.user.Version, approverAuthorityVersion: p.approver.epoch.authorizationVersion,
 		authorityNamespace: p.approver.epoch.namespace, parentID: p.start.parent.SessionID, parentVersion: p.start.parent.SessionVersion,
 		parentDigest: p.start.parent.Lookup, derivedDigest: p.start.digest,
-		startedAt: active.StartedAt, expiresAt: active.ExpiresAt.UTC().Truncate(time.Microsecond), version: active.GrantVersion, status: impersonation.StatusActive})
+		startedAt: active.StartedAt, expiresAt: active.ExpiresAt.UTC().Truncate(time.Microsecond), version: active.GrantVersion, status: impersonation.StatusActive}
+	if err := insertActivation(ctx, w, record); err != nil {
+		return err
+	}
+	if p.service.selfStop {
+		return storeStopProof(ctx, w, record, p.start.stopProof)
+	}
+	return nil
 }
 
 func (p *approvalPhase) checkStoredActivationDeadline(ctx context.Context, w kernel.Work, at time.Time) error {
