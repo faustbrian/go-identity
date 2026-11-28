@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Discover authenticated OAuth proxy origins for an exact retained disable in
+  bounded native PostgreSQL pages. Enumeration does not mutate custody or
+  acknowledge provider-wide cleanup.
+
 - Add opt-in exact-origin OAuth proxy retirement after a retained provider
   disable. Revoke the original unused grant and erase local bearer custody
   in the same audited transaction without changing the original callback

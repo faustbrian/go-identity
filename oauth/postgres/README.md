@@ -53,6 +53,18 @@ with it. This does not settle a previously unknown provider exchange, close the
 provider's whole cascade, or publish an HTTP route. A later enabled epoch is
 not eligible. Retry an ambiguous result only with the same command and inputs.
 
+### Discover affected originals
+
+The same live native services expose `ListDisabledProviderOrigins` for trusted
+operators. Reuse the exact retained disable and audit reader. Start with an empty
+`AfterFlowID` and a `ScanLimit` of 1–32. The service reads at most that many
+local rows plus one lookahead, returning only authenticated original command
+and flow IDs. Continue with `NextAfterFlowID` even when no origins matched.
+Feed each eligible original to the existing exact retirement call; discovery
+does not authorize or perform that mutation, open bearer custody, or call the
+provider. A missing continuation ends this traversal, not the cascade: it does
+not establish a stable snapshot or exclude a delayed writer.
+
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;
 credentials are sent only in the HTTPS token form. This does not add a built-in
