@@ -81,6 +81,7 @@ type proxyRetirementPhase struct {
 	envelopes                   *envelope.Service
 	request                     ProxyOriginRetirementRequest
 	command                     identity.Command
+	sealed                      bool
 }
 
 func (*proxyRetirementPhase) Descriptor() kernel.ContributorDescriptor {
@@ -113,6 +114,7 @@ func (p *proxyRetirementPhase) execute(ctx context.Context, authority *ProxyReti
 		return identity.CommandResult{}, err
 	}
 	p.command = command
+	p.sealed = authority.sealer != nil
 	auditPlan, err := proxyRetirementAudit(binding, retention)
 	if err != nil {
 		return identity.CommandResult{}, err
@@ -172,8 +174,11 @@ func (p *proxyRetirementPhase) ApplyFeature(ctx context.Context, w kernel.Work, 
 	if scope.SourceCommandID != p.request.Disable.CommandID || scope.SourceVersion != p.request.Disable.Next.Version {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
-	mutation, err := p.authenticateCustody(ctx, w, scope)
+	mutation, err := p.authenticateCustody(ctx, w, scope, proxyCustodyReadyToRetire)
 	if err != nil {
+		if _, denied := err.(identity.ForbiddenError); p.sealed && denied {
+			return identity.FeatureReceipt{}, p.confirmCompetingRetirement(ctx, w, command, scope)
+		}
 		return identity.FeatureReceipt{}, err
 	}
 	defer clear(mutation.binding)
@@ -187,9 +192,28 @@ func (p *proxyRetirementPhase) ApplyFeature(ctx context.Context, w kernel.Work, 
 		return identity.FeatureReceipt{}, err
 	}
 	if err := mutation.erase(ctx, w, scope); err != nil {
+		// The kernel tenant lock serializes native retirement before Apply.
+		// A CAS miss here is not proof of a competing retirement, and cannot
+		// be refined using a grant revocation this Work may have just staged.
 		return identity.FeatureReceipt{}, err
 	}
 	return identity.FeatureReceipt{Operation: kernel.OAuthProxyOriginRetirementOperation(), AfterVersion: 1}, nil
+}
+
+func (p *proxyRetirementPhase) confirmCompetingRetirement(ctx context.Context, w kernel.Work, command identity.Command, scope kernel.OAuthProxyOriginRetirementScope) error {
+	custody, err := p.authenticateCustody(ctx, w, scope, proxyCustodyAlreadyRetired)
+	if err != nil {
+		return err
+	}
+	clear(custody.binding)
+	grant, err := w.OAuthProxyOriginRetirementGrant(ctx, p, command)
+	if err != nil {
+		return err
+	}
+	if err := capabilitypg.ConfirmOAuthProxyOriginGrantTerminal(ctx, w, p, command, grant); err != nil {
+		return err
+	}
+	return w.MarkOAuthProxyOriginAlreadyRetired(ctx, p, command)
 }
 
 func (*proxyRetirementPhase) RecoverParticipant(context.Context, kernel.RecoveryWork) (kernel.RecoveryStatus, error) {

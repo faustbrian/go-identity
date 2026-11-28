@@ -46,13 +46,13 @@ func TestProxyRetirementCustodyQueriesStayBounded(t *testing.T) {
 		name, table, key, seed string
 		kind                   kernel.OAuthProxyRetirementKind
 		source                 migrations.Source
-		read, erase            func(string) string
+		read, retired, erase   func(string) string
 	}{
 		{
 			name: "production", table: "proxy_transactions", key: "transaction_id",
 			kind:   kernel.OAuthProxyRetireProduction,
 			source: ProxyTransactionMigrationSource{Schema: "oauth_rp", Version: 101},
-			read:   productionRetirementQuery, erase: productionRetirementMutation,
+			read:   productionRetirementQuery, retired: productionRetiredCustodyQuery, erase: productionRetirementMutation,
 			seed: `INSERT INTO oauth_rp.proxy_transactions
  (tenant_id,transaction_id,origin_command_id,callback_command_id,production_deployment,provider_id,
  configuration_version,production_callback_uri,state_key_version,state_lookup_digest,binding_ciphertext,
@@ -71,7 +71,7 @@ func TestProxyRetirementCustodyQueriesStayBounded(t *testing.T) {
 			name: "preview", table: "proxy_preview_bindings", key: "flow_id",
 			kind:   kernel.OAuthProxyRetirePreview,
 			source: ProxyPreviewBindingMigrationSource{Schema: "oauth_rp", Version: 104},
-			read:   previewRetirementQuery, erase: previewRetirementMutation,
+			read:   previewRetirementQuery, retired: previewRetiredCustodyQuery, erase: previewRetirementMutation,
 			seed: `INSERT INTO oauth_rp.proxy_preview_bindings
  (tenant_id,flow_id,origin_command_id,callback_command_id,issued_at,expires_at,
  binding_ciphertext,proof_ciphertext,version,settled_at)
@@ -168,6 +168,49 @@ func TestProxyRetirementCustodyQueriesStayBounded(t *testing.T) {
 						proxyRetirementMeasureStatement(t, ctx, tx, role.erase(table), mutationArgs, role.table, role.key, true, want, callback, binding)
 					})
 				}
+				t.Run(selection.name+"/retired-custody", func(t *testing.T) {
+					t.Run("not-retired", func(t *testing.T) {
+						proxyRetirementMeasureStatement(t, ctx, tx, role.retired(table), readArgs, role.table, role.key, false, 0, callback, binding)
+					})
+					retired, err := tx.Begin(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer proxyRetirementQueryRollback(t, retired)
+					rows := proxyRetirementNativeRows(t, ctx, retired, role.erase(table), eraseArgs)
+					rows.Close()
+					if err := rows.Err(); err != nil || rows.CommandTag().RowsAffected() != 1 {
+						t.Fatal("prepare one retired representative without changing original partitions", err, rows.CommandTag())
+					}
+					if _, err := retired.Exec(ctx, "ANALYZE "+table); err != nil {
+						t.Fatal(err)
+					}
+					variants := []string{"eligible", "missing-flow", "stale-origin", "wrong-tenant"}
+					if role.kind == kernel.OAuthProxyRetireProduction {
+						variants = append(variants, "wrong-deployment", "wrong-provider")
+					}
+					for _, variant := range variants {
+						t.Run(variant, func(t *testing.T) {
+							queryArgs := slices.Clone(readArgs)
+							want := 0
+							switch variant {
+							case "eligible":
+								want = 1
+							case "missing-flow":
+								queryArgs[1] = "missing-flow"
+							case "stale-origin":
+								queryArgs[2] = bytes.Repeat([]byte{250}, 16)
+							case "wrong-tenant":
+								queryArgs[0] = "tenant-sparse-1"
+							case "wrong-deployment":
+								queryArgs[3] = "production-other"
+							case "wrong-provider":
+								queryArgs[4] = "provider-other"
+							}
+							proxyRetirementMeasureStatement(t, ctx, retired, role.retired(table), queryArgs, role.table, role.key, false, want, callback, binding)
+						})
+					}
+				})
 			}
 			var unchanged bool
 			if err := tx.QueryRow(ctx, `SELECT count(*)=20000 AND count(*) FILTER(WHERE version=1)=10000
@@ -303,6 +346,9 @@ type proxyRetirementEvidencePlan struct {
 	Relation  string                        `json:"Relation Name"`
 	Index     string                        `json:"Index Name"`
 	Condition string                        `json:"Index Cond"`
+	CTE       string                        `json:"CTE Name"`
+	Parent    string                        `json:"Parent Relationship"`
+	Subplan   string                        `json:"Subplan Name"`
 	Rows      float64                       `json:"Actual Rows"`
 	Loops     float64                       `json:"Actual Loops"`
 	Filtered  float64                       `json:"Rows Removed by Filter"`
@@ -314,7 +360,24 @@ func (p proxyRetirementEvidencePlan) pointBounded(table, key string, mutation bo
 		// UPDATE without RETURNING reports zero output rows; its child reports
 		// matched rows. A normal sample checks the command's affected-row tag.
 		return p.Kind == "ModifyTable" && p.Operation == "Update" && p.Relation == table && p.Loops == 1 && p.Rows == 0 &&
-			len(p.Plans) == 1 && p.Plans[0].pointBounded(table, key, false, want)
+			len(p.Plans) == 1 && p.Plans[0].Kind != "CTE Scan" && p.Plans[0].pointBounded(table, key, false, want)
+	}
+	if p.Kind == "CTE Scan" {
+		if table != "proxy_transactions" || key != "transaction_id" || p.CTE != "original" || p.Operation != "" ||
+			p.Relation != "" || p.Index != "" || p.Condition != "" || p.Parent != "" || p.Subplan != "" ||
+			p.Loops != 1 || p.Rows != float64(want) || p.Filtered < 0 || p.Rows+p.Filtered > 1 || len(p.Plans) != 1 {
+			return false
+		}
+		lookup := p.Plans[0]
+		indexedKey := map[string]string{
+			table + "_pkey": key,
+			table + "_tenant_id_origin_command_id_key": "origin_command_id",
+		}[lookup.Index]
+		return lookup.Kind == "Index Scan" && lookup.Operation == "" && lookup.Relation == table &&
+			indexedKey != "" && strings.Contains(lookup.Condition, "tenant_id") && strings.Contains(lookup.Condition, indexedKey) &&
+			lookup.CTE == "" && lookup.Parent == "InitPlan" && lookup.Subplan == "CTE "+p.CTE &&
+			lookup.Loops == 1 && lookup.Rows >= 0 && lookup.Filtered >= 0 && lookup.Rows+lookup.Filtered <= 1 &&
+			p.Rows+p.Filtered == lookup.Rows && len(lookup.Plans) == 0
 	}
 	exactKey := map[string]string{
 		table + "_pkey": key,

@@ -150,10 +150,13 @@ confirm at most one target. It keeps the exact pending command IDs through
 interruptions, including a failure to save progress after retirement commits.
 Retry with the same selected generation and deployment; a contested
 checkpoint can return a conflict without skipping the target. Stop when
-`Exhausted` is true, not merely when a page has no matches. An unavailable
-journal result or a failed target does not advance the cursor. `Retired`
-counts confirmed local commands, not session revocations or consumer
-acknowledgements. No background worker or HTTP route is added.
+`Exhausted` is true, not merely when a page has no matches. A distinct command
+can retire a staged target first. The sealed path advances only if the original
+pending command records a definitive no-change result based on authenticated
+retired custody and the exact terminal grant. It does not record a second
+successful retirement. Unknown outcomes and ordinary failures do not advance
+the cursor. `Retired` counts confirmed local targets, not successful commands,
+session revocations, or consumer acknowledgements. No HTTP route is added.
 
 Configured providers may explicitly select `oauth.ClientSecretPost` as well as
 the existing public or Basic profiles. Original native state binds that choice;

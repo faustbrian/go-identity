@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	database "github.com/faustbrian/go-postgres"
@@ -14,7 +16,9 @@ import (
 // Exhausted is a local checkpoint, not a whole-consumer acknowledgement.
 // AfterFlowID is the last acknowledged page's nonempty continuation.
 type ProxyRetirementDrainProgress struct {
-	Exhausted   bool
+	Exhausted bool
+	// Retired counts confirmed local targets, including ones retired by another
+	// trusted command. It is not the number of successful commands issued here.
 	Retired     uint64
 	AfterFlowID identity.PreAuthTransactionID
 	Remaining   uint16
@@ -117,10 +121,10 @@ func (d *ProxyRetirementDrain) Step(ctx context.Context, scanLimit uint16) (Prox
 		result, err := d.retire(ctx, d.authority, ProxyOriginRetirementRequest{
 			CommandID: target.Command, OriginCommandID: target.Origin, FlowID: target.Flow, Disable: source.Disable,
 		})
-		if err != nil {
-			return ProxyRetirementDrainProgress{}, err
-		}
-		if !confirmedProxyRetirementDrainResult(result, source.Disable.Key.TenantID, target) {
+		if !confirmedProxyRetirementDrainResult(result, err, source.Disable.Key.TenantID, target) {
+			if err != nil {
+				return ProxyRetirementDrainProgress{}, err
+			}
 			return ProxyRetirementDrainProgress{}, identity.UnavailableError{}
 		}
 		state.confirmed++
@@ -140,11 +144,18 @@ func (d *ProxyRetirementDrain) Step(ctx context.Context, scanLimit uint16) (Prox
 	return state.progress(), nil
 }
 
-func confirmedProxyRetirementDrainResult(r identity.CommandResult, tenant identity.TenantID, target proxyRetirementDrainTarget) bool {
-	return r.Outcome == identity.CommitOutcomeCommitted && r.Validate() == nil && r.Binding.CommandID == target.Command &&
-		r.Binding.TenantID == tenant && r.Binding.AnonymousFlowID == string(target.Flow) &&
-		r.Binding.RecordID == string(target.Flow) && r.Binding.CorrelationID == string(target.Origin) &&
-		r.Binding.OperationID == kernel.OAuthProxyOriginRetirementOperation().OperationID
+func confirmedProxyRetirementDrainResult(r identity.CommandResult, err error, tenant identity.TenantID, target proxyRetirementDrainTarget) bool {
+	b := r.Binding
+	if r.Validate() != nil || r.Feature == nil || r.Feature.Operation != kernel.OAuthProxyOriginRetirementOperation() ||
+		b.ActorKind != authorization.SubjectServiceAccount || b.CommandID != target.Command || b.TenantID != tenant ||
+		b.AnonymousFlowID != string(target.Flow) || b.RecordID != string(target.Flow) || b.CorrelationID != string(target.Origin) {
+		return false
+	}
+	if r.Outcome == identity.CommitOutcomeCommitted {
+		return err == nil
+	}
+	var detail kernel.TypedFeatureFailureError
+	return r.Outcome == identity.CommitOutcomeNotCommitted && errors.As(err, &detail) && detail.Code == kernel.FeatureFailureOAuthProxyAlreadyRetired
 }
 
 func newProxyRetirementDrainPage(found ProxyRetirementDiscoveryPage, after identity.PreAuthTransactionID) (*proxyRetirementDrainPage, error) {

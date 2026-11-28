@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Resume sealed local proxy drains when a separate trusted retirement already
+  covered the exact staged target. Preserve the drain command's no-change
+  journal result without a second successful retirement event.
+
 - Resume a sealed local OAuth custody drain from a durable page checkpoint.
   Reuse the original retirement commands after interruption and advance only
   once the kernel journal confirms them.

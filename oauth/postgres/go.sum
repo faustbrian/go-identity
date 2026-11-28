@@ -49,8 +49,8 @@ github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060 h
 github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060/go.mod h1:1CrqZmsebZ1miA3k8hitH0g2fCSHuzdsmSoCRJ58zfw=
 github.com/faustbrian/go-cache/v2 v2.0.0 h1:I/e1YaZzs4DMFmqyvOs/kG8U/env6/5ZH+5H9o8/ba0=
 github.com/faustbrian/go-cache/v2 v2.0.0/go.mod h1:dB+6KBmhLYDO7UqjNiqdl/G8q8dlDrzwNjeYSzKHrVo=
-github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261127151507-eaff06dcbab4 h1:S7oIEkPti6ChrmhQhJQ1FG7wtjtRvwso7vw314KS5Ho=
-github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261127151507-eaff06dcbab4/go.mod h1:dQCCYwD+jO3IGUE+HX7cnl4xhxC2txnQCrLDHkxdXyI=
+github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261128033851-62b296e88d9d h1:69swdGYBEmHq2tT+BoDrz7vvUg8XFnalwx8DWX6KfIQ=
+github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261128033851-62b296e88d9d/go.mod h1:dQCCYwD+jO3IGUE+HX7cnl4xhxC2txnQCrLDHkxdXyI=
 github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec h1:zsKeLj0VkOz+wRjKvvACtVF4MO229KsUXIw9CR0jywY=
 github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec/go.mod h1:ssUHOHCArf/XQ+xfzVOmiDsV3eTPJeS2hyFH5uhqIJE=
 github.com/faustbrian/go-cli v1.1.1 h1:TPLVSpVvBOy/wmVCogS5nFZTduigG4+DyMloXCXcG1M=
@@ -97,8 +97,8 @@ github.com/faustbrian/go-identity/password/postgres v0.0.0-20261122025034-f17a5d
 github.com/faustbrian/go-identity/password/postgres v0.0.0-20261122025034-f17a5dc39fa2/go.mod h1:misSM2Y8r0vKapfUkcuLFEk8IYgoge3BsDuAYd9prQ4=
 github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6 h1:D+H1oYaOCQYGuvltxahVnzZCmVQTd7s5jzdV3RLkrUc=
 github.com/faustbrian/go-identity/phone v0.0.0-20261020215141-387cc56b91f6/go.mod h1:rQXIEiPXU/DMLt80tkafJnol/ayyUHFoS2ya3hVR1nE=
-github.com/faustbrian/go-identity/postgres v0.0.0-20261127151717-0d576e66e965 h1:0WxgqPrBwJC46mQucHfrBrVKHoFDk1LYi6gahnhJUJw=
-github.com/faustbrian/go-identity/postgres v0.0.0-20261127151717-0d576e66e965/go.mod h1:2se0pU/UH8LwiF7kP2TWfBCYFYuJq1TXPb47soXnwRM=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261128034638-2fac399bbb0c h1:Oofo3wzx+burQAsDwHx/7KThsI3/455rdqzDdPm54jk=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261128034638-2fac399bbb0c/go.mod h1:2se0pU/UH8LwiF7kP2TWfBCYFYuJq1TXPb47soXnwRM=
 github.com/faustbrian/go-identity/risk v0.0.0-20261122034753-6cea43cbedf2 h1:KWSzChvmzw7YWq16N2PNWjEK4qBMKOAL2oTbVq27lJQ=
 github.com/faustbrian/go-identity/risk v0.0.0-20261122034753-6cea43cbedf2/go.mod h1:zgNZ4X6AUlAWF12+6VIXijPginf0xGML8wBYVkv+FvY=
 github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261122024644-105adde9ae64 h1:/xylgUx2LyOoKUy7aA7ZA+6w3hdOjAahT/56INyKRcg=
