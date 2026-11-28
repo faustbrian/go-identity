@@ -82,20 +82,31 @@ func (t Target) User() identity.UserID { return t.actor.user }
 // Version returns the exact directory account version requiring revalidation.
 func (t Target) Version() uint64 { return t.version }
 
-// Policy identifies the selected one-distinct-approval policy. Its zero value
-// is invalid. Eligibility and actual policy enforcement belong to the adapter.
+// Policy binds a selected policy identity, revision and required approval count.
+// Its zero value is invalid. It authorizes nobody and does not establish that
+// eligible distinct approvals exist; actual enforcement belongs to the adapter.
 type Policy struct {
-	id      string
-	version uint64
+	id                string
+	version           uint64
+	requiredApprovals int
 }
 
-// NewPolicy selects a case-sensitive policy ID and nonzero revision. This
-// profile supports exactly one distinct non-target approver, never a quorum knob.
+// NewPolicy selects a case-sensitive policy ID and nonzero revision requiring
+// one distinct approval. It is exactly equivalent to NewPolicyWithQuorum(id,
+// version, 1), including the historical v1 request binding.
 func NewPolicy(id string, version uint64) (Policy, error) {
-	if _, err := NewActor(identity.TenantID(id), "policy"); err != nil || version == 0 {
+	return NewPolicyWithQuorum(id, version, 1)
+}
+
+// NewPolicyWithQuorum selects a case-sensitive policy ID, nonzero revision and
+// 1..32 required distinct approvals. This immutable requirement does not enable
+// multi-approval enforcement: the adapter must select this policy, authorize
+// eligible distinct approvers and persist their decisions atomically.
+func NewPolicyWithQuorum(id string, version uint64, required int) (Policy, error) {
+	if _, err := NewActor(identity.TenantID(id), "policy"); err != nil || version == 0 || required < 1 || required > 32 {
 		return Policy{}, ErrInvalidInput
 	}
-	return Policy{id: id, version: version}, nil
+	return Policy{id: id, version: version, requiredApprovals: required}, nil
 }
 
 // ID returns the exact policy identity.
@@ -104,12 +115,10 @@ func (p Policy) ID() string { return p.id }
 // Version returns the exact policy revision.
 func (p Policy) Version() uint64 { return p.version }
 
-// RequiredApprovals is one for a valid selected policy and zero for invalid zero.
+// RequiredApprovals returns the selected requirement, not a count of existing
+// approvals or authority to activate. It returns zero for the invalid zero policy.
 func (p Policy) RequiredApprovals() int {
-	if p.version == 0 {
-		return 0
-	}
-	return 1
+	return p.requiredApprovals
 }
 
 // Scope is an immutable sorted set of 1..64 distinct permissions. Each is

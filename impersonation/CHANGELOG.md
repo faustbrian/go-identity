@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind a selected approval quorum to new requests. Keep one-reviewer
+  request digests unchanged; for a larger quorum, require every distinct
+  retained approval before the pure activation transition.
+
 - Add an exact approved-to-active decision with fixed scope and immutable
   actor, target and parent-session lineage. Active expiry cannot outlive
   the original authorized duration or parent session.

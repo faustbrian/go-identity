@@ -22,7 +22,8 @@ type RequestInput struct {
 }
 
 // Request is immutable exact intent. Its zero value is invalid. Digest includes
-// tenant, actor, target/version, scope, reason digest, duration and policy ID/version.
+// tenant, actor, target/version, scope, reason digest, duration, policy ID/version
+// and required approval count.
 type Request struct {
 	input  RequestInput
 	digest [32]byte
@@ -56,6 +57,8 @@ func (r Request) Input() RequestInput { return r.input }
 
 // Digest returns a versioned canonical intent binding, not a keyed command
 // fingerprint, secret or authority. Persist it with the original typed inputs.
+// One-approval policies retain the historical v1 binding; counts above one use
+// a separate v2 domain and encode the count after the policy revision.
 func (r Request) Digest() [32]byte { return r.digest }
 
 // Tenant returns the bound tenant partition.
@@ -76,12 +79,16 @@ func (r Request) Reason() Reason { return r.input.Reason }
 // Duration returns requested session duration, not any issued lifetime.
 func (r Request) Duration() time.Duration { return r.input.Duration }
 
-// Policy returns the bound policy identity and revision.
+// Policy returns the bound policy identity, revision and approval requirement.
 func (r Request) Policy() Policy { return r.input.Policy }
 
 func requestDigest(input RequestInput) [32]byte {
 	h := sha256.New()
-	writeString(h, "identity.impersonation.request.binding.v1")
+	if input.Policy.RequiredApprovals() == 1 {
+		writeString(h, "identity.impersonation.request.binding.v1")
+	} else {
+		writeString(h, "identity.impersonation.request.binding.v2")
+	}
 	writeString(h, string(input.Tenant))
 	writeString(h, string(input.Actor.user))
 	writeString(h, string(input.Target.actor.user))
@@ -95,6 +102,9 @@ func requestDigest(input RequestInput) [32]byte {
 	writeUint(h, uint64(input.Duration))
 	writeString(h, input.Policy.id)
 	writeUint(h, input.Policy.version)
+	if input.Policy.RequiredApprovals() > 1 {
+		writeUint(h, uint64(input.Policy.RequiredApprovals()))
+	}
 	var digest [32]byte
 	copy(digest[:], h.Sum(nil))
 	return digest
@@ -120,6 +130,7 @@ type Grant struct {
 	requestedAt time.Time
 	expiresAt   time.Time
 	approval    Approval
+	approvals   []Approval
 }
 
 // String prevents implicit diagnostics from traversing a sensitive request.
@@ -157,6 +168,13 @@ func (g Grant) RequestedAt() time.Time { return g.requestedAt }
 // ExpiresAt returns the exclusive decision/activation deadline, never extended
 // by approval or activation. ActiveSession.Bindings exposes the active expiry.
 func (g Grant) ExpiresAt() time.Time { return g.expiresAt }
+
+// Approvals returns a caller-owned snapshot in decision order. A partial list
+// does not satisfy the selected quorum or establish authorization. Each decision
+// retains the actual pending version against which it was applied.
+func (g Grant) Approvals() []Approval {
+	return append([]Approval(nil), g.approvals...)
+}
 
 // ApprovalInput proposes one decision against an exact pending grant/request.
 // At must be the adapter's trusted current clock, not a client-supplied time.
@@ -210,15 +228,26 @@ func (a Approval) At() time.Time { return a.at }
 // impersonation, check original CSRF and current target/actor/scoped policy,
 // then compare-and-swap version and persist the distinct row/effects atomically.
 // Repeats conflict here; durable keyed retries must recover the original result.
+// Each decision advances the version once, retaining pending status below the
+// selected quorum and approving exactly at quorum without renewing the deadline.
 func Approve(grant Grant, input ApprovalInput) (Grant, Approval, error) {
 	if input.Approver.user == "" || input.Reason.text == "" || input.At.IsZero() {
 		return Grant{}, Approval{}, ErrInvalidInput
 	}
-	if grant.status != StatusPendingApproval || grant.version != 1 || input.GrantID != grant.id || input.ExpectedVersion != grant.version || input.Request.digest != grant.request.digest {
+	required := grant.request.input.Policy.RequiredApprovals()
+	if grant.status != StatusPendingApproval || grant.version != uint64(len(grant.approvals))+1 || len(grant.approvals) >= required {
+		return Grant{}, Approval{}, ErrConflict
+	}
+	if input.GrantID != grant.id || input.ExpectedVersion != grant.version || input.Request.digest != grant.request.digest {
 		return Grant{}, Approval{}, ErrConflict
 	}
 	if input.Approver.tenant != grant.request.input.Tenant || input.Approver.user == grant.request.input.Actor.user || input.Approver.user == grant.request.input.Target.actor.user {
 		return Grant{}, Approval{}, ErrConflict
+	}
+	for _, previous := range grant.approvals {
+		if input.Approver == previous.approver {
+			return Grant{}, Approval{}, ErrConflict
+		}
 	}
 	if input.At.Before(grant.requestedAt) {
 		return Grant{}, Approval{}, ErrInvalidInput
@@ -227,7 +256,10 @@ func Approve(grant Grant, input ApprovalInput) (Grant, Approval, error) {
 		return Grant{}, Approval{}, ErrExpired
 	}
 	approval := Approval{grantID: grant.id, requestVersion: grant.version, requestDigest: grant.request.digest, approver: input.Approver, reason: input.Reason, at: input.At.Round(0).UTC()}
-	grant.status = StatusApproved
+	grant.approvals = append(grant.Approvals(), approval)
+	if len(grant.approvals) == required {
+		grant.status = StatusApproved
+	}
 	grant.version++
 	grant.approval = approval
 	return grant, approval, nil

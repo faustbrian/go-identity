@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the complete ordered set of original impersonation reviewers inside
+  native configurable Start. Compare each current account and authorization
+  epoch in the original coordinator transaction.
+
 - Retain the original aggregate and authority versions for keyed administrative
   ban and unban. Matching retries recover the same command and preconditions
   from the existing status request-key history without rereading the target.

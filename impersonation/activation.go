@@ -12,6 +12,8 @@ import (
 // values are data, not proof of authentication or authorization. At must be the
 // adapter's trusted current clock; ParentExpiresAt is the parent's effective
 // expiry, including idle and absolute limits, not a client-supplied lifetime.
+// Approval supplies the single decision for Activate and must be zero when
+// ActivateWithQuorum receives the complete ordered evidence separately.
 type ActivationInput struct {
 	GrantID              GrantID
 	ExpectedVersion      uint64
@@ -45,9 +47,10 @@ type ActiveBindings struct {
 }
 
 // ActiveSession is immutable activation metadata, not an ordinary session,
-// authentication proof or bearer. Its zero value is invalid. Only Activate
-// constructs it; adapters must persist and check authoritative state on every
-// use, then intersect current actor authority and target-effective permissions.
+// authentication proof or bearer. Its zero value is invalid. Activate and
+// ActivateWithQuorum construct it; adapters must persist and check authoritative
+// state on every use, then intersect current actor authority and target-effective
+// permissions.
 type ActiveSession struct{ bindings ActiveBindings }
 
 // String prevents implicit diagnostics from traversing private lineage.
@@ -81,7 +84,7 @@ func Activate(grant Grant, input ActivationInput) (Grant, ActiveSession, error) 
 	if input.Actor.user == "" || !validParentSessionID(input.ParentSessionID) || input.ParentSessionVersion == 0 || input.ParentExpiresAt.IsZero() || input.At.IsZero() {
 		return Grant{}, ActiveSession{}, ErrInvalidInput
 	}
-	if grant.status != StatusApproved || grant.version != 2 || input.GrantID != grant.id || input.ExpectedVersion != grant.version {
+	if grant.status != StatusApproved || grant.version != 2 || grant.request.input.Policy.RequiredApprovals() != 1 || input.GrantID != grant.id || input.ExpectedVersion != grant.version {
 		return Grant{}, ActiveSession{}, ErrConflict
 	}
 	if input.Approval != grant.approval || input.Approval.grantID != grant.id || input.Approval.requestVersion != 1 || input.Approval.requestDigest != grant.request.digest {
@@ -97,7 +100,58 @@ func Activate(grant Grant, input ActivationInput) (Grant, ActiveSession, error) 
 	if !input.At.Before(grant.expiresAt) || !input.At.Before(input.ParentExpiresAt) {
 		return Grant{}, ActiveSession{}, ErrExpired
 	}
+	active, session := activationMetadata(grant, input)
+	return active, session, nil
+}
 
+// ActivateWithQuorum validates a pure approved-to-active metadata transition for
+// 1..32 required distinct approvals. approvals must exactly match the complete
+// retained snapshot in decision order, and input.Approval must be zero so there
+// is only one supplied source of approval evidence. The input slice is borrowed
+// only for this call and is neither retained nor mutated.
+//
+// This operation authenticates nobody, issues no credential and performs no I/O.
+// The adapter must freshly revalidate the original actor and every retained
+// approver, current target/policy and original parent session, prohibit recursive
+// impersonation, and atomically persist a single winner with required effects.
+// Every grant use still requires authoritative online state/revocation checks.
+//
+// ErrInvalidInput rejects malformed parent/actor/time data or a time before any
+// retained decision; ErrConflict rejects state, version, binding or evidence
+// mismatches; ErrExpired rejects either exclusive deadline. All failures return
+// zero values. The original grant, decisions and deadline remain unchanged.
+func ActivateWithQuorum(grant Grant, input ActivationInput, approvals []Approval) (Grant, ActiveSession, error) {
+	if input.Actor.user == "" || !validParentSessionID(input.ParentSessionID) || input.ParentSessionVersion == 0 || input.ParentExpiresAt.IsZero() || input.At.IsZero() {
+		return Grant{}, ActiveSession{}, ErrInvalidInput
+	}
+	required := grant.request.input.Policy.RequiredApprovals()
+	if required < 1 || required > 32 || grant.status != StatusApproved || grant.version != uint64(required)+1 {
+		return Grant{}, ActiveSession{}, ErrConflict
+	}
+	if input.GrantID != grant.id || input.ExpectedVersion != grant.version || input.Approval != (Approval{}) {
+		return Grant{}, ActiveSession{}, ErrConflict
+	}
+	if len(approvals) != required || !slices.Equal(approvals, grant.approvals) {
+		return Grant{}, ActiveSession{}, ErrConflict
+	}
+	request := grant.request.input
+	if input.Actor != request.Actor || input.CurrentTarget != request.Target || input.CurrentPolicy != request.Policy {
+		return Grant{}, ActiveSession{}, ErrConflict
+	}
+	for _, approval := range approvals {
+		if input.At.Before(approval.at) {
+			return Grant{}, ActiveSession{}, ErrInvalidInput
+		}
+	}
+	if !input.At.Before(grant.expiresAt) || !input.At.Before(input.ParentExpiresAt) {
+		return Grant{}, ActiveSession{}, ErrExpired
+	}
+	active, session := activationMetadata(grant, input)
+	return active, session, nil
+}
+
+func activationMetadata(grant Grant, input ActivationInput) (Grant, ActiveSession) {
+	request := grant.request.input
 	startedAt := input.At.Round(0).UTC()
 	expiresAt := startedAt.Add(request.Duration)
 	if input.ParentExpiresAt.Before(expiresAt) {
@@ -112,7 +166,7 @@ func Activate(grant Grant, input ActivationInput) (Grant, ActiveSession, error) 
 		StartedAt: startedAt, ExpiresAt: expiresAt, ParentSessionID: input.ParentSessionID,
 		ParentSessionVersion: input.ParentSessionVersion,
 	}}
-	return grant, session, nil
+	return grant, session
 }
 
 // Native session SessionSpec uses 1..128 printable non-space ASCII bytes, not
