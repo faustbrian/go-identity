@@ -19,6 +19,9 @@ import (
 // for strict bearer custody or SessionState with a configured valid header,
 // zero independent token age and denied Referer fallback for native protected
 // cookie custody. Factories own enforcement; selection issues no CSRF token.
+// Impersonation start/stop additionally admit SessionState with the exact
+// X-CSRF-Token header and no Referer fallback. Start binds the original actor
+// session; stop binds the derived child. The selected handler owns that check.
 // Organization create/update/member-add/member-update/member-remove/member-leave,
 // owner-transfer, archive/restore, team create/update/delete/member-add/member-remove
 // role create/update/delete and invitation send/accept/resend/cancel/reject/expire

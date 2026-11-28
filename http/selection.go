@@ -467,6 +467,14 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if (r.OperationID == "identity.session.signout" || r.OperationID == "identity.password.change") && (r.CSRFOrigin.Mode == CSRFNone || r.CSRFOrigin.Mode == CSRFSessionState) {
 			csrfMatches = true
 		}
+		// Impersonation start uses the exact original actor session, whereas
+		// stop uses the distinct child grant. Their native owners validate a
+		// stored synchronizer, never an independently aged header or fallback.
+		if (r.OperationID == "identity.impersonation.start" || r.OperationID == "identity.impersonation.stop") &&
+			r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" &&
+			r.CSRFOrigin.TokenMaximumAge == 0 && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Verification selects either strict bearer custody or the stored-session
 		// synchronizer protected by its native transaction owner. Selection grants
 		// no authority and does not issue or age an independent CSRF token.

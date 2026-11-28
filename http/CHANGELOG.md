@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit stored-session synchronizer metadata for opt-in impersonation Start
+  and Stop routes without changing their keyed and repeat contracts.
+
 - Keep the opt-in OAuth preview browser relay inside the router's HTTP
   deadline, streaming body cap and canceled-response guards.
 

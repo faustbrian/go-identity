@@ -167,3 +167,33 @@ func TestAPIKeyManagementSelectsOnlyExplicitBearerKeyedProfile(t *testing.T) {
 		}
 	}
 }
+func TestCanonicalImpersonationStartStopRequireStoredSynchronizer(t *testing.T) {
+	for _, item := range []struct{ operation, path, idempotency string }{
+		{"identity.impersonation.start", "/v1/impersonation/start", "keyed"},
+		{"identity.impersonation.stop", "/v1/impersonation/stop", "repeat"},
+	} {
+		t.Run(item.operation, func(t *testing.T) {
+			config := identityhttp.CanonicalOperationConfig{
+				Owner: "identity/impersonation", OperationID: item.operation,
+				Handler:                http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+				CSRF:                   identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny},
+				MaximumSerializedBytes: 16384,
+			}
+			op, err := identityhttp.NewCanonicalOperation(config)
+			if err != nil || op.Route.Path != item.path || op.Record.Idempotency != item.idempotency {
+				t.Fatal("canonical impersonation selection rejected stored synchronizer or changed retry contract", err)
+			}
+			for _, variant := range []identityhttp.CSRFPolicy{
+				{Mode: identityhttp.CSRFNone},
+				{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny},
+				{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-Other", RefererFallback: identityhttp.RefererFallbackDeny},
+				{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackSameOriginHTTPS},
+			} {
+				config.CSRF = variant
+				if _, err := identityhttp.NewCanonicalOperation(config); err == nil {
+					t.Fatal("accepted a different cookie synchronizer policy", variant.Mode)
+				}
+			}
+		})
+	}
+}
