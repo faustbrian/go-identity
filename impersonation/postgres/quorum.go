@@ -48,6 +48,21 @@ type QuorumResult struct {
 // distinguish all terminal states. Explicit current read permission addresses
 // the exact grant. No reason, envelope, credential, or mutation is involved.
 func (s *Service) Quorum(ctx context.Context, input QuorumInput) (QuorumResult, error) {
+	return s.quorum(ctx, input, nil)
+}
+
+// QuorumWithAdmission adds the transport's required quota check to Quorum.
+// Admit runs synchronously with the authenticated and authorized ordinary
+// actor, before the grant lookup. It must honor the passed deadline and not
+// retain its arguments. Errors return no grant metadata; it is never retried.
+func (s *Service) QuorumWithAdmission(ctx context.Context, input QuorumInput, admit func(context.Context, identity.UserID) error) (QuorumResult, error) {
+	if admit == nil {
+		return QuorumResult{}, impersonation.ErrInvalidInput
+	}
+	return s.quorum(ctx, input, admit)
+}
+
+func (s *Service) quorum(ctx context.Context, input QuorumInput, admit func(context.Context, identity.UserID) error) (QuorumResult, error) {
 	if s == nil || !s.denial || ctx == nil || !validStoredGrantKey(input.Tenant, input.GrantID) {
 		return QuorumResult{}, impersonation.ErrInvalidInput
 	}
@@ -86,6 +101,18 @@ func (s *Service) Quorum(ctx context.Context, input QuorumInput) (QuorumResult, 
 	if decision.Outcome != authorization.Allow || decision.Revision != request.PolicyRevision {
 		return QuorumResult{}, identity.ForbiddenError{}
 	}
+	if admit != nil {
+		if err := actor.requireFresh(readConfig.Validation.Clock.Now()); err != nil {
+			return QuorumResult{}, err
+		}
+		err := checkQuorumAdmission(bounded, spec.UserID, admit)
+		if bounded.Err() != nil {
+			return QuorumResult{}, bounded.Err()
+		}
+		if err != nil {
+			return QuorumResult{}, err
+		}
+	}
 	result, err := loadQuorumSnapshot(bounded, s.pool, spec.TenantID, input.GrantID, readConfig.Validation.Clock.Now().UTC())
 	if bounded.Err() != nil {
 		return QuorumResult{}, bounded.Err()
@@ -98,4 +125,13 @@ func (s *Service) Quorum(ctx context.Context, input QuorumInput) (QuorumResult, 
 	}
 	result.RequiredApprovals = policy.RequiredApprovals()
 	return result, nil
+}
+
+func checkQuorumAdmission(ctx context.Context, actor identity.UserID, admit func(context.Context, identity.UserID) error) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = identity.UnavailableError{}
+		}
+	}()
+	return admit(ctx, actor)
 }
