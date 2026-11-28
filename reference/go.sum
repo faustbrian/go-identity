@@ -105,8 +105,8 @@ github.com/faustbrian/go-identity/http/oauth v0.0.0-20261127041615-8560ec14797c 
 github.com/faustbrian/go-identity/http/oauth v0.0.0-20261127041615-8560ec14797c/go.mod h1:eWNGj8OQwYj5jERfvYIDw8yNE/AOj59OWzD+JjpFvOA=
 github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1 h1:JJgzABmydpsbBMPJfRG1+iZfz9J3ehvti7hLl1xfS9g=
 github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1/go.mod h1:OZA0573vEzXxTuoX4z2rGyWDgnHsR2opTD8Xt4LrUaM=
-github.com/faustbrian/go-identity/http/organization v0.0.0-20261128093509-08c106647e8a h1:ATM2w25rLAntt+JWuDPzU1XQ2NqkWHfSUGbpRFEz34M=
-github.com/faustbrian/go-identity/http/organization v0.0.0-20261128093509-08c106647e8a/go.mod h1:zQbLf+kGQShi61rcbDX5GtUwPLimtAyNxJiSbyAJVKQ=
+github.com/faustbrian/go-identity/http/organization v0.0.0-20261128100801-96b1401b987a h1:IrIMklAEbmP4YwTsrJsqWjSbbwDI5Qy4uC2Ec/zjMFQ=
+github.com/faustbrian/go-identity/http/organization v0.0.0-20261128100801-96b1401b987a/go.mod h1:zQbLf+kGQShi61rcbDX5GtUwPLimtAyNxJiSbyAJVKQ=
 github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f h1:lS8Q2gVsA4vnXIvpGAGSuHyzjctKsFdbVsIdxMWHrKQ=
 github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f/go.mod h1:DysCHQGJ9ixiJw8LQJAFs2mij5Ys7uK18L0iXeMVKbY=
 github.com/faustbrian/go-identity/http/passkey v0.0.0-20261025150519-83149c8dcdf6 h1:E5+BL2sEZhAccPgZ3Hzo3ZFZjjyjLijj08W1+K48AsY=
@@ -117,8 +117,8 @@ github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806 
 github.com/faustbrian/go-identity/http/phone v0.0.0-20261020215928-da005d59c806/go.mod h1:EipErj0XDt8PdfOWExIvlvmVafz6A/JsYSx1gMrknMQ=
 github.com/faustbrian/go-identity/http/scim v0.0.0-20261127003455-4a711f454711 h1:BOvMLfQkXz10o+cCafLQ4iHSsxf9NhEayzgBwcRzeHs=
 github.com/faustbrian/go-identity/http/scim v0.0.0-20261127003455-4a711f454711/go.mod h1:4Eiwt0C1vqw04SSkVdr3wjjUTnVlJEib7fM5l9FmIxc=
-github.com/faustbrian/go-identity/http/session v0.0.0-20261128095439-12e53e8fe144 h1:s7b+ANn1AbkVnG/hlkvyfYTgiv6Sreky5tjoUIOdk0I=
-github.com/faustbrian/go-identity/http/session v0.0.0-20261128095439-12e53e8fe144/go.mod h1:UhwkOK9Ots451yMk5ssOdD+ofcImNEerGvmLuTQyQ5c=
+github.com/faustbrian/go-identity/http/session v0.0.0-20261128101821-a26fa6a33214 h1:b9GuZ3JktGK8Z+0ZguKhGnegXTQIKPsbhukP9IZnUwA=
+github.com/faustbrian/go-identity/http/session v0.0.0-20261128101821-a26fa6a33214/go.mod h1:SrEhqOeYOiJ3gqc7msTGbnKZ5pL+IGtno3c4I7czOEI=
 github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b h1:WW66OhXrpZQGrz8KsjphEvRYz2KO1GOiZlw9SX1aTuQ=
 github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b/go.mod h1:p8kzQt1XHZKXjEA3pHqCz9HqFne9NvvPKIr8MgdZ3J0=
 github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e h1:f0HjL3gZg2HQWn1Rmvi03kx0O3YiHqElNslzdDwx+xQ=
@@ -165,8 +165,8 @@ github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261124125758-d8bd5f7b07
 github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261124125758-d8bd5f7b074a/go.mod h1:xJ1QFi1fZfvfUHxOUWcul9jPDoAnjwOrWPTnlEMtF5I=
 github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3 h1:aWdCQOSXOjSweD1EFfYE/Wz2VDUu/faLs1/EFDONJ10=
 github.com/faustbrian/go-identity/risk/valkey v0.0.0-20261015094324-5d5bf8236eb3/go.mod h1:Dr+TKiY24feF9p9vYuWnsDaRE+Bnxlx7earFFjKNOLE=
-github.com/faustbrian/go-identity/session v0.0.0-20261126235901-19a81db3fa1c h1:DPFPTXq/kv4t4Uo+5JEEud2a8uA9CwKgZ4wDAPR30O0=
-github.com/faustbrian/go-identity/session v0.0.0-20261126235901-19a81db3fa1c/go.mod h1:Gz2OXGEGnxdviC2a+vEcE0BfxAxaCZwNTHScUmh++P0=
+github.com/faustbrian/go-identity/session v0.0.0-20261128100743-762aadc071f0 h1:JXg1Dga4iNjrlKbE/Akju+/FM7cRs1T4I7Ig0Yj5yhc=
+github.com/faustbrian/go-identity/session v0.0.0-20261128100743-762aadc071f0/go.mod h1:Gz2OXGEGnxdviC2a+vEcE0BfxAxaCZwNTHScUmh++P0=
 github.com/faustbrian/go-identity/session/postgres v0.0.0-20261128060844-611ac945c9dd h1:wGFd+KH0SD7Sr2gzhCwVxPSkmsi9tWajB6o9+fev5vU=
 github.com/faustbrian/go-identity/session/postgres v0.0.0-20261128060844-611ac945c9dd/go.mod h1:ITOPQRIKPf5vaoe04FNSqaIwVc9AFj6+cfGn/gTBtLQ=
 github.com/faustbrian/go-identity/session/valkey v0.0.0-20261113101712-a0f7aabc4f38 h1:Ji/X8e7SGjvmG0Au4Y1HNBwmcxQ0JAaQblF6vtftmvQ=

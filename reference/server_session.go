@@ -69,9 +69,20 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 	if err != nil {
 		return nil, err
 	}
+	admin, err := s.adminSessionListOps(network)
+	if err != nil {
+		return nil, err
+	}
 	h := s.state.features.httpSession
 	if h == nil {
-		return preauth, nil
+		if len(admin) == 0 {
+			return preauth, nil
+		}
+		if preauth != nil {
+			admin = append(admin, preauth.Operations()...)
+		}
+		feature, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/session", Operations: admin})
+		return &feature, err
 	}
 	owner := s.state.features.session
 	if owner == nil {
@@ -149,6 +160,7 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 		}
 		ops = append(ops, flow...)
 	}
+	ops = append(ops, admin...)
 	feature, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/session", Operations: ops})
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_http_session_combined_feature"}

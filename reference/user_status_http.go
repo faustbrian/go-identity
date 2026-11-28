@@ -67,44 +67,54 @@ func composeUserStatusHTTP(c StoreConfiguration, n *userStatusAdministrationStat
 		return invalid
 	}
 	selected := &userStatusHTTPState{ban: h.Ban, unban: h.Unban, origins: slices.Clone(h.TrustedOrigins), cookie: cookie.Name}
-	var candidates [4]*organizationhttp.AdminRateLimiter
+	options := organizationhttp.AdminRateConfig{
+		Shared: rate.backend, Namespace: h.AdminNamespace, Key: h.AdminKey, Denied: h.Denied,
+		Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration,
+	}
+	selected.admin, selected.ownsAdmin, err = selectReferenceAdminRate(options, referenceAdminRateCandidates(org, directory, scim, impersonation))
+	if err != nil {
+		return invalid
+	}
+	n.http = selected
+	return nil
+}
+
+func referenceAdminRateCandidates(org *organizationHTTPState, directory *directorySyncState, scim *managedSCIMCreateState, impersonation *impersonationState) []*organizationhttp.AdminRateLimiter {
+	candidates := make([]*organizationhttp.AdminRateLimiter, 0, 5)
 	if org != nil {
-		candidates[0] = org.admin
+		candidates = append(candidates, org.admin)
 	}
 	if directory != nil {
-		candidates[1] = directory.admin
+		candidates = append(candidates, directory.admin)
 	}
 	if scim != nil {
-		candidates[2] = scim.rate
+		candidates = append(candidates, scim.rate)
 	}
 	if impersonation != nil {
-		candidates[3] = impersonation.admin
+		candidates = append(candidates, impersonation.admin)
 	}
+	return candidates
+}
+
+func selectReferenceAdminRate(options organizationhttp.AdminRateConfig, candidates []*organizationhttp.AdminRateLimiter) (*organizationhttp.AdminRateLimiter, bool, error) {
+	var existing *organizationhttp.AdminRateLimiter
 	for _, candidate := range candidates {
 		if candidate == nil {
 			continue
 		}
-		if !candidate.Configured() || selected.admin != nil && selected.admin != candidate {
-			return invalid
+		if !candidate.Configured() || existing != nil && existing != candidate {
+			return nil, false, identityhttp.ErrInvalidInput
 		}
-		selected.admin = candidate
+		existing = candidate
 	}
-	if selected.admin != nil {
-		if h.AdminNamespace != "" || h.AdminKey != ([32]byte{}) || h.Denied != nil {
-			return invalid
+	if existing != nil {
+		if options.Namespace != "" || options.Key != ([32]byte{}) || options.Denied != nil {
+			return nil, false, identityhttp.ErrInvalidInput
 		}
-	} else {
-		selected.admin, err = organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
-			Shared: rate.backend, Namespace: h.AdminNamespace, Key: h.AdminKey, Denied: h.Denied,
-			Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration,
-		})
-		if err != nil {
-			return invalid
-		}
-		selected.ownsAdmin = true
+		return existing, false, nil
 	}
-	n.http = selected
-	return nil
+	owner, err := organizationhttp.NewAdminRateLimiter(options)
+	return owner, err == nil, err
 }
 
 func (s *Server) userStatusFeature(network identityhttp.NetworkConfig) (*identityhttp.Feature, error) {

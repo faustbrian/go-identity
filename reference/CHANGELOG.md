@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Mount an opt-in administrator session list using native password/TOTP and
+  PostgreSQL paging. Share the admin quota and select its existing schema.
+
 - Mount HTTPS ban and unban independently over the existing status owner.
   Use the original administrator session and shared quota, and retain exact
   retry preconditions without adding public version fields.

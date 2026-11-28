@@ -150,6 +150,20 @@ operator route or claim about external revocation.
 
 ## User status administration
 
+Select `HTTPAdminSessionList` with the native password/TOTP graph and
+`HTTPRate` to mount `GET /v1/admin/session-list?targetSubjectID=…&limit=…`.
+The selected admin policy must allow the current cookie session to read
+that target. Follow `nextCursor` for the same target and audience. The route
+does not accept a request actor, idempotency key, or CSRF proof. It returns
+safe metadata for active and inactive sessions, never cookies or credentials.
+
+Apply the selected session-label and paging-index history through explicit
+Reference migration planning before enabling the route. The existing index
+build is transactional; schedule it in a maintenance window on a populated
+session store. The server does not apply migrations at startup.
+
+### Ban and unban
+
 Select `StoreConfiguration.UserStatusAdministration` on the native password
 and TOTP graph. Configure the status policy, registered ban reasons, redaction,
 retention, and exact pending-consumer contracts. Use

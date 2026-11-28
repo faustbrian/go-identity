@@ -45,6 +45,8 @@ type StoreConfiguration struct {
 	// HTTPUserStatusAdministration independently mounts selected status routes.
 	// Omission keeps the direct Go selection and does not expose HTTP writes.
 	HTTPUserStatusAdministration *HTTPUserStatusAdministrationConfiguration
+	// HTTPAdminSessionList opts into the same-tenant administrative read only.
+	HTTPAdminSessionList *HTTPAdminSessionListConfiguration
 	// ProviderDiscovery selects only the public configured-provider list over
 	// PostgreSQL DurableAdmission and HTTPRate. It cannot select sign-in.
 	ProviderDiscovery *ProviderDiscoveryConfiguration
@@ -667,6 +669,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 		state.features.httpManagedSCIMCreate.close()
 		state.features.impersonation.close()
 		state.features.userStatusAdministration.closeHTTP()
+		state.features.adminSessionList.close()
 	}
 	if state.features != nil && state.features.httpAnonymous != nil {
 		state.features.httpAnonymous.close()

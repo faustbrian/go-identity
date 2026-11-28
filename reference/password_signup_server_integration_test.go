@@ -373,6 +373,7 @@ type signupGraphExtensions struct {
 	organizationTeamBindings    bool
 	userStatusAdministration    bool
 	userStatusHTTP              bool
+	adminSessionListHTTP        bool
 	passkey                     bool
 	passkeyUpgrade              bool
 	passkeyDiscovery            bool
@@ -582,6 +583,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	var adminSessionListPolicy *referenceAdminSessionListPolicy
+	if extensions.adminSessionListHTTP {
+		adminSessionListPolicy = &referenceAdminSessionListPolicy{}
+		selectedAuthorization = adminSessionListPolicy
+	}
 	var userStatusPolicy *referenceUserStatusAdministrationPolicy
 	if extensions.userStatusAdministration {
 		userStatusPolicy = &referenceUserStatusAdministrationPolicy{}
@@ -1071,6 +1077,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passwordMFA || extensions.phoneTOTP {
 		configureReferencePasswordMFA(t, &c, origin)
+	}
+	if extensions.adminSessionListHTTP {
+		configureReferenceAdminSessionListHTTP(t, &c)
 	}
 	if extensions.userStatusAdministration {
 		configureReferenceUserStatusAdministration(t, &c)
@@ -1786,6 +1795,12 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if seen["identity.admin.session-list"] != (c.HTTPAdminSessionList != nil) {
+		t.Fatal("administrator session list OpenAPI selection differs from configured HTTP")
+	}
+	if c.HTTPAdminSessionList != nil {
+		wantOperations++
+	}
 	for _, op := range []string{"identity.impersonation.start", "identity.impersonation.stop"} {
 		if seen[op] != (c.HTTPImpersonation != nil) {
 			t.Fatal("impersonation OpenAPI selection differs from configured HTTP", op)
@@ -3171,6 +3186,10 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			}
 			proveReferenceDeviceHTTP(t, ctx, client, network.URL, origin, cookies, csrf)
 		}
+	}
+	if extensions.adminSessionListHTTP {
+		proveReferenceAdminSessionListHTTP(t, ctx, f, features, workers, c, adminSessionListPolicy, client, network.URL, origin, messages)
+		return
 	}
 	if extensions.userStatusAdministration {
 		if extensions.userStatusHTTP {
