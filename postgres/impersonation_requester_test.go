@@ -8,6 +8,60 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
+func TestImpersonationActivationAndApprovalParticipantFences(t *testing.T) {
+	requester, approver := identity.UserID("requester"), identity.UserID("approver")
+	for _, tc := range []struct {
+		action, schema string
+		actor          identity.UserID
+	}{
+		{"identity.impersonation.approve", "impersonation-approve", approver},
+		{"identity.impersonation.start", "impersonation-start", requester},
+	} {
+		t.Run(tc.schema, func(t *testing.T) {
+			id, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			grant, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			op := identity.FeatureOperation{Owner: "identity/impersonation", OperationID: tc.action, SchemaID: tc.schema, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+			reg := FeatureRegistration{Operation: op, Contributor: ContributorDescriptor{Owner: "identity/impersonation/postgres", ContractID: "identity.impersonation", Version: 1}}
+			binding := identity.CommandBinding{CommandID: id, TenantID: "tenant", UserID: "target", ActorID: identity.ActorID(tc.actor), ActorKind: authorization.SubjectUser, OperationID: tc.action, SchemaID: tc.schema, SchemaVersion: 1, RecordID: string(grant), CorrelationID: string(id), PolicyID: "admin", PolicyVersion: 1}
+			requesterUser := identity.User{ID: requester, TenantID: "tenant", Status: identity.StatusActive, Version: 3}
+			approverUser := identity.User{ID: approver, TenantID: "tenant", Status: identity.StatusActive, Version: 7}
+			reqPolicy := UserAuthorizationAdmission{Scope: authority.AuthorityScope{TenantID: "tenant", SubjectID: "requester", PolicyNamespace: "users"}, Version: 4}
+			appPolicy := UserAuthorizationAdmission{Scope: authority.AuthorityScope{TenantID: "tenant", SubjectID: "approver", PolicyNamespace: "users"}, Version: 8}
+			command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: op, Fields: []identity.FeatureField{
+				{Name: "impersonation.requester-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(requester)}},
+				{Name: "impersonation.requester-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: requesterUser.Version}},
+				{Name: "impersonation.requester-namespace", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "users"}},
+				{Name: "impersonation.requester-authority", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: reqPolicy.Version}},
+				{Name: "impersonation.approver-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(approver)}},
+				{Name: "impersonation.approver-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: approverUser.Version}},
+				{Name: "impersonation.approver-namespace", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "users"}},
+				{Name: "impersonation.approver-authority", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: appPolicy.Version}},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !impersonationApproverMatches(binding, reg, command, approverUser, appPolicy) ||
+				!impersonationRequesterMatches(binding, reg, command, requesterUser, reqPolicy) {
+				t.Fatal("both frozen participants must retain their own authority")
+			}
+			if impersonationApproverMatches(binding, reg, command, requesterUser, reqPolicy) ||
+				impersonationRequesterMatches(binding, reg, command, approverUser, appPolicy) {
+				t.Fatal("participant roles substituted for one another")
+			}
+			appPolicy.Version++
+			if impersonationApproverMatches(binding, reg, command, approverUser, appPolicy) {
+				t.Fatal("current policy substituted the retained approval epoch")
+			}
+		})
+	}
+}
+
 func TestImpersonationRequesterBindsFrozenApprovalSubject(t *testing.T) {
 	id, err := identity.NewCommandID()
 	if err != nil {

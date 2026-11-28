@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence both frozen impersonation participants during native activation and
+  the reviewing administrator during approval. Preserve the original actor
+  and target and reuse the current account and authorization row locks.
+
 - Recheck the original impersonation requester's account and authorization
   versions inside the exact native approval. Keep the requester's role
   separate from the authenticating approver and the target account.
