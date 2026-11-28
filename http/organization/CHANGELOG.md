@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add exact administrative session list/revoke/revoke-all admission on the
+  existing atomic administrative quota. Preserve shared actor, tenant and
+  trusted full-IP budgets, exact denial auditing and bounded retry hints
+  without broadening organization, directory-sync or user-status admission.
+
 - Add exact administrative user-ban/unban admission on the existing atomic
   administrative quota. Preserve shared actor, tenant and trusted full-IP
   budgets, exact denial auditing and bounded retry hints without broadening

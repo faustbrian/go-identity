@@ -28,6 +28,245 @@ type impersonationDenyRateAdmitter interface {
 	AdmitImpersonationDeny(context.Context, identityhttp.NetworkFacts, identity.UserID) (time.Duration, error)
 }
 
+type sessionAdministrationRateAdmitter interface {
+	AdmitSessionAdministration(context.Context, identityhttp.NetworkFacts, string, identity.UserID) (time.Duration, error)
+}
+
+func TestSessionAdministrationSharesCanonicalLimitsAndExactDenialAudit(t *testing.T) {
+	for _, operationID := range []string{"identity.admin.session-list", "identity.admin.session-revoke", "identity.admin.session-revoke-all"} {
+		for _, dimension := range []struct {
+			name     string
+			capacity int
+		}{{"actor", 30}, {"tenant", 100}, {"ip", 60}} {
+			t.Run(operationID+"/"+dimension.name, func(t *testing.T) {
+				f := newFixture(t)
+				var events []organizationhttp.AdminRateEvent
+				limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
+					Shared: &budgetBackend{used: make(map[string]uint64)}, Namespace: "organization-test", Key: [32]byte{1},
+					Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+					Denied: func(ctx context.Context, event organizationhttp.AdminRateEvent) error {
+						if _, ok := ctx.Deadline(); !ok {
+							t.Fatal("session administration denial audit lacks admission deadline")
+						}
+						events = append(events, event)
+						return nil
+					},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { limiter.Close() })
+				admitter, ok := any(limiter).(sessionAdministrationRateAdmitter)
+				if !ok {
+					t.Fatal("shared administrative owner cannot admit session administration")
+				}
+				resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+				if err != nil {
+					t.Fatal(err)
+				}
+				resolve := func(remoteAddr string) identityhttp.NetworkFacts {
+					t.Helper()
+					r := request(f, "/v1/admin/session-list", `{}`, true)
+					r.RemoteAddr = remoteAddr
+					facts, err := resolver.Resolve(r)
+					if err != nil {
+						t.Fatal(err)
+					}
+					return facts
+				}
+				facts := resolve("198.51.100.7:54321")
+				for i := range dimension.capacity - 1 {
+					user, attemptFacts := identity.UserID("user-a"), facts
+					if dimension.name != "actor" {
+						user = identity.UserID(fmt.Sprintf("user-%d", i))
+					}
+					if dimension.name == "tenant" {
+						attemptFacts = resolve(fmt.Sprintf("198.51.100.%d:54321", i+1))
+					}
+					if out, err := limiter.Admit(t.Context(), attemptFacts, organization.Create, user); err != nil || !out.Allowed {
+						t.Fatal("organization admission exhausted budget before canonical capacity", i, err)
+					}
+				}
+				if retry, err := admitter.AdmitSessionAdministration(t.Context(), facts, operationID, "user-a"); err != nil || retry != 0 || len(events) != 0 {
+					t.Fatal("session administration did not consume final shared token", retry, err)
+				}
+				for i, deniedOperation := range []string{"identity.admin.session-list", "identity.admin.session-revoke", "identity.admin.session-revoke-all"} {
+					if retry, err := admitter.AdmitSessionAdministration(t.Context(), facts, deniedOperation, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || retry != 2*time.Second {
+						t.Fatal("session administration bypassed exhausted shared budget", deniedOperation, retry, err)
+					}
+					if len(events) != i+1 {
+						t.Fatal("session administration omitted or duplicated denial audit", events)
+					}
+					last := events[len(events)-1]
+					if string(last.Operation) != deniedOperation || last.Reason != "limited" {
+						t.Fatal("session administration lost exact denial attribution", last)
+					}
+				}
+				if len(events) != 3 {
+					t.Fatal("session administration denial audit count changed", events)
+				}
+				if retry, err := limiter.AdmitUserStatus(t.Context(), facts, "identity.admin.user-ban", "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || retry != 2*time.Second {
+					t.Fatal("session administration did not debit shared user-status budget", retry, err)
+				}
+			})
+		}
+	}
+}
+
+func TestSessionAdministrationUsesCanonicalDebitsAndRejectsInvalidAdmissions(t *testing.T) {
+	f := newFixture(t)
+	admitter, ok := any(f.c.AdminRate).(sessionAdministrationRateAdmitter)
+	if !ok {
+		t.Fatal("shared administrative owner cannot admit session administration")
+	}
+	config := f.c.Network
+	config.PublicHosts = []string{"public.example"}
+	resolver, err := identityhttp.NewNetworkResolver(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/admin/session-list", `{}`, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+		t.Fatal(err)
+	}
+	original := f.rate.last
+	previousAttempt := original.CommandID
+	for _, operationID := range []string{"identity.admin.session-list", "identity.admin.session-revoke", "identity.admin.session-revoke-all", "identity.admin.session-list"} {
+		if retry, err := admitter.AdmitSessionAdministration(t.Context(), facts, operationID, "user-a"); err != nil || retry != 0 {
+			t.Fatal("session administration admission failed", retry, err)
+		}
+		if f.rate.last.CommandID == previousAttempt || len(f.rate.last.Requests) != 3 {
+			t.Fatal("session administration reused attempt or split canonical budgets")
+		}
+		previousAttempt = f.rate.last.CommandID
+		for i, before := range original.Requests {
+			after := f.rate.last.Requests[i]
+			if before.Key != after.Key || before.Policy.ID() != after.Policy.ID() || before.Policy.Capacity() != after.Policy.Capacity() || before.Policy.Period() != after.Policy.Period() || after.Cost != 1 {
+				t.Fatal("session administration changed canonical actor, tenant or full-IP budgets")
+			}
+		}
+	}
+	calls := f.rate.calls
+	for _, operationID := range []string{"", "session-list", "identity.admin.session-list ", "identity.admin.session-revoke-extra", "identity.admin.session-revoke-all-extra", "identity.admin.user-ban", "identity.session.list"} {
+		if retry, err := admitter.AdmitSessionAdministration(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("noncanonical session administration operation reached backend", operationID, retry, err)
+		}
+	}
+	for _, user := range []identity.UserID{"", "with space", identity.UserID(strings.Repeat("a", 129))} {
+		if retry, err := admitter.AdmitSessionAdministration(t.Context(), facts, "identity.admin.session-list", user); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("invalid session administration actor reached backend", retry, err)
+		}
+	}
+	publicRequest := request(f, "/v1/admin/session-list", `{}`, true)
+	publicRequest.Host = "public.example"
+	publicFacts, err := resolver.Resolve(publicRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []identityhttp.NetworkFacts{{}, publicFacts} {
+		if retry, err := admitter.AdmitSessionAdministration(t.Context(), invalid, "identity.admin.session-list", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("unproven tenant facts reached backend", retry, err)
+		}
+	}
+	if retry, err := admitter.AdmitSessionAdministration(nil, facts, "identity.admin.session-list", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+		t.Fatal("missing session administration context reached backend", retry, err)
+	}
+	for _, operationID := range []string{"identity.admin.session-list", "identity.admin.session-revoke", "identity.admin.session-revoke-all"} {
+		if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Operation(operationID), "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != calls {
+			t.Fatal("generic organization admission broadened to session administration")
+		}
+		if _, err := f.c.AdminRate.AdmitDirectorySync(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != calls {
+			t.Fatal("directory admission broadened to session administration")
+		}
+		if _, err := f.c.AdminRate.AdmitUserStatus(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != calls {
+			t.Fatal("user-status admission broadened to session administration")
+		}
+	}
+	if f.denials.Load() != 0 {
+		t.Fatal("invalid input created denial audit")
+	}
+	var nilLimiter *organizationhttp.AdminRateLimiter
+	for _, limiter := range []*organizationhttp.AdminRateLimiter{nilLimiter, {}, f.c.AdminRate} {
+		if limiter == f.c.AdminRate {
+			if err := limiter.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if retry, err := any(limiter).(sessionAdministrationRateAdmitter).AdmitSessionAdministration(t.Context(), facts, "identity.admin.session-list", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("unconfigured or closed session administration reached backend", retry, err)
+		}
+	}
+}
+
+func TestSessionAdministrationAuditsUnavailableAndFailsClosed(t *testing.T) {
+	for _, operationID := range []string{"identity.admin.session-list", "identity.admin.session-revoke", "identity.admin.session-revoke-all"} {
+		for _, mode := range []string{"unknown-backend", "unavailable-backend", "panic-backend", "failed-audit", "panic-audit", "canceled-context"} {
+			t.Run(operationID+"/"+mode, func(t *testing.T) {
+				f := newFixture(t)
+				var events []organizationhttp.AdminRateEvent
+				limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
+					Shared: f.rate, Namespace: "organization-test", Key: [32]byte{1}, Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+					Denied: func(_ context.Context, event organizationhttp.AdminRateEvent) error {
+						events = append(events, event)
+						if mode == "failed-audit" {
+							return errors.New("private audit diagnostic")
+						}
+						if mode == "panic-audit" {
+							panic("private audit diagnostic")
+						}
+						return nil
+					},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { limiter.Close() })
+				admitter, ok := any(limiter).(sessionAdministrationRateAdmitter)
+				if !ok {
+					t.Fatal("shared administrative owner cannot admit session administration")
+				}
+				switch mode {
+				case "unknown-backend":
+					f.rate.mode = 2
+				case "unavailable-backend":
+					f.rate.mode = 3
+				case "panic-backend":
+					f.rate.mode = 4
+				default:
+					f.rate.mode = 1
+				}
+				resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+				if err != nil {
+					t.Fatal(err)
+				}
+				facts, err := resolver.Resolve(request(f, "/v1/admin/session-list", `{}`, true))
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				if mode == "canceled-context" {
+					cancel()
+				}
+				retry, err := admitter.AdmitSessionAdministration(ctx, facts, operationID, "user-a")
+				if !errors.Is(err, identityhttp.ErrRateUnavailable) || retry != 0 || strings.Contains(fmt.Sprint(err), "private") {
+					t.Fatal("session administration failed open or leaked diagnostics", retry, err)
+				}
+				wantReason := "unavailable"
+				if mode == "failed-audit" || mode == "panic-audit" {
+					wantReason = "limited"
+				}
+				if len(events) != 1 || string(events[0].Operation) != operationID || events[0].Reason != wantReason {
+					t.Fatal("session administration escaped exact mandatory denial audit", events)
+				}
+			})
+		}
+	}
+}
+
 func TestUserStatusSharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
 	for _, operationID := range []string{"identity.admin.user-ban", "identity.admin.user-unban"} {
 		t.Run(operationID, func(t *testing.T) {
