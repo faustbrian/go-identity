@@ -23,11 +23,73 @@ func proveReferenceAdminSessionRevokeFinalFreshness(t *testing.T, ctx context.Co
 	if actor == target || policy.actor != actor || policy.target != target {
 		t.Fatal("late administrator revoke requires the original authorized actor and distinct target")
 	}
+	profile := referenceAdminSessionRevokeFreshnessProfile{
+		policy: policy, policyID: config.HTTPAdminSessionRevoke.PolicyID, revision: config.HTTPAdminSessionRevoke.PolicyRevision,
+		operation: "identity.admin.session-revoke", journal: "session_revocations",
+		provisionalMutation: func(schema string) string {
+			return `EXISTS (SELECT 1 FROM ` + pgx.Identifier{schema, "sessions"}.Sanitize() + ` WHERE tenant_id=NEW.tenant_id AND session_id=NEW.subject_id AND state='revoked')`
+		},
+		newCall: func(reader *session.SessionService, executor *sessionpg.AdminRevokeExecutor, c session.AdminRevokeConfig) (referenceAdminSessionRevokeFreshnessCall, error) {
+			service, err := session.NewAdminRevokeService(reader, executor, c)
+			return func(ctx context.Context, id identity.CommandID, credential session.Credential, csrf session.CSRFToken) (bool, error) {
+				result, revokeErr := service.AdminSessionRevoke(ctx, session.AdminSessionRevokeRequest{
+					TenantID: otpTenant, ActorID: identity.SubjectID(actor), TargetSubjectID: identity.SubjectID(target),
+					SessionID: targetSessionID, CommandID: id, CorrelationID: string(id), Credential: credential, CSRF: csrf,
+				})
+				return result != (session.AdminSessionRevokeResult{}), revokeErr
+			}, err
+		},
+	}
+	proveReferenceAdminSessionRevokeFreshness(t, ctx, f, config, actor, actorSession, actorWire, actorCSRF, profile)
+}
+
+func proveReferenceAdminSessionRevokeAllFinalFreshness(t *testing.T, ctx context.Context, f liveStores, config reference.StoreConfiguration, actor identity.UserID, actorSession string, target identity.UserID, actorWire, actorCSRF string, policy *referenceAdminSessionRevokeAllPolicy) {
+	t.Helper()
+	if actor == target || policy.actor != actor || policy.target != target {
+		t.Fatal("late administrator bulk revoke requires the original authorized actor and distinct target")
+	}
+	profile := referenceAdminSessionRevokeFreshnessProfile{
+		policy: policy, policyID: config.HTTPAdminSessionRevokeAll.PolicyID, revision: config.HTTPAdminSessionRevokeAll.PolicyRevision,
+		operation: "identity.admin.session-revoke-all", journal: "admin_set_revocations",
+		provisionalMutation: func(schema string) string {
+			return `(SELECT count(*) FROM ` + pgx.Identifier{schema, "sessions"}.Sanitize() + ` WHERE tenant_id=NEW.tenant_id AND user_id=NEW.subject_id AND state='revoked')=2
+ AND EXISTS (SELECT 1 FROM ` + pgx.Identifier{schema, "admin_set_revocations"}.Sanitize() + ` WHERE tenant_id=NEW.tenant_id AND user_id=NEW.subject_id
+ AND command_id=decode(translate(NEW.correlation_id,'-_','+/') || '==','base64')
+ AND purpose=NEW.action AND before_version=0 AND subject_version=1 AND revoked_count=2)`
+		},
+		newCall: func(reader *session.SessionService, executor *sessionpg.AdminRevokeExecutor, c session.AdminRevokeConfig) (referenceAdminSessionRevokeFreshnessCall, error) {
+			service, err := session.NewAdminRevokeAllService(reader, executor, c)
+			return func(ctx context.Context, id identity.CommandID, credential session.Credential, csrf session.CSRFToken) (bool, error) {
+				result, revokeErr := service.AdminSessionRevokeAll(ctx, session.AdminSessionRevokeAllRequest{
+					TenantID: otpTenant, ActorID: identity.SubjectID(actor), TargetSubjectID: identity.SubjectID(target),
+					CommandID: id, CorrelationID: string(id), Credential: credential, CSRF: csrf,
+				})
+				return result != (session.AdminSessionRevokeAllResult{}), revokeErr
+			}, err
+		},
+	}
+	proveReferenceAdminSessionRevokeFreshness(t, ctx, f, config, actor, actorSession, actorWire, actorCSRF, profile)
+}
+
+type referenceAdminSessionRevokeFreshnessCall func(context.Context, identity.CommandID, session.Credential, session.CSRFToken) (bool, error)
+
+type referenceAdminSessionRevokeFreshnessProfile struct {
+	policy              authorization.Service
+	policyID            string
+	revision            authorization.Revision
+	operation           string
+	journal             string
+	provisionalMutation func(string) string
+	newCall             func(*session.SessionService, *sessionpg.AdminRevokeExecutor, session.AdminRevokeConfig) (referenceAdminSessionRevokeFreshnessCall, error)
+}
+
+func proveReferenceAdminSessionRevokeFreshness(t *testing.T, ctx context.Context, f liveStores, config reference.StoreConfiguration, actor identity.UserID, actorSession, actorWire, actorCSRF string, profile referenceAdminSessionRevokeFreshnessProfile) {
+	t.Helper()
 	ordinary, login := config.Session.Native, config.PasswordSignin.Native
 	execution, validation := ordinary.Execution, ordinary.Validation
-	execution.Authorization = policy
-	execution.PolicyID = config.HTTPAdminSessionRevoke.PolicyID
-	execution.PolicyVersion = uint64(config.HTTPAdminSessionRevoke.PolicyRevision)
+	execution.Authorization = profile.policy
+	execution.PolicyID = profile.policyID
+	execution.PolicyVersion = uint64(profile.revision)
 	// The ordinary timeout must outlive the injected phase. Only the original
 	// actor freshness deadline should prevent the final native commit.
 	execution.Coordinator.MaximumDuration = 4 * time.Second
@@ -45,8 +107,8 @@ func proveReferenceAdminSessionRevokeFinalFreshness(t *testing.T, ctx context.Co
 	if err != nil {
 		t.Fatal("configure native late-freshness executor", err)
 	}
-	service, err := session.NewAdminRevokeService(reader, executor, session.AdminRevokeConfig{
-		Authorization: policy, PolicyID: execution.PolicyID, PolicyRevision: authorization.Revision(execution.PolicyVersion),
+	invoke, err := profile.newCall(reader, executor, session.AdminRevokeConfig{
+		Authorization: profile.policy, PolicyID: execution.PolicyID, PolicyRevision: authorization.Revision(execution.PolicyVersion),
 		CSRFKey: login.CSRFKey, MaximumDuration: 4 * time.Second,
 	})
 	if err != nil {
@@ -86,7 +148,7 @@ func proveReferenceAdminSessionRevokeFinalFreshness(t *testing.T, ctx context.Co
 	snapshot := func(t *testing.T) []string {
 		t.Helper()
 		tables := [][2]string{
-			{schema, "sessions"}, {schema, "families"}, {schema, "session_revocations"},
+			{schema, "sessions"}, {schema, "families"}, {schema, profile.journal},
 			{"public", "identity_outbox_bindings"}, {"public", "outbox_messages"},
 		}
 		state := make([]string, len(tables)+1)
@@ -96,7 +158,7 @@ func proveReferenceAdminSessionRevokeFinalFreshness(t *testing.T, ctx context.Co
 				t.Fatal("observe protected late-freshness state", err)
 			}
 		}
-		if err := f.pool.Raw().QueryRow(ctx, `SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text FROM audit.records r WHERE action='identity.admin.session-revoke' AND outcome=$1`, int64(audit.OutcomeSucceeded)).Scan(&state[len(tables)]); err != nil {
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text FROM audit.records r WHERE action=$1 AND outcome=$2`, profile.operation, int64(audit.OutcomeSucceeded)).Scan(&state[len(tables)]); err != nil {
 			t.Fatal("observe protected administrator success audits", err)
 		}
 		return state
@@ -123,8 +185,8 @@ func proveReferenceAdminSessionRevokeFinalFreshness(t *testing.T, ctx context.Co
 		delay := `CREATE SEQUENCE public.admin_revoke_freshness_phase;
 CREATE FUNCTION public.admin_revoke_freshness_delay() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
- IF NEW.action='identity.admin.session-revoke' AND NEW.outcome=1 AND NEW.correlation_id=TG_ARGV[0] THEN
-  IF NOT EXISTS (SELECT 1 FROM ` + sessions + ` WHERE tenant_id=NEW.tenant_id AND session_id=NEW.subject_id AND state='revoked') THEN
+ IF NEW.action='` + profile.operation + `' AND NEW.outcome=1 AND NEW.correlation_id=TG_ARGV[0] THEN
+  IF NOT (` + profile.provisionalMutation(schema) + `) THEN
    RAISE EXCEPTION 'late-phase fixture did not observe provisional target revocation';
   END IF;
   PERFORM nextval('public.admin_revoke_freshness_phase');
@@ -190,12 +252,8 @@ EXECUTE FUNCTION public.admin_revoke_freshness_delay('` + string(commandID) + `'
 		if err != nil || !caller.Authenticated || caller.ValidateAt(time.Now()) != nil {
 			t.Fatal("near-expiry original administrator must still authenticate before delayed Work", err)
 		}
-		request := session.AdminSessionRevokeRequest{
-			TenantID: otpTenant, ActorID: identity.SubjectID(actor), TargetSubjectID: identity.SubjectID(target),
-			SessionID: targetSessionID, CommandID: commandID, CorrelationID: string(commandID), Credential: credential, CSRF: csrf,
-		}
-		result, revokeErr := service.AdminSessionRevoke(ctx, request)
-		if revokeErr == nil || result != (session.AdminSessionRevokeResult{}) {
+		confirmed, revokeErr := invoke(ctx, commandID, credential, csrf)
+		if revokeErr == nil || confirmed {
 			t.Fatal("administrator revoke confirmed a mutation after original freshness expired")
 		}
 		var reached bool

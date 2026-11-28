@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opt into HTTPS administrator revoke-all using the native session-set writer.
+  Return each committed command's exact count and session-only version.
+
 - Opt into HTTPS single-session administrator revocation over the native
   PostgreSQL writer and shared administrative quota. Preserve sibling sessions
   and return no version for an authorized no-op.

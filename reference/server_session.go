@@ -78,6 +78,11 @@ func (s *Server) sessionFeature(network identityhttp.NetworkConfig, f FeatureSet
 		return nil, err
 	}
 	admin = append(admin, revoke...)
+	revokeAll, err := s.adminSessionRevokeAllOps(network)
+	if err != nil {
+		return nil, err
+	}
+	admin = append(admin, revokeAll...)
 	h := s.state.features.httpSession
 	if h == nil {
 		if len(admin) == 0 {

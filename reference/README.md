@@ -170,6 +170,16 @@ version; a missing or already-revoked target returns `revoked: false` without
 a version. Other sessions and credentials are unaffected. Apply both planned
 journal migration phases before enabling the writer.
 
+Select `HTTPAdminSessionRevokeAll` independently to mount
+`POST /v1/admin/session-revoke-all` with `{"userID":"…"}` and the same
+cookie, Origin and stored synchronizer. A committed request returns
+`revokedCount` and a new `subjectVersion`, even when the count is zero.
+It invalidates only that user's sessions, across audiences; it does not
+change other credentials or the user's global authority version.
+Use the shared administrative quota when enabling both routes. Apply the
+separate session-set history explicitly; on a populated store, the
+Reference index build requires a maintenance window.
+
 ### Ban and unban
 
 Select `StoreConfiguration.UserStatusAdministration` on the native password

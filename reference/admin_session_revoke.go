@@ -42,7 +42,13 @@ func (HTTPAdminSessionRevokeConfiguration) MarshalText() ([]byte, error) {
 }
 
 type adminSessionRevokeState struct {
-	native    *session.AdminRevokeService
+	native *session.AdminRevokeService
+	adminSessionRevokeTransport
+}
+
+// adminSessionRevokeTransport owns the shared quota lifetime and original
+// cookie policy for the selected administrative session mutations.
+type adminSessionRevokeTransport struct {
 	admin     *organizationhttp.AdminRateLimiter
 	ownsAdmin bool
 	cookie    string
@@ -58,7 +64,11 @@ func validateAdminSessionRevokeSelection(c StoreConfiguration) error {
 	if h == nil {
 		return nil
 	}
-	invalid := identity.InvalidInputError{Field: "reference_http_admin_session_revoke"}
+	return validateAdminSessionMutation(c, *h, "reference_http_admin_session_revoke")
+}
+
+func validateAdminSessionMutation(c StoreConfiguration, h HTTPAdminSessionRevokeConfiguration, field string) error {
+	invalid := identity.InvalidInputError{Field: field}
 	if c.HTTPRate == nil || c.OTP == nil || c.Delivery == nil || c.Session == nil || c.PasswordSignin == nil ||
 		c.PasswordSignin.TOTP == nil || c.PasswordSignin.PreAuth == nil || c.PasswordSignin.PreAuth.Origin == "" || c.PasswordSignin.Native.Transport != password.CookieSignin ||
 		c.ProviderDiscovery != nil || c.OAuthWorkload != nil || c.Passkey != nil && c.Passkey.Standalone != nil {
@@ -76,9 +86,24 @@ func composeAdminSessionRevoke(c StoreConfiguration, d ReferenceDependencies, ra
 	if h == nil {
 		return nil, nil
 	}
-	invalid := identity.InvalidInputError{Field: "reference_http_admin_session_revoke"}
+	sessions, executor, config, transport, err := composeAdminSessionMutation(c, d, rate, candidates, *h, "reference_http_admin_session_revoke")
+	if err != nil {
+		return nil, err
+	}
+	native, err := session.NewAdminRevokeService(sessions, executor, config)
+	if err != nil {
+		transport.close()
+		return nil, err
+	}
+	return &adminSessionRevokeState{native: native, adminSessionRevokeTransport: transport}, nil
+}
+
+func composeAdminSessionMutation(c StoreConfiguration, d ReferenceDependencies, rate *httpRateState, candidates []*organizationhttp.AdminRateLimiter, h HTTPAdminSessionRevokeConfiguration, field string) (*session.SessionService, *sessionpg.AdminRevokeExecutor, session.AdminRevokeConfig, adminSessionRevokeTransport, error) {
+	invalid := identity.InvalidInputError{Field: field}
+	var config session.AdminRevokeConfig
+	var transport adminSessionRevokeTransport
 	if rate == nil {
-		return nil, invalid
+		return nil, nil, config, transport, invalid
 	}
 	ordinary := c.Session.Native
 	login := c.PasswordSignin.Native
@@ -91,36 +116,40 @@ func composeAdminSessionRevoke(c StoreConfiguration, d ReferenceDependencies, ra
 		Repository: execution.Repository, Profile: login.Profile, Validation: validation,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, config, transport, err
 	}
 	executor, err := sessionpg.NewAdminRevokeExecutor(d.PostgreSQL, sessionpg.AdminRevokeExecutorConfig{
 		Execution: execution, Sessions: sessions, Actor: login.Profile, CSRFKey: login.CSRFKey,
 	})
 	if err != nil {
-		return nil, err
-	}
-	native, err := session.NewAdminRevokeService(sessions, executor, session.AdminRevokeConfig{
-		Authorization: execution.Authorization, PolicyID: h.PolicyID, PolicyRevision: h.PolicyRevision, CSRFKey: login.CSRFKey, MaximumDuration: h.MaximumDuration,
-	})
-	if err != nil {
-		return nil, err
+		return nil, nil, config, transport, err
 	}
 	cookie, err := login.Issuance.Cookie.DeletionAttributes()
 	if err != nil {
-		return nil, invalid
+		return nil, nil, config, transport, invalid
 	}
 	admin, owns, err := selectReferenceAdminRate(organizationhttp.AdminRateConfig{
 		Shared: rate.backend, Namespace: h.AdminNamespace, Key: h.AdminKey, Denied: h.Denied,
 		Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration,
 	}, candidates)
 	if err != nil {
-		return nil, invalid
+		return nil, nil, config, transport, invalid
 	}
-	return &adminSessionRevokeState{native: native, admin: admin, ownsAdmin: owns, cookie: cookie.Name, origin: identityhttp.Origin(c.PasswordSignin.PreAuth.Origin), schema: execution.Repository.Schema, maximum: h.MaximumDuration}, nil
+	config = session.AdminRevokeConfig{
+		Authorization: execution.Authorization, PolicyID: h.PolicyID, PolicyRevision: h.PolicyRevision, CSRFKey: login.CSRFKey, MaximumDuration: h.MaximumDuration,
+	}
+	transport = adminSessionRevokeTransport{admin: admin, ownsAdmin: owns, cookie: cookie.Name, origin: identityhttp.Origin(c.PasswordSignin.PreAuth.Origin), schema: execution.Repository.Schema, maximum: h.MaximumDuration}
+	return sessions, executor, config, transport, nil
 }
 
 func (s *adminSessionRevokeState) close() {
-	if s != nil && s.ownsAdmin {
+	if s != nil {
+		s.adminSessionRevokeTransport.close()
+	}
+}
+
+func (s adminSessionRevokeTransport) close() {
+	if s.ownsAdmin {
 		s.admin.Close()
 	}
 }

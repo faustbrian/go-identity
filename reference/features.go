@@ -109,6 +109,7 @@ type featureState struct {
 	userStatusAdministration     *userStatusAdministrationState
 	adminSessionList             *adminSessionListState
 	adminSessionRevoke           *adminSessionRevokeState
+	adminSessionRevokeAll        *adminSessionRevokeAllState
 	passkey                      *passkeyState
 	anonymous                    *anonymousState
 	httpAnonymous                *anonymousHTTPState
@@ -195,6 +196,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	if err := validateAdminSessionRevokeSelection(c); err != nil {
+		return err
+	}
+	if err := validateAdminSessionRevokeAllSelection(c); err != nil {
 		return err
 	}
 	if err := validateImpersonationSelection(c); err != nil {
@@ -725,6 +729,18 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			adminSessionRevoke.close()
 		}
 	}()
+	if adminSessionRevoke != nil {
+		adminCandidates = append(adminCandidates, adminSessionRevoke.admin)
+	}
+	adminSessionRevokeAll, err := composeAdminSessionRevokeAll(c, d, s.httpRate, adminCandidates)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !retainedResetHTTP {
+			adminSessionRevokeAll.close()
+		}
+	}()
 	managedUsers, err := s.composeManagedSCIMUsers(c, d, sessionOwner, organizationOwner, managedSCIMCreate, scimBulk)
 	if err != nil {
 		return err
@@ -1118,6 +1134,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.userStatusAdministration = userStatusOwner
 	s.features.adminSessionList = adminSessionList
 	s.features.adminSessionRevoke = adminSessionRevoke
+	s.features.adminSessionRevokeAll = adminSessionRevokeAll
 	s.features.passwordVerification = passwordVerificationOwner
 	s.features.anonymous = anonymousOwner
 	s.features.httpAnonymous = httpAnonymous
