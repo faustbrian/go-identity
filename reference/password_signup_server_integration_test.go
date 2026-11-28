@@ -284,6 +284,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 
 type signupGraphExtensions struct {
 	impersonation                bool
+	impersonationDenial          bool
 	passwordSigninLocalization   bool
 	scimManagedUsersDeactivation bool
 	oauthProxyPreview            bool
@@ -658,6 +659,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.impersonation {
 		selectedAuthorization = referenceImpersonationPolicy{}
+	}
+	var impersonationDenialPolicy *referenceImpersonationDenialPolicy
+	if extensions.impersonationDenial {
+		impersonationDenialPolicy = &referenceImpersonationDenialPolicy{}
+		selectedAuthorization = impersonationDenialPolicy
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
 	var socialIssuer *referenceSocialOIDCIssuer
@@ -1053,6 +1059,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.impersonation {
 		configureReferenceImpersonation(t, &c, origin)
+	}
+	if extensions.impersonationDenial {
+		configureReferenceImpersonationDenial(t, &c, origin)
 	}
 	if extensions.passwordRecovery {
 		totp := c.PasswordSignin.TOTP
@@ -1753,6 +1762,12 @@ END $$`); err != nil {
 		if c.HTTPImpersonation != nil {
 			wantOperations++
 		}
+	}
+	if seen["identity.impersonation.deny"] != (c.HTTPImpersonationDenial != nil) {
+		t.Fatal("impersonation denial OpenAPI selection differs from configured HTTP")
+	}
+	if c.HTTPImpersonationDenial != nil {
+		wantOperations++
 	}
 	if c.HTTPAPIKey != nil {
 		wantOperations += 3
@@ -3106,7 +3121,7 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			proveReferenceDeviceHTTP(t, ctx, client, network.URL, origin, cookies, csrf)
 		}
 	}
-	if extensions.impersonation {
+	if extensions.impersonation || extensions.impersonationDenial {
 		native, err := features.Impersonation()
 		if err != nil {
 			t.Fatal("selected native impersonation unavailable", err)
@@ -3114,7 +3129,11 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 		requester, requesterCSRF := referenceImpersonationAdmin(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-requester")
 		approver, approverCSRF := referenceImpersonationAdmin(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-approver")
 		target := registerReferenceOrganizationHuman(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-target")
-		proveReferenceImpersonationHTTP(t, ctx, native, client, network.URL, origin, requester, approver, requesterCSRF, approverCSRF, target.user)
+		if extensions.impersonationDenial {
+			proveReferenceImpersonationDenialHTTP(t, ctx, native, deps.PostgreSQL, c.Session.Native.Execution.Repository.Schema, impersonationDenialPolicy, client, network.URL, origin, requester, approver, requesterCSRF, approverCSRF, target.user)
+		} else {
+			proveReferenceImpersonationHTTP(t, ctx, native, client, network.URL, origin, requester, approver, requesterCSRF, approverCSRF, target.user)
+		}
 		return
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)

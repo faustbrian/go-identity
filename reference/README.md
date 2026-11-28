@@ -174,6 +174,21 @@ and its own synchronizer and clears only the child cookies. Direct Go
 request and approval do not add HTTP routes; leaving HTTP unselected adds
 no routes or OpenAPI operations.
 
+Set `Impersonation.Denial` to add native pending-grant denial. Apply the
+forward migration plan before accepting traffic. An independent current
+administrator can call `PrepareDenial` and `Execute`; the exact original
+binding supports metadata-only `Recover`.
+
+To expose only `POST /v1/impersonation/deny`, also select
+`HTTPImpersonationDenial` and supply its trusted origins. When Start/Stop are
+selected, omit Deny's origins so all three share the same ingress policy.
+Deny requires the ordinary cookie and synchronizer and accepts `grantID`,
+`expectedVersion: 1`, and a private `reason`. It rejects `Idempotency-Key`
+and never sets a cookie. A second decision conflicts with the committed
+terminal grant. Configure `HTTPRate` and reuse any selected administrative
+quota; for Deny alone supply its admin namespace, key, and durable denial
+auditor.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose optional pending-grant denial over native password/TOTP. Select
+  its HTTPS route separately, with the shared audited administrative quota.
+
 - Compose approved impersonation over the native password/TOTP primary.
   Independently opt into HTTPS Start and child-only Stop with retained keyed
   retry custody and no ordinary-session cookie replacement.

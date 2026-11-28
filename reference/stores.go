@@ -139,6 +139,8 @@ type StoreConfiguration struct {
 	Impersonation *ImpersonationConfiguration
 	// HTTPImpersonation independently selects only HTTPS Start and self-Stop.
 	HTTPImpersonation *HTTPImpersonationConfiguration
+	// HTTPImpersonationDenial independently selects HTTPS administrator Deny.
+	HTTPImpersonationDenial *HTTPImpersonationDenialConfiguration
 	// Passkey explicitly selects native existing-account passkey workflows.
 	// Nil exposes no passkey handle, route or method; HTTP stays independent.
 	Passkey *PasskeyConfiguration
@@ -655,6 +657,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 		state.features.httpOrganization.close()
 		state.features.httpManagedSCIMRead.close()
 		state.features.httpManagedSCIMCreate.close()
+		state.features.impersonation.close()
 	}
 	if state.features != nil && state.features.httpAnonymous != nil {
 		state.features.httpAnonymous.close()

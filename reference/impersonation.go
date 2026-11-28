@@ -55,7 +55,18 @@ func (s *ImpersonationService) PrepareApproval(ctx context.Context, input impers
 	return native.PrepareApproval(w, input)
 }
 
-// Execute commits the native request or distinct-administrator approval.
+// PrepareDenial prepares an independent administrator's terminal decision
+// when the native denial profile is selected. It does not write the grant.
+func (s *ImpersonationService) PrepareDenial(ctx context.Context, input impersonationpg.DenyInput) (impersonationpg.PreparedCommand, error) {
+	w, done, native, err := s.enter(ctx)
+	if err != nil {
+		return impersonationpg.PreparedCommand{}, err
+	}
+	defer done()
+	return native.PrepareDenial(w, input)
+}
+
+// Execute commits the native request, approval, or selected denial.
 func (s *ImpersonationService) Execute(ctx context.Context, input impersonationpg.PreparedCommand) (identity.CommandResult, error) {
 	w, done, native, err := s.enter(ctx)
 	if err != nil {
@@ -65,11 +76,11 @@ func (s *ImpersonationService) Execute(ctx context.Context, input impersonationp
 	return native.Execute(w, input)
 }
 
-// Recover reconciles an exact original request or approval with current
+// Recover reconciles an exact original request, approval, or denial with current
 // administrator authentication. It cannot mint or transfer credentials.
 func (s *ImpersonationService) Recover(ctx context.Context, auth impersonationpg.Authentication, binding identity.CommandBinding) (identity.CommandResult, error) {
 	switch binding.OperationID {
-	case "identity.impersonation.request", "identity.impersonation.approve":
+	case "identity.impersonation.request", "identity.impersonation.approve", "identity.impersonation.deny":
 	default:
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}

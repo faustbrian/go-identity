@@ -6,14 +6,29 @@ import (
 )
 
 func (s *Server) impersonationFeature(network identityhttp.NetworkConfig) (*identityhttp.Feature, error) {
-	if s.state.features == nil || s.state.features.impersonation == nil || s.state.features.impersonation.keyed == nil {
+	if s.state.features == nil || s.state.features.impersonation == nil {
 		return nil, nil
 	}
 	n := s.state.features.impersonation
-	feature, err := impersonationhttp.NewStartStopFeature(impersonationhttp.StartConfig{
+	start := impersonationhttp.StartConfig{
 		Network: network, TrustedOrigins: n.origins, OriginalCookieName: n.cookie,
 		Native: n.keyed, MaximumDuration: s.budget,
-	}, n.native)
+	}
+	var feature identityhttp.Feature
+	var err error
+	switch {
+	case n.keyed != nil && n.admin != nil:
+		feature, err = impersonationhttp.NewStartStopDenyFeature(start, n.native, n.native, n.admin)
+	case n.keyed != nil:
+		feature, err = impersonationhttp.NewStartStopFeature(start, n.native)
+	case n.admin != nil:
+		feature, err = impersonationhttp.NewDenyFeature(impersonationhttp.DenyConfig{
+			Network: network, TrustedOrigins: n.origins, OriginalCookieName: n.cookie,
+			Native: n.native, Rate: n.admin, MaximumDuration: s.budget,
+		})
+	default:
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,11 @@ func (s StoreSet) impersonationMigrationCatalog(ctx context.Context, catalog []m
 	}
 	// The required password/TOTP profile has already selected its common
 	// counter, lockout and session predecessors in baseMigrationCatalog.
-	steps, err := (impersonationpg.SelfStopMigrationSource{}).Load(ctx)
+	var source migrations.Source = impersonationpg.SelfStopMigrationSource{}
+	if s.state.features.impersonation.denial {
+		source = impersonationpg.DenialMigrationSource{}
+	}
+	steps, err := source.Load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +25,7 @@ func (s StoreSet) impersonationMigrationCatalog(ctx context.Context, catalog []m
 	for _, step := range steps {
 		owners[step.Version()] = "identity/impersonation/postgres"
 	}
-	return append(catalog, migrationHistory{
+	history := migrationHistory{
 		namespace: "identity_impersonation",
 		history:   steps,
 		owners:    owners,
@@ -33,5 +37,14 @@ func (s StoreSet) impersonationMigrationCatalog(ctx context.Context, catalog []m
 			{version: 5, schema: "identity_impersonation", functions: []string{"reject_revoked_activation", "revocation_ready"}},
 			{version: 6, schema: "identity_impersonation", tables: []string{"stop_proofs", "stops"}, functions: []string{"preserve_stop_proof", "preserve_stop"}},
 		},
-	}), nil
+	}
+	if s.state.features.impersonation.denial {
+		// Native v8 replaces v4's existing approval fence in place; its
+		// presence cannot distinguish an unmanaged suffix from the v1-v6 prefix.
+		history.guards = append(history.guards,
+			migrationGuard{version: 7, schema: "identity_impersonation", tables: []string{"denials"}, functions: []string{"preserve_denial"}},
+			migrationGuard{version: 9, schema: "identity_impersonation", functions: []string{"reject_denied_revocation", "denial_ready"}},
+		)
+	}
+	return append(catalog, history), nil
 }
