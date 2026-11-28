@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an opt-in HTTPS quorum read for the native single-approval profile.
+  Require the original administrator cookie and shared audited admin quota.
+
 - Add opt-in HTTPS pending denial using the original ordinary session,
   the shared audited admin quota, and a metadata-only terminal response.
 

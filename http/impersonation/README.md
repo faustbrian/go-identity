@@ -9,6 +9,20 @@ before composing native services for the selected routes. Select
 import this adapter. Select `NewDenyFeature` for denial alone or
 `NewStartStopDenyFeature` for all three on the same ingress.
 
+## Read a grant's quorum
+
+Select `NewQuorumFeature` with the native `QuorumWithAdmission` owner and
+the shared `rate.admin` limiter. Send
+`GET /v1/impersonation/quorum?grantID=<canonical-grant-id>` on the mapped
+HTTPS tenant with the original ordinary administrator cookie. The request
+has no body, CSRF proof, or `Idempotency-Key`. Selecting the read does not
+enable any write route.
+
+After exact native grant authorization, the service charges the shared
+quota once and returns the single-approval requirement, safe approver
+metadata, and current retained status. Responses never set a cookie or
+include approval reasons, credentials, or private diagnostics.
+
 ## Start
 
 `POST /v1/impersonation/start` requires the exact mapped HTTPS Origin,

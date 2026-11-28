@@ -23,10 +23,7 @@ var errMisdirected = errors.New("impersonation http: not a mapped HTTPS tenant")
 
 func newCookieIngress(config identityhttp.NetworkConfig, origins []identityhttp.Origin, name string, duration time.Duration) (cookieIngress, error) {
 	var ingress cookieIngress
-	if !strings.HasPrefix(name, "__Host-") || name == "__Host-" || len(name) > 128 ||
-		name == ChildCookieName || name == ChildCSRFCookieName ||
-		(&http.Cookie{Name: name, Value: "x", Path: "/", Secure: true}).Valid() != nil ||
-		duration < time.Millisecond || duration > 30*time.Second {
+	if !validOrdinaryCookie(name, duration) {
 		return ingress, identityhttp.ErrInvalidInput
 	}
 	var err error
@@ -53,20 +50,34 @@ func newCookieIngress(config identityhttp.NetworkConfig, origins []identityhttp.
 }
 
 func (h cookieIngress) facts(r *http.Request) (identityhttp.NetworkFacts, error) {
-	var zero identityhttp.NetworkFacts
-	facts, err := h.network.Resolve(r)
-	if err != nil && !errors.Is(err, identityhttp.DecodeError{}) {
-		return zero, err
-	}
-	if err != nil || facts.Scheme() != "https" || facts.TenantID() == "" {
-		return zero, errMisdirected
+	facts, err := mappedHTTPSFacts(h.network, r)
+	if err != nil {
+		return identityhttp.NetworkFacts{}, err
 	}
 	origin, err := h.origin.Check(r)
 	if err != nil {
-		return zero, err
+		return identityhttp.NetworkFacts{}, err
 	}
 	if string(origin) != facts.Origin() {
-		return zero, identityhttp.OriginError{}
+		return identityhttp.NetworkFacts{}, identityhttp.OriginError{}
+	}
+	return facts, nil
+}
+
+func validOrdinaryCookie(name string, duration time.Duration) bool {
+	return strings.HasPrefix(name, "__Host-") && name != "__Host-" && len(name) <= 128 &&
+		name != ChildCookieName && name != ChildCSRFCookieName &&
+		(&http.Cookie{Name: name, Value: "x", Path: "/", Secure: true}).Valid() == nil &&
+		duration >= time.Millisecond && duration <= 30*time.Second
+}
+
+func mappedHTTPSFacts(network *identityhttp.NetworkResolver, r *http.Request) (identityhttp.NetworkFacts, error) {
+	facts, err := network.Resolve(r)
+	if err != nil && !errors.Is(err, identityhttp.DecodeError{}) {
+		return identityhttp.NetworkFacts{}, err
+	}
+	if err != nil || facts.Scheme() != "https" || facts.TenantID() == "" {
+		return identityhttp.NetworkFacts{}, errMisdirected
 	}
 	return facts, nil
 }
