@@ -28,6 +28,7 @@ use (
 	./http/session
 	./http/sso
 	./i18n
+	./impersonation
 	./magiclink
 	./magiclink/postgres
 	./mfa

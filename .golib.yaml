@@ -10,6 +10,14 @@ evidence:
   root: .verification
 
 operations:
+  - module: impersonation
+    gate: fuzz
+    steps:
+      - type: go-test
+        packages: [.]
+        fuzz: FuzzReasonAndScope
+        budget: 3s
+        timeout: 60s
   - module: oauth/onetap
     gate: fuzz
     steps:
