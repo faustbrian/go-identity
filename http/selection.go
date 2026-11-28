@@ -483,6 +483,14 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 			r.CSRFOrigin.TokenMaximumAge == 0 && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
+		// Native single-session administrator revocation checks the original
+		// actor-session synchronizer without independent token age. Revoke-all
+		// is a separate operation and retains its canonical profile.
+		if r.OperationID == "identity.admin.session-revoke" &&
+			r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" &&
+			r.CSRFOrigin.TokenMaximumAge == 0 && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Verification selects either strict bearer custody or the stored-session
 		// synchronizer protected by its native transaction owner. Selection grants
 		// no authority and does not issue or age an independent CSRF token.

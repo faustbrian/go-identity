@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence the original administrator's confirmed TOTP enrollment and factor
+  generation for the exact native administrator session-revoke operation,
+  including when the administrator owns the target session. Keep self-service
+  and impersonation admission unchanged.
+
 - Use the administrator's original TOTP fence for exact impersonation denial.
   Require a canonical grant identifier distinct from the deny command ID.
 

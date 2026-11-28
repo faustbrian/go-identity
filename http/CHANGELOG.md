@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit the original actor-session synchronizer for the opt-in administrator
+  single-session revocation descriptor while preserving its repeat contract.
+
 - Admit the original stored-session synchronizer for the opt-in user ban
   and unban descriptors without changing their keyed request contract.
 

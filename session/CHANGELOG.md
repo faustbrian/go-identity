@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Prepare a separate administrator command for one exact target session.
+  The direct service requires the original fresh password/TOTP cookie and
+  synchronizer and authorizes the target before calling a durable executor.
+  Existing self-service requests remain self-only.
+
 - List an exact authorized user's sessions through a separate admin API.
   Reuse the primary page reader with actor- and target-bound cursors. The
   existing self-list operation remains self-only.
