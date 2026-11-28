@@ -41,6 +41,8 @@ const (
 	productionProxyStatic productionProxyMigrationProfile = iota
 	productionProxyLiveAuthority
 	productionProxyRetirement
+	productionProxyMaintenanceExpand
+	productionProxyMaintenanceActivate
 )
 
 // NewOAuthProxyProductionMigrations freezes the exact selected native histories
@@ -64,6 +66,20 @@ func NewOAuthProxyProductionMigrationsWithProviderAuthority(pool *database.Pool,
 // existing history and does not enable retirement or change runtime grants.
 func NewOAuthProxyProductionMigrationsWithRetirement(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration) (OAuthProxyProductionMigrations, error) {
 	return newOAuthProxyProductionMigrations(pool, c, productionProxyRetirement)
+}
+
+// NewOAuthProxyProductionMigrationsWithMaintenance extends the retirement
+// history for the selected proxy pair. Plan and apply expansion first. Select
+// activation in a separate plan only after deploying the fenced writers.
+func NewOAuthProxyProductionMigrationsWithMaintenance(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration, phase OAuthProxyMaintenanceSchema) (OAuthProxyProductionMigrations, error) {
+	if !phase.valid() {
+		return OAuthProxyProductionMigrations{}, invalidOAuthProxyMaintenance()
+	}
+	profile := productionProxyMaintenanceExpand
+	if phase == OAuthProxyMaintenanceActivate {
+		profile = productionProxyMaintenanceActivate
+	}
+	return newOAuthProxyProductionMigrations(pool, c, profile)
 }
 
 func newOAuthProxyProductionMigrations(pool *database.Pool, c OAuthProxyProductionMigrationConfiguration, profile productionProxyMigrationProfile) (OAuthProxyProductionMigrations, error) {
@@ -168,7 +184,7 @@ func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProduction
 		oauthHistory = append(oauthHistory, authority...)
 		oauthGuards = append(oauthGuards, migrationGuard{version: 3, schema: c.Schema, tables: []string{"provider_authorities"}})
 	}
-	if profile == productionProxyRetirement {
+	if profile >= productionProxyRetirement {
 		retirement, guard, err := proxyRetirementMigrationSuffix(ctx, c.Schema, kernel.OAuthProxyRetireProduction)
 		if err != nil {
 			return nil, err
@@ -176,7 +192,25 @@ func productionProxyMigrationCatalog(ctx context.Context, c OAuthProxyProduction
 		oauthHistory = append(oauthHistory, retirement...)
 		oauthGuards = append(oauthGuards, guard)
 	}
-	catalog = append(catalog, proxyOwnedHistory("identity_oauth_proxy", "identity/oauth/postgres", oauthHistory, oauthGuards...))
+	var activation migrations.Version
+	if profile >= productionProxyMaintenanceExpand {
+		phase := OAuthProxyMaintenanceExpand
+		if profile == productionProxyMaintenanceActivate {
+			phase = OAuthProxyMaintenanceActivate
+		}
+		steps, guards, err := proxyMaintenanceMigrationSuffix(ctx, c.Schema, kernel.OAuthProxyRetireProduction, phase)
+		if err != nil {
+			return nil, err
+		}
+		oauthHistory = append(oauthHistory, steps...)
+		oauthGuards = append(oauthGuards, guards...)
+		if phase == OAuthProxyMaintenanceActivate {
+			activation = oauthHistory[len(oauthHistory)-1].Version()
+		}
+	}
+	oauth := proxyOwnedHistory("identity_oauth_proxy", "identity/oauth/postgres", oauthHistory, oauthGuards...)
+	oauth.activationBoundary = activation
+	catalog = append(catalog, oauth)
 	capability, err := migrations.NewFSSource(ownedMigrationFiles{capabilitypg.Migrations()}, ".")
 	if err != nil {
 		return nil, err

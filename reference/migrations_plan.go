@@ -155,6 +155,10 @@ func buildMigrationPlan(snapshots []migrationSnapshot, ids []ModuleID) (Migratio
 				last = i
 			}
 		}
+		if h.activationBoundary != 0 && last >= 0 && pending[0].Migration().Version() < h.activationBoundary &&
+			pending[last].Migration().Version() >= h.activationBoundary {
+			return MigrationPlan{}, identity.ConflictError{}
+		}
 		if last+1 > 4096-len(plan.Steps) {
 			return MigrationPlan{}, identity.InvalidInputError{Field: "reference_plan_steps"}
 		}

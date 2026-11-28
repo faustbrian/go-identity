@@ -57,7 +57,7 @@ type oauthProxyPreviewState struct {
 	authority *oauthpg.ProviderAuthority
 }
 
-func composeOAuthProxyPreview(c StoreConfiguration, social *socialOAuthState, a *oauthpg.ProviderAuthority) (*oauthProxyPreviewState, error) {
+func composeOAuthProxyPreview(c StoreConfiguration, social *socialOAuthState, a *oauthpg.ProviderAuthority, fenced bool) (*oauthProxyPreviewState, error) {
 	if c.OAuthProxyPreview == nil {
 		return nil, nil
 	}
@@ -92,7 +92,9 @@ func composeOAuthProxyPreview(c StoreConfiguration, social *socialOAuthState, a 
 	}
 	var owner *oauthpg.ProxyPreviewService
 	var err error
-	if a == nil {
+	if fenced {
+		owner, err = oauthpg.NewProxyPreviewServiceWithCustodyFence(social.signin.complete, n.Native, a)
+	} else if a == nil {
 		owner, err = oauthpg.NewProxyPreviewService(social.signin.complete, n.Native)
 	} else {
 		owner, err = oauthpg.NewProxyPreviewServiceWithProviderAuthority(social.signin.complete, n.Native, a)

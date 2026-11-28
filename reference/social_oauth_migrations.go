@@ -100,7 +100,7 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 		oauthHistory.history = append(oauthHistory.history, bindings...)
 		oauthHistory.owners[previewVersion] = "identity/oauth/postgres"
 		oauthHistory.guards = append(oauthHistory.guards, migrationGuard{version: previewVersion, schema: schema, tables: []string{"proxy_preview_bindings"}})
-		if s.state.proxyPreviewRetirement != nil {
+		if s.state.proxyPreviewRetirement != nil || s.state.proxyMaintenance.valid() {
 			retirement, guard, err := proxyRetirementMigrationSuffix(ctx, schema, kernel.OAuthProxyRetirePreview)
 			if err != nil {
 				return nil, err
@@ -110,6 +110,20 @@ func (s StoreSet) socialOAuthMigrationCatalog(ctx context.Context, catalog []mig
 				oauthHistory.owners[step.Version()] = "identity/oauth/postgres"
 			}
 			oauthHistory.guards = append(oauthHistory.guards, guard)
+		}
+		if phase := s.state.proxyMaintenance; phase.valid() {
+			steps, guards, err := proxyMaintenanceMigrationSuffix(ctx, schema, kernel.OAuthProxyRetirePreview, phase)
+			if err != nil {
+				return nil, err
+			}
+			oauthHistory.history = append(oauthHistory.history, steps...)
+			oauthHistory.guards = append(oauthHistory.guards, guards...)
+			for _, step := range steps {
+				oauthHistory.owners[step.Version()] = "identity/oauth/postgres"
+			}
+			if phase == OAuthProxyMaintenanceActivate {
+				oauthHistory.activationBoundary = steps[len(steps)-1].Version()
+			}
 		}
 	}
 	catalog = append(catalog, oauthHistory)

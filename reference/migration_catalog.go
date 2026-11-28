@@ -24,6 +24,8 @@ type migrationHistory struct {
 	owners    map[migrations.Version]ModuleID
 	guards    []migrationGuard
 	preflight string // native fresh-install policy; never exposed as executable SQL
+	// activationBoundary must be planned separately from this history's expansion.
+	activationBoundary migrations.Version
 }
 
 type migrationGuard struct {

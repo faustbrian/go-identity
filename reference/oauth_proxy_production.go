@@ -57,6 +57,7 @@ type OAuthProxyProduction struct {
 	tenant               identity.TenantID
 	providerAuthority    *oauthpg.ProviderAuthority
 	retirement           *oauthpg.ProxyRetirementAuthority
+	maintenanceSchema    string
 }
 
 // NewOAuthProxyProduction assembles native Start and the acknowledged command
@@ -64,7 +65,7 @@ type OAuthProxyProduction struct {
 // provider IO. Use NewOAuthProxyProductionMigrations to install the selected
 // native histories before invoking Start or mounting the handler.
 func NewOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration) (*OAuthProxyProduction, error) {
-	return newOAuthProxyProduction(pool, c, nil, nil)
+	return newOAuthProxyProduction(pool, c, nil, nil, false)
 }
 
 // NewOAuthProxyProductionWithProviderAuthority selects the live provider
@@ -74,7 +75,7 @@ func NewOAuthProxyProductionWithProviderAuthority(pool *database.Pool, c OAuthPr
 	if a == nil {
 		return nil, identity.InvalidInputError{Field: "reference_oauth_proxy_production"}
 	}
-	return newOAuthProxyProduction(pool, c, a, nil)
+	return newOAuthProxyProduction(pool, c, a, nil, false)
 }
 
 // NewOAuthProxyProductionWithRetirement selects live provider checks and
@@ -86,10 +87,22 @@ func NewOAuthProxyProductionWithRetirement(pool *database.Pool, c OAuthProxyProd
 	if a == nil || retirement == nil {
 		return nil, identity.InvalidInputError{Field: "reference_oauth_proxy_production_retirement"}
 	}
-	return newOAuthProxyProduction(pool, c, a, retirement)
+	return newOAuthProxyProduction(pool, c, a, retirement, false)
 }
 
-func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority, retirement *oauthpg.ProxyRetirementAuthority) (*OAuthProxyProduction, error) {
+// NewOAuthProxyProductionWithMaintenance selects the live fenced Start
+// writer. Use the matching maintenance expansion before serving this writer,
+// and activate fences only once all writers have switched. Callback routing
+// and opt-in HTTP behavior are unchanged.
+func NewOAuthProxyProductionWithMaintenance(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority) (*OAuthProxyProduction, error) {
+	if a == nil {
+		return nil, invalidOAuthProxyMaintenance()
+	}
+	return newOAuthProxyProduction(pool, c, a, nil, true)
+}
+
+func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfiguration, a *oauthpg.ProviderAuthority,
+	retirement *oauthpg.ProxyRetirementAuthority, fenced bool) (*OAuthProxyProduction, error) {
 	invalid := identity.InvalidInputError{Field: "reference_oauth_proxy_production"}
 	if c.Codec == nil || nilServerDependency(c.Clock) {
 		return nil, invalid
@@ -104,7 +117,12 @@ func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfigur
 	if err != nil {
 		return nil, invalid
 	}
-	start, err := oauthpg.NewProxyStartService(forward, c.Start)
+	var start *oauthpg.ProxyStartService
+	if fenced {
+		start, err = oauthpg.NewProxyStartServiceWithCustodyFence(forward, c.Start)
+	} else {
+		start, err = oauthpg.NewProxyStartService(forward, c.Start)
+	}
 	if err != nil {
 		return nil, invalid
 	}
@@ -123,6 +141,9 @@ func newOAuthProxyProduction(pool *database.Pool, c OAuthProxyProductionConfigur
 	result := &OAuthProxyProduction{start: start, forward: forward, pool: pool, provider: exchange.Profile(),
 		productionDeployment: c.Native.ProductionDeployment, previewTarget: target, tenant: c.Start.Preview.TenantID,
 		providerAuthority: a, retirement: retirement}
+	if fenced {
+		result.maintenanceSchema = c.Native.Schema
+	}
 	if c.HTTP == nil {
 		return result, nil
 	}

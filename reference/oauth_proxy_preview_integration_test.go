@@ -61,6 +61,7 @@ type referenceOAuthProxyPreviewProof struct {
 	authority         *oauthpg.ProviderAuthority
 	operator          *oauthpg.ProviderAuthorityOperator
 	retirement        *oauthpg.ProxyRetirementAuthority
+	maintenance       bool
 	readerRole        string
 	epoch             uint64
 }
@@ -286,10 +287,15 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 		p.installProviderAuthority(t, ctx, f)
 	}
 	runtimePool := newOAuthProxyProductionRuntimePool(t, ctx, f)
+	if p.maintenance {
+		p.installMaintenance(t, ctx, c, f, runtimePool)
+	}
 	productionConfig.HTTP = oauthProxyProductionHTTPConfiguration(t, runtimePool)
 	var production *reference.OAuthProxyProduction
 	var err error
-	if p.retirement != nil {
+	if p.maintenance {
+		production, err = reference.NewOAuthProxyProductionWithMaintenance(runtimePool, productionConfig, p.authority)
+	} else if p.retirement != nil {
 		production, err = reference.NewOAuthProxyProductionWithRetirement(runtimePool, productionConfig, p.authority, p.retirement)
 	} else if p.authority != nil {
 		production, err = reference.NewOAuthProxyProductionWithProviderAuthority(runtimePool, productionConfig, p.authority)
@@ -458,6 +464,10 @@ func (p *referenceOAuthProxyPreviewProof) prove(t *testing.T, ctx context.Contex
 	authorization, err := features.StartOAuthProxyPreview(ctx, production, startRequest)
 	if err != nil {
 		t.Fatal("the public preview owner did not acknowledge both native origin bindings", err)
+	}
+	if p.maintenance {
+		p.proveMaintenance(t, ctx, c, features, production, app, base, origin, startRequest, authorization.URL())
+		return
 	}
 	providerClient := *p.provider.server.Client()
 	providerClient.CheckRedirect = productionClient.CheckRedirect

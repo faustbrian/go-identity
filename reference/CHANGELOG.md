@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in production/preview proxy maintenance over the native pair:
+  separate schema expansion and activation, fenced writers, resumable local
+  drains and an exact pair-only acknowledgement. No HTTP operator route.
+
 - Opt into trusted retirement of exact disabled OAuth proxy origins on both
   deployments. Append the selected custody migrations without exposing an
   HTTP operator route or granting audit reads to callback roles.

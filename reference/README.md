@@ -122,6 +122,32 @@ It does not complete the provider-wide cascade. To stop retirement, stop
 invoking the trusted methods and retain the expanded migration selection;
 already erased material is not restored.
 
+### Drain and acknowledge the configured proxy pair
+
+This direct-Go operator is separate from the original single-target retirement
+path. Install the two `OAuthProxyMaintenanceExpand` plans first:
+`NewOAuthProxyProductionMigrationsWithMaintenance` for production, and
+`ComposeStoresWithOAuthProxyPreviewMaintenance` for preview. These plans
+preserve the existing prefixes and do not activate a fence.
+
+Switch all production Start and preview Bind writers to the maintenance
+constructors. Production uses `NewOAuthProxyProductionWithMaintenance`;
+preview uses its maintenance store composer. Once every writer has switched,
+plan and apply `OAuthProxyMaintenanceActivate` on each database separately.
+The activated plan refuses to include unfinished expansion. Do not detach the
+fenced writers or reuse the deployment/database bindings while work is pending.
+
+Use `FeatureSet.NewOAuthProxyMaintenance` with the matching production owner,
+existing provider operator and the two trusted local fence pools. Keep audit
+and fence-write grants off the HTTP callback roles. The selected maintenance
+runtime must read its actual local fence and read/write its drain checkpoint.
+Admit the disable with `ApplyDisableCascade`, pass the same tenant, source
+command, cascade and generation to `Seal`, and drive `StepProduction` and
+`StepPreview` until each reports exhaustion. Only then can `Acknowledge`
+record the pair's proxy cleanup. Retry the original selector after any
+ambiguous outcome. The provider cascade remains pending and there is no HTTP
+operator route or claim about external revocation.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes

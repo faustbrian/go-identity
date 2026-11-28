@@ -287,6 +287,7 @@ type signupGraphExtensions struct {
 	oauthProxyPreview            bool
 	oauthProxyProviderAuthority  bool
 	oauthProxyRetirement         bool
+	oauthProxyMaintenance        bool
 
 	scimBulk                    bool
 	scimManagedRead             bool
@@ -1444,6 +1445,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.oauthProxyPreview {
 		proxyPreview = configureReferenceOAuthProxyPreview(t, &c, origin, socialIssuer)
 		proxyPreview.previewPool = deps.PostgreSQL
+		proxyPreview.maintenance = extensions.oauthProxyMaintenance
 		if extensions.oauthProxyProviderAuthority {
 			proxyPreview.prepareProviderAuthority(t, ctx)
 		}
@@ -1501,7 +1503,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	var stores reference.StoreSet
 	var err error
-	if proxyPreview != nil && proxyPreview.retirement != nil {
+	if proxyPreview != nil && proxyPreview.maintenance {
+		stores, err = reference.ComposeStoresWithOAuthProxyPreviewMaintenance(c, deps, proxyPreview.authority, reference.OAuthProxyMaintenanceExpand)
+	} else if proxyPreview != nil && proxyPreview.retirement != nil {
 		stores, err = reference.ComposeStoresWithOAuthProxyPreviewRetirement(c, deps, proxyPreview.authority, proxyPreview.retirement)
 	} else if proxyPreview != nil && proxyPreview.authority != nil {
 		stores, err = reference.ComposeStoresWithOAuthProxyPreviewProviderAuthority(c, deps, proxyPreview.authority)

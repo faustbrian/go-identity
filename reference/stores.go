@@ -311,6 +311,7 @@ type storeState struct {
 	productionProxyHistory []migrationHistory
 	proxyPreviewAuthority  *oauthpg.ProviderAuthority
 	proxyPreviewRetirement *oauthpg.ProxyRetirementAuthority
+	proxyMaintenance       OAuthProxyMaintenanceSchema
 }
 
 type tenantRecovery struct {
@@ -326,7 +327,7 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
-	return composeStores(c, d, nil, nil)
+	return composeStores(c, d, nil, nil, 0)
 }
 
 // ComposeStoresWithOAuthProxyPreviewProviderAuthority selects live provider
@@ -338,7 +339,7 @@ func ComposeStoresWithOAuthProxyPreviewProviderAuthority(c StoreConfiguration, d
 	if c.OAuthProxyPreview == nil || a == nil {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview"}
 	}
-	return composeStores(c, d, a, nil)
+	return composeStores(c, d, a, nil, 0)
 }
 
 // ComposeStoresWithOAuthProxyPreviewRetirement selects live preview authority
@@ -349,10 +350,21 @@ func ComposeStoresWithOAuthProxyPreviewRetirement(c StoreConfiguration, d Refere
 	if c.OAuthProxyPreview == nil || a == nil || retirement == nil {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview_retirement"}
 	}
-	return composeStores(c, d, a, retirement)
+	return composeStores(c, d, a, retirement, 0)
 }
 
-func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority *oauthpg.ProviderAuthority, proxyRetirement *oauthpg.ProxyRetirementAuthority) (StoreSet, error) {
+// ComposeStoresWithOAuthProxyPreviewMaintenance selects the fenced preview
+// writer and its explicit schema phase. Construction changes neither schema
+// nor traffic. Apply expansion before sending work to the fenced writer.
+func ComposeStoresWithOAuthProxyPreviewMaintenance(c StoreConfiguration, d ReferenceDependencies, a *oauthpg.ProviderAuthority, phase OAuthProxyMaintenanceSchema) (StoreSet, error) {
+	if c.OAuthProxyPreview == nil || a == nil || !phase.valid() {
+		return StoreSet{}, invalidOAuthProxyMaintenance()
+	}
+	return composeStores(c, d, a, nil, phase)
+}
+
+func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority *oauthpg.ProviderAuthority,
+	proxyRetirement *oauthpg.ProxyRetirementAuthority, maintenance OAuthProxyMaintenanceSchema) (StoreSet, error) {
 	if c.OAuthProxyPreview != nil && (c.SocialOAuth == nil || c.SocialOAuth.Signin == nil || c.OTP == nil || c.OAuthWorkload != nil || c.ProviderDiscovery != nil) {
 		return StoreSet{}, identity.InvalidInputError{Field: "reference_oauth_proxy_preview"}
 	}
@@ -388,7 +400,7 @@ func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority
 		return StoreSet{}, err
 	}
 	if c.DurableAdmission != nil {
-		return composeDurableAdmission(c, d, migrationPolicy, httpRate, proxyAuthority, proxyRetirement)
+		return composeDurableAdmission(c, d, migrationPolicy, httpRate, proxyAuthority, proxyRetirement, maintenance)
 	}
 	v := c.Velocity
 	if len(v.Tenants) < 1 || len(v.Tenants) > 128 || v.Batch < 1 || v.Batch > 1000 || v.MaxRecords < 1 || v.MaxRecords > 100000 || v.RecoveryTimeout <= 0 || v.RecoveryTimeout >= v.LeaseDuration {
@@ -430,7 +442,7 @@ func composeStores(c StoreConfiguration, d ReferenceDependencies, proxyAuthority
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
 	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
-	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy, httpRate: httpRate, proxyPreviewAuthority: proxyAuthority, proxyPreviewRetirement: proxyRetirement}
+	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy, httpRate: httpRate, proxyPreviewAuthority: proxyAuthority, proxyPreviewRetirement: proxyRetirement, proxyMaintenance: maintenance}
 	if err := state.composeFeatureStores(c, d); err != nil {
 		cancel()
 		return StoreSet{}, err
