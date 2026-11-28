@@ -104,6 +104,57 @@ func testPasswordMFASessionRead(t *testing.T, ctx context.Context, pool *databas
 	if !result.ValidUntil().Equal(validation.Clock.Now().Add(20*time.Second - validation.ClockUncertainty)) {
 		t.Fatal("password factor read renewed authority freshness")
 	}
+	parentObserver, err := NewOriginalPasswordTOTPParentObserver(pool, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentReference := OriginalPasswordTOTPParentReference{
+		TenantID: s.TenantID, ActorID: s.UserID, SessionID: s.SessionID,
+		SessionVersion: s.Version, Lookup: s.Lookup,
+	}
+	assertParentDenied := func(t *testing.T, reference OriginalPasswordTOTPParentReference) {
+		t.Helper()
+		observed, err := parentObserver.Observe(ctx, reference)
+		if !errors.Is(err, session.ErrUnauthenticated) || observed != (OriginalPasswordTOTPParentObservation{}) {
+			t.Fatal("denied original parent returned authority or a non-denial error", err)
+		}
+	}
+	assertCurrentParent := func(t *testing.T) {
+		t.Helper()
+		if m.Method != "totp" {
+			assertParentDenied(t, parentReference)
+			return
+		}
+		now := validation.Clock.Now()
+		lifetime, err := withCSRF.Lifetime(now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		observed, err := parentObserver.Observe(ctx, parentReference)
+		if err != nil || !observed.ReadStartedAt.Equal(now) || !observed.ValidUntil.Equal(result.ValidUntil()) || !observed.ExpiresAt.Equal(lifetime.ExpiresAt) {
+			t.Fatal("original password TOTP parent lost bounded observation or effective expiry", err)
+		}
+	}
+	t.Run("original password TOTP parent uses current native authority", func(t *testing.T) {
+		assertCurrentParent(t)
+		assertCurrentParent(t)
+	})
+	if m.Method == "totp" {
+		for _, substitution := range []struct {
+			name   string
+			change func(*OriginalPasswordTOTPParentReference)
+		}{
+			{"actor", func(r *OriginalPasswordTOTPParentReference) { r.ActorID = "other-parent-actor" }},
+			{"session version", func(r *OriginalPasswordTOTPParentReference) { r.SessionVersion++ }},
+			{"session", func(r *OriginalPasswordTOTPParentReference) { r.SessionID += "-other" }},
+		} {
+			t.Run("original parent denies substituted "+substitution.name, func(t *testing.T) {
+				reference := parentReference
+				substitution.change(&reference)
+				assertParentDenied(t, reference)
+			})
+		}
+	}
 	combined, err := NewSelectedSessionService(pool, SelectedSessionServiceConfig{Repository: repository, Validation: validation, Admission: SelectedSessionAdmissionConfig{SingleFactor: SingleFactorSessionAdmissionConfig{Verified: &profile}, MFAPassword: &profile}})
 	if err != nil {
 		t.Fatal(err)
@@ -147,9 +198,14 @@ func testPasswordMFASessionRead(t *testing.T, ctx context.Context, pool *databas
 	if denied, err := withPasskey.Get(ctx, request); err != nil || denied.Authenticated {
 		t.Fatal("passkey-selected reader fell back after password credential denial", err)
 	}
+	t.Run("original parent cannot cache an allow after password disable", func(t *testing.T) {
+		assertParentDenied(t, parentReference)
+		assertParentDenied(t, parentReference)
+	})
 	if _, err = pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=true WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3`, string(s.TenantID), string(s.UserID), credentialID); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("original parent rereads restored password authority", assertCurrentParent)
 	defer func() {
 		if _, err := pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=$3::numeric WHERE tenant_id=$1 AND user_id=$2`, string(s.TenantID), string(s.UserID), strconv.FormatUint(m.FactorAuthorityVersion, 10)); err != nil {
 			t.Error(err)
@@ -167,4 +223,8 @@ func testPasswordMFASessionRead(t *testing.T, ctx context.Context, pool *databas
 	if denied, err := withPasskey.Get(ctx, request); err != nil || denied.Authenticated {
 		t.Fatal("passkey-selected reader fell back after password factor denial", err)
 	}
+	t.Run("original parent cannot cache an allow after factor epoch advance", func(t *testing.T) {
+		assertParentDenied(t, parentReference)
+		assertParentDenied(t, parentReference)
+	})
 }

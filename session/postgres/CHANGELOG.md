@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add uncached primary liveness checks for exact ordinary password-plus-TOTP
+  parent references. Derived-session owners can check current authority and
+  effective expiry without retaining, accepting or returning a parent bearer.
+
 - Retain an explicitly selected One Tap redirect's exact endpoint and mode in
   canonical browser storage, keyed start commitments and same-transaction
   consumption. Keep the original five-minute lifetime and ordinary/popup cuts,

@@ -49,20 +49,28 @@ func NewSessionService(pool *database.Pool, c SessionServiceConfig) (*session.Se
 }
 
 func newPasswordSessionService(pool *database.Pool, c SessionServiceConfig, mfa bool) (*session.SessionService, error) {
+	reader, cacheProfile, err := newPasswordSessionReader(pool, c, mfa)
+	if err != nil {
+		return nil, err
+	}
+	return session.NewProfileSessionService(reader, c.Validation, session.AuthenticationVerified, cacheProfile)
+}
+
+func newPasswordSessionReader(pool *database.Pool, c SessionServiceConfig, mfa bool) (*primarySessionReader, string, error) {
 	if !c.Profile.valid() || c.Profile.CredentialKind == identity.CredentialPasskey || c.Profile.Audience != c.Validation.Audience || c.Repository.MaximumDuration > c.Validation.MaximumDuration {
-		return nil, session.ErrInvalidInput
+		return nil, "", session.ErrInvalidInput
 	}
 	native, err := NewRepository(pool, c.Repository)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	domain, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: c.Repository.MaximumDuration})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	policy, err := authority.NewAuthorityStore(pool.Raw(), c.Repository.MaximumDuration)
 	if err != nil {
-		return nil, session.ErrInvalidInput
+		return nil, "", session.ErrInvalidInput
 	}
 	profile := c.Profile
 	profile.GlobalAuthorityID = strings.Clone(profile.GlobalAuthorityID)
@@ -74,19 +82,19 @@ func newPasswordSessionService(pool *database.Pool, c SessionServiceConfig, mfa 
 	r := &primarySessionReader{native: native, domain: domain, policy: policy, profile: profile, clock: c.Validation.Clock, mfaPassword: mfa}
 	if mfa {
 		if profile.AuthenticationMethod != "password" || profile.CredentialKind != identity.CredentialPassword || profile.CredentialOwner != "identity/password" {
-			return nil, session.ErrInvalidInput
+			return nil, "", session.ErrInvalidInput
 		}
 		r.mfaFactors, err = mfapg.NewTOTPSessionFactorReader(pool, c.Repository.MaximumDuration)
 		if err != nil {
-			return nil, session.ErrInvalidInput
+			return nil, "", session.ErrInvalidInput
 		}
 		r.mfaOTPFactors, err = mfapg.NewOTPSessionFactorReader(pool, c.Repository.MaximumDuration)
 		if err != nil {
-			return nil, session.ErrInvalidInput
+			return nil, "", session.ErrInvalidInput
 		}
 		cacheProfile = nativeAdmissionCacheProfile("native-mfa-password-totp-otp-recovery-session-v3", cacheProfile)
 	}
-	return session.NewProfileSessionService(r, c.Validation, session.AuthenticationVerified, cacheProfile)
+	return r, cacheProfile, nil
 }
 
 // Canonical selected native authority and storage configuration is authenticated

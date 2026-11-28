@@ -521,6 +521,15 @@ Install `PasswordMFAMigrationSource` at a new permanent version after
 rewriting older migrations or records. Upgrade readers first. This is a native
 session-reading API, not the still-unfinished password challenge/login service.
 
+For a derived session, `NewOriginalPasswordTOTPParentObserver` rechecks the
+exact ordinary parent against the same primary. Pass the original actor,
+session ID, version and lookup digest from trusted grant storage. Do not
+accept these fields as a client credential or return them over HTTP. It
+returns only the original read start, conservative validity deadline and
+effective parent expiry. It rejects single-factor and non-TOTP records,
+does not require or reveal the original bearer, and never caches authority.
+Check it again for every derived-session use.
+
 ## Atomic magic-link session effects
 
 Install `MagicLinkSigninMigrationSource` at a new permanent version after
