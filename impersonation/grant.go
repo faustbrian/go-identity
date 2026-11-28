@@ -111,7 +111,7 @@ func writeUint(h hash.Hash, value uint64) {
 }
 
 // Grant is an immutable versioned snapshot, not a bearer credential or store.
-// Only pending and approved snapshots can be constructed in this profile.
+// Pending, approved and active snapshots can be constructed in this profile.
 type Grant struct {
 	id          GrantID
 	request     Request
@@ -119,6 +119,7 @@ type Grant struct {
 	version     uint64
 	requestedAt time.Time
 	expiresAt   time.Time
+	approval    Approval
 }
 
 // String prevents implicit diagnostics from traversing a sensitive request.
@@ -153,7 +154,8 @@ func (g Grant) Version() uint64 { return g.version }
 // RequestedAt returns the original trusted creation time.
 func (g Grant) RequestedAt() time.Time { return g.requestedAt }
 
-// ExpiresAt returns the exclusive decision deadline, never extended by approval.
+// ExpiresAt returns the exclusive decision/activation deadline, never extended
+// by approval or activation. ActiveSession.Bindings exposes the active expiry.
 func (g Grant) ExpiresAt() time.Time { return g.expiresAt }
 
 // ApprovalInput proposes one decision against an exact pending grant/request.
@@ -227,5 +229,6 @@ func Approve(grant Grant, input ApprovalInput) (Grant, Approval, error) {
 	approval := Approval{grantID: grant.id, requestVersion: grant.version, requestDigest: grant.request.digest, approver: input.Approver, reason: input.Reason, at: input.At.Round(0).UTC()}
 	grant.status = StatusApproved
 	grant.version++
+	grant.approval = approval
 	return grant, approval, nil
 }

@@ -1,9 +1,8 @@
 # Impersonation request binding
 
-This independently versioned module supplies the storage-neutral part of the
-selected M24 direct-Go pending request and one-distinct-admin approval profile.
-It is not the complete impersonation feature. A successful pure transition
-does not authenticate an administrator, authorize an operation or grant access.
+This independently versioned module supplies the storage-neutral request,
+distinct-administrator approval, and approved-to-active rules. It does not
+authenticate an administrator, issue credentials or grant access.
 
 `NewActor` and `NewTarget` use the pinned identity module's identifier syntax,
 preserving exact case and spelling. The target also binds its current account
@@ -32,6 +31,16 @@ stable redacted `Error` classifications (`ErrInvalidInput`, `ErrConflict`,
 clock, random source, I/O, goroutine or mutable store in this module.
 
 ## Durable consumer responsibilities
+
+The pure `Activate` operation requires the exact retained approval, the
+original actor, unchanged target/account version and the original policy
+identity and revision. It transitions version 2 to 3 once, before the
+original approval deadline and before the authenticated parent session's
+effective expiry. Active expiry is the earlier of the end of the approved
+duration and the parent's expiry; neither deadline is renewed. The original
+`Grant.ExpiresAt()` deadline has not changed. `ActiveSession.Bindings()`
+returns an owned metadata projection with the exact approved scope and
+actor, target, grant and parent lineage. It has no bearer or reason.
 
 Before either transition the adapter must authenticate a non-impersonated
 administrator using their own current password-plus-TOTP session, fresh within
@@ -64,9 +73,10 @@ approval against that pending snapshot at the original decision time. This is
 structural validation, not renewed authorization or permission to replay effects.
 
 All full lifecycle names are recognized by `Status.Valid`, but this profile
-exposes only pending creation and pending-to-approved. Denial, revoke, activation,
-session issuance/restoration, lineage/presentation, quorum reads, HTTP transport,
-expiry persistence and authoritative online session checks are unsupported.
+exposes only pending creation, pending-to-approved and the pure activation
+transition. Denial, revoke, durable activation, session issuance/restoration,
+quorum reads, HTTP transport, expiry persistence and authoritative online
+session checks are outside this package.
 There is no bearer token, `SessionIssuer` stub, mutable aggregate approval list or
 private authorization engine. Completing this module alone does not deliver M24.
 

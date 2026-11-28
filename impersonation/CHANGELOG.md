@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an exact approved-to-active decision with fixed scope and immutable
+  actor, target and parent-session lineage. Active expiry cannot outlive
+  the original authorized duration or parent session.
+
 - Add immutable bounded impersonation request binding and versioned pending
   grants for the selected M24 direct-Go consumer profile.
 - Add exact-intent distinct non-target approval with fixed fifteen-minute expiry,
