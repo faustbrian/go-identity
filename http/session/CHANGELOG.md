@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into the administrator session list using only the original HTTPS
+  cookie and an exact target. Return a bounded safe page and charge the
+  existing administrative quota after current authorization.
+
 - Select administrator user ban and unban HTTPS routes independently. Require
   the original session synchronizer and one idempotency key, share the admin
   quota, and return only the safe status and pending cleanup receipt.
