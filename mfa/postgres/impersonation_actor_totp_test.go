@@ -13,7 +13,11 @@ func TestImpersonationActorTOTPBindingRequiresExactOwnerAndDistinctActor(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"request", "approve"} {
+	grantID, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"request", "approve", "start"} {
 		t.Run(action, func(t *testing.T) {
 			registration := kernel.FeatureRegistration{
 				Operation: identity.FeatureOperation{
@@ -24,12 +28,12 @@ func TestImpersonationActorTOTPBindingRequiresExactOwnerAndDistinctActor(t *test
 			}
 			binding := identity.CommandBinding{
 				CommandID: id, TenantID: "tenant", UserID: "target", ActorID: "administrator",
-				ActorKind: authorization.SubjectUser, RecordID: string(id),
+				ActorKind: authorization.SubjectUser, RecordID: string(grantID),
 				OperationID: registration.Operation.OperationID, SchemaID: registration.Operation.SchemaID,
 				SchemaVersion: 1, PolicyID: "administrator-policy", PolicyVersion: 1, CorrelationID: string(id),
 			}
 			if !impersonationActorTOTPBindingMatches(binding, registration, "administrator") {
-				t.Fatal("exact approval operation did not bind the administrator's factor")
+				t.Fatal("exact impersonation operation did not bind the administrator's factor")
 			}
 			for _, tc := range []struct {
 				name  string
@@ -48,9 +52,12 @@ func TestImpersonationActorTOTPBindingRequiresExactOwnerAndDistinctActor(t *test
 				{name: "unrecognized schema", actor: "administrator", alter: func(b *identity.CommandBinding, f *kernel.FeatureRegistration) {
 					b.SchemaVersion, f.Operation.SchemaVersion = 2, 2
 				}},
-				{name: "activation", actor: "administrator", alter: func(b *identity.CommandBinding, f *kernel.FeatureRegistration) {
-					b.OperationID = "identity.impersonation.start"
+				{name: "stop", actor: "administrator", alter: func(b *identity.CommandBinding, f *kernel.FeatureRegistration) {
+					b.OperationID = "identity.impersonation.stop"
 					f.Operation.OperationID = b.OperationID
+				}},
+				{name: "other schema", actor: "administrator", alter: func(b *identity.CommandBinding, f *kernel.FeatureRegistration) {
+					b.SchemaID, f.Operation.SchemaID = "impersonation-stop", "impersonation-stop"
 				}},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
@@ -62,6 +69,12 @@ func TestImpersonationActorTOTPBindingRequiresExactOwnerAndDistinctActor(t *test
 						t.Fatal("unselected operation or actor could use the impersonation factor gate")
 					}
 				})
+			}
+			if action == "start" {
+				binding.RecordID = string(id)
+				if impersonationActorTOTPBindingMatches(binding, registration, "administrator") {
+					t.Fatal("activation reused its command ID as antecedent grant")
+				}
 			}
 		})
 	}

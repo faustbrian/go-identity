@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the original administrator's TOTP factor during the exact native
+  impersonation activation command, without accepting target factors or
+  changing request and approval admission.
+
 - Add an actor-scoped TOTP session factor fence for the exact native
   impersonation request and approval operations. The target's factor never
   satisfies this check; existing self-service fences remain unchanged.

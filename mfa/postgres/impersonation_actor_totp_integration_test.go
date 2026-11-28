@@ -79,11 +79,11 @@ func (p *impersonationActorFactorInvocation) ApplyFeature(ctx context.Context, w
 			return identity.FeatureReceipt{}, err
 		}
 	}
-	before := uint64(0)
-	if p.op.OperationID == "identity.impersonation.approve" {
-		before = 1
+	_, _, declared, err := w.FeatureScope(p)
+	if err != nil {
+		return identity.FeatureReceipt{}, err
 	}
-	return identity.FeatureReceipt{Operation: p.op, BeforeVersion: before, AfterVersion: before + 1}, nil
+	return identity.FeatureReceipt{Operation: p.op, BeforeVersion: declared.BeforeVersion, AfterVersion: declared.AfterVersion}, nil
 }
 
 func (p *impersonationActorFactorInvocation) CheckFeatureCommit(ctx context.Context, w kernel.Work, _ identity.Command) error {
@@ -116,7 +116,7 @@ func TestRequireImpersonationActorTOTPSessionFactorPostgres(t *testing.T) {
 	for _, operation := range []struct {
 		name, schema string
 		before       uint64
-	}{{"request", "impersonation-request", 0}, {"approve", "impersonation-approve", 1}} {
+	}{{"request", "impersonation-request", 0}, {"approve", "impersonation-approve", 1}, {"start", "impersonation-start", 2}} {
 		t.Run(operation.name, func(t *testing.T) {
 			for _, mode := range []string{"current-actor", "target-substitution", "target-factor", "foreign-invocation", "foreign-schema", "foreign-contributor", "stale-authority", "stale-enrollment", "withdrawn", "late-withdrawn"} {
 				t.Run(mode, func(t *testing.T) {
@@ -153,7 +153,11 @@ UPDATE identity_mfa.totp_factors SET state=2,enrollment_version=1,encrypted_secr
 					if err != nil {
 						t.Fatal(err)
 					}
-					binding := identity.CommandBinding{CommandID: id, TenantID: "tenant-a", UserID: "target-user", ActorID: "actor-admin", ActorKind: authorization.SubjectUser, RecordID: string(id), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: "impersonation-admin", PolicyVersion: 1, CorrelationID: string(id)}
+					grantID, err := identity.NewCommandID()
+					if err != nil {
+						t.Fatal(err)
+					}
+					binding := identity.CommandBinding{CommandID: id, TenantID: "tenant-a", UserID: "target-user", ActorID: "actor-admin", ActorKind: authorization.SubjectUser, RecordID: string(grantID), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: "impersonation-admin", PolicyVersion: 1, CorrelationID: string(id)}
 					command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: binding, Operation: op})
 					if err != nil {
 						t.Fatal(err)

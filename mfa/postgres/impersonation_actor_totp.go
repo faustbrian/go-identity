@@ -10,7 +10,7 @@ import (
 
 // RequireImpersonationActorTOTPSessionFactor fences the administrator's
 // original confirmed TOTP enrollment and factor generation for a protected
-// impersonation request or approval. The administrator is the command actor,
+// impersonation request, approval or activation. The administrator is the command actor,
 // not its target user. The native owner must bind the original authenticated
 // session's factor, fence the actor's current primary and authorization before
 // calling this guard, and check session possession, CSRF and freshness in the
@@ -46,6 +46,12 @@ func impersonationActorTOTPBindingMatches(binding identity.CommandBinding, regis
 		schema = "impersonation-request"
 	case "identity.impersonation.approve":
 		schema = "impersonation-approve"
+	case "identity.impersonation.start":
+		grantID, err := identity.ParseCommandID(binding.RecordID)
+		if err != nil || grantID == binding.CommandID {
+			return false
+		}
+		schema = "impersonation-start"
 	default:
 		return false
 	}
