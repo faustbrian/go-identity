@@ -34,7 +34,49 @@ func TestReferencePostgresOAuthProxyMaintenanceDrainsBothActualOrigins(t *testin
 	}, true)
 }
 
-func (p *referenceOAuthProxyPreviewProof) installMaintenance(t *testing.T, ctx context.Context, c reference.StoreConfiguration, production liveStores, runtime *database.Pool) {
+func (p *referenceOAuthProxyPreviewProof) activateMaintenancePreview(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies) reference.StoreSet {
+	t.Helper()
+	activation, err := reference.ComposeStoresWithOAuthProxyPreviewMaintenance(c, deps, p.authority, reference.OAuthProxyMaintenanceActivate)
+	if err != nil {
+		t.Fatal("compose public preview activation over its recorded managed expansion", err)
+	}
+	t.Cleanup(func() {
+		bounded, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		if err := activation.Close(bounded); err != nil {
+			t.Error("close the separate preview activation owner without closing its borrowed pool", err)
+		}
+	})
+	request := applyRequest(t, ctx, activation, []reference.ModuleID{"identity/oauth/postgres"})
+	if len(request.Plan.Steps) != 1 {
+		t.Fatal("managed preview expansion did not leave exactly one pending activation migration")
+	}
+	step := request.Plan.Steps[0]
+	if step.Owner != "identity/oauth/postgres" || step.FromVersion != 7 || step.ToVersion != 8 {
+		t.Fatal("preview activation replanned an expansion or changed a predecessor", step)
+	}
+	request.CommandID = "preview_proxy_maintenance_activate_0001"
+	request.IdempotencyKey, err = identity.NewIdempotencyKey([]byte("preview-proxy-maintenance-activation"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt := range 2 {
+		result, err := activation.ReferenceMigrationApply(ctx, request)
+		receipts := result.Result.Receipts()
+		want := reference.MigrationContributorReceipt{Module: "identity/oauth/postgres", Version: 8}
+		if err != nil || result.Result.State() != reference.MigrationApplied || result.Result.CommandID() != request.CommandID ||
+			result.Result.Digest() != request.Plan.Digest || len(receipts) != 1 || receipts[0] != want {
+			t.Fatal("public preview activation Apply or exact replay lost its command, plan or native receipt", attempt, err)
+		}
+	}
+	completed, err := activation.ReferenceMigrationPlan(ctx, reference.ReferenceMigrationPlanRequest{Modules: []reference.ModuleID{"identity/oauth/postgres"}})
+	if err != nil || len(completed.Plan.Steps) != 0 || completed.Plan.Digest == ([32]byte{}) {
+		t.Fatal("managed preview activation did not leave a valid no-op plan", err)
+	}
+	return activation
+}
+
+func (p *referenceOAuthProxyPreviewProof) installMaintenance(t *testing.T, ctx context.Context, _ reference.StoreConfiguration, production liveStores, runtime *database.Pool) {
 	t.Helper()
 	productionSchema := p.production.Native.Schema
 	for _, source := range []migrations.Source{
@@ -47,9 +89,6 @@ func (p *referenceOAuthProxyPreviewProof) installMaintenance(t *testing.T, ctx c
 	} {
 		applyReferenceProxyMaintenanceSource(t, ctx, production.pool, source)
 	}
-	applyReferenceProxyMaintenanceSource(t, ctx, p.previewPool, oauthpg.ProxyCustodyWriteFenceActivationSource{
-		Schema: c.SocialOAuth.Schema, Version: 100, Kind: kernel.OAuthProxyRetirePreview,
-	})
 	reader := pgx.Identifier{p.readerRole}.Sanitize()
 	cascadeTable := pgx.Identifier{productionSchema, "provider_disable_cascades"}.Sanitize()
 	if _, err := production.pool.Raw().Exec(ctx, "GRANT SELECT ON "+cascadeTable+" TO "+reader); err != nil {

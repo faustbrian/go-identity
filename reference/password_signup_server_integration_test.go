@@ -1541,10 +1541,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		t.Fatal("registration graph", err)
 	}
 	f.stores = stores
+	originalStores := stores
 	t.Cleanup(func() {
 		bounded, stop := context.WithTimeout(context.Background(), 5*time.Second)
 		defer stop()
-		if err := stores.Close(bounded); err != nil {
+		if err := originalStores.Close(bounded); err != nil {
 			t.Error(err)
 		}
 	})
@@ -1671,6 +1672,25 @@ END $$`); err != nil {
 	}
 	if out, err := migrationResult, migrationErr; err != nil || out.Result.State() != reference.MigrationApplied {
 		t.Fatal("fresh selected registration migration", err, "state", out.Result.State(), "safe-cause", errors.Unwrap(err), "receipts", len(out.Result.Receipts()))
+	}
+	if proxyPreview != nil && proxyPreview.maintenance {
+		stores = proxyPreview.activateMaintenancePreview(t, ctx, c, deps)
+		if err := originalStores.Close(ctx); err != nil {
+			t.Fatal("close the superseded preview expansion graph", err)
+		}
+		f.stores = stores
+		providers, err = reference.ComposeProviders(stores)
+		if err != nil {
+			t.Fatal("compose activated preview providers", err)
+		}
+		workers, err = reference.ComposeWorkers(stores, providers, workerConfigs...)
+		if err != nil {
+			t.Fatal("compose activated preview workers", err)
+		}
+		features, err = reference.ComposeFeatures(stores, providers, workers)
+		if err != nil {
+			t.Fatal("compose activated preview features", err)
+		}
 	}
 	policies := identity.PolicySet{Authorize: c.OTP.RequestKeys.Policy.Authorization, AssessRisk: func(context.Context, identity.RiskPolicyInput) (identity.RiskPolicyDecision, error) { panic("unused") }, MapClaims: func(context.Context, identity.ClaimsPolicyInput) (identity.ClaimsPolicyDecision, error) {
 		panic("unused")
