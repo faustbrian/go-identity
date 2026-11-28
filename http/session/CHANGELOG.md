@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select administrator user ban and unban HTTPS routes independently. Require
+  the original session synchronizer and one idempotency key, share the admin
+  quota, and return only the safe status and pending cleanup receipt.
+
 - Optionally select a borrowed ordinary-GET session projection, including a
   bounded encrypted cache. Original owner custody and expiry remain mandatory;
   protected metadata and signout continue using the native primary. Omission
