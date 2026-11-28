@@ -77,14 +77,36 @@ func (HTTPImpersonationDenialConfiguration) MarshalText() ([]byte, error) {
 	return nil, session.ErrSecretSerialization
 }
 
+// HTTPImpersonationQuorumConfiguration selects only the fresh administrator
+// quorum read. It requires the complete native Denial history. Leave the
+// quota fields unset when Deny or another administrative owner already
+// configures the shared quota; otherwise provide all three fields.
+type HTTPImpersonationQuorumConfiguration struct {
+	AdminNamespace string
+	AdminKey       [32]byte
+	Denied         func(context.Context, organizationhttp.AdminRateEvent) error
+}
+
+func (HTTPImpersonationQuorumConfiguration) Format(w fmt.State, _ rune) {
+	_, _ = w.Write([]byte("reference.HTTPImpersonationQuorumConfiguration(redacted)"))
+}
+func (HTTPImpersonationQuorumConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+func (HTTPImpersonationQuorumConfiguration) MarshalText() ([]byte, error) {
+	return nil, session.ErrSecretSerialization
+}
+
 type impersonationState struct {
-	native    *impersonationpg.Service
-	keyed     *impersonationpg.KeyedStartService
-	origins   []identityhttp.Origin
-	cookie    string
-	denial    bool
-	admin     *organizationhttp.AdminRateLimiter
-	ownsAdmin bool
+	native     *impersonationpg.Service
+	keyed      *impersonationpg.KeyedStartService
+	origins    []identityhttp.Origin
+	cookie     string
+	denial     bool
+	httpDeny   bool
+	httpQuorum bool
+	admin      *organizationhttp.AdminRateLimiter
+	ownsAdmin  bool
 }
 
 func (s *impersonationState) close() {
@@ -94,7 +116,7 @@ func (s *impersonationState) close() {
 }
 
 func validateImpersonationSelection(c StoreConfiguration) error {
-	if c.Impersonation == nil && c.HTTPImpersonation == nil && c.HTTPImpersonationDenial == nil {
+	if c.Impersonation == nil && c.HTTPImpersonation == nil && c.HTTPImpersonationDenial == nil && c.HTTPImpersonationQuorum == nil {
 		return nil
 	}
 	if c.Impersonation == nil || c.OTP == nil || c.Delivery == nil || c.Session == nil || c.PasswordSignin == nil ||
@@ -104,6 +126,9 @@ func validateImpersonationSelection(c StoreConfiguration) error {
 	}
 	if c.HTTPImpersonationDenial != nil && (!c.Impersonation.Denial || c.HTTPRate == nil) {
 		return identity.InvalidInputError{Field: "reference_http_impersonation_denial"}
+	}
+	if c.HTTPImpersonationQuorum != nil && (!c.Impersonation.Denial || c.HTTPRate == nil) {
+		return identity.InvalidInputError{Field: "reference_http_impersonation_quorum"}
 	}
 	return nil
 }
@@ -152,7 +177,7 @@ func composeImpersonation(c StoreConfiguration, d ReferenceDependencies, session
 		return nil, fmt.Errorf("reference impersonation native owner: %w", err)
 	}
 	owner := &impersonationState{native: native, denial: n.Denial}
-	if c.HTTPImpersonation == nil && c.HTTPImpersonationDenial == nil {
+	if c.HTTPImpersonation == nil && c.HTTPImpersonationDenial == nil && c.HTTPImpersonationQuorum == nil {
 		return owner, nil
 	}
 	cookie, err := login.Issuance.Cookie.DeletionAttributes()
@@ -173,22 +198,36 @@ func composeImpersonation(c StoreConfiguration, d ReferenceDependencies, session
 	return owner, nil
 }
 
-func composeImpersonationDenialHTTP(c StoreConfiguration, owner *impersonationState, rate *httpRateState, org *organizationHTTPState, directory *directorySyncState, scim *managedSCIMCreateState) error {
-	h := c.HTTPImpersonationDenial
-	if h == nil {
+func composeImpersonationAdminHTTP(c StoreConfiguration, owner *impersonationState, rate *httpRateState, org *organizationHTTPState, directory *directorySyncState, scim *managedSCIMCreateState) error {
+	deny, quorum := c.HTTPImpersonationDenial, c.HTTPImpersonationQuorum
+	if deny == nil && quorum == nil {
 		return nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_impersonation_denial"}
+	if deny == nil {
+		invalid.Field = "reference_http_impersonation_quorum"
+	}
 	if owner == nil || !owner.denial || c.HTTPRate == nil || rate == nil {
 		return invalid
 	}
-	if owner.keyed == nil {
-		if len(h.TrustedOrigins) == 0 {
+	options := organizationhttp.AdminRateConfig{Shared: rate.backend, Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration}
+	if deny != nil {
+		if owner.keyed == nil {
+			if len(deny.TrustedOrigins) == 0 {
+				return invalid
+			}
+			owner.origins = slices.Clone(deny.TrustedOrigins)
+		} else if len(deny.TrustedOrigins) != 0 {
 			return invalid
 		}
-		owner.origins = slices.Clone(h.TrustedOrigins)
-	} else if len(h.TrustedOrigins) != 0 {
-		return invalid
+		options.Namespace, options.Key, options.Denied = deny.AdminNamespace, deny.AdminKey, deny.Denied
+	}
+	if quorum != nil {
+		if deny == nil {
+			options.Namespace, options.Key, options.Denied = quorum.AdminNamespace, quorum.AdminKey, quorum.Denied
+		} else if quorum.AdminNamespace != "" || quorum.AdminKey != ([32]byte{}) || quorum.Denied != nil {
+			return identity.InvalidInputError{Field: "reference_http_impersonation_quorum"}
+		}
 	}
 	var existing [3]*organizationhttp.AdminRateLimiter
 	if org != nil {
@@ -211,19 +250,17 @@ func composeImpersonationDenialHTTP(c StoreConfiguration, owner *impersonationSt
 		shared = candidate
 	}
 	if shared != nil {
-		if h.AdminNamespace != "" || h.AdminKey != ([32]byte{}) || h.Denied != nil {
+		if options.Namespace != "" || options.Key != ([32]byte{}) || options.Denied != nil {
 			return invalid
 		}
 		owner.admin = shared
-		return nil
+	} else {
+		admin, err := organizationhttp.NewAdminRateLimiter(options)
+		if err != nil {
+			return invalid
+		}
+		owner.admin, owner.ownsAdmin = admin, true
 	}
-	admin, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
-		Shared: rate.backend, Namespace: h.AdminNamespace, Key: h.AdminKey, Now: time.Now,
-		MaximumDuration: c.HTTPRate.MaximumDuration, Denied: h.Denied,
-	})
-	if err != nil {
-		return invalid
-	}
-	owner.admin, owner.ownsAdmin = admin, true
+	owner.httpDeny, owner.httpQuorum = deny != nil, quorum != nil
 	return nil
 }

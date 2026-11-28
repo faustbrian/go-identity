@@ -141,6 +141,8 @@ type StoreConfiguration struct {
 	HTTPImpersonation *HTTPImpersonationConfiguration
 	// HTTPImpersonationDenial independently selects HTTPS administrator Deny.
 	HTTPImpersonationDenial *HTTPImpersonationDenialConfiguration
+	// HTTPImpersonationQuorum independently selects the HTTPS quorum read.
+	HTTPImpersonationQuorum *HTTPImpersonationQuorumConfiguration
 	// Passkey explicitly selects native existing-account passkey workflows.
 	// Nil exposes no passkey handle, route or method; HTTP stays independent.
 	Passkey *PasskeyConfiguration

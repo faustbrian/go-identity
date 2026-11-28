@@ -283,14 +283,16 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
-	impersonation                bool
-	impersonationDenial          bool
-	passwordSigninLocalization   bool
-	scimManagedUsersDeactivation bool
-	oauthProxyPreview            bool
-	oauthProxyProviderAuthority  bool
-	oauthProxyRetirement         bool
-	oauthProxyMaintenance        bool
+	impersonation                 bool
+	impersonationDenial           bool
+	impersonationQuorum           bool
+	impersonationQuorumStandalone bool
+	passwordSigninLocalization    bool
+	scimManagedUsersDeactivation  bool
+	oauthProxyPreview             bool
+	oauthProxyProviderAuthority   bool
+	oauthProxyRetirement          bool
+	oauthProxyMaintenance         bool
 
 	scimBulk                    bool
 	scimManagedRead             bool
@@ -664,6 +666,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.impersonationDenial {
 		impersonationDenialPolicy = &referenceImpersonationDenialPolicy{}
 		selectedAuthorization = impersonationDenialPolicy
+	}
+	var impersonationQuorumPolicy *referenceImpersonationQuorumPolicy
+	if extensions.impersonationQuorum {
+		impersonationDenialPolicy = &referenceImpersonationDenialPolicy{}
+		impersonationQuorumPolicy = &referenceImpersonationQuorumPolicy{denial: impersonationDenialPolicy}
+		selectedAuthorization = impersonationQuorumPolicy
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
 	var socialIssuer *referenceSocialOIDCIssuer
@@ -1062,6 +1070,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.impersonationDenial {
 		configureReferenceImpersonationDenial(t, &c, origin)
+	}
+	if extensions.impersonationQuorum {
+		configureReferenceImpersonationDenial(t, &c, origin)
+		quorum := &reference.HTTPImpersonationQuorumConfiguration{}
+		if extensions.impersonationQuorumStandalone {
+			deny := c.HTTPImpersonationDenial
+			quorum.AdminNamespace, quorum.AdminKey, quorum.Denied = deny.AdminNamespace, deny.AdminKey, deny.Denied
+			c.HTTPImpersonationDenial = nil
+		}
+		c.HTTPImpersonationQuorum = quorum
 	}
 	if extensions.passwordRecovery {
 		totp := c.PasswordSignin.TOTP
@@ -1767,6 +1785,12 @@ END $$`); err != nil {
 		t.Fatal("impersonation denial OpenAPI selection differs from configured HTTP")
 	}
 	if c.HTTPImpersonationDenial != nil {
+		wantOperations++
+	}
+	if seen["identity.impersonation.quorum"] != (c.HTTPImpersonationQuorum != nil) {
+		t.Fatal("impersonation quorum OpenAPI selection differs from configured HTTP")
+	}
+	if c.HTTPImpersonationQuorum != nil {
 		wantOperations++
 	}
 	if c.HTTPAPIKey != nil {
@@ -3121,7 +3145,7 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 			proveReferenceDeviceHTTP(t, ctx, client, network.URL, origin, cookies, csrf)
 		}
 	}
-	if extensions.impersonation || extensions.impersonationDenial {
+	if extensions.impersonation || extensions.impersonationDenial || extensions.impersonationQuorum {
 		native, err := features.Impersonation()
 		if err != nil {
 			t.Fatal("selected native impersonation unavailable", err)
@@ -3129,7 +3153,12 @@ CREATE TRIGGER reject_test_denial BEFORE UPDATE ON identity_social.transactions 
 		requester, requesterCSRF := referenceImpersonationAdmin(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-requester")
 		approver, approverCSRF := referenceImpersonationAdmin(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-approver")
 		target := registerReferenceOrganizationHuman(t, ctx, client, network.URL, origin, features, workers, messages, "impersonation-target")
-		if extensions.impersonationDenial {
+		if extensions.impersonationQuorum {
+			proveReferenceImpersonationQuorumHTTP(t, ctx, native, deps.PostgreSQL, c.Session.Native.Execution.Repository.Schema, c.PasswordSignin.TOTP.Counters.Schema, impersonationQuorumPolicy, client, network.URL, requester, approver, requesterCSRF, approverCSRF, target.user)
+			if !extensions.impersonationQuorumStandalone {
+				proveReferenceImpersonationDenialHTTP(t, ctx, native, deps.PostgreSQL, c.Session.Native.Execution.Repository.Schema, impersonationDenialPolicy, client, network.URL, origin, requester, approver, requesterCSRF, approverCSRF, target.user)
+			}
+		} else if extensions.impersonationDenial {
 			proveReferenceImpersonationDenialHTTP(t, ctx, native, deps.PostgreSQL, c.Session.Native.Execution.Repository.Schema, impersonationDenialPolicy, client, network.URL, origin, requester, approver, requesterCSRF, approverCSRF, target.user)
 		} else {
 			proveReferenceImpersonationHTTP(t, ctx, native, client, network.URL, origin, requester, approver, requesterCSRF, approverCSRF, target.user)

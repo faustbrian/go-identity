@@ -668,7 +668,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			managedSCIMCreate.close()
 		}
 	}()
-	if err := composeImpersonationDenialHTTP(c, impersonationOwner, s.httpRate, httpOrganization, directorySync, managedSCIMCreate); err != nil {
+	if err := composeImpersonationAdminHTTP(c, impersonationOwner, s.httpRate, httpOrganization, directorySync, managedSCIMCreate); err != nil {
 		return err
 	}
 	defer func() {

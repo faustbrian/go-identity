@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Independently select HTTPS quorum inspection for the single-approval
+  impersonation profile. Reuse the existing audited administrative quota.
+
 - Compose optional pending-grant denial over native password/TOTP. Select
   its HTTPS route separately, with the shared audited administrative quota.
 

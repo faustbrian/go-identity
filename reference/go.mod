@@ -25,12 +25,12 @@ require (
 	github.com/faustbrian/go-identity/http/anonymous v0.0.0-20261021120851-ab3f4a286f93
 	github.com/faustbrian/go-identity/http/apikey v0.0.0-20261029135707-3291fee4a90f
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261018014422-615ac00e2231
-	github.com/faustbrian/go-identity/http/impersonation v0.0.0-20261128085110-d2f5e1e8c8a8
+	github.com/faustbrian/go-identity/http/impersonation v0.0.0-20261128091551-82456c760487
 	github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261025150519-83149c8dcdf6
 	github.com/faustbrian/go-identity/http/oauth v0.0.0-20261127041615-8560ec14797c
 	github.com/faustbrian/go-identity/http/oauthserver v0.0.0-20261123075948-ca3ae06371c1
-	github.com/faustbrian/go-identity/http/organization v0.0.0-20261128083929-aadd3a9abf1a
+	github.com/faustbrian/go-identity/http/organization v0.0.0-20261128090247-2972121733f1
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261019052145-b88e7097fe0f
 	github.com/faustbrian/go-identity/http/passkey v0.0.0-20261025150519-83149c8dcdf6
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261128045025-64c742f675c9
@@ -40,7 +40,7 @@ require (
 	github.com/faustbrian/go-identity/http/sso v0.0.0-20261124151127-a3d59f97169b
 	github.com/faustbrian/go-identity/i18n v0.0.0-20261126141413-e236c3ee150e
 	github.com/faustbrian/go-identity/impersonation v0.0.0-20261128060409-ec2ff88687be
-	github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128082501-6a23feb2214f
+	github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128090348-1cfbfa7187b8
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34

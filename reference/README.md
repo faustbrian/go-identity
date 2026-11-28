@@ -189,6 +189,19 @@ terminal grant. Configure `HTTPRate` and reuse any selected administrative
 quota; for Deny alone supply its admin namespace, key, and durable denial
 auditor.
 
+Set `HTTPImpersonationQuorum` to opt into
+`GET /v1/impersonation/quorum?grantID=<canonical-grant-id>`. It requires
+the complete native `Impersonation.Denial` history, `HTTPRate`, the original
+ordinary password/TOTP cookie, and exact current grant-read permission.
+No CSRF proof or idempotency key is required. This read does not select
+Deny, Start, or Stop.
+
+Leave the quorum quota fields unset when Deny or another selected
+administrative transport supplies the shared owner. With no existing
+owner, configure the quorum admin namespace, key and durable denial
+auditor. Success returns only approval count, safe approver metadata and
+grant status without issuing credentials or changing grant state.
+
 ## Managed SCIM User deactivation
 
 Select `HTTPManagedSCIMUsersPatch` and apply its migration plan, which includes
