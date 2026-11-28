@@ -28,6 +28,94 @@ type impersonationDenyRateAdmitter interface {
 	AdmitImpersonationDeny(context.Context, identityhttp.NetworkFacts, identity.UserID) (time.Duration, error)
 }
 
+func TestImpersonationQuorumSharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
+	f := newFixture(t)
+	var events []organizationhttp.AdminRateEvent
+	limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
+		Shared: &budgetBackend{used: make(map[string]uint64)}, Namespace: "organization-test", Key: [32]byte{1},
+		Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+		Denied: func(ctx context.Context, event organizationhttp.AdminRateEvent) error {
+			if _, ok := ctx.Deadline(); !ok {
+				t.Fatal("quorum denial audit lacks its admission deadline")
+			}
+			events = append(events, event)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/impersonation/quorum", ``, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 29 {
+		if out, err := limiter.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+			t.Fatal("organization budget exhausted before actor capacity", err)
+		}
+	}
+	if retry, err := limiter.AdmitImpersonationQuorum(t.Context(), facts, "user-a"); err != nil || retry != 0 || len(events) != 0 {
+		t.Fatal("quorum read did not consume final shared actor token", retry, err)
+	}
+	if retry, err := limiter.AdmitImpersonationQuorum(t.Context(), facts, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || retry != 2*time.Second {
+		t.Fatal("quorum read bypassed exhausted shared budget", retry, err)
+	}
+	if len(events) != 1 || events[0].Operation != "identity.impersonation.quorum" || events[0].Reason != "limited" {
+		t.Fatal("quorum read lost exact denial attribution", events)
+	}
+	if out, err := limiter.Admit(t.Context(), facts, organization.RemoveMember, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+		t.Fatal("quorum read did not debit organization budget", err)
+	}
+}
+
+func TestImpersonationQuorumUsesCanonicalDebitsAndFailsClosed(t *testing.T) {
+	f := newFixture(t)
+	resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/impersonation/quorum", ``, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+		t.Fatal(err)
+	}
+	original := f.rate.last
+	if retry, err := f.c.AdminRate.AdmitImpersonationQuorum(t.Context(), facts, "user-a"); err != nil || retry != 0 {
+		t.Fatal("quorum read admission failed", retry, err)
+	}
+	if f.rate.last.CommandID == original.CommandID || len(f.rate.last.Requests) != 3 {
+		t.Fatal("quorum read reused an attempt or split canonical budgets")
+	}
+	for i, before := range original.Requests {
+		after := f.rate.last.Requests[i]
+		if before.Key != after.Key || before.Policy.ID() != after.Policy.ID() || before.Policy.Capacity() != after.Policy.Capacity() || after.Cost != 1 {
+			t.Fatal("quorum read changed canonical actor, tenant or full-IP budgets")
+		}
+	}
+	for _, user := range []identity.UserID{"", "with space", identity.UserID(strings.Repeat("a", 129))} {
+		if retry, err := f.c.AdminRate.AdmitImpersonationQuorum(t.Context(), facts, user); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != 2 {
+			t.Fatal("invalid quorum actor reached backend", retry, err)
+		}
+	}
+	if _, err := f.c.AdminRate.Admit(t.Context(), facts, "identity.impersonation.quorum", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 2 {
+		t.Fatal("generic organization admission was broadened to quorum read")
+	}
+	if _, err := f.c.AdminRate.AdmitDirectorySync(t.Context(), facts, "identity.impersonation.quorum", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != 2 {
+		t.Fatal("directory admission was broadened to quorum read")
+	}
+	f.rate.mode = 2
+	if retry, err := f.c.AdminRate.AdmitImpersonationQuorum(t.Context(), facts, "user-a"); !errors.Is(err, identityhttp.ErrRateUnavailable) || retry != 0 || f.denials.Load() != 1 {
+		t.Fatal("unknown quorum admission did not fail closed with mandatory auditing", retry, err)
+	}
+}
+
 func TestImpersonationDenySharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
 	f := newFixture(t)
 	var events []organizationhttp.AdminRateEvent
