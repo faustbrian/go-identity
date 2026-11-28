@@ -24,6 +24,211 @@ type scimCreateRateAdmitter interface {
 	AdmitSCIMConnectionCreate(context.Context, identityhttp.NetworkFacts, identity.UserID) (organizationhttp.AdminRateResult, error)
 }
 
+type impersonationDenyRateAdmitter interface {
+	AdmitImpersonationDeny(context.Context, identityhttp.NetworkFacts, identity.UserID) (time.Duration, error)
+}
+
+func TestImpersonationDenySharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
+	f := newFixture(t)
+	var events []organizationhttp.AdminRateEvent
+	limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
+		Shared: &budgetBackend{used: make(map[string]uint64)}, Namespace: "organization-test", Key: [32]byte{1},
+		Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+		Denied: func(ctx context.Context, event organizationhttp.AdminRateEvent) error {
+			if _, ok := ctx.Deadline(); !ok {
+				t.Fatal("impersonation denial audit lacks its admission deadline")
+			}
+			events = append(events, event)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	admitter, ok := any(limiter).(impersonationDenyRateAdmitter)
+	if !ok {
+		t.Fatal("shared administrative owner cannot admit impersonation deny")
+	}
+	resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/impersonation/deny", `{}`, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 29 {
+		if out, err := limiter.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+			t.Fatal("organization budget exhausted before actor capacity", err)
+		}
+	}
+	if retry, err := admitter.AdmitImpersonationDeny(t.Context(), facts, "user-a"); err != nil || retry != 0 || len(events) != 0 {
+		t.Fatal("impersonation deny did not consume final shared actor token", retry, err)
+	}
+	if retry, err := admitter.AdmitImpersonationDeny(t.Context(), facts, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || retry != 2*time.Second {
+		t.Fatal("impersonation deny bypassed exhausted shared budget", retry, err)
+	}
+	if len(events) != 1 || events[0].Operation != "identity.impersonation.deny" || events[0].Reason != "limited" {
+		t.Fatal("impersonation deny lost exact denial attribution", events)
+	}
+	if out, err := limiter.Admit(t.Context(), facts, organization.RemoveMember, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+		t.Fatal("impersonation deny did not debit organization budget", err)
+	}
+}
+
+func TestImpersonationDenyUsesActualBindingsAndRejectsInvalidInputs(t *testing.T) {
+	f := newFixture(t)
+	admitter, ok := any(f.c.AdminRate).(impersonationDenyRateAdmitter)
+	if !ok {
+		t.Fatal("shared administrative owner cannot admit impersonation deny")
+	}
+	config := f.c.Network
+	config.TenantHosts = append(config.TenantHosts, identityhttp.TenantHost{Host: "other.example", TenantID: "tenant-b"})
+	config.PublicHosts = []string{"public.example"}
+	resolver, err := identityhttp.NewNetworkResolver(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolve := func(host, remoteAddr string) identityhttp.NetworkFacts {
+		t.Helper()
+		r := request(f, "/v1/impersonation/deny", `{}`, true)
+		r.Host, r.RemoteAddr = host, remoteAddr
+		facts, err := resolver.Resolve(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return facts
+	}
+	facts := resolve("tenant.example", "198.51.100.7:54321")
+	if out, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+		t.Fatal(err)
+	}
+	original := f.rate.last
+	previousAttempt := original.CommandID
+	for _, tc := range []struct {
+		name    string
+		facts   identityhttp.NetworkFacts
+		user    identity.UserID
+		changed [3]bool
+	}{
+		{"same-binding", facts, "user-a", [3]bool{}},
+		{"actual-actor", facts, "user-b", [3]bool{true, false, false}},
+		{"actual-tenant", resolve("other.example", "198.51.100.7:54321"), "user-a", [3]bool{true, true, false}},
+		{"full-ip", resolve("tenant.example", "198.51.100.8:54321"), "user-a", [3]bool{false, false, true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if retry, err := admitter.AdmitImpersonationDeny(t.Context(), tc.facts, tc.user); err != nil || retry != 0 {
+				t.Fatal("impersonation deny admission failed", retry, err)
+			}
+			if f.rate.last.CommandID == previousAttempt || len(f.rate.last.Requests) != 3 {
+				t.Fatal("impersonation deny reused an attempt or split canonical budgets")
+			}
+			previousAttempt = f.rate.last.CommandID
+			for i, before := range original.Requests {
+				after := f.rate.last.Requests[i]
+				if (before.Key != after.Key) != tc.changed[i] || before.Policy.ID() != after.Policy.ID() || before.Policy.Capacity() != after.Policy.Capacity() || after.Cost != 1 {
+					t.Fatal("impersonation deny changed policy or ignored actual actor/tenant/full-IP binding")
+				}
+			}
+		})
+	}
+	calls := f.rate.calls
+	for _, user := range []identity.UserID{"", "with space", identity.UserID(strings.Repeat("a", 129))} {
+		if retry, err := admitter.AdmitImpersonationDeny(t.Context(), facts, user); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("invalid impersonation actor reached backend", retry, err)
+		}
+	}
+	for _, invalid := range []identityhttp.NetworkFacts{{}, resolve("public.example", "198.51.100.7:54321")} {
+		if retry, err := admitter.AdmitImpersonationDeny(t.Context(), invalid, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("unproven tenant facts reached backend", retry, err)
+		}
+	}
+	if retry, err := admitter.AdmitImpersonationDeny(nil, facts, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+		t.Fatal("missing context reached backend", retry, err)
+	}
+	if _, err := f.c.AdminRate.Admit(t.Context(), facts, "identity.impersonation.deny", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != calls {
+		t.Fatal("generic organization admission was broadened to impersonation deny")
+	}
+	if _, err := f.c.AdminRate.AdmitDirectorySync(t.Context(), facts, "identity.impersonation.deny", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != calls {
+		t.Fatal("directory admission was broadened to impersonation deny")
+	}
+	var nilLimiter *organizationhttp.AdminRateLimiter
+	for _, limiter := range []*organizationhttp.AdminRateLimiter{nilLimiter, {}, f.c.AdminRate} {
+		if limiter == f.c.AdminRate {
+			if err := limiter.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if retry, err := any(limiter).(impersonationDenyRateAdmitter).AdmitImpersonationDeny(t.Context(), facts, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("unconfigured or closed impersonation admission reached backend", retry, err)
+		}
+	}
+}
+
+func TestImpersonationDenyAuditsUnavailableAndFailsClosed(t *testing.T) {
+	for _, mode := range []string{"unknown-backend", "unavailable-backend", "panic-backend", "failed-audit", "panic-audit", "canceled-context"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFixture(t)
+			var events []organizationhttp.AdminRateEvent
+			limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{Shared: f.rate, Namespace: "organization-test", Key: [32]byte{1}, Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+				Denied: func(_ context.Context, event organizationhttp.AdminRateEvent) error {
+					events = append(events, event)
+					if mode == "failed-audit" {
+						return errors.New("private audit diagnostic")
+					}
+					if mode == "panic-audit" {
+						panic("private audit diagnostic")
+					}
+					return nil
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { limiter.Close() })
+			admitter, ok := any(limiter).(impersonationDenyRateAdmitter)
+			if !ok {
+				t.Fatal("shared administrative owner cannot admit impersonation deny")
+			}
+			switch mode {
+			case "unknown-backend":
+				f.rate.mode = 2
+			case "unavailable-backend":
+				f.rate.mode = 3
+			case "panic-backend":
+				f.rate.mode = 4
+			default:
+				f.rate.mode = 1
+			}
+			resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+			if err != nil {
+				t.Fatal(err)
+			}
+			facts, err := resolver.Resolve(request(f, "/v1/impersonation/deny", `{}`, true))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if mode == "canceled-context" {
+				cancel()
+			}
+			retry, err := admitter.AdmitImpersonationDeny(ctx, facts, "user-a")
+			if !errors.Is(err, identityhttp.ErrRateUnavailable) || retry != 0 || strings.Contains(fmt.Sprint(err), "private") {
+				t.Fatal("impersonation deny failed open or leaked private diagnostics", retry, err)
+			}
+			wantReason := "unavailable"
+			if mode == "failed-audit" || mode == "panic-audit" {
+				wantReason = "limited"
+			}
+			if len(events) != 1 || events[0].Operation != "identity.impersonation.deny" || events[0].Reason != wantReason {
+				t.Fatal("impersonation deny escaped exact mandatory denial auditing", events)
+			}
+		})
+	}
+}
+
 func TestSCIMConnectionCreateSharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
 	f := newFixture(t)
 	var events []organizationhttp.AdminRateEvent

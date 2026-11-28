@@ -20,8 +20,9 @@ import (
 
 // AdminRateEvent is required denial auditing without request secrets, tenant,
 // actor, network address, submitted fields or underlying diagnostics. Operation
-// retains the exact selected organization, directory-sync or SCIM-create ID. Reason
-// is exactly limited or unavailable. This event is not a protected domain audit.
+// retains the exact selected organization, directory-sync, SCIM-create or
+// impersonation-deny ID. Reason is exactly limited or unavailable. This event
+// is not a protected domain audit.
 type AdminRateEvent struct {
 	Operation organization.Operation
 	Reason    string
@@ -66,8 +67,9 @@ type adminRateState struct {
 // tenant100/minute and trusted full-IP60/minute, atomic shared fail-closed
 // admission plus mandatory secret-free denial auditing. Admit selects only its
 // finite organization profile; AdmitDirectorySync selects directory-sync start
-// and cancel, and AdmitSCIMConnectionCreate selects only SCIM connection create.
-// All use the same budgets and mandatory denial auditor.
+// and cancel, AdmitSCIMConnectionCreate selects only SCIM connection create,
+// and AdmitImpersonationDeny selects only impersonation deny. All use the same
+// budgets and mandatory denial auditor.
 func NewAdminRateLimiter(c AdminRateConfig) (out *AdminRateLimiter, err error) {
 	defer func() {
 		if recover() != nil {
@@ -130,6 +132,30 @@ func (l *AdminRateLimiter) AdmitDirectorySync(ctx context.Context, facts identit
 		return 0, identityhttp.ErrInvalidInput
 	}
 	out, err := l.admitOperation(ctx, facts, organization.Operation(operationID), user)
+	if err != nil {
+		return out.RetryAfter, err
+	}
+	if !out.Allowed {
+		return 0, identityhttp.ErrRateUnavailable
+	}
+	return 0, nil
+}
+
+// AdmitImpersonationDeny admits exactly identity.impersonation.deny through
+// this owner's existing atomic actor, tenant and full-IP budgets. The caller
+// must supply resolver-owned tenant facts and the actual current authenticated
+// user; this method grants no impersonation authority. Each call charges a
+// fresh attempt. Nil error means admitted; an audited limit returns
+// ErrRateLimited and bounded ceiling seconds in retryAfter. Backend ambiguity
+// or failed denial auditing returns ErrRateUnavailable without a retry hint.
+// Nil/closed owners, invalid facts/context or malformed user IDs return
+// ErrInvalidInput before backend access. Denial audits retain the exact
+// impersonation operation; no fallback or operation override is accepted.
+func (l *AdminRateLimiter) AdmitImpersonationDeny(ctx context.Context, facts identityhttp.NetworkFacts, user identity.UserID) (retryAfter time.Duration, err error) {
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !boundedID(string(user)) {
+		return 0, identityhttp.ErrInvalidInput
+	}
+	out, err := l.admitOperation(ctx, facts, "identity.impersonation.deny", user)
 	if err != nil {
 		return out.RetryAfter, err
 	}

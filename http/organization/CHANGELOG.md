@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add dedicated impersonation-deny admission on the existing atomic
+  administrative quota. Preserve shared actor, tenant and full-IP budgets,
+  exact denial attribution and fail-closed auditing without broadening generic
+  organization or directory-sync operation admission.
+
 - Add dedicated SCIM connection-create admission on the existing atomic
   administrative quota. Preserve shared organization/directory budgets and
   exact SCIM denial attribution without broadening generic operation admission.
