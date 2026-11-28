@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Opt into exact single-session administrator revocation with the original
+  HTTPS cookie and stored synchronizer. Charge the shared administrative quota
+  after authorization; repeat no-ops omit the version, and native errors never
+  disclose a partial result or change cookies.
+
 - Opt into the administrator session list using only the original HTTPS
   cookie and an exact target. Return a bounded safe page and charge the
   existing administrative quota after current authorization.
