@@ -21,8 +21,8 @@ import (
 // AdminRateEvent is required denial auditing without request secrets, tenant,
 // actor, network address, submitted fields or underlying diagnostics. Operation
 // retains the exact selected organization, directory-sync, SCIM-create,
-// impersonation-deny or impersonation-quorum ID. Reason is exactly limited or
-// unavailable. This event is not a protected domain audit.
+// impersonation-deny, impersonation-quorum or user-status ID. Reason is exactly
+// limited or unavailable. This event is not a protected domain audit.
 type AdminRateEvent struct {
 	Operation organization.Operation
 	Reason    string
@@ -69,8 +69,9 @@ type adminRateState struct {
 // finite organization profile; AdmitDirectorySync selects directory-sync start
 // and cancel, AdmitSCIMConnectionCreate selects only SCIM connection create,
 // AdmitImpersonationDeny selects only impersonation deny, and
-// AdmitImpersonationQuorum selects only the quorum read. All use the same
-// budgets and mandatory denial auditor.
+// AdmitImpersonationQuorum selects only the quorum read, and AdmitUserStatus
+// selects only administrative user ban/unban. All use the same budgets and
+// mandatory denial auditor.
 func NewAdminRateLimiter(c AdminRateConfig) (out *AdminRateLimiter, err error) {
 	defer func() {
 		if recover() != nil {
@@ -127,6 +128,34 @@ func (l *AdminRateLimiter) Admit(ctx context.Context, facts identityhttp.Network
 // exact directory operation, never a substitute organization operation.
 func (l *AdminRateLimiter) AdmitDirectorySync(ctx context.Context, facts identityhttp.NetworkFacts, operationID string, user identity.UserID) (retryAfter time.Duration, err error) {
 	if operationID != "identity.sso.directory-sync-start" && operationID != "identity.sso.directory-sync-cancel" {
+		return 0, identityhttp.ErrInvalidInput
+	}
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !boundedID(string(user)) {
+		return 0, identityhttp.ErrInvalidInput
+	}
+	out, err := l.admitOperation(ctx, facts, organization.Operation(operationID), user)
+	if err != nil {
+		return out.RetryAfter, err
+	}
+	if !out.Allowed {
+		return 0, identityhttp.ErrRateUnavailable
+	}
+	return 0, nil
+}
+
+// AdmitUserStatus admits only identity.admin.user-ban and
+// identity.admin.user-unban using this owner's existing atomic actor, tenant
+// and trusted full-IP budgets, as selected by http/catalog.json's rate.admin.
+// The caller must supply resolver-owned tenant facts and the actual current
+// authenticated ordinary user, not the target user; admission grants no
+// administrative authority. Each call charges a fresh attempt. Nil error means
+// admitted; an audited limit returns ErrRateLimited and bounded ceiling seconds
+// in retryAfter. Backend ambiguity or failed auditing returns ErrRateUnavailable
+// without a retry hint. Invalid inputs and nil/closed owners return
+// ErrInvalidInput before backend access. Audits retain the exact operation;
+// aliases and generic organization/directory admission remain unsupported.
+func (l *AdminRateLimiter) AdmitUserStatus(ctx context.Context, facts identityhttp.NetworkFacts, operationID string, user identity.UserID) (retryAfter time.Duration, err error) {
+	if operationID != "identity.admin.user-ban" && operationID != "identity.admin.user-unban" {
 		return 0, identityhttp.ErrInvalidInput
 	}
 	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != identityhttp.RealmTenant || !boundedID(string(user)) {

@@ -28,6 +28,116 @@ type impersonationDenyRateAdmitter interface {
 	AdmitImpersonationDeny(context.Context, identityhttp.NetworkFacts, identity.UserID) (time.Duration, error)
 }
 
+func TestUserStatusSharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
+	for _, operationID := range []string{"identity.admin.user-ban", "identity.admin.user-unban"} {
+		t.Run(operationID, func(t *testing.T) {
+			f := newFixture(t)
+			var events []organizationhttp.AdminRateEvent
+			limiter, err := organizationhttp.NewAdminRateLimiter(organizationhttp.AdminRateConfig{
+				Shared: &budgetBackend{used: make(map[string]uint64)}, Namespace: "organization-test", Key: [32]byte{1},
+				Now: func() time.Time { return f.now }, MaximumDuration: time.Second,
+				Denied: func(ctx context.Context, event organizationhttp.AdminRateEvent) error {
+					if _, ok := ctx.Deadline(); !ok {
+						t.Fatal("user-status denial audit lacks its admission deadline")
+					}
+					events = append(events, event)
+					return nil
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { limiter.Close() })
+			resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+			if err != nil {
+				t.Fatal(err)
+			}
+			facts, err := resolver.Resolve(request(f, "/v1/admin/user-ban", `{}`, true))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for range 29 {
+				if out, err := limiter.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+					t.Fatal("organization budget exhausted before actor capacity", err)
+				}
+			}
+			if retry, err := limiter.AdmitUserStatus(t.Context(), facts, operationID, "user-a"); err != nil || retry != 0 || len(events) != 0 {
+				t.Fatal("user-status admission did not consume final shared actor token", retry, err)
+			}
+			if retry, err := limiter.AdmitUserStatus(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || retry != 2*time.Second {
+				t.Fatal("user-status admission bypassed exhausted shared budget", retry, err)
+			}
+			if len(events) != 1 || string(events[0].Operation) != operationID || events[0].Reason != "limited" {
+				t.Fatal("user-status admission lost exact denial attribution", events)
+			}
+			if out, err := limiter.Admit(t.Context(), facts, organization.RemoveMember, "user-a"); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+				t.Fatal("user-status admission did not debit organization budget", err)
+			}
+		})
+	}
+}
+
+func TestUserStatusUsesCanonicalDebitsAndRejectsInvalidAdmissions(t *testing.T) {
+	f := newFixture(t)
+	resolver, err := identityhttp.NewNetworkResolver(f.c.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := resolver.Resolve(request(f, "/v1/admin/user-ban", `{}`, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Create, "user-a"); err != nil || !out.Allowed {
+		t.Fatal(err)
+	}
+	original := f.rate.last
+	previousAttempt := original.CommandID
+	for _, operationID := range []string{"identity.admin.user-ban", "identity.admin.user-unban"} {
+		if retry, err := f.c.AdminRate.AdmitUserStatus(t.Context(), facts, operationID, "user-a"); err != nil || retry != 0 {
+			t.Fatal("user-status admission failed", retry, err)
+		}
+		if f.rate.last.CommandID == previousAttempt || len(f.rate.last.Requests) != 3 {
+			t.Fatal("user-status admission reused an attempt or split canonical budgets")
+		}
+		previousAttempt = f.rate.last.CommandID
+		for i, before := range original.Requests {
+			after := f.rate.last.Requests[i]
+			if before.Key != after.Key || before.Policy.ID() != after.Policy.ID() || before.Policy.Capacity() != after.Policy.Capacity() || after.Cost != 1 {
+				t.Fatal("user-status admission changed canonical actor, tenant or full-IP budgets")
+			}
+		}
+	}
+	calls := f.rate.calls
+	for _, operationID := range []string{"", "user-ban", "identity.admin.ban-user", "identity.admin.user-ban ", "identity.admin.user-delete", "identity.impersonation.deny"} {
+		if retry, err := f.c.AdminRate.AdmitUserStatus(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("noncanonical user-status operation reached backend", operationID, retry, err)
+		}
+	}
+	for _, user := range []identity.UserID{"", "with space", identity.UserID(strings.Repeat("a", 129))} {
+		if retry, err := f.c.AdminRate.AdmitUserStatus(t.Context(), facts, "identity.admin.user-ban", user); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+			t.Fatal("invalid user-status actor reached backend", retry, err)
+		}
+	}
+	if retry, err := f.c.AdminRate.AdmitUserStatus(nil, facts, "identity.admin.user-ban", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+		t.Fatal("missing user-status context reached backend", retry, err)
+	}
+	if retry, err := f.c.AdminRate.AdmitUserStatus(t.Context(), identityhttp.NetworkFacts{}, "identity.admin.user-unban", "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || retry != 0 || f.rate.calls != calls {
+		t.Fatal("unproven user-status network facts reached backend", retry, err)
+	}
+	for _, operationID := range []string{"identity.admin.user-ban", "identity.admin.user-unban"} {
+		if _, err := f.c.AdminRate.Admit(t.Context(), facts, organization.Operation(operationID), "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != calls {
+			t.Fatal("generic organization admission was broadened to user status")
+		}
+		if _, err := f.c.AdminRate.AdmitDirectorySync(t.Context(), facts, operationID, "user-a"); !errors.Is(err, identityhttp.ErrInvalidInput) || f.rate.calls != calls {
+			t.Fatal("directory admission was broadened to user status")
+		}
+	}
+	f.rate.mode = 2
+	if retry, err := f.c.AdminRate.AdmitUserStatus(t.Context(), facts, "identity.admin.user-unban", "user-a"); !errors.Is(err, identityhttp.ErrRateUnavailable) || retry != 0 || f.denials.Load() != 1 {
+		t.Fatal("unknown user-status admission did not fail closed with mandatory auditing", retry, err)
+	}
+}
+
 func TestImpersonationQuorumSharesAdministrativeBudgetAndExactDenialAudit(t *testing.T) {
 	f := newFixture(t)
 	var events []organizationhttp.AdminRateEvent

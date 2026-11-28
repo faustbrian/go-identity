@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add exact administrative user-ban/unban admission on the existing atomic
+  administrative quota. Preserve shared actor, tenant and trusted full-IP
+  budgets, exact denial auditing and bounded retry hints without broadening
+  generic organization or directory-sync admission.
+
 - Add dedicated impersonation-quorum read admission on the existing atomic
   administrative quota. Preserve shared actor, tenant and trusted full-IP
   budgets, exact denial attribution and bounded retry hints without broadening
