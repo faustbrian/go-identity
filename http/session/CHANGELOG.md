@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently opt into administrator revoke-all with only the original
+  HTTPS session cookie, exact mapped Origin and stored synchronizer. Charge
+  the shared administrative quota after authorization and return the exact
+  count with a positive session-only subject version, including zero-count
+  repeats; failed or unknown outcomes never confirm a transition or alter cookies.
+
 - Opt into exact single-session administrator revocation with the original
   HTTPS cookie and stored synchronizer. Charge the shared administrative quota
   after authorization; repeat no-ops omit the version, and native errors never
