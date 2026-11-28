@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Verify the exact frozen pair before dispatching an admitted disable to its
+  local custody seal or drain.
+
 - Atomically bind an opt-in provider disable to one configured production and
   preview pair, and acknowledge only that proxy consumer after both actual
   durable drains finish. Keep the provider cascade pending.

@@ -32,6 +32,10 @@ func TestProxyDisablePairAcknowledgesOnlyBothActualExhaustedCustodyOrigins(t *te
 				t.Fatal("admit the exact native-pair provider disable", admission, err)
 			}
 			source := proxyDisablePairSource(admission)
+			checked, err := pair.CheckAdmission(production.ctx, source)
+			if err != nil || !reflect.DeepEqual(checked, admission) {
+				t.Fatal("the operator could not prove the paired admission before sealing or draining", err)
+			}
 			sourceBefore := proxyDisablePairSourceSnapshot(t, production, admission)
 			assertDeniedWithoutEffects := func(request ProxyCustodyFenceSealRequest) {
 				t.Helper()
@@ -281,6 +285,9 @@ func TestProxyDisablePairCannotRetrofitUnpairedAdmissionAfterActualDrainsFinish(
 		t.Fatal("admit a real legacy disable without selecting its native pair", err)
 	}
 	source := proxyDisablePairSource(admission)
+	if checked, err := pair.CheckAdmission(production.ctx, source); checked.CascadeID != "" || err == nil {
+		t.Fatal("an unpaired admission could enter the paired seal/drain workflow", err)
+	}
 	sourceBefore := proxyDisablePairSourceSnapshot(t, production, admission)
 	productionAuthority := proxyDisablePairSeal(t, production, preview, source, kernel.OAuthProxyRetireProduction)
 	previewAuthority := proxyDisablePairSeal(t, production, preview, source, kernel.OAuthProxyRetirePreview)

@@ -100,31 +100,56 @@ func (p *ProxyDisablePairOperator) ApplyDisableCascade(ctx context.Context, chan
 	return p.operator.applyDisableCascade(ctx, change, window, &p.scope)
 }
 
+// CheckAdmission reads the exact pending provider disable and its frozen pair.
+// Use it before dispatching a paired operation to either local seal or drain.
+// It performs no local custody work and is not evidence of cleanup.
+func (p *ProxyDisablePairOperator) CheckAdmission(ctx context.Context, source ProxyCustodyFenceSealRequest) (ProviderDisableAdmission, error) {
+	if err := p.validateSource(ctx, source); err != nil {
+		return ProviderDisableAdmission{}, err
+	}
+	ctx, stop := context.WithTimeout(ctx, p.operator.authority.timeout)
+	defer stop()
+	admission, _, err := p.readAdmission(ctx, source)
+	return admission, err
+}
+
+func (p *ProxyDisablePairOperator) validateSource(ctx context.Context, source ProxyCustodyFenceSealRequest) error {
+	if p == nil || p.operator == nil || ctx == nil || source.TenantID != p.key.TenantID {
+		return identity.ForbiddenError{}
+	}
+	return validateProxyCustodyFenceSealRequest(source)
+}
+
+func (p *ProxyDisablePairOperator) readAdmission(ctx context.Context, source ProxyCustodyFenceSealRequest) (ProviderDisableAdmission, time.Time, error) {
+	reader := ProxyCustodyFenceOperator{primary: p.primary, config: ProxyCustodyFenceOperatorConfig{ActorID: p.operator.actor}}
+	admission, err := reader.authoritativeDisable(ctx, source)
+	if err != nil {
+		return ProviderDisableAdmission{}, time.Time{}, err
+	}
+	if admission.Disable.Key != p.key {
+		return ProviderDisableAdmission{}, time.Time{}, identity.ForbiddenError{}
+	}
+	owner := p.operator.authority
+	at, err := readProxyDisablePair(ctx, owner.pool.Raw(), owner.proxyPairsTable, admission, p.scope)
+	if err != nil {
+		return ProviderDisableAdmission{}, time.Time{}, err
+	}
+	return admission, at, nil
+}
+
 // Acknowledge records the selected proxy consumer only after both actual local
 // databases have an activated fence, sufficient cutoff and durable exhausted
 // checkpoint for this exact admission. An absent/incomplete checkpoint returns
 // conflict, without writing. After completion, retry returns the same persisted
 // acknowledgement; it never repeats local cleanup or changes the cascade status.
 func (p *ProxyDisablePairOperator) Acknowledge(ctx context.Context, source ProxyCustodyFenceSealRequest) (ProxyDisablePairAcknowledgement, error) {
-	if p == nil || p.operator == nil || ctx == nil || source.TenantID != p.key.TenantID {
-		return ProxyDisablePairAcknowledgement{}, identity.ForbiddenError{}
-	}
-	if err := validateProxyCustodyFenceSealRequest(source); err != nil {
+	if err := p.validateSource(ctx, source); err != nil {
 		return ProxyDisablePairAcknowledgement{}, err
 	}
 	owner := p.operator.authority
 	ctx, stop := context.WithTimeout(ctx, owner.timeout)
 	defer stop()
-	reader := ProxyCustodyFenceOperator{primary: p.primary, config: ProxyCustodyFenceOperatorConfig{ActorID: p.operator.actor}}
-	admission, err := reader.authoritativeDisable(ctx, source)
-	if err != nil {
-		return ProxyDisablePairAcknowledgement{}, err
-	}
-	if admission.Disable.Key != p.key {
-		return ProxyDisablePairAcknowledgement{}, identity.ForbiddenError{}
-	}
-	pool := owner.pool.Raw()
-	at, err := readProxyDisablePair(ctx, pool, owner.proxyPairsTable, admission, p.scope)
+	admission, at, err := p.readAdmission(ctx, source)
 	if err != nil {
 		return ProxyDisablePairAcknowledgement{}, err
 	}
@@ -137,7 +162,7 @@ func (p *ProxyDisablePairOperator) Acknowledge(ctx context.Context, source Proxy
 			p.scope.previewSchema, p.scope.previewDeployment); err != nil {
 			return ProxyDisablePairAcknowledgement{}, err
 		}
-		at, err = confirmProxyDisablePair(ctx, pool, owner.proxyPairsTable, admission, p.scope)
+		at, err = confirmProxyDisablePair(ctx, owner.pool.Raw(), owner.proxyPairsTable, admission, p.scope)
 		if err != nil {
 			return ProxyDisablePairAcknowledgement{}, err
 		}
