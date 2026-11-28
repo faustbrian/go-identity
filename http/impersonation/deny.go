@@ -52,11 +52,25 @@ type DenyConfig struct {
 // NewDenyFeature selects only the exact HTTPS administrator denial route.
 // It requires the native owner and the already-configured shared quota.
 func NewDenyFeature(c DenyConfig) (identityhttp.Feature, error) {
+	return newDenyFeatureForQuorum(c, 1)
+}
+
+// NewConfigurableDenyFeature selects denial of pending versions 1..required
+// for an explicit quorum of 2..32 approvals. Native authorization and the
+// shared administrative quota remain required before any denial is executed.
+func NewConfigurableDenyFeature(c DenyConfig, requiredApprovals int) (identityhttp.Feature, error) {
+	if requiredApprovals < 2 || requiredApprovals > 32 {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	return newDenyFeatureForQuorum(c, requiredApprovals)
+}
+
+func newDenyFeatureForQuorum(c DenyConfig, requiredApprovals int) (identityhttp.Feature, error) {
 	ingress, err := newCookieIngress(c.Network, c.TrustedOrigins, c.OriginalCookieName, c.MaximumDuration)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op, err := denyDescriptor(ingress, c.Native, c.Rate)
+	op, err := denyDescriptorForQuorum(ingress, c.Native, c.Rate, requiredApprovals)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
@@ -64,20 +78,25 @@ func NewDenyFeature(c DenyConfig) (identityhttp.Feature, error) {
 }
 
 func denyDescriptor(ingress cookieIngress, native DenyService, rate DenyRate) (identityhttp.OperationDescriptor, error) {
+	return denyDescriptorForQuorum(ingress, native, rate, 1)
+}
+
+func denyDescriptorForQuorum(ingress cookieIngress, native DenyService, rate DenyRate, requiredApprovals int) (identityhttp.OperationDescriptor, error) {
 	if missingOwner(native) || missingOwner(rate) || !rate.Configured() {
 		return identityhttp.OperationDescriptor{}, identityhttp.ErrInvalidInput
 	}
-	op, err := canonicalCookieOperation(denyOperation.OperationID, denyHandler{cookieIngress: ingress, native: native, rate: rate})
+	op, err := canonicalCookieOperation(denyOperation.OperationID, denyHandler{cookieIngress: ingress, native: native, rate: rate, maximumPendingVersion: uint64(requiredApprovals)})
 	if err == nil {
-		op.Wire = denyWire(ingress.parentCookie)
+		op.Wire = denyWireForPendingVersions(ingress.parentCookie, requiredApprovals)
 	}
 	return op, err
 }
 
 type denyHandler struct {
 	cookieIngress
-	native DenyService
-	rate   DenyRate
+	native                DenyService
+	rate                  DenyRate
+	maximumPendingVersion uint64
 }
 
 type denyResponse struct {
@@ -143,7 +162,7 @@ func (h denyHandler) denyRequest(w http.ResponseWriter, r *http.Request) error {
 		return identity.UnavailableError{}
 	}
 	result, err := h.native.Execute(ctx, prepared)
-	writeDenial(ctx, w, binding, result, err)
+	writeDenialForVersion(ctx, w, binding, result, err, input.ExpectedVersion)
 	return nil
 }
 
@@ -171,7 +190,7 @@ func (h denyHandler) decodeDenial(r *http.Request) (impersonationpg.DenyInput, i
 	var grantID, reason string
 	var expected uint64
 	if len(fields) != 3 || json.Unmarshal(fields["grantID"], &grantID) != nil ||
-		json.Unmarshal(fields["expectedVersion"], &expected) != nil || expected != 1 ||
+		json.Unmarshal(fields["expectedVersion"], &expected) != nil || expected < 1 || expected > h.maximumPendingVersion ||
 		json.Unmarshal(fields["reason"], &reason) != nil {
 		return input, empty, identityhttp.DecodeError{}
 	}
@@ -206,13 +225,17 @@ func validDenialBinding(b identity.CommandBinding, input impersonationpg.DenyInp
 }
 
 func writeDenial(ctx context.Context, w http.ResponseWriter, binding identity.CommandBinding, result identity.CommandResult, err error) {
+	writeDenialForVersion(ctx, w, binding, result, err, 1)
+}
+
+func writeDenialForVersion(ctx context.Context, w http.ResponseWriter, binding identity.CommandBinding, result identity.CommandResult, err error, before uint64) {
 	if ctx.Err() != nil && err == nil {
 		err = ctx.Err()
 	}
 	out := denyFailure("unavailable")
 	status := http.StatusServiceUnavailable
 	switch {
-	case result.Binding == binding && validCookieReceipt(result, denyOperation, binding.TenantID, 1):
+	case result.Binding == binding && validCookieReceipt(result, denyOperation, binding.TenantID, before):
 		out.CommandID, out.Outcome = binding.CommandID, commitOutcome(result.Outcome)
 		switch {
 		case err != nil:

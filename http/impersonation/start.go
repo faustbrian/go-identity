@@ -41,6 +41,16 @@ func NewStartFeature(c StartConfig) (identityhttp.Feature, error) {
 	return newStartFeature(c, nil, nil, nil)
 }
 
+// NewConfigurableStartFeature selects Start for one explicit positive quorum
+// of 2..32 approvals. The native owner must select that same immutable policy;
+// only its exact approved-version receipt can produce a successful response.
+func NewConfigurableStartFeature(c StartConfig, requiredApprovals int) (identityhttp.Feature, error) {
+	if requiredApprovals < 2 || requiredApprovals > 32 {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	return newStartFeatureForQuorum(c, nil, nil, nil, requiredApprovals)
+}
+
 // NewStartStopFeature selects Start and Stop together with the same HTTPS,
 // Origin, original-cookie and deadline configuration. Both owners are required.
 func NewStartStopFeature(c StartConfig, stop StopService) (identityhttp.Feature, error) {
@@ -60,6 +70,10 @@ func NewStartStopDenyFeature(c StartConfig, stop StopService, deny DenyService, 
 }
 
 func newStartFeature(c StartConfig, stop StopService, deny DenyService, rate DenyRate) (identityhttp.Feature, error) {
+	return newStartFeatureForQuorum(c, stop, deny, rate, 1)
+}
+
+func newStartFeatureForQuorum(c StartConfig, stop StopService, deny DenyService, rate DenyRate, requiredApprovals int) (identityhttp.Feature, error) {
 	if missingOwner(c.Native) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
@@ -67,11 +81,12 @@ func newStartFeature(c StartConfig, stop StopService, deny DenyService, rate Den
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	start, err := canonicalCookieOperation(startOperation.OperationID, startHandler{cookieIngress: ingress, native: c.Native})
+	approvedVersion := uint64(requiredApprovals) + 1
+	start, err := canonicalCookieOperation(startOperation.OperationID, startHandler{cookieIngress: ingress, native: c.Native, approvedVersion: approvedVersion})
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	start.Wire = startWire(c.OriginalCookieName)
+	start.Wire = startWireForVersion(c.OriginalCookieName, approvedVersion)
 	ops := []identityhttp.OperationDescriptor{start}
 	if stop != nil {
 		op, err := stopDescriptor(ingress, stop)
@@ -92,7 +107,8 @@ func newStartFeature(c StartConfig, stop StopService, deny DenyService, rate Den
 
 type startHandler struct {
 	cookieIngress
-	native StartService
+	native          StartService
+	approvedVersion uint64
 }
 
 type startResponse struct {
@@ -160,7 +176,7 @@ func (h startHandler) decodeStart(r *http.Request) (impersonationpg.KeyedStartIn
 	var grantID string
 	var version uint64
 	if len(fields) != 2 || json.Unmarshal(fields["grantID"], &grantID) != nil ||
-		json.Unmarshal(fields["expectedVersion"], &version) != nil || version != 2 {
+		json.Unmarshal(fields["expectedVersion"], &version) != nil || version != h.approvedVersion {
 		return zero, identityhttp.DecodeError{}
 	}
 	if _, err := identity.ParseCommandID(grantID); err != nil {
@@ -183,7 +199,7 @@ func (h startHandler) writeStart(ctx context.Context, w http.ResponseWriter, inp
 	out := startFailure("unavailable")
 	status := http.StatusServiceUnavailable
 	receipt := result.Receipt
-	if receipt.Binding.RecordID != string(input.GrantID) || !validCookieReceipt(receipt, startOperation, input.Authentication.Tenant, 2) {
+	if receipt.Binding.RecordID != string(input.GrantID) || !validCookieReceipt(receipt, startOperation, input.Authentication.Tenant, h.approvedVersion) {
 		if err != nil && receipt.Outcome == identity.CommitOutcomeInvalid {
 			status, out.Error = transportError(err)
 		}

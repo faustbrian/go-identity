@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit configurable-quorum HTTPS selectors that check the native
+  lifecycle versions for Start, Deny, and Stop, and expose bounded distinct
+  approvals in the quorum view. Keep the fixed-one selectors unchanged.
+
 - Add an opt-in HTTPS quorum read for the native single-approval profile.
   Require the original administrator cookie and shared audited admin quota.
 

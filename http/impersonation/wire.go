@@ -2,11 +2,16 @@ package impersonationhttp
 
 import (
 	"encoding/json"
+	"fmt"
 
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
 func startWire(originalCookie string) *identityhttp.WireOperation {
+	return startWireForVersion(originalCookie, 2)
+}
+
+func startWireForVersion(originalCookie string, approvedVersion uint64) *identityhttp.WireOperation {
 	id := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$"}
 	text := map[string]any{"type": "string", "minLength": 1, "maxLength": 128}
 	responseFields := map[string]any{
@@ -27,7 +32,7 @@ func startWire(originalCookie string) *identityhttp.WireOperation {
 		return map[string]any{"in": "header", "name": name, "required": true, "schema": schema}
 	}
 	request := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"grantID", "expectedVersion"}, "properties": map[string]any{
-		"grantID": id, "expectedVersion": map[string]any{"type": "integer", "const": 2},
+		"grantID": id, "expectedVersion": map[string]any{"type": "integer", "const": approvedVersion},
 	}}
 	operation := map[string]any{
 		"operationId": startOperation.OperationID,
@@ -47,6 +52,10 @@ func startWire(originalCookie string) *identityhttp.WireOperation {
 }
 
 func stopWire() *identityhttp.WireOperation {
+	return stopWireForQuorum(1)
+}
+
+func stopWireForQuorum(requiredApprovals int) *identityhttp.WireOperation {
 	responseFields := map[string]any{
 		"stopped": map[string]any{"type": "boolean"}, "parentResumed": map[string]any{"type": "boolean"},
 		"commandID":     map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$"},
@@ -72,16 +81,28 @@ func stopWire() *identityhttp.WireOperation {
 		"requestBody": map[string]any{"required": true, "content": payload(map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{}})},
 		"responses":   responses,
 	}
+	if requiredApprovals > 1 {
+		operation["description"] = fmt.Sprintf("%s Selected approval threshold %d: the native committed transition must be active version %d to stopped version %d.",
+			operation["description"], requiredApprovals, requiredApprovals+2, requiredApprovals+3)
+	}
 	definition, _ := json.Marshal(operation)
 	scheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": ChildCookieName, "description": "Dedicated child credential, never an ordinary actor session."})
 	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: "ImpersonationChildCookie", Definition: scheme}}}
 }
 
 func denyWire(cookie string) *identityhttp.WireOperation {
+	return denyWireForPendingVersions(cookie, 1)
+}
+
+func denyWireForPendingVersions(cookie string, maximumPendingVersion int) *identityhttp.WireOperation {
 	id := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$"}
 	payload := func(s any) map[string]any { return map[string]any{"application/json": map[string]any{"schema": s}} }
+	versionSchema := map[string]any{"type": "integer", "const": 1}
+	if maximumPendingVersion > 1 {
+		versionSchema = map[string]any{"type": "integer", "minimum": 1, "maximum": maximumPendingVersion}
+	}
 	request := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"grantID", "expectedVersion", "reason"}, "properties": map[string]any{
-		"grantID": id, "expectedVersion": map[string]any{"type": "integer", "const": 1},
+		"grantID": id, "expectedVersion": versionSchema,
 		"reason": map[string]any{"type": "string", "minLength": 1, "maxLength": 1024, "writeOnly": true, "description": "Private non-blank reason, at most 1024 UTF-8 bytes."},
 	}}
 	response := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"denied", "commitOutcome"}, "properties": map[string]any{
@@ -114,6 +135,10 @@ func denyWire(cookie string) *identityhttp.WireOperation {
 }
 
 func quorumWire(cookie string) *identityhttp.WireOperation {
+	return quorumWireForCapacity(cookie, maximumQuorumApprovals)
+}
+
+func quorumWireForCapacity(cookie string, capacity int) *identityhttp.WireOperation {
 	id := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$"}
 	object := func(required []string, fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
@@ -124,8 +149,8 @@ func quorumWire(cookie string) *identityhttp.WireOperation {
 	})
 	result := object([]string{"grantID", "requiredApprovals", "approvals", "status"}, map[string]any{
 		"grantID":           id,
-		"requiredApprovals": map[string]any{"type": "integer", "minimum": 1, "maximum": maximumQuorumApprovals},
-		"approvals":         map[string]any{"type": "array", "maxItems": maximumQuorumApprovals, "items": approval},
+		"requiredApprovals": map[string]any{"type": "integer", "minimum": 1, "maximum": capacity},
+		"approvals":         map[string]any{"type": "array", "maxItems": capacity, "items": approval},
 		"status": map[string]any{"type": "string", "enum": []string{
 			"pending_approval", "approved", "active", "stopped", "expired", "denied", "revoked",
 		}},
@@ -158,4 +183,8 @@ func quorumWire(cookie string) *identityhttp.WireOperation {
 	definition, _ := json.Marshal(operation)
 	scheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": cookie, "description": "Original ordinary administrator cookie."})
 	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: "ImpersonationQuorumCookie", Definition: scheme}}}
+}
+
+func configurableStopWire(requiredApprovals int) *identityhttp.WireOperation {
+	return stopWireForQuorum(requiredApprovals)
 }

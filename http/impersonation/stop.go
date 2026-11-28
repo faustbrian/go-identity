@@ -50,6 +50,19 @@ type StopConfig struct {
 // NewStopFeature selects only the exact HTTPS child-cookie self-stop route.
 // Construction validates the transport profile and never performs I/O.
 func NewStopFeature(c StopConfig) (identityhttp.Feature, error) {
+	return newStopFeatureForQuorum(c, 1)
+}
+
+// NewConfigurableStopFeature selects child-bound Stop for an explicit quorum
+// of 2..32 approvals. Only its exact active-version transition clears cookies.
+func NewConfigurableStopFeature(c StopConfig, requiredApprovals int) (identityhttp.Feature, error) {
+	if requiredApprovals < 2 || requiredApprovals > 32 {
+		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+	}
+	return newStopFeatureForQuorum(c, requiredApprovals)
+}
+
+func newStopFeatureForQuorum(c StopConfig, requiredApprovals int) (identityhttp.Feature, error) {
 	if missingOwner(c.Native) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
@@ -57,7 +70,7 @@ func NewStopFeature(c StopConfig) (identityhttp.Feature, error) {
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op, err := stopDescriptor(ingress, c.Native)
+	op, err := stopDescriptorForQuorum(ingress, c.Native, requiredApprovals)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
@@ -65,16 +78,24 @@ func NewStopFeature(c StopConfig) (identityhttp.Feature, error) {
 }
 
 func stopDescriptor(ingress cookieIngress, native StopService) (identityhttp.OperationDescriptor, error) {
-	op, err := canonicalCookieOperation(stopOperation.OperationID, stopHandler{cookieIngress: ingress, native: native})
+	return stopDescriptorForQuorum(ingress, native, 1)
+}
+
+func stopDescriptorForQuorum(ingress cookieIngress, native StopService, requiredApprovals int) (identityhttp.OperationDescriptor, error) {
+	op, err := canonicalCookieOperation(stopOperation.OperationID, stopHandler{cookieIngress: ingress, native: native, activeVersion: uint64(requiredApprovals) + 2})
 	if err == nil {
 		op.Wire = stopWire()
+		if requiredApprovals > 1 {
+			op.Wire = configurableStopWire(requiredApprovals)
+		}
 	}
 	return op, err
 }
 
 type stopHandler struct {
 	cookieIngress
-	native StopService
+	native        StopService
+	activeVersion uint64
 }
 
 type stopResponse struct {
@@ -155,7 +176,7 @@ func (h stopHandler) stopRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	out := stopFailure("unavailable")
 	status := http.StatusServiceUnavailable
-	if validStopReceipt(result.Receipt, commandID, facts.TenantID()) {
+	if result.Receipt.Binding.CommandID == commandID && validCookieReceipt(result.Receipt, stopOperation, facts.TenantID(), h.activeVersion) {
 		out.CommandID = commandID
 		out.Outcome = commitOutcome(result.Receipt.Outcome)
 		if err == nil && result.Receipt.Outcome == identity.CommitOutcomeCommitted {

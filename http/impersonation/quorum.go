@@ -48,6 +48,17 @@ type QuorumConfig struct {
 // NewQuorumFeature selects only the administrator quorum read. It requires
 // both native and configured rate owners and does not select a writer.
 func NewQuorumFeature(c QuorumConfig) (identityhttp.Feature, error) {
+	return newQuorumReadFeature(c, false)
+}
+
+// NewConfigurableQuorumReadFeature selects safe metadata for native profiles
+// with 1..32 required approvals. It issues no credentials, selects no writer,
+// and retains the ordinary-cookie authentication and shared read quota.
+func NewConfigurableQuorumReadFeature(c QuorumConfig) (identityhttp.Feature, error) {
+	return newQuorumReadFeature(c, true)
+}
+
+func newQuorumReadFeature(c QuorumConfig, configurable bool) (identityhttp.Feature, error) {
 	if !validOrdinaryCookie(c.OriginalCookieName, c.MaximumDuration) || missingOwner(c.Native) || missingOwner(c.Rate) || !c.Rate.Configured() {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
@@ -59,7 +70,7 @@ func NewQuorumFeature(c QuorumConfig) (identityhttp.Feature, error) {
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	h := quorumHandler{network: network, decoder: decoder, cookie: c.OriginalCookieName, duration: c.MaximumDuration, native: c.Native, rate: c.Rate}
+	h := quorumHandler{network: network, decoder: decoder, cookie: c.OriginalCookieName, duration: c.MaximumDuration, native: c.Native, rate: c.Rate, configurable: configurable}
 	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
 		Owner: "identity/impersonation", OperationID: quorumOperation, Handler: h,
 		CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 16384,
@@ -68,16 +79,20 @@ func NewQuorumFeature(c QuorumConfig) (identityhttp.Feature, error) {
 		return identityhttp.Feature{}, err
 	}
 	op.Wire = quorumWire(c.OriginalCookieName)
+	if configurable {
+		op.Wire = quorumWireForCapacity(c.OriginalCookieName, 32)
+	}
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/impersonation", Operations: []identityhttp.OperationDescriptor{op}})
 }
 
 type quorumHandler struct {
-	network  *identityhttp.NetworkResolver
-	decoder  *identityhttp.RequestDecoder
-	cookie   string
-	duration time.Duration
-	native   QuorumService
-	rate     QuorumRate
+	network      *identityhttp.NetworkResolver
+	decoder      *identityhttp.RequestDecoder
+	cookie       string
+	duration     time.Duration
+	native       QuorumService
+	rate         QuorumRate
+	configurable bool
 }
 
 func (h quorumHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -134,11 +149,18 @@ func (h quorumHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			status, code = http.StatusServiceUnavailable, "unavailable"
 		}
 		writeQuorumFailure(w, status, code)
-	case !attempted || !validQuorumResult(result, input.GrantID):
+	case !attempted || !h.validResult(result, input.GrantID):
 		writeQuorumFailure(w, http.StatusServiceUnavailable, "unavailable")
 	default:
 		writeJSON(w, http.StatusOK, result)
 	}
+}
+
+func (h quorumHandler) validResult(result impersonationpg.QuorumResult, grant impersonation.GrantID) bool {
+	if !h.configurable {
+		return validQuorumResult(result, grant)
+	}
+	return validConfigurableQuorumResult(result, grant)
 }
 
 func (h quorumHandler) decodeQuorum(r *http.Request) (identityhttp.NetworkFacts, impersonationpg.QuorumInput, error) {
@@ -197,6 +219,39 @@ func validQuorumResult(result impersonationpg.QuorumResult, grant impersonation.
 			approval.DecidedAt.Year() < 1 || approval.DecidedAt.Year() > 9999 {
 			return false
 		}
+	}
+	return true
+}
+
+func validConfigurableQuorumResult(result impersonationpg.QuorumResult, grant impersonation.GrantID) bool {
+	count, required := len(result.Approvals), result.RequiredApprovals
+	if result.GrantID != grant || result.Approvals == nil || required < 1 || required > 32 || count > required {
+		return false
+	}
+	switch result.Status {
+	case impersonation.StatusPendingApproval, impersonation.StatusDenied:
+		if count >= required {
+			return false
+		}
+	case impersonation.StatusApproved, impersonation.StatusActive, impersonation.StatusStopped:
+		if count != required {
+			return false
+		}
+	case impersonation.StatusExpired, impersonation.StatusRevoked:
+		// Either state can retain partial or complete approval history.
+	default:
+		return false
+	}
+	seen := make(map[identity.UserID]struct{}, count)
+	for _, approval := range result.Approvals {
+		if !validQuorumUser(approval.ApproverID) || approval.DecidedAt.IsZero() ||
+			approval.DecidedAt.Year() < 1 || approval.DecidedAt.Year() > 9999 {
+			return false
+		}
+		if _, duplicate := seen[approval.ApproverID]; duplicate {
+			return false
+		}
+		seen[approval.ApproverID] = struct{}{}
 	}
 	return true
 }
