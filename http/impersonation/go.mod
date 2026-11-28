@@ -8,7 +8,7 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261123113741-94b876278a93
 	github.com/faustbrian/go-identity/http v0.0.0-20261128071536-d3005ba7af42
 	github.com/faustbrian/go-identity/impersonation v0.0.0-20261128060409-ec2ff88687be
-	github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128070725-8ee39ba57bed
+	github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128073405-5283cd48d0b9
 	github.com/faustbrian/go-identity/session v0.0.0-20261126235901-19a81db3fa1c
 )
 

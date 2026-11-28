@@ -63,8 +63,8 @@ github.com/faustbrian/go-identity/http v0.0.0-20261128071536-d3005ba7af42 h1:cDI
 github.com/faustbrian/go-identity/http v0.0.0-20261128071536-d3005ba7af42/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/impersonation v0.0.0-20261128060409-ec2ff88687be h1:zq9oqZVMTjJeInWf0aiz+txYa+/XLouxbwGSso2AIXU=
 github.com/faustbrian/go-identity/impersonation v0.0.0-20261128060409-ec2ff88687be/go.mod h1:eUj+X+CzHwS55FgjHW33m4aMF1Sh4LT+HCfzjUygrPI=
-github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128070725-8ee39ba57bed h1:NDmak3/laBBuhDprMetpNMfp3dgpKqJjKzbVhIQNm3Y=
-github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128070725-8ee39ba57bed/go.mod h1:S3p6gN602y4ThqbxRNXA/QZXcgCjWKdEPdZ7Zc57bD4=
+github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128073405-5283cd48d0b9 h1:vBuIE0TfHXT4NHJMLr3sEjKmJ21PS79FITIYGk6vzME=
+github.com/faustbrian/go-identity/impersonation/postgres v0.0.0-20261128073405-5283cd48d0b9/go.mod h1:S3p6gN602y4ThqbxRNXA/QZXcgCjWKdEPdZ7Zc57bD4=
 github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34 h1:tA0vza2BfdWWMWPR31Z0IjBLbSrfprlrLlNUZwi6XHA=
 github.com/faustbrian/go-identity/mfa v0.0.0-20261025081547-dcd89dfc3e34/go.mod h1:mHmrn9LRl/lICJbM1cpafYTMVJkwX5bz9dOhFxpJq/M=
 github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261128064753-40cd49f6dbc8 h1:x8kMuse3qtp+pURi7MUZTvDRbJ1I+eth1ebkKlY22Fc=

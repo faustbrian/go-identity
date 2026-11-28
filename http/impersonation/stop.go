@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"reflect"
-	"strings"
 	"time"
 
 	"github.com/faustbrian/go-authentication/v2"
@@ -52,64 +50,31 @@ type StopConfig struct {
 // NewStopFeature selects only the exact HTTPS child-cookie self-stop route.
 // Construction validates the transport profile and never performs I/O.
 func NewStopFeature(c StopConfig) (identityhttp.Feature, error) {
-	if missingStopOwner(c.Native) || !strings.HasPrefix(c.OriginalCookieName, "__Host-") ||
-		c.OriginalCookieName == "__Host-" || len(c.OriginalCookieName) > 128 ||
-		c.OriginalCookieName == ChildCookieName || c.OriginalCookieName == ChildCSRFCookieName ||
-		(&http.Cookie{Name: c.OriginalCookieName, Value: "x", Path: "/", Secure: true}).Valid() != nil ||
-		c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
+	if missingOwner(c.Native) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	network, err := identityhttp.NewNetworkResolver(c.Network)
+	ingress, err := newCookieIngress(c.Network, c.TrustedOrigins, c.OriginalCookieName, c.MaximumDuration)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	decoder, err := identityhttp.NewRequestDecoder(c.Network.Limits)
+	op, err := stopDescriptor(ingress, c.Native)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	guard, err := identityhttp.NewOriginGuard(identityhttp.OriginGuardConfig{
-		Network: network, TrustedOrigins: c.TrustedOrigins, RefererFallback: identityhttp.RefererFallbackDeny,
-	})
-	if err != nil {
-		return identityhttp.Feature{}, err
-	}
-	csrf, err := identityhttp.NewCSRFDecoder(identityhttp.CSRFDecoderConfig{Origins: guard, FormField: "csrf_token"})
-	if err != nil {
-		return identityhttp.Feature{}, err
-	}
-	handler := stopHandler{network: network, decoder: decoder, origin: guard, csrf: csrf, native: c.Native, parentCookie: c.OriginalCookieName, duration: c.MaximumDuration}
-	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{
-		Owner: "identity/impersonation", OperationID: stopOperation.OperationID, Handler: handler,
-		CSRF:                   identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny},
-		MaximumSerializedBytes: 16384,
-	})
-	if err != nil {
-		return identityhttp.Feature{}, err
-	}
-	op.Wire = stopWire()
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/impersonation", Operations: []identityhttp.OperationDescriptor{op}})
 }
 
-func missingStopOwner(owner StopService) bool {
-	if owner == nil {
-		return true
+func stopDescriptor(ingress cookieIngress, native StopService) (identityhttp.OperationDescriptor, error) {
+	op, err := canonicalCookieOperation(stopOperation.OperationID, stopHandler{cookieIngress: ingress, native: native})
+	if err == nil {
+		op.Wire = stopWire()
 	}
-	switch v := reflect.ValueOf(owner); v.Kind() {
-	case reflect.Pointer, reflect.Chan, reflect.Func, reflect.Map, reflect.Slice, reflect.Interface:
-		return v.IsNil()
-	default:
-		return false
-	}
+	return op, err
 }
 
 type stopHandler struct {
-	network      *identityhttp.NetworkResolver
-	decoder      *identityhttp.RequestDecoder
-	origin       *identityhttp.OriginGuard
-	csrf         *identityhttp.CSRFDecoder
-	native       StopService
-	parentCookie string
-	duration     time.Duration
+	cookieIngress
+	native StopService
 }
 
 type stopResponse struct {
@@ -122,24 +87,24 @@ type stopResponse struct {
 
 func (h stopHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r == nil || r.URL == nil {
-		writeStop(w, 400, stopFailure("invalid_request"))
+		writeJSON(w, 400, stopFailure("invalid_request"))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.duration)
 	defer cancel()
 	r = r.WithContext(ctx)
 	if r.URL.EscapedPath() != stopPath || r.URL.Path != stopPath {
-		writeStop(w, 404, stopFailure("not_found"))
+		writeJSON(w, 404, stopFailure("not_found"))
 		return
 	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
-		writeStop(w, 405, stopFailure("method_not_allowed"))
+		writeJSON(w, 405, stopFailure("method_not_allowed"))
 		return
 	}
 	if err := h.stopRequest(w, r); err != nil {
-		status, code := stopError(err)
-		writeStop(w, status, stopFailure(code))
+		status, code := transportError(err)
+		writeJSON(w, status, stopFailure(code))
 	}
 }
 
@@ -150,20 +115,9 @@ func (h stopHandler) stopRequest(w http.ResponseWriter, r *http.Request) error {
 	if _, _, err := h.decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil {
 		return err
 	}
-	facts, err := h.network.Resolve(r)
-	if err != nil || facts.Scheme() != "https" || facts.TenantID() == "" {
-		if err != nil && !errors.Is(err, identityhttp.DecodeError{}) {
-			return err
-		}
-		writeStop(w, 421, stopFailure("misdirected_request"))
-		return nil
-	}
-	origin, err := h.origin.Check(r)
-	if err != nil || string(origin) != facts.Origin() {
-		if err != nil {
-			return err
-		}
-		return identityhttp.OriginError{}
+	facts, err := h.facts(r)
+	if err != nil {
+		return err
 	}
 	child, _, err := h.decoder.CookieBearer(r, ChildCookieName, identityhttp.HeaderRequired)
 	if err != nil {
@@ -203,7 +157,7 @@ func (h stopHandler) stopRequest(w http.ResponseWriter, r *http.Request) error {
 	status := http.StatusServiceUnavailable
 	if validStopReceipt(result.Receipt, commandID, facts.TenantID()) {
 		out.CommandID = commandID
-		out.Outcome = stopOutcome(result.Receipt.Outcome)
+		out.Outcome = commitOutcome(result.Receipt.Outcome)
 		if err == nil && result.Receipt.Outcome == identity.CommitOutcomeCommitted {
 			out.Stopped, out.Error = true, ""
 			out.ParentResumed = result.Parent.ValidateAt(time.Now()) == nil
@@ -213,30 +167,34 @@ func (h stopHandler) stopRequest(w http.ResponseWriter, r *http.Request) error {
 			}
 			status = http.StatusOK
 		} else if err != nil {
-			status, out.Error = stopError(err)
+			status, out.Error = transportError(err)
 		} else if result.Receipt.Outcome == identity.CommitOutcomeConflict || result.Receipt.Outcome == identity.CommitOutcomeInProgress || result.Receipt.Outcome == identity.CommitOutcomeNotCommitted {
 			status, out.Error = http.StatusConflict, "conflict"
 		}
 	} else if err != nil && result.Receipt.Outcome == identity.CommitOutcomeInvalid {
-		status, out.Error = stopError(err)
+		status, out.Error = transportError(err)
 	}
-	writeStop(w, status, out)
+	writeJSON(w, status, out)
 	return nil
 }
 
 func validStopReceipt(r identity.CommandResult, command identity.CommandID, tenant identity.TenantID) bool {
+	return r.Binding.CommandID == command && validCookieReceipt(r, stopOperation, tenant, 3)
+}
+
+func validCookieReceipt(r identity.CommandResult, op identity.FeatureOperation, tenant identity.TenantID, before uint64) bool {
 	b := r.Binding
-	if r.Validate() != nil || b.CommandID != command || b.TenantID != tenant || b.ActorKind != authorization.SubjectUser ||
-		b.UserID == identity.UserID(b.ActorID) || b.CorrelationID != string(command) ||
-		b.ValidateFor(stopOperation) != nil || r.Feature == nil || r.Feature.Operation != stopOperation {
+	if r.Validate() != nil || b.TenantID != tenant || b.ActorKind != authorization.SubjectUser ||
+		b.UserID == identity.UserID(b.ActorID) || b.CorrelationID != string(b.CommandID) ||
+		b.ValidateFor(op) != nil || r.Feature == nil || r.Feature.Operation != op {
 		return false
 	}
 	record, err := identity.ParseCommandID(b.RecordID)
-	return err == nil && record != command && (r.Outcome != identity.CommitOutcomeCommitted ||
-		r.Feature.BeforeVersion == 3 && r.Feature.AfterVersion == 4)
+	return err == nil && record != b.CommandID && (r.Outcome != identity.CommitOutcomeCommitted ||
+		r.Feature.BeforeVersion == before && r.Feature.AfterVersion == before+1)
 }
 
-func stopOutcome(outcome identity.CommitOutcome) string {
+func commitOutcome(outcome identity.CommitOutcome) string {
 	switch outcome {
 	case identity.CommitOutcomeCommitted:
 		return "committed"
@@ -253,11 +211,13 @@ func stopOutcome(outcome identity.CommitOutcome) string {
 	}
 }
 
-func stopError(err error) (int, string) {
+func transportError(err error) (int, string) {
 	var invalid identity.InvalidInputError
 	var conflict identity.ConflictError
 	var pending identity.InProgressError
 	switch {
+	case errors.Is(err, errMisdirected):
+		return http.StatusMisdirectedRequest, "misdirected_request"
 	case errors.Is(err, identityhttp.CSRFError{}), errors.Is(err, identityhttp.OriginError{}), errors.Is(err, identity.ForbiddenError{}), errors.Is(err, session.ErrCSRFDenied), errors.Is(err, session.ErrUnauthenticated), errors.Is(err, impersonation.ErrExpired):
 		return http.StatusForbidden, "denied"
 	case errors.Is(err, identityhttp.DecodeError{}), errors.As(err, &invalid), errors.Is(err, impersonation.ErrInvalidInput):
@@ -271,7 +231,7 @@ func stopError(err error) (int, string) {
 
 func stopFailure(code string) stopResponse { return stopResponse{Outcome: "none", Error: code} }
 
-func writeStop(w http.ResponseWriter, status int, body stopResponse) {
+func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Type", "application/json")

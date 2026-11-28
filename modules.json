@@ -39,7 +39,7 @@
         "non_goals":["Provide authentication policy, grant storage, native proof custody or administrative UI.","Claim complete HTTP or Reference composition."],
         "public_package_identifier":"impersonationhttp",
         "primary_entry_packages":["github.com/faustbrian/go-identity/http/impersonation"],
-        "package_selection":{"github.com/faustbrian/go-identity/http/impersonation":"Explicit cookie self-stop over the native grant authority."},
+        "package_selection":{"github.com/faustbrian/go-identity/http/impersonation":"Explicit cookie Start and Stop over the native keyed grant authority."},
         "lifecycle_status":"active",
         "maturity":"experimental",
         "construction_styles":["new-config","plain-function"],

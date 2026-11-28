@@ -6,6 +6,46 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
+func startWire(originalCookie string) *identityhttp.WireOperation {
+	id := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$"}
+	text := map[string]any{"type": "string", "minLength": 1, "maxLength": 128}
+	responseFields := map[string]any{
+		"started": map[string]any{"type": "boolean"}, "credentialIssued": map[string]any{"type": "boolean"},
+		"commandID": id, "grantID": id, "actorID": text, "targetID": text,
+		"commitOutcome": map[string]any{"type": "string", "enum": []string{"none", "committed", "unknown", "not_committed", "conflict", "in_progress"}},
+		"error":         map[string]any{"type": "string", "enum": []string{"invalid_request", "denied", "conflict", "unavailable", "misdirected_request", "not_found", "method_not_allowed"}},
+	}
+	response := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"started", "credentialIssued", "commitOutcome"}, "properties": responseFields}
+	payload := func(s any) map[string]any {
+		return map[string]any{"application/json": map[string]any{"schema": s}}
+	}
+	responses := map[string]any{}
+	for _, status := range []string{"200", "400", "403", "409", "421", "503"} {
+		responses[status] = map[string]any{"description": "Credential-free Start outcome. Only the original acknowledged commit can set the paired child cookies.", "content": payload(response)}
+	}
+	header := func(name string, schema map[string]any) map[string]any {
+		return map[string]any{"in": "header", "name": name, "required": true, "schema": schema}
+	}
+	request := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"grantID", "expectedVersion"}, "properties": map[string]any{
+		"grantID": id, "expectedVersion": map[string]any{"type": "integer", "const": 2},
+	}}
+	operation := map[string]any{
+		"operationId": startOperation.OperationID,
+		"description": "Start one independently approved grant using the original ordinary administrator cookie and its synchronizer. No child credential substitution. An exact keyed retry returns only the original metadata and does not replace any cookies.",
+		"security":    []any{map[string]any{"ImpersonationOriginalCookie": []string{}}},
+		"parameters": []any{
+			header("Origin", map[string]any{"type": "string"}),
+			header("X-CSRF-Token", map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}),
+			header("Idempotency-Key", map[string]any{"type": "string", "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}$"}),
+		},
+		"requestBody": map[string]any{"required": true, "content": payload(request)},
+		"responses":   responses,
+	}
+	definition, _ := json.Marshal(operation)
+	scheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": originalCookie, "description": "Original ordinary administrator cookie."})
+	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: "ImpersonationOriginalCookie", Definition: scheme}}}
+}
+
 func stopWire() *identityhttp.WireOperation {
 	responseFields := map[string]any{
 		"stopped": map[string]any{"type": "boolean"}, "parentResumed": map[string]any{"type": "boolean"},

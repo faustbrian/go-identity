@@ -1,9 +1,31 @@
 # Impersonation HTTP
 
-This opt-in contribution exposes browser self-stop for a prepared native
-impersonation session. Install the native self-stop migration and compose a
-native `NewServiceWithSelfStop` before selecting `NewStopFeature` in the
-shared HTTP dispatcher. Base HTTP does not import this adapter.
+This opt-in contribution exposes approved-grant Start and browser self-stop.
+Install the native self-stop and existing request-key preparation migrations
+before composing native services for the selected routes. Select
+`NewStartStopFeature` to use one ingress policy for both, or
+`NewStartFeature` or `NewStopFeature` to expose just one. Base HTTP does not
+import this adapter.
+
+## Start
+
+`POST /v1/impersonation/start` requires the exact mapped HTTPS Origin,
+the original ordinary administrator cookie and its `X-CSRF-Token`,
+one `Idempotency-Key`, and JSON with only `grantID` and
+`expectedVersion: 2`. The grant must independently be approved. Native
+`NewKeyedStartService` owns policy, current authority, durable keyed
+admission and replay. Child cookies never substitute for the original
+administrator or its synchronizer.
+
+The original acknowledged commit alone returns a host-only, Secure,
+SameSite=Strict child credential and a separately readable child
+synchronizer. Neither the ordinary cookie nor its proof is changed.
+The child bearer is HttpOnly. Browser cookie lifetime is capped at 15
+minutes; authoritative grant expiry can be sooner. The credential-free
+JSON marks the actor, target and grant. A receipt-only retry returns
+`credentialIssued: false` without setting any cookie.
+
+## Stop
 
 `POST /v1/impersonation/stop` accepts strict JSON `{}`, the exact mapped
 HTTPS Origin, the `__Host-identity_impersonation` cookie and its
@@ -19,5 +41,5 @@ call uses one native command; only its exact successful commit clears the
 two child cookies. Failed, canceled and ambiguous attempts do not clear
 cookies, and the adapter does not retry an unresolved mutation. An exact
 known response includes the command ID for operator correlation. There is no
-automatic HTTP recovery, Start, approval, revoke or Reference composition in
+automatic HTTP recovery, approval, revoke or Reference composition in
 this selection.
