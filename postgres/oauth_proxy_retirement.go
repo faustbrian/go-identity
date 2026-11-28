@@ -91,6 +91,29 @@ func (w Work) OAuthProxyOriginRetirementScope(ctx context.Context, owner Feature
 	return scope, nil
 }
 
+// MarkOAuthProxyOriginAlreadyRetired poisons the original retirement Apply
+// with a no-change conflict. The native owner must first authenticate the
+// retirement source, the exact already-retired custody and its terminal grant
+// in this Work. Close all owned rows first. This method does not read those
+// records or grant retirement authority.
+//
+// Existing failures are not reclassified. The detail is replayable only after
+// the coordinator proves rollback and commits the protected failure terminal;
+// it never acknowledges a retirement by this command or an external outcome.
+func (w Work) MarkOAuthProxyOriginAlreadyRetired(ctx context.Context, owner FeatureExecutionContributor, command identity.Command) error {
+	if _, err := w.OAuthProxyOriginRetirementScope(ctx, owner, command); err != nil {
+		return err
+	}
+	if w.state.rows != nil || w.state.featureFailure != 0 {
+		return w.fail(ctx, invalidWork())
+	}
+	err := w.fail(ctx, identity.ConflictError{})
+	if _, ok := err.(identity.ConflictError); ok {
+		w.state.featureFailure = FeatureFailureOAuthProxyAlreadyRetired
+	}
+	return err
+}
+
 func oauthProxyRetirementScope(b identity.CommandBinding) (OAuthProxyOriginRetirementScope, bool) {
 	flow, flowErr := identity.ParsePreAuthTransactionID(b.AnonymousFlowID)
 	origin, originErr := identity.ParseCommandID(b.CorrelationID)

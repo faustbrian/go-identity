@@ -7,7 +7,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
-// FeatureFailureCode is a closed SCIM denial classification retained in the
+// FeatureFailureCode is a closed native failure classification retained in the
 // existing protected journal result, never arbitrary error text or payload.
 // Zero denotes unchanged legacy behavior. A code alone grants no authority.
 type FeatureFailureCode uint8
@@ -60,17 +60,20 @@ const (
 	// FeatureFailureSCIMBulkNoTarget retains an original snapshot-derived Bulk
 	// User or Group PATCH noTarget denial without granting mutation authority.
 	FeatureFailureSCIMBulkNoTarget
+	// FeatureFailureOAuthProxyAlreadyRetired retains a no-change conflict when
+	// the OAuth owner confirms that another command already retired the target.
+	FeatureFailureOAuthProxyAlreadyRetired
 )
 
 func (c FeatureFailureCode) valid() bool {
-	return c >= FeatureFailureUniqueness && c <= FeatureFailureSCIMBulkNoTarget
+	return c >= FeatureFailureUniqueness && c <= FeatureFailureOAuthProxyAlreadyRetired
 }
 
-// TypedFeatureFailureError reports an acknowledged original SCIM NotCommitted
-// terminal denial. Unwrap preserves existing identity.ConflictError handling.
+// TypedFeatureFailureError reports an acknowledged original NotCommitted
+// terminal conflict. Unwrap preserves existing identity.ConflictError handling.
 // Code is finite, not a receipt or mutation authority. Constructing/returning
-// this error cannot attach detail to a journal; only Work.DenyFeature can stage
-// it, followed by known rollback and fenced failure-audit/terminal commit.
+// this error cannot attach detail to a journal; only a matching native Work
+// method can stage it, followed by known rollback and fenced terminal commit.
 type TypedFeatureFailureError struct{ Code FeatureFailureCode }
 
 func (TypedFeatureFailureError) Error() string { return "identity: feature conflict" }
@@ -104,6 +107,9 @@ func featureFailureSubject(op identity.FeatureOperation) string {
 }
 
 func featureFailureCodeAllowed(op identity.FeatureOperation, code FeatureFailureCode) bool {
+	if code == FeatureFailureOAuthProxyAlreadyRetired {
+		return op == OAuthProxyOriginRetirementOperation()
+	}
 	if op.OperationID == scimBulkInvalidChildID {
 		return op == SCIMBulkInvalidChildOperation() && scimBulkInvalidChildDenialCode(code)
 	}

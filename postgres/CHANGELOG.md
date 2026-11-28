@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve an OAuth proxy retirement's no-change outcome on replay when the
+  native owner confirms another command already retired the exact origin.
+
 - Recover the exact OAuth proxy retirement grant locator from the original
   committed Start or Bind plan, even after proof expiry or ciphertext erasure.
 
