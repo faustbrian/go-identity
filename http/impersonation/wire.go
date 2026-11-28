@@ -93,6 +93,10 @@ func denyWire(cookie string) *identityhttp.WireOperation {
 	for _, status := range []string{"200", "400", "403", "409", "421", "429", "503"} {
 		responses[status] = map[string]any{"description": "Credential-free denial result; no response issues or clears cookies.", "content": payload(response)}
 	}
+	// The shared CORS guard can reject a foreign Origin before this handler.
+	responses["403"].(map[string]any)["content"].(map[string]any)["text/plain"] = map[string]any{
+		"schema": map[string]any{"type": "string", "const": "identity.http.origin_denied\n"},
+	}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 60}}}
 	operation := map[string]any{
 		"operationId": denyOperation.OperationID,

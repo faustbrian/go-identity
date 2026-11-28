@@ -327,6 +327,24 @@ func TestDenySelectionMatchesItsExactPostRouteAndOpenAPI(t *testing.T) {
 	if len(ops) != 1 || ops[0].Record.OperationID != "identity.impersonation.deny" || ops[0].Record.Idempotency != "repeat" {
 		t.Fatal("standalone denial advertised a different operation or retry contract")
 	}
+	var document struct {
+		Paths map[string]map[string]struct {
+			Responses map[string]struct {
+				Content map[string]struct {
+					Schema struct {
+						Constant string `json:"const"`
+					}
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal(doc.JSON(), &document); err != nil {
+		t.Fatal(err)
+	}
+	forbidden := document.Paths["/v1/impersonation/deny"]["post"].Responses["403"].Content
+	if _, ok := forbidden["application/json"]; !ok || forbidden["text/plain"].Schema.Constant != "identity.http.origin_denied\n" {
+		t.Fatal("denial does not document both its JSON rejection and the shared CORS guard's rejection")
+	}
 	for _, path := range []string{"/v1/impersonation/deny/", "/v1/impersonation/start", "/v1/impersonation/stop", "/v1/impersonation/revoke"} {
 		r := denyRequest(denyBody)
 		r.URL.Path = path
